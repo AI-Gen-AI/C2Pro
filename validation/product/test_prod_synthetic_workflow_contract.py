@@ -341,7 +341,7 @@ def test_health_poll_does_not_reload_analysis_dashboard() -> None:
     assert "page.request.get(" in health_poll
 
 
-def test_health_poll_reuses_observed_browser_auth_headers() -> None:
+def test_health_poll_refreshes_clerk_bearer_and_reuses_observed_tenant() -> None:
     spec = (
         REPO_ROOT
         / "apps"
@@ -358,9 +358,10 @@ def test_health_poll_reuses_observed_browser_auth_headers() -> None:
     health_poll = spec[start:end]
 
     assert "observedApiAuthContext" in spec
-    assert 'headers: observedApiAuthContext.headers' in health_poll
+    assert "const headers = await refreshedApiAuthHeaders(authPage);" in health_poll
+    assert "headers," in health_poll
     assert "Authorization:" in spec
-    assert '"X-Tenant-ID"' in spec
+    assert '"X-Tenant-ID": observedApiAuthContext.tenantId' in spec
 
 
 def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
@@ -379,7 +380,10 @@ def test_health_poll_is_bounded_and_ui_navigation_follows_convergence() -> None:
     assert "HEALTH_POLL_MAX_REQUESTS = 6" in spec
 
     analyzed = spec.index('expect(terminal.lifecycle_status).toBe("analyzed");')
-    wait_health = spec.index("const health = await waitForHealth(page, projectId);", analyzed)
+    wait_health = spec.index(
+        "const health = await waitForHealth(page, pollingAuthPage, projectId);",
+        analyzed,
+    )
     analysis_nav = spec.index(
         "baseUrl()}/projects/${projectId}/analysis",
         analyzed,
@@ -438,7 +442,8 @@ def test_health_poll_uses_observed_configured_backend_origin() -> None:
     health_loader = spec[start:end]
 
     assert "observedApiAuthContext.origin" in health_loader
-    assert "headers: observedApiAuthContext.headers" in health_loader
+    assert "const headers = await refreshedApiAuthHeaders(authPage);" in health_loader
+    assert "headers," in health_loader
     assert '${baseUrl()}/api/v1/projects/${projectId}/health' not in health_loader
 
 
@@ -510,6 +515,45 @@ def test_upload_captures_verified_backend_auth_context_for_direct_document_poll(
     assert "requireProductionOrigin(response.url())" not in upload
 
 
+def test_direct_polls_refresh_short_lived_clerk_token_without_remounting_product_ui() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    refresh_start = spec.index("async function refreshedApiAuthHeaders(")
+    refresh_end = spec.index("function responsePath(", refresh_start)
+    refresh = spec[refresh_start:refresh_end]
+
+    assert "session.getToken({" in refresh
+    assert "organizationId: expectedOrgId" in refresh
+    assert "skipCache: true" in refresh
+    assert 'window.Clerk?.organization?.id !== expectedOrgId' in refresh
+    assert '"X-Tenant-ID": observedApiAuthContext.tenantId' in refresh
+    assert "PROD_ACCEPTANCE_POLL_AUTH_REFRESH_FAILED" in refresh
+    assert "console." not in refresh
+
+    polling_page_start = spec.index("async function createPollingAuthPage(")
+    polling_page_end = spec.index("async function refreshedApiAuthHeaders(", polling_page_start)
+    polling_page = spec[polling_page_start:polling_page_end]
+    assert 'authPage.route("**/*"' in polling_page
+    assert 'url.pathname.startsWith("/api/")' in polling_page
+    assert "await route.abort();" in polling_page
+
+    capture_start = spec.index("function captureObservedApiAuthContext(")
+    capture_end = spec.index("async function loadDocument(", capture_start)
+    capture = spec[capture_start:capture_end]
+    assert "const authorization = requestHeaders.authorization;" in capture
+    assert "tenantId," in capture
+    assert "Authorization: authorization" not in capture
+
+
 def test_production_journey_resets_observed_api_auth_context() -> None:
     spec = (
         REPO_ROOT
@@ -544,20 +588,24 @@ def test_direct_processing_polls_quiesce_browser_background_requests() -> None:
 
     assert 'async function quiesceBrowserPage(page: Page): Promise<void>' in spec
     assert 'await page.goto("about:blank");' in spec
-    assert spec.count("await quiesceBrowserPage(page);") == 2
 
     journey = spec[
         spec.index('test("real user completes the canonical production journey"') :
     ]
+    assert journey.count("await quiesceBrowserPage(page);") == 2
     upload = journey.index("const upload = await uploadFixture(page, projectId);")
-    first_quiesce = journey.index("await quiesceBrowserPage(page);", upload)
+    auth_page = journey.index(
+        "const pollingAuthPage = await createPollingAuthPage(page);",
+        upload,
+    )
+    first_quiesce = journey.index("await quiesceBrowserPage(page);", auth_page)
     first_poll = journey.index("let terminal = await waitForDocumentAttentionOrCompletion(", first_quiesce)
-    assert upload < first_quiesce < first_poll
+    assert upload < auth_page < first_quiesce < first_poll
 
     approve = journey.index("await approveExactDocumentReview(", first_poll)
     second_quiesce = journey.index("await quiesceBrowserPage(page);", approve)
     analyzed_poll = journey.index(
-        "terminal = await waitForAnalyzed(page, projectId, upload.documentId);",
+        "terminal = await waitForAnalyzed(",
         second_quiesce,
     )
     assert approve < second_quiesce < analyzed_poll
@@ -618,3 +666,57 @@ def test_configured_backend_origin_requires_https_absolute_url() -> None:
     assert "cause:" not in helper
     assert 'parsed.protocol !== "https:"' in helper
     assert "PROD_ACCEPTANCE_BACKEND_ORIGIN_INVALID" in helper
+
+
+def test_evidence_hard_refresh_honors_production_rate_limit_without_weakening_addressability() -> None:
+    spec = (
+        REPO_ROOT
+        / "apps"
+        / "web"
+        / "src"
+        / "tests"
+        / "e2e"
+        / "prod-acceptance"
+        / "706-production-synthetic.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "EVIDENCE_RELOAD_MAX_ATTEMPTS = 3" in spec
+    assert "async function waitForFreshEvidenceReloadWindow(" in spec
+    assert "async function reloadExactEvidenceAddress(" in spec
+    assert '"x-ratelimit-reset"' in spec
+    assert '"retry-after"' in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_RATE_LIMIT_TIMEOUT" in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_RETRY_AFTER_MISSING" in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_AUTH_FAILED" in spec
+    assert "PROD_ACCEPTANCE_EVIDENCE_REDIRECT_REJECTED" in spec
+
+    helper_start = spec.index("async function reloadExactEvidenceAddress(")
+    helper_end = spec.index(
+        "async function resolveConfiguredProductionBackendOrigin(",
+        helper_start,
+    )
+    helper = spec[helper_start:helper_end]
+    assert 'await page.reload({ waitUntil: "domcontentloaded" });' in helper
+    assert "await quiesceBrowserPage(page);" in helper
+    assert "matchesDocumentDetailApiPath(responsePath(response), documentId)" in helper
+    assert "response.status() === 200" in helper
+    assert "document-fallback" not in helper
+
+    journey = spec[
+        spec.index('test("real user completes the canonical production journey"') :
+    ]
+    initial_response = journey.index("const initialEvidenceDocumentResponse = page.waitForResponse(")
+    initial_exact = journey.index(
+        "await expect(exactEvidenceLanding).toBeVisible({ timeout: 30_000 });"
+    )
+    fresh_window = journey.index(
+        "await waitForFreshEvidenceReloadWindow(page, initialDocumentResponse);"
+    )
+    reload_exact = journey.index("await reloadExactEvidenceAddress(")
+    assert initial_response < initial_exact < fresh_window < reload_exact
+
+    # The rate-limit recovery must not weaken the truthfulness contract:
+    # after the refreshed address resolves, document fallback remains forbidden.
+    after_reload = journey[reload_exact:]
+    assert 'page.getByTestId("evidence-link-document-fallback")' in after_reload
+    assert ".toHaveCount(0)" in after_reload

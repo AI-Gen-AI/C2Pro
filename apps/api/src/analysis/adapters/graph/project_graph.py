@@ -516,6 +516,9 @@ def _collection_changes(
                 after=entry.raw_payload,
                 semantic_summary=f"{object_type} {entry.anchor} added",
                 match_confidence=1.0,
+                # A missing generated label is no more proof than a matching one.
+                match_basis="generated_anchor",
+                needs_review=True,
             )
         )
     for entry in sorted(unmatched_prior, key=lambda item: item.anchor):
@@ -528,14 +531,21 @@ def _collection_changes(
                 after=None,
                 semantic_summary=f"{object_type} {entry.anchor} removed",
                 match_confidence=1.0,
+                # A missing generated label is no more proof than a matching one.
+                match_basis="generated_anchor",
+                needs_review=True,
             )
         )
-    for prior_entry, current_entry, confidence, needs_review in sorted(
+    for prior_entry, current_entry, confidence, _ in sorted(
         matched,
         key=lambda pair: pair[0].anchor,
     ):
         if prior_entry.normalized_payload == current_entry.normalized_payload:
             continue
+        # PR-C2: anchors here (risk source/title, WBS code, cost code) are
+        # extractor-generated labels. Equal or similar labels propose a pairing;
+        # they never prove identity, so every such pairing -- and every
+        # added/removed above -- is a review candidate.
         changes.append(
             SemanticChange(
                 object_type=object_type,
@@ -545,7 +555,8 @@ def _collection_changes(
                 after=current_entry.raw_payload,
                 semantic_summary=f"{object_type} {prior_entry.anchor} modified",
                 match_confidence=confidence,
-                needs_review=needs_review,
+                match_basis="generated_anchor",
+                needs_review=True,
             )
         )
     return changes

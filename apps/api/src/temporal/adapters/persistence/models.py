@@ -61,6 +61,10 @@ class DocumentRevisionORM(Base):
 
     __table_args__ = (
         UniqueConstraint("document_id", "rev_no", name="uq_docrev_document_revno"),
+        # Referenced by clauses' revision binding (C3a): revision, document and tenant agree.
+        UniqueConstraint(
+            "revision_id", "document_id", "tenant_id", name="uq_document_revisions_identity"
+        ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

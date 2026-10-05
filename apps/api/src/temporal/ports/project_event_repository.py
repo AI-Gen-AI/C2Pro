@@ -57,5 +57,46 @@ class IProjectEventRepository(ABC):
         """Fail-closed relational lookup for one revision change projection."""
         ...
 
+    @abstractmethod
+    async def list_for_revision(self, *, tenant_id: UUID, revision_id: UUID) -> list[ProjectEvent]:
+        """Every event a revision itself produced, in canonical order (temporal-review seam)."""
+        ...
+
+    async def append_if_absent(self, event: ProjectEvent) -> bool:
+        """Append ``event`` unless an event with its id exists; True when appended.
+
+        Idempotency for deterministic event ids (Lane C / C3b-2 recomputation).
+        Implementations should make the check-and-insert race-safe.
+        """
+        if await self.get(event.event_id, event.tenant_id) is not None:
+            return False
+        await self.append(event)
+        return True
+
+    async def list_outcomes_for_revisions(
+        self, *, tenant_id: UUID, revision_ids: list[UUID]
+    ) -> list[ProjectEvent]:
+        """Every outcome event (analysis / recomputation / reinterpretation) of these revisions."""
+        from src.temporal.application.effective_change import OUTCOME_EVENT_TYPES
+
+        events: list[ProjectEvent] = []
+        for revision_id in dict.fromkeys(revision_ids):
+            events.extend(
+                event
+                for event in await self.list_for_revision(tenant_id=tenant_id, revision_id=revision_id)
+                if event.event_type in OUTCOME_EVENT_TYPES
+            )
+        return events
+
+    async def list_revision_outcomes(
+        self, *, tenant_id: UUID, project_id: UUID, document_id: UUID, revision_id: UUID
+    ) -> list[ProjectEvent]:
+        """Every outcome event of one revision of one document, in canonical order."""
+        return [
+            event
+            for event in await self.list_outcomes_for_revisions(tenant_id=tenant_id, revision_ids=[revision_id])
+            if event.project_id == project_id and event.payload.get("document_id") == str(document_id)
+        ]
+
 
 __all__ = ["IProjectEventRepository"]

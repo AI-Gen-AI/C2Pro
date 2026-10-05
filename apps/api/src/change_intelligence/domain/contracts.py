@@ -5,6 +5,10 @@ TS-UT-CI-CON-001
 L1 intentionally leaves severity and confidence as None. Those fields belong
 to L2 semantic analysis; structural-only diffing must not fabricate impact or
 certainty beyond anchor-resolution confidence.
+
+``match_basis`` records how a cross-revision pairing was established, so an
+inferred pairing is always distinguishable from deterministic identity. It is
+optional: payloads persisted before it existed still validate.
 """
 
 from __future__ import annotations
@@ -31,10 +35,26 @@ ChangeType = Literal[
     "added",
     "removed",
     "modified",
+    "renumbered",
     "superseded",
     "conflict_introduced",
 ]
 Severity = Literal["info", "low", "medium", "high", "critical"]
+MatchBasis = Literal[
+    # deterministic: identical normalized text
+    "exact_content",
+    # deterministic: source number read from the clause text, numbering stable
+    "source_identifier",
+    # inferred: a unique similarity candidate; always needs review
+    "similarity_candidate",
+    # more than one possible counterpart; no pairing asserted, needs review
+    "ambiguous",
+    # no counterpart by any rule
+    "no_counterpart",
+    # paired only by an extractor-generated label (risk source/title, WBS or
+    # cost code); a candidate for review, never identity
+    "generated_anchor",
+]
 
 
 class SemanticChange(BaseModel):
@@ -53,6 +73,8 @@ class SemanticChange(BaseModel):
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     severity: Severity | None = None
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    match_basis: MatchBasis | None = None
+    match_rationale: str | None = None
 
 
 class ChangeSet(BaseModel):
@@ -76,8 +98,9 @@ class ChangeSet(BaseModel):
             "added": sum(1 for change in self.changes if change.change_type == "added"),
             "removed": sum(1 for change in self.changes if change.change_type == "removed"),
             "modified": sum(1 for change in self.changes if change.change_type == "modified"),
+            "renumbered": sum(1 for change in self.changes if change.change_type == "renumbered"),
             "needs_review": sum(1 for change in self.changes if change.needs_review),
         }
 
 
-__all__ = ["ChangeSet", "SemanticChange"]
+__all__ = ["ChangeSet", "MatchBasis", "SemanticChange"]

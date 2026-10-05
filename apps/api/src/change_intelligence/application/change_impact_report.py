@@ -6,7 +6,6 @@ TS-UT-CI-REPORT-001
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from statistics import mean
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -15,6 +14,7 @@ import structlog
 from src.change_intelligence.application.semantic_diff import enrich_modified_changes
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
 from src.change_intelligence.domain.contracts import ChangeSet, SemanticChange
+from src.evidence.domain.confidence import compose_confidence
 from src.evidence.domain.runtime_trust import EvidenceRef
 
 logger = structlog.get_logger(__name__)
@@ -78,18 +78,31 @@ def _recommended_actions(changes: list[SemanticChange]) -> list[str]:
 
 
 def _hitl_routing(changes: list[SemanticChange]) -> Literal["auto", "needs_review"]:
-    if any(change.needs_review for change in changes):
+    if any(change.needs_review or change.match_basis == "generated_anchor" for change in changes):
         return "needs_review"
     if any(change.severity in {"high", "critical"} for change in changes):
         return "needs_review"
     return "auto"
 
 
-def _overall_confidence(changes: list[SemanticChange]) -> float | None:
-    confidences = [change.confidence for change in changes if change.confidence is not None]
-    if not confidences:
+def _change_confidence(change: SemanticChange) -> float | None:
+    """A change's conclusions rest on its pairing and on its L2 classification.
+
+    A pairing made only by an extractor-generated label has no established
+    identity, so its confidence is unknown whatever the classifier says.
+    """
+    if change.match_basis == "generated_anchor":
         return None
-    return mean(confidences)
+    return compose_confidence(change.match_confidence, change.confidence)
+
+
+def _overall_confidence(changes: list[SemanticChange]) -> float | None:
+    """The weakest change's confidence -- never an average (PR-C2).
+
+    Unknown (no L2 classification, or a generated-anchor pairing) anywhere
+    makes the report's confidence unknown.
+    """
+    return compose_confidence(*(_change_confidence(change) for change in changes))
 
 
 async def build_change_impact_report(

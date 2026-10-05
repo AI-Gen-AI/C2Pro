@@ -64,10 +64,12 @@ interface HealthVector {
 
 type ObservedApiAuthContext = {
   origin: string;
-  headers: {
-    Authorization: string;
-    "X-Tenant-ID": string;
-  };
+  tenantId: string;
+};
+
+type RefreshedApiAuthHeaders = {
+  Authorization: string;
+  "X-Tenant-ID": string;
 };
 
 let observedApiAuthContext: ObservedApiAuthContext | null = null;
@@ -96,6 +98,98 @@ async function quiesceBrowserPage(page: Page): Promise<void> {
   await page.goto("about:blank");
 }
 
+async function createPollingAuthPage(page: Page): Promise<Page> {
+  const frontendOrigin = requireProductionOrigin(page.url());
+  const expectedOrganizationId =
+    process.env.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID;
+  if (!expectedOrganizationId) {
+    throw new Error(
+      "PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID",
+    );
+  }
+
+  const authPage = await page.context().newPage();
+  await authPage.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin === frontendOrigin && url.pathname.startsWith("/api/")) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+
+  await authPage.goto(`${frontendOrigin}/projects`, {
+    waitUntil: "domcontentloaded",
+  });
+  requireProductionOrigin(authPage.url());
+
+  try {
+    await authPage.waitForFunction(
+      (expectedOrgId) =>
+        window.Clerk?.session?.status === "active" &&
+        window.Clerk?.organization?.id === expectedOrgId,
+      expectedOrganizationId,
+      { timeout: 60_000 },
+    );
+  } catch {
+    throw new Error("PROD_ACCEPTANCE_POLL_AUTH_SESSION_NOT_READY");
+  }
+
+  return authPage;
+}
+
+async function refreshedApiAuthHeaders(
+  authPage: Page,
+): Promise<RefreshedApiAuthHeaders> {
+  if (!observedApiAuthContext) {
+    throw new Error("PROD_ACCEPTANCE_API_AUTH_CONTEXT_MISSING");
+  }
+
+  const expectedOrganizationId =
+    process.env.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID;
+  if (!expectedOrganizationId) {
+    throw new Error(
+      "PROD_ACCEPTANCE_MISSING_ENV:PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID",
+    );
+  }
+
+  const result = await authPage.evaluate(
+    async (expectedOrgId) => {
+      const session = window.Clerk?.session;
+      if (session?.status !== "active") {
+        return { state: "SESSION_INACTIVE", token: null };
+      }
+      if (window.Clerk?.organization?.id !== expectedOrgId) {
+        return { state: "WRONG_ORGANIZATION", token: null };
+      }
+      try {
+        const token = await session.getToken({
+          organizationId: expectedOrgId,
+          skipCache: true,
+        });
+        return {
+          state: token ? "OK" : "TOKEN_NULL",
+          token,
+        };
+      } catch {
+        return { state: "TOKEN_ERROR", token: null };
+      }
+    },
+    expectedOrganizationId,
+  );
+
+  if (result.state !== "OK" || !result.token) {
+    throw new Error(
+      `PROD_ACCEPTANCE_POLL_AUTH_REFRESH_FAILED:${result.state}`,
+    );
+  }
+
+  return {
+    Authorization: `Bearer ${result.token}`,
+    "X-Tenant-ID": observedApiAuthContext.tenantId,
+  };
+}
+
 function responsePath(response: Response): string {
   return new URL(response.url()).pathname;
 }
@@ -112,6 +206,124 @@ function matchesProjectApiPath(
   return paths.some(
     (expected) => pathname === expected || pathname === `${expected}/`,
   );
+}
+
+const EVIDENCE_RELOAD_MAX_ATTEMPTS = 3;
+const EVIDENCE_RATE_LIMIT_SETTLE_MS = 1_000;
+
+function matchesDocumentDetailApiPath(
+  pathname: string,
+  documentId: string,
+): boolean {
+  const paths = [
+    `/api/documents/${documentId}`,
+    `/api/v1/documents/${documentId}`,
+  ];
+  return paths.some(
+    (expected) => pathname === expected || pathname === `${expected}/`,
+  );
+}
+
+function positiveHeaderSeconds(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function boundedRateLimitDelayMs(response: Response, header: string): number | null {
+  const seconds = positiveHeaderSeconds(response.headers()[header]);
+  return seconds === null
+    ? null
+    : Math.min(seconds * 1_000 + EVIDENCE_RATE_LIMIT_SETTLE_MS, 61_000);
+}
+
+function assertEvidenceDocumentResponse(response: Response): void {
+  const status = response.status();
+  if (status >= 300 && status < 400) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_REDIRECT_REJECTED:${status}`);
+  }
+  if (status === 401 || status === 403) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_AUTH_FAILED:${status}`);
+  }
+  if (status >= 400 && status < 500 && status !== 429) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_HTTP_${status}`);
+  }
+  if (status !== 200 && status !== 429) {
+    throw new Error(`PROD_ACCEPTANCE_EVIDENCE_HTTP_${status}`);
+  }
+}
+
+async function waitForFreshEvidenceReloadWindow(
+  page: Page,
+  initialDocumentResponse: Response,
+): Promise<void> {
+  assertEvidenceDocumentResponse(initialDocumentResponse);
+  if (initialDocumentResponse.status() !== 200) {
+    throw new Error(
+      `PROD_ACCEPTANCE_EVIDENCE_INITIAL_DOCUMENT_HTTP_${initialDocumentResponse.status()}`,
+    );
+  }
+
+  // Evidence is a fan-out UI. Start its hard-refresh proof in the next
+  // production fixed-window budget when the server exposes that boundary,
+  // rather than racing the same user budget already consumed by processing.
+  const resetMs = boundedRateLimitDelayMs(
+    initialDocumentResponse,
+    "x-ratelimit-reset",
+  );
+  if (resetMs !== null) {
+    await page.waitForTimeout(resetMs);
+  }
+}
+
+async function reloadExactEvidenceAddress(
+  page: Page,
+  projectId: string,
+  documentId: string,
+  clauseId: string,
+): Promise<void> {
+  const targetUrl =
+    `${baseUrl()}/projects/${projectId}/evidence?documentId=${encodeURIComponent(documentId)}&highlightId=${encodeURIComponent(clauseId)}`;
+
+  for (let attempt = 1; attempt <= EVIDENCE_RELOAD_MAX_ATTEMPTS; attempt += 1) {
+    const documentResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        matchesDocumentDetailApiPath(responsePath(response), documentId),
+      { timeout: 60_000 },
+    );
+
+    if (attempt === 1) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+    } else {
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+    }
+
+    await page.waitForURL(
+      (url) =>
+        url.pathname === `/projects/${projectId}/evidence` &&
+        url.searchParams.get("documentId") === documentId &&
+        url.searchParams.get("highlightId") === clauseId,
+      { timeout: 30_000 },
+    );
+
+    const response = await documentResponse;
+    assertEvidenceDocumentResponse(response);
+    if (response.status() === 200) return;
+
+    const retryMs = boundedRateLimitDelayMs(response, "retry-after");
+    if (retryMs === null) {
+      throw new Error("PROD_ACCEPTANCE_EVIDENCE_RETRY_AFTER_MISSING");
+    }
+
+    // Stop React Query retries from spending the next fixed window while we
+    // honor the server's Retry-After. The next attempt returns to the exact
+    // same deep link and must still resolve the same clause.
+    await quiesceBrowserPage(page);
+    await page.waitForTimeout(retryMs);
+  }
+
+  throw new Error("PROD_ACCEPTANCE_EVIDENCE_RATE_LIMIT_TIMEOUT");
 }
 
 async function resolveConfiguredProductionBackendOrigin(
@@ -188,15 +400,13 @@ function captureObservedApiAuthContext(
   }
   observedApiAuthContext = {
     origin: configuredBackendOrigin,
-    headers: {
-      Authorization: authorization,
-      "X-Tenant-ID": tenantId,
-    },
+    tenantId,
   };
 }
 
 async function loadDocument(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<{
@@ -208,6 +418,7 @@ async function loadDocument(
     throw new Error("PROD_ACCEPTANCE_DOCUMENT_AUTH_CONTEXT_MISSING");
   }
 
+  const headers = await refreshedApiAuthHeaders(authPage);
   let response: APIResponse;
   try {
     response = await page.request.get(
@@ -215,7 +426,7 @@ async function loadDocument(
       {
         failOnStatusCode: false,
         maxRedirects: 0,
-        headers: observedApiAuthContext.headers,
+        headers,
         timeout: 60_000,
       },
     );
@@ -280,6 +491,7 @@ const HEALTH_POLL_MAX_REQUESTS = 6;
 
 async function pollDocumentUntilTerminal(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
@@ -288,7 +500,12 @@ async function pollDocumentUntilTerminal(
   let lastHttpStatus = 0;
 
   while (Date.now() < deadline) {
-    const observation = await loadDocument(page, projectId, documentId);
+    const observation = await loadDocument(
+      page,
+      authPage,
+      projectId,
+      documentId,
+    );
     lastHttpStatus = observation.status;
     if (observation.record) {
       latest = observation.record;
@@ -320,18 +537,25 @@ async function pollDocumentUntilTerminal(
 
 async function waitForDocumentAttentionOrCompletion(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  return pollDocumentUntilTerminal(page, projectId, documentId);
+  return pollDocumentUntilTerminal(page, authPage, projectId, documentId);
 }
 
 async function waitForAnalyzed(
   page: Page,
+  authPage: Page,
   projectId: string,
   documentId: string,
 ): Promise<DocumentRecord> {
-  const latest = await pollDocumentUntilTerminal(page, projectId, documentId);
+  const latest = await pollDocumentUntilTerminal(
+    page,
+    authPage,
+    projectId,
+    documentId,
+  );
   const lifecycle = String(latest.lifecycle_status ?? "").toLowerCase();
   if (lifecycle === "analyzed") return latest;
   if (DOCUMENT_FAILURE_STATES.has(lifecycle)) {
@@ -344,6 +568,7 @@ async function waitForAnalyzed(
 
 async function loadHealth(
   page: Page,
+  authPage: Page,
   projectId: string,
 ): Promise<{
   status: number;
@@ -354,6 +579,7 @@ async function loadHealth(
     throw new Error("PROD_ACCEPTANCE_HEALTH_AUTH_CONTEXT_MISSING");
   }
 
+  const headers = await refreshedApiAuthHeaders(authPage);
   let response: APIResponse;
   try {
     response = await page.request.get(
@@ -361,7 +587,7 @@ async function loadHealth(
       {
         failOnStatusCode: false,
         maxRedirects: 0,
-        headers: observedApiAuthContext.headers,
+        headers,
         timeout: 60_000,
       },
     );
@@ -414,13 +640,14 @@ async function loadHealth(
 
 async function waitForHealth(
   page: Page,
+  authPage: Page,
   projectId: string,
 ): Promise<HealthVector> {
   let lastStatus = 0;
   let lastVector: HealthVector | null = null;
 
   for (let attempt = 1; attempt <= HEALTH_POLL_MAX_REQUESTS; attempt += 1) {
-    const observation = await loadHealth(page, projectId);
+    const observation = await loadHealth(page, authPage, projectId);
     lastStatus = observation.status;
     if (observation.vector) {
       lastVector = observation.vector;
@@ -551,6 +778,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const projectName = buildSyntheticProjectName();
     const projectId = await createProject(page, projectName);
     const upload = await uploadFixture(page, projectId);
+    const pollingAuthPage = await createPollingAuthPage(page);
     await quiesceBrowserPage(page);
 
     writeRunEvidence({
@@ -563,6 +791,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     let terminal = await waitForDocumentAttentionOrCompletion(
       page,
+      pollingAuthPage,
       projectId,
       upload.documentId,
     );
@@ -583,7 +812,12 @@ test.describe("Issue #706 production synthetic acceptance", () => {
       );
       hitlExercised = true;
       await quiesceBrowserPage(page);
-      terminal = await waitForAnalyzed(page, projectId, upload.documentId);
+      terminal = await waitForAnalyzed(
+        page,
+        pollingAuthPage,
+        projectId,
+        upload.documentId,
+      );
     } else if (requireHitl()) {
       throw new Error(
         `PROD_ACCEPTANCE_HITL_REQUIRED_NOT_REACHED:${terminal.lifecycle_status ?? "null"}`,
@@ -592,7 +826,7 @@ test.describe("Issue #706 production synthetic acceptance", () => {
 
     expect(terminal.lifecycle_status).toBe("analyzed");
 
-    const health = await waitForHealth(page, projectId);
+    const health = await waitForHealth(page, pollingAuthPage, projectId);
     const refreshedHealth = page.waitForResponse(
       (response) =>
         response.request().method() === "GET" &&
@@ -663,29 +897,68 @@ test.describe("Issue #706 production synthetic acceptance", () => {
     const evidenceLink = evidenceLinks.first();
     const clauseId = await evidenceLink.getAttribute("data-clause-id");
     if (!clauseId) throw new Error("PROD_ACCEPTANCE_EVIDENCE_CLAUSE_ID_MISSING");
+    const initialEvidenceDocumentResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        matchesDocumentDetailApiPath(responsePath(response), upload.documentId),
+      { timeout: 60_000 },
+    );
     await evidenceLink.click();
     await page.waitForURL(
       (url) =>
         url.pathname === `/projects/${projectId}/evidence` &&
+        url.searchParams.get("documentId") === upload.documentId &&
         url.searchParams.get("highlightId") === clauseId,
       { timeout: 30_000 },
     );
     const activeEvidence = page.locator(
       '[data-testid="evidence-entity-card"][data-active="true"]',
     );
-    await expect(activeEvidence).toBeVisible({ timeout: 30_000 });
-    await expect(activeEvidence).toContainText(/Page\s+\d+/);
-    await expect(activeEvidence).not.toContainText(/Exact location unavailable/i);
+    const sourceClauseEvidence = page.getByTestId("evidence-link-source-clause");
+    const exactEvidenceLanding = activeEvidence.or(sourceClauseEvidence).first();
+    await expect(exactEvidenceLanding).toBeVisible({ timeout: 30_000 });
+    const initialDocumentResponse = await initialEvidenceDocumentResponse;
 
-    // Hard refresh must preserve the exact evidence address.
-    await page.reload();
-    await expect(activeEvidence).toBeVisible({ timeout: 30_000 });
-    await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+    if ((await activeEvidence.count()) > 0) {
+      await expect(activeEvidence).toContainText(/Page\s+\d+/);
+      await expect(activeEvidence).not.toContainText(/Exact location unavailable/i);
+      await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+    } else {
+      // Health evidence IDs are authoritative clause IDs. When no semantic
+      // sidebar entity represents that clause, Evidence intentionally resolves
+      // the source clause itself instead of fabricating an entity card.
+      await expect(sourceClauseEvidence).toContainText(/showing source clause/i);
+      await expect(sourceClauseEvidence).toContainText(/page\s+\d+/i);
+      await expect(page.getByTestId("evidence-link-unavailable")).toHaveCount(0);
+      await expect(page.getByTestId("evidence-link-document-fallback")).toHaveCount(0);
+    }
+
+    // A hard refresh fans out several authenticated UI reads. Preserve the
+    // exact evidence address while respecting the production fixed-window
+    // limiter instead of misclassifying a legitimate 429 as missing evidence.
+    await waitForFreshEvidenceReloadWindow(page, initialDocumentResponse);
+    await reloadExactEvidenceAddress(
+      page,
+      projectId,
+      upload.documentId,
+      clauseId,
+    );
+    await expect(activeEvidence.or(sourceClauseEvidence).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    if ((await activeEvidence.count()) > 0) {
+      await expect(activeEvidence).toHaveAttribute("data-entity-id", clauseId);
+    } else {
+      await expect(sourceClauseEvidence).toContainText(/page\s+\d+/i);
+      await expect(page.getByTestId("evidence-link-unavailable")).toHaveCount(0);
+      await expect(page.getByTestId("evidence-link-document-fallback")).toHaveCount(0);
+    }
 
     // Real UI sign-out and password sign-in again: no storageState restore.
+    await pollingAuthPage.close();
     await signOutThroughUi(page);
     await signInSyntheticProductionUser(page);
-    const healthAfterRelogin = await waitForHealth(page, projectId);
+    const healthAfterRelogin = await waitForHealth(page, page, projectId);
     expect(
       healthAfterRelogin.single_document_coverage?.assessments?.map(
         (item) => item.category,

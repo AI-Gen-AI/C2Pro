@@ -100,6 +100,7 @@ class CoherenceResultORM(Base):
     )
     score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     score_missing_dimensions: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    scoring_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Timestamps
     calculated_at: Mapped[datetime] = mapped_column(

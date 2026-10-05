@@ -104,6 +104,7 @@ def test_all_db_owning_celery_asyncio_wrappers_use_shared_lifecycle() -> None:
         "hitl_resume_reconciler.py": (
             "return run_async_db_task(",
             "_sweep_async(",
+            "_reconcile_graph_completed_health_projections(",
         ),
         "project_graph_tasks.py": (
             "run_async_db_task(",

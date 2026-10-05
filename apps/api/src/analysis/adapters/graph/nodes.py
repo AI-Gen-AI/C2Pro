@@ -404,6 +404,36 @@ async def budget_parser_node(state: ProjectState) -> ProjectState:
 # ── N12 — Critique ──────────────────────────────────────────────────────────
 
 
+async def _apply_temporal_review_gate(state: ProjectState) -> None:
+    """PR-C2 trust seam: a pinned revision whose temporal identity is unresolved
+    must take the canonical approval path. Only ever raises the flag; a lookup
+    failure fails closed.
+    """
+    revision_id = state.get("document_revision_id")
+    if not revision_id:
+        return
+    tenant_id = state.get("tenant_id")
+    # Resolved through the module so the seam stays a single replaceable authority.
+    from src.temporal.adapters import temporal_review_gate
+
+    try:
+        if not tenant_id:
+            raise ValueError("a pinned revision without a tenant cannot be checked")
+        decision = await temporal_review_gate.revision_requires_temporal_review(
+            tenant_id=tenant_id,
+            document_id=state["document_id"],
+            revision_id=revision_id,
+        )
+        required, reason, detail = decision.required, decision.reason, decision.detail
+    except Exception as exc:  # noqa: BLE001 - fail closed on any lookup failure
+        logger.warning("temporal_review_lookup_failed", revision_id=revision_id, error=str(exc))
+        required, reason, detail = True, "temporal_review_lookup_failed", None
+    state["temporal_review_reason"] = reason
+    if required:
+        logger.info("temporal_review_required", revision_id=revision_id, reason=reason, detail=detail)
+        state["human_approval_required"] = True
+
+
 async def critique_node(state: ProjectState) -> ProjectState:
     """N12 — Delegates critique + evaluation to CritiqueExtractionUseCase."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
@@ -411,6 +441,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
         state["human_approval_required"] = False
+        await _apply_temporal_review_gate(state)
         state["node_results"] = [
             *state.get("node_results", []),
             _ok_node_result(
@@ -449,6 +480,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    await _apply_temporal_review_gate(state)
     state["node_results"] = [
         *state.get("node_results", []),
         _ok_node_result(
@@ -457,7 +489,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 "status": result.status,
                 "confidence": result.confidence,
                 "retry_count": result.retry_count,
-                "human_approval_required": result.human_approval_required,
+                "human_approval_required": state["human_approval_required"],
             },
             confidence=result.confidence,
         ),
@@ -791,9 +823,39 @@ async def _save_to_db_fenced(state: ProjectState, provenance: Any) -> ProjectSta
 
 
 async def save_to_db_node(state: ProjectState) -> ProjectState:
-    """N17 — Persist analysis, alerts, and WBS via PersistAnalysisUseCase."""
+    """N17 — Persist analysis and alerts via PersistAnalysisUseCase (WBS stays a proposal, #830)."""
     if not state.get("tenant_id"):
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
+        return state
+
+    # Lane C / C3a: canonical state (analysis row, risk alerts, canonical WBS,
+    # graph.completed) is written only by a run that needs no human approval or
+    # that a human approved (N13 sets the flag to False). A run that reached N17
+    # with approval still required -- C2PRO_SKIP_HITL / C2PRO_AI_MOCK route past
+    # N13 -- is exactly the run whose #714 artifact is persisted PROPOSED
+    # (document_artifact_completion._requires_human_approval): it must not mutate
+    # what the trusted revision established. Same fail-closed rule: anything but
+    # an explicit False is untrusted.
+    if state.get("human_approval_required") is not False:
+        logger.info(
+            "n17_canonical_write_skipped_untrusted",
+            document_id=state.get("document_id"),
+            revision_id=state.get("document_revision_id"),
+        )
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="save_to_db",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="canonical_write_requires_trusted_approval",
+            ),
+        ]
+        state["messages"].append(
+            AIMessage(
+                content="N17 save_to_db: skipped -- human approval is still required, "
+                "so no canonical state is written."
+            )
+        )
         return state
 
     # C2PRO P0b crash-safe resume V3: a fenced resume persists through ONE
@@ -813,18 +875,16 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         PersistAnalysisCommand,
         PersistAnalysisUseCase,
     )
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id = UUID(state["tenant_id"])
     try:
         async with get_session_with_tenant(tenant_id) as session:
-            # #711: analysis, alerts and canonical WBS commit only for the
-            # current processing owner (same transaction as the writes).
+            # #711: analysis and alerts commit only for the current processing
+            # owner (same transaction as the writes). #830: the extracted WBS is
+            # kept as a proposal in the analysis; canonical WBS is never written.
             await fence_current(session)
             result = await PersistAnalysisUseCase(
                 analysis_repo=SqlAlchemyAnalysisRepository(session),
-                wbs_repo=SQLAlchemyWBSRepository(session),
-                session=session,
             ).execute(
                 PersistAnalysisCommand(
                     project_id=UUID(state["project_id"]),

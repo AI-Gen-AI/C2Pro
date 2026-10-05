@@ -75,6 +75,23 @@ def _parent_snapshot(parent_revision_id: UUID, events: list[ProjectEvent]) -> Pr
     return None
 
 
+def snapshot_clauses_for_revision(
+    revision_id: UUID, events: list[ProjectEvent]
+) -> list[Clause] | None:
+    """The clauses of ``revision_id``'s immutable analysis snapshot, if one exists.
+
+    Lane C / C3a: a revision analysed before clause rows were persisted per
+    revision keeps its snapshot identities when its rows are finally written.
+    """
+    snapshot = _parent_snapshot(revision_id, events)
+    if snapshot is None:
+        return None
+    raw_clauses = snapshot.payload.get("clauses")
+    if not isinstance(raw_clauses, list) or not all(isinstance(value, dict) for value in raw_clauses):
+        return None
+    return [_restore_clause(value) for value in raw_clauses]
+
+
 async def build_revision_analysis_events(
     *, revision: DocumentRevision, clauses: list[Clause], existing_events: list[ProjectEvent]
 ) -> list[ProjectEvent]:
@@ -126,4 +143,4 @@ async def build_revision_analysis_events(
     return [snapshot, change]
 
 
-__all__ = ["build_revision_analysis_events"]
+__all__ = ["build_revision_analysis_events", "snapshot_clauses_for_revision"]

@@ -8,6 +8,7 @@ from uuid import UUID
 from src.change_intelligence.application.semantic_diff import enrich_modified_changes
 from src.change_intelligence.domain.contracts import ChangeSet
 from src.temporal.application.change_projection import ChangeCause, build_change_projection_event
+from src.temporal.application.change_qualification import CHANGE_EVENT_TYPES
 from src.temporal.domain.project_event import ProjectEvent
 from src.temporal.ports.project_event_repository import IProjectEventRepository
 
@@ -42,7 +43,7 @@ async def reinterpret_change_event(
     different uploads: the new event describes what C2Pro learned later, not a
     second mutation of business reality.
     """
-    if original_event.event_type not in {"revision.changed", "revision.reinterpreted"}:
+    if original_event.event_type not in CHANGE_EVENT_TYPES:
         return None
     payload = original_event.payload
     raw_changeset = payload.get("changeset")
@@ -62,6 +63,9 @@ async def reinterpret_change_event(
     target_hash = provenance.get("target_blob_hash")
     if not isinstance(source_hash, str) or not isinstance(target_hash, str):
         return None
+    # The clause pairings are the original matcher's; L2 only re-reads them. An
+    # older matcher's pairings must never be relabelled as the current matcher's.
+    matcher_version = provenance.get("diff_engine_version")
     return build_change_projection_event(
         changeset=enriched,
         document_id=UUID(document_id),
@@ -73,6 +77,7 @@ async def reinterpret_change_event(
         change_cause=ChangeCause.NEWLY_DISCOVERED,
         event_type="revision.reinterpreted",
         provenance_extra={"reinterpretation_of_event_id": str(original_event.event_id)},
+        diff_engine_version=matcher_version if isinstance(matcher_version, str) else "unknown",
     )
 
 

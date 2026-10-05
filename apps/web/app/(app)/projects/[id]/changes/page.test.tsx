@@ -29,6 +29,13 @@ type Item = {
   confidence: number | null;
   document_id: string | null;
   provenance: { target_revision_id?: string; diff_engine_version?: string };
+  matcher_status?: "current" | "legacy" | "unsupported" | null;
+  legacy_matcher?: boolean;
+  qualification_reason?: string | null;
+  derivation?: "original" | "recomputed" | "reinterpreted" | null;
+  derived_from_event_id?: string | null;
+  effective?: boolean | null;
+  superseded_by_event_id?: string | null;
 };
 
 function item(overrides: Partial<Item>): Item {
@@ -114,5 +121,82 @@ describe("ProjectChangesPage — honest revision states", () => {
 
     expect(await screen.findByText(/could not load this project.s change history/i)).toBeInTheDocument();
     expect(screen.queryByText("No history yet")).not.toBeInTheDocument();
+  });
+
+  it("labels a legacy-matcher comparison as needing review with its reason", async () => {
+    timeline([
+      item({
+        event_id: "evt-legacy",
+        state: "needs_review",
+        confidence: null,
+        change_cause: null,
+        matcher_status: "legacy",
+        legacy_matcher: true,
+        qualification_reason: "Compared by an older matcher (p0c-structural-l1-v1).",
+      }),
+    ]);
+
+    render(<ProjectChangesPage />);
+
+    const card = await cardFor("change-item-evt-legacy");
+    expect(card.getByText("Older matcher")).toBeInTheDocument();
+    expect(card.getByText(/compared by an older matcher/i)).toBeInTheDocument();
+    expect(card.getByText("Change needs review")).toBeInTheDocument();
+  });
+
+  it("labels an unregistered matcher as unverified, never as legacy", async () => {
+    timeline([
+      item({
+        event_id: "evt-unsupported",
+        state: "needs_review",
+        confidence: null,
+        matcher_status: "unsupported",
+        legacy_matcher: false,
+        qualification_reason: "Compared by an unregistered engine (x-v9).",
+      }),
+    ]);
+
+    render(<ProjectChangesPage />);
+
+    const card = await cardFor("change-item-evt-unsupported");
+    expect(card.getByText("Unverified matcher")).toBeInTheDocument();
+    expect(card.queryByText("Older matcher")).not.toBeInTheDocument();
+  });
+
+  it("keeps a superseded legacy result visible as history and links to it exactly", async () => {
+    timeline([
+      item({
+        event_id: "evt-legacy-original",
+        state: "needs_review",
+        matcher_status: "legacy",
+        legacy_matcher: true,
+        derivation: "original",
+        effective: false,
+        superseded_by_event_id: "evt-recomputed",
+      }),
+      item({
+        event_id: "evt-recomputed",
+        event_type: "revision.recomputed",
+        change_cause: "BUSINESS_STATE_CHANGED",
+        matcher_status: "current",
+        derivation: "recomputed",
+        derived_from_event_id: "evt-legacy-original",
+        effective: true,
+      }),
+    ]);
+
+    render(<ProjectChangesPage />);
+
+    const original = await cardFor("change-item-evt-legacy-original");
+    expect(original.getByText(/historical — superseded/i)).toBeInTheDocument();
+    expect(original.getByText("Older matcher")).toBeInTheDocument();
+    expect(original.getByRole("link")).toHaveAttribute(
+      "href",
+      "/projects/proj_changes_001/changes/doc-1/rev-2?event=evt-legacy-original",
+    );
+    const recomputed = await cardFor("change-item-evt-recomputed");
+    expect(recomputed.getByText(/recomputed · current matcher/i)).toBeInTheDocument();
+    expect(recomputed.queryByText(/historical/i)).not.toBeInTheDocument();
+    expect(recomputed.getByRole("link")).toHaveAttribute("href", "/projects/proj_changes_001/changes/doc-1/rev-2");
   });
 });

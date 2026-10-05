@@ -29,6 +29,12 @@ from src.core.database import get_session
 from src.core.security import CurrentTenantId
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.current_revision_sql import (
+    chunk_in_current_scope,
+    current_chunk_join,
+    current_revision_lateral,
+    parsed_text_in_current_scope,
+)
 
 router = APIRouter(
     prefix="/analysis",
@@ -131,6 +137,16 @@ def get_analyze_use_case(
     return AnalyzeDocumentUseCase(orchestrator)
 
 
+# Lane C / C3a: RAG chunks and parsed text are served only for each document's
+# trusted-current revision (a PROPOSED / REJECTED revision's text is excluded).
+_CURRENT_CHUNK_JOIN = current_chunk_join("dc")
+_CHUNK_IN_CURRENT_SCOPE = chunk_in_current_scope("dc", "cur")
+_CURRENT_DOCUMENT_JOIN = (
+    f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur"
+)
+_PARSED_TEXT_IN_CURRENT_SCOPE = parsed_text_in_current_scope("d", "cur")
+
+
 async def get_document_text_from_rag(
     db: AsyncSession,
     project_id: UUID,
@@ -141,11 +157,13 @@ async def get_document_text_from_rag(
 ) -> tuple[str, list[dict[str, Any]]]:
     """Fetch document text from RAG chunks and build context, with parsed_text fallback."""
     if document_id:
-        chunk_stmt = text("""
+        chunk_stmt = text(f"""
             SELECT dc.content, dc.metadata
             FROM document_chunks dc
             JOIN projects p ON dc.project_id = p.id
-            WHERE dc.project_id = CAST(:project_id AS uuid)
+            {_CURRENT_CHUNK_JOIN}
+            WHERE {_CHUNK_IN_CURRENT_SCOPE}
+              AND dc.project_id = CAST(:project_id AS uuid)
               AND dc.document_id = CAST(:document_id AS uuid)
               AND p.tenant_id = CAST(:tenant_id AS uuid)
             ORDER BY dc.created_at DESC
@@ -158,11 +176,13 @@ async def get_document_text_from_rag(
             "limit": top_k,
         }
     else:
-        chunk_stmt = text("""
+        chunk_stmt = text(f"""
             SELECT dc.content, dc.metadata
             FROM document_chunks dc
             JOIN projects p ON dc.project_id = p.id
-            WHERE dc.project_id = CAST(:project_id AS uuid)
+            {_CURRENT_CHUNK_JOIN}
+            WHERE {_CHUNK_IN_CURRENT_SCOPE}
+              AND dc.project_id = CAST(:project_id AS uuid)
               AND p.tenant_id = CAST(:tenant_id AS uuid)
             ORDER BY dc.created_at DESC
             LIMIT :limit
@@ -183,11 +203,13 @@ async def get_document_text_from_rag(
         return full_text, chunks
 
     if document_id:
-        doc_stmt = text("""
+        doc_stmt = text(f"""
             SELECT d.id, d.document_type::text, d.document_metadata
             FROM documents d
             JOIN projects p ON d.project_id = p.id
-            WHERE d.project_id = CAST(:project_id AS uuid)
+            {_CURRENT_DOCUMENT_JOIN}
+            WHERE {_PARSED_TEXT_IN_CURRENT_SCOPE}
+              AND d.project_id = CAST(:project_id AS uuid)
               AND d.id = CAST(:document_id AS uuid)
               AND p.tenant_id = CAST(:tenant_id AS uuid)
               AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
@@ -199,11 +221,13 @@ async def get_document_text_from_rag(
             "tenant_id": str(tenant_id),
         }
     else:
-        doc_stmt = text("""
+        doc_stmt = text(f"""
             SELECT d.id, d.document_type::text, d.document_metadata
             FROM documents d
             JOIN projects p ON d.project_id = p.id
-            WHERE d.project_id = CAST(:project_id AS uuid)
+            {_CURRENT_DOCUMENT_JOIN}
+            WHERE {_PARSED_TEXT_IN_CURRENT_SCOPE}
+              AND d.project_id = CAST(:project_id AS uuid)
               AND p.tenant_id = CAST(:tenant_id AS uuid)
               AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
             ORDER BY d.created_at DESC

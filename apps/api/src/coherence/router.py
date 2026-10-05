@@ -5,6 +5,7 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 
 from collections.abc import Sequence
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -12,19 +13,23 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import String, cast, delete, func, select, text
+from sqlalchemy import String, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
+from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
-from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
+from src.analysis.application.dtos import AlertCreate
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
+from src.coherence.application.disposition_review import build_scoring_snapshot
 from src.coherence.feature_flags import (
     coherence_canonical_canary_enabled_for_tenant,
     coherence_llm_crosscheck_enabled_for_tenant,
     coherence_v2_enabled_for_tenant,
 )
+from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
@@ -33,6 +38,13 @@ from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.current_revision_sql import (
+    chunk_in_current_scope,
+    clause_in_current_scope,
+    current_chunk_join,
+    current_revision_lateral,
+    parsed_text_in_current_scope,
+)
 
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
@@ -43,9 +55,11 @@ from .canonical.live_rescore import (
 )
 from .domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 from .graph.graph import evaluate_coherence_async
+from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
 from .schedule_clause_builder import build_schedule_clauses
+from .scoring import ScoringService
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 logger = structlog.get_logger()
@@ -104,6 +118,14 @@ COHERENCE_WEIGHTS = {
     "LEGAL": 0.15,
     "TIME": 0.15,
 }
+
+
+@dataclass(frozen=True)
+class _CoherenceAlertReconciliation:
+    """Durable Alert reconciliation truth for the current evaluation transaction."""
+
+    finding_keys_by_alert_index: tuple[str, ...]
+    records_by_finding_key: dict[str, Any]
 
 
 def _normalize_utc_datetime(value: datetime | None) -> datetime | None:
@@ -236,6 +258,17 @@ _CATEGORY_KEYWORDS: dict[str, list[str]] = {
 _CLAUSES_PER_CATEGORY = 10
 
 
+# Lane C / C3a: every clause-like source of /coherence/evaluate reads only the
+# trusted-current revision of each document (one shared rule, fail closed).
+_CURRENT_CLAUSE_JOIN = (
+    f"CROSS JOIN LATERAL {current_revision_lateral('c.document_id', 'c.tenant_id')} AS cur"
+)
+_CLAUSE_IN_CURRENT_SCOPE = clause_in_current_scope("c", "cur")
+_CURRENT_DOCUMENT_JOIN = (
+    f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur"
+)
+
+
 def _build_clause(row: Sequence[object]) -> Clause | None:
     clause_id = str(row[0])
     text_value = str(row[1]) if row[1] else ""
@@ -362,13 +395,15 @@ async def _get_persisted_clause_candidates(
 ) -> list[Clause]:
     """Load persisted document clauses using category-targeted queries."""
     seen_ids: set[str] = set()
-    base_query = """
+    base_query = f"""
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
         JOIN documents d ON c.document_id = d.id
         JOIN projects p ON d.project_id = p.id
+        {_CURRENT_CLAUSE_JOIN}
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {_CLAUSE_IN_CURRENT_SCOPE}
           AND LOWER(c.full_text) LIKE ANY(CAST(:keyword_patterns AS text[]))
         ORDER BY c.created_at ASC
         LIMIT :limit
@@ -418,13 +453,15 @@ async def _load_fallback_clause_candidates(
     remaining: int,
     seen_ids: set[str],
 ) -> list[Clause]:
-    fallback_stmt = text("""
+    fallback_stmt = text(f"""
         SELECT c.id, c.full_text, c.extracted_entities, d.id, d.document_type::text
         FROM clauses c
         JOIN documents d ON c.document_id = d.id
         JOIN projects p ON d.project_id = p.id
+        {_CURRENT_CLAUSE_JOIN}
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {_CLAUSE_IN_CURRENT_SCOPE}
         ORDER BY c.created_at ASC
         LIMIT :limit
     """)
@@ -450,12 +487,14 @@ async def _get_rag_chunk_clauses(
     max_chunks: int,
 ) -> list[Clause]:
     """Load RAG chunk fallback clauses."""
-    stmt = text("""
+    stmt = text(f"""
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
         JOIN projects p ON dc.project_id = p.id
+        {current_chunk_join("dc")}
         WHERE dc.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {chunk_in_current_scope("dc", "cur")}
         ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
@@ -492,12 +531,14 @@ async def _get_parsed_text_fallback_clauses(
     tenant_id: UUID,
 ) -> list[Clause]:
     """Load parsed document text fallback clauses."""
-    fallback_stmt = text("""
+    fallback_stmt = text(f"""
         SELECT d.id, d.document_type::text, d.document_metadata
         FROM documents d
         JOIN projects p ON d.project_id = p.id
+        {_CURRENT_DOCUMENT_JOIN}
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
+          AND {parsed_text_in_current_scope("d", "cur")}
           AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
         ORDER BY d.created_at DESC
     """)
@@ -541,60 +582,357 @@ _COHERENCE_ALERT_SEVERITY: dict[str, AlertSeverity] = {
 }
 
 
+def _coherence_alert_category(value: object) -> str:
+    key = str(getattr(value, "value", value) or "").strip().upper()
+    return {
+        "SCHEDULE": "TIME",
+        "FINANCIAL": "BUDGET",
+        "GENERAL": "SCOPE",
+    }.get(key, key or "SCOPE")
+
+
+def _uuid_or_none(value: object) -> UUID | None:
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+def _split_clause_locators(value: object) -> list[str]:
+    """Split detector locators that encode multiple clause identities."""
+
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split("|") if part.strip()]
+
+
+def _coherence_alert_to_create(
+    *,
+    project_id: UUID,
+    alert: Any,
+    clauses: Sequence[Clause],
+    persisted_clause_documents: dict[UUID, UUID],
+) -> AlertCreate:
+    evidence = getattr(alert, "evidence", None)
+    source_locator = (
+        str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
+    )
+    clause_by_id = {str(clause.id): clause for clause in clauses}
+    source_locators = _split_clause_locators(source_locator)
+    candidate_clause_ids = [_uuid_or_none(locator) for locator in source_locators]
+    # Composite documentary provenance is all-or-nothing. Promoting only the
+    # current subset would lend partial authority to a finding that still
+    # depends on stale/external evidence.
+    all_locators_verified = bool(source_locators) and all(
+        candidate is not None and candidate in persisted_clause_documents
+        for candidate in candidate_clause_ids
+    )
+    verified_clause_ids = (
+        [candidate for candidate in candidate_clause_ids if candidate is not None]
+        if all_locators_verified
+        else []
+    )
+
+    source_clause_id = verified_clause_ids[0] if verified_clause_ids else None
+    related_clause_ids = verified_clause_ids[1:] or None
+    verified_document_ids: list[str] = []
+    for clause_id in verified_clause_ids:
+        document_id = str(persisted_clause_documents[clause_id])
+        if document_id not in verified_document_ids:
+            verified_document_ids.append(document_id)
+
+    source_clause = (
+        clause_by_id.get(source_locators[0])
+        if len(source_locators) == 1
+        else None
+    )
+    source_document_id = (
+        verified_document_ids[0]
+        if verified_document_ids
+        else (
+            str(source_clause.data.get("document_id"))
+            if source_clause is not None and source_clause.data.get("document_id")
+            else None
+        )
+    )
+    detection_evidence = (
+        {
+            "source_clause_id": source_locator or None,
+            "source_document_id": source_document_id,
+            "claim": str(getattr(evidence, "claim", "") or ""),
+            "quote": str(getattr(evidence, "quote", "") or ""),
+        }
+        if evidence is not None
+        else None
+    )
+    affected_entities: dict[str, Any] = {}
+    if verified_document_ids:
+        affected_entities["documents"] = verified_document_ids
+    elif source_document_id:
+        affected_entities["documents"] = [source_document_id]
+
+    severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
+    message = (getattr(alert, "message", None) or "Coherence issue detected.").strip()
+    return AlertCreate(
+        project_id=project_id,
+        analysis_id=None,
+        severity=_COHERENCE_ALERT_SEVERITY.get(
+            severity_key, AlertSeverity.MEDIUM
+        ),
+        alert_type=AlertType.COHERENCE,
+        rule_id=getattr(alert, "rule_id", None),
+        category=_coherence_alert_category(getattr(alert, "category", None)),
+        title=message[:255],
+        description=message,
+        source_clause_id=source_clause_id,
+        related_clause_ids=related_clause_ids,
+        affected_entities=affected_entities,
+        recommendation=None,
+        impact_level=None,
+        alert_metadata={
+            "source": "coherence_evaluate",
+            "detection_evidence": detection_evidence,
+        },
+    )
+
+
+async def _verified_persisted_clause_documents(
+    *,
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    alerts: Sequence[Any],
+) -> dict[UUID, UUID]:
+    """Return only clause/document pairs inside C3a trusted-current truth.
+
+    Clause UUID shape and project membership are insufficient once historical
+    revisions remain queryable. Reuse C3a's canonical current-revision SQL
+    predicate rather than re-deriving temporal authority in Line B.
+    """
+    candidate_set: set[UUID] = set()
+    for alert in alerts:
+        evidence = getattr(alert, "evidence", None)
+        if evidence is None:
+            continue
+        for locator in _split_clause_locators(
+            getattr(evidence, "source_clause_id", None)
+        ):
+            candidate = _uuid_or_none(locator)
+            if candidate is not None:
+                candidate_set.add(candidate)
+    candidates = sorted(candidate_set, key=str)
+
+    if not candidates:
+        return {}
+
+    candidate_params = {
+        f"candidate_{index}": str(candidate)
+        for index, candidate in enumerate(candidates)
+    }
+    candidate_sql = ", ".join(
+        f"CAST(:candidate_{index} AS uuid)"
+        for index in range(len(candidates))
+    )
+    statement = text(
+        f"""
+        SELECT c.id, c.document_id
+        FROM clauses c
+        JOIN documents d ON d.id = c.document_id
+        CROSS JOIN LATERAL
+            {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+        WHERE c.id IN ({candidate_sql})
+          AND c.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.tenant_id = CAST(:tenant_id AS uuid)
+          AND d.project_id = CAST(:project_id AS uuid)
+          AND {clause_in_current_scope("c", "cur")}
+        """
+    )
+    rows = (
+        await db.execute(
+            statement,
+            {
+                **candidate_params,
+                "tenant_id": str(tenant_id),
+                "project_id": str(project_id),
+            },
+        )
+    ).all()
+    return {row.id: row.document_id for row in rows}
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
     project_id: UUID,
     tenant_id: UUID,
     alerts: Sequence[Any],
-) -> None:
-    """Mirror ``/evaluate`` coherence alerts into the ``alerts`` table.
+    clauses: Sequence[Clause] = (),
+) -> _CoherenceAlertReconciliation:
+    """Reconcile findings and return the durable disposition truth for this transaction.
 
-    The alerts UI lists rows from the ``alerts`` table (ListAlertsUseCase), but
-    ``/evaluate`` only stored alerts inside ``coherence_results.alerts`` (JSON) —
-    so the dashboard showed a non-zero ``alert_count`` while the alerts page stayed
-    empty. Coherence-sourced rows are ``analysis_id=NULL`` + ``alert_type=COHERENCE``;
-    the prior batch for the project is replaced first so re-evaluating never
-    duplicates. Not committed here — the caller commits with the coherence result.
+    The project-scoped advisory lock serializes concurrent evaluations. The service
+    deliberately does not commit: the caller owns the transaction so Alert lifecycle
+    and the resulting Coherence score become durable together.
     """
     await db.execute(
-        delete(AlertORM).where(
-            AlertORM.project_id == project_id,
-            AlertORM.tenant_id == tenant_id,
-            AlertORM.analysis_id.is_(None),
-            AlertORM.alert_type == AlertType.COHERENCE,
-        )
+        text("SELECT pg_advisory_xact_lock(hashtext(:mirror_key))"),
+        {"mirror_key": f"coherence-alerts:{tenant_id}:{project_id}"},
     )
-    for alert in alerts:
-        severity_key = str(getattr(alert.severity, "value", alert.severity)).lower()
-        message = (alert.message or "Coherence issue detected.").strip()
-        evidence = getattr(alert, "evidence", None)
-        db.add(
-            AlertORM(
-                project_id=project_id,
-                tenant_id=tenant_id,
-                analysis_id=None,
-                severity=_COHERENCE_ALERT_SEVERITY.get(severity_key, AlertSeverity.MEDIUM),
-                alert_type=AlertType.COHERENCE,
-                category=getattr(alert, "category", None),
-                rule_id=getattr(alert, "rule_id", None),
-                title=message[:255],
-                message=message,
-                description=message,
-                alert_metadata={
-                    "source": "coherence_evaluate",
-                    "evidence": (
-                        {
-                            "source_clause_id": evidence.source_clause_id,
-                            "claim": evidence.claim,
-                            "quote": evidence.quote,
-                        }
-                        if evidence
-                        else None
-                    ),
-                },
-            )
+    persisted_clause_documents = await _verified_persisted_clause_documents(
+        db=db,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        alerts=alerts,
+    )
+    payloads = [
+        _coherence_alert_to_create(
+            project_id=project_id,
+            alert=alert,
+            clauses=clauses,
+            persisted_clause_documents=persisted_clause_documents,
         )
+        for alert in alerts
+    ]
+    service = AlertGeneratorService(SqlAlchemyAlertRepository(db))
+    records = await service.process_violations(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        violations=payloads,
+        auto_resolve=True,
+        commit=False,
+    )
+    finding_keys = tuple(service.finding_key(payload) for payload in payloads)
+    records_by_finding_key: dict[str, Any] = {}
+    for record in records:
+        metadata = dict(getattr(record, "alert_metadata", None) or {})
+        key = metadata.get("finding_key") or metadata.get("fingerprint")
+        if isinstance(key, str) and key:
+            records_by_finding_key[key] = record
+    return _CoherenceAlertReconciliation(
+        finding_keys_by_alert_index=finding_keys,
+        records_by_finding_key=records_by_finding_key,
+    )
+
+
+def _is_validated_false_positive(record: Any | None) -> bool:
+    if record is None:
+        return False
+    status_value = str(getattr(getattr(record, "status", None), "value", getattr(record, "status", "")))
+    if status_value != AlertStatus.DISMISSED.value:
+        return False
+    metadata = dict(getattr(record, "alert_metadata", None) or {})
+    current_basis = metadata.get("current_observation_key")
+    reviewed_basis = metadata.get("disposition_basis_key")
+    return bool(
+        metadata.get("disposition") == "false_positive"
+        and isinstance(current_basis, str)
+        and current_basis
+        and reviewed_basis == current_basis
+    )
+
+
+def _coverage_from_breakdown(result: EnrichedCoherenceResult) -> tuple[dict[str, bool], set[str]]:
+    coverage = dict.fromkeys(COHERENCE_CATEGORIES, False)
+    budget_throttled: set[str] = set()
+    for item in result.category_breakdown:
+        category = canonical_category_name(str(item.category))
+        if category not in coverage:
+            continue
+        if item.state in {"assessed_clean", "assessed_findings"}:
+            coverage[category] = True
+        elif item.state == "budget_throttled":
+            budget_throttled.add(category)
+    return coverage, budget_throttled
+
+
+def _apply_disposition_aware_rescore(
+    result: EnrichedCoherenceResult,
+    reconciliation: _CoherenceAlertReconciliation,
+    *,
+    clauses: Sequence[Clause],
+    config: EvaluationConfig,
+) -> EnrichedCoherenceResult:
+    """Filter durable false positives before rerunning the same v1 ScoringService.
+
+    Alerts provide disposition authority only. Scoring continues to use the complete
+    FindingSignal objects (impact/confidence/materiality inputs), never a lossy Alert row.
+    """
+    signal_count = len(result.finding_signals)
+    if len(reconciliation.finding_keys_by_alert_index) < signal_count:
+        raise RuntimeError("COHERENCE_ALERT_SIGNAL_IDENTITY_MISMATCH")
+
+    eligible_signals = []
+    eligible_alert_indexes: list[int] = []
+    seen_families: set[str] = set()
+    excluded_false_positive_keys: set[str] = set()
+
+    for index, signal in enumerate(result.finding_signals):
+        finding_key = reconciliation.finding_keys_by_alert_index[index]
+        if finding_key in seen_families:
+            continue
+        seen_families.add(finding_key)
+        record = reconciliation.records_by_finding_key.get(finding_key)
+        if _is_validated_false_positive(record):
+            excluded_false_positive_keys.add(finding_key)
+            continue
+        eligible_signals.append(signal)
+        eligible_alert_indexes.append(index)
+
+    changed = (
+        len(eligible_signals) != len(result.finding_signals)
+        or len(seen_families) != len(result.finding_signals)
+    )
+    if not changed:
+        return result
+
+    coverage_map, budget_throttled = _coverage_from_breakdown(result)
+    diagnostics = ScoringService().calculate_detailed(
+        signals=eligible_signals,
+        num_clauses=len(clauses),
+        num_rules=12,
+        poor_extraction_quality=config.poor_extraction_quality,
+        coverage_map=coverage_map,
+    )
+    category_scores = diagnostics.category_scores or {}
+    category_breakdown = _build_category_breakdown(
+        eligible_signals,
+        coverage_map,
+        category_scores,
+        budget_throttled_categories=budget_throttled,
+    )
+
+    # format_output guarantees the first N alerts correspond 1:1 with all_signals;
+    # any trailing alert is a non-scoring meta alert and remains visible.
+    active_alerts = [result.alerts[index] for index in eligible_alert_indexes]
+    active_alerts.extend(result.alerts[signal_count:])
+
+    logger.info(
+        "coherence_disposition_rescore",
+        excluded_false_positives=len(excluded_false_positive_keys),
+        deduplicated_findings=len(result.finding_signals) - len(seen_families),
+        score_before=result.overall_score,
+        score_after=diagnostics.score,
+    )
+    return result.model_copy(
+        update={
+            "overall_score": diagnostics.score,
+            "alerts": active_alerts,
+            "category_breakdown": category_breakdown,
+            "score_reason": diagnostics.reason,
+            "score_missing_dimensions": diagnostics.missing_dimensions,
+            "finding_signals": eligible_signals,
+            "deterministic_findings_count": diagnostics.deterministic_findings,
+            "llm_findings_count": diagnostics.llm_findings,
+            "scope_factor": diagnostics.scope_factor,
+            "penalty_density": diagnostics.penalty_density,
+            "avg_impact": diagnostics.avg_impact,
+            "avg_confidence": diagnostics.avg_confidence,
+            "category_scores": diagnostics.category_scores,
+            "audit_coverage": diagnostics.audit_coverage,
+        }
+    )
 
 
 _TECHNICAL_PLIEGO_MARKERS: tuple[str, ...] = (
@@ -745,27 +1083,65 @@ async def evaluate_project_coherence(
     )
 
     logger.info(
-        "coherence_evaluate_complete",
+        "coherence_detection_complete",
         alerts_count=len(enriched_result.alerts),
         overall_score=enriched_result.overall_score,
     )
+    detected_result = enriched_result
+    reconciliation: _CoherenceAlertReconciliation | None = None
+
+    # B1-09: durable human disposition is part of the scoring input authority.
+    # Reconcile first (same transaction), then re-score the complete FindingSignals.
+    # A validated false positive is excluded; ACKNOWLEDGED/accepted variance remains.
+    if payload.project_id and enriched_result.overall_score is not None:
+        reconciliation = await _mirror_coherence_alerts_to_alerts_table(
+            db=db,
+            project_id=payload.project_id,
+            tenant_id=current_user.tenant_id,
+            alerts=enriched_result.alerts,
+            clauses=clauses,
+        )
+        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+            enriched_result = _apply_disposition_aware_rescore(
+                enriched_result,
+                reconciliation,
+                clauses=clauses,
+                config=config,
+            )
 
     # Referenced-but-missing hint: if the technical dimension was withheld for lack
     # of evidence but the documents reference a technical specifications pliego, tell
     # the user what to upload — honest and actionable, never a fabricated score.
     _annotate_missing_technical_hint(enriched_result, clauses)
 
-    # ADR-017 canary: for enrolled tenants, re-score the SAME findings through the canonical
-    # scorer (ADR-009 §G.1) — this flips the SCORER only; detection/alerts are unchanged.
-    # Always logs the v1↔canonical delta; substitutes the headline only when the tenant is
-    # enrolled. Default off (no tenant enrolled) ⇒ persistence + response below are
-    # byte-identical to the v1 path.
+    # ADR-017 canary runs only after B1 disposition filtering so both scorers see
+    # the same eligible finding set.
     enriched_result = await _maybe_apply_canonical_canary(
         enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
     )
 
-    # Persist result so the dashboard always reflects the latest evaluation
+    logger.info(
+        "coherence_evaluate_complete",
+        alerts_count=len(enriched_result.alerts),
+        findings_count=len(enriched_result.finding_signals),
+        overall_score=enriched_result.overall_score,
+        score_version=enriched_result.score_version,
+    )
+
+    # Persist result so the dashboard always reflects the latest evaluation.
+    # Keep the exact detected FindingSignals and their identity basis so a later
+    # validated false-positive review can replay the same scorer/version.
     if payload.project_id and enriched_result.overall_score is not None:
+        scoring_snapshot = None
+        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+            scoring_snapshot = build_scoring_snapshot(
+                detected_result=detected_result,
+                finding_keys_by_alert_index=reconciliation.finding_keys_by_alert_index,
+                records_by_finding_key=reconciliation.records_by_finding_key,
+                clauses=list(clauses),
+                config=config,
+                score_version=enriched_result.score_version or SCORE_VERSION_V1,
+            )
         # Normalize legacy "SCHEDULE"→"TIME" so dashboard sub_scores keys match COHERENCE_CATEGORIES
         _CAT_ALIAS = {"SCHEDULE": "TIME", "FINANCIAL": "BUDGET", "GENERAL": "SCOPE"}
 
@@ -816,27 +1192,12 @@ async def evaluate_project_coherence(
                 score_version=enriched_result.score_version or SCORE_VERSION_V1,
                 score_reason=enriched_result.score_reason,
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
+                scoring_snapshot=scoring_snapshot,
             )
         )
+        # Alert lifecycle was reconciled before scoring with commit=False.
+        # This one commit makes the disposition-aware score and Alert state durable together.
         await db.commit()
-        # Best-effort: mirror alerts into the alerts table so the alerts UI (which
-        # lists the alerts table, not coherence_results.alerts) surfaces them. Runs
-        # after the coherence result is committed so a mirroring failure can never
-        # fail the already-persisted evaluation.
-        try:
-            await _mirror_coherence_alerts_to_alerts_table(
-                db=db,
-                project_id=payload.project_id,
-                tenant_id=current_user.tenant_id,
-                alerts=enriched_result.alerts,
-            )
-            await db.commit()
-        except Exception:
-            logger.warning(
-                "coherence_alert_mirror_failed",
-                project_id=str(payload.project_id),
-                exc_info=True,
-            )
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
     # Guard mirrors _maybe_add_v2_dashboard: only fires when both flags are True.
@@ -1316,6 +1677,8 @@ async def _attach_trusted_projection(
             "projection_baseline_score": projection.baseline_score,
             "projected_score": projection.projected_score,
             "projected_delta": projection.projected_delta,
+            "projection_baseline_sub_scores": projection.projection_baseline_sub_scores,
+            "projected_sub_scores": projection.projected_sub_scores,
             "pending_review_count": projection.pending_review_count,
             "projection_score_version": version,
             "projection_status": projection.status.value,

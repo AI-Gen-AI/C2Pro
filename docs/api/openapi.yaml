@@ -1241,6 +1241,19 @@ paths:
           type: string
           format: uuid
           title: Document Id
+      - name: revision_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Read the clauses of this historical revision instead of the
+            document's trusted-current revision. Never changes what is current.
+          title: Revision Id
+        description: Read the clauses of this historical revision instead of the document's
+          trusted-current revision. Never changes what is current.
       responses:
         '200':
           description: Successful Response
@@ -1376,6 +1389,19 @@ paths:
           type: string
           format: uuid
           title: Document Id
+      - name: revision_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Read the entities of this historical revision instead of the
+            document's trusted-current revision. Never changes what is current.
+          title: Revision Id
+        description: Read the entities of this historical revision instead of the
+          document's trusted-current revision. Never changes what is current.
       responses:
         '200':
           description: Successful Response
@@ -1635,6 +1661,19 @@ paths:
           type: string
           format: uuid
           title: Revision Id
+      - name: event_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Read one specific (possibly historical) comparison of this
+            revision; omitted, the revision's EFFECTIVE comparison is returned.
+          title: Event Id
+        description: Read one specific (possibly historical) comparison of this revision;
+          omitted, the revision's EFFECTIVE comparison is returned.
       responses:
         '200':
           description: Successful Response
@@ -1957,6 +1996,41 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/alerts/{alert_id}/evidence:
+    post:
+      tags:
+      - alerts
+      summary: Attach reviewer evidence to alert
+      operationId: attach_alert_evidence_api_v1_alerts__alert_id__evidence_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachEvidenceRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts/{alert_id}/history:
     get:
       tags:
@@ -4086,6 +4160,16 @@ components:
           additionalProperties: true
           type: object
           title: Affected Entities
+        source_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Clause Id
+        detection_evidence:
+          anyOf:
+          - $ref: '#/components/schemas/DetectionEvidenceResponse'
+          - type: 'null'
         reviewed_by:
           anyOf:
           - type: string
@@ -4476,6 +4560,27 @@ components:
         \ review for a newer candidate shares; without the row, a\ndecision from a\
         \ stale screen would land on a review the human never saw.\nA pinned row that\
         \ is no longer awaiting a decision fails closed."
+    AttachEvidenceRequest:
+      properties:
+        type:
+          type: string
+          enum:
+          - note
+          - screenshot
+          - document_excerpt
+          title: Type
+        content:
+          type: string
+          title: Content
+        source:
+          type: string
+          title: Source
+          default: manual_review
+      type: object
+      required:
+      - type
+      - content
+      title: AttachEvidenceRequest
     AttentionItem:
       properties:
         kind:
@@ -5098,6 +5203,9 @@ components:
         event_type:
           type: string
           title: Event Type
+        basis:
+          $ref: '#/components/schemas/EpistemicBasis'
+          default: observed
         state:
           type: string
           title: State
@@ -5111,6 +5219,20 @@ components:
           - type: number
           - type: 'null'
           title: Confidence
+        matcher_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Matcher Status
+        legacy_matcher:
+          type: boolean
+          title: Legacy Matcher
+          default: false
+        qualification_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualification Reason
         document_id:
           anyOf:
           - type: string
@@ -5124,6 +5246,28 @@ components:
         l3_impact:
           type: 'null'
           title: L3 Impact
+        derivation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Derivation
+        derived_from_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Derived From Event Id
+        effective:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Effective
+        superseded_by_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Superseded By Event Id
         changes:
           items:
             additionalProperties: true
@@ -5136,6 +5280,24 @@ components:
             type: object
           type: array
           title: Evidence Refs
+        impacts:
+          items:
+            $ref: '#/components/schemas/ChangeImpact'
+          type: array
+          title: Impacts
+        projection:
+          anyOf:
+          - $ref: '#/components/schemas/RevisionProjection'
+          - type: 'null'
+        history:
+          items:
+            $ref: '#/components/schemas/TimelineItemResponse'
+          type: array
+          title: History
+        revision_status:
+          anyOf:
+          - $ref: '#/components/schemas/RevisionStatus'
+          - type: 'null'
       type: object
       required:
       - event_id
@@ -5144,6 +5306,28 @@ components:
       - state
       title: ChangeDetailResponse
       description: Evidence-grounded revision detail with L1/L2 before and after snapshots.
+    ChangeImpact:
+      properties:
+        change_index:
+          type: integer
+          minimum: 0.0
+          title: Change Index
+        change_type:
+          type: string
+          title: Change Type
+        source:
+          $ref: '#/components/schemas/TemporalEntityRef'
+        assessment:
+          $ref: '#/components/schemas/ImpactAssessment'
+      additionalProperties: false
+      type: object
+      required:
+      - change_index
+      - change_type
+      - source
+      - assessment
+      title: ChangeImpact
+      description: The impact of one change within a stored change event.
     Clause:
       properties:
         id:
@@ -5828,6 +6012,29 @@ components:
           title: Projected Delta
           description: projected_score - projection_baseline_score (null when either
             is null).
+        projection_baseline_sub_scores:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: number
+              - type: 'null'
+            type: object
+          - type: 'null'
+          title: Projection Baseline Sub Scores
+          description: Canonical six-dimension subscores for the trusted artifact-set
+            evaluation used as the projection baseline. Null when no baseline is available.
+        projected_sub_scores:
+          anyOf:
+          - additionalProperties:
+              anyOf:
+              - type: number
+              - type: 'null'
+            type: object
+          - type: 'null'
+          title: Projected Sub Scores
+          description: PROVISIONAL six-dimension subscores for the pending scenario.
+            Same evaluator/score_version as projected_score; Unknown dimensions remain
+            null.
         pending_review_count:
           type: integer
           title: Pending Review Count
@@ -5869,6 +6076,29 @@ components:
       description: "Consolidated view of project coherence for the dashboard.\n\n\
         ECOA v2 (ADR-009 \xA77.2 step 1): the optional `categories_v2` field carries\n\
         the locked v2 contract. Defaults to None so v1 clients are unaffected."
+    DetectionEvidenceResponse:
+      properties:
+        source_clause_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Clause Id
+        source_document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Document Id
+        claim:
+          type: string
+          title: Claim
+          default: ''
+        quote:
+          type: string
+          title: Quote
+          default: ''
+      type: object
+      title: DetectionEvidenceResponse
+      description: Detector-produced provenance; distinct from reviewer-attached evidence.
     DisclaimerAcceptRequest:
       properties:
         version:
@@ -6673,6 +6903,14 @@ components:
         CoherenceResult remains the public API shape; this adds internal diagnostics
 
         for debugging, dashboards, and score curve validation.'
+    EpistemicBasis:
+      type: string
+      enum:
+      - observed
+      - derived
+      - projected
+      - trusted
+      title: EpistemicBasis
     Evidence:
       properties:
         source_clause_id:
@@ -6867,6 +7105,19 @@ components:
       - tier
       title: EvidenceRef
       description: Reference to evidence supporting or withholding a critical output.
+    EvidenceResponse:
+      properties:
+        alert_id:
+          type: string
+          title: Alert Id
+        evidence_count:
+          type: integer
+          title: Evidence Count
+      type: object
+      required:
+      - alert_id
+      - evidence_count
+      title: EvidenceResponse
     EvidenceTier:
       type: string
       enum:
@@ -7549,6 +7800,61 @@ components:
       - source_domain
       - evidence_tier
       title: HitlSection
+    ImpactAssessment:
+      properties:
+        status:
+          $ref: '#/components/schemas/ImpactStatus'
+        items:
+          items:
+            $ref: '#/components/schemas/ImpactItem'
+          type: array
+          title: Items
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        basis:
+          $ref: '#/components/schemas/EpistemicBasis'
+          default: derived
+      additionalProperties: false
+      type: object
+      required:
+      - status
+      title: ImpactAssessment
+    ImpactItem:
+      properties:
+        target:
+          $ref: '#/components/schemas/ImpactTarget'
+        relationship:
+          $ref: '#/components/schemas/ImpactRelationship'
+        status:
+          type: string
+          enum:
+          - CONFIRMED
+          - CANDIDATE
+          title: Status
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+      additionalProperties: false
+      type: object
+      required:
+      - target
+      - relationship
+      - status
+      title: ImpactItem
     ImpactLevel:
       type: string
       enum:
@@ -7557,6 +7863,68 @@ components:
       - HIGH
       - CRITICAL
       title: ImpactLevel
+    ImpactRelationship:
+      properties:
+        kind:
+          type: string
+          enum:
+          - direct
+          - indirect
+          title: Kind
+        via:
+          type: string
+          title: Via
+        link_confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Link Confidence
+      additionalProperties: false
+      type: object
+      required:
+      - kind
+      - via
+      title: ImpactRelationship
+    ImpactStatus:
+      type: string
+      enum:
+      - CONFIRMED
+      - CANDIDATE
+      - UNKNOWN
+      title: ImpactStatus
+    ImpactTarget:
+      properties:
+        entity_type:
+          type: string
+          title: Entity Type
+        entity_id:
+          type: string
+          format: uuid
+          title: Entity Id
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        potentially_stale:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Potentially Stale
+      additionalProperties: false
+      type: object
+      required:
+      - entity_type
+      - entity_id
+      title: ImpactTarget
+      description: A persisted project entity that depends on the changed source entity.
     InterestLevel:
       type: string
       enum:
@@ -7643,6 +8011,29 @@ components:
 
 
         Used for TS-E2E-SEC-MCP-001 test suite.'
+    MaterializationStatus:
+      properties:
+        state:
+          type: string
+          title: State
+        scope:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scope
+        qualifications:
+          items:
+            type: string
+          type: array
+          title: Qualifications
+        deferred_effects:
+          additionalProperties: true
+          type: object
+          title: Deferred Effects
+      type: object
+      required:
+      - state
+      title: MaterializationStatus
     MeResponse:
       properties:
         user:
@@ -8396,6 +8787,26 @@ components:
       title: ProjectWBSResponse
       description: 'Authoritative WBS contract: root items with nested children (procurement
         WBS store).'
+    ProjectionCandidate:
+      properties:
+        artifact_id:
+          type: string
+          format: uuid
+          title: Artifact Id
+        artifact_version:
+          type: integer
+          title: Artifact Version
+        artifact_hash:
+          type: string
+          title: Artifact Hash
+      additionalProperties: false
+      type: object
+      required:
+      - artifact_id
+      - artifact_version
+      - artifact_hash
+      title: ProjectionCandidate
+      description: 'The exact #714 candidate envelope the projection substituted.'
     QueryResult:
       properties:
         data:
@@ -8953,6 +9364,131 @@ components:
       - ESCALATED
       - CLOSED
       title: ReviewStatus
+    RevisionProjection:
+      properties:
+        basis:
+          $ref: '#/components/schemas/EpistemicBasis'
+          default: projected
+        status:
+          type: string
+          enum:
+          - none
+          - provisional
+          - unavailable
+          title: Status
+        source_revision_id:
+          type: string
+          format: uuid
+          title: Source Revision Id
+        trusted_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Trusted Score
+        projected_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Projected Score
+        projected_delta:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Projected Delta
+        score_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Score Version
+        candidate:
+          anyOf:
+          - $ref: '#/components/schemas/ProjectionCandidate'
+          - type: 'null'
+        qualification:
+          anyOf:
+          - type: string
+            enum:
+            - provisional
+            - provisional_unverified_temporal_identity
+          - type: 'null'
+          title: Qualification
+        confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confidence
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - status
+      - source_revision_id
+      title: RevisionProjection
+    RevisionStatus:
+      properties:
+        status:
+          type: string
+          enum:
+          - available
+          - unavailable
+          title: Status
+          default: available
+        revision_id:
+          type: string
+          format: uuid
+          title: Revision Id
+        rev_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rev No
+        trust_state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trust State
+        artifact_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Artifact Id
+        artifact_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Artifact Version
+        is_current:
+          type: boolean
+          title: Is Current
+          default: false
+        current_revision_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Current Revision Id
+        current_basis:
+          type: string
+          title: Current Basis
+          default: unresolved
+        materialization:
+          anyOf:
+          - $ref: '#/components/schemas/MaterializationStatus'
+          - type: 'null'
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - revision_id
+      title: RevisionStatus
     RouteForReviewRequest:
       properties:
         item_id:
@@ -9494,6 +10030,53 @@ components:
       - database_status
       - timestamp
       title: SystemStatusResponse
+    TemporalEntityRef:
+      properties:
+        artifact_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Artifact Type
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        revision_id:
+          type: string
+          format: uuid
+          title: Revision Id
+        entity_type:
+          type: string
+          enum:
+          - clause
+          - milestone
+          - budget_item
+          - rfi
+          - change_order
+          - risk
+          - wbs_activity
+          - citation
+          title: Entity Type
+        entity_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Entity Id
+        evidence:
+          items:
+            $ref: '#/components/schemas/EvidenceRef'
+          type: array
+          title: Evidence
+      additionalProperties: false
+      type: object
+      required:
+      - artifact_type
+      - document_id
+      - revision_id
+      - entity_type
+      - entity_id
+      title: TemporalEntityRef
+      description: One entity as it existed in one artifact revision.
     TenantResponse:
       properties:
         id:
@@ -9582,6 +10165,9 @@ components:
         event_type:
           type: string
           title: Event Type
+        basis:
+          $ref: '#/components/schemas/EpistemicBasis'
+          default: observed
         state:
           type: string
           title: State
@@ -9595,6 +10181,20 @@ components:
           - type: number
           - type: 'null'
           title: Confidence
+        matcher_status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Matcher Status
+        legacy_matcher:
+          type: boolean
+          title: Legacy Matcher
+          default: false
+        qualification_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualification Reason
         document_id:
           anyOf:
           - type: string
@@ -9608,6 +10208,28 @@ components:
         l3_impact:
           type: 'null'
           title: L3 Impact
+        derivation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Derivation
+        derived_from_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Derived From Event Id
+        effective:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Effective
+        superseded_by_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Superseded By Event Id
       type: object
       required:
       - event_id

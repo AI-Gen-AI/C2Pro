@@ -40,6 +40,11 @@
 import type { ChangeDetailResponseChangesItem } from "./changeDetailResponseChangesItem";
 import type { ChangeDetailResponseEvidenceRefsItem } from "./changeDetailResponseEvidenceRefsItem";
 import type { ChangeDetailResponseProvenance } from "./changeDetailResponseProvenance";
+import type { ChangeImpact } from "./changeImpact";
+import type { EpistemicBasis } from "./epistemicBasis";
+import type { RevisionProjection } from "./revisionProjection";
+import type { RevisionStatus } from "./revisionStatus";
+import type { TimelineItemResponse } from "./timelineItemResponse";
 
 /**
  * Evidence-grounded revision detail with L1/L2 before and after snapshots.
@@ -48,13 +53,25 @@ export interface ChangeDetailResponse {
   event_id: string;
   occurred_at: string;
   event_type: string;
+  basis?: EpistemicBasis;
   state: string;
   change_cause?: string | null;
   confidence?: number | null;
+  matcher_status?: string | null;
+  legacy_matcher?: boolean;
+  qualification_reason?: string | null;
   document_id?: string | null;
   provenance?: ChangeDetailResponseProvenance;
   /** @nullable */
   l3_impact?: null;
+  derivation?: string | null;
+  derived_from_event_id?: string | null;
+  effective?: boolean | null;
+  superseded_by_event_id?: string | null;
   changes?: ChangeDetailResponseChangesItem[];
   evidence_refs?: ChangeDetailResponseEvidenceRefsItem[];
+  impacts?: ChangeImpact[];
+  projection?: RevisionProjection | null;
+  history?: TimelineItemResponse[];
+  revision_status?: RevisionStatus | null;
 }

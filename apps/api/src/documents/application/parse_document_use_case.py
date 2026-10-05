@@ -177,6 +177,9 @@ class ParseDocumentUseCase:
                 document=document,
                 parsed_payload=parsed_payload,
                 tenant_id=scoped_tenant_id,
+                # Lane C / C3a: stamped with the revision just parsed, so this
+                # replaces only that revision's chunks and readers can scope them.
+                revision_id=revision.revision_id if revision is not None else None,
             )
 
             # 7. Extract parsed_text and store in document_metadata
@@ -185,6 +188,10 @@ class ParseDocumentUseCase:
             metadata = dict(document.document_metadata or {})
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
+                if revision is not None:
+                    metadata["parsed_text_revision_id"] = str(revision.revision_id)
+                else:
+                    metadata.pop("parsed_text_revision_id", None)
             stated_total = _extract_budget_stated_total(parsed_payload)
             if stated_total is not None:
                 metadata["stated_total"] = stated_total

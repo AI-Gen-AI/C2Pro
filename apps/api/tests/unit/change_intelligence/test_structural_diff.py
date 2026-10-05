@@ -42,24 +42,24 @@ def test_rev_c_to_rev_d_detects_added_removed_and_modified_with_anchors() -> Non
     old_clauses = [
         _clause(
             "1.1",
-            "The contractor shall mobilize within 10 days.",
+            "1.1 The contractor shall mobilize within 10 days.",
             project_id=project_id,
             tenant_id=tenant_id,
         ),
-        _clause("5.2", "Penalty cap is 10 percent.", project_id=project_id, tenant_id=tenant_id),
-        _clause("9.1", "Legacy reporting clause.", project_id=project_id, tenant_id=tenant_id),
+        _clause("5.2", "5.2 Penalty cap is 10 percent.", project_id=project_id, tenant_id=tenant_id),
+        _clause("9.1", "9.1 Legacy reporting clause.", project_id=project_id, tenant_id=tenant_id),
     ]
     new_clauses = [
         _clause(
             "1.1",
-            "The contractor shall mobilize within 10 days.",
+            "1.1 The contractor shall mobilize within 10 days.",
             project_id=project_id,
             tenant_id=tenant_id,
         ),
-        _clause("5.2", "Penalty cap is 15 percent.", project_id=project_id, tenant_id=tenant_id),
+        _clause("5.2", "5.2 Penalty cap is 15 percent.", project_id=project_id, tenant_id=tenant_id),
         _clause(
             "12.1",
-            "New sustainability reporting clause.",
+            "12.1 New sustainability reporting clause.",
             project_id=project_id,
             tenant_id=tenant_id,
         ),
@@ -77,6 +77,7 @@ def test_rev_c_to_rev_d_detects_added_removed_and_modified_with_anchors() -> Non
     by_type = {change.change_type: change for change in changeset.changes}
     assert set(by_type) == {"added", "removed", "modified"}
     assert by_type["modified"].anchor == "5.2"
+    assert by_type["modified"].match_basis == "source_identifier"
     assert by_type["modified"].before["clause_code"] == "5.2"
     assert by_type["modified"].after["clause_code"] == "5.2"
     assert by_type["added"].before is None
@@ -87,6 +88,7 @@ def test_rev_c_to_rev_d_detects_added_removed_and_modified_with_anchors() -> Non
         "added": 1,
         "removed": 1,
         "modified": 1,
+        "renumbered": 0,
         "needs_review": 0,
     }
 

@@ -103,3 +103,48 @@ async def test_producer_persists_the_new_discovery_as_a_distinct_event(monkeypat
     )
 
     assert discovered is events.appended[0]
+
+
+@pytest.mark.asyncio
+async def test_reinterpretation_keeps_the_original_structural_matcher_version(monkeypatch) -> None:
+    """A later L2 pass must not relabel an older matcher's clause pairings as current."""
+    async def enabled(tenant_id):  # noqa: ANN001
+        return True
+
+    monkeypatch.setattr("src.change_intelligence.application.semantic_diff.is_change_semantic_llm_enabled", enabled)
+    original = _event()
+    legacy = original.model_copy(
+        update={
+            "payload": {
+                **original.payload,
+                "provenance": {**original.payload["provenance"], "diff_engine_version": "p0c-structural-l1-v1"},
+            }
+        }
+    )
+
+    event = await reinterpret_change_event(
+        original_event=legacy, llm=_L2(), semantic_provider="anthropic",
+        semantic_model="model", semantic_model_version="v2",
+    )
+
+    assert event is not None
+    assert event.payload["provenance"]["diff_engine_version"] == "p0c-structural-l1-v1"
+
+
+@pytest.mark.asyncio
+async def test_reinterpretation_without_a_recorded_matcher_version_is_not_labelled_current(monkeypatch) -> None:
+    async def enabled(tenant_id):  # noqa: ANN001
+        return True
+
+    monkeypatch.setattr("src.change_intelligence.application.semantic_diff.is_change_semantic_llm_enabled", enabled)
+    original = _event()
+    provenance = {k: v for k, v in original.payload["provenance"].items() if k != "diff_engine_version"}
+    unversioned = original.model_copy(update={"payload": {**original.payload, "provenance": provenance}})
+
+    event = await reinterpret_change_event(
+        original_event=unversioned, llm=_L2(), semantic_provider="anthropic",
+        semantic_model="model", semantic_model_version="v2",
+    )
+
+    assert event is not None
+    assert event.payload["provenance"]["diff_engine_version"] == "unknown"

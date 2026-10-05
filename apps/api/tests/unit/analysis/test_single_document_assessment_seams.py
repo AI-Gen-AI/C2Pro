@@ -177,22 +177,6 @@ class _FakeAnalysisRepo:
         self.committed = True
 
 
-class _FakeWbsRepo:
-    def __init__(self) -> None:
-        self.created: list[tuple[UUID, list[dict[str, Any]]]] = []
-
-    async def bulk_create_from_dicts(self, project_id: UUID, items: list[dict[str, Any]]) -> None:
-        self.created.append((project_id, items))
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.statements: list[Any] = []
-
-    async def execute(self, statement: Any) -> None:
-        self.statements.append(statement)
-
-
 async def _persist(assessment: dict[str, Any] | None) -> AnalysisWrite:
     from src.analysis.application.persist_analysis_use_case import (
         PersistAnalysisCommand,
@@ -200,9 +184,7 @@ async def _persist(assessment: dict[str, Any] | None) -> AnalysisWrite:
     )
 
     repo = _FakeAnalysisRepo()
-    await PersistAnalysisUseCase(
-        analysis_repo=repo, wbs_repo=_FakeWbsRepo(), session=_FakeSession()
-    ).execute(
+    await PersistAnalysisUseCase(analysis_repo=repo).execute(
         PersistAnalysisCommand(
             project_id=uuid4(),
             tenant_id=uuid4(),

@@ -399,13 +399,17 @@ async def test_change_impact_genuine_new_and_deleted_objects_emit_added_removed(
         ("added", "B-NEW"),
         ("removed", "B-OLD"),
     ]
+    # PR #823: absence of a generated label is no more proof than its presence --
+    # a relabelled item would read as added + removed. Both are review candidates.
+    assert all(change.match_basis == "generated_anchor" for change in report.changes)
+    assert all(change.needs_review is True for change in report.changes)
 
 
 @pytest.mark.asyncio
-async def test_change_impact_budget_cost_code_amount_change_is_clean_modified(
+async def test_change_impact_budget_cost_code_pairing_is_a_review_candidate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """TS-UT-ADR016-L3-001: stable budget cost_code anchors semantic value changes."""
+    """TS-UT-ADR016-L3-001 / PR-C2: an extractor cost_code proposes, never proves, identity."""
 
     from src.analysis.adapters.graph import project_graph
 
@@ -442,8 +446,8 @@ async def test_change_impact_budget_cost_code_amount_change_is_clean_modified(
     assert change.object_type == "budget_item"
     assert change.change_type == "modified"
     assert change.anchor == "B-1"
-    assert change.match_confidence == pytest.approx(1.0)
-    assert change.needs_review is False
+    assert change.match_basis == "generated_anchor"
+    assert change.needs_review is True
 
 
 @pytest.mark.asyncio
@@ -509,3 +513,39 @@ async def test_change_impact_load_failure_returns_failed_node_result() -> None:
     assert node_result.error.node == "change_impact"
     assert node_result.error.error_type == "RuntimeError"
     assert "artifact store down" in node_result.error.message
+
+
+@pytest.mark.asyncio
+async def test_identical_generated_risk_anchor_cannot_establish_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PR-C2: an equal extractor-generated anchor is a candidate pairing, never identity."""
+
+    from src.analysis.adapters.graph import project_graph
+
+    document_id = uuid4()
+    prior = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        risks=[RiskItem(title="Delay penalty exposure", description="Capped at 10%", source="R-7")],
+    )
+    current = _artifact_with_payloads(
+        document_id=document_id,
+        revision_id=uuid4(),
+        risks=[RiskItem(title="Delay penalty exposure", description="Capped at 15%", source="R-7")],
+    )
+
+    async def _fake_build_report(changeset, tenant_id):
+        await sleep(0)
+        return _report_from_changeset(changeset)
+
+    monkeypatch.setattr(project_graph, "build_change_impact_report", _fake_build_report)
+
+    result = await project_graph.change_impact(
+        _state(artifact=current, repo=FakeArtifactRepository([prior]), previous_snapshot_id=uuid4())
+    )
+
+    (change,) = result["impact_result"].changes
+    assert change.change_type == "modified"
+    assert change.match_basis == "generated_anchor"
+    assert change.needs_review is True

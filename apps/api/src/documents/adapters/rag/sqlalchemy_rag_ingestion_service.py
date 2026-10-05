@@ -37,6 +37,7 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
         document: Document,
         parsed_payload: dict[str, Any],
         tenant_id: UUID,
+        revision_id: UUID | None = None,
     ) -> RagIngestionResult:
         text_content = _extract_rag_text(parsed_payload).strip()
         if not text_content:
@@ -50,7 +51,10 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
                 document_id=document.id,
                 project_id=document.project_id,
                 text_content=text_content,
-                metadata={"document_type": document.document_type.value},
+                metadata={
+                    "document_type": document.document_type.value,
+                    **({"revision_id": str(revision_id)} if revision_id is not None else {}),
+                },
             )
         except RagProviderMisconfiguredError as exc:
             # An operator has to act; retrying changes nothing. Logged at error

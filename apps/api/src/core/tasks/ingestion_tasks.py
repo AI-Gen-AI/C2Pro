@@ -56,15 +56,14 @@ from src.documents.application.document_source import (
     fetch_source_file,
     resolve_source_revision,
 )
+from src.documents.application.revision_clauses import persist_revision_clauses
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
-from src.procurement.application.use_cases.wbs_use_cases import CreateWBSItemUseCase
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -78,6 +77,7 @@ from src.temporal.adapters.persistence.project_event_repository import (
 from src.temporal.application.change_projection import build_revision_processing_failed_event
 from src.temporal.application.revision_change_orchestrator import (
     build_revision_analysis_events,
+    snapshot_clauses_for_revision,
 )
 from src.temporal.domain.document_revision import DocumentRevision
 
@@ -680,17 +680,39 @@ async def get_document_rag_chunk_count(
     session: Any,
     tenant_id: TenantId,
     document_id: UUID,
+    revision_id: UUID | None = None,
 ) -> int:
-    """TS-UD-OPS-DOCFLOW-B-001: count committed tenant-scoped RAG chunks."""
-    statement = text(
-        """
+    """TS-UD-OPS-DOCFLOW-B-001: count committed tenant-scoped RAG chunks.
+
+    Lane C / C3a: with a ``revision_id`` only that revision's (stamped) chunks
+    count. Other revisions' chunks are retained (a trusted V1 index survives a
+    pending V2), so they must never make a V2 whose embedding failed look ready.
+    """
+    query = """
         SELECT COUNT(*)
         FROM document_chunks
         WHERE tenant_id = CAST(:tenant_id AS uuid)
           AND document_id = CAST(:document_id AS uuid)
         """
-    )
     params = {"tenant_id": str(tenant_id), "document_id": str(document_id)}
+    if revision_id is not None:
+        # Unstamped (pre-C3a) chunks can only be this revision's when the document
+        # has a single revision -- the same rule the RAG readers apply.
+        query += """
+          AND (
+            metadata ->> 'revision_id' = :revision_id
+            OR (
+              metadata ->> 'revision_id' IS NULL
+              AND (
+                SELECT count(*) FROM document_revisions r
+                WHERE r.document_id = document_chunks.document_id
+                  AND r.tenant_id = document_chunks.tenant_id
+              ) <= 1
+            )
+          )
+        """
+        params["revision_id"] = str(revision_id)
+    statement = text(query)
 
     result = await session.execute(statement, params)
     return int(result.scalar_one())
@@ -735,10 +757,15 @@ async def _run_analysis_graph_best_effort(
     #
     # Injected into initial_state too, since human_interrupt_node reads
     # thread_id from state, not from the run() kwarg alone.
+    authority = processing_authority.current_authority()
     thread_id = checkpoint_lineage.analysis_thread_id(
         document_id=document_id,
-        authority=processing_authority.current_authority(),
+        authority=authority,
     )
+    # Lane C PR-C2: the revision this run analyses is the one the #711
+    # authority pinned -- never "the latest upload". It binds the #714 artifact
+    # to its revision and lets N12 consult the temporal-review seam.
+    pinned_revision = getattr(authority, "revision_id", None) if authority is not None else None
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
@@ -756,6 +783,7 @@ async def _run_analysis_graph_best_effort(
         "retry_count": 0,
         "human_approval_required": False,
         "analysis_id": None,
+        "document_revision_id": str(pinned_revision) if pinned_revision else None,
         "force_full_pipeline": True,
     }
     # #758: take the existing review's lineage over the moment this attempt
@@ -829,8 +857,9 @@ class AnalysisIncompleteRetryableError(RuntimeError):
 
 # Document types whose product value depends on the N1-N17 free-text graph.
 # Grounded in DOC_TYPES ("contract", "technical_spec", "budget", "schedule") and
-# in how parsing treats them: schedule/budget are completed by structured WBS/BOM
-# extraction and legitimately never need the text graph.
+# in how parsing treats them: schedule/budget are completed by structured parsing
+# (schedule rows -> RAG, never canonical WBS (#852); budget -> BOM) and legitimately
+# never need the text graph.
 TEXT_ANALYSIS_DOCUMENT_TYPES: frozenset[DocumentType] = frozenset(
     {
         DocumentType.CONTRACT,
@@ -851,7 +880,7 @@ def requires_text_analysis(
     those documents pending forever for a graph they never needed -- trading the
     old false-success bug for a false-incomplete one.
 
-    A structured document is complete via WBS/BOM extraction; only a free-text
+    A structured document is complete via structured parsing; only a free-text
     document that actually has text can be owed a graph run.
     """
     if document_type not in TEXT_ANALYSIS_DOCUMENT_TYPES:
@@ -1042,14 +1071,15 @@ async def _analyze_owned(
         session=session,
         tenant_id=tenant_id,
         document_id=document_id,
+        revision_id=grant.revision_id,
     )
 
     # The N1-N17 text-analysis graph only applies to free-text documents that
     # have RAG chunks. Structured documents (schedule/budget) carry no free
     # text, and text documents whose embeddings are unavailable (e.g. no
     # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
-    # document is still ANALYZED via the structured extraction (clauses / WBS
-    # / BOM) done during parsing — the graph is a best-effort enrichment, never
+    # document is still ANALYZED via the structured extraction (clauses /
+    # schedule rows / BOM) done during parsing — the graph is a best-effort enrichment, never
     # a hard gate. This is what previously stranded documents in
     # parsed_pending_analysis and the DLQ ("parsed_text not available" /
     # "RAG chunks were not committed").
@@ -1296,7 +1326,7 @@ async def _process(
 
     #711: the worker first obtains the document's processing authority
     (attempt + owner token + fencing token under a DB-clock lease). Every
-    ingestion output -- stakeholders, WBS/BOM, RAG chunks, clauses, revision
+    ingestion output -- stakeholders, BOM, RAG chunks, clauses, revision
     events, metadata and the status hand-over -- is staged in ONE transaction
     that commits only after the authority is re-verified in that same
     transaction. A worker that lost authority (lease expired and taken over,
@@ -1320,10 +1350,6 @@ async def _process(
                 CreateStakeholderUseCase(repository=stk_repo, document_repository=repo),
             )
 
-        def wbs_factory() -> Any:
-            wbs_repo = SQLAlchemyWBSRepository(session=session)
-            return _SavepointedUseCase(session, CreateWBSItemUseCase(wbs_repository=wbs_repo))
-
         def bom_factory() -> Any:
             bom_repo = SQLAlchemyBOMRepository(session=session)
             return _SavepointedUseCase(session, CreateBOMItemUseCase(bom_repository=bom_repo))
@@ -1332,7 +1358,7 @@ async def _process(
             raise ValueError("document has no created_by user_id")
         entity_extraction = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            wbs_use_case_factory=wbs_factory,
+            # #852: no WBS writer -- a schedule is observed, never written as canonical WBS.
             bom_use_case_factory=bom_factory,
             user_id=document.created_by,
         )
@@ -1398,7 +1424,15 @@ async def _process(
             tenant_id=tenant_id,
             document_id=document_id,
             stage=ProcessingStage.INGESTION,
-            revision_id=revision_id,
+            # Lane C / C3a: a legacy message without revision_id still ingests one
+            # concrete revision (the current one, resolved above); the authority is
+            # acquired FOR it, so the analysis that follows is pinned to it. A
+            # conflicting binding is refused by acquire (fail closed).
+            revision_id=(
+                revision_id
+                if revision_id is not None or source_revision is None
+                else source_revision.revision_id
+            ),
             generation=generation,
             authority=authority,
         )
@@ -1484,6 +1518,9 @@ async def _ingest_owned(
         document=document,
         parsed_payload=parsed_payload,
         tenant_id=tenant_id,
+        # C3a: chunks are stamped with the pinned revision; readers only serve the
+        # trusted-current revision's chunks.
+        revision_id=source_revision.revision_id if source_revision else None,
     )
 
     document.document_metadata = document.document_metadata or {}
@@ -1503,36 +1540,25 @@ async def _ingest_owned(
     metadata["rag_ingestion_outcome"] = rag_result.outcome.value
     if parsed_text:
         metadata["parsed_text"] = parsed_text
+        # C3a: parsed_text is overwritten per ingestion; the stamp lets readers serve
+        # it only while it is the trusted-current revision's text.
+        if source_revision is not None:
+            metadata["parsed_text_revision_id"] = str(source_revision.revision_id)
+        else:
+            metadata.pop("parsed_text_revision_id", None)
         if document.document_type == DocumentType.CONTRACT:
-            existing_clauses = await repo.list_clauses_for_document(tenant_id, document_id)
-            revision_clauses = _extract_contract_clauses(
-                document_id=document_id,
-                project_id=document.project_id,
+            contract_clause_count = await _stage_contract_clauses(
+                session,
+                repo,
+                document=document,
                 tenant_id=tenant_id,
+                source_revision=source_revision,
+                authority_revision_id=grant.revision_id,
                 parsed_text=parsed_text,
                 parsed_payload=parsed_payload,
-                revision_id=source_revision.revision_id if source_revision else None,
             )
-            if not existing_clauses:
-                for clause in revision_clauses:
-                    await repo.add_clause(tenant_id, clause)
-                contract_clause_count = len(revision_clauses)
+            if contract_clause_count:
                 metadata["contract_clause_count"] = contract_clause_count
-            # P0c deliberately snapshots every revision's extraction even when the
-            # mutable legacy clause rows already contain the prior revision.
-            # Historical comparisons never read those mutable rows, and the events
-            # are bound to the immutable revision this task pinned.
-            if source_revision is not None:
-                event_repository = SqlAlchemyProjectEventRepository(session)
-                prior_events = await event_repository.list_for_project(
-                    document.project_id, tenant_id
-                )
-                for temporal_event in await build_revision_analysis_events(
-                    revision=source_revision,
-                    clauses=revision_clauses,
-                    existing_events=prior_events,
-                ):
-                    await event_repository.append(temporal_event)
     await repo.update_metadata(tenant_id, document_id, metadata)
     from datetime import UTC, datetime
 
@@ -1603,6 +1629,70 @@ async def _ingest_owned(
         "document_id": str(document_id),
         "details": processing_details,
     }
+
+
+class RevisionAuthorityMismatchError(ValueError):
+    """The bytes being ingested are not the revision the processing authority pinned."""
+
+
+async def _stage_contract_clauses(
+    session: Any,
+    repo: SqlAlchemyDocumentRepository,
+    *,
+    document: Any,
+    tenant_id: TenantId,
+    source_revision: DocumentRevision | None,
+    authority_revision_id: UUID | None,
+    parsed_text: str,
+    parsed_payload: dict[str, Any],
+) -> int:
+    """Stage the pinned revision's clause rows and its immutable snapshot (C3a).
+
+    Rows are bound to exactly the revision the #711 authority pinned (never the
+    latest/current one); a retry or reprocess of that revision reuses its rows,
+    and the snapshot is built from the persisted rows so its entity ids are the
+    row ids. Returns how many rows were inserted (0 on a replay).
+    """
+    revision_id = source_revision.revision_id if source_revision is not None else None
+    if authority_revision_id is not None and authority_revision_id != revision_id:
+        raise RevisionAuthorityMismatchError(
+            f"authority pinned revision {authority_revision_id}, ingesting {revision_id}"
+        )
+    extracted = _extract_contract_clauses(
+        document_id=document.id,
+        project_id=document.project_id,
+        tenant_id=tenant_id,
+        parsed_text=parsed_text,
+        parsed_payload=parsed_payload,
+        revision_id=revision_id,
+    )
+    event_repository = SqlAlchemyProjectEventRepository(session)
+    prior_events = (
+        await event_repository.list_for_project(document.project_id, tenant_id)
+        if source_revision is not None
+        else []
+    )
+    persisted = await persist_revision_clauses(
+        repo,
+        tenant_id=tenant_id,
+        document_id=document.id,
+        revision_id=revision_id,
+        extracted=extracted,
+        snapshot=(
+            snapshot_clauses_for_revision(revision_id, prior_events)
+            if revision_id is not None
+            else None
+        ),
+    )
+    if source_revision is not None:
+        # The events are bound to the immutable revision this task pinned.
+        for temporal_event in await build_revision_analysis_events(
+            revision=source_revision,
+            clauses=list(persisted.clauses),
+            existing_events=prior_events,
+        ):
+            await event_repository.append(temporal_event)
+    return persisted.inserted
 
 
 async def _record_ingestion_failure(

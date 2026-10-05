@@ -12,7 +12,10 @@ import pytest
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.coherence.rules_engine.context_rules import CoherenceRuleResult
-from src.coherence.services.alerts.generator import AlertGeneratorService
+from src.coherence.services.alerts.generator import (
+    FINGERPRINT_VERSION,
+    AlertGeneratorService,
+)
 
 
 def _make_alert_create(
@@ -47,7 +50,10 @@ def _make_mock_alert(
     alert.id = alert_id or uuid4()
     alert.status = status
     alert.severity = severity
-    alert.alert_metadata = {"fingerprint": fingerprint}
+    alert.alert_metadata = {
+        "fingerprint": fingerprint,
+        "fingerprint_version": FINGERPRINT_VERSION,
+    }
     alert.project_id = uuid4()
     alert.category = None
     alert.rule_id = None
@@ -93,6 +99,198 @@ class TestFingerprint:
         svc = AlertGeneratorService(repository=MagicMock())
         fp = svc._fingerprint(alert)
         assert len(fp) == 64  # SHA-256 hex
+
+
+    def test_legacy_text_locator_matches_new_detection_evidence_identity(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "AUDIT_INCOMPLETE"
+        existing.category = "SCOPE"
+        existing.alert_metadata = {
+            "evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "claim": "Missing dimensions",
+                "quote": "",
+            }
+        }
+
+        incoming = _make_alert_create(
+            rule_id="AUDIT_INCOMPLETE",
+            category="SCOPE",
+            affected_entities={"documents": ["doc-fallback"]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "source_document_id": "doc-fallback",
+                "claim": "Missing dimensions",
+                "quote": "",
+            }
+        }
+
+        assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
+    def test_positional_rag_locator_does_not_own_finding_identity(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        first = _make_alert_create(
+            rule_id="DET-LEG-RAG",
+            category="LEGAL",
+            affected_entities={"documents": ["doc-123"]},
+        )
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_0_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+        second = first.model_copy(deep=True)
+        second.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_9_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+
+        assert svc._fingerprint(first) == svc._fingerprint(second)
+
+    def test_existing_positional_rag_locator_matches_renumbered_incoming_finding(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "DET-LEG-RAG"
+        existing.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_1_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+        incoming = _make_alert_create(
+            rule_id="DET-LEG-RAG",
+            category="LEGAL",
+            affected_entities={"documents": ["doc-123"]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_7_deadbeef",
+                "source_document_id": "doc-123",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+
+        assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
+    def test_parsed_text_locator_does_not_hide_materially_changed_finding(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        first = _make_alert_create(rule_id="AUDIT_INCOMPLETE", category="SCOPE")
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "source_document_id": "doc-fallback",
+                "claim": "Missing dimensions",
+                "quote": "Scope A",
+            }
+        }
+        second = first.model_copy(deep=True)
+        second.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_deadbeef",
+                "source_document_id": "doc-fallback",
+                "claim": "Different missing dimensions",
+                "quote": "Scope B",
+            }
+        }
+
+        assert svc._fingerprint(first) != svc._fingerprint(second)
+
+    def test_legacy_positional_rag_without_document_id_matches_incoming(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "DET-LEG-RAG"
+        existing.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_1_deadbeef",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+        incoming = _make_alert_create(rule_id="DET-LEG-RAG", category="LEGAL")
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "chunk_7_deadbeef",
+                "source_document_id": "deadbeef-document",
+                "claim": "Notice period mismatch",
+                "quote": "Notice shall be thirty days",
+            }
+        }
+
+        assert svc._fingerprint_existing(existing) == svc._fingerprint(incoming)
+
+
+    def test_verified_composite_locator_matches_persisted_identity(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        clause_a = uuid4()
+        clause_b = uuid4()
+        composite = f"{clause_a}|{clause_b}"
+        incoming = _make_alert_create(
+            rule_id="CROSS-LEGAL-CONFLICT",
+            category="LEGAL",
+            source_clause_id=clause_a,
+        )
+        incoming.related_clause_ids = [clause_b]
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": composite,
+                "claim": "Clauses conflict",
+                "quote": "A conflicts with B",
+            }
+        }
+
+        existing = _make_mock_alert(fingerprint="")
+        existing.rule_id = "CROSS-LEGAL-CONFLICT"
+        existing.category = "LEGAL"
+        existing.source_clause_id = clause_a
+        existing.related_clause_ids = [clause_b]
+        existing.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": composite,
+                "claim": "Clauses conflict",
+                "quote": "A conflicts with B",
+            }
+        }
+
+        assert svc._fingerprint(incoming) == svc._fingerprint_existing(existing)
+
+    def test_stored_legacy_fingerprint_is_recomputed_with_current_identity_scheme(self) -> None:
+        clause_id = uuid4()
+        svc = AlertGeneratorService(repository=MagicMock())
+        existing = _make_mock_alert(fingerprint="legacy-v1-digest")
+        existing.alert_metadata = {
+            "fingerprint": "legacy-v1-digest",
+            "fingerprint_version": 1,
+        }
+        existing.rule_id = "DET-SCP-DELIVERABLES"
+        existing.category = "SCOPE"
+        existing.source_clause_id = clause_id
+        existing.affected_entities = {"documents": ["doc-1"]}
+
+        incoming = _make_alert_create(
+            rule_id="DET-SCP-DELIVERABLES",
+            category="SCOPE",
+            source_clause_id=clause_id,
+            affected_entities={"documents": ["doc-1"]},
+        )
+
+        current = svc._fingerprint(incoming)
+        assert current != "legacy-v1-digest"
+        assert svc._fingerprint_existing(existing) == current
 
 
 class TestFlattenEntities:
@@ -236,6 +434,33 @@ class TestProcessViolations:
         assert len(resolved_calls) >= 1
 
     @pytest.mark.asyncio
+    async def test_acknowledged_finding_survives_temporary_detector_miss(self) -> None:
+        existing = _make_mock_alert(
+            status=AlertStatus.ACKNOWLEDGED,
+            fingerprint="accepted-fp",
+        )
+        reviewer = uuid4()
+        existing.reviewed_by = reviewer
+        existing.review_comment = "Accepted contractual variance"
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        svc = AlertGeneratorService(repository=repo)
+        await svc.process_violations(
+            project_id=uuid4(),
+            violations=[],
+            auto_resolve=True,
+        )
+
+        assert existing.status == AlertStatus.ACKNOWLEDGED
+        assert existing.reviewed_by == reviewer
+        assert existing.review_comment == "Accepted contractual variance"
+        repo.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_no_auto_resolve_when_disabled(self) -> None:
         existing = _make_mock_alert(status=AlertStatus.OPEN, fingerprint="old-fp")
         repo = MagicMock()
@@ -271,7 +496,9 @@ class _StatefulAlertRepo:
         self.create_calls = 0
         self.update_calls = 0
 
-    async def list_for_project(self, project_id, cursor=None, limit=200):  # noqa: ANN001, ARG002
+    async def list_for_project(
+        self, project_id, tenant_id=None, alert_type=None, cursor=None, limit=200
+    ):  # noqa: ANN001, ARG002
         return _make_mock_page(list(self._alerts), has_more=False)
 
     async def create(self, payload):  # noqa: ANN001
@@ -392,3 +619,418 @@ class TestProcessRuleResults:
         result = await svc.process_rule_results(project_id=uuid4(), rule_results=[rule_result])
         assert result == []
         repo.create.assert_not_awaited()
+
+
+class TestLineBStableFindingIdentity:
+    @pytest.mark.asyncio
+    async def test_reanalysis_scopes_existing_lookup_to_tenant_and_coherence_type(self) -> None:
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([]))
+        repo.create = AsyncMock(return_value=_make_mock_alert())
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        project_id = uuid4()
+        tenant_id = uuid4()
+
+        await svc.process_violations(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            violations=[_make_alert_create(rule_id="DET-SCP-DELIVERABLES")],
+        )
+
+        repo.list_for_project.assert_awaited_once_with(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alert_type=AlertType.COHERENCE,
+            cursor=None,
+            limit=200,
+        )
+
+    @pytest.mark.asyncio
+    async def test_same_acknowledged_finding_preserves_human_disposition_and_metadata(self) -> None:
+        reviewer = uuid4()
+        existing = _make_mock_alert(status=AlertStatus.ACKNOWLEDGED, fingerprint="stable-fp")
+        existing.reviewed_by = reviewer
+        existing.review_comment = "Accepted contractual variance"
+        existing.alert_metadata = {
+            "fingerprint": "stable-fp",
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "approve"}],
+            "evidence": [{"type": "note", "content": "Reviewer evidence"}],
+            "detection_evidence": {"claim": "old claim", "quote": "old quote"},
+        }
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        incoming = _make_alert_create(rule_id="DET-SCP-DELIVERABLES")
+        incoming.alert_metadata = {
+            "detection_evidence": {"claim": "fresh claim", "quote": "fresh quote"}
+        }
+
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="stable-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(), tenant_id=uuid4(), violations=[incoming]
+            )
+
+        same = result[0]
+        assert same is existing
+        assert same.status == AlertStatus.ACKNOWLEDGED
+        assert same.reviewed_by == reviewer
+        assert same.review_comment == "Accepted contractual variance"
+        assert same.alert_metadata["history"] == [
+            {"action": "reviewed", "decision": "approve"}
+        ]
+        assert same.alert_metadata["evidence"] == [
+            {"type": "note", "content": "Reviewer evidence"}
+        ]
+        assert same.alert_metadata["detection_evidence"]["claim"] == "fresh claim"
+
+    @pytest.mark.asyncio
+    async def test_same_dismissed_false_positive_does_not_reopen(self) -> None:
+        existing = _make_mock_alert(status=AlertStatus.DISMISSED, fingerprint="false-positive-fp")
+        existing.review_comment = "False positive confirmed"
+        existing.resolution_notes = "False positive confirmed"
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        incoming = _make_alert_create(rule_id="DET-SCP-DELIVERABLES")
+
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="false-positive-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(), tenant_id=uuid4(), violations=[incoming]
+            )
+
+        assert result[0] is existing
+        assert existing.status == AlertStatus.DISMISSED
+        assert existing.review_comment == "False positive confirmed"
+        assert existing.resolution_notes == "False positive confirmed"
+
+    @pytest.mark.asyncio
+    async def test_duplicate_findings_in_one_evaluation_create_one_alert(self) -> None:
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([]))
+        repo.create = AsyncMock(side_effect=lambda payload: _make_mock_alert())
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+        same = _make_alert_create(rule_id="DET-SCP-DELIVERABLES")
+
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="same-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(), tenant_id=uuid4(), violations=[same, same]
+            )
+
+        assert len(result) == 1
+        assert repo.create.await_count == 1
+
+
+class TestB1ResidualIdentityContracts:
+    @pytest.mark.asyncio
+    async def test_b1_new_authoritative_observation_revalidates_dismissed_disposition(self) -> None:
+        """B1-03/B1-04: same family on a new evidence basis must not inherit dismissal blindly."""
+        old_revision = uuid4()
+        new_revision = uuid4()
+        existing = _make_mock_alert(
+            status=AlertStatus.DISMISSED,
+            fingerprint="stable-family-fp",
+        )
+        existing.review_comment = "False positive against V1 evidence"
+        existing.alert_metadata = {
+            "fingerprint": "stable-family-fp",
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "reject"}],
+            "detection_evidence": {
+                "revision_id": str(old_revision),
+                "claim": "Old evidence basis",
+            },
+        }
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        incoming = _make_alert_create(rule_id="DET-TIM-GAP")
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "revision_id": str(new_revision),
+                "claim": "New trusted evidence basis",
+            }
+        }
+
+        svc = AlertGeneratorService(repository=repo)
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="stable-family-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                violations=[incoming],
+            )
+
+        assert result[0] is existing
+        assert existing.status == AlertStatus.OPEN
+        history = existing.alert_metadata.get("history", [])
+        assert any(item.get("action") == "basis_changed_reopened" for item in history)
+
+    @pytest.mark.asyncio
+    async def test_b1_ambiguous_legacy_family_fails_closed_instead_of_picking_first_row(self) -> None:
+        """B1-04: duplicate legacy ownership must surface an explicit fail-closed conflict."""
+        first = _make_mock_alert(status=AlertStatus.OPEN, fingerprint="legacy-collision")
+        second = _make_mock_alert(status=AlertStatus.ACKNOWLEDGED, fingerprint="legacy-collision")
+        first.rule_id = second.rule_id = "DET-LEG-COLLISION"
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([first, second]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        incoming = _make_alert_create(rule_id="DET-LEG-COLLISION")
+        svc = AlertGeneratorService(repository=repo)
+
+        with (
+            patch(
+                "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+                return_value="legacy-collision",
+            ),
+            pytest.raises(Exception, match="LEGACY_IDENTITY_CONFLICT"),
+        ):
+            await svc.process_violations(
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                violations=[incoming],
+            )
+
+
+class TestB1FingerprintV4Safety:
+    def test_same_document_rule_and_claim_but_different_quote_do_not_collapse(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = str(uuid4())
+
+        first = _make_alert_create(rule_id="DET-LEG-NOTICE", category="LEGAL")
+        first.affected_entities = {"documents": [document_id]}
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": document_id,
+                "claim": "Notice period conflict",
+                "quote": "Notice shall be thirty days.",
+            }
+        }
+
+        second = first.model_copy(deep=True)
+        second.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": document_id,
+                "claim": "Notice period conflict",
+                "quote": "Notice shall be ninety days.",
+            }
+        }
+
+        assert svc._fingerprint(first) != svc._fingerprint(second)
+
+    def test_document_family_is_order_independent_for_composite_documents(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        doc_a, doc_b = str(uuid4()), str(uuid4())
+
+        first = _make_alert_create(rule_id="CROSS-BUDGET-CONFLICT", category="BUDGET")
+        first.affected_entities = {"documents": [doc_a, doc_b]}
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": doc_a,
+                "claim": "Contract value conflicts with budget total",
+                "quote": "Contract total differs from approved budget total.",
+            }
+        }
+
+        second = first.model_copy(deep=True)
+        second.affected_entities = {"documents": [doc_b, doc_a]}
+
+        assert svc._fingerprint(first) == svc._fingerprint(second)
+
+    def test_without_stable_document_semantics_clause_identity_stays_revision_bound(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        first_clause, second_clause = uuid4(), uuid4()
+
+        first = _make_alert_create(
+            rule_id="DET-UNANCHORED",
+            category="SCOPE",
+            source_clause_id=first_clause,
+        )
+        first.alert_metadata = {"detection_evidence": {"claim": "", "quote": ""}}
+
+        second = first.model_copy(deep=True)
+        second.source_clause_id = second_clause
+
+        assert svc._fingerprint(first) != svc._fingerprint(second)
+
+
+class TestB1RealCrossRevisionIdentity:
+    def test_same_semantic_finding_across_clause_revisions_keeps_family_but_changes_observation(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = uuid4()
+        v1_clause = uuid4()
+        v2_clause = uuid4()
+
+        def candidate(clause_id):
+            alert = _make_alert_create(
+                rule_id="DET-TIM-COD-MISMATCH",
+                category="TIME",
+                source_clause_id=clause_id,
+                affected_entities={"documents": [str(document_id)]},
+            )
+            alert.alert_metadata = {
+                "detection_evidence": {
+                    "source_clause_id": str(clause_id),
+                    "source_document_id": str(document_id),
+                    "claim": "Contract COD conflicts with approved schedule COD",
+                    "quote": "The contractual completion date conflicts with the approved schedule.",
+                }
+            }
+            return alert
+
+        v1 = candidate(v1_clause)
+        v2 = candidate(v2_clause)
+
+        assert svc._fingerprint(v1) == svc._fingerprint(v2), (
+            "revision-bound clause UUID must be observation provenance, not semantic family identity"
+        )
+        assert svc._observation_key(v1.alert_metadata) != svc._observation_key(v2.alert_metadata)
+
+    @pytest.mark.asyncio
+    async def test_dismissed_v1_family_reopens_on_real_v2_clause_without_creating_new_alert(self) -> None:
+        document_id = uuid4()
+        v1_clause = uuid4()
+        v2_clause = uuid4()
+        svc_for_identity = AlertGeneratorService(repository=MagicMock())
+
+        v1 = _make_alert_create(
+            rule_id="DET-TIM-COD-MISMATCH",
+            category="TIME",
+            source_clause_id=v1_clause,
+            affected_entities={"documents": [str(document_id)]},
+        )
+        v1.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": str(v1_clause),
+                "source_document_id": str(document_id),
+                "claim": "Contract COD conflicts with approved schedule COD",
+                "quote": "The contractual completion date conflicts with the approved schedule.",
+            }
+        }
+        old_family = svc_for_identity._fingerprint(v1)
+        existing = _make_mock_alert(
+            status=AlertStatus.DISMISSED,
+            fingerprint=old_family,
+        )
+        existing.rule_id = "DET-TIM-COD-MISMATCH"
+        existing.category = "TIME"
+        existing.source_clause_id = v1_clause
+        existing.affected_entities = {"documents": [str(document_id)]}
+        existing.alert_metadata = {
+            "fingerprint": old_family,
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "reject"}],
+            "detection_evidence": dict(v1.alert_metadata["detection_evidence"]),
+            "current_observation_key": svc_for_identity._observation_key(v1.alert_metadata),
+        }
+
+        incoming = _make_alert_create(
+            rule_id="DET-TIM-COD-MISMATCH",
+            category="TIME",
+            source_clause_id=v2_clause,
+            affected_entities={"documents": [str(document_id)]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": str(v2_clause),
+                "source_document_id": str(document_id),
+                "claim": "Contract COD conflicts with approved schedule COD",
+                "quote": "The contractual completion date conflicts with the approved schedule.",
+            }
+        }
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+
+        result = await svc.process_violations(
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            violations=[incoming],
+        )
+
+        assert result == [existing]
+        assert existing.status == AlertStatus.OPEN
+        repo.create.assert_not_awaited()
+        history = existing.alert_metadata.get("history", [])
+        assert any(item.get("action") == "basis_changed_reopened" for item in history)
+
+
+class TestB1IdentityQualityMetadata:
+    def test_strong_document_family_is_explicitly_versioned(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = str(uuid4())
+        alert = _make_alert_create(rule_id="DET-TIM-QUALITY", category="TIME")
+        alert.affected_entities = {"documents": [document_id]}
+        alert.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": document_id,
+                "claim": "Completion date conflict",
+                "quote": "The completion dates conflict.",
+            }
+        }
+
+        fingerprint = svc._fingerprint(alert)
+        metadata = svc._build_metadata(alert, fingerprint)
+
+        assert metadata["finding_key"] == fingerprint
+        assert metadata["identity_schema_version"] == FINGERPRINT_VERSION
+        assert metadata["identity_quality"] == "strong"
+
+    def test_clause_only_identity_is_marked_revision_bound(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        alert = _make_alert_create(
+            rule_id="DET-SCOPE-REVISION-BOUND",
+            category="SCOPE",
+            source_clause_id=uuid4(),
+        )
+        alert.alert_metadata = {"detection_evidence": {}}
+
+        metadata = svc._build_metadata(alert, svc._fingerprint(alert))
+
+        assert metadata["identity_quality"] == "revision_bound"
+
+    def test_synthetic_locator_identity_is_marked_weak(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        alert = _make_alert_create(rule_id="DET-TECH-SYNTHETIC", category="TECHNICAL")
+        alert.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_1234abcd",
+                "claim": "Synthetic extraction conflict",
+                "quote": "Synthetic source text",
+            }
+        }
+
+        metadata = svc._build_metadata(alert, svc._fingerprint(alert))
+
+        assert metadata["identity_quality"] == "weak"

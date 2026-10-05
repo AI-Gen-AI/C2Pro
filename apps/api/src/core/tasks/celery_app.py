@@ -45,6 +45,8 @@ celery_app = Celery(
         "src.core.tasks.ingestion_tasks",
         "src.core.tasks.budget_alerts",
         "src.core.tasks.project_graph_tasks",
+        "src.core.tasks.materialization_tasks",
+        "src.core.tasks.temporal_tasks",
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
         "src.core.tasks.hitl_resume_reconciler",
@@ -96,6 +98,13 @@ celery_app.conf.update(
             "task": "hitl_resume.reconcile",
             "schedule": 60.0,
         },
+        # #795: trusted HITL finalization writes a durable GRAPH_COMPLETED
+        # Health projection obligation. This bounded sweep recovers a lost
+        # post-commit Celery dispatch without replaying the graph or decision.
+        "hitl-health-projection-reconcile": {
+            "task": "hitl_resume.reconcile_health_projection",
+            "schedule": 60.0,
+        },
         "document-processing-reconcile": {
             "task": "documents.reconcile_stale_processing",
             "schedule": 60.0,
@@ -105,6 +114,13 @@ celery_app.conf.update(
         "project-graph-trusted-projection-reconcile": {
             "task": "project_graph.reconcile_trusted_projections",
             "schedule": 300.0,
+        },
+        # C3b-1: an approval's artifact-keyed materialization obligation is
+        # normally fulfilled in the approval transaction itself; anything left
+        # pending (lost dispatch, crash) is re-dispatched from here.
+        "trusted-materialization-reconcile": {
+            "task": "materialization.reconcile_pending",
+            "schedule": 120.0,
         },
     },
 )

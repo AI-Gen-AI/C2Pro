@@ -37,6 +37,8 @@ class AnalysisWrite:
     resume_attempt_id: UUID | None = None
     fencing_token: int | None = None
     decision_revision: int | None = None
+    # Lane C / C3b-1: the trusted artifact this analysis materializes (one at most).
+    source_artifact_id: UUID | None = None
 
 
 @dataclass(frozen=True)

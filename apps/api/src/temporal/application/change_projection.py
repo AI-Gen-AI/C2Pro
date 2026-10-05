@@ -15,7 +15,8 @@ from src.change_intelligence.domain.contracts import ChangeSet
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_event import ProjectEvent
 
-CHANGE_PROJECTION_ENGINE_VERSION = "p0c-structural-l1-v1"
+# v2: fail-closed clause identity; positional codes never pair clauses (PR-C1).
+CHANGE_PROJECTION_ENGINE_VERSION = "p0c-structural-l1-v2"
 
 
 class ChangeCause(StrEnum):
@@ -36,8 +37,12 @@ def _state_for(changeset: ChangeSet) -> str:
 
 
 def _confidence_for(changeset: ChangeSet) -> float | None:
+    # An L2 classification cannot be more certain than the pairing it classifies,
+    # so semantic confidence never masks a weak or inferred anchor match.
     values = [
-        change.confidence if change.confidence is not None else change.match_confidence
+        min(change.match_confidence, change.confidence)
+        if change.confidence is not None
+        else change.match_confidence
         for change in changeset.changes
     ]
     return min(values) if values else None
@@ -66,8 +71,13 @@ def build_change_projection_event(
     event_type: str = "revision.changed",
     provenance_extra: dict[str, str] | None = None,
     actor: str | None = None,
+    diff_engine_version: str = CHANGE_PROJECTION_ENGINE_VERSION,
 ) -> ProjectEvent:
     """Build the immutable temporal projection after L1/L2 computation.
+
+    ``diff_engine_version`` names the structural matcher that produced the
+    changeset's clause pairings; a later L2 pass over an existing changeset must
+    pass the original matcher's version rather than the current one.
 
     Equal content hashes can still produce a useful interpretation upgrade, but
     are never labelled as a change in the underlying business state.
@@ -98,7 +108,7 @@ def build_change_projection_event(
                 str(target_ingestion_event_id) if target_ingestion_event_id else None
             ),
             "provenance": {
-                "diff_engine_version": CHANGE_PROJECTION_ENGINE_VERSION,
+                "diff_engine_version": diff_engine_version,
                 "source_revision_id": str(changeset.from_revision_id),
                 "target_revision_id": str(changeset.to_revision_id),
                 "semantic_model_version": semantic_model_version,

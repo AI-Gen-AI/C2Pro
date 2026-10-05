@@ -32,56 +32,6 @@ lock, and no database connection is held while LangGraph runs -- the graph
 opens its own sessions, and holding one across it deadlocks (the request
 cannot commit until the graph returns; the graph cannot proceed until the
 request commits).
-
-Lock order (#758)
------------------
-Row locks across the tables that a resume and a document generation both
-touch are taken in ONE canonical order, and every transaction takes a PREFIX
-or a SUBSET of it::
-
-    documents
-      -> system_recovery.document_work_index
-      -> document_processing_operations
-      -> resume_operations
-      -> review_items
-      -> projects, then append-only tables
-         (analyses, alerts, wbs_nodes, project_events,
-          resume_operation_attempts, document_revisions)
-
-``document_processing_operations`` and ``resume_operations`` are never held
-at the same time, so their relative position is a convention rather than a
-constraint. The orders actually taken are::
-
-    reupload / reprocess   documents -> dpo -> review_items
-    analysis terminal      documents -> dpo
-    lineage claim/rebind   documents -> dpo -> review_items
-    acquire / recovery     resume_operations -> review_items
-    verify_in_transaction  resume_operations -> review_items
-    N17                    resume_operations -> review_items -> projects
-    graph-completed        resume_operations -> review_items
-    finalize (both ways)   documents -> resume_operations -> review_items
-
-Finalization needed fixing first. It is the only resume transaction that
-writes ``documents``, and it used to do so LAST, which formed a real cycle
-with the generation transition: the reupload held the document and waited on
-the review, while the approval held the review and waited on the document.
-Reversing the GENERATION side instead was not an option -- taking the review
-before the document there would invert against the lineage claim, which
-necessarily holds the #711 authority row before it touches the review.
-
-The document row is now locked EXPLICITLY on BOTH sides, rather than left to
-the order statements happen to be emitted in. "Reupload/reprocess already
-starts from the document" turned out to be true only of reupload: the
-repository's ``update_status`` / ``update_metadata`` merely STAGE an ORM
-mutation, so a reprocess reached the authority row and the review with its
-``UPDATE documents`` still unflushed. Measured with ``FOR UPDATE NOWAIT``
-from a second connection, that transition held the authority row and the
-review while the document row was still free -- the inverted order, and
-invisible in the call sequence. ``processing_authority`` therefore takes the
-document row itself (see ``_lock_document`` there).
-
-Anything added here that writes ``documents`` or ``projects`` from inside a
-resume transaction must take those rows before ``resume_operations``.
 """
 
 from __future__ import annotations
@@ -811,13 +761,67 @@ _MARK_TERMINAL_SQL = text(
 )
 
 
+@dataclass(frozen=True)
+class GraphCompletedMarker:
+    """The durable ``graph.completed`` event committed by section 9.
+
+    Returned so the application layer can enqueue the snapshot projection
+    only after the fenced transaction has committed.
+    """
+
+    event_id: UUID
+    project_id: UUID
+
+
+_LOAD_GRAPH_COMPLETED_MARKER_SQL = text(
+    """
+    SELECT event_id, project_id
+      FROM project_events
+     WHERE tenant_id = cast(:tenant_id as uuid)
+       AND resume_operation_id = cast(:operation_id as uuid)
+       AND event_type = 'graph.completed'
+     ORDER BY created_at ASC, event_id ASC
+     LIMIT 1
+    """
+)
+
+
+async def get_graph_completed_marker(
+    *,
+    ownership: Ownership,
+    session_factory: Any = None,
+) -> GraphCompletedMarker | None:
+    """Load the exact graph-completion event already committed for this operation.
+
+    Recovery enters at ``GRAPH_COMPLETED`` without replaying the graph, so it
+    must reuse the original event identity.  The database uniqueness contract
+    makes this a single durable marker rather than a "latest event" guess.
+    """
+    async with _session(session_factory, ownership.tenant_id) as session:
+        row = (
+            await session.execute(
+                _LOAD_GRAPH_COMPLETED_MARKER_SQL,
+                {
+                    "tenant_id": str(ownership.tenant_id),
+                    "operation_id": str(ownership.operation_id),
+                },
+            )
+        ).first()
+    if row is None:
+        return None
+    return GraphCompletedMarker(
+        event_id=_uuid(row.event_id),
+        project_id=_uuid(row.project_id),
+    )
+
+
 async def mark_graph_completed(
     *,
     ownership: Ownership,
     terminal_checkpoint_id: str,
     document_id: str | None = None,
     session_factory: Any = None,
-) -> bool:
+) -> GraphCompletedMarker | None:
     """Record that the graph reached a VERIFIED terminal checkpoint.
 
     C2PRO P0b crash-safe HITL resume V3, section 9. One short fenced
@@ -854,13 +858,15 @@ async def mark_graph_completed(
         ).first()
         if row is None:
             # Not in N17_DURABLE, or no longer ours: emit nothing.
-            return False
+            return None
 
+        event_id = _uuid4()
+        project_id = _uuid(row.project_id)
         now = datetime.now(UTC).replace(tzinfo=None)
         session.add(
             ProjectEventORM(
-                event_id=_uuid4(),
-                project_id=row.project_id,
+                event_id=event_id,
+                project_id=project_id,
                 tenant_id=ownership.tenant_id,
                 event_type=GRAPH_COMPLETED_EVENT,
                 payload={
@@ -885,8 +891,9 @@ async def mark_graph_completed(
         operation_id=str(ownership.operation_id),
         attempt_id=str(ownership.attempt_id),
         terminal_checkpoint_id=terminal_checkpoint_id,
+        event_id=str(event_id),
     )
-    return True
+    return GraphCompletedMarker(event_id=event_id, project_id=project_id)
 
 
 # ── finalization (V3 section 10) ─────────────────────────────────────────────
@@ -961,13 +968,63 @@ _FINALIZE_DOCUMENT_REJECT_SQL = text(
     """
 )
 
+GRAPH_COMPLETED_HEALTH_PROJECTION_KEY = "graph_completed_health_projection"
+GRAPH_COMPLETED_HEALTH_PROJECTION_RETRY_SECONDS = 300
+
 _FINALIZE_OPERATION_SQL = text(
     """
     UPDATE resume_operations
-       SET phase = cast(:phase as text), updated_at = clock_timestamp()
+       SET phase = cast(:phase as text),
+           operation_metadata = CASE
+               WHEN cast(:phase as text) = 'FINALIZED_APPROVED'
+               THEN coalesce(operation_metadata, '{}'::jsonb)
+                    || jsonb_build_object(
+                           'graph_completed_health_projection',
+                           jsonb_build_object(
+                               'event_id', (
+                                   SELECT e.event_id::text
+                                     FROM project_events e
+                                    WHERE e.resume_operation_id = resume_operations.id
+                                      AND e.tenant_id = resume_operations.tenant_id
+                                      AND e.project_id = resume_operations.project_id
+                                      AND e.event_type = 'graph.completed'
+                                    LIMIT 1
+                               ),
+                               -- The post-commit fast path below is attempt #1.
+                               -- Persist it as in-flight in the SAME trusted
+                               -- transaction so the 60s Beat sweep cannot race a
+                               -- slow broker/worker delivery. A crashed/lost fast
+                               -- path becomes retryable only after this lease.
+                               'state', 'in_flight',
+                               'attempts', 1,
+                               'retry_after',
+                                   clock_timestamp()
+                                   + make_interval(
+                                         secs => cast(
+                                             :health_projection_retry_seconds
+                                             as double precision
+                                         )
+                                     )
+                           )
+                       )
+               ELSE coalesce(operation_metadata, '{}'::jsonb)
+           END,
+           updated_at = clock_timestamp()
      WHERE id = cast(:operation_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
        AND current_attempt_id = cast(:attempt_id as uuid)
        AND fencing_token = cast(:fencing_token as bigint)
+       AND (
+           cast(:phase as text) <> 'FINALIZED_APPROVED'
+           OR EXISTS (
+               SELECT 1
+                 FROM project_events e
+                WHERE e.resume_operation_id = resume_operations.id
+                  AND e.tenant_id = resume_operations.tenant_id
+                  AND e.project_id = resume_operations.project_id
+                  AND e.event_type = 'graph.completed'
+           )
+       )
     RETURNING id
     """
 )
@@ -1064,7 +1121,6 @@ async def finalize_v3(
                     "Cannot finalize approval without a document to mark ANALYZED; "
                     "refusing to report success"
                 )
-
         review = (
             await session.execute(
                 _FINALIZE_REVIEW_SQL,
@@ -1126,6 +1182,7 @@ async def finalize_v3(
                 _FINALIZE_OPERATION_SQL,
                 {
                     "operation_id": str(ownership.operation_id),
+                    "tenant_id": str(ownership.tenant_id),
                     "attempt_id": str(ownership.attempt_id),
                     "fencing_token": ownership.fencing_token,
                     "phase": (
@@ -1133,6 +1190,8 @@ async def finalize_v3(
                         if approved
                         else Phase.FINALIZED_REJECTED.value
                     ),
+                    "health_projection_retry_seconds":
+                        GRAPH_COMPLETED_HEALTH_PROJECTION_RETRY_SECONDS,
                 },
             )
         ).first()

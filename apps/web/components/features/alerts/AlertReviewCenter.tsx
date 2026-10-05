@@ -4,7 +4,8 @@
  */
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type AlertSeverity = "critical" | "high" | "medium" | "low";
 type AlertStatus = "pending" | "approved" | "rejected";
@@ -15,6 +16,10 @@ export interface ReviewAlert {
   severity: AlertSeverity;
   status: AlertStatus;
   clauseId?: string;
+  addressableClauseId?: string;
+  sourceDocumentId?: string;
+  evidenceClaim?: string;
+  evidenceQuote?: string;
   assignee?: string;
   rejectionReason?: string;
   resolutionNotes?: string;
@@ -33,6 +38,13 @@ type ModalState =
 interface AlertReviewCenterProps {
   projectId: string;
   alerts: ReviewAlert[];
+  onApprove?: (alertId: string) => Promise<void>;
+  onReject?: (alertId: string, reason: string) => Promise<void>;
+  onResolve?: (
+    alertId: string,
+    resolution: string,
+    rootCause?: string,
+  ) => Promise<void>;
 }
 
 const SEVERITY_RANK: Record<AlertSeverity, number> = {
@@ -48,7 +60,13 @@ function findAlert(items: ReviewAlert[], alertId: string): ReviewAlert | undefin
   return items.find((item) => item.id === alertId);
 }
 
-export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps) {
+export function AlertReviewCenter({
+  projectId,
+  alerts,
+  onApprove,
+  onReject,
+  onResolve,
+}: AlertReviewCenterProps) {
   const [items, setItems] = useState<ReviewAlert[]>(alerts);
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -62,7 +80,14 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
   const [createTitle, setCreateTitle] = useState("");
   const [createSeverity, setCreateSeverity] = useState<AlertSeverity>("medium");
   const [createClauseId, setCreateClauseId] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const persistedMode = Boolean(onApprove && onReject && onResolve);
+
+  useEffect(() => {
+    setItems(alerts);
+  }, [alerts]);
 
   const activeAlert = useMemo(() => {
     if (modal.kind === "none" || modal.kind === "create") return undefined;
@@ -79,6 +104,7 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
 
   const closeModal = () => {
     setModal({ kind: "none" });
+    setMutationError(null);
     setApproveConfirmed(false);
     setRejectReason("");
     setResolutionNotes("");
@@ -126,8 +152,23 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
     setModal({ kind: "create" });
   };
 
-  const saveApprove = () => {
+  const saveApprove = async () => {
     if (modal.kind !== "approve" || !approveConfirmed) return;
+    if (persistedMode && onApprove) {
+      setIsSaving(true);
+      setMutationError(null);
+      try {
+        await onApprove(modal.alertId);
+        closeModal();
+      } catch (error) {
+        setMutationError(
+          error instanceof Error ? error.message : "Could not approve alert.",
+        );
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
     setItems((prev) =>
       prev.map((item) =>
         item.id === modal.alertId ? { ...item, status: "approved", rejectionReason: undefined } : item,
@@ -136,8 +177,23 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
     closeModal();
   };
 
-  const saveReject = () => {
+  const saveReject = async () => {
     if (modal.kind !== "reject" || rejectReason.trim().length === 0) return;
+    if (persistedMode && onReject) {
+      setIsSaving(true);
+      setMutationError(null);
+      try {
+        await onReject(modal.alertId, rejectReason.trim());
+        closeModal();
+      } catch (error) {
+        setMutationError(
+          error instanceof Error ? error.message : "Could not reject alert.",
+        );
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
     setItems((prev) =>
       prev.map((item) =>
         item.id === modal.alertId
@@ -151,10 +207,30 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
   const requiresRootCause = (severity: AlertSeverity): boolean =>
     severity === "critical" || severity === "high";
 
-  const saveResolve = () => {
+  const saveResolve = async () => {
     if (modal.kind !== "resolve" || !activeAlert) return;
     if (resolutionNotes.trim().length === 0) return;
     if (requiresRootCause(activeAlert.severity) && rootCause.trim().length === 0) {
+      return;
+    }
+
+    if (persistedMode && onResolve) {
+      setIsSaving(true);
+      setMutationError(null);
+      try {
+        await onResolve(
+          modal.alertId,
+          resolutionNotes.trim(),
+          rootCause.trim() || undefined,
+        );
+        closeModal();
+      } catch (error) {
+        setMutationError(
+          error instanceof Error ? error.message : "Could not resolve alert.",
+        );
+      } finally {
+        setIsSaving(false);
+      }
       return;
     }
 
@@ -215,6 +291,8 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
       `Severity: ${alert.severity.toUpperCase()}`,
       `Status: ${alert.status}`,
       `Clause: ${alert.clauseId ?? "—"}`,
+      `Evidence claim: ${alert.evidenceClaim ?? "—"}`,
+      `Evidence quote: ${alert.evidenceQuote ?? "—"}`,
       `Owner: ${alert.assignee ?? "—"}`,
       "Please review the source evidence and confirm the vendor response or corrective action.",
     ].join("\n");
@@ -247,12 +325,14 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
             <option value="rejected">Rejected</option>
           </select>
         </div>
-        <button
-          type="button"
-          onClick={(event) => openCreate(event.currentTarget)}
-        >
-          New Alert
-        </button>
+        {!persistedMode ? (
+          <button
+            type="button"
+            onClick={(event) => openCreate(event.currentTarget)}
+          >
+            New Alert
+          </button>
+        ) : null}
       </div>
 
       <table aria-label="Alert Review Center">
@@ -262,6 +342,7 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
             <th>Severity</th>
             <th>Status</th>
             <th>Clause</th>
+            <th>Evidence</th>
             <th>Assignee</th>
             <th>Actions</th>
           </tr>
@@ -272,7 +353,43 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
               <td>{alert.title}</td>
               <td>{alert.severity}</td>
               <td>{alert.status}</td>
-              <td>{alert.clauseId ?? "—"}</td>
+              <td>
+                {alert.clauseId ? (
+                  alert.addressableClauseId && alert.sourceDocumentId ? (
+                    <Link
+                      href={
+                        "/projects/" +
+                        encodeURIComponent(projectId) +
+                        "/evidence?documentId=" +
+                        encodeURIComponent(alert.sourceDocumentId) +
+                        "&highlightId=" +
+                        encodeURIComponent(alert.addressableClauseId)
+                      }
+                      aria-label={"View evidence for " + alert.addressableClauseId}
+                    >
+                      {alert.clauseId}
+                    </Link>
+                  ) : (
+                    alert.clauseId
+                  )
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                {alert.evidenceClaim || alert.evidenceQuote ? (
+                  <div className="space-y-1">
+                    {alert.evidenceClaim ? <div>{alert.evidenceClaim}</div> : null}
+                    {alert.evidenceQuote ? (
+                      <q className="text-sm text-muted-foreground">
+                        {alert.evidenceQuote}
+                      </q>
+                    ) : null}
+                  </div>
+                ) : (
+                  "—"
+                )}
+              </td>
               <td>{alert.assignee ?? "—"}</td>
               <td>
                 <button
@@ -293,18 +410,22 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
                 >
                   Resolve {alert.id}
                 </button>
-                <button
-                  type="button"
-                  onClick={(event) => openEdit(alert.id, event.currentTarget)}
-                >
-                  Edit {alert.id}
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => openDelete(alert.id, event.currentTarget)}
-                >
-                  Delete {alert.id}
-                </button>
+                {!persistedMode ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(event) => openEdit(alert.id, event.currentTarget)}
+                    >
+                      Edit {alert.id}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => openDelete(alert.id, event.currentTarget)}
+                    >
+                      Delete {alert.id}
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -321,6 +442,12 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
           ))}
         </tbody>
       </table>
+
+      {mutationError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {mutationError}
+        </p>
+      ) : null}
 
       {modal.kind === "approve" ? (
         <div
@@ -340,7 +467,11 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
             />
             I confirm approval
           </label>
-          <button type="button" onClick={saveApprove} disabled={!approveConfirmed}>
+          <button
+            type="button"
+            onClick={() => void saveApprove()}
+            disabled={!approveConfirmed || isSaving}
+          >
             Confirm Approve
           </button>
         </div>
@@ -362,7 +493,11 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
             value={rejectReason}
             onChange={(event) => setRejectReason(event.target.value)}
           />
-          <button type="button" onClick={saveReject} disabled={rejectReason.trim().length === 0}>
+          <button
+            type="button"
+            onClick={() => void saveReject()}
+            disabled={rejectReason.trim().length === 0 || isSaving}
+          >
             Confirm Reject
           </button>
         </div>
@@ -406,8 +541,9 @@ export function AlertReviewCenter({ projectId, alerts }: AlertReviewCenterProps)
           ) : null}
           <button
             type="button"
-            onClick={saveResolve}
+            onClick={() => void saveResolve()}
             disabled={
+              isSaving ||
               resolutionNotes.trim().length === 0 ||
               (activeAlert ? requiresRootCause(activeAlert.severity) && rootCause.trim().length === 0 : false)
             }
