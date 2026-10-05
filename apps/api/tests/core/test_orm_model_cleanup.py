@@ -34,7 +34,15 @@ def test_analysis_and_documents_relationships_are_restored() -> None:
 
 
 def test_reenabled_foreign_keys_reference_real_tables() -> None:
-    assert str(next(iter(Analysis.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
+    # C3b-1: analyses.project_id now participates in both the canonical project
+    # FK and the composite (artifact, tenant, project) provenance FK. Assert the
+    # required target is present rather than relying on set iteration order.
+    analysis_project_targets = {
+        str(foreign_key.target_fullname)
+        for foreign_key in Analysis.__table__.c.project_id.foreign_keys
+    }
+    assert "projects.id" in analysis_project_targets
+    assert "document_artifacts.project_id" in analysis_project_targets
     assert str(next(iter(Alert.__table__.c.project_id.foreign_keys)).target_fullname) == "projects.id"
     assert str(next(iter(Alert.__table__.c.analysis_id.foreign_keys)).target_fullname) == "analyses.id"
     assert str(next(iter(Alert.__table__.c.source_clause_id.foreign_keys)).target_fullname) == "clauses.id"
