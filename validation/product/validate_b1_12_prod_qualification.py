@@ -11,6 +11,8 @@ from typing import Any
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+EVIDENCE_ROOT = (REPO_ROOT / "evidence" / "product-qualification").resolve()
+BUNDLE_NAME_RE = __import__("re").compile(r"^b1-12-prod-gh-[1-9][0-9]*-[1-9][0-9]*\.yaml$")
 REQUIRED_ASSERTIONS = {
     "canonical_alerts_from_same_finding_set",
     "fresh_session_identity_and_provenance",
@@ -30,6 +32,16 @@ class ValidationError(RuntimeError):
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _resolve_bundle(raw: str) -> Path:
+    candidate = Path(raw)
+    if candidate.is_absolute() or candidate.name != raw or not BUNDLE_NAME_RE.fullmatch(raw):
+        raise ValidationError("bundle must be a canonical B1-12 evidence filename")
+    resolved = (EVIDENCE_ROOT / candidate).resolve()
+    if resolved.parent != EVIDENCE_ROOT:
+        raise ValidationError("bundle escaped the evidence directory")
+    return resolved
 
 
 def validate(path: Path) -> None:
@@ -121,7 +133,7 @@ def main() -> int:
     parser.add_argument("bundle")
     args = parser.parse_args()
     try:
-        validate(REPO_ROOT / args.bundle)
+        validate(_resolve_bundle(args.bundle))
     except Exception as exc:
         raise SystemExit(f"FAIL: {type(exc).__name__}: {exc}") from exc
     print("PASS: B1-12 production evidence is internally consistent.")
