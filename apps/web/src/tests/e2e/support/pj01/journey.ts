@@ -13,6 +13,8 @@ import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
+import type { AuthObservation } from "../p0b-auth";
+
 import {
   contractAPdfPath,
   healthExpectationsFromManifest,
@@ -43,17 +45,27 @@ export interface Pj01FirstHalfResult {
 
 export async function runPj01FirstHalf(
   page: Page,
-  options: { baseURL: string; recorder: Pj01RunRecorder; projectName?: string },
+  options: {
+    baseURL: string;
+    recorder: Pj01RunRecorder;
+    projectName?: string;
+    authObservation?: AuthObservation;
+  },
 ): Promise<Pj01FirstHalfResult> {
   const { recorder } = options;
   const manifest = loadContractAManifest();
   recorder.record("fixture", manifest.fixture_id);
 
-  const observation = await recorder.step("PJ01-S1", "Login", async () => {
+  const observation = options.authObservation ?? await recorder.step("PJ01-S1", "Login", async () => {
     const auth = await signInAsJourneyUser(page, options.baseURL);
     await recorder.screenshot(page, "s1-projects");
     return auth;
   });
+  if (options.authObservation) {
+    await recorder.step("PJ01-S1", "Use pre-authenticated governed session", async () => {
+      await recorder.screenshot(page, "s1-projects");
+    });
+  }
 
   const projectId = await recorder.step("PJ01-S2", "Create project", async () => {
     const id = await createProjectThroughUi(page, observation, options.projectName ?? `PJ-01 ${recorder.runId}`);
