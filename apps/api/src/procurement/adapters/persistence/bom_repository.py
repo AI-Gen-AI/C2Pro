@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.procurement.adapters.persistence.models import BOMItemORM
@@ -88,53 +88,6 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         await self.session.refresh(orm)
 
         return self._orm_to_domain(orm)
-
-    async def replace_for_source_document(
-        self,
-        *,
-        project_id: UUID,
-        source_document_id: UUID,
-        bom_items: list[BOMItem],
-        tenant_id: UUID,
-    ) -> list[BOMItem]:
-        """Replace all BOM rows produced by one parsed source document.
-
-        Also clears any orphaned rows with source_document_id IS NULL for the
-        same project — these are legacy rows created before the linkage column
-        was added (TASK-DOC-BOM-ORPHAN-007) or rows left after a document was
-        deleted whose FK cascade could not reach them.
-        """
-        await self._ensure_project_in_tenant(project_id, tenant_id)
-        await self.session.execute(
-            delete(BOMItemORM).where(
-                BOMItemORM.project_id == project_id,
-                BOMItemORM.source_document_id == source_document_id,
-            )
-        )
-        # Sweep NULL-source orphans — they are either pre-column-migration rows
-        # or rows whose parent document was deleted and left without a FK.
-        await self.session.execute(
-            delete(BOMItemORM).where(
-                BOMItemORM.project_id == project_id,
-                BOMItemORM.source_document_id.is_(None),
-            )
-        )
-
-        orms = []
-        for item in bom_items:
-            if item.project_id != project_id:
-                raise ValueError("BOM item project_id must match replacement project_id")
-            item.source_document_id = source_document_id
-            orms.append(self._domain_to_orm(item))
-
-        self.session.add_all(orms)
-        await self.session.flush()
-
-        created_items: list[BOMItem] = []
-        for orm in orms:
-            await self.session.refresh(orm)
-            created_items.append(self._orm_to_domain(orm))
-        return created_items
 
     async def get_by_id(self, bom_id: UUID, tenant_id: UUID) -> BOMItem | None:
         """Retrieve a BOM item by ID."""

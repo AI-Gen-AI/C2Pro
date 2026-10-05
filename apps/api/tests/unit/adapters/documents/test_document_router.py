@@ -957,11 +957,11 @@ class TestRouterHelperFunctions:
 
         assert service._user_id == user_id
         stakeholder_use_case = service._stakeholder_use_case_factory()
-        bom_use_case = service._bom_use_case_factory()
         assert stakeholder_use_case.document_repository is repository
-        # #852: the parse endpoint wires no WBS writer -- schedules never write canonical WBS.
+        # #852 / #860: the parse endpoint wires no WBS or BOM writer -- schedules never
+        # write canonical WBS and budgets never write canonical BOM.
         assert not hasattr(service, "_wbs_use_case_factory")
-        assert bom_use_case.bom_repository.session is mock_session
+        assert not hasattr(service, "_bom_use_case_factory")
 
     def test_get_use_case_dependency_builders(self, mock_session):
         """Test dependency builders return concrete use cases."""

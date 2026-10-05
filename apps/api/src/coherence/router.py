@@ -1311,6 +1311,9 @@ async def _run_v2_shadow_on_evaluate(
             text("SELECT set_config('app.current_tenant', :tenant_id, true)"),
             {"tenant_id": str(tenant_id)},
         )
+        from src.coherence.domain.budget_line_availability import (
+            structured_budget_assessment,
+        )
         from src.coherence.services.v2.aggregator_v2 import GlobalAggregatorV2
         from src.coherence.services.v2.category_aggregator import CategoryAggregator
         from src.coherence.services.v2.conflict_service import (
@@ -1348,12 +1351,18 @@ async def _run_v2_shadow_on_evaluate(
         conflict_candidates_by_category: dict[str, list[ConflictCandidate]] = {}
         for candidate in build_conflict_candidates(v1_result.finding_signals):
             conflict_candidates_by_category.setdefault(candidate.category, []).append(candidate)
+        # #860: decided here, where the evaluation inputs are assembled -- no
+        # authoritative structured budget-line source exists (the BOM table is
+        # not budget truth), so BUDGET is applicable but unassessed.
+        assessment_by_category, assessment_reason_by_category = structured_budget_assessment()
         v2_payload = await orchestrator.run(
             project_id=project_id,
             evidence_inputs=ProjectEvidenceInputs(
                 project_docs=project_docs,
                 project_context={},
                 conflict_candidates_by_category=conflict_candidates_by_category,
+                assessment_by_category=assessment_by_category,
+                assessment_reason_by_category=assessment_reason_by_category,
             ),
         )
 

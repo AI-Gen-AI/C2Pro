@@ -1,4 +1,4 @@
-"""TS-UD-PROC-BOM-IDEM-001: BOM persistence is idempotent per source document."""
+"""TS-UD-PROC-BOM-IDEM-001 (#860): BOM persistence never sweeps rows by source document."""
 
 from __future__ import annotations
 
@@ -14,55 +14,39 @@ from src.procurement.domain.models import BOMItem
 from tests.support.idempotency_fakes import FakeSession
 
 
+def test_repository_has_no_source_document_replace_sweep() -> None:
+    """#860: the budget-reparse delete-by-source + NULL-source orphan sweep is removed.
+
+    Supersedes the set-replacement contract: automated budget ingestion no longer
+    writes BOM, so nothing may bulk-delete manual / procurement-edited rows.
+    """
+    assert not hasattr(SQLAlchemyBOMRepository, "replace_for_source_document")
+
+
 @pytest.mark.asyncio
-async def test_replace_for_source_document_deletes_then_inserts_new_set() -> None:
-    """TS-UD-PROC-BOM-IDEM-001: same-document budget reparse replaces its whole BOM set."""
+async def test_create_with_source_document_id_never_deletes() -> None:
+    """#860: a create carrying a source document is an insert, never a set replacement."""
     tenant_id = uuid4()
     project_id = uuid4()
     document_id = uuid4()
     session = FakeSession()
     repository = SQLAlchemyBOMRepository(session)  # type: ignore[arg-type]
 
-    created = await repository.replace_for_source_document(
-        project_id=project_id,
-        source_document_id=document_id,
-        bom_items=[
-            BOMItem(
-                project_id=project_id,
-                item_name="Concrete",
-                quantity=Decimal("2"),
-                unit_price=Decimal("10"),
-                total_price=Decimal("20"),
-                source_document_id=document_id,
-                bom_metadata={"source_document_id": str(document_id)},
-            ),
-            BOMItem(
-                project_id=project_id,
-                item_name="Steel",
-                quantity=Decimal("3"),
-                unit_price=Decimal("5"),
-                total_price=Decimal("15"),
-                source_document_id=document_id,
-                bom_metadata={"source_document_id": str(document_id)},
-            ),
-        ],
-        tenant_id=tenant_id,
+    await repository.create(
+        BOMItem(
+            project_id=project_id,
+            item_name="Concrete",
+            quantity=Decimal("2"),
+            source_document_id=document_id,
+            bom_metadata={},
+        ),
+        tenant_id,
     )
 
-    delete_statements = [statement for statement in session.statements if isinstance(statement, Delete)]
-    # Two DELETEs: (1) rows for this document, (2) NULL-source orphan sweep.
-    assert len(delete_statements) == 2
-    compiled0 = str(delete_statements[0].compile(compile_kwargs={"literal_binds": False}))
-    assert "procurement_bom_items.project_id" in compiled0
-    assert "procurement_bom_items.source_document_id" in compiled0
-    compiled1 = str(delete_statements[1].compile(compile_kwargs={"literal_binds": False}))
-    assert "procurement_bom_items.project_id" in compiled1
-    # Second DELETE targets IS NULL rows — no source_document_id equality term.
-    assert "IS NULL" in compiled1 or "source_document_id" in compiled1
-    assert len(session.added) == 2
-    assert all(isinstance(orm, BOMItemORM) for orm in session.added)
-    assert all(orm.source_document_id == document_id for orm in session.added)
-    assert [item.item_name for item in created] == ["Concrete", "Steel"]
+    assert not any(isinstance(statement, Delete) for statement in session.statements)
+    assert len(session.added) == 1
+    assert isinstance(session.added[0], BOMItemORM)
+    assert session.added[0].source_document_id == document_id
 
 
 @pytest.mark.asyncio

@@ -60,4 +60,45 @@ describe("ReconciliationCard", () => {
     expect(screen.queryByText("1,200")).not.toBeInTheDocument();
     expect(screen.queryByText("1,500")).not.toBeInTheDocument();
   });
+
+  // #860: structured budget lines are unavailable -> say so, never show a clean result.
+  const unavailableBudgetCategory: CategoryV2 = {
+    ...baseBudgetCategory,
+    status: "insufficient_evidence",
+    coherence_score: null,
+    rationale: "structured_budget_source_unavailable",
+    calculation_metadata: {
+      assessment_state: "unassessed",
+      assessment_reason: "structured_budget_source_unavailable",
+    },
+  };
+
+  it("states that budget line reconciliation is unavailable pending a structured budget model", () => {
+    render(<ReconciliationCard category={unavailableBudgetCategory} />);
+
+    expect(screen.getByTestId("budget-reconciliation-unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Budget line reconciliation unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/not evaluated/i)).toBeInTheDocument();
+    expect(screen.getByText(/pending a structured budget model/i)).toBeInTheDocument();
+    expect(screen.queryByText("Computed from line items")).not.toBeInTheDocument();
+  });
+
+  it("never assembles reconciliation figures from conflict totals while lines are unavailable", () => {
+    render(
+      <ReconciliationCard
+        category={{
+          ...unavailableBudgetCategory,
+          detected_conflicts: [
+            { rule_id: "DET-BUD-SUM", compared_values: { items_sum: 1200, contract_total: 1600 } },
+            { rule_id: "DET-BUD-INTERNAL", compared_values: { items_sum: 1200, stated_total: 1500 } },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("budget-reconciliation-unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("Computed from line items")).not.toBeInTheDocument();
+    expect(screen.queryByText("1,200")).not.toBeInTheDocument();
+    expect(screen.queryByText(/delta/i)).not.toBeInTheDocument();
+  });
 });

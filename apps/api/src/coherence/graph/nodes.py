@@ -680,14 +680,11 @@ def _is_non_substantive_clause(clause: Clause) -> bool:
     """Return True for headings/table rows that should not consume an LLM rule.
 
     This is deliberately conservative: substantive clauses with obligation verbs
-    still reach the category-matched LLM rule, while BOM rows, synthetic budget
-    reconciliation clauses, and bare headings/list rows are skipped.
+    still reach the category-matched LLM rule, while synthetic budget
+    reconciliation clauses and bare headings/list rows are skipped. (BOM rows no
+    longer reach coherence at all: the BOM table is not budget truth, #860.)
     """
     text = (clause.text or "").strip()
-    data = clause.data or {}
-    source = str(data.get("source", "")).lower()
-    if source == "procurement_bom":
-        return True
 
     lowered = text.lower()
     if lowered == "project budget vs contract reconciliation":

@@ -23,7 +23,37 @@ const CONTRACT_KEYS = ["contract_total", "contractTotal", "contract_price", "con
 const DELTA_KEYS = ["deviation_pct", "deviationPercent", "delta_pct", "deltaPercent"];
 const SOURCE_KEYS = ["rule_id", "rule_code", "ruleId", "ruleCode", "finding_id", "findingId"];
 
+// #860: no authoritative structured budget-line source exists yet (the BOM table is
+// not budget truth), so line reconciliation is not evaluated -- say so, never show
+// a clean or computed result.
+export const STRUCTURED_BUDGET_SOURCE_UNAVAILABLE = "structured_budget_source_unavailable";
+
+export function isBudgetLineReconciliationUnavailable(
+  category: CategoryV2 | null | undefined,
+): boolean {
+  return (
+    category?.category === "BUDGET" &&
+    category.rationale === STRUCTURED_BUDGET_SOURCE_UNAVAILABLE
+  );
+}
+
 export function ReconciliationCard({ category }: ReconciliationCardProps) {
+  if (isBudgetLineReconciliationUnavailable(category)) {
+    return (
+      <Card data-testid="budget-reconciliation-unavailable">
+        <CardHeader className="pb-3">
+          <CardTitle>Budget line reconciliation unavailable</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Not evaluated, pending a structured budget model. Budget line items are not
+            reconciled against the procurement BOM, which is not budget truth.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const reconciliation = extractBudgetReconciliation(category);
 
   if (!reconciliation) {

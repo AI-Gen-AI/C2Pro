@@ -1,4 +1,4 @@
-"""TS-COH-BUD-RECON-001: structured budget clauses for deterministic coherence."""
+"""TS-COH-BUD-RECON-001 / #860: budget-document facts for deterministic coherence."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.coherence.domain.budget_line_availability import STRUCTURED_BUDGET_SOURCE_UNAVAILABLE
 from src.coherence.models import Clause
 from src.temporal.adapters.persistence.current_revision_sql import (
     clause_in_current_scope,
@@ -50,90 +51,58 @@ async def load_contract_total(db: AsyncSession, project_id: UUID, tenant_id: UUI
     return _as_float(result.scalar_one_or_none())
 
 
+_STATED_TOTAL_SQL = text("""
+    SELECT (d.document_metadata->>'stated_total')::numeric AS amt
+    FROM documents d
+    JOIN projects p ON d.project_id = p.id
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND p.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'budget'
+      AND d.document_metadata ? 'stated_total'
+    ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
+    LIMIT 1
+""")
+
+
 async def build_budget_clauses(
     db: AsyncSession,
     project_id: UUID,
     tenant_id: UUID,
 ) -> list[Clause]:
-    """Build deterministic BUDGET clauses from tenant-scoped procurement BOM rows."""
-    bom_stmt = text("""
-        SELECT b.id, b.item_name, b.quantity, b.unit_price, b.total_price, b.unit
-        FROM procurement_bom_items b
-        JOIN projects p ON b.project_id = p.id
-        WHERE b.project_id = CAST(:project_id AS uuid)
-          AND p.tenant_id = CAST(:tenant_id AS uuid)
-    """)
-    bom_result = await db.execute(
-        bom_stmt,
-        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
-    )
-    rows = bom_result.fetchall()
-    if not rows:
+    """Budget-document facts for deterministic coherence -- never the BOM table (#860).
+
+    The procurement BOM is a mixed legacy object (manual procurement rows,
+    historical budget-derived rows, procurement edits), not budget truth, so no
+    BOM row becomes a budget line and no line set is assembled from it: the rules
+    that need structured budget lines (DET-BUD-LINEITEM / SUM / INTERNAL) are not
+    evaluated, and the clause says so explicitly.
+
+    What IS independently available is kept: the budget document's own declared
+    total (and the contract total) reach the total-level rules that need nothing
+    else -- no longer gated on BOM rows happening to exist. ``stated_total`` is a
+    total, not a line set; no line item is derived from it.
+    """
+    params = {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    stated_total = _as_float((await db.execute(_STATED_TOTAL_SQL, params)).scalar_one_or_none())
+    if stated_total is None:
         return []
 
-    clauses: list[Clause] = []
-    reconciliation_items: list[dict[str, float | str]] = []
-    for row in rows:
-        unit_price = _as_float(row.unit_price)
-        quantity = _as_float(row.quantity)
-        total_price = _as_float(row.total_price)
-        if unit_price is None or quantity is None or total_price is None:
-            continue
-
-        item_name = str(row.item_name or "")
-        clauses.append(
-            Clause(
-                id=f"bom-{row.id}",
-                text=item_name,
-                data={
-                    "document_type": "budget",
-                    "source": "procurement_bom",
-                    "category": "BUDGET",
-                    "affected_categories": ["BUDGET"],
-                    "unit_price": unit_price,
-                    "quantity": quantity,
-                    "line_total": total_price,
-                    "total": total_price,
-                    "unit": row.unit,
-                },
-            )
-        )
-        reconciliation_items.append({"amount": total_price, "name": item_name})
-
+    data: dict[str, Any] = {
+        "document_type": "budget",
+        "source": "budget_document_metadata",
+        "category": "BUDGET",
+        "affected_categories": ["BUDGET"],
+        "stated_total": stated_total,
+        "budget_line_items": "unavailable",
+        "budget_line_items_reason": STRUCTURED_BUDGET_SOURCE_UNAVAILABLE,
+    }
     contract_total = await load_contract_total(db, project_id, tenant_id)
-    stated_total_stmt = text("""
-        SELECT (d.document_metadata->>'stated_total')::numeric AS amt
-        FROM documents d
-        JOIN projects p ON d.project_id = p.id
-        WHERE d.project_id = CAST(:project_id AS uuid)
-          AND p.tenant_id = CAST(:tenant_id AS uuid)
-          AND d.document_type::text = 'budget'
-          AND d.document_metadata ? 'stated_total'
-        ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
-        LIMIT 1
-    """)
-    stated_total_result = await db.execute(
-        stated_total_stmt,
-        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
-    )
-    stated_total = _as_float(stated_total_result.scalar_one_or_none())
-    if reconciliation_items and (contract_total is not None or stated_total is not None):
-        data: dict[str, Any] = {
-            "document_type": "budget",
-            "category": "BUDGET",
-            "affected_categories": ["BUDGET"],
-            "budget_items": reconciliation_items,
-        }
-        if contract_total is not None:
-            data["contract_total"] = contract_total
-        if stated_total is not None:
-            data["stated_total"] = stated_total
-        clauses.append(
-            Clause(
-                id=f"budget-reconciliation-{project_id}",
-                text="Project budget vs contract reconciliation",
-                data=data,
-            )
+    if contract_total is not None:
+        data["contract_total"] = contract_total
+    return [
+        Clause(
+            id=f"budget-reconciliation-{project_id}",
+            text="Project budget vs contract reconciliation",
+            data=data,
         )
-
-    return clauses
+    ]
