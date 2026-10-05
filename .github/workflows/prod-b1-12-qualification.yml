@@ -73,8 +73,8 @@ jobs:
             echo "Refusing production mutation: confirmation does not match RUN-ISSUE-867." >&2
             exit 2
           }
-          test "$GITHUB_REF_NAME" = "main" || {
-            echo "Refusing B1-12 qualification from non-main ref: $GITHUB_REF_NAME" >&2
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "Refusing B1-12 qualification from non-main ref: $GITHUB_REF" >&2
             exit 2
           }
           test "$STAGED_CLEAR" = "true" || {
@@ -221,7 +221,9 @@ jobs:
           set -euo pipefail
           python apps/api/scripts/verify_prod_synthetic_journey.py \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
-            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
+            --allow-project-prefix "ACCEPT-867-"
+          echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
 
       - name: Generate deterministic B1 structured fixtures
         shell: bash
@@ -314,7 +316,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          retention-days: 7
+          retention-days: 3
           name: c2pro-867-b1-production-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           path: |
