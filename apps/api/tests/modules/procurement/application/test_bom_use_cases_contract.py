@@ -57,7 +57,7 @@ async def test_create_bom_item_use_case_passes_tenant_id_to_repository() -> None
 
 @pytest.mark.asyncio
 async def test_create_bom_item_use_case_preserves_source_document_id() -> None:
-    """TS-UD-PROC-BOM-IDEM-001: budget parses carry their source document into BOM persistence."""
+    """TS-UD-PROC-BOM-IDEM-001: an explicit create keeps its source document reference."""
     tenant_id = uuid4()
     project_id = uuid4()
     document_id = uuid4()
@@ -89,42 +89,7 @@ async def test_create_bom_item_use_case_preserves_source_document_id() -> None:
     assert result.source_document_id == document_id
 
 
-@pytest.mark.asyncio
-async def test_replace_bom_items_for_source_document_keeps_other_documents() -> None:
-    """TS-UD-PROC-BOM-IDEM-001: set-level replacement is scoped to one budget document."""
-    tenant_id = uuid4()
-    project_id = uuid4()
-    source_document_id = uuid4()
-    repository = AsyncMock()
-    repository.replace_for_source_document.return_value = [
-        BOMItem(
-            project_id=project_id,
-            item_name="Concrete",
-            quantity=Decimal("2"),
-            source_document_id=source_document_id,
-        )
-    ]
-
-    use_case = CreateBOMItemUseCase(repository)
-    payload = BOMItemCreate(
-        project_id=project_id,
-        item_name="Concrete",
-        quantity=Decimal("2"),
-        source_document_id=source_document_id,
-        bom_metadata={"source_document_id": str(source_document_id)},
-    )
-
-    result = await use_case.replace_for_source_document(
-        project_id=project_id,
-        source_document_id=source_document_id,
-        bom_items=[payload],
-        tenant_id=tenant_id,
-    )
-
-    repository.replace_for_source_document.assert_awaited_once()
-    args = repository.replace_for_source_document.await_args.kwargs
-    assert args["project_id"] == project_id
-    assert args["source_document_id"] == source_document_id
-    assert args["tenant_id"] == tenant_id
-    assert args["bom_items"][0].source_document_id == source_document_id
-    assert result[0].item_name == "Concrete"
+def test_use_case_exposes_no_source_document_replacement() -> None:
+    """#860: set-level replacement by budget document is removed; manual create remains."""
+    assert not hasattr(CreateBOMItemUseCase, "replace_for_source_document")
+    assert hasattr(CreateBOMItemUseCase, "execute")

@@ -42,6 +42,7 @@ class ProjectEvidenceInputs:
     )
     applicability: dict[str, tuple[bool, str | None]] = field(default_factory=dict)
     assessment_by_category: dict[str, bool] = field(default_factory=dict)
+    assessment_reason_by_category: dict[str, str] = field(default_factory=dict)
 
 
 class CoherenceV2Orchestrator:
@@ -81,6 +82,7 @@ class CoherenceV2Orchestrator:
                     applicable=applicable,
                     applicability_reason=reason,
                     assessed=evidence_inputs.assessment_by_category.get(cat, True),
+                    assessment_reason=evidence_inputs.assessment_reason_by_category.get(cat),
                 )
             )
 

@@ -12,17 +12,20 @@ from src.coherence.models import Clause
 
 
 def test_budget_reconciliation_marks_budget_assessed_with_both_alerts(monkeypatch) -> None:
-    """TS-COH-BUD-RECON-004: contract and declared totals assess BUDGET without LLM."""
+    """TS-COH-BUD-RECON-004: contract and declared totals assess BUDGET without LLM.
+
+    Evaluator wiring only: the structured line inputs here are a fixture. #860 means
+    no production path assembles them (the BOM table is not budget truth).
+    """
     monkeypatch.setenv("LANGCHAIN_TRACING_V2", "false")
     monkeypatch.setattr("langchain_core.tracers.context._get_tracer_project", lambda: "test")
     project_id = uuid4()
     clauses = [
         Clause(
-            id="bom-line-1",
-            text="Total BOM line",
+            id="budget-line-1",
+            text="Total budget line",
             data={
                 "document_type": "budget",
-                "source": "procurement_bom",
                 "category": "BUDGET",
                 "affected_categories": ["BUDGET"],
                 "unit_price": 636_044_805.0,
@@ -38,7 +41,7 @@ def test_budget_reconciliation_marks_budget_assessed_with_both_alerts(monkeypatc
                 "document_type": "budget",
                 "category": "BUDGET",
                 "affected_categories": ["BUDGET"],
-                "budget_items": [{"amount": 636_044_805.0, "name": "BOM total"}],
+                "budget_items": [{"amount": 636_044_805.0, "name": "Budget line total"}],
                 "contract_total": 628_624_801.0,
                 "stated_total": 654_144_805.0,
             },

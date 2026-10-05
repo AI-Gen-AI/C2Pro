@@ -911,6 +911,8 @@ def calculate_v2_from_signals(
     evidence_bundles: dict[str, EvidenceBundle],
     applicability_map: dict[str, tuple[bool, str | None]],
     project_id: UUID,
+    assessment_by_category: dict[str, bool] | None = None,
+    assessment_reason_by_category: dict[str, str] | None = None,
 ) -> CoherenceV2Payload:
     """Compute the canonical v2 payload.
 
@@ -919,6 +921,10 @@ def calculate_v2_from_signals(
         evidence_bundles: dict[str, EvidenceBundle] keyed by category.
         applicability_map: dict[str, tuple[bool, str | None]] (applicable, reason).
         project_id: UUID of the project.
+        assessment_by_category: categories the caller could NOT assess from
+            authoritative inputs map to False (default: assessed). Decided by the
+            caller assembling the evaluation, never by the per-category scorer.
+        assessment_reason_by_category: optional reason per unassessed category.
 
     Returns:
         CoherenceV2Payload — the JSON v2 contract object.
@@ -991,7 +997,10 @@ def calculate_v2_from_signals(
         )
         conflict = conflict_service.detect(cat, bundle, candidates_by_category.get(cat, []))
         conflicts.append(conflict)
-        recon_data = budget_reconciliation_raw.get(cat)
+        assessed = (assessment_by_category or {}).get(cat, True)
+        # An unassessed category reports no reconciliation: totals from an
+        # incomplete assessment must not read as a reconciled result (#860).
+        recon_data = budget_reconciliation_raw.get(cat) if assessed else None
         if recon_data and cat == "BUDGET":
             recon_data = {**recon_data, "source_rule_ids": budget_source_rule_ids}
         budget_recon = BudgetReconciliation(**recon_data) if recon_data else None
@@ -1003,6 +1012,8 @@ def calculate_v2_from_signals(
                 rule_signals=signals_by_category.get(cat, []),
                 applicable=applicable,
                 applicability_reason=reason,
+                assessed=assessed,
+                assessment_reason=(assessment_reason_by_category or {}).get(cat),
                 budget_reconciliation=budget_recon,
             )
         )

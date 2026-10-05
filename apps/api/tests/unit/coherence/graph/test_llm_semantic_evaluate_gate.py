@@ -202,8 +202,11 @@ async def test_run_gate_skips_llm_rules_for_irrelevant_clause_categories():
 
 @pytest.mark.asyncio
 async def test_run_gate_skips_non_substantive_clauses_before_llm_call():
-    """TASK-COH-LLM-APPLIC-009-P3: headings and structured BOM rows are not
-    substantive legal/payment clauses, so they must not consume LLM calls."""
+    """TASK-COH-LLM-APPLIC-009-P3: headings and structured budget line rows are not
+    substantive legal/payment clauses, so they must not consume LLM calls.
+
+    #860: BOM rows no longer reach coherence at all, so the row is skipped on its
+    own shape, not on a BOM ``source`` marker."""
     from src.coherence.graph.nodes import llm_semantic_evaluate_async
 
     heading_clause = Clause(
@@ -212,12 +215,11 @@ async def test_run_gate_skips_non_substantive_clauses_before_llm_call():
         data={"document_type": "contract", "category": "LEGAL"},
     )
     budget_line_clause = Clause(
-        id="bom-1",
+        id="budget-line-1",
         text="1.1 Personal PMO, site manager, administrativo",
         data={
             "document_type": "budget",
             "category": "BUDGET",
-            "source": "procurement_bom",
             "unit_price": 100.0,
             "quantity": 2.0,
             "line_total": 200.0,
@@ -264,7 +266,7 @@ async def test_run_gate_skips_non_substantive_clauses_before_llm_call():
 
     called = set(gate.calls)
     assert ("R-RESPONSIBILITY-01", "legal-heading") not in called
-    assert ("R-PAYMENT-CLARITY-01", "bom-1") not in called
+    assert ("R-PAYMENT-CLARITY-01", "budget-line-1") not in called
     assert ("R-RESPONSIBILITY-01", "legal-certificate") not in called
     assert ("R-RESPONSIBILITY-01", "legal-appendix-list") not in called
     assert ("R-RESPONSIBILITY-01", "legal-obligation") in called

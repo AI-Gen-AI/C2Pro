@@ -66,48 +66,6 @@ class CreateBOMItemUseCase:
 
         return await self.bom_repository.create(bom_item, tenant_id)
 
-    async def replace_for_source_document(
-        self,
-        *,
-        project_id: UUID,
-        source_document_id: UUID,
-        bom_items: list[BOMItemCreate],
-        tenant_id: TenantId,
-    ) -> list[BOMItem]:
-        """Replace parsed BOM rows for one source document in a single repository operation."""
-        domain_items = [
-            BOMItem(
-                project_id=item.project_id,
-                wbs_item_id=item.wbs_item_id,
-                item_code=item.item_code,
-                item_name=item.item_name,
-                description=item.description,
-                category=item.category,
-                quantity=item.quantity,
-                unit=item.unit,
-                unit_price=item.unit_price,
-                total_price=item.total_price,
-                currency=item.currency,
-                supplier=item.supplier,
-                lead_time_days=item.lead_time_days,
-                incoterm=item.incoterm,
-                contract_clause_id=item.contract_clause_id,
-                source_document_id=source_document_id,
-                procurement_status=item.procurement_status,
-                bom_metadata={
-                    **item.bom_metadata,
-                    "source_document_id": str(source_document_id),
-                },
-            )
-            for item in bom_items
-        ]
-        return await self.bom_repository.replace_for_source_document(
-            project_id=project_id,
-            source_document_id=source_document_id,
-            bom_items=domain_items,
-            tenant_id=tenant_id,
-        )
-
 
 class ListBOMItemsUseCase:
     """Use case for listing BOM items for a project."""
