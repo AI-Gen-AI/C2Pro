@@ -6,11 +6,15 @@ Refers to Suite ID: TS-BUG-ALRT-IMPORT-001.
 """
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from src.alerts.application.dtos import AlertResponse
 from src.alerts.application.mappers import AlertMapper
 from src.alerts.application.ports.alert_repository import IAlertRepository
+from src.alerts.domain.models import Alert
+
+PostReviewHandler = Callable[[Alert, UUID, str], Awaitable[None]]
 
 
 class AlertNotFoundError(Exception):
@@ -19,8 +23,13 @@ class AlertNotFoundError(Exception):
 
 
 class ReviewAlertUseCase:
-    def __init__(self, repository: IAlertRepository) -> None:
+    def __init__(
+        self,
+        repository: IAlertRepository,
+        post_review_handler: PostReviewHandler | None = None,
+    ) -> None:
         self._repository = repository
+        self._post_review_handler = post_review_handler
 
     async def execute(
         self,
@@ -39,6 +48,8 @@ class ReviewAlertUseCase:
         alert.append_history("reviewed", user_id, decision=decision)
 
         await self._repository.save(alert)
+        if self._post_review_handler is not None:
+            await self._post_review_handler(alert, tenant_id, decision)
         await self._repository.commit()
 
         return AlertMapper.to_response(alert, tenant_id)
