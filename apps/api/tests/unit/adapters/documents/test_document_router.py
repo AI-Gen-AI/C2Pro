@@ -957,10 +957,10 @@ class TestRouterHelperFunctions:
 
         assert service._user_id == user_id
         stakeholder_use_case = service._stakeholder_use_case_factory()
-        wbs_use_case = service._wbs_use_case_factory()
         bom_use_case = service._bom_use_case_factory()
         assert stakeholder_use_case.document_repository is repository
-        assert wbs_use_case.wbs_repository.session is mock_session
+        # #852: the parse endpoint wires no WBS writer -- schedules never write canonical WBS.
+        assert not hasattr(service, "_wbs_use_case_factory")
         assert bom_use_case.bom_repository.session is mock_session
 
     def test_get_use_case_dependency_builders(self, mock_session):

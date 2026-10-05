@@ -63,9 +63,7 @@ from src.documents.application.trigger_document_analysis_use_case import (
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
 from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
-from src.procurement.application.use_cases.wbs_use_cases import CreateWBSItemUseCase
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -859,8 +857,9 @@ class AnalysisIncompleteRetryableError(RuntimeError):
 
 # Document types whose product value depends on the N1-N17 free-text graph.
 # Grounded in DOC_TYPES ("contract", "technical_spec", "budget", "schedule") and
-# in how parsing treats them: schedule/budget are completed by structured WBS/BOM
-# extraction and legitimately never need the text graph.
+# in how parsing treats them: schedule/budget are completed by structured parsing
+# (schedule rows -> RAG, never canonical WBS (#852); budget -> BOM) and legitimately
+# never need the text graph.
 TEXT_ANALYSIS_DOCUMENT_TYPES: frozenset[DocumentType] = frozenset(
     {
         DocumentType.CONTRACT,
@@ -881,7 +880,7 @@ def requires_text_analysis(
     those documents pending forever for a graph they never needed -- trading the
     old false-success bug for a false-incomplete one.
 
-    A structured document is complete via WBS/BOM extraction; only a free-text
+    A structured document is complete via structured parsing; only a free-text
     document that actually has text can be owed a graph run.
     """
     if document_type not in TEXT_ANALYSIS_DOCUMENT_TYPES:
@@ -1079,8 +1078,8 @@ async def _analyze_owned(
     # have RAG chunks. Structured documents (schedule/budget) carry no free
     # text, and text documents whose embeddings are unavailable (e.g. no
     # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
-    # document is still ANALYZED via the structured extraction (clauses / WBS
-    # / BOM) done during parsing — the graph is a best-effort enrichment, never
+    # document is still ANALYZED via the structured extraction (clauses /
+    # schedule rows / BOM) done during parsing — the graph is a best-effort enrichment, never
     # a hard gate. This is what previously stranded documents in
     # parsed_pending_analysis and the DLQ ("parsed_text not available" /
     # "RAG chunks were not committed").
@@ -1327,7 +1326,7 @@ async def _process(
 
     #711: the worker first obtains the document's processing authority
     (attempt + owner token + fencing token under a DB-clock lease). Every
-    ingestion output -- stakeholders, WBS/BOM, RAG chunks, clauses, revision
+    ingestion output -- stakeholders, BOM, RAG chunks, clauses, revision
     events, metadata and the status hand-over -- is staged in ONE transaction
     that commits only after the authority is re-verified in that same
     transaction. A worker that lost authority (lease expired and taken over,
@@ -1351,10 +1350,6 @@ async def _process(
                 CreateStakeholderUseCase(repository=stk_repo, document_repository=repo),
             )
 
-        def wbs_factory() -> Any:
-            wbs_repo = SQLAlchemyWBSRepository(session=session)
-            return _SavepointedUseCase(session, CreateWBSItemUseCase(wbs_repository=wbs_repo))
-
         def bom_factory() -> Any:
             bom_repo = SQLAlchemyBOMRepository(session=session)
             return _SavepointedUseCase(session, CreateBOMItemUseCase(bom_repository=bom_repo))
@@ -1363,7 +1358,7 @@ async def _process(
             raise ValueError("document has no created_by user_id")
         entity_extraction = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            wbs_use_case_factory=wbs_factory,
+            # #852: no WBS writer -- a schedule is observed, never written as canonical WBS.
             bom_use_case_factory=bom_factory,
             user_id=document.created_by,
         )

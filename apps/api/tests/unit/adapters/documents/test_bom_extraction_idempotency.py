@@ -30,7 +30,6 @@ async def test_budget_extraction_replaces_bom_rows_once_per_source_document() ->
     bom_use_case = _FakeBOMUseCase()
     service = DocumentsEntityExtractionService(
         stakeholder_use_case_factory=lambda: object(),
-        wbs_use_case_factory=lambda: object(),
         bom_use_case_factory=lambda: bom_use_case,
         user_id=uuid4(),
     )
