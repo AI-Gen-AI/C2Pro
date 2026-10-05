@@ -110,3 +110,35 @@ async def test_b1_human_disposition_fields_are_all_written_by_repository_save() 
     assert persisted_approval_name == ApprovalStatus.APPROVED.name
     assert orm_alert.review_comment == "Confirmed against the trusted schedule."
     assert orm_alert.resolution_notes == "Corrective change approved and recorded."
+
+def test_b1_repository_roundtrip_exposes_coherence_alert_type_to_domain() -> None:
+    """Score-affecting policy must see the durable ORM alert type, not a default."""
+    repo = SqlAlchemyAlertRepository(session=AsyncMock())
+    orm_alert = SimpleNamespace(
+        id=uuid4(),
+        project_id=uuid4(),
+        severity=AlertSeverity.HIGH.value,
+        category="TIME",
+        status=AlertStatus.OPEN.value,
+        approval_status=ApprovalStatus.PENDING.value,
+        alert_type="coherence",
+        rule_id="DET-TIM-COHERENCE",
+        title="Timing conflict",
+        description="Timing conflict",
+        affected_entities={},
+        alert_metadata={"source": "coherence_evaluate"},
+        created_at=datetime.now(UTC),
+        updated_at=None,
+        reviewed_by=None,
+        reviewed_at=None,
+        review_comment=None,
+        resolved_at=None,
+        resolved_by=None,
+        resolution_notes=None,
+        source_clause_id=None,
+    )
+
+    alert = repo._to_domain(orm_alert)
+
+    assert alert.alert_type == "coherence"
+
