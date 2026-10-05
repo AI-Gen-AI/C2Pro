@@ -27,6 +27,7 @@ class Alert:
     rule_id: str | None
     title: str
     description: str
+    alert_type: str = "risk"
     affected_entities: dict[str, Any] = field(default_factory=dict)
     alert_metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
