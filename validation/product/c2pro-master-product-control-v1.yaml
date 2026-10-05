@@ -1,7 +1,7 @@
 schema: c2pro-product-control-v1
 schema_version: 8
 repository: AI-Gen-AI/C2Pro
-generated: "2026-10-04"
+generated: "2026-10-05"
 control_status: reconciliation
 
 # Machine source of truth for product programme state. Edit this file first;
@@ -48,7 +48,7 @@ development_execution_authority:
     This product plane records target/state; it does not authorize merges or production mutation.
 
 production_position:
-  reconciled_against_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+  reconciled_against_main_sha: 23b963a50a7de7a4096063808a7f361f9df84ba1
   deployed_runtime_sha: UNVERIFIED
   observed_production_evidence:
     - "kuwait2 doc c510de21: enqueue -> worker -> SUCCESS on dedicated Railway Redis (historical P0a evidence)"
@@ -207,7 +207,8 @@ reconciliation_delta_2026_10_03_post_780:
 
 reconciliation_delta_2026_10_04_p0b:
   previous_main_sha: 9893cd42049c3cd2bbf9e8d891df0725b35ef082
-  current_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+  accepted_control_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+  current_main_sha: 23b963a50a7de7a4096063808a7f361f9df84ba1
   authoritative_runs:
     A1: {run_number: 55, run_id: 37195954713, conclusion: PASS}
     A2: {run_number: 56, run_id: 37196092728, conclusion: PASS}
@@ -246,6 +247,29 @@ reconciliation_delta_2026_10_04_p0b:
     #824 (persisted alert review), #823 (Lane C temporal impact/trust seam) and #826 (production-acceptance
     Evidence hard-refresh rate-limit handling); those later merges are implementation/harness state only
     and do not alter the accepted P0b runtime binding or inherit production-validation authority from run #56.
+
+reconciliation_delta_2026_10_05_b1_closure:
+  previous_main_sha: c41ff69bcabd87da1a606b125bd9cc37184bc7cc
+  current_main_sha: 23b963a50a7de7a4096063808a7f361f9df84ba1
+  material_main_advances:
+    - "#832 merged B1 implementation-closure / acceptance-boundary v1.2 after the final B1 runtime slices; B1-12 exact-runtime Alerts+Coherence product acceptance remains PENDING."
+    - "#842/#840/#853/#858/#857 collectively land cross-revision family/observation identity, projected subscore authority, validated false-positive canonical rescore, transaction-aware review and exact snapshot/replay wiring. These are repository/CI implementation evidence, not deployment or PROD_VALIDATED evidence."
+    - "#817 merged canonical document-first processing-authority locking with real two-session PostgreSQL race coverage; this is correctness hardening and does not alter lifecycle promotion."
+    - "Schedule ingestion no longer writes canonical WBS state; #856 was closed after verification that its effective change was already contained in main. Schedule Temporal Intelligence remains a linked-domain concern, not WBS identity."
+    - "#863/#862 removed the destructive NULL-source BOM sweep from ordinary Budget parse/reparse. Replacement is now source-owned; manual/ownership-unknown BOM rows are preserved."
+    - "#864 records the separate P1 provenance defect: automatically extracted stakeholders must not masquerade as human-approved."
+  implementation_closure:
+    B1_runtime: "IMPLEMENTATION_CLOSED"
+    B1_exact_runtime_acceptance: "PENDING"
+    broader_C3b_journey: "OPEN_UNDER_831"
+    global_coherence_v2_cutover: "UNPROVEN"
+  control_conclusion: >
+    Main has advanced materially since the accepted P0b production bundle, especially through B1
+    reconciliation/scoring integrity and document/BOM correctness hardening. None of these later
+    merges inherits the earlier P0b production-validation authority. P0b remains accepted exactly
+    as evidenced; P0c and P0d remain REQUIRED. The next product-qualification sequence is P0c then
+    P0d, while B1-12 may collect its own exact-runtime Alerts+Coherence acceptance evidence in
+    parallel without creating another temporal or Coherence authority.
 
 north_star:
   full_product: >
@@ -640,11 +664,19 @@ pr_disposition:
   "630": {action: MERGED_RELEASE_READY_NOT_PROD_VALIDATED, reason: "P0b-L4-5 implementation merged; PR explicitly records PROD_VALIDATED=NO"}
   "631": {action: MERGED_PRODUCTION_MIGRATION_HOTFIX, reason: "ADR-025 migration repaired for the real production predecessor schema"}
   "650": {action: MERGED_HITL_V3_IDEMPOTENCY, reason: "final decision audit idempotency + exact-identity reconciliation integrated"}
+  "817": {action: MERGED_LOCK_ORDER_HARDENING, reason: "document-first processing authority lock order integrated with real PostgreSQL race proof"}
+  "832": {action: MERGED_B1_IMPLEMENTATION_CLOSURE, reason: "B1 v1.2 records implementation closure while keeping exact-runtime acceptance pending"}
+  "857": {action: MERGED_B1_ATOMIC_RESCORE, reason: "false-positive review -> exact snapshot/replay -> canonical rescore transaction integrated"}
+  "863": {action: MERGED_P0_DATA_INTEGRITY, reason: "Budget parse/reparse preserves manual and ownership-unknown BOM rows"}
+  "839": {action: HOLD_REAPPLY_CURRENT_CONTROL, reason: "Risk Register direction remains approved; stale Product-Control branch must be recomposed after this reconciliation"}
+  "850": {action: HOLD_RECOMPOSE_CURRENT_MAIN, reason: "DEV-15 hygiene remains useful but follows correctness/control reconciliation"}
 
 next_authorized_action:
-  - "P0b is accepted from run #56 / 37196092728. Do not rerun or demote it without contradictory production evidence; the accepted bundle is evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml."
-  - "#715 and #792 are CLOSED from the canonical production proof. #712 and #713 remain separate acceptance/fix-forward authorities for lifecycle/evidence cases not exhaustively covered by the bounded P0b scenario."
-  - "Proceed with the remaining P0 qualification wave: P0c temporal/change and P0d current-state reporting require their own exact-runtime production evidence before lifecycle promotion."
-  - "Line B may build the Alerts + Coherence Product Acceptance Matrix in parallel, but must not create a second temporal engine or second Coherence authority; Line C produces temporal facts and Line B consumes them."
-  - "Do not authorize new P1 Coherence/Project-Controls runtime promotion merely because P0b passed; integrate/qualify remaining P0 work or make an explicit dependency decision first."
+  - "P0b remains accepted from run #56 / 37196092728 and its hash-bound bundle. Later merges do not inherit or extend that production-validation authority."
+  - "B1 runtime implementation is closed by the landed reconciliation/scoring chain and #832 v1.2; B1-12 exact-runtime Alerts+Coherence product acceptance remains separate and may proceed in parallel."
+  - "Execute #686 P0c What Changed exact-runtime production qualification next; rebind the live Railway/Vercel deployment pair immediately before any production mutation."
+  - "After accepted P0c evidence, execute #687 P0d Current State qualification on the same clean governed project where possible. PASS bundles never self-promote lifecycle state."
+  - "After remaining P0 qualification, enter P1 Project Controls through PC-1/PC-2 (one logical canonical WBS + baseline/change governance) unless an explicit reviewed dependency decision authorizes a different order."
+  - "Schedule remains a linked temporal domain and Procurement remains downstream of the canonical WBS; neither may instantiate a parallel WBS authority."
+  - "#864 stakeholder provenance is a P1 correctness follow-up; #839 Risk Register direction is retained but must be reapplied on current Product Control rather than merged from stale history."
   - "Track the run #56 ai_usage_logs model_name schema drift and Railway log-rate saturation as OPS/observability residuals; they did not invalidate the product journey but must not be silently forgotten."

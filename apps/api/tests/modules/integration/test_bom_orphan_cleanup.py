@@ -1,6 +1,7 @@
 """
-Regression tests for TASK-DOC-BOM-ORPHAN-007, superseded by #860.
-TS-INT-BOM-ORPHAN-001: NULL-source BOM rows are manual / legacy rows, never orphans.
+Regression tests for TASK-DOC-BOM-ORPHAN-007, superseded by #862 and #860.
+TS-INT-BOM-ORPHAN-001: NULL-source BOM rows are manual / ownership-unknown rows,
+never disposable orphans (#862: NULL is not proof that a row is disposable).
 
 The original sweep deleted NULL-source rows on every budget reparse because coherence
 summed the BOM table as budget truth and they doubled the totals. #860 removes both

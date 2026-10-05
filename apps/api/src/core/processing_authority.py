@@ -138,6 +138,16 @@ class AcquireResult:
 
 _SET_TENANT_SQL = text("SELECT set_config('app.current_tenant', :tenant, true)")
 
+# #758: first row for every authority transaction that can take authority.
+_LOCK_DOCUMENT_SQL = text(
+    """
+    SELECT id FROM documents
+     WHERE id = CAST(:document_id AS uuid)
+       AND tenant_id = CAST(:tenant_id AS uuid)
+     FOR UPDATE
+    """
+)
+
 _LOCK_SQL = text(
     """
     SELECT document_id, tenant_id, revision_id, generation, stage, phase,
@@ -281,21 +291,33 @@ async def _set_tenant(session: Any, tenant_id: UUID) -> None:
     await session.execute(_SET_TENANT_SQL, {"tenant": str(tenant_id)})
 
 
-async def _touch_index(session: Any, *, tenant_id: UUID, document_id: UUID) -> None:
-    """Refresh the discovery hint, taking its row lock FIRST.
+async def _touch_index(
+    session: Any, *, tenant_id: UUID, document_id: UUID, lock_document: bool = True
+) -> None:
+    """Refresh the discovery hint while preserving canonical lock order.
 
-    Lock order for every writer is documents -> discovery index -> authority
-    row (a documents UPDATE reaches the index through its trigger; the
-    recovery sweep locks documents + index, then the authority row). Taking
-    the index before the authority row here keeps that order, so heartbeats,
-    acquires and the sweep cannot deadlock.
+    Authority writers take documents -> discovery index -> authority row.
+    Heartbeat is deliberately exempt from the document lock because it does
+    not take an authority row lock and must not lose its lease while queued
+    behind a long document transaction.
     """
     await _set_tenant(session, tenant_id)
+    if lock_document:
+        await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
     await session.execute(_INDEX_HEARTBEAT_SQL, {"document_id": str(document_id)})
+
+
+async def _lock_document(session: Any, *, tenant_id: UUID, document_id: UUID) -> None:
+    """Lock the document before processing authority (#758 canonical order)."""
+    await session.execute(
+        _LOCK_DOCUMENT_SQL,
+        {"document_id": str(document_id), "tenant_id": str(tenant_id)},
+    )
 
 
 async def _lock(session: Any, *, tenant_id: UUID, document_id: UUID) -> Any:
     await _set_tenant(session, tenant_id)
+    await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
     return (
         await session.execute(
             _LOCK_SQL, {"document_id": str(document_id), "tenant_id": str(tenant_id)}
@@ -328,6 +350,8 @@ async def begin_generation(
     from src.core import resume_lineage
 
     await _set_tenant(session, tenant_id)
+    # Document first: ORM status/version updates may still be staged until flush.
+    await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
     row = (
         await session.execute(
             _BEGIN_GENERATION_SQL,
@@ -537,7 +561,10 @@ async def heartbeat(session: Any, authority: ProcessingAuthority) -> bool:
     live worker can never keep the recovery discovery hint fresh either.
     """
     await _touch_index(
-        session, tenant_id=authority.tenant_id, document_id=authority.document_id
+        session,
+        tenant_id=authority.tenant_id,
+        document_id=authority.document_id,
+        lock_document=False,
     )
     renewed = (
         await session.execute(

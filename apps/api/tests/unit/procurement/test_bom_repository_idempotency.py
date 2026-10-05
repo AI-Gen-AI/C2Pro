@@ -17,6 +17,9 @@ from tests.support.idempotency_fakes import FakeSession
 def test_repository_has_no_source_document_replace_sweep() -> None:
     """#860: the budget-reparse delete-by-source + NULL-source orphan sweep is removed.
 
+    #862 already dropped the NULL-source sweep; #860 removes the remaining
+    source-scoped replacement as well (automated ingestion writes no BOM).
+
     Supersedes the set-replacement contract: automated budget ingestion no longer
     writes BOM, so nothing may bulk-delete manual / procurement-edited rows.
     """
