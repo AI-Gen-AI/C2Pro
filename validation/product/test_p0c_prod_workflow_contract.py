@@ -16,7 +16,7 @@ def test_p0c_production_workflow_is_manual_and_environment_gated() -> None:
     assert "schedule:" not in source
     assert "environment: production-qualification" in source
     assert 'test "$CONFIRM" = "RUN-ISSUE-686"' in source
-    assert 'test "${GITHUB_REF_NAME}" = "main"' in source
+    assert 'test "${GITHUB_REF}" = "main"' in source
     assert 'test "$STAGED_CLEAR" = "true"' in source
 
 
