@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_JSON = Path("apps/web/playwright/.p0c-prod/run.json")
 TIMELINE_JSON = Path("apps/web/playwright/.p0c-prod/timeline.json")
 DETAIL_JSON = Path("apps/web/playwright/.p0c-prod/change-detail.json")
+NO_CHANGE_DETAIL_JSON = Path("apps/web/playwright/.p0c-prod/no-change-detail.json")
 VERIFIER_JSON = Path("evidence/product-qualification/runtime/p0c-verifier.json")
 OUTPUT_ROOT = Path("evidence/product-qualification")
 FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -111,11 +112,13 @@ def build_bundle(
     run_path = _path(RUN_JSON, "P0c browser run")
     timeline_path = _path(TIMELINE_JSON, "P0c timeline capture")
     detail_path = _path(DETAIL_JSON, "P0c change-detail capture")
+    no_change_detail_path = _path(NO_CHANGE_DETAIL_JSON, "P0c no-change detail capture")
     verifier_path = _path(VERIFIER_JSON, "P0c durable verifier")
 
     run = _json(run_path)
     timeline = _json(timeline_path)
     detail = _json(detail_path)
+    no_change_detail = _json(no_change_detail_path)
     verifier = _json(verifier_path)
     _assert_verifier(verifier)
 
@@ -148,13 +151,43 @@ def build_bundle(
         raise BundleBuildError("P0c browser journey did not preserve one analyzed logical document")
 
     negative = run.get("negative_control")
-    if (
-        not isinstance(negative, dict)
-        or negative.get("mode") != "unchanged_declared_facts_not_reported_changed"
-        or not isinstance(negative.get("fact_count"), int)
-        or negative["fact_count"] < 1
-    ):
-        raise BundleBuildError("P0c unchanged-fact negative control is missing")
+    if not isinstance(negative, dict) or negative.get("mode") != "identical_revision_no_material_change":
+        raise BundleBuildError("P0c real no-change negative control is missing")
+    negative_source_revision_id = _string(negative, "source_revision_id")
+    negative_target_revision_id = _string(negative, "target_revision_id")
+    negative_event_id = _string(negative, "event_id")
+    negative_blob_hash = _string(negative, "blob_hash")
+    if negative_source_revision_id != to_revision_id:
+        raise BundleBuildError("P0c negative control must compare B to C")
+    if negative_target_revision_id in {from_revision_id, to_revision_id}:
+        raise BundleBuildError("P0c negative target revision C must be distinct")
+    if negative_blob_hash != _string(run, "target_blob_hash"):
+        raise BundleBuildError("P0c negative revision must reuse exact Contract B bytes")
+
+    for key, expected in {
+        "negative_target_revision_id": negative_target_revision_id,
+        "negative_event_id": negative_event_id,
+    }.items():
+        if verifier_ids.get(key) != expected:
+            raise BundleBuildError(f"browser/verifier negative identifier mismatch: {key}")
+
+    if no_change_detail.get("event_id") != negative_event_id:
+        raise BundleBuildError("no-change detail event id disagrees")
+    if no_change_detail.get("state") != "ready" or no_change_detail.get("change_cause") is not None:
+        raise BundleBuildError("no-change detail is not a settled null-cause comparison")
+    if no_change_detail.get("changes") != []:
+        raise BundleBuildError("no-change detail contains invented material changes")
+    no_change_provenance = no_change_detail.get("provenance")
+    if not isinstance(no_change_provenance, dict):
+        raise BundleBuildError("no-change provenance is missing")
+    if no_change_provenance.get("source_revision_id") != negative_source_revision_id:
+        raise BundleBuildError("no-change source revision disagrees")
+    if no_change_provenance.get("target_revision_id") != negative_target_revision_id:
+        raise BundleBuildError("no-change target revision disagrees")
+    if no_change_provenance.get("source_blob_hash") != negative_blob_hash:
+        raise BundleBuildError("no-change source blob hash disagrees")
+    if no_change_provenance.get("target_blob_hash") != negative_blob_hash:
+        raise BundleBuildError("no-change target blob hash disagrees")
 
     timeline_items = timeline.get("items")
     if not isinstance(timeline_items, list):
@@ -199,6 +232,7 @@ def build_bundle(
     browser_sha = _sha256(run_path)
     timeline_sha = _sha256(timeline_path)
     detail_sha = _sha256(detail_path)
+    no_change_detail_sha = _sha256(no_change_detail_path)
     verifier_sha = _sha256(verifier_path)
 
     evidence_refs: list[dict[str, Any]] = [
@@ -238,6 +272,20 @@ def build_bundle(
             "sha256": None,
         },
         {
+            "id": "no-change-revision",
+            "kind": "persisted_entity",
+            "ref": f"postgres:document_revision:{negative_target_revision_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
+            "id": "no-change-event",
+            "kind": "persisted_entity",
+            "ref": f"postgres:project_event:{negative_event_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
             "id": "browser-run",
             "kind": "ui_report",
             "ref": "artifact:playwright/.p0c-prod/run.json",
@@ -257,6 +305,13 @@ def build_bundle(
             "ref": "artifact:playwright/.p0c-prod/change-detail.json",
             "immutable": False,
             "sha256": detail_sha,
+        },
+        {
+            "id": "no-change-detail-api",
+            "kind": "api_capture",
+            "ref": "artifact:playwright/.p0c-prod/no-change-detail.json",
+            "immutable": False,
+            "sha256": no_change_detail_sha,
         },
         {
             "id": "db-verifier",
@@ -328,10 +383,17 @@ def build_bundle(
             {
                 "id": "absent_evidence_does_not_invent_change",
                 "status": "PASS",
-                "evidence_refs": ["browser-run", "change-detail-api"],
+                "evidence_refs": [
+                    "browser-run",
+                    "no-change-detail-api",
+                    "no-change-revision",
+                    "no-change-event",
+                    "db-verifier",
+                ],
                 "note": (
-                    "Bounded negative control: the canonical PJ-01 evaluator requires every "
-                    "fixture-declared unchanged control fact to be absent from reported changes."
+                    "Real bounded negative control: revision C reuses the exact Contract B bytes; "
+                    "the current runtime must persist and render one settled comparison with "
+                    "change_cause=null and changes=[]."
                 ),
             },
         ],
