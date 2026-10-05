@@ -8,7 +8,6 @@ properties before writing output.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import tempfile
 from pathlib import Path
@@ -46,7 +45,14 @@ def _blocks(pdf_bytes: bytes) -> list[tuple[int, str]]:
         return result
 
 
-def build(source: Path, output: Path) -> tuple[str, str]:
+def build() -> tuple[str, str]:
+    source = DEFAULT_SOURCE.resolve(strict=True)
+    output = DEFAULT_OUTPUT.resolve(strict=False)
+    if source != DEFAULT_SOURCE.resolve():
+        raise RuntimeError("canonical source path resolution failed")
+    if output.parent != DEFAULT_OUTPUT.parent.resolve():
+        raise RuntimeError("canonical output path resolution failed")
+
     original = source.read_bytes()
     doc = fitz.open(stream=original, filetype="pdf")
     doc.set_metadata(
@@ -71,15 +77,11 @@ def build(source: Path, output: Path) -> tuple[str, str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    args = parser.parse_args()
-    original_sha, derived_sha = build(args.source, args.output)
+    original_sha, derived_sha = build()
     print("P0C_NO_CHANGE_FIXTURE=PASS")
     print(f"source_sha256={original_sha}")
     print(f"derived_sha256={derived_sha}")
-    print(f"output={args.output}")
+    print(f"output={DEFAULT_OUTPUT}")
     return 0
 
 
