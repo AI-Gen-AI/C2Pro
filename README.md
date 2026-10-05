@@ -3,7 +3,7 @@
 [![CI](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/ci.yml/badge.svg)](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/ci.yml)
 [![Secret Scan](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/secret-scan.yml)
 [![CodeQL](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/codeql.yml/badge.svg)](https://github.com/AI-Gen-AI/C2Pro/actions/workflows/codeql.yml)
-[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)
 
 C2Pro is an evidence-backed contract, project-controls and procurement intelligence platform for construction/infrastructure projects.
 

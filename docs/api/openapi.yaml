@@ -2,23 +2,22 @@ openapi: 3.1.0
 info:
   title: C2Pro API
   description: "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma\
-    \ de inteligencia contractual para proyectos de construcci\xC3\xB3n e ingenier\xC3\
-    \xADa.\n\n        ## Caracter\xC3\xADsticas\n\n        - \xF0\u0178\u201D **Auditor\xC3\
-    \xADa Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n\
-    \        - \xF0\u0178\xA4\u2013 **IA Especializada**: Claude 4 entrenado en documentos\
-    \ de construcci\xC3\xB3n\n        - \xF0\u0178\u201C\u0160 **Coherence Score**:\
-    \ Indicador 0-100 de alineaci\xC3\xB3n entre documentos\n        - \xF0\u0178\u2018\
-    \xA5 **Stakeholder Intelligence**: Extracci\xC3\xB3n y mapeo autom\xC3\xA1tico\
-    \ de stakeholders\n        - \xF0\u0178\u201C\u02C6 **Multi-tenant**: Aislamiento\
-    \ completo de datos por organizaci\xC3\xB3n\n\n        ## Autenticaci\xC3\xB3\
-    n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xC3\xB3n.\n\n \
-    \       1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
+    \ de inteligencia contractual para proyectos de construcci\xF3n e ingenier\xED\
+    a.\n\n        ## Caracter\xEDsticas\n\n        - \U0001F50D **Auditor\xEDa Tridimensional**:\
+    \ Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \U0001F916\
+    \ **IA Especializada**: Claude 4 entrenado en documentos de construcci\xF3n\n\
+    \        - \U0001F4CA **Coherence Score**: Indicador 0-100 de alineaci\xF3n entre\
+    \ documentos\n        - \U0001F465 **Stakeholder Intelligence**: Extracci\xF3\
+    n y mapeo autom\xE1tico de stakeholders\n        - \U0001F4C8 **Multi-tenant**:\
+    \ Aislamiento completo de datos por organizaci\xF3n\n\n        ## Autenticaci\xF3\
+    n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xF3n.\n\n     \
+    \   1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
     \ /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization:\
-    \ Bearer <token>`\n\n        ## L\xC3\xADmites de Uso\n\n        - **Rate Limit**:\
+    \ Bearer <token>`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
     \ 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n     \
-    \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \xF0\u0178\
-    \u201C\xA7 Email: support@c2pro.app\n        - \xF0\u0178\u201C\u2013 Docs: https://docs.c2pro.app\n\
-    \        - \xF0\u0178\u2019\xAC Discord: https://discord.gg/c2pro\n        "
+    \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \U0001F4E7\
+    \ Email: support@c2pro.app\n        - \U0001F4D6 Docs: https://docs.c2pro.app\n\
+    \        - \U0001F4AC Discord: https://discord.gg/c2pro\n        "
   version: 1.0.0
 paths:
   /:
