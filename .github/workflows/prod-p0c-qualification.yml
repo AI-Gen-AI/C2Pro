@@ -82,7 +82,7 @@ jobs:
           }
           [[ "$BACKEND_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
           [[ "$FRONTEND_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
-          [[ "$BACKEND_DEPLOYMENT" =~ ^[0-9a-fA-F-]{36}$ ]] || exit 2
+          [[ "$BACKEND_DEPLOYMENT" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]] || exit 2
           [[ "$FRONTEND_DEPLOYMENT" =~ ^dpl_[A-Za-z0-9]{20,64}$ ]] || exit 2
 
       - name: Fail closed on protected qualification prerequisites
@@ -185,8 +185,10 @@ jobs:
             --expected-frontend-sha "$FRONTEND_SHA" \
             --expected-frontend-deployment "$FRONTEND_DEPLOYMENT" \
             --expected-frontend-project "$PROD_ACCEPTANCE_VERCEL_PROJECT_ID"
-          echo "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA=$BACKEND_SHA" >> "$GITHUB_ENV"
-          echo "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA=$FRONTEND_SHA" >> "$GITHUB_ENV"
+          backend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["backend"]["api"]["commit_sha"])')"
+          frontend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["frontend"]["commit_sha"])')"
+          echo "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA=$backend_sha" >> "$GITHUB_ENV"
+          echo "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA=$frontend_sha" >> "$GITHUB_ENV"
 
       - name: Setup Python backend
         uses: ./.github/actions/setup-python-backend
