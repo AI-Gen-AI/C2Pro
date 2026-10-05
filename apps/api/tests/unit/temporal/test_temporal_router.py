@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -16,8 +16,11 @@ from src.temporal.adapters.http.router import (
     get_impact_assessor,
     get_project_repository,
     get_revision_projector,
+    get_revision_status_reader,
     router,
 )
+from src.temporal.application.change_qualification import CHANGE_EVENT_TYPES
+from src.temporal.application.effective_change import OUTCOME_EVENT_TYPES, select_effective_outcome
 from src.temporal.application.revision_projection import RevisionProjection
 from src.temporal.domain.entity_ref import TemporalEntityRef
 from src.temporal.domain.impact import ChangeImpact, ImpactAssessment, ImpactStatus
@@ -41,14 +44,33 @@ class _Events:
         return rows[: limit + 1]
 
     async def get_change_for_revision(self, *, tenant_id, project_id, document_id, revision_id):  # noqa: ANN001
-        for event in self.events:
-            if event.tenant_id != tenant_id or event.project_id != project_id:
-                continue
-            if event.event_type not in {"revision.changed", "revision.reinterpreted"} or event.source_revision_id not in {None, revision_id}:
-                continue
-            if event.payload.get("document_id") == str(document_id):
-                return event
-        return None
+        # Mirrors the SQL reader: the EFFECTIVE comparison, never "latest wins".
+        candidates = [
+            event for event in self.events
+            if event.tenant_id == tenant_id and event.project_id == project_id
+            and event.event_type in CHANGE_EVENT_TYPES
+            and event.source_revision_id in {None, revision_id}
+            and event.payload.get("document_id") == str(document_id)
+        ]
+        return select_effective_outcome(candidates).effective
+
+    @staticmethod
+    def _revision_of(event: ProjectEvent):  # noqa: ANN205
+        provenance = event.payload.get("provenance") or {}
+        return event.source_revision_id or UUID(provenance["target_revision_id"])
+
+    async def list_outcomes_for_revisions(self, *, tenant_id, revision_ids):  # noqa: ANN001
+        return [
+            event for event in self.events
+            if event.tenant_id == tenant_id and event.event_type in OUTCOME_EVENT_TYPES
+            and self._revision_of(event) in set(revision_ids)
+        ]
+
+    async def list_revision_outcomes(self, *, tenant_id, project_id, document_id, revision_id):  # noqa: ANN001
+        return [
+            event for event in await self.list_outcomes_for_revisions(tenant_id=tenant_id, revision_ids=[revision_id])
+            if event.project_id == project_id and event.payload.get("document_id") == str(document_id)
+        ]
 
 
 class _Projects:
@@ -80,7 +102,7 @@ def _event(project_id, tenant_id, document_id, revision_id, *, engine="p0c-struc
     )
 
 
-def _app(events: list[ProjectEvent], tenant_id, *, owned: bool = True, impacts=None, projection=None) -> FastAPI:  # noqa: ANN001
+def _app(events: list[ProjectEvent], tenant_id, *, owned: bool = True, impacts=None, projection=None, status=None) -> FastAPI:  # noqa: ANN001
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
 
@@ -110,7 +132,14 @@ def _app(events: list[ProjectEvent], tenant_id, *, owned: bool = True, impacts=N
         return project
 
     app.dependency_overrides[get_impact_assessor] = _assessor
+    async def _status_reader():  # noqa: ANN202
+        async def read(*, project_id, document_id, revision_id):  # noqa: ANN001, ANN202
+            return status
+
+        return read
+
     app.dependency_overrides[get_revision_projector] = _projector
+    app.dependency_overrides[get_revision_status_reader] = _status_reader
     return app
 
 
@@ -326,3 +355,140 @@ async def test_projection_read_failure_is_unavailable_not_an_error(monkeypatch: 
     assert projection.status == "unavailable"
     assert projection.reason == "projection_read_failed"
     assert projection.projected_score is None
+
+
+# --- C3b-2: lineage, historical reads and revision status ----------------------------
+
+
+def _recomputed(original: ProjectEvent, revision_id) -> ProjectEvent:  # noqa: ANN001
+    event = _event(original.project_id, original.tenant_id, UUID(original.payload["document_id"]), revision_id)
+    payload = dict(event.payload)
+    payload["provenance"] = {
+        **payload["provenance"],
+        "recomputed_from_event_id": str(original.event_id),
+        "recomputed_from_engine": "p0c-structural-l1-v1",
+    }
+    return event.model_copy(
+        update={"event_type": "revision.recomputed", "payload": payload, "source_revision_id": revision_id}
+    )
+
+
+@pytest.mark.asyncio
+async def test_timeline_marks_the_recomputation_effective_and_the_legacy_original_historical() -> None:
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    legacy = _event(
+        project_id, tenant_id, document_id, revision_id, engine="p0c-structural-l1-v1", basis=None
+    ).model_copy(update={"source_revision_id": revision_id})
+    recomputed = _recomputed(legacy, revision_id)
+    app = _app([legacy, recomputed], tenant_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/v1/projects/{project_id}/timeline")
+
+    items = {item["event_id"]: item for item in response.json()["items"]}
+    old, new = items[str(legacy.event_id)], items[str(recomputed.event_id)]
+    # The legacy output stays visible, qualified, and can never pass for current.
+    assert old["derivation"] == "original" and old["effective"] is False
+    assert old["superseded_by_event_id"] == str(recomputed.event_id)
+    assert old["legacy_matcher"] is True and old["state"] == "needs_review"
+    assert new["derivation"] == "recomputed" and new["effective"] is True
+    assert new["derived_from_event_id"] == str(legacy.event_id)
+    assert new["matcher_status"] == "current" and new["superseded_by_event_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_change_detail_returns_the_effective_comparison_with_its_history() -> None:
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    legacy = _event(
+        project_id, tenant_id, document_id, revision_id, engine="p0c-structural-l1-v1", basis=None
+    ).model_copy(update={"source_revision_id": revision_id})
+    recomputed = _recomputed(legacy, revision_id)
+    app = _app([recomputed, legacy], tenant_id)
+    url = f"/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        effective = (await client.get(url)).json()
+        historical = (await client.get(url, params={"event_id": str(legacy.event_id)})).json()
+        unknown = await client.get(url, params={"event_id": str(uuid4())})
+
+    assert effective["event_id"] == str(recomputed.event_id) and effective["effective"] is True
+    assert {h["event_id"] for h in effective["history"]} == {str(legacy.event_id), str(recomputed.event_id)}
+    # An explicit historical read is labelled as such, never as the current result.
+    assert historical["event_id"] == str(legacy.event_id)
+    assert historical["effective"] is False
+    assert historical["superseded_by_event_id"] == str(recomputed.event_id)
+    assert historical["state"] == "needs_review"
+    assert unknown.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_change_detail_cannot_read_another_revisions_event_by_id() -> None:
+    tenant_id, project_id, document_id = uuid4(), uuid4(), uuid4()
+    rev_a, rev_b = uuid4(), uuid4()
+    other = _event(project_id, tenant_id, document_id, rev_b)
+    app = _app([_event(project_id, tenant_id, document_id, rev_a), other], tenant_id)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/documents/{document_id}/changes/{rev_a}",
+            params={"event_id": str(other.event_id)},
+        )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_change_detail_carries_revision_trust_and_materialization_status() -> None:
+    from src.temporal.application.revision_status import MaterializationStatus, RevisionStatus
+
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    status = RevisionStatus(
+        revision_id=revision_id, rev_no=2, trust_state="trusted", is_current=True,
+        current_revision_id=revision_id, current_basis="trusted",
+        materialization=MaterializationStatus(
+            state="materialized", scope="governance_authorized_effects_applied",
+            qualifications=["WBS_GOVERNANCE_REQUIRED", "RISK_ALERT_RECONCILIATION_REQUIRED"],
+            deferred_effects={"wbs": {"qualification": "WBS_GOVERNANCE_REQUIRED", "proposed_nodes": 3}},
+        ),
+    )
+    app = _app([_event(project_id, tenant_id, document_id, revision_id)], tenant_id, status=status)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        body = (await client.get(
+            f"/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}"
+        )).json()
+
+    revision_status = body["revision_status"]
+    assert revision_status["trust_state"] == "trusted" and revision_status["is_current"] is True
+    assert revision_status["materialization"]["scope"] == "governance_authorized_effects_applied"
+    assert "WBS_GOVERNANCE_REQUIRED" in revision_status["materialization"]["qualifications"]
+
+
+@pytest.mark.asyncio
+async def test_revision_status_read_failure_is_unavailable_never_current(monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlib import asynccontextmanager
+
+    import src.temporal.adapters.persistence.revision_status_reader as readers
+    from src.temporal.adapters.http import router as temporal_router
+
+    @asynccontextmanager
+    async def _session(_tenant):  # noqa: ANN001, ANN202
+        yield _NestedSession()
+
+    class _BrokenReader:
+        def __init__(self, _session) -> None:  # noqa: ANN001
+            pass
+
+        async def read(self, **_):  # noqa: ANN003, ANN202
+            raise RuntimeError("store down")
+
+    monkeypatch.setattr(temporal_router, "get_session_with_tenant", _session)
+    monkeypatch.setattr(readers, "SqlAlchemyRevisionStatusReader", _BrokenReader)
+    revision_id = uuid4()
+    reader_gen = temporal_router.get_revision_status_reader(SimpleNamespace(tenant_id=uuid4()))
+    read = await reader_gen.__anext__()
+    status = await read(project_id=uuid4(), document_id=uuid4(), revision_id=revision_id)
+    await reader_gen.aclose()
+
+    assert status is not None and status.status == "unavailable"
+    assert status.is_current is False and status.trust_state is None

@@ -38,7 +38,8 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from src.analysis.domain.trust import TrustState
-from src.temporal.application.change_qualification import CHANGE_EVENT_TYPES, qualify_event
+from src.temporal.application.change_qualification import qualify_event
+from src.temporal.application.effective_change import select_effective_outcome
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.engine_registry import COMPARED_ARTIFACT_TYPES
 from src.temporal.domain.project_event import ProjectEvent
@@ -157,7 +158,10 @@ def _own_comparison_decision(
         return TemporalReviewDecision(False, "baseline_revision")
 
     own = [event for event in events if event.source_revision_id == revision.revision_id]
-    outcome = _latest(own, {*CHANGE_EVENT_TYPES, "revision.analysis_failed"})
+    # C3b-2: the EFFECTIVE outcome (lineage + matcher qualification), not merely
+    # the newest event -- an older matcher's reinterpretation appended after a
+    # current-matcher recomputation must not take the decision back.
+    outcome = select_effective_outcome(own).effective
     if outcome is not None:
         if outcome.event_type == "revision.analysis_failed":
             return TemporalReviewDecision(True, "temporal_comparison_failed")

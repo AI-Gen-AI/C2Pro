@@ -23,7 +23,7 @@ from src.temporal.domain.engine_registry import (
 )
 from src.temporal.domain.project_event import ProjectEvent
 
-CHANGE_EVENT_TYPES = frozenset({"revision.changed", "revision.reinterpreted"})
+CHANGE_EVENT_TYPES = frozenset({"revision.changed", "revision.reinterpreted", "revision.recomputed"})
 
 
 @dataclass(frozen=True)

@@ -37,29 +37,19 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { EpistemicBasis } from "./epistemicBasis";
-import type { TimelineItemResponseProvenance } from "./timelineItemResponseProvenance";
+import type { MaterializationStatus } from "./materializationStatus";
+import type { RevisionStatusStatus } from "./revisionStatusStatus";
 
-/**
- * One immutable event rendered for the What Changed product surface.
- */
-export interface TimelineItemResponse {
-  event_id: string;
-  occurred_at: string;
-  event_type: string;
-  basis?: EpistemicBasis;
-  state: string;
-  change_cause?: string | null;
-  confidence?: number | null;
-  matcher_status?: string | null;
-  legacy_matcher?: boolean;
-  qualification_reason?: string | null;
-  document_id?: string | null;
-  provenance?: TimelineItemResponseProvenance;
-  /** @nullable */
-  l3_impact?: null;
-  derivation?: string | null;
-  derived_from_event_id?: string | null;
-  effective?: boolean | null;
-  superseded_by_event_id?: string | null;
+export interface RevisionStatus {
+  status?: RevisionStatusStatus;
+  revision_id: string;
+  rev_no?: number | null;
+  trust_state?: string | null;
+  artifact_id?: string | null;
+  artifact_version?: number | null;
+  is_current?: boolean;
+  current_revision_id?: string | null;
+  current_basis?: string;
+  materialization?: MaterializationStatus | null;
+  reason?: string | null;
 }

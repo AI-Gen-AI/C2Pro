@@ -23,7 +23,19 @@ from src.temporal.adapters.persistence.clause_impact_resolver import SqlAlchemyC
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
-from src.temporal.application.change_qualification import ChangeQualification, qualify_event
+from src.temporal.application.change_qualification import (
+    CHANGE_EVENT_TYPES,
+    ChangeQualification,
+    qualify_event,
+)
+from src.temporal.application.effective_change import (
+    OUTCOME_EVENT_TYPES,
+    EffectiveOutcome,
+    derivation_of,
+    derived_from,
+    effective_by_revision,
+    select_effective_outcome,
+)
 from src.temporal.application.impact_assessment import (
     ImpactResolver,
     ResolverResult,
@@ -33,6 +45,7 @@ from src.temporal.application.revision_projection import (
     RevisionProjection,
     project_revision_coherence,
 )
+from src.temporal.application.revision_status import RevisionStatus
 from src.temporal.application.timeline import (
     InvalidTimelineCursor,
     TimelineScope,
@@ -57,6 +70,12 @@ class RevisionProjector(Protocol):
     ) -> Awaitable[RevisionProjection]: ...
 
 
+class RevisionStatusRead(Protocol):
+    def __call__(
+        self, *, project_id: UUID, document_id: UUID, revision_id: UUID
+    ) -> Awaitable[RevisionStatus | None]: ...
+
+
 class TimelineItemResponse(BaseModel):
     """One immutable event rendered for the What Changed product surface."""
 
@@ -76,6 +95,14 @@ class TimelineItemResponse(BaseModel):
     document_id: UUID | None = None
     provenance: dict[str, Any] = Field(default_factory=dict)
     l3_impact: None = None
+    # C3b-2 lineage (revision outcomes only; None for bookkeeping events):
+    # "original" | "recomputed" | "reinterpreted".
+    derivation: str | None = None
+    derived_from_event_id: UUID | None = None
+    # Whether this is the revision's EFFECTIVE outcome (lineage + matcher, never
+    # recency alone); a historical event names the event that supersedes it.
+    effective: bool | None = None
+    superseded_by_event_id: UUID | None = None
 
 
 class TimelineResponse(BaseModel):
@@ -94,6 +121,10 @@ class ChangeDetailResponse(TimelineItemResponse):
     impacts: list[ChangeImpact] = Field(default_factory=list)
     # PROJECTED: hypothetical #714 Coherence with this revision's pending candidate.
     projection: RevisionProjection | None = None
+    # Every outcome recorded for this revision, with lineage (historical included).
+    history: list[TimelineItemResponse] = Field(default_factory=list)
+    # Trust / current-vs-historical / materialization status of the revision.
+    revision_status: RevisionStatus | None = None
 
 
 async def get_event_repository(
@@ -205,14 +236,45 @@ async def get_revision_projector(
         yield project
 
 
+async def get_revision_status_reader(
+    current_user: User = Depends(get_current_user),
+) -> AsyncIterator[RevisionStatusRead]:
+    """Trust / currency / materialization of one revision; read-only, fail closed."""
+    from src.temporal.adapters.persistence.revision_status_reader import (
+        SqlAlchemyRevisionStatusReader,
+    )
+
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    async with get_session_with_tenant(tenant_id) as db:
+        reader = SqlAlchemyRevisionStatusReader(db)
+
+        async def read(*, project_id: UUID, document_id: UUID, revision_id: UUID) -> RevisionStatus | None:
+            try:
+                async with db.begin_nested():
+                    return await reader.read(
+                        tenant_id=tenant_id, project_id=project_id, document_id=document_id, revision_id=revision_id
+                    )
+            except Exception:  # noqa: BLE001 - status unknown is never "current" or "trusted"
+                logger.warning("temporal_revision_status_unavailable", revision_id=str(revision_id), exc_info=True)
+                return RevisionStatus.unavailable(revision_id, "revision_status_read_failed")
+
+        yield read
+
+
 def _projection_payload(event: ProjectEvent) -> dict[str, Any]:
     return event.payload if isinstance(event.payload, dict) else {}
 
 
-def _item(event: ProjectEvent, qualification: ChangeQualification | None = None) -> TimelineItemResponse:
+def _item(
+    event: ProjectEvent,
+    qualification: ChangeQualification | None = None,
+    lineage: EffectiveOutcome | None = None,
+) -> TimelineItemResponse:
     payload = _projection_payload(event)
     document_id = payload.get("document_id")
     qualified = qualification or qualify_event(event)
+    outcome = event.event_type in OUTCOME_EVENT_TYPES
+    effective = lineage.is_effective(event) if outcome and lineage is not None else None
     return TimelineItemResponse(
         event_id=event.event_id,
         occurred_at=event.occurred_at.isoformat(),
@@ -226,6 +288,12 @@ def _item(event: ProjectEvent, qualification: ChangeQualification | None = None)
         document_id=UUID(document_id) if isinstance(document_id, str) else None,
         provenance=cast(dict[str, Any], payload["provenance"]) if isinstance(payload.get("provenance"), dict) else {},
         l3_impact=None,
+        derivation=derivation_of(event).value if outcome else None,
+        derived_from_event_id=derived_from(event) if outcome else None,
+        effective=effective,
+        superseded_by_event_id=(
+            lineage.superseded_by.get(event.event_id) if outcome and lineage is not None else None
+        ),
     )
 
 
@@ -272,7 +340,29 @@ async def get_project_timeline(
         if len(rows) > limit and page_items
         else None
     )
-    return TimelineResponse(items=[_item(event) for event in page_items], next_cursor=next_cursor)
+    # Lineage is decided over ALL outcomes of each revision on the page, not just
+    # the ones this page happens to include.
+    revision_ids = [
+        event.source_revision_id
+        for event in page_items
+        if event.event_type in OUTCOME_EVENT_TYPES and event.source_revision_id is not None
+    ]
+    outcomes = (
+        await events.list_outcomes_for_revisions(tenant_id=tenant_id, revision_ids=revision_ids)
+        if revision_ids
+        else []
+    )
+    lineage = effective_by_revision([event for event in outcomes if event.project_id == project_id])
+    return TimelineResponse(
+        items=[
+            _item(
+                event,
+                lineage=lineage.get(event.source_revision_id) if event.source_revision_id else None,
+            )
+            for event in page_items
+        ],
+        next_cursor=next_cursor,
+    )
 
 
 @router.get(
@@ -283,22 +373,41 @@ async def get_revision_change_detail(
     project_id: UUID,
     document_id: UUID,
     revision_id: UUID,
+    event_id: UUID | None = Query(
+        default=None,
+        description="Read one specific (possibly historical) comparison of this revision; "
+        "omitted, the revision's EFFECTIVE comparison is returned.",
+    ),
     current_user: User = Depends(get_current_user),
     events: IProjectEventRepository = Depends(get_event_repository),
     projects: ProjectRepository = Depends(get_project_repository),
     assess_impacts: ImpactAssessor = Depends(get_impact_assessor),
     project_revision: RevisionProjector = Depends(get_revision_projector),
+    read_revision_status: RevisionStatusRead = Depends(get_revision_status_reader),
 ) -> ChangeDetailResponse:
     """Read a revision detail only from the tenant-scoped immutable projection."""
 
     tenant_id = require_tenant_id(current_user.tenant_id)
     await _require_project_access(project_id, tenant_id, projects)
-    event = await events.get_change_for_revision(
+    history = await events.list_revision_outcomes(
         tenant_id=tenant_id,
         project_id=project_id,
         document_id=document_id,
         revision_id=revision_id,
     )
+    lineage = select_effective_outcome(history)
+    if event_id is None:
+        event = await events.get_change_for_revision(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=document_id,
+            revision_id=revision_id,
+        )
+    else:
+        event = next(
+            (e for e in history if e.event_id == event_id and e.event_type in CHANGE_EVENT_TYPES),
+            None,
+        )
     if event is None:
         raise HTTPException(status_code=404, detail="Change not found")
     payload = _projection_payload(event)
@@ -310,7 +419,7 @@ async def get_revision_change_detail(
     ):
         raise HTTPException(status_code=404, detail="Change not found")
     qualification = qualify_event(event)
-    item = _item(event, qualification)
+    item = _item(event, qualification, lineage)
     changeset = payload.get("changeset")
     changes = changeset.get("changes", []) if isinstance(changeset, dict) else []
     return ChangeDetailResponse(
@@ -321,6 +430,10 @@ async def get_revision_change_detail(
         projection=await project_revision(
             project_id=project_id, document_id=document_id, revision_id=revision_id, qualification=qualification
         ),
+        history=[_item(outcome, lineage=lineage) for outcome in history],
+        revision_status=await read_revision_status(
+            project_id=project_id, document_id=document_id, revision_id=revision_id
+        ),
     )
 
 
@@ -329,5 +442,6 @@ __all__ = [
     "get_impact_assessor",
     "get_project_repository",
     "get_revision_projector",
+    "get_revision_status_reader",
     "router",
 ]

@@ -2383,6 +2383,25 @@
               "format": "uuid",
               "title": "Revision Id"
             }
+          },
+          {
+            "name": "event_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Read one specific (possibly historical) comparison of this revision; omitted, the revision's EFFECTIVE comparison is returned.",
+              "title": "Event Id"
+            },
+            "description": "Read one specific (possibly historical) comparison of this revision; omitted, the revision's EFFECTIVE comparison is returned."
           }
         ],
         "responses": {
@@ -2929,6 +2948,62 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/alerts/{alert_id}/evidence": {
+      "post": {
+        "tags": ["alerts"],
+        "summary": "Attach reviewer evidence to alert",
+        "operationId": "attach_alert_evidence_api_v1_alerts__alert_id__evidence_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachEvidenceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/alerts/{alert_id}/history": {
@@ -6613,6 +6688,27 @@
         "title": "ApproveRequest",
         "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement review for a newer candidate shares; without the row, a\ndecision from a stale screen would land on a review the human never saw.\nA pinned row that is no longer awaiting a decision fails closed."
       },
+      "AttachEvidenceRequest": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["note", "screenshot", "document_excerpt"],
+            "title": "Type"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "manual_review"
+          }
+        },
+        "type": "object",
+        "required": ["type", "content"],
+        "title": "AttachEvidenceRequest"
+      },
       "AttentionItem": {
         "properties": {
           "kind": {
@@ -7553,6 +7649,52 @@
             "type": "null",
             "title": "L3 Impact"
           },
+          "derivation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derivation"
+          },
+          "derived_from_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From Event Id"
+          },
+          "effective": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective"
+          },
+          "superseded_by_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Event Id"
+          },
           "changes": {
             "items": {
               "additionalProperties": true,
@@ -7580,6 +7722,23 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RevisionProjection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineItemResponse"
+            },
+            "type": "array",
+            "title": "History"
+          },
+          "revision_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionStatus"
               },
               {
                 "type": "null"
@@ -10064,6 +10223,21 @@
         "title": "EvidenceRef",
         "description": "Reference to evidence supporting or withholding a critical output."
       },
+      "EvidenceResponse": {
+        "properties": {
+          "alert_id": {
+            "type": "string",
+            "title": "Alert Id"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "title": "Evidence Count"
+          }
+        },
+        "type": "object",
+        "required": ["alert_id", "evidence_count"],
+        "title": "EvidenceResponse"
+      },
       "EvidenceTier": {
         "type": "string",
         "enum": ["verified", "weak", "inferred", "unverified"],
@@ -11244,6 +11418,40 @@
         "required": ["operation"],
         "title": "MCPExecuteRequest",
         "description": "Generic MCP execution request.\n\nUsed for TS-E2E-SEC-MCP-001 test suite."
+      },
+      "MaterializationStatus": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "qualifications": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Qualifications"
+          },
+          "deferred_effects": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Deferred Effects"
+          }
+        },
+        "type": "object",
+        "required": ["state"],
+        "title": "MaterializationStatus"
       },
       "MeResponse": {
         "properties": {
@@ -13289,6 +13497,112 @@
         "required": ["status", "source_revision_id"],
         "title": "RevisionProjection"
       },
+      "RevisionStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["available", "unavailable"],
+            "title": "Status",
+            "default": "available"
+          },
+          "revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revision Id"
+          },
+          "rev_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rev No"
+          },
+          "trust_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust State"
+          },
+          "artifact_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "artifact_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Version"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current",
+            "default": false
+          },
+          "current_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision Id"
+          },
+          "current_basis": {
+            "type": "string",
+            "title": "Current Basis",
+            "default": "unresolved"
+          },
+          "materialization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaterializationStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": ["revision_id"],
+        "title": "RevisionStatus"
+      },
       "RouteForReviewRequest": {
         "properties": {
           "item_id": {
@@ -14377,6 +14691,52 @@
           "l3_impact": {
             "type": "null",
             "title": "L3 Impact"
+          },
+          "derivation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derivation"
+          },
+          "derived_from_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Derived From Event Id"
+          },
+          "effective": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective"
+          },
+          "superseded_by_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Event Id"
           }
         },
         "type": "object",
