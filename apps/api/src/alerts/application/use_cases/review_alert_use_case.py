@@ -15,7 +15,7 @@ from src.alerts.application.ports.alert_repository import IAlertRepository
 from src.alerts.domain.models import Alert
 
 PreReviewHandler = Callable[[UUID, UUID, str], Awaitable[None]]
-PostReviewHandler = Callable[[Alert, UUID, str], Awaitable[None]]
+PostReviewHandler = Callable[[Alert, UUID, str, str | None], Awaitable[None]]
 
 
 class AlertNotFoundError(Exception):
@@ -50,12 +50,22 @@ class ReviewAlertUseCase:
         if not alert:
             raise AlertNotFoundError(f"Alert {alert_id} not found")
 
+        previous_disposition_raw = (alert.alert_metadata or {}).get("disposition")
+        previous_disposition = (
+            previous_disposition_raw if isinstance(previous_disposition_raw, str) else None
+        )
+
         alert.apply_review(user_id, decision, comment)
         alert.append_history("reviewed", user_id, decision=decision)
 
         await self._repository.save(alert)
         if self._post_review_handler is not None:
-            await self._post_review_handler(alert, tenant_id, decision)
+            await self._post_review_handler(
+                alert,
+                tenant_id,
+                decision,
+                previous_disposition,
+            )
         await self._repository.commit()
 
         return AlertMapper.to_response(alert, tenant_id)
