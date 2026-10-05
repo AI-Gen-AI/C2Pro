@@ -197,18 +197,17 @@ jobs:
           echo "P0C_SOURCE_BLOB_HASH=$source_hash" >> "$GITHUB_ENV"
           echo "P0C_TARGET_BLOB_HASH=$target_hash" >> "$GITHUB_ENV"
 
-      - name: Read-only P0c clean-start preflight
+      - name: Read-only synthetic tenant preflight
         env:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
-          P0C_PROJECT_ID: ${{ inputs.project_id }}
-          P0C_DOCUMENT_ID: ${{ inputs.document_id }}
-          P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
-          python apps/api/scripts/verify_p0c_prod_qualification.py             --phase preflight             --project-id "$P0C_PROJECT_ID"             --document-id "$P0C_DOCUMENT_ID"             --source-revision-id "$P0C_SOURCE_REVISION_ID"             --source-blob-hash "$P0C_SOURCE_BLOB_HASH"
+          python apps/api/scripts/verify_prod_synthetic_journey.py \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
 
       - name: Execute real P0c production browser journey
@@ -220,9 +219,6 @@ jobs:
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
           PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED: "1"
-          P0C_ACCEPTANCE_PROJECT_ID: ${{ inputs.project_id }}
-          P0C_ACCEPTANCE_DOCUMENT_ID: ${{ inputs.document_id }}
-          P0C_ACCEPTANCE_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         working-directory: apps/web
         shell: bash
         run: |
@@ -238,6 +234,9 @@ jobs:
           from pathlib import Path
           data = json.loads(Path("apps/web/playwright/.prod-acceptance/p0c-run.json").read_text())
           for env, key in [
+              ("P0C_PROJECT_ID", "project_id"),
+              ("P0C_DOCUMENT_ID", "document_id"),
+              ("P0C_SOURCE_REVISION_ID", "source_revision_id"),
               ("P0C_TARGET_REVISION_ID", "target_revision_id"),
               ("P0C_CHANGE_EVENT_ID", "change_event_id"),
           ]:
@@ -252,13 +251,10 @@ jobs:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
-          P0C_PROJECT_ID: ${{ inputs.project_id }}
-          P0C_DOCUMENT_ID: ${{ inputs.document_id }}
-          P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
-          python apps/api/scripts/verify_p0c_prod_qualification.py             --phase postrun             --project-id "$P0C_PROJECT_ID"             --document-id "$P0C_DOCUMENT_ID"             --source-revision-id "$P0C_SOURCE_REVISION_ID"             --target-revision-id "$P0C_TARGET_REVISION_ID"             --change-event-id "$P0C_CHANGE_EVENT_ID"             --source-blob-hash "$P0C_SOURCE_BLOB_HASH"             --target-blob-hash "$P0C_TARGET_BLOB_HASH"             --write-evidence
+          python apps/api/scripts/verify_p0c_prod_qualification.py             --project-id "$P0C_PROJECT_ID"             --document-id "$P0C_DOCUMENT_ID"             --source-revision-id "$P0C_SOURCE_REVISION_ID"             --target-revision-id "$P0C_TARGET_REVISION_ID"             --change-event-id "$P0C_CHANGE_EVENT_ID"             --source-blob-hash "$P0C_SOURCE_BLOB_HASH"             --target-blob-hash "$P0C_TARGET_BLOB_HASH"             --write-evidence
 
       - name: Build non-authoritative P0c evidence bundle
         env:
@@ -281,8 +277,6 @@ jobs:
           BACKEND_SHA: ${{ inputs.backend_commit_sha }}
           FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
           FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
-          PROJECT_ID: ${{ inputs.project_id }}
-          DOCUMENT_ID: ${{ inputs.document_id }}
         shell: bash
         run: |
           {
@@ -290,9 +284,8 @@ jobs:
             echo
             echo "- backend: `$BACKEND_DEPLOYMENT` @ `$BACKEND_SHA`"
             echo "- frontend: `$FRONTEND_DEPLOYMENT` @ `$FRONTEND_SHA`"
-            echo "- project: `$PROJECT_ID`"
-            echo "- document: `$DOCUMENT_ID`"
-            echo "- allowed mutation: Contract B as new version of the same document only"
+            echo "- journey: fresh synthetic project -> Contract A -> same-document Contract B -> What Changed -> relogin"
+            echo "- no existing P0b project is mutated"
             echo "- lifecycle authority: **false**"
           } >> "$GITHUB_STEP_SUMMARY"
 
