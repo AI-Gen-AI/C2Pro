@@ -23,7 +23,7 @@
   },
   "scripts": {
     "preinstall": "npx -y only-allow pnpm",
-    "test": "pnpm --filter c2pro-web test:all",
+    "test": "pnpm --filter c2pro-web exec vitest run --coverage",
     "prepare": "husky",
     "lint": "eslint .",
     "format": "prettier --write .",
