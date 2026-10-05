@@ -209,6 +209,13 @@ jobs:
           python apps/api/scripts/verify_prod_qualification_tenant.py
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
 
+      - name: Build byte-distinct semantic no-change fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/build_p0c_semantic_no_change_fixture.py
+          test -f apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
+
       - name: Execute P0c real production browser journey
         env:
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
@@ -219,6 +226,7 @@ jobs:
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
           PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED: "1"
           P0C_PROD_RUN_ID: ${{ env.P0C_PROD_RUN_ID }}
+          P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
         working-directory: apps/web
         shell: bash
         run: |
@@ -274,7 +282,7 @@ jobs:
             echo "## C2Pro #686 P0c Production Qualification"
             echo
             echo "- control commit: `$GITHUB_SHA`"
-            echo "- execution: real production Clerk + canonical PJ-01 A→B + identical B reupload"
+            echo "- execution: real production Clerk + canonical PJ-01 A→B + byte-distinct parser-equivalent no-change revision"
             echo "- DB verifier: fresh read-only transaction"
             echo "- lifecycle authority: **false**"
             echo
