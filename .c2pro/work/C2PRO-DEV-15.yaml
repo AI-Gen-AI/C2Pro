@@ -3,7 +3,7 @@ schema_version: 1
 work_id: C2PRO-DEV-15
 campaign_id: REPO-HYGIENE-CORE-AI-20261005
 role: implementation_lead
-base_sha: f2214730efd216e176e28fdd4716e23ab272be61
+base_sha: 852429c35852ff09048d7a6ca7f8c1b0a61f8c38
 branch: chore/c2pro-dev-15-repository-hygiene-wave1
 risk_class: normal
 scope:
