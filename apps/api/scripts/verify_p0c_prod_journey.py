@@ -206,12 +206,30 @@ async def _post_checks(
     source_blob_hash = _require_run_string(run, "source_blob_hash")
     target_blob_hash = _require_run_string(run, "target_blob_hash")
 
+    negative = run.get("negative_control")
+    if not isinstance(negative, dict) or negative.get("mode") != "identical_revision_no_material_change":
+        raise VerificationFailure("real no-change negative control is missing")
+    negative_source_revision_id = _uuid(
+        _require_run_string(negative, "source_revision_id"), "negative source revision id"
+    )
+    negative_target_revision_id = _uuid(
+        _require_run_string(negative, "target_revision_id"), "negative target revision id"
+    )
+    negative_event_id = _uuid(_require_run_string(negative, "event_id"), "negative event id")
+    negative_blob_hash = _require_run_string(negative, "blob_hash")
+
     if (run_project, run_document, run_source) != (project_id, document_id, source_revision_id):
         raise VerificationFailure("browser run identifiers disagree with the bound P0b project")
     if target_revision_id == source_revision_id:
         raise VerificationFailure("target revision must differ from source revision")
     if source_blob_hash == target_blob_hash:
         raise VerificationFailure("Contract A and B blob hashes must differ")
+    if negative_source_revision_id != target_revision_id:
+        raise VerificationFailure("no-change control must compare B to C")
+    if negative_target_revision_id in {source_revision_id, target_revision_id}:
+        raise VerificationFailure("no-change target revision C must be distinct")
+    if negative_blob_hash != target_blob_hash:
+        raise VerificationFailure("no-change revision C must reuse exact Contract B bytes")
 
     p = {
         "tenant_id": tenant_id,
@@ -220,6 +238,8 @@ async def _post_checks(
         "source_revision_id": source_revision_id,
         "target_revision_id": target_revision_id,
         "change_event_id": change_event_id,
+        "negative_target_revision_id": negative_target_revision_id,
+        "negative_event_id": negative_event_id,
     }
 
     scope = await _one(
@@ -232,8 +252,8 @@ async def _post_checks(
             WHERE d.id = :document_id
               AND d.document_type::text = 'contract'
               AND d.upload_status::text = 'analyzed'
-              AND d.version = 2
-          ) AS document_v2
+              AND d.version = 3
+          ) AS document_v3
         FROM documents d
         LEFT JOIN document_revisions r
           ON r.document_id = d.id
@@ -260,8 +280,15 @@ async def _post_checks(
               AND rev_no = 2
               AND parent_revision_id = :source_revision_id
               AND blob_hash = :target_blob_hash
-              AND valid_to IS NULL
+              AND valid_to IS NOT NULL
           ) AS target_ok,
+          count(*) FILTER (
+            WHERE revision_id = :negative_target_revision_id
+              AND rev_no = 3
+              AND parent_revision_id = :target_revision_id
+              AND blob_hash = :target_blob_hash
+              AND valid_to IS NULL
+          ) AS negative_target_ok,
           count(*) FILTER (
             WHERE revision_id = :source_revision_id
               AND valid_to IS NOT NULL
@@ -319,17 +346,61 @@ async def _post_checks(
         p,
     )
 
+    negative_event = await _one(
+        conn,
+        """
+        SELECT
+          count(*) AS event_count,
+          count(*) FILTER (
+            WHERE event_type = 'revision.changed'
+              AND source_revision_id = :negative_target_revision_id
+              AND payload ->> 'document_id' = CAST(:document_id AS text)
+              AND payload ->> 'state' = 'ready'
+              AND payload ->> 'change_cause' IS NULL
+              AND payload #>> '{provenance,source_revision_id}' = CAST(:target_revision_id AS text)
+              AND payload #>> '{provenance,target_revision_id}' = CAST(:negative_target_revision_id AS text)
+              AND payload #>> '{provenance,source_blob_hash}' = :target_blob_hash
+              AND payload #>> '{provenance,target_blob_hash}' = :target_blob_hash
+              AND jsonb_typeof(payload -> 'changeset' -> 'changes') = 'array'
+              AND jsonb_array_length(payload -> 'changeset' -> 'changes') = 0
+          ) AS no_change_ok
+        FROM project_events
+        WHERE event_id = :negative_event_id
+          AND project_id = :project_id
+          AND tenant_id = :tenant_id
+        """,
+        {**p, "target_blob_hash": target_blob_hash},
+    )
+
+    negative_duplicate = await _one(
+        conn,
+        """
+        SELECT count(*) AS n
+        FROM project_events
+        WHERE project_id = :project_id
+          AND tenant_id = :tenant_id
+          AND event_type = 'revision.changed'
+          AND payload ->> 'document_id' = CAST(:document_id AS text)
+          AND payload #>> '{provenance,target_revision_id}' = CAST(:negative_target_revision_id AS text)
+        """,
+        p,
+    )
+
     checks = [
-        Check("one logical document after revision B", int(scope["documents"]) == 1, f"documents={scope['documents']}"),
-        Check("exactly two revisions after revision B", int(scope["revisions"]) == 2, f"revisions={scope['revisions']}"),
-        Check("logical document is analyzed version 2", int(scope["document_v2"]) == 1, f"documents={scope['document_v2']}"),
+        Check("one logical document after P0c controls", int(scope["documents"]) == 1, f"documents={scope['documents']}"),
+        Check("exactly three revisions A-B-C", int(scope["revisions"]) == 3, f"revisions={scope['revisions']}"),
+        Check("logical document is analyzed version 3", int(scope["document_v3"]) == 1, f"documents={scope['document_v3']}"),
         Check("source revision A blob identity preserved", int(revisions["source_ok"]) == 1, f"source_matches={revisions['source_ok']}"),
         Check("target revision B parent/blob identity exact", int(revisions["target_ok"]) == 1, f"target_matches={revisions['target_ok']}"),
-        Check("source revision closed when B became current", int(revisions["source_closed"]) == 1, f"closed_sources={revisions['source_closed']}"),
-        Check("exact revision.changed event exists", int(event["event_count"]) == 1, f"events={event['event_count']}"),
-        Check("revision.changed durable provenance/evidence is exact", int(event["canonical_event_ok"]) == 1, f"matching_events={event['canonical_event_ok']}"),
+        Check("no-change revision C parent/blob identity exact", int(revisions["negative_target_ok"]) == 1, f"target_matches={revisions['negative_target_ok']}"),
+        Check("source revision A closed", int(revisions["source_closed"]) == 1, f"closed_sources={revisions['source_closed']}"),
+        Check("exact A-to-B revision.changed event exists", int(event["event_count"]) == 1, f"events={event['event_count']}"),
+        Check("A-to-B durable provenance/evidence is exact", int(event["canonical_event_ok"]) == 1, f"matching_events={event['canonical_event_ok']}"),
         Check("revision B has one canonical change outcome", int(duplicate["n"]) == 1, f"revision_changed_events={duplicate['n']}"),
-        Check("change cause is business-state change", event["change_cause"] == "BUSINESS_STATE_CHANGED", f"change_cause={event['change_cause']}"),
+        Check("A-to-B cause is business-state change", event["change_cause"] == "BUSINESS_STATE_CHANGED", f"change_cause={event['change_cause']}"),
+        Check("exact B-to-C no-change event exists", int(negative_event["event_count"]) == 1, f"events={negative_event['event_count']}"),
+        Check("B-to-C outcome is durable true no-change", int(negative_event["no_change_ok"]) == 1, f"matching_events={negative_event['no_change_ok']}"),
+        Check("revision C has one canonical no-change outcome", int(negative_duplicate["n"]) == 1, f"revision_changed_events={negative_duplicate['n']}"),
         Check("browser PJ-01 classification is usable", run.get("pj01_classification") == "USABLE", f"classification={run.get('pj01_classification')}"),
         Check("browser recorded no blocking findings", run.get("blocking_findings") == [], f"blocking_findings={len(run.get('blocking_findings') or [])}"),
         Check("same logical document remained listed", run.get("documents_listed") == 1, f"documents_listed={run.get('documents_listed')}"),
@@ -341,6 +412,8 @@ async def _post_checks(
         "from_revision_id": str(source_revision_id),
         "to_revision_id": str(target_revision_id),
         "change_event_id": str(change_event_id),
+        "negative_target_revision_id": str(negative_target_revision_id),
+        "negative_event_id": str(negative_event_id),
     }
     return checks, identifiers
 
