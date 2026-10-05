@@ -40,7 +40,9 @@ def test_synthetic_tenant_preflight_requires_durable_marker_and_clerk_binding() 
     source = SCRIPT.read_text(encoding="utf-8")
     assert "settings ->> \'synthetic_acceptance\'" in source
     assert "clerk_org_id = :clerk_org_id" in source
-    assert "name NOT LIKE \'ACCEPT-706-%\'" in source
+    assert 'allowed_patterns = ("ACCEPT-706-%",)' in source
+    assert '--allow-project-prefix' in source
+    assert 'name NOT LIKE :allowed_prefix_' in source
 
 
 def test_all_business_queries_are_explicitly_tenant_project_scoped() -> None:
@@ -59,8 +61,13 @@ def test_all_business_queries_are_explicitly_tenant_project_scoped() -> None:
         for index in positions:
             window = source[index:index + 500]
             assert "tenant_id = :tenant_id" in window
-            if table != "projects" or "name NOT LIKE" not in window:
-                assert "project_id = :project_id" in window or "id = :project_id" in window
+            if table == "projects" and "{exclusion_sql}" in window:
+                # Tenant inventory preflight is intentionally aggregate-only; it
+                # must remain tenant-scoped while excluding only explicit
+                # synthetic qualification prefixes.
+                assert "allowed_prefix_" in source
+                continue
+            assert "project_id = :project_id" in window or "id = :project_id" in window
 
 
 def test_verifier_forces_read_only_transaction_and_has_no_write_sql() -> None:
