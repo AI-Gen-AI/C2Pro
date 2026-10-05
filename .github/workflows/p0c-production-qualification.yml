@@ -247,9 +247,8 @@ jobs:
           run_json="apps/web/playwright/.prod-p0c/${P0C_PROD_RUN_ID}/run.json"
           test -f "$run_json"
           python apps/api/scripts/verify_p0c_prod_qualification.py \
-            --run-json "$run_json" \
+            --run-id "$P0C_PROD_RUN_ID" \
             --write-evidence
-          echo "P0C_RUN_JSON=$run_json" >> "$GITHUB_ENV"
 
       - name: Build P0c evidence bundle
         env:
@@ -266,8 +265,7 @@ jobs:
             --backend-deployment-id "$BACKEND_DEPLOYMENT" \
             --frontend-commit-sha "$FRONTEND_SHA" \
             --frontend-deployment-id "$FRONTEND_DEPLOYMENT" \
-            --run-json "$P0C_RUN_JSON" \
-            --verifier-json "evidence/product-qualification/runtime/p0c-verifier.json" \
+            --run-id "$P0C_PROD_RUN_ID" \
             --github-run-id "$GITHUB_RUN_ID" \
             --github-run-attempt "$GITHUB_RUN_ATTEMPT"
 
