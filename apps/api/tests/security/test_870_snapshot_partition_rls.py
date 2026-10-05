@@ -54,8 +54,15 @@ def test_supabase_mirror_matches_canonical_migration() -> None:
     assert MIRROR.read_text(encoding="utf-8") == module.supabase_sql()
 
 
-def test_runtime_partition_creator_enables_rls_on_every_new_leaf() -> None:
+def test_runtime_partition_creator_enables_rls_only_when_missing() -> None:
     body = RETENTION.read_text(encoding="utf-8")
+    assert "async def _rls_enabled(" in body
+    assert "c.relrowsecurity" in body
+    assert "if not await _rls_enabled(session, table_name=partition_name):" in body
+    assert (
+        'if not await _rls_enabled(session, table_name="project_snapshots_default"):'
+        in body
+    )
     assert "ALTER TABLE {partition_name} ENABLE ROW LEVEL SECURITY" in body
     assert "ALTER TABLE project_snapshots_default ENABLE ROW LEVEL SECURITY" in body
 
