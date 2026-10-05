@@ -46,6 +46,7 @@ celery_app = Celery(
         "src.core.tasks.budget_alerts",
         "src.core.tasks.project_graph_tasks",
         "src.core.tasks.materialization_tasks",
+        "src.core.tasks.temporal_tasks",
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
         "src.core.tasks.hitl_resume_reconciler",

@@ -1661,6 +1661,19 @@ paths:
           type: string
           format: uuid
           title: Revision Id
+      - name: event_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Read one specific (possibly historical) comparison of this
+            revision; omitted, the revision's EFFECTIVE comparison is returned.
+          title: Event Id
+        description: Read one specific (possibly historical) comparison of this revision;
+          omitted, the revision's EFFECTIVE comparison is returned.
       responses:
         '200':
           description: Successful Response
@@ -5233,6 +5246,28 @@ components:
         l3_impact:
           type: 'null'
           title: L3 Impact
+        derivation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Derivation
+        derived_from_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Derived From Event Id
+        effective:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Effective
+        superseded_by_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Superseded By Event Id
         changes:
           items:
             additionalProperties: true
@@ -5253,6 +5288,15 @@ components:
         projection:
           anyOf:
           - $ref: '#/components/schemas/RevisionProjection'
+          - type: 'null'
+        history:
+          items:
+            $ref: '#/components/schemas/TimelineItemResponse'
+          type: array
+          title: History
+        revision_status:
+          anyOf:
+          - $ref: '#/components/schemas/RevisionStatus'
           - type: 'null'
       type: object
       required:
@@ -7944,6 +7988,29 @@ components:
 
 
         Used for TS-E2E-SEC-MCP-001 test suite.'
+    MaterializationStatus:
+      properties:
+        state:
+          type: string
+          title: State
+        scope:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scope
+        qualifications:
+          items:
+            type: string
+          type: array
+          title: Qualifications
+        deferred_effects:
+          additionalProperties: true
+          type: object
+          title: Deferred Effects
+      type: object
+      required:
+      - state
+      title: MaterializationStatus
     MeResponse:
       properties:
         user:
@@ -9338,6 +9405,67 @@ components:
       - status
       - source_revision_id
       title: RevisionProjection
+    RevisionStatus:
+      properties:
+        status:
+          type: string
+          enum:
+          - available
+          - unavailable
+          title: Status
+          default: available
+        revision_id:
+          type: string
+          format: uuid
+          title: Revision Id
+        rev_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rev No
+        trust_state:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trust State
+        artifact_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Artifact Id
+        artifact_version:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Artifact Version
+        is_current:
+          type: boolean
+          title: Is Current
+          default: false
+        current_revision_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Current Revision Id
+        current_basis:
+          type: string
+          title: Current Basis
+          default: unresolved
+        materialization:
+          anyOf:
+          - $ref: '#/components/schemas/MaterializationStatus'
+          - type: 'null'
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+      type: object
+      required:
+      - revision_id
+      title: RevisionStatus
     RouteForReviewRequest:
       properties:
         item_id:
@@ -10057,6 +10185,28 @@ components:
         l3_impact:
           type: 'null'
           title: L3 Impact
+        derivation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Derivation
+        derived_from_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Derived From Event Id
+        effective:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Effective
+        superseded_by_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Superseded By Event Id
       type: object
       required:
       - event_id

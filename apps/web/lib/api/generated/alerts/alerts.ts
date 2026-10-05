@@ -58,10 +58,12 @@ import type {
   AlertListResponse,
   AlertResponse,
   AlertWorkspaceSettingsPayload,
+  AttachEvidenceRequest,
   BulkOperationResponse,
   BulkResolveRequest,
   BulkReviewRequest,
   CreateAlertRequest,
+  EvidenceResponse,
   HTTPValidationError,
   ListProjectAlertsApiV1AlertsProjectsProjectIdGetParams,
   ListProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetParams,
@@ -1241,6 +1243,106 @@ export const useBulkResolveAlertsApiV1AlertsBulkResolvePost = <
 > => {
   return useMutation(
     getBulkResolveAlertsApiV1AlertsBulkResolvePostMutationOptions(options),
+    queryClient,
+  );
+};
+/**
+ * @summary Attach reviewer evidence to alert
+ */
+export const attachAlertEvidenceApiV1AlertsAlertIdEvidencePost = (
+  alertId: string,
+  attachEvidenceRequest: AttachEvidenceRequest,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<EvidenceResponse>({
+    url: `/api/v1/alerts/${alertId}/evidence`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: attachEvidenceRequest,
+    signal,
+  });
+};
+
+export const getAttachAlertEvidenceApiV1AlertsAlertIdEvidencePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof attachAlertEvidenceApiV1AlertsAlertIdEvidencePost>
+      >,
+      TError,
+      { alertId: string; data: AttachEvidenceRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof attachAlertEvidenceApiV1AlertsAlertIdEvidencePost>
+    >,
+    TError,
+    { alertId: string; data: AttachEvidenceRequest },
+    TContext
+  > => {
+    const mutationKey = ["attachAlertEvidenceApiV1AlertsAlertIdEvidencePost"];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof attachAlertEvidenceApiV1AlertsAlertIdEvidencePost>
+      >,
+      { alertId: string; data: AttachEvidenceRequest }
+    > = (props) => {
+      const { alertId, data } = props ?? {};
+
+      return attachAlertEvidenceApiV1AlertsAlertIdEvidencePost(alertId, data);
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type AttachAlertEvidenceApiV1AlertsAlertIdEvidencePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof attachAlertEvidenceApiV1AlertsAlertIdEvidencePost>
+    >
+  >;
+export type AttachAlertEvidenceApiV1AlertsAlertIdEvidencePostMutationBody =
+  AttachEvidenceRequest;
+export type AttachAlertEvidenceApiV1AlertsAlertIdEvidencePostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Attach reviewer evidence to alert
+ */
+export const useAttachAlertEvidenceApiV1AlertsAlertIdEvidencePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof attachAlertEvidenceApiV1AlertsAlertIdEvidencePost>
+      >,
+      TError,
+      { alertId: string; data: AttachEvidenceRequest },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof attachAlertEvidenceApiV1AlertsAlertIdEvidencePost>>,
+  TError,
+  { alertId: string; data: AttachEvidenceRequest },
+  TContext
+> => {
+  return useMutation(
+    getAttachAlertEvidenceApiV1AlertsAlertIdEvidencePostMutationOptions(
+      options,
+    ),
     queryClient,
   );
 };

@@ -37,29 +37,11 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { EpistemicBasis } from "./epistemicBasis";
-import type { TimelineItemResponseProvenance } from "./timelineItemResponseProvenance";
+import type { MaterializationStatusDeferredEffects } from "./materializationStatusDeferredEffects";
 
-/**
- * One immutable event rendered for the What Changed product surface.
- */
-export interface TimelineItemResponse {
-  event_id: string;
-  occurred_at: string;
-  event_type: string;
-  basis?: EpistemicBasis;
+export interface MaterializationStatus {
   state: string;
-  change_cause?: string | null;
-  confidence?: number | null;
-  matcher_status?: string | null;
-  legacy_matcher?: boolean;
-  qualification_reason?: string | null;
-  document_id?: string | null;
-  provenance?: TimelineItemResponseProvenance;
-  /** @nullable */
-  l3_impact?: null;
-  derivation?: string | null;
-  derived_from_event_id?: string | null;
-  effective?: boolean | null;
-  superseded_by_event_id?: string | null;
+  scope?: string | null;
+  qualifications?: string[];
+  deferred_effects?: MaterializationStatusDeferredEffects;
 }

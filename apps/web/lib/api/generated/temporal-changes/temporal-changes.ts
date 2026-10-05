@@ -53,6 +53,7 @@ import type {
 import type {
   ChangeDetailResponse,
   GetProjectTimelineApiV1ProjectsProjectIdTimelineGetParams,
+  GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
   HTTPValidationError,
   TimelineResponse,
 } from "../models";
@@ -322,19 +323,27 @@ export const getRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdCha
     projectId: string,
     documentId: string,
     revisionId: string,
+    params?: GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
     signal?: AbortSignal,
   ) => {
     return orvalApiClient<ChangeDetailResponse>({
       url: `/api/v1/projects/${projectId}/documents/${documentId}/changes/${revisionId}`,
       method: "GET",
+      params,
       signal,
     });
   };
 
 export const getGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetQueryKey =
-  (projectId: string, documentId: string, revisionId: string) => {
+  (
+    projectId: string,
+    documentId: string,
+    revisionId: string,
+    params?: GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
+  ) => {
     return [
       `/api/v1/projects/${projectId}/documents/${documentId}/changes/${revisionId}`,
+      ...(params ? [params] : []),
     ] as const;
   };
 
@@ -350,6 +359,7 @@ export const getGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentId
     projectId: string,
     documentId: string,
     revisionId: string,
+    params?: GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
     options?: {
       query?: Partial<
         UseQueryOptions<
@@ -372,6 +382,7 @@ export const getGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentId
         projectId,
         documentId,
         revisionId,
+        params,
       );
 
     const queryFn: QueryFunction<
@@ -385,6 +396,7 @@ export const getGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentId
         projectId,
         documentId,
         revisionId,
+        params,
         signal,
       );
 
@@ -432,6 +444,9 @@ export function useGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumen
   projectId: string,
   documentId: string,
   revisionId: string,
+  params:
+    | undefined
+    | GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -476,6 +491,7 @@ export function useGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumen
   projectId: string,
   documentId: string,
   revisionId: string,
+  params?: GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -520,6 +536,7 @@ export function useGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumen
   projectId: string,
   documentId: string,
   revisionId: string,
+  params?: GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -552,6 +569,7 @@ export function useGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumen
   projectId: string,
   documentId: string,
   revisionId: string,
+  params?: GetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumentIdChangesRevisionIdGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -574,6 +592,7 @@ export function useGetRevisionChangeDetailApiV1ProjectsProjectIdDocumentsDocumen
       projectId,
       documentId,
       revisionId,
+      params,
       options,
     );
 

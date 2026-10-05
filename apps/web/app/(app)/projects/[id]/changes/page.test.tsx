@@ -32,6 +32,10 @@ type Item = {
   matcher_status?: "current" | "legacy" | "unsupported" | null;
   legacy_matcher?: boolean;
   qualification_reason?: string | null;
+  derivation?: "original" | "recomputed" | "reinterpreted" | null;
+  derived_from_event_id?: string | null;
+  effective?: boolean | null;
+  superseded_by_event_id?: string | null;
 };
 
 function item(overrides: Partial<Item>): Item {
@@ -157,5 +161,42 @@ describe("ProjectChangesPage — honest revision states", () => {
     const card = await cardFor("change-item-evt-unsupported");
     expect(card.getByText("Unverified matcher")).toBeInTheDocument();
     expect(card.queryByText("Older matcher")).not.toBeInTheDocument();
+  });
+
+  it("keeps a superseded legacy result visible as history and links to it exactly", async () => {
+    timeline([
+      item({
+        event_id: "evt-legacy-original",
+        state: "needs_review",
+        matcher_status: "legacy",
+        legacy_matcher: true,
+        derivation: "original",
+        effective: false,
+        superseded_by_event_id: "evt-recomputed",
+      }),
+      item({
+        event_id: "evt-recomputed",
+        event_type: "revision.recomputed",
+        change_cause: "BUSINESS_STATE_CHANGED",
+        matcher_status: "current",
+        derivation: "recomputed",
+        derived_from_event_id: "evt-legacy-original",
+        effective: true,
+      }),
+    ]);
+
+    render(<ProjectChangesPage />);
+
+    const original = await cardFor("change-item-evt-legacy-original");
+    expect(original.getByText(/historical — superseded/i)).toBeInTheDocument();
+    expect(original.getByText("Older matcher")).toBeInTheDocument();
+    expect(original.getByRole("link")).toHaveAttribute(
+      "href",
+      "/projects/proj_changes_001/changes/doc-1/rev-2?event=evt-legacy-original",
+    );
+    const recomputed = await cardFor("change-item-evt-recomputed");
+    expect(recomputed.getByText(/recomputed · current matcher/i)).toBeInTheDocument();
+    expect(recomputed.queryByText(/historical/i)).not.toBeInTheDocument();
+    expect(recomputed.getByRole("link")).toHaveAttribute("href", "/projects/proj_changes_001/changes/doc-1/rev-2");
   });
 });
