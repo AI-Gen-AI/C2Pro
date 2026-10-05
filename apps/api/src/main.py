@@ -1,7 +1,7 @@
 """
 C2Pro - FastAPI Application
 
-AplicaciÃ³n principal de la API de C2Pro.
+Aplicación principal de la API de C2Pro.
 
 Refers to Suite ID: TS-CORE-MCP-STARTUP-001.
 """
@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app: FastAPI application instance
 
     Yields:
-        None durante la ejecuciÃ³n de la aplicaciÃ³n
+        None durante la ejecución de la aplicación
     """
     # STARTUP
     logger.info("application_starting", environment=settings.environment, debug=settings.debug)
@@ -198,7 +198,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_application() -> FastAPI:
     """
-    Factory para crear la aplicaciÃ³n FastAPI.
+    Factory para crear la aplicación FastAPI.
 
     Returns:
         FastAPI application instance configurada
@@ -209,25 +209,25 @@ def create_application() -> FastAPI:
         description="""
         **C2Pro - Contract Intelligence Platform**
 
-        Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.
+        Plataforma de inteligencia contractual para proyectos de construcción e ingeniería.
 
-        ## CaracterÃ­sticas
+        ## Características
 
-        - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
-        - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n
-        - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos
-        - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders
-        - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n
+        - 🔍 **Auditoría Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto
+        - 🤖 **IA Especializada**: Claude 4 entrenado en documentos de construcción
+        - 📊 **Coherence Score**: Indicador 0-100 de alineación entre documentos
+        - 👥 **Stakeholder Intelligence**: Extracción y mapeo automático de stakeholders
+        - 📈 **Multi-tenant**: Aislamiento completo de datos por organización
 
-        ## AutenticaciÃ³n
+        ## Autenticación
 
-        La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.
+        La API usa JWT (JSON Web Tokens) para autenticación.
 
         1. **Registro**: `POST /api/v1/auth/register`
         2. **Login**: `POST /api/v1/auth/login`
         3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`
 
-        ## LÃ­mites de Uso
+        ## Límites de Uso
 
         - **Rate Limit**: 60 requests/minuto
         - **AI Budget**: $50 USD/mes (plan free)
@@ -235,9 +235,9 @@ def create_application() -> FastAPI:
 
         ## Soporte
 
-        - ðŸ“§ Email: support@c2pro.app
-        - ðŸ“– Docs: https://docs.c2pro.app
-        - ðŸ’¬ Discord: https://discord.gg/c2pro
+        - 📧 Email: support@c2pro.app
+        - 📖 Docs: https://docs.c2pro.app
+        - 💬 Discord: https://discord.gg/c2pro
         """,
         docs_url="/docs",
         redoc_url="/redoc",
@@ -271,7 +271,7 @@ def create_application() -> FastAPI:
     # ===========================================
 
     # Registrar todos los exception handlers globales
-    # Ver src/core/handlers.py para detalles de implementaciÃ³n
+    # Ver src/core/handlers.py para detalles de implementación
     register_exception_handlers(app)
 
     # ===========================================
