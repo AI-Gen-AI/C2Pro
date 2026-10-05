@@ -11,7 +11,6 @@ import {
   contractBPdfPath,
   loadContractBManifest,
 } from "../../pj01/revision-fixture";
-import { clickProjectTab } from "../support/pj01/health";
 import { observeProcessingWithoutReload } from "../support/pj01/processing";
 import { uploadNewVersionThroughUi } from "../support/pj01/revision";
 import { Pj01RunRecorder } from "../support/pj01/run-recorder";
@@ -52,8 +51,112 @@ function requiredFixture(name: "B1_BUDGET_FIXTURE" | "B1_SCHEDULE_FIXTURE"): str
 }
 
 function alertsResponse(projectId: string) {
-  const exact = new RegExp(`/api/v1/alerts/projects/${projectId}/?$`);
-  const compatibility = new RegExp(`/api/v1/projects/${projectId}/alerts/?$`);
+  const exact = new RegExp(`/api/v1/alerts/projects/${projectId}/?import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import { expect, test, type Page, type Response } from "@playwright/test";
+
+import {
+  contractAPdfPath,
+  loadContractAManifest,
+} from "../../pj01/fixture-contract";
+import {
+  contractBPdfPath,
+  loadContractBManifest,
+} from "../../pj01/revision-fixture";
+import { observeProcessingWithoutReload } from "../support/pj01/processing";
+import { uploadNewVersionThroughUi } from "../support/pj01/revision";
+import { Pj01RunRecorder } from "../support/pj01/run-recorder";
+import { createProjectThroughAuthenticatedUi } from "../support/pj01/session";
+import { uploadDocumentThroughUi } from "../support/pj01/upload";
+import {
+  signInSyntheticProductionUser,
+  signOutThroughUi,
+} from "./support/prod-auth.synthetic";
+
+const OUTPUT = path.join(process.cwd(), "playwright", ".prod-b1", "run.json");
+const GENUINE_RULE = "DET-TIM-OVERDUE";
+const FALSE_POSITIVE_RULE = "DET-QUA-INSPECT";
+
+type PersistedAlert = {
+  id: string;
+  rule_code: string;
+  status: string;
+  message: string;
+  source_clause_id?: string | null;
+};
+
+type AlertList = {
+  items: PersistedAlert[];
+  total: number;
+};
+
+function runId(): string {
+  const value = process.env.PROD_ACCEPTANCE_RUN_ID?.trim();
+  if (!value) throw new Error("B1_PROD_MISSING_ENV:PROD_ACCEPTANCE_RUN_ID");
+  return value;
+}
+
+function requiredFixture(name: "B1_BUDGET_FIXTURE" | "B1_SCHEDULE_FIXTURE"): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`B1_PROD_MISSING_ENV:${name}`);
+  return value;
+}
+
+);
+  const compatibility = new RegExp(`/api/v1/projects/${projectId}/alerts/?import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import { expect, test, type Page, type Response } from "@playwright/test";
+
+import {
+  contractAPdfPath,
+  loadContractAManifest,
+} from "../../pj01/fixture-contract";
+import {
+  contractBPdfPath,
+  loadContractBManifest,
+} from "../../pj01/revision-fixture";
+import { observeProcessingWithoutReload } from "../support/pj01/processing";
+import { uploadNewVersionThroughUi } from "../support/pj01/revision";
+import { Pj01RunRecorder } from "../support/pj01/run-recorder";
+import { createProjectThroughAuthenticatedUi } from "../support/pj01/session";
+import { uploadDocumentThroughUi } from "../support/pj01/upload";
+import {
+  signInSyntheticProductionUser,
+  signOutThroughUi,
+} from "./support/prod-auth.synthetic";
+
+const OUTPUT = path.join(process.cwd(), "playwright", ".prod-b1", "run.json");
+const GENUINE_RULE = "DET-TIM-OVERDUE";
+const FALSE_POSITIVE_RULE = "DET-QUA-INSPECT";
+
+type PersistedAlert = {
+  id: string;
+  rule_code: string;
+  status: string;
+  message: string;
+  source_clause_id?: string | null;
+};
+
+type AlertList = {
+  items: PersistedAlert[];
+  total: number;
+};
+
+function runId(): string {
+  const value = process.env.PROD_ACCEPTANCE_RUN_ID?.trim();
+  if (!value) throw new Error("B1_PROD_MISSING_ENV:PROD_ACCEPTANCE_RUN_ID");
+  return value;
+}
+
+function requiredFixture(name: "B1_BUDGET_FIXTURE" | "B1_SCHEDULE_FIXTURE"): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`B1_PROD_MISSING_ENV:${name}`);
+  return value;
+}
+
+);
   return (response: Response): boolean =>
     response.request().method() === "GET" &&
     response.ok() &&
@@ -61,9 +164,27 @@ function alertsResponse(projectId: string) {
       compatibility.test(new URL(response.url()).pathname));
 }
 
+async function clickVisibleB1Tab(
+  page: Page,
+  projectId: string,
+  key: "alerts" | "coherence",
+): Promise<void> {
+  const tabs = page.locator('nav[aria-label="Project tabs"] a');
+  await tabs.first().waitFor({ state: "visible", timeout: 30_000 });
+  const expectedHref = `/projects/${projectId}/${key}`;
+  const tab = tabs.filter({ hasText: new RegExp(key, "i") }).filter({
+    has: page.locator(`[href="${expectedHref}"]`),
+  });
+  if ((await tab.count()) === 0) {
+    throw new Error(`B1_${key.toUpperCase()}_TAB_NOT_NAVIGABLE`);
+  }
+  await tab.first().click();
+}
+
+
 async function openAlertsAndRead(page: Page, recorder: Pj01RunRecorder, projectId: string): Promise<AlertList> {
   const observed = page.waitForResponse(alertsResponse(projectId), { timeout: 60_000 });
-  await clickProjectTab(page, recorder, projectId, "alerts", "ALERTS_TAB_NOT_NAVIGABLE");
+  await clickVisibleB1Tab(page, projectId, "alerts");
   await page.waitForURL(new RegExp(`/projects/${projectId}/alerts`), { timeout: 30_000 });
   return (await (await observed).json()) as AlertList;
 }
@@ -114,13 +235,7 @@ async function evaluateThroughUi(
   recorder: Pj01RunRecorder,
   projectId: string,
 ): Promise<{ alerts: Array<{ rule_id?: string }> }> {
-  await clickProjectTab(
-    page,
-    recorder,
-    projectId,
-    "coherence",
-    "COHERENCE_TAB_NOT_NAVIGABLE",
-  );
+  await clickVisibleB1Tab(page, projectId, "coherence");
   await page.waitForURL(new RegExp(`/projects/${projectId}/coherence`), {
     timeout: 30_000,
   });
