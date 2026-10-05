@@ -79,7 +79,11 @@ async def _scalar(
 
 
 async def _preflight_checks(
-    conn: AsyncConnection, *, tenant_id: UUID, clerk_org_id: str
+    conn: AsyncConnection,
+    *,
+    tenant_id: UUID,
+    clerk_org_id: str,
+    allowed_project_prefixes: tuple[str, ...] = (),
 ) -> list[Check]:
     eligible = await _scalar(
         conn,
@@ -95,17 +99,30 @@ async def _preflight_checks(
         ),
         {TENANT_ID_KEY: tenant_id, "clerk_org_id": clerk_org_id},
     )
+    allowed_patterns = ("ACCEPT-706-%",) + tuple(
+        f"{prefix}%" for prefix in allowed_project_prefixes if prefix
+    )
+    exclusion_sql = "\n".join(
+        f"           AND name NOT LIKE :allowed_prefix_{index}"
+        for index, _pattern in enumerate(allowed_patterns)
+    )
     foreign_projects = await _scalar(
         conn,
         text(
-            """
+            f"""
         SELECT count(*)
           FROM projects
          WHERE tenant_id = :tenant_id
-           AND name NOT LIKE 'ACCEPT-706-%'
+{exclusion_sql}
             """
         ),
-        {TENANT_ID_KEY: tenant_id},
+        {
+            TENANT_ID_KEY: tenant_id,
+            **{
+                f"allowed_prefix_{index}": pattern
+                for index, pattern in enumerate(allowed_patterns)
+            },
+        },
     )
     return [
         Check("synthetic tenant binding", eligible == 1, f"eligible_tenants={eligible}"),
@@ -258,6 +275,7 @@ async def verify(
     clerk_org_id: str,
     project_id: UUID | None,
     require_hitl: bool,
+    allowed_project_prefixes: tuple[str, ...] = (),
 ) -> tuple[list[Check], dict[str, str]]:
     engine = create_async_engine(_normalize_database_url(database_url))
     identifiers: dict[str, str] = {}
@@ -277,6 +295,7 @@ async def verify(
                     conn,
                     tenant_id=tenant_id,
                     clerk_org_id=clerk_org_id,
+                    allowed_project_prefixes=allowed_project_prefixes,
                 )
                 if project_id is not None:
                     checks.extend(
@@ -309,6 +328,15 @@ def main() -> int:
     parser.add_argument("--project-id", default=os.getenv("PROD_ACCEPTANCE_PROJECT_ID"))
     parser.add_argument("--require-hitl", action="store_true")
     parser.add_argument(
+        "--allow-project-prefix",
+        action="append",
+        default=[],
+        help=(
+            "Allow an additional synthetic qualification project-name prefix during "
+            "the tenant preflight. May be repeated; ACCEPT-706- remains allowed by default."
+        ),
+    )
+    parser.add_argument(
         "--write-evidence",
         action="store_true",
         help="Write bounded verifier evidence to the canonical repository path.",
@@ -328,6 +356,7 @@ def main() -> int:
                 clerk_org_id=args.clerk_org_id,
                 project_id=project_id,
                 require_hitl=args.require_hitl,
+                allowed_project_prefixes=tuple(args.allow_project_prefix),
             )
         )
     except Exception as exc:
