@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,6 +16,13 @@ from src.alerts.application.use_cases.bulk_review_alerts_use_case import (
 from src.alerts.application.use_cases.review_alert_use_case import ReviewAlertUseCase
 from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
 from src.alerts.domain.models import Alert
+from src.coherence.application.disposition_review import (
+    CoherenceReviewRescoreUnavailable,
+    _coverage_from_breakdown,
+    _validate_snapshot,
+    acquire_coherence_review_lock,
+    rescore_coherence_after_review,
+)
 
 
 def _alert(*, alert_type: str = "coherence") -> Alert:
@@ -154,3 +163,413 @@ async def test_bulk_reject_non_coherence_alert_keeps_existing_policy() -> None:
     assert response.processed_count == 1
     assert repo.commit_count == 1
     assert alert.status is AlertStatus.DISMISSED
+
+
+
+@pytest.mark.asyncio
+async def test_review_pre_handler_runs_before_alert_load_and_mutation() -> None:
+    events: list[str] = []
+    alert = _alert()
+
+    class OrderedRepo(_Repo):
+        async def get_by_id(self, alert_id: UUID, tenant_id: UUID) -> Alert | None:
+            events.append("get")
+            return await super().get_by_id(alert_id, tenant_id)
+
+    repo = OrderedRepo([alert], events)
+
+    async def pre_handler(
+        alert_id: UUID,  # noqa: ARG001
+        tenant_id: UUID,  # noqa: ARG001
+        decision: str,
+    ) -> None:
+        assert decision == "reject"
+        events.append("lock")
+
+    async def post_handler(
+        reviewed: Alert,  # noqa: ARG001
+        tenant_id: UUID,  # noqa: ARG001
+        decision: str,  # noqa: ARG001
+    ) -> None:
+        events.append("rescore")
+
+    use_case = ReviewAlertUseCase(
+        repository=repo,
+        pre_review_handler=pre_handler,
+        post_review_handler=post_handler,
+    )
+    await use_case.execute(
+        alert_id=alert.id,
+        tenant_id=uuid4(),
+        user_id=uuid4(),
+        decision="reject",
+        comment="Validated false positive",
+    )
+
+    assert events == ["lock", "get", "save", "rescore", "commit"]
+
+
+@pytest.mark.asyncio
+async def test_exact_review_rescore_fails_closed_without_scoring_snapshot() -> None:
+    basis = "basis-current"
+    finding_key = "family-1"
+    alert = _alert()
+    alert.alert_metadata.update(
+        {
+            "finding_key": finding_key,
+            "current_observation_key": basis,
+            "disposition_basis_key": basis,
+            "disposition": "false_positive",
+        }
+    )
+    alert.status = AlertStatus.DISMISSED
+
+    latest = type(
+        "Latest",
+        (),
+        {
+            "id": uuid4(),
+            "score_version": "coherence-v1",
+            "scoring_snapshot": None,
+        },
+    )()
+
+    class Session:
+        async def scalar(self, statement):  # noqa: ANN001, ARG002
+            return latest
+
+    with pytest.raises(
+        CoherenceReviewRescoreUnavailable,
+        match="SCORING_SNAPSHOT_REQUIRED",
+    ):
+        await rescore_coherence_after_review(
+            session=Session(),  # type: ignore[arg-type]
+            alert=alert,
+            tenant_id=uuid4(),
+            decision="reject",
+        )
+
+
+@pytest.mark.asyncio
+async def test_exact_review_rescore_replays_full_signal_inputs_and_appends_result() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+
+    basis = "basis-current"
+    finding_key = "family-1"
+    project_id = uuid4()
+    tenant_id = uuid4()
+    alert = _alert()
+    alert.project_id = project_id
+    alert.alert_metadata.update(
+        {
+            "finding_key": finding_key,
+            "current_observation_key": basis,
+            "disposition_basis_key": basis,
+            "disposition": "false_positive",
+        }
+    )
+    alert.status = AlertStatus.DISMISSED
+
+    signal_payload = {
+        "rule_id": "DET-TIM-B1-REVIEW",
+        "clause_id": str(uuid4()),
+        "source": "deterministic",
+        "impact_score": 0.95,
+        "confidence": 1.0,
+        "severity": "critical",
+        "category": "TIME",
+        "evidence_summary": "False positive timing conflict",
+        "quote": "Exact evidence",
+        "raw_data": {},
+    }
+    snapshot = {
+        "schema_version": 1,
+        "score_version": "coherence-v1",
+        "num_clauses": 1,
+        "poor_extraction_quality": False,
+        "coverage_map": {
+            "SCOPE": True,
+            "BUDGET": True,
+            "QUALITY": True,
+            "TECHNICAL": True,
+            "LEGAL": True,
+            "TIME": True,
+        },
+        "budget_throttled_categories": [],
+        "findings": [
+            {
+                "finding_key": finding_key,
+                "observation_key": basis,
+                "signal": signal_payload,
+                "alert": {
+                    "rule_id": "DET-TIM-B1-REVIEW",
+                    "severity": "critical",
+                    "category": "schedule",
+                    "message": "False positive timing conflict",
+                    "evidence": {
+                        "source_clause_id": signal_payload["clause_id"],
+                        "claim": "False positive timing conflict",
+                        "quote": "Exact evidence",
+                    },
+                },
+            }
+        ],
+    }
+    latest = SimpleNamespace(
+        id=uuid4(),
+        score_version="coherence-v1",
+        scoring_snapshot=snapshot,
+        is_gaming_detected=False,
+        gaming_violations=[],
+        penalty_points=0,
+    )
+    persisted_alert = SimpleNamespace(
+        status=SimpleNamespace(value="dismissed"),
+        alert_metadata=dict(alert.alert_metadata),
+    )
+
+    session = Mock()
+    session.scalar = AsyncMock(return_value=latest)
+    session.scalars = AsyncMock(
+        return_value=SimpleNamespace(all=lambda: [persisted_alert])
+    )
+    session.flush = AsyncMock()
+    session.add = Mock()
+
+    await rescore_coherence_after_review(
+        session=session,
+        alert=alert,
+        tenant_id=tenant_id,
+        decision="reject",
+    )
+
+    session.add.assert_called_once()
+    new_result = session.add.call_args.args[0]
+    assert new_result.project_id == project_id
+    assert new_result.tenant_id == tenant_id
+    assert new_result.score_version == "coherence-v1"
+    assert new_result.alerts == []
+    assert new_result.scoring_snapshot["last_rescore"]["reviewed_finding_key"] == finding_key
+    session.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_review_lock_is_noop_for_non_reject_decisions() -> None:
+    session = Mock()
+    session.execute = AsyncMock()
+
+    await acquire_coherence_review_lock(
+        session=session,
+        alert_id=uuid4(),
+        tenant_id=uuid4(),
+        decision="approve",
+    )
+
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_review_lock_skips_missing_and_non_coherence_alerts() -> None:
+    tenant_id = uuid4()
+    alert_id = uuid4()
+
+    missing_result = Mock()
+    missing_result.first.return_value = None
+    missing_session = Mock()
+    missing_session.execute = AsyncMock(return_value=missing_result)
+
+    await acquire_coherence_review_lock(
+        session=missing_session,
+        alert_id=alert_id,
+        tenant_id=tenant_id,
+        decision="reject",
+    )
+    missing_session.execute.assert_awaited_once()
+
+    risk_result = Mock()
+    risk_result.first.return_value = (uuid4(), "risk")
+    risk_session = Mock()
+    risk_session.execute = AsyncMock(return_value=risk_result)
+
+    await acquire_coherence_review_lock(
+        session=risk_session,
+        alert_id=alert_id,
+        tenant_id=tenant_id,
+        decision="reject",
+    )
+    risk_session.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_review_lock_uses_same_project_serialization_key_as_evaluate() -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    alert_id = uuid4()
+
+    lookup_result = Mock()
+    lookup_result.first.return_value = (project_id, "coherence")
+    lock_result = Mock()
+    session = Mock()
+    session.execute = AsyncMock(side_effect=[lookup_result, lock_result])
+
+    await acquire_coherence_review_lock(
+        session=session,
+        alert_id=alert_id,
+        tenant_id=tenant_id,
+        decision="reject",
+    )
+
+    assert session.execute.await_count == 2
+    lock_call = session.execute.await_args_list[1]
+    assert lock_call.args[1] == {
+        "mirror_key": f"coherence-alerts:{tenant_id}:{project_id}"
+    }
+
+
+@pytest.mark.asyncio
+async def test_review_rescore_is_noop_for_non_score_affecting_review() -> None:
+    session = Mock()
+    session.scalar = AsyncMock()
+    tenant_id = uuid4()
+
+    await rescore_coherence_after_review(
+        session=session,
+        alert=_alert(),
+        tenant_id=tenant_id,
+        decision="approve",
+    )
+    await rescore_coherence_after_review(
+        session=session,
+        alert=_alert(alert_type="risk"),
+        tenant_id=tenant_id,
+        decision="reject",
+    )
+
+    session.scalar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_review_rescore_rejects_unproven_disposition_basis() -> None:
+    alert = _alert()
+    alert.alert_metadata.update(
+        {
+            "finding_key": "family-1",
+            "current_observation_key": "basis-current",
+            "disposition_basis_key": "basis-stale",
+            "disposition": "false_positive",
+        }
+    )
+
+    with pytest.raises(
+        CoherenceReviewRescoreUnavailable,
+        match="FALSE_POSITIVE_REVIEW_BASIS_INVALID",
+    ):
+        await rescore_coherence_after_review(
+            session=Mock(),  # type: ignore[arg-type]
+            alert=alert,
+            tenant_id=uuid4(),
+            decision="reject",
+        )
+
+
+@pytest.mark.parametrize(
+    ("snapshot", "score_version", "message"),
+    [
+        (
+            {
+                "schema_version": 99,
+                "score_version": "coherence-v1",
+                "findings": [],
+                "coverage_map": {},
+                "budget_throttled_categories": [],
+                "num_clauses": 1,
+            },
+            "coherence-v1",
+            "SCHEMA_UNSUPPORTED",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "score_version": "coherence-v2",
+                "findings": [],
+                "coverage_map": {},
+                "budget_throttled_categories": [],
+                "num_clauses": 1,
+            },
+            "coherence-v1",
+            "SCORE_VERSION_MISMATCH",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "score_version": "coherence-v1",
+                "findings": {},
+                "coverage_map": {},
+                "budget_throttled_categories": [],
+                "num_clauses": 1,
+            },
+            "coherence-v1",
+            "FINDINGS_INVALID",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "score_version": "coherence-v1",
+                "findings": [],
+                "coverage_map": [],
+                "budget_throttled_categories": [],
+                "num_clauses": 1,
+            },
+            "coherence-v1",
+            "COVERAGE_INVALID",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "score_version": "coherence-v1",
+                "findings": [],
+                "coverage_map": {},
+                "budget_throttled_categories": {},
+                "num_clauses": 1,
+            },
+            "coherence-v1",
+            "BUDGET_STATE_INVALID",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "score_version": "coherence-v1",
+                "findings": [],
+                "coverage_map": {},
+                "budget_throttled_categories": [],
+                "num_clauses": "1",
+            },
+            "coherence-v1",
+            "SCOPE_INVALID",
+        ),
+    ],
+)
+def test_scoring_snapshot_validation_fails_closed(
+    snapshot: dict[str, object],
+    score_version: str,
+    message: str,
+) -> None:
+    with pytest.raises(CoherenceReviewRescoreUnavailable, match=message):
+        _validate_snapshot(snapshot, score_version)
+
+
+def test_coverage_from_breakdown_tracks_assessed_and_budget_throttled_states() -> None:
+    result = SimpleNamespace(
+        category_breakdown=[
+            SimpleNamespace(category="TIME", state="assessed_findings"),
+            SimpleNamespace(category="LEGAL", state="budget_throttled"),
+            SimpleNamespace(category="UNKNOWN", state="assessed_clean"),
+        ]
+    )
+
+    coverage, throttled = _coverage_from_breakdown(result)
+
+    assert coverage["TIME"] is True
+    assert coverage["LEGAL"] is False
+    assert throttled == {"LEGAL"}
