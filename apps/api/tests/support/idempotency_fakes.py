@@ -1,7 +1,7 @@
 """Shared async-session fakes for procurement repository idempotency tests.
 
-Both the BOM and WBS ``replace_for_source_document`` tests exercise the same
-repository shape (execute/add/add_all/flush/refresh), so the fake lives here in
+The procurement repository tests (BOM create, WBS ``replace_for_source_document``)
+exercise the same repository shape (execute/add/add_all/flush/refresh), so the fake lives here in
 a single place instead of being copied per test module.
 """
 

@@ -4,9 +4,8 @@ TS-UT-852-SCHEDULE-WBS-GUARD-001. A static guard over the automated document
 ingestion layers (parsers, entity extraction, RAG, the documents application
 use cases, the ingestion worker and the documents router's extraction wiring):
 none of them may reference canonical WBS write machinery, construct a canonical
-WBS row, or pass ``wbs_items`` to a persistence call. BUDGET -> BOM persistence
-(``replace_for_source_document(bom_items=...)``) is a separate path and is not
-covered here.
+WBS row, or pass ``wbs_items`` to a persistence call. BUDGET -> BOM writes are
+guarded separately by the #860 guard (test_860_no_budget_canonical_bom_writes).
 
 A schedule activity is not a WBS node; the governed WBS baseline authority is
 PC-1 / PC-2. Explicit human WBS editing APIs (WBS / procurement / projects

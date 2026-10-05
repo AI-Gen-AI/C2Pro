@@ -23,19 +23,16 @@ class TestDocumentsEntityExtractionService:
         )
 
         stakeholder_factory = MagicMock(return_value=MagicMock())
-        bom_factory = MagicMock(return_value=MagicMock())
         user_id = uuid4()
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            bom_use_case_factory=bom_factory,
             user_id=user_id,
         )
 
         assert service._user_id == user_id
         assert service._stakeholder_use_case_factory is stakeholder_factory
         assert not hasattr(service, "_wbs_use_case_factory")
-        assert service._bom_use_case_factory is bom_factory
 
     def test_has_extract_method(self):
         """Test service has extract method."""
@@ -44,11 +41,9 @@ class TestDocumentsEntityExtractionService:
         )
 
         stakeholder_factory = MagicMock(return_value=MagicMock())
-        bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            bom_use_case_factory=bom_factory,
             user_id=uuid4(),
         )
 
@@ -70,11 +65,9 @@ class TestExtractionServiceIntegration:
         mock_stakeholder_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=mock_stakeholder_use_case)
-        mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
 
@@ -113,7 +106,6 @@ class TestExtractionServiceIntegration:
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=MagicMock(return_value=MagicMock()),
-            bom_use_case_factory=MagicMock(return_value=MagicMock()),
             user_id=uuid4(),
         )
 
@@ -149,10 +141,8 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         stakeholder_factory = MagicMock()
-        bom_factory = MagicMock()
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            bom_use_case_factory=bom_factory,
             user_id=uuid4(),
         )
         doc = Document(
@@ -186,27 +176,22 @@ class TestExtractionServiceIntegration:
             "wbs_items": 0,
             "bom_items": 0,
             "schedule_activities": 2,
+            "budget_lines": 0,
         }
         stakeholder_factory.assert_not_called()
-        bom_factory.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_entities_budget_document(self):
-        """Test extraction for BUDGET document type extracts BOM items."""
+        """#860: budget rows are observed (counted), never written as canonical BOM."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
-        mock_bom_use_case = MagicMock()
-        mock_bom_use_case.execute = AsyncMock()
-
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=mock_bom_use_case)
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
 
@@ -222,6 +207,8 @@ class TestExtractionServiceIntegration:
         parsed_payload = {
             "budget": [
                 {"item": "Concrete", "quantity": 10, "unit": "m3", "unit_price": 100, "total": 1000},
+                {"item": "Rebar", "quantity": 2, "unit": "t", "unit_price": 900, "total": 1800},
+                {"item": "", "quantity": 0},
             ]
         }
 
@@ -231,25 +218,22 @@ class TestExtractionServiceIntegration:
             tenant_id=uuid4(),
         )
 
-        assert "bom_items" in result
+        assert result["bom_items"] == 0
+        assert result["budget_lines"] == 2
+        mock_stakeholder_factory.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_entities_budget_chapters_format(self):
-        """Test extraction for BUDGET with chapters format (BC3)."""
+        """#860: BC3 chapter units are observed, never written as canonical BOM."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
-        mock_bom_use_case = MagicMock()
-        mock_bom_use_case.execute = AsyncMock()
-
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=mock_bom_use_case)
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
 
@@ -281,7 +265,9 @@ class TestExtractionServiceIntegration:
             tenant_id=uuid4(),
         )
 
-        assert "bom_items" in result
+        assert result["bom_items"] == 0
+        assert result["budget_lines"] == 1
+        mock_stakeholder_factory.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_stakeholders_no_emails(self):
@@ -292,11 +278,9 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
 
@@ -327,11 +311,9 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute = AsyncMock(side_effect=Exception("Duplicate"))
 
         mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
-        mock_bom_factory = MagicMock(return_value=MagicMock())
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
             user_id=uuid4(),
         )
 
@@ -362,13 +344,11 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute = AsyncMock()
 
         mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
-        mock_bom_factory = MagicMock(return_value=MagicMock())
         user_id = uuid4()
         tenant_id = uuid4()
 
         service = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
             user_id=user_id,
         )
 
@@ -389,113 +369,6 @@ class TestExtractionServiceIntegration:
         mock_use_case.execute.assert_awaited_once()
         assert mock_use_case.execute.await_args.kwargs["tenant_id"] == tenant_id
         assert mock_use_case.execute.await_args.kwargs["user_id"] == user_id
-
-    @pytest.mark.asyncio
-    async def test_extract_bom_items_no_budget(self):
-        """Test BOM extraction returns 0 when no budget data."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=MagicMock())
-
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
-            user_id=uuid4(),
-        )
-
-        doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.BUDGET,
-            filename="budget.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        parsed_payload = {}
-
-        result = await service._extract_bom_items(doc, parsed_payload, uuid4())
-
-        assert result == 0
-
-    @pytest.mark.asyncio
-    async def test_extract_bom_items_with_exception(self):
-        """Test BOM extraction handles exceptions gracefully."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_use_case = MagicMock()
-        mock_use_case.execute = AsyncMock(side_effect=Exception("DB error"))
-
-        mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=mock_use_case)
-
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
-            user_id=uuid4(),
-        )
-
-        doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.BUDGET,
-            filename="budget.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        parsed_payload = {"budget": [{"item": "Test Item", "quantity": 1}]}
-
-        result = await service._extract_bom_items(doc, parsed_payload, uuid4())
-
-        assert result == 0
-
-    @pytest.mark.asyncio
-    async def test_extract_bom_items_skips_invalid_items(self):
-        """Test BOM extraction skips items without name or quantity."""
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            DocumentsEntityExtractionService,
-        )
-        from src.documents.domain.models import Document, DocumentStatus, DocumentType
-
-        mock_use_case = MagicMock()
-        mock_use_case.execute = AsyncMock()
-
-        mock_stakeholder_factory = MagicMock(return_value=MagicMock())
-        mock_bom_factory = MagicMock(return_value=mock_use_case)
-
-        service = DocumentsEntityExtractionService(
-            stakeholder_use_case_factory=mock_stakeholder_factory,
-            bom_use_case_factory=mock_bom_factory,
-            user_id=uuid4(),
-        )
-
-        doc = Document(
-            id=uuid4(),
-            project_id=uuid4(),
-            tenant_id=uuid4(),
-            document_type=DocumentType.BUDGET,
-            filename="budget.xlsx",
-            upload_status=DocumentStatus.PARSED,
-        )
-
-        parsed_payload = {
-            "budget": [
-                {"item": None, "quantity": None},
-                {"item": "", "quantity": 0},
-            ]
-        }
-
-        result = await service._extract_bom_items(doc, parsed_payload, uuid4())
-
-        assert result == 0
 
 
 class TestEmailExtraction:
@@ -606,22 +479,6 @@ class TestParseDecimal:
         result = _parse_decimal(None)
 
         assert result is None
-
-
-class TestToBomCategory:
-    """Tests for the _to_bom_category string->enum mapping."""
-
-    def test_maps_known_and_unknown_values(self):
-        from src.documents.adapters.extraction.documents_entity_extraction_service import (
-            _to_bom_category,
-        )
-        from src.procurement.domain.models import BOMCategory
-
-        assert _to_bom_category("service") == BOMCategory.SERVICE
-        assert _to_bom_category("MATERIAL") == BOMCategory.MATERIAL
-        assert _to_bom_category(BOMCategory.EQUIPMENT) == BOMCategory.EQUIPMENT
-        assert _to_bom_category("not-a-category") is None
-        assert _to_bom_category(None) is None
 
 
 class TestNormalizeNameFromEmail:

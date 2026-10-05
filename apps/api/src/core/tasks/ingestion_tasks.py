@@ -62,8 +62,6 @@ from src.documents.application.trigger_document_analysis_use_case import (
 )
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
-from src.procurement.adapters.persistence.bom_repository import SQLAlchemyBOMRepository
-from src.procurement.application.use_cases.bom_use_cases import CreateBOMItemUseCase
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -858,7 +856,8 @@ class AnalysisIncompleteRetryableError(RuntimeError):
 # Document types whose product value depends on the N1-N17 free-text graph.
 # Grounded in DOC_TYPES ("contract", "technical_spec", "budget", "schedule") and
 # in how parsing treats them: schedule/budget are completed by structured parsing
-# (schedule rows -> RAG, never canonical WBS (#852); budget -> BOM) and legitimately
+# (schedule rows -> RAG, never canonical WBS (#852); budget -> reparsable revision,
+# never canonical BOM (#860)) and legitimately
 # never need the text graph.
 TEXT_ANALYSIS_DOCUMENT_TYPES: frozenset[DocumentType] = frozenset(
     {
@@ -1079,7 +1078,7 @@ async def _analyze_owned(
     # text, and text documents whose embeddings are unavailable (e.g. no
     # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
     # document is still ANALYZED via the structured extraction (clauses /
-    # schedule rows / BOM) done during parsing — the graph is a best-effort enrichment, never
+    # schedule rows / budget lines) done during parsing — the graph is a best-effort enrichment, never
     # a hard gate. This is what previously stranded documents in
     # parsed_pending_analysis and the DLQ ("parsed_text not available" /
     # "RAG chunks were not committed").
@@ -1326,7 +1325,7 @@ async def _process(
 
     #711: the worker first obtains the document's processing authority
     (attempt + owner token + fencing token under a DB-clock lease). Every
-    ingestion output -- stakeholders, BOM, RAG chunks, clauses, revision
+    ingestion output -- stakeholders, RAG chunks, clauses, revision
     events, metadata and the status hand-over -- is staged in ONE transaction
     that commits only after the authority is re-verified in that same
     transaction. A worker that lost authority (lease expired and taken over,
@@ -1350,16 +1349,12 @@ async def _process(
                 CreateStakeholderUseCase(repository=stk_repo, document_repository=repo),
             )
 
-        def bom_factory() -> Any:
-            bom_repo = SQLAlchemyBOMRepository(session=session)
-            return _SavepointedUseCase(session, CreateBOMItemUseCase(bom_repository=bom_repo))
-
         if document.created_by is None:
             raise ValueError("document has no created_by user_id")
         entity_extraction = DocumentsEntityExtractionService(
             stakeholder_use_case_factory=stakeholder_factory,
-            # #852: no WBS writer -- a schedule is observed, never written as canonical WBS.
-            bom_use_case_factory=bom_factory,
+            # #852 / #860: no WBS or BOM writer -- a schedule / budget is observed,
+            # never written as canonical WBS / BOM.
             user_id=document.created_by,
         )
         rag_ingestion = SqlAlchemyRagIngestionService(db_session=session, commit=False)

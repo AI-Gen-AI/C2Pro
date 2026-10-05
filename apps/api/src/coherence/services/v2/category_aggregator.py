@@ -107,7 +107,17 @@ class CategoryAggregator:
         applicability_reason: str | None = None,
         assessed: bool = True,
         budget_reconciliation: BudgetReconciliation | None = None,  # TASK-BCK-093
+        assessment_reason: str | None = None,
     ) -> CategoryV2:
+        """Aggregate one category.
+
+        ``assessed`` / ``assessment_reason`` are decided UPSTREAM by whoever
+        assembled the evaluation inputs (which sources were authoritative); this
+        scorer is category-agnostic. An applicable category that could not be
+        assessed is never scored -- even when some of its rules produced signals,
+        a partial assessment must not read as a complete one -- but those signals
+        and any detected conflicts stay visible.
+        """
         if not applicable:
             return CategoryV2(
                 category=category,
@@ -135,6 +145,28 @@ class CategoryAggregator:
                 budget_reconciliation=budget_reconciliation,
             )
 
+        if not assessed:
+            metadata: dict[str, object] = {"assessment_state": "unassessed"}
+            if assessment_reason:
+                metadata["assessment_reason"] = assessment_reason
+            if rule_signals:
+                metadata["available_rule_signals"] = [rule_id for rule_id, _ in rule_signals]
+            return CategoryV2(
+                category=category,
+                status=CategoryStatus.INSUFFICIENT_EVIDENCE,
+                coherence_score=None,
+                evidence_coverage=evidence.evidence_coverage,
+                technical_reliability=evidence.avg_technical_reliability,
+                evidence_freshness=evidence.evidence_freshness,
+                evidence_count=evidence.count,
+                evidence_references=list(evidence.references),
+                missing_evidence=list(evidence.missing_required),
+                detected_conflicts=list(conflict.conflict_set),
+                rationale=assessment_reason or "rule_assessment_unavailable",
+                calculation_metadata=metadata,
+                budget_reconciliation=budget_reconciliation,
+            )
+
         threshold = MIN_EVIDENCE_BY_CATEGORY.get(category, 1)
         if evidence.count < threshold:
             return CategoryV2(
@@ -152,21 +184,6 @@ class CategoryAggregator:
 
         base = self._aggregate_rule_signals(rule_signals)
         if base is None:
-            if not assessed:
-                return CategoryV2(
-                    category=category,
-                    status=CategoryStatus.INSUFFICIENT_EVIDENCE,
-                    coherence_score=None,
-                    evidence_coverage=evidence.evidence_coverage,
-                    technical_reliability=evidence.avg_technical_reliability,
-                    evidence_freshness=evidence.evidence_freshness,
-                    evidence_count=evidence.count,
-                    evidence_references=list(evidence.references),
-                    missing_evidence=list(evidence.missing_required),
-                    rationale="rule_assessment_unavailable",
-                    calculation_metadata={"assessment_state": "unassessed"},
-                    budget_reconciliation=budget_reconciliation,
-                )
             base = 100.0
             assessment_state = "assessed_clean"
         else:
