@@ -207,7 +207,8 @@ jobs:
           set -euo pipefail
           python apps/api/scripts/verify_prod_synthetic_journey.py \
             --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
-            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID" \
+            --allow-project-prefix "P0c Qualification "
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
 
       - name: Execute real P0c production browser journey
