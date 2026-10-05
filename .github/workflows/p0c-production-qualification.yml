@@ -365,6 +365,8 @@ jobs:
             apps/web/playwright/.p0c-prod/timeline.json
             apps/web/playwright/.p0c-prod/change-detail.json
             apps/web/playwright/.p0c-prod/no-change-detail.json
+            apps/web/playwright/.p0c-prod/fresh-session-timeline.json
+            apps/web/playwright/.p0c-prod/fresh-session-change-detail.json
             apps/web/playwright/.p0c-prod/pj01/**
             evidence/product-qualification/runtime/p0c-verifier.json
             evidence/product-qualification/runtime/deployment-identity.json
