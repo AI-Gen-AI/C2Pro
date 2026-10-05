@@ -50,16 +50,24 @@ class Alert:
         self.reviewed_at = datetime.now(UTC)
         self.review_comment = comment
 
+        metadata = dict(self.alert_metadata or {})
+        current_observation_key = metadata.get("current_observation_key")
+        if isinstance(current_observation_key, str) and current_observation_key:
+            metadata["disposition_basis_key"] = current_observation_key
+
         if decision == "approve":
             self.approval_status = ApprovalStatus.APPROVED
             self.status = AlertStatus.ACKNOWLEDGED
+            metadata["disposition"] = "genuine_inconsistency"
         else:
             self.approval_status = ApprovalStatus.REJECTED
             self.status = AlertStatus.DISMISSED
             self.resolved_at = datetime.now(UTC)
             self.resolved_by = user_id
             self.resolution_notes = comment
+            metadata["disposition"] = "false_positive"
 
+        self.alert_metadata = metadata
         self.updated_at = datetime.now(UTC)
 
     def apply_resolution(

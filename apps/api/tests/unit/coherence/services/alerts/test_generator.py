@@ -736,3 +736,251 @@ class TestLineBStableFindingIdentity:
 
         assert len(result) == 1
         assert repo.create.await_count == 1
+
+
+class TestB1ResidualIdentityContracts:
+    @pytest.mark.asyncio
+    async def test_b1_new_authoritative_observation_revalidates_dismissed_disposition(self) -> None:
+        """B1-03/B1-04: same family on a new evidence basis must not inherit dismissal blindly."""
+        old_revision = uuid4()
+        new_revision = uuid4()
+        existing = _make_mock_alert(
+            status=AlertStatus.DISMISSED,
+            fingerprint="stable-family-fp",
+        )
+        existing.review_comment = "False positive against V1 evidence"
+        existing.alert_metadata = {
+            "fingerprint": "stable-family-fp",
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "reject"}],
+            "detection_evidence": {
+                "revision_id": str(old_revision),
+                "claim": "Old evidence basis",
+            },
+        }
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        incoming = _make_alert_create(rule_id="DET-TIM-GAP")
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "revision_id": str(new_revision),
+                "claim": "New trusted evidence basis",
+            }
+        }
+
+        svc = AlertGeneratorService(repository=repo)
+        with patch(
+            "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+            return_value="stable-family-fp",
+        ):
+            result = await svc.process_violations(
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                violations=[incoming],
+            )
+
+        assert result[0] is existing
+        assert existing.status == AlertStatus.OPEN
+        history = existing.alert_metadata.get("history", [])
+        assert any(item.get("action") == "basis_changed_reopened" for item in history)
+
+    @pytest.mark.asyncio
+    async def test_b1_ambiguous_legacy_family_fails_closed_instead_of_picking_first_row(self) -> None:
+        """B1-04: duplicate legacy ownership must surface an explicit fail-closed conflict."""
+        first = _make_mock_alert(status=AlertStatus.OPEN, fingerprint="legacy-collision")
+        second = _make_mock_alert(status=AlertStatus.ACKNOWLEDGED, fingerprint="legacy-collision")
+        first.rule_id = second.rule_id = "DET-LEG-COLLISION"
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([first, second]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+
+        incoming = _make_alert_create(rule_id="DET-LEG-COLLISION")
+        svc = AlertGeneratorService(repository=repo)
+
+        with (
+            patch(
+                "src.coherence.services.alerts.generator.AlertGeneratorService._fingerprint",
+                return_value="legacy-collision",
+            ),
+            pytest.raises(Exception, match="LEGACY_IDENTITY_CONFLICT"),
+        ):
+            await svc.process_violations(
+                project_id=uuid4(),
+                tenant_id=uuid4(),
+                violations=[incoming],
+            )
+
+
+class TestB1FingerprintV4Safety:
+    def test_same_document_rule_and_claim_but_different_quote_do_not_collapse(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = str(uuid4())
+
+        first = _make_alert_create(rule_id="DET-LEG-NOTICE", category="LEGAL")
+        first.affected_entities = {"documents": [document_id]}
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": document_id,
+                "claim": "Notice period conflict",
+                "quote": "Notice shall be thirty days.",
+            }
+        }
+
+        second = first.model_copy(deep=True)
+        second.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": document_id,
+                "claim": "Notice period conflict",
+                "quote": "Notice shall be ninety days.",
+            }
+        }
+
+        assert svc._fingerprint(first) != svc._fingerprint(second)
+
+    def test_document_family_is_order_independent_for_composite_documents(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        doc_a, doc_b = str(uuid4()), str(uuid4())
+
+        first = _make_alert_create(rule_id="CROSS-BUDGET-CONFLICT", category="BUDGET")
+        first.affected_entities = {"documents": [doc_a, doc_b]}
+        first.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": doc_a,
+                "claim": "Contract value conflicts with budget total",
+                "quote": "Contract total differs from approved budget total.",
+            }
+        }
+
+        second = first.model_copy(deep=True)
+        second.affected_entities = {"documents": [doc_b, doc_a]}
+
+        assert svc._fingerprint(first) == svc._fingerprint(second)
+
+    def test_without_stable_document_semantics_clause_identity_stays_revision_bound(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        first_clause, second_clause = uuid4(), uuid4()
+
+        first = _make_alert_create(
+            rule_id="DET-UNANCHORED",
+            category="SCOPE",
+            source_clause_id=first_clause,
+        )
+        first.alert_metadata = {"detection_evidence": {"claim": "", "quote": ""}}
+
+        second = first.model_copy(deep=True)
+        second.source_clause_id = second_clause
+
+        assert svc._fingerprint(first) != svc._fingerprint(second)
+
+
+class TestB1RealCrossRevisionIdentity:
+    def test_same_semantic_finding_across_clause_revisions_keeps_family_but_changes_observation(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = uuid4()
+        v1_clause = uuid4()
+        v2_clause = uuid4()
+
+        def candidate(clause_id):
+            alert = _make_alert_create(
+                rule_id="DET-TIM-COD-MISMATCH",
+                category="TIME",
+                source_clause_id=clause_id,
+                affected_entities={"documents": [str(document_id)]},
+            )
+            alert.alert_metadata = {
+                "detection_evidence": {
+                    "source_clause_id": str(clause_id),
+                    "source_document_id": str(document_id),
+                    "claim": "Contract COD conflicts with approved schedule COD",
+                    "quote": "The contractual completion date conflicts with the approved schedule.",
+                }
+            }
+            return alert
+
+        v1 = candidate(v1_clause)
+        v2 = candidate(v2_clause)
+
+        assert svc._fingerprint(v1) == svc._fingerprint(v2), (
+            "revision-bound clause UUID must be observation provenance, not semantic family identity"
+        )
+        assert svc._observation_key(v1.alert_metadata) != svc._observation_key(v2.alert_metadata)
+
+    @pytest.mark.asyncio
+    async def test_dismissed_v1_family_reopens_on_real_v2_clause_without_creating_new_alert(self) -> None:
+        document_id = uuid4()
+        v1_clause = uuid4()
+        v2_clause = uuid4()
+        svc_for_identity = AlertGeneratorService(repository=MagicMock())
+
+        v1 = _make_alert_create(
+            rule_id="DET-TIM-COD-MISMATCH",
+            category="TIME",
+            source_clause_id=v1_clause,
+            affected_entities={"documents": [str(document_id)]},
+        )
+        v1.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": str(v1_clause),
+                "source_document_id": str(document_id),
+                "claim": "Contract COD conflicts with approved schedule COD",
+                "quote": "The contractual completion date conflicts with the approved schedule.",
+            }
+        }
+        old_family = svc_for_identity._fingerprint(v1)
+        existing = _make_mock_alert(
+            status=AlertStatus.DISMISSED,
+            fingerprint=old_family,
+        )
+        existing.rule_id = "DET-TIM-COD-MISMATCH"
+        existing.category = "TIME"
+        existing.source_clause_id = v1_clause
+        existing.affected_entities = {"documents": [str(document_id)]}
+        existing.alert_metadata = {
+            "fingerprint": old_family,
+            "fingerprint_version": FINGERPRINT_VERSION,
+            "history": [{"action": "reviewed", "decision": "reject"}],
+            "detection_evidence": dict(v1.alert_metadata["detection_evidence"]),
+            "current_observation_key": svc_for_identity._observation_key(v1.alert_metadata),
+        }
+
+        incoming = _make_alert_create(
+            rule_id="DET-TIM-COD-MISMATCH",
+            category="TIME",
+            source_clause_id=v2_clause,
+            affected_entities={"documents": [str(document_id)]},
+        )
+        incoming.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": str(v2_clause),
+                "source_document_id": str(document_id),
+                "claim": "Contract COD conflicts with approved schedule COD",
+                "quote": "The contractual completion date conflicts with the approved schedule.",
+            }
+        }
+
+        repo = MagicMock()
+        repo.list_for_project = AsyncMock(return_value=_make_mock_page([existing]))
+        repo.create = AsyncMock()
+        repo.update = AsyncMock()
+        repo.commit = AsyncMock()
+        svc = AlertGeneratorService(repository=repo)
+
+        result = await svc.process_violations(
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            violations=[incoming],
+        )
+
+        assert result == [existing]
+        assert existing.status == AlertStatus.OPEN
+        repo.create.assert_not_awaited()
+        history = existing.alert_metadata.get("history", [])
+        assert any(item.get("action") == "basis_changed_reopened" for item in history)
