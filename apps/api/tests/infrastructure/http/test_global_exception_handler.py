@@ -7,6 +7,7 @@ Refers to Suite IDs: TS-UA-DTO-ALL-001, TS-UAD-HTTP-ERR-001.
 from __future__ import annotations
 
 from collections.abc import Iterable
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
