@@ -1,0 +1,325 @@
+name: B1-12 Production Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "Type RUN-ISSUE-867 to acknowledge the bounded B1-12 production journey."
+        required: true
+        type: string
+      backend_commit_sha:
+        description: "Expected Railway production Git SHA observed independently."
+        required: true
+        type: string
+      backend_deployment_id:
+        description: "Expected Railway API deployment ID observed independently."
+        required: true
+        type: string
+      frontend_commit_sha:
+        description: "Expected Vercel production Git SHA observed independently."
+        required: true
+        type: string
+      frontend_deployment_id:
+        description: "Expected Vercel production deployment ID observed independently."
+        required: true
+        type: string
+      railway_staged_changes_clear:
+        description: "Operator verified Railway has no unreviewed effective staged changes."
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c2pro-b1-12-production-qualification
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+  PROD_ACCEPTANCE_BASE_URL: "https://c2pro.io"
+  PROD_ACCEPTANCE_RAILWAY_PROJECT_ID: "db60e356-d645-4561-a8c5-ddf5e5a2afa2"
+  PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID: "ecd39af1-2501-4b9b-8e2e-fafcc6a66570"
+  PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID: "dd372d3a-fb0a-4953-862b-63a10b9058ad"
+  PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID: "e2fac2e9-e9f7-42a8-b022-3c9309d0c763"
+  PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID: "d7952082-b1b3-46f4-b916-c66c8329452c"
+  PROD_ACCEPTANCE_VERCEL_TEAM_ID: "team_OD4wmtP2vMrbaA8K5C3WcVET"
+  PROD_ACCEPTANCE_VERCEL_PROJECT_ID: "prj_3CgujYjdedPU5ThQFi4JqHmnlwAr"
+
+jobs:
+  b1-production:
+    name: "#867 B1-12 exact-runtime Alerts + Coherence"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production-qualification
+
+    steps:
+      - name: Fail closed on operator intent and branch
+        env:
+          CONFIRM: ${{ inputs.confirm_production }}
+          STAGED_CLEAR: ${{ inputs.railway_staged_changes_clear }}
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+          RAILWAY_ID_RE: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRM" = "RUN-ISSUE-867" || {
+            echo "Refusing production mutation: confirmation does not match RUN-ISSUE-867." >&2
+            exit 2
+          }
+          test "$GITHUB_REF_NAME" = "main" || {
+            echo "Refusing B1-12 qualification from non-main ref: $GITHUB_REF_NAME" >&2
+            exit 2
+          }
+          test "$STAGED_CLEAR" = "true" || {
+            echo "Refusing B1-12 while Railway effective staged changes are unreviewed." >&2
+            exit 2
+          }
+          [[ "$BACKEND_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          [[ "$FRONTEND_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          [[ "$BACKEND_DEPLOYMENT" =~ $RAILWAY_ID_RE ]] || exit 2
+          [[ "$FRONTEND_DEPLOYMENT" =~ ^dpl_[A-Za-z0-9]{20,64}$ ]] || exit 2
+
+      - name: Fail closed on protected qualification prerequisites
+        env:
+          RAILWAY_TOKEN: ${{ secrets.PROD_ACCEPTANCE_RAILWAY_API_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.PROD_ACCEPTANCE_VERCEL_TOKEN }}
+          DATABASE_URL: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          CLERK_ORG: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in RAILWAY_TOKEN VERCEL_TOKEN DATABASE_URL TENANT_ID CLERK_ORG CLERK_EMAIL CLERK_PASSWORD
+          do
+            test -n "${!name:-}" || {
+              echo "Required protected qualification prerequisite is absent: $name" >&2
+              exit 2
+            }
+          done
+          echo "Protected qualification prerequisites are present (values withheld)."
+
+      - name: Checkout exact control commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Verify control commit belongs to canonical main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test -f validation/product/c2pro-master-product-control-v1.yaml
+          echo "CONTROL_COMMIT_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "PROD_ACCEPTANCE_RUN_ID=gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Observe Railway production identities
+        env:
+          PROD_ACCEPTANCE_RAILWAY_API_TOKEN: ${{ secrets.PROD_ACCEPTANCE_RAILWAY_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/product-qualification/runtime/provider
+          query='query serviceInstance($serviceId: String!, $environmentId: String!) { serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { latestDeployment { id status meta } } }'
+          railway_graphql() {
+            local service_id="$1" output="$2" payload candidate auth header value
+            payload="$(jq -cn --arg q "$query" --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID" --arg service "$service_id" '{query:$q,variables:{serviceId:$service,environmentId:$environment}}')"
+            candidate="${output}.candidate"
+            rm -f "$candidate"
+            for auth in bearer project
+            do
+              if [ "$auth" = bearer ]; then
+                header="Authorization"; value="Bearer $PROD_ACCEPTANCE_RAILWAY_API_TOKEN"
+              else
+                header="Project-Access-Token"; value="$PROD_ACCEPTANCE_RAILWAY_API_TOKEN"
+              fi
+              if curl --fail --silent --show-error --request POST \
+                --url "https://backboard.railway.com/graphql/v2" \
+                --header "$header: $value" --header "Content-Type: application/json" \
+                --data "$payload" --output "$candidate" \
+                && jq -e '((.errors // []) | length == 0) and ((.data.serviceInstance.latestDeployment.id? // "") | length > 0)' "$candidate" >/dev/null
+              then
+                mv "$candidate" "$output"; return 0
+              fi
+            done
+            rm -f "$candidate"; return 1
+          }
+          railway_graphql "$PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID" evidence/product-qualification/runtime/provider/railway-api.json
+          railway_graphql "$PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID" evidence/product-qualification/runtime/provider/railway-worker.json
+          railway_graphql "$PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID" evidence/product-qualification/runtime/provider/railway-scheduler.json
+
+      - name: Observe Vercel production identity
+        env:
+          PROD_ACCEPTANCE_VERCEL_TOKEN: ${{ secrets.PROD_ACCEPTANCE_VERCEL_TOKEN }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --url "https://api.vercel.com/v13/deployments/$FRONTEND_DEPLOYMENT?teamId=$PROD_ACCEPTANCE_VERCEL_TEAM_ID" \
+            --header "Authorization: Bearer $PROD_ACCEPTANCE_VERCEL_TOKEN" \
+            --output evidence/product-qualification/runtime/provider/vercel-frontend.json
+
+      - name: Verify independently observed deployment identities
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python validation/product/verify_prod_deployment_identity.py \
+            --expected-backend-sha "$BACKEND_SHA" \
+            --expected-api-deployment "$BACKEND_DEPLOYMENT" \
+            --expected-frontend-sha "$FRONTEND_SHA" \
+            --expected-frontend-deployment "$FRONTEND_DEPLOYMENT" \
+            --expected-frontend-project "$PROD_ACCEPTANCE_VERCEL_PROJECT_ID"
+          backend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["backend"]["api"]["commit_sha"])')"
+          frontend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["frontend"]["commit_sha"])')"
+          echo "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA=$backend_sha" >> "$GITHUB_ENV"
+          echo "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA=$frontend_sha" >> "$GITHUB_ENV"
+
+      - name: Setup Python backend
+        uses: ./.github/actions/setup-python-backend
+        with:
+          python-version: "3.11"
+          install-system-deps: "false"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install production browser
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Read-only synthetic tenant preflight
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/verify_prod_synthetic_journey.py \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
+
+      - name: Generate deterministic B1 structured fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/generate_b1_prod_qualification_fixtures.py | tee /tmp/b1-fixtures.env
+          cat /tmp/b1-fixtures.env >> "$GITHUB_ENV"
+
+      - name: Execute B1-12 real production browser journey
+        env:
+          PLAYWRIGHT_SKIP_WEBSERVER: "1"
+          PLAYWRIGHT_BASE_URL: "https://c2pro.io"
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA }}
+          PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec playwright test \
+            src/tests/e2e/prod-acceptance/867-production-alerts-coherence.spec.ts \
+            --project=prod-b1-12 --reporter=line --workers=1
+
+      - name: Resolve B1 identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+          data=json.loads(Path("apps/web/playwright/.prod-b1/run.json").read_text())
+          mapping={
+              "project_id":"B1_PROJECT_ID",
+              "genuine_alert_id":"B1_GENUINE_ALERT_ID",
+              "false_positive_alert_id":"B1_FALSE_POSITIVE_ALERT_ID",
+              "post_revision_false_positive_alert_id":"B1_POST_REVISION_FP_ALERT_ID",
+              "genuine_rule":"B1_GENUINE_RULE",
+              "false_positive_rule":"B1_FALSE_POSITIVE_RULE",
+          }
+          for key, env in mapping.items():
+              value=data.get(key)
+              if not isinstance(value,str) or not value:
+                  raise SystemExit(f"missing {key}")
+              print(f"{env}={value}")
+          PY
+
+      - name: Read-only B1-12 durable verification
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/verify_b1_12_prod_acceptance.py \
+            --project-id "$B1_PROJECT_ID" \
+            --genuine-alert-id "$B1_GENUINE_ALERT_ID" \
+            --false-positive-alert-id "$B1_FALSE_POSITIVE_ALERT_ID" \
+            --post-revision-false-positive-alert-id "$B1_POST_REVISION_FP_ALERT_ID" \
+            --genuine-rule "$B1_GENUINE_RULE" \
+            --false-positive-rule "$B1_FALSE_POSITIVE_RULE" \
+            --write-evidence
+
+      - name: Build and validate B1-12 evidence
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_name="b1-12-prod-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.yaml"
+          python validation/product/build_b1_12_prod_qualification_bundle.py \
+            --control-commit-sha "$CONTROL_COMMIT_SHA" \
+            --backend-commit-sha "$BACKEND_SHA" \
+            --backend-deployment-id "$BACKEND_DEPLOYMENT" \
+            --frontend-commit-sha "$FRONTEND_SHA" \
+            --frontend-deployment-id "$FRONTEND_DEPLOYMENT" \
+            --github-run-id "$GITHUB_RUN_ID" \
+            --github-run-attempt "$GITHUB_RUN_ATTEMPT"
+          python validation/product/validate_b1_12_prod_qualification.py "$bundle_name"
+
+      - name: Upload bounded B1-12 artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          retention-days: 7
+          name: c2pro-867-b1-production-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            apps/web/playwright/.prod-b1/run.json
+            apps/web/playwright/.prod-b1/artifacts/**
+            evidence/product-qualification/runtime/deployment-identity.json
+            evidence/product-qualification/runtime/b1-12-verifier.json
+            evidence/product-qualification/b1-12-prod-gh-*.yaml
