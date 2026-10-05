@@ -3,8 +3,9 @@
 
 The verifier never repairs state, never reads unrelated tenants, and never
 prints credentials. It proves that the browser-created PJ-01 project contains
-one logical document, exactly two canonical revisions, and one durable
-revision.changed event with exact provenance.
+one logical document, exactly two canonical revisions, one durable
+revision.changed event with exact provenance, and an isolated identical-content
+negative case that persists an empty no-change comparison without invented evidence.
 """
 
 from __future__ import annotations
@@ -73,6 +74,11 @@ async def verify(
     change_event_id: UUID,
     source_blob_hash: str,
     target_blob_hash: str,
+    negative_project_id: UUID,
+    negative_document_id: UUID,
+    negative_source_revision_id: UUID,
+    negative_target_revision_id: UUID,
+    negative_change_event_id: UUID,
 ) -> tuple[list[Check], dict[str, str]]:
     p = {
         "tenant_id": tenant_id,
@@ -98,6 +104,19 @@ async def verify(
         "document_id_text": str(document_id),
         "source_revision_id_text": str(source_revision_id),
         "target_revision_id_text": str(target_revision_id),
+    }
+
+    negative_params = {
+        "tenant_id": tenant_id,
+        "project_id": negative_project_id,
+        "document_id": negative_document_id,
+        "source_revision_id": negative_source_revision_id,
+        "target_revision_id": negative_target_revision_id,
+        "change_event_id": negative_change_event_id,
+        "document_id_text": str(negative_document_id),
+        "source_revision_id_text": str(negative_source_revision_id),
+        "target_revision_id_text": str(negative_target_revision_id),
+        "blob_hash": target_blob_hash,
     }
 
     eligible_tenant = await _scalar(
@@ -223,6 +242,85 @@ async def verify(
         duplicate_change_params,
     )
 
+
+    negative_project = await _scalar(
+        conn,
+        """
+        SELECT count(*)
+          FROM projects
+         WHERE id = :project_id
+           AND tenant_id = :tenant_id
+           AND name LIKE 'P0c Qualification Negative %'
+        """,
+        negative_params,
+    )
+    negative_documents = await _scalar(
+        conn,
+        """
+        SELECT count(*)
+          FROM documents
+         WHERE id = :document_id
+           AND project_id = :project_id
+           AND tenant_id = :tenant_id
+        """,
+        negative_params,
+    )
+    negative_revisions = await _scalar(
+        conn,
+        """
+        SELECT count(*)
+          FROM document_revisions
+         WHERE document_id = :document_id
+           AND project_id = :project_id
+           AND tenant_id = :tenant_id
+        """,
+        negative_params,
+    )
+    negative_lineage = await _scalar(
+        conn,
+        """
+        SELECT count(*)
+          FROM document_revisions src
+          JOIN document_revisions dst
+            ON dst.parent_revision_id = src.revision_id
+           AND dst.document_id = src.document_id
+           AND dst.project_id = src.project_id
+           AND dst.tenant_id = src.tenant_id
+         WHERE src.revision_id = :source_revision_id
+           AND dst.revision_id = :target_revision_id
+           AND src.document_id = :document_id
+           AND src.project_id = :project_id
+           AND src.tenant_id = :tenant_id
+           AND src.valid_to IS NOT NULL
+           AND dst.valid_to IS NULL
+           AND src.blob_hash = :blob_hash
+           AND dst.blob_hash = :blob_hash
+        """,
+        negative_params,
+    )
+    negative_no_change = await _scalar(
+        conn,
+        """
+        SELECT count(*)
+          FROM project_events
+         WHERE event_id = :change_event_id
+           AND project_id = :project_id
+           AND tenant_id = :tenant_id
+           AND event_type = 'revision.changed'
+           AND source_revision_id = :target_revision_id
+           AND payload ->> 'state' = 'ready'
+           AND payload ->> 'document_id' = :document_id_text
+           AND payload -> 'change_cause' = 'null'::jsonb
+           AND payload #>> '{provenance,source_revision_id}' = :source_revision_id_text
+           AND payload #>> '{provenance,target_revision_id}' = :target_revision_id_text
+           AND payload #>> '{provenance,source_blob_hash}' = :blob_hash
+           AND payload #>> '{provenance,target_blob_hash}' = :blob_hash
+           AND jsonb_array_length(payload #> '{changeset,changes}') = 0
+           AND jsonb_array_length(evidence_refs) = 0
+        """,
+        negative_params,
+    )
+
     checks = [
         Check("synthetic tenant binding", eligible_tenant == 1, f"eligible_tenants={eligible_tenant}"),
         Check("fresh P0c qualification project belongs to tenant", project == 1, f"projects={project}"),
@@ -233,6 +331,11 @@ async def verify(
         Check("revision.changed event durable and provenance exact", change == 1, f"matching_change_events={change}"),
         Check("change event carries evidence refs", event_evidence == 1, f"events_with_evidence={event_evidence}"),
         Check("no duplicate revision.changed outcome", duplicate_change == 1, f"matching_family_events={duplicate_change}"),
+        Check("negative project belongs to synthetic tenant", negative_project == 1, f"negative_projects={negative_project}"),
+        Check("negative case preserves one logical document", negative_documents == 1, f"negative_documents={negative_documents}"),
+        Check("negative case has exactly two revisions", negative_revisions == 2, f"negative_revisions={negative_revisions}"),
+        Check("identical-content lineage is durable", negative_lineage == 1, f"negative_lineage_matches={negative_lineage}"),
+        Check("absent evidence does not invent change", negative_no_change == 1, f"honest_no_change_events={negative_no_change}"),
     ]
     identifiers = {
         "project_id": str(project_id),
@@ -240,6 +343,11 @@ async def verify(
         "source_revision_id": str(source_revision_id),
         "target_revision_id": str(target_revision_id),
         "change_event_id": str(change_event_id),
+        "negative_project_id": str(negative_project_id),
+        "negative_document_id": str(negative_document_id),
+        "negative_source_revision_id": str(negative_source_revision_id),
+        "negative_target_revision_id": str(negative_target_revision_id),
+        "negative_change_event_id": str(negative_change_event_id),
     }
     return checks, identifiers
 
@@ -267,6 +375,11 @@ async def _run(args: argparse.Namespace, database_url: str) -> tuple[list[Check]
                     change_event_id=_uuid(args.change_event_id, "change event id"),
                     source_blob_hash=args.source_blob_hash,
                     target_blob_hash=args.target_blob_hash,
+                    negative_project_id=_uuid(args.negative_project_id, "negative project id"),
+                    negative_document_id=_uuid(args.negative_document_id, "negative document id"),
+                    negative_source_revision_id=_uuid(args.negative_source_revision_id, "negative source revision id"),
+                    negative_target_revision_id=_uuid(args.negative_target_revision_id, "negative target revision id"),
+                    negative_change_event_id=_uuid(args.negative_change_event_id, "negative change event id"),
                 )
                 await transaction.rollback()
                 return checks, identifiers
@@ -288,6 +401,11 @@ def main() -> int:
     parser.add_argument("--change-event-id", required=True)
     parser.add_argument("--source-blob-hash", required=True)
     parser.add_argument("--target-blob-hash", required=True)
+    parser.add_argument("--negative-project-id", required=True)
+    parser.add_argument("--negative-document-id", required=True)
+    parser.add_argument("--negative-source-revision-id", required=True)
+    parser.add_argument("--negative-target-revision-id", required=True)
+    parser.add_argument("--negative-change-event-id", required=True)
     parser.add_argument("--write-evidence", action="store_true")
     args = parser.parse_args()
 
