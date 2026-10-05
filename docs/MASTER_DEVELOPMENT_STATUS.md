@@ -11,7 +11,7 @@ Repository-quality execution is tracked under **C2PRO-DEV-15 / issue #849 — Re
 
 This is a non-product quality lane: it does not alter Product Control lifecycle state or the active P0c qualification. Wave 1 covers reference-proven repository hygiene; later Core AI assurance removes coverage exclusions only alongside meaningful contract and failure-path tests.
 
-DEV-15 execution baseline for this wave: `main@f2214730efd216e176e28fdd4716e23ab272be61`.
+DEV-15 execution baseline for this wave: `main@852429c35852ff09048d7a6ca7f8c1b0a61f8c38`.
 
 ## Product programme authority
 
