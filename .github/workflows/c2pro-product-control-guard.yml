@@ -21,7 +21,7 @@ on:
       - "docs/product/00-c2pro-master-product-control-v1.md"
 
 concurrency:
-  group: c2pro-product-control-guard-${{ github.event.pull_request.number || github.ref }}
+  group: c2pro-product-control-guard-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
