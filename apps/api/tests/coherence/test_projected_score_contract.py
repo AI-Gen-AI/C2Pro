@@ -28,6 +28,22 @@ def test_dashboard_contract_exposes_trusted_and_projected_scores_separately() ->
         projected_delta=-20.0,
         pending_review_count=2,
         projection_score_version="coherence-v1",
+        projection_baseline_sub_scores={
+            "SCOPE": 90.0,
+            "BUDGET": 80.0,
+            "QUALITY": 85.0,
+            "TECHNICAL": 75.0,
+            "LEGAL": 80.0,
+            "TIME": 70.0,
+        },
+        projected_sub_scores={
+            "SCOPE": 90.0,
+            "BUDGET": 92.0,
+            "QUALITY": 85.0,
+            "TECHNICAL": 75.0,
+            "LEGAL": 80.0,
+            "TIME": 70.0,
+        },
     )
 
     assert summary.coherence_score == 80.0
@@ -36,6 +52,9 @@ def test_dashboard_contract_exposes_trusted_and_projected_scores_separately() ->
     assert summary.projected_delta == -20.0
     assert summary.pending_review_count == 2
     assert summary.projection_score_version == summary.score_version
+    assert summary.projection_baseline_sub_scores["BUDGET"] == 80.0
+    assert summary.projected_sub_scores["BUDGET"] == 92.0
+    assert summary.sub_scores != summary.projected_sub_scores
 
 
 def test_projection_supports_unknown_trusted_score_without_fabricating_zero() -> None:
