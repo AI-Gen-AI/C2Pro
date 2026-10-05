@@ -31,6 +31,7 @@ from src.alerts.application.dtos import (
 from src.alerts.application.mappers import AlertMapper
 from src.alerts.application.ports.alert_repository import IAlertRepository
 from src.alerts.application.ports.tenant_repository import ITenantRepository
+from src.alerts.domain.models import Alert
 from src.alerts.application.use_cases.attach_alert_evidence_use_case import (
     AlertNotFoundError as EvidenceAlertNotFoundError,
 )
@@ -119,7 +120,7 @@ def get_review_alert_use_case(
             decision=decision,
         )
 
-    async def post_review(alert, tenant_id: UUID, decision: str) -> None:
+    async def post_review(alert: Alert, tenant_id: UUID, decision: str) -> None:
         await rescore_coherence_after_review(
             session=session,
             alert=alert,
