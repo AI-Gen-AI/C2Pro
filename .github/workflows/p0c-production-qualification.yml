@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_production:
-        description: "Type RUN-P0C-686 to acknowledge revision-B mutation of the accepted synthetic production project."
+        description: "Type RUN-P0C-686 to acknowledge revision B plus the bounded identical revision C no-change control on the accepted synthetic project."
         required: true
         type: string
       backend_commit_sha:
@@ -349,6 +349,7 @@ jobs:
             echo "- source revision A: `$P0C_QUAL_SOURCE_REVISION_ID`"
             echo "- creates new project: **false**"
             echo "- creates second logical document: **false**"
+            echo "- bounded negative control: exact Contract B bytes re-uploaded as revision C"
             echo "- lifecycle authority: **false**"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -363,6 +364,7 @@ jobs:
             apps/web/playwright/.p0c-prod/run.json
             apps/web/playwright/.p0c-prod/timeline.json
             apps/web/playwright/.p0c-prod/change-detail.json
+            apps/web/playwright/.p0c-prod/no-change-detail.json
             apps/web/playwright/.p0c-prod/pj01/**
             evidence/product-qualification/runtime/p0c-verifier.json
             evidence/product-qualification/runtime/deployment-identity.json
