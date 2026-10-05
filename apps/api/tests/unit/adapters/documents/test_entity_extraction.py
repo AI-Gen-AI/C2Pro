@@ -308,7 +308,7 @@ class TestExtractionServiceIntegration:
         from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
         mock_use_case = MagicMock()
-        mock_use_case.execute = AsyncMock(side_effect=Exception("Duplicate"))
+        mock_use_case.record_extracted_observation = AsyncMock(side_effect=Exception("Duplicate"))
 
         mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
 
@@ -334,7 +334,7 @@ class TestExtractionServiceIntegration:
 
     @pytest.mark.asyncio
     async def test_extract_stakeholders_passes_tenant_id_to_use_case(self):
-        """Test stakeholder extraction forwards tenant context to the create use case."""
+        """#861: tenant context reaches the observation seam; no user id is handed over."""
         from src.documents.adapters.extraction.documents_entity_extraction_service import (
             DocumentsEntityExtractionService,
         )
@@ -342,6 +342,7 @@ class TestExtractionServiceIntegration:
 
         mock_use_case = MagicMock()
         mock_use_case.execute = AsyncMock()
+        mock_use_case.record_extracted_observation = AsyncMock(return_value=object())
 
         mock_stakeholder_factory = MagicMock(return_value=mock_use_case)
         user_id = uuid4()
@@ -366,9 +367,12 @@ class TestExtractionServiceIntegration:
         result = await service._extract_stakeholders(doc, parsed_payload, tenant_id)
 
         assert result == 1
-        mock_use_case.execute.assert_awaited_once()
-        assert mock_use_case.execute.await_args.kwargs["tenant_id"] == tenant_id
-        assert mock_use_case.execute.await_args.kwargs["user_id"] == user_id
+        mock_use_case.execute.assert_not_awaited()
+        mock_use_case.record_extracted_observation.assert_awaited_once()
+        kwargs = mock_use_case.record_extracted_observation.await_args.kwargs
+        assert kwargs["tenant_id"] == tenant_id
+        assert kwargs["source_document_id"] == doc.id
+        assert "user_id" not in kwargs and user_id not in kwargs.values()
 
 
 class TestEmailExtraction:

@@ -43,8 +43,11 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         user_id: UUID,
     ) -> None:
         """
-        Initialize the service with factories to avoid circular dependencies
-        and provide the user_id for auditing.
+        Initialize the service with factories to avoid circular dependencies.
+
+        ``user_id`` identifies who triggered the ingestion; it is never written as
+        reviewer provenance -- an extracted stakeholder is a PENDING observation
+        with no reviewer (#861).
 
         There is deliberately no WBS or BOM use case: schedule ingestion never
         writes the canonical WBS (#852) and budget ingestion never writes the
@@ -95,10 +98,9 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         use_case = self._stakeholder_use_case_factory()
         count = 0
 
-        for email in emails:
-            # Note: The use case handles "existing" check if implemented there,
-            # or we might get a uniqueness error from DB which is also fine for a background task.
-            # For parity with legacy, we keep it simple.
+        # #861: an extracted email is a machine OBSERVATION -- recorded PENDING with
+        # no reviewer (no user id is handed over), never a human-approved create.
+        for email in sorted(emails):
             payload = StakeholderCreateRequest(
                 name=_normalize_name_from_email(email),
                 email=email,
@@ -110,19 +112,20 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
                 power_score=None,
                 interest_score=None,
                 feedback_comment=None,
-                stakeholder_metadata={"source_document_id": str(document.id)}
+                stakeholder_metadata={"source_document_id": str(document.id)},
             )
             try:
-                await use_case.execute(
+                recorded = await use_case.record_extracted_observation(
                     project_id=document.project_id,
-                    user_id=self._user_id,
                     payload=payload,
-                    tenant_id=_tenant_id
+                    tenant_id=_tenant_id,
+                    source_document_id=document.id,
                 )
-                count += 1
             except Exception as exc:
-                # Likely duplicate email or other validation error
                 logger.debug("stakeholder_extraction_skipped", email=email, error=str(exc))
+                continue
+            if recorded is not None:
+                count += 1
 
         return count
 
