@@ -31,7 +31,6 @@ class _ExplodingFactory:
 def _service() -> DocumentsEntityExtractionService:
     return DocumentsEntityExtractionService(
         stakeholder_use_case_factory=_ExplodingFactory(),
-        bom_use_case_factory=_ExplodingFactory(),
         user_id=uuid4(),
     )
 
@@ -71,6 +70,7 @@ async def test_schedule_reparse_is_stable_and_writes_no_wbs() -> None:
         "wbs_items": 0,
         "bom_items": 0,
         "schedule_activities": 2,
+        "budget_lines": 0,
     }
 
 

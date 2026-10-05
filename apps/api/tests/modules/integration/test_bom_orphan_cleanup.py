@@ -1,6 +1,12 @@
 """
-#862 data-integrity regression: source-scoped BOM replacement must preserve
-rows whose ownership is not proven by source_document_id.
+Regression tests for TASK-DOC-BOM-ORPHAN-007, superseded by #862 and #860.
+TS-INT-BOM-ORPHAN-001: NULL-source BOM rows are manual / ownership-unknown rows,
+never disposable orphans (#862: NULL is not proof that a row is disposable).
+
+The original sweep deleted NULL-source rows on every budget reparse because coherence
+summed the BOM table as budget truth and they doubled the totals. #860 removes both
+ends: coherence never reads the BOM table, and budget ingestion never writes it, so
+the sweep (and with it the loss of manual / procurement-edited rows) is gone.
 """
 from __future__ import annotations
 
@@ -79,131 +85,50 @@ def _make_bom_orm(project_id, source_document_id=None) -> BOMItemORM:
     )
 
 
-class TestBomSourceOwnership:
-    """#862: replacement may mutate only rows proven to belong to its source."""
+class TestBomOrphanCleanup:
+    """TASK-DOC-BOM-ORPHAN-007 regression suite under the #860 contract."""
+
+    def test_source_document_sweep_is_removed(self):
+        assert not hasattr(SQLAlchemyBOMRepository, "replace_for_source_document")
 
     @pytest.mark.asyncio
-    async def test_replace_preserves_null_source_manual_rows(self, db, orphan_project):
+    async def test_null_source_and_other_document_rows_survive_a_create(self, db, orphan_project):
         """
-        GIVEN a project has BOM rows with source_document_id=NULL
-        WHEN one source document is parsed/reparsed
-        THEN ownership-unknown/manual rows survive untouched.
-
-        NULL is not proof that a row is disposable. Destructive legacy cleanup
-        must not run inside ordinary document replacement.
+        GIVEN manual NULL-source BOM rows and a row tied to a parsed document
+        WHEN a new BOM row is created for that document
+        THEN every existing row survives untouched and only the new row is added.
         """
         project = orphan_project["project"]
         tenant = orphan_project["tenant"]
         doc_id = orphan_project["document"].id
 
-        orphan1 = _make_bom_orm(project.id, source_document_id=None)
-        orphan2 = _make_bom_orm(project.id, source_document_id=None)
-        orphan3 = _make_bom_orm(project.id, source_document_id=None)
-        db.add_all([orphan1, orphan2, orphan3])
+        existing = [
+            _make_bom_orm(project.id, source_document_id=None),
+            _make_bom_orm(project.id, source_document_id=None),
+            _make_bom_orm(project.id, source_document_id=doc_id),
+        ]
+        db.add_all(existing)
         await db.commit()
+        existing_ids = {row.id for row in existing}
 
-        result = await db.execute(
-            select(BOMItemORM).where(BOMItemORM.project_id == project.id)
-        )
-        assert len(result.scalars().all()) == 3
-
-        new_items = [
+        repo = SQLAlchemyBOMRepository(db)
+        created = await repo.create(
             BOMItem(
                 project_id=project.id,
                 item_code="NEW-001",
-                item_name="New Parse Item",
+                item_name="New manual item",
                 quantity=Decimal("5"),
                 unit="m2",
                 unit_price=Decimal("50.00"),
                 currency="USD",
                 source_document_id=doc_id,
-            )
-        ]
-
-        repo = SQLAlchemyBOMRepository(db)
-        created = await repo.replace_for_source_document(
-            project_id=project.id,
-            source_document_id=doc_id,
-            bom_items=new_items,
-            tenant_id=tenant.id,
+            ),
+            tenant.id,
         )
         await db.commit()
 
         result = await db.execute(
             select(BOMItemORM).where(BOMItemORM.project_id == project.id)
         )
-        surviving = result.scalars().all()
-        assert len(surviving) == 4, (
-            f"Expected 3 ownership-unknown/manual rows plus 1 replacement, "
-            f"got {len(surviving)}"
-        )
-        null_source = [row for row in surviving if row.source_document_id is None]
-        from_source = [row for row in surviving if row.source_document_id == doc_id]
-        assert len(null_source) == 3, "manual/unknown-ownership BOM rows were deleted"
-        assert len(from_source) == 1
-        assert len(created) == 1
-
-    @pytest.mark.asyncio
-    async def test_replace_keeps_other_document_rows_intact(self, db, orphan_project):
-        """
-        GIVEN a project has BOM rows from two different parsed documents (doc_A and doc_B)
-        WHEN replace_for_source_document is called for doc_A only
-        THEN doc_B's rows survive untouched.
-        """
-        from src.documents.adapters.persistence.models import DocumentORM
-
-        project = orphan_project["project"]
-        tenant = orphan_project["tenant"]
-
-        # Create a second stub document so FK constraints are satisfied for doc_B.
-        doc_b = DocumentORM(
-            id=uuid4(),
-            project_id=project.id,
-            tenant_id=tenant.id,
-            document_type="budget",
-            filename="doc_b.pdf",
-            upload_status="parsed",
-            version=1,
-        )
-        db.add(doc_b)
-        await db.commit()
-
-        doc_a_id = orphan_project["document"].id
-        doc_b_id = doc_b.id
-
-        row_a = _make_bom_orm(project.id, source_document_id=doc_a_id)
-        row_b = _make_bom_orm(project.id, source_document_id=doc_b_id)
-        db.add_all([row_a, row_b])
-        await db.commit()
-
-        new_items_for_a = [
-            BOMItem(
-                project_id=project.id,
-                item_code="A-NEW-001",
-                item_name="Replacement for doc A",
-                quantity=Decimal("2"),
-                unit="pcs",
-                unit_price=Decimal("30.00"),
-                currency="USD",
-                source_document_id=doc_a_id,
-            )
-        ]
-
-        repo = SQLAlchemyBOMRepository(db)
-        await repo.replace_for_source_document(
-            project_id=project.id,
-            source_document_id=doc_a_id,
-            bom_items=new_items_for_a,
-            tenant_id=tenant.id,
-        )
-        await db.commit()
-
-        result = await db.execute(
-            select(BOMItemORM).where(BOMItemORM.project_id == project.id)
-        )
-        surviving = result.scalars().all()
-        source_ids = {r.source_document_id for r in surviving}
-
-        assert doc_b_id in source_ids, "doc_B rows must survive after doc_A replace"
-        assert doc_a_id in source_ids, "doc_A replacement rows must be present"
-        assert len(surviving) == 2
+        surviving_ids = {row.id for row in result.scalars().all()}
+        assert surviving_ids == existing_ids | {created.id}

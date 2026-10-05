@@ -9,6 +9,13 @@ identity; the governed WBS baseline authority is PC-1 / PC-2. The schedule stays
 recoverable from its immutable revision (deterministically reparsable) and from
 its RAG chunks, so nothing is lost by not materializing it here. This service
 therefore has no WBS writer at all.
+
+#860: a BUDGET is observed, never written into the canonical BOM. A budget line is
+not a canonical BOM item, and the BOM table is a mixed legacy object (manual
+procurement rows, historical budget-derived rows, procurement edits) that budget
+ingestion must never create, delete, replace, reset or relink. The budget stays
+recoverable from its immutable revision (deterministically reparsable). This
+service therefore has no BOM writer at all.
 """
 from __future__ import annotations
 
@@ -22,8 +29,6 @@ import structlog
 
 from src.documents.domain.models import Document, DocumentType
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
-from src.procurement.application.dtos import BOMItemCreate
-from src.procurement.domain.models import BOMCategory, ProcurementStatus
 
 # DTOs and Interfaces from other modules
 from src.stakeholders.application.dtos import StakeholderCreateRequest
@@ -35,18 +40,17 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
     def __init__(
         self,
         stakeholder_use_case_factory: Callable[[], Any],
-        bom_use_case_factory: Callable[[], Any],
         user_id: UUID,
     ) -> None:
         """
         Initialize the service with factories to avoid circular dependencies
         and provide the user_id for auditing.
 
-        There is deliberately no WBS use case: schedule ingestion never writes the
-        canonical WBS (#852).
+        There is deliberately no WBS or BOM use case: schedule ingestion never
+        writes the canonical WBS (#852) and budget ingestion never writes the
+        canonical BOM (#860).
         """
         self._stakeholder_use_case_factory = stakeholder_use_case_factory
-        self._bom_use_case_factory = bom_use_case_factory
         self._user_id = user_id
 
     async def extract_entities_from_document(
@@ -55,13 +59,15 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
         parsed_payload: dict[str, Any],
         tenant_id: UUID,
     ) -> dict[str, int]:
-        # ``wbs_items`` counts canonical WBS writes and is always 0 (#852);
-        # ``schedule_activities`` counts the named activities the schedule carries.
+        # ``wbs_items`` / ``bom_items`` count canonical writes and are always 0
+        # (#852 / #860); ``schedule_activities`` / ``budget_lines`` count what the
+        # schedule / budget carries.
         extraction_summary = {
             "stakeholders": 0,
             "wbs_items": 0,
             "bom_items": 0,
             "schedule_activities": 0,
+            "budget_lines": 0,
         }
 
         if document.document_type == DocumentType.CONTRACT:
@@ -74,8 +80,7 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
             )
 
         if document.document_type == DocumentType.BUDGET:
-            summary = await self._extract_bom_items(document, parsed_payload, tenant_id)
-            extraction_summary["bom_items"] = summary
+            extraction_summary["budget_lines"] = _count_budget_lines(parsed_payload)
 
         return extraction_summary
 
@@ -121,103 +126,6 @@ class DocumentsEntityExtractionService(IEntityExtractionService):
 
         return count
 
-    async def _extract_bom_items(
-        self, document: Document, parsed_payload: dict[str, Any], _tenant_id: UUID
-    ) -> int:
-        budget_payload = parsed_payload.get("budget")
-        if not budget_payload:
-            return 0
-
-        use_case = self._bom_use_case_factory()
-        count = 0
-
-        # Normalize budget payload into a flat list of items
-        items_to_process = []
-        if isinstance(budget_payload, list):
-            for index, item in enumerate(budget_payload, start=1):
-                items_to_process.append({
-                    "name": item.get("item"),
-                    "code": f"BUD-{index:04d}",
-                    "quantity": _parse_decimal(item.get("quantity")),
-                    "unit": item.get("unit"),
-                    "category": item.get("category"),
-                    "price": _parse_decimal(item.get("unit_price")),
-                    "total": _parse_decimal(item.get("total")),
-                    "metadata": {"source_document_id": str(document.id)}
-                })
-        elif isinstance(budget_payload, dict):
-            for chapter in budget_payload.get("chapters", []):
-                for unit in chapter.get("units", []):
-                    items_to_process.append({
-                        "name": unit.get("description"),
-                        "code": unit.get("code"),
-                        "quantity": _parse_decimal(unit.get("quantity")),
-                        "unit": unit.get("unit"),
-                        "category": unit.get("category"),
-                        "price": _parse_decimal(unit.get("price")),
-                        "total": _parse_decimal(unit.get("total")),
-                        "metadata": {
-                            "source_document_id": str(document.id),
-                            "chapter_code": chapter.get("code")
-                        }
-                    })
-
-        payloads: list[BOMItemCreate] = []
-        for item in items_to_process:
-            if not item["name"] or item["quantity"] is None:
-                continue
-
-            payloads.append(
-                BOMItemCreate(
-                    project_id=document.project_id,
-                    item_code=item["code"],
-                    item_name=item["name"],
-                    quantity=item["quantity"],
-                    unit=item["unit"],
-                    unit_price=item["price"],
-                    total_price=item["total"],
-                    currency="EUR",
-                    description=None,
-                    category=_to_bom_category(item.get("category")),
-                    supplier=None,
-                    lead_time_days=None,
-                    incoterm=None,
-                    procurement_status=ProcurementStatus.PENDING,
-                    wbs_item_id=None,
-                    contract_clause_id=None,
-                    source_document_id=document.id,
-                    bom_metadata=item["metadata"],
-                )
-            )
-
-        if not payloads:
-            return 0
-
-        try:
-            created = await use_case.replace_for_source_document(
-                project_id=document.project_id,
-                source_document_id=document.id,
-                bom_items=payloads,
-                tenant_id=_tenant_id,
-            )
-            count = len(created)
-        except Exception as exc:
-            logger.debug("bom_extraction_skipped", document_id=str(document.id), error=str(exc))
-
-        return count
-
-
-def _to_bom_category(value: object) -> BOMCategory | None:
-    """Map a parsed category string (e.g. "material"/"service") to BOMCategory."""
-    if isinstance(value, BOMCategory):
-        return value
-    if isinstance(value, str) and value.strip():
-        try:
-            return BOMCategory(value.strip().lower())
-        except ValueError:
-            return None
-    return None
-
 
 def _extract_emails(text_blocks: list[dict[str, Any]]) -> set[str]:
     emails: set[str] = set()
@@ -234,6 +142,27 @@ def _count_schedule_activities(parsed_payload: dict[str, Any]) -> int:
     """Named schedule activities observed (#852): counted, never written as WBS."""
     schedule_data = parsed_payload.get("schedule") or []
     return sum(1 for task in schedule_data if isinstance(task, dict) and task.get("task"))
+
+
+def _count_budget_lines(parsed_payload: dict[str, Any]) -> int:
+    """Budget lines observed (#860): counted, never written as canonical BOM.
+
+    A line is a named row with a quantity (flat .xlsx rows, or BC3 chapter units).
+    """
+    budget_payload = parsed_payload.get("budget")
+    rows: list[tuple[object, object]] = []
+    if isinstance(budget_payload, list):
+        rows = [(item.get("item"), item.get("quantity"))
+                for item in budget_payload if isinstance(item, dict)]
+    elif isinstance(budget_payload, dict):
+        rows = [
+            (unit.get("description"), unit.get("quantity"))
+            for chapter in budget_payload.get("chapters", [])
+            if isinstance(chapter, dict)
+            for unit in chapter.get("units", [])
+            if isinstance(unit, dict)
+        ]
+    return sum(1 for name, quantity in rows if name and _parse_decimal(quantity) is not None)
 
 
 def _parse_decimal(value: object) -> Decimal | None:
