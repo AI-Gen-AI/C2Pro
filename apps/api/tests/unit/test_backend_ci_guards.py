@@ -604,7 +604,7 @@ def test_live_backend_entrypoint_has_no_utf8_mojibake() -> None:
     repo_root = Path(__file__).resolve().parents[4]
     contents = (repo_root / "apps" / "api" / "src" / "main.py").read_text(encoding="utf-8")
 
-    for marker in ("Ã", "Â", "â€"):
+    for marker in ("Ã", "Â", "â€", "ðŸ"):
         assert marker not in contents
 
 
