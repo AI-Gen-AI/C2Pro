@@ -132,6 +132,44 @@ async def test_snapshot_retention_keeps_recent_weekly_and_drops_old_partitions(
     )
     assert future_partition_result.scalar_one() == future_partition
 
+    rls_result = await db.execute(
+        text(
+            """
+            SELECT c.relrowsecurity
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relname = :partition_name
+            """
+        ),
+        {"partition_name": future_partition},
+    )
+    assert rls_result.scalar_one() is True
+
+    policy_result = await db.execute(
+        text(
+            """
+            SELECT count(*)
+            FROM pg_policies
+            WHERE schemaname = 'public' AND tablename = :partition_name
+            """
+        ),
+        {"partition_name": future_partition},
+    )
+    assert policy_result.scalar_one() == 0
+
+    default_rls_result = await db.execute(
+        text(
+            """
+            SELECT c.relrowsecurity
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = 'project_snapshots_default'
+            """
+        )
+    )
+    assert default_rls_result.scalar_one() is True
+
     future = await _append_snapshot(
         repo,
         project_id=project_id,

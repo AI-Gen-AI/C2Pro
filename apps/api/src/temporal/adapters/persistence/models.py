@@ -216,6 +216,9 @@ def _install_project_snapshot_partitions(table: Any) -> None:
         CREATE TABLE IF NOT EXISTS project_snapshots_default
         PARTITION OF project_snapshots DEFAULT
         """
+    default_partition_rls_ddl = (
+        "ALTER TABLE project_snapshots_default ENABLE ROW LEVEL SECURITY"
+    )
     monthly_partition_ddl = """
         DO $$
         DECLARE
@@ -238,10 +241,18 @@ def _install_project_snapshot_partitions(table: Any) -> None:
                     partition_start,
                     partition_end
                 );
+                EXECUTE format(
+                    'ALTER TABLE %%I ENABLE ROW LEVEL SECURITY',
+                    partition_name
+                );
             END LOOP;
         END $$;
         """
-    for statement in (default_partition_ddl, monthly_partition_ddl):
+    for statement in (
+        default_partition_ddl,
+        default_partition_rls_ddl,
+        monthly_partition_ddl,
+    ):
         event.listen(
             table,
             "after_create",
