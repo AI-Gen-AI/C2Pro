@@ -1129,10 +1129,8 @@ async def evaluate_project_coherence(
     )
 
     # Persist result so the dashboard always reflects the latest evaluation.
-    # The scoring snapshot preserves the complete detected FindingSignals plus
-    # their family/observation identities so a later human false-positive review
-    # can replay the exact scorer without rerunning detectors or approximating
-    # from Alert severity.
+    # Keep the exact detected FindingSignals and their identity basis so a later
+    # validated false-positive review can replay the same scorer/version.
     if payload.project_id and enriched_result.overall_score is not None:
         scoring_snapshot = None
         if isinstance(reconciliation, _CoherenceAlertReconciliation):
@@ -1679,6 +1677,8 @@ async def _attach_trusted_projection(
             "projection_baseline_score": projection.baseline_score,
             "projected_score": projection.projected_score,
             "projected_delta": projection.projected_delta,
+            "projection_baseline_sub_scores": projection.projection_baseline_sub_scores,
+            "projected_sub_scores": projection.projected_sub_scores,
             "pending_review_count": projection.pending_review_count,
             "projection_score_version": version,
             "projection_status": projection.status.value,

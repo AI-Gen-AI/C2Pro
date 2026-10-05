@@ -31,7 +31,6 @@ from src.alerts.application.dtos import (
 from src.alerts.application.mappers import AlertMapper
 from src.alerts.application.ports.alert_repository import IAlertRepository
 from src.alerts.application.ports.tenant_repository import ITenantRepository
-from src.alerts.domain.models import Alert
 from src.alerts.application.use_cases.attach_alert_evidence_use_case import (
     AlertNotFoundError as EvidenceAlertNotFoundError,
 )
@@ -65,6 +64,7 @@ from src.alerts.application.use_cases.review_alert_use_case import (
 from src.alerts.application.use_cases.update_alert_workspace_settings_use_case import (
     UpdateAlertWorkspaceSettingsUseCase,
 )
+from src.alerts.domain.models import Alert
 from src.coherence.application.disposition_review import CoherenceReviewRescoreUnavailable
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
@@ -124,14 +124,12 @@ def get_review_alert_use_case(
         alert: Alert,
         tenant_id: UUID,
         decision: str,
-        previous_disposition: str | None,
     ) -> None:
         await rescore_coherence_after_review(
             session=session,
             alert=alert,
             tenant_id=tenant_id,
             decision=decision,
-            previous_disposition=previous_disposition,
         )
 
     return ReviewAlertUseCase(

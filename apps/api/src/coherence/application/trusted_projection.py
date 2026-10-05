@@ -56,6 +56,8 @@ class CoherenceProjection:
     baseline_score: float | None
     projected_score: float | None
     projected_delta: float | None
+    projection_baseline_sub_scores: dict[str, float | None] | None
+    projected_sub_scores: dict[str, float | None] | None
     pending_review_count: int
     projection_score_version: str | None
     status: ProjectionStatus
@@ -87,6 +89,8 @@ async def project_pending_coherence(
             baseline_score=None,
             projected_score=None,
             projected_delta=None,
+            projection_baseline_sub_scores=None,
+            projected_sub_scores=None,
             pending_review_count=count,
             projection_score_version=None,
             status=ProjectionStatus.UNAVAILABLE,
@@ -98,6 +102,8 @@ async def project_pending_coherence(
             baseline_score=None,
             projected_score=None,
             projected_delta=None,
+            projection_baseline_sub_scores=None,
+            projected_sub_scores=None,
             pending_review_count=0,
             projection_score_version=None,
             status=ProjectionStatus.NONE,
@@ -130,10 +136,36 @@ async def project_pending_coherence(
         projected_delta=(
             round(projected_score - baseline_score, 4) if baseline_score is not None else None
         ),
+        projection_baseline_sub_scores=(
+            _canonical_sub_scores(getattr(baseline.summary, "category_scores", {}))
+            if baseline is not None
+            else None
+        ),
+        projected_sub_scores=_canonical_sub_scores(
+            getattr(projected.summary, "category_scores", {})
+        ),
         pending_review_count=count,
         projection_score_version=version,
         status=ProjectionStatus.PROVISIONAL,
     )
+
+
+def _canonical_sub_scores(raw: dict[str, float | None]) -> dict[str, float | None]:
+    """Normalize ProjectGraph category aliases to the six canonical dimensions."""
+    aliases = {"FINANCIAL": "BUDGET", "SCHEDULE": "TIME", "GENERAL": "SCOPE"}
+    canonical: dict[str, float | None] = {
+        "SCOPE": None,
+        "BUDGET": None,
+        "QUALITY": None,
+        "TECHNICAL": None,
+        "LEGAL": None,
+        "TIME": None,
+    }
+    for category, score in raw.items():
+        key = aliases.get(str(category).upper(), str(category).upper())
+        if key in canonical:
+            canonical[key] = score
+    return canonical
 
 
 __all__ = [

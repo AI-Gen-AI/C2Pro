@@ -65,6 +65,18 @@ class BulkReviewAlertsUseCase:
                 continue
             alerts.append(alert)
 
+        if decision == "reject":
+            coherence_alerts = [
+                alert
+                for alert in alerts
+                if str(getattr(alert, "alert_type", "")).lower() == "coherence"
+            ]
+            if coherence_alerts:
+                raise BulkReviewPolicyError(
+                    "Coherence alerts require individual review so score-affecting "
+                    "false-positive dispositions can be rescored atomically."
+                )
+
         if decision == "approve":
             high_risk = [
                 alert
@@ -75,16 +87,6 @@ class BulkReviewAlertsUseCase:
                 raise BulkReviewPolicyError(
                     "High and critical alerts require individual review and "
                     "cannot be bulk approved."
-                )
-
-        if decision == "reject":
-            coherence_alerts = [
-                alert for alert in alerts if alert.alert_type == "coherence"
-            ]
-            if coherence_alerts:
-                raise BulkReviewPolicyError(
-                    "Coherence false-positive decisions require individual review "
-                    "so Alert disposition and score recalculation commit atomically."
                 )
 
         for alert in alerts:
