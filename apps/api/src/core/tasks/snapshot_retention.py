@@ -58,6 +58,28 @@ async def _is_partitioned(session: AsyncSession) -> bool:
     return bool(result.scalar_one())
 
 
+async def _rls_enabled(
+    session: AsyncSession,
+    *,
+    table_name: str,
+) -> bool:
+    """Return whether RLS is already enabled on a public snapshot partition."""
+    result = await session.execute(
+        text(
+            """
+            SELECT c.relrowsecurity
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = :table_name
+            """
+        ),
+        {"table_name": table_name},
+    )
+    value = result.scalar_one_or_none()
+    return bool(value)
+
+
 async def _execute_partition_sql(
     session: AsyncSession,
     *,
@@ -79,9 +101,12 @@ async def _execute_partition_sql(
     # #870: RLS is table-local in PostgreSQL. New partition leaves do not
     # inherit the parent's relrowsecurity flag, so every leaf must be born
     # closed even though ordinary application queries target the parent.
-    await session.execute(
-        text(f"ALTER TABLE {partition_name} ENABLE ROW LEVEL SECURITY")
-    )
+    # Avoid repeating ALTER TABLE for already-secured leaves: ENABLE RLS takes
+    # a heavyweight DDL lock that would otherwise be held through retention.
+    if not await _rls_enabled(session, table_name=partition_name):
+        await session.execute(
+            text(f"ALTER TABLE {partition_name} ENABLE ROW LEVEL SECURITY")
+        )
 
 
 async def ensure_project_snapshot_partitions(
@@ -102,9 +127,10 @@ async def ensure_project_snapshot_partitions(
             """
         )
     )
-    await session.execute(
-        text("ALTER TABLE project_snapshots_default ENABLE ROW LEVEL SECURITY")
-    )
+    if not await _rls_enabled(session, table_name="project_snapshots_default"):
+        await session.execute(
+            text("ALTER TABLE project_snapshots_default ENABLE ROW LEVEL SECURITY")
+        )
     base_month = _month_start(anchor or _utcnow())
     for offset in range(-months_back, months_ahead + 1):
         start = _add_months(base_month, offset)
