@@ -984,3 +984,53 @@ class TestB1RealCrossRevisionIdentity:
         repo.create.assert_not_awaited()
         history = existing.alert_metadata.get("history", [])
         assert any(item.get("action") == "basis_changed_reopened" for item in history)
+
+
+class TestB1IdentityQualityMetadata:
+    def test_strong_document_family_is_explicitly_versioned(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        document_id = str(uuid4())
+        alert = _make_alert_create(rule_id="DET-TIM-QUALITY", category="TIME")
+        alert.affected_entities = {"documents": [document_id]}
+        alert.alert_metadata = {
+            "detection_evidence": {
+                "source_document_id": document_id,
+                "claim": "Completion date conflict",
+                "quote": "The completion dates conflict.",
+            }
+        }
+
+        fingerprint = svc._fingerprint(alert)
+        metadata = svc._build_metadata(alert, fingerprint)
+
+        assert metadata["finding_key"] == fingerprint
+        assert metadata["identity_schema_version"] == FINGERPRINT_VERSION
+        assert metadata["identity_quality"] == "strong"
+
+    def test_clause_only_identity_is_marked_revision_bound(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        alert = _make_alert_create(
+            rule_id="DET-SCOPE-REVISION-BOUND",
+            category="SCOPE",
+            source_clause_id=uuid4(),
+        )
+        alert.alert_metadata = {"detection_evidence": {}}
+
+        metadata = svc._build_metadata(alert, svc._fingerprint(alert))
+
+        assert metadata["identity_quality"] == "revision_bound"
+
+    def test_synthetic_locator_identity_is_marked_weak(self) -> None:
+        svc = AlertGeneratorService(repository=MagicMock())
+        alert = _make_alert_create(rule_id="DET-TECH-SYNTHETIC", category="TECHNICAL")
+        alert.alert_metadata = {
+            "detection_evidence": {
+                "source_clause_id": "parsed_1234abcd",
+                "claim": "Synthetic extraction conflict",
+                "quote": "Synthetic source text",
+            }
+        }
+
+        metadata = svc._build_metadata(alert, svc._fingerprint(alert))
+
+        assert metadata["identity_quality"] == "weak"
