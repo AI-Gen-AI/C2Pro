@@ -175,11 +175,11 @@ class SqlAlchemyProjectEventRepository(IProjectEventRepository):
         events = await self.list_revision_outcomes(
             tenant_id=tenant_id, project_id=project_id, document_id=document_id, revision_id=revision_id
         )
-        # Comparisons only, as before: an analysis failure has no change to render
-        # (the trust seam, not this reader, fails closed on it).
-        return select_effective_outcome(
-            event for event in events if event.event_type in CHANGE_EVENT_TYPES
-        ).effective
+        # Selected over EVERY outcome: when the effective outcome is a failed newer
+        # analysis there is no current comparison to render (fail closed); the
+        # older comparison stays readable as history by its event id.
+        effective = select_effective_outcome(events).effective
+        return effective if effective is not None and effective.event_type in CHANGE_EVENT_TYPES else None
 
     async def list_revision_outcomes(
         self,

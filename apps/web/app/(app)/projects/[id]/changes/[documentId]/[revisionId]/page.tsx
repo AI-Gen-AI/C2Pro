@@ -42,10 +42,14 @@ export default function ChangeDetailPage() {
 // A superseded comparison stays inspectable but is never presented as the current result.
 function LineageNote({ detail, currentHref }: { detail: Detail; currentHref: string }) {
   if (detail.effective === false) {
+    // A failed newer analysis leaves no current comparison: say so instead of linking back here.
+    const failed = detail.history?.find((entry) => entry.event_id === detail.superseded_by_event_id)?.event_type === "revision.analysis_failed";
     return <Card data-testid="change-detail-historical"><CardContent className="flex flex-wrap items-center gap-2 pt-6 text-sm">
       <Badge variant="outline"><History className="mr-1 h-3 w-3" />Historical — superseded</Badge>
-      <span className="text-muted-foreground">A newer result replaces this comparison; it is kept as history only.</span>
-      <Link className="font-medium text-primary hover:underline" href={currentHref}>View the current result</Link>
+      {failed
+        ? <span className="text-muted-foreground">A newer analysis of this revision failed, so there is no current comparison; this one is kept as history only.</span>
+        : <><span className="text-muted-foreground">A newer result replaces this comparison; it is kept as history only.</span>
+          <Link className="font-medium text-primary hover:underline" href={currentHref}>View the current result</Link></>}
     </CardContent></Card>;
   }
   if (detail.derivation === "recomputed") {

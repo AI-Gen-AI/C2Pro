@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -48,11 +48,12 @@ class _Events:
         candidates = [
             event for event in self.events
             if event.tenant_id == tenant_id and event.project_id == project_id
-            and event.event_type in CHANGE_EVENT_TYPES
+            and event.event_type in OUTCOME_EVENT_TYPES
             and event.source_revision_id in {None, revision_id}
             and event.payload.get("document_id") == str(document_id)
         ]
-        return select_effective_outcome(candidates).effective
+        effective = select_effective_outcome(candidates).effective
+        return effective if effective is not None and effective.event_type in CHANGE_EVENT_TYPES else None
 
     @staticmethod
     def _revision_of(event: ProjectEvent):  # noqa: ANN205
@@ -492,3 +493,34 @@ async def test_revision_status_read_failure_is_unavailable_never_current(monkeyp
 
     assert status is not None and status.status == "unavailable"
     assert status.is_current is False and status.trust_state is None
+
+
+@pytest.mark.asyncio
+async def test_a_newer_failed_analysis_leaves_no_current_comparison_but_history_readable() -> None:
+    tenant_id, project_id, document_id, revision_id = uuid4(), uuid4(), uuid4(), uuid4()
+    comparison = _event(project_id, tenant_id, document_id, revision_id).model_copy(
+        update={"source_revision_id": revision_id}
+    )
+    failed = comparison.model_copy(
+        update={
+            "event_id": uuid4(),
+            "event_type": "revision.analysis_failed",
+            "payload": {"state": "error", "document_id": str(document_id),
+                        "provenance": {"target_revision_id": str(revision_id)}},
+            "occurred_at": comparison.occurred_at + timedelta(minutes=5),
+        }
+    )
+    app = _app([comparison, failed], tenant_id)
+    url = f"/api/v1/projects/{project_id}/documents/{document_id}/changes/{revision_id}"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        current = await client.get(url)
+        historical = await client.get(url, params={"event_id": str(comparison.event_id)})
+
+    # The effective outcome is the failure: no stale comparison is served as current.
+    assert current.status_code == 404
+    body = historical.json()
+    assert body["event_id"] == str(comparison.event_id)
+    assert body["effective"] is False
+    assert body["superseded_by_event_id"] == str(failed.event_id)
+    assert [h["event_type"] for h in body["history"]] == ["revision.changed", "revision.analysis_failed"]

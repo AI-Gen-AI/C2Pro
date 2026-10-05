@@ -345,3 +345,32 @@ async def test_current_matcher_comparisons_are_never_recomputed(db: AsyncSession
     outcome = await recompute_legacy_change_event(world.events, current)
     assert outcome.status is RecomputeStatus.NOT_ELIGIBLE and outcome.reason == "matcher_current"
     assert await world.count_recomputed(tenant_id) == 0
+
+
+async def test_a_newer_failed_analysis_leaves_no_current_comparison(db: AsyncSession) -> None:
+    from src.temporal.application.change_projection import build_revision_processing_failed_event
+
+    world = _World(db)
+    tenant_id, project_id, document_id, v2, original = await world.legacy_history()
+    failed = build_revision_processing_failed_event(revision=await _revision_of(db, v2.revision_id, tenant_id),
+                                                    failure_code="parse_error")
+    failed = failed.model_copy(update={"occurred_at": original.occurred_at + timedelta(minutes=5),
+                                       "created_at": original.occurred_at + timedelta(minutes=5)})
+    await world.events.append(failed)
+    await db.commit()
+
+    # Fail closed: the stale comparison is not served as the current one ...
+    assert await world.events.get_change_for_revision(
+        tenant_id=tenant_id, project_id=project_id, document_id=document_id, revision_id=v2.revision_id
+    ) is None
+    # ... and it stays readable as history, superseded by the failure.
+    history = await world.events.list_revision_outcomes(
+        tenant_id=tenant_id, project_id=project_id, document_id=document_id, revision_id=v2.revision_id
+    )
+    assert select_effective_outcome(history).superseded_by[original.event_id] == failed.event_id
+
+
+async def _revision_of(db: AsyncSession, revision_id: UUID, tenant_id: UUID) -> DocumentRevision:
+    revision = await SqlAlchemyDocumentRevisionRepository(db).get_by_id(revision_id, tenant_id)
+    assert revision is not None
+    return revision

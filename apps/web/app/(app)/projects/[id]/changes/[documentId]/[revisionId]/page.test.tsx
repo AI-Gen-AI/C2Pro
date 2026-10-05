@@ -288,4 +288,23 @@ describe("ChangeDetailPage — current vs historical, trust and materialization 
     expect(status.getByText("Revision status unavailable.")).toBeInTheDocument();
     expect(status.queryByText("Current revision")).not.toBeInTheDocument();
   });
+
+  it("never links a comparison superseded by a failed analysis back to itself", async () => {
+    searchParams = new URLSearchParams("event=evt-old");
+    detail([modified], "ready", {
+      event_id: "evt-old",
+      effective: false,
+      superseded_by_event_id: "evt-failed",
+      history: [
+        { event_id: "evt-old", event_type: "revision.changed", derivation: "original", effective: false },
+        { event_id: "evt-failed", event_type: "revision.analysis_failed", derivation: "original", effective: true },
+      ],
+    });
+
+    render(<ChangeDetailPage />);
+
+    const banner = within(await screen.findByTestId("change-detail-historical"));
+    expect(banner.getByText(/newer analysis of this revision failed/i)).toBeInTheDocument();
+    expect(banner.queryByRole("link")).not.toBeInTheDocument();
+  });
 });
