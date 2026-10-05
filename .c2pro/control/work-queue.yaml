@@ -56,3 +56,13 @@ items:
     priority: P1
     depends_on: []
     review_policy: independent_principal
+
+  # Repository Hygiene & Core AI Assurance — issue #849.
+  # Parallel quality lane; must not touch active product-domain implementation.
+  - work_id: C2PRO-DEV-15
+    status: in_progress
+    role: implementation_lead
+    work_ref: https://github.com/AI-Gen-AI/C2Pro/issues/849
+    priority: P1
+    depends_on: []
+    review_policy: independent_principal
