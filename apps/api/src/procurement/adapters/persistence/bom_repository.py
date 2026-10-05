@@ -97,12 +97,11 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         bom_items: list[BOMItem],
         tenant_id: UUID,
     ) -> list[BOMItem]:
-        """Replace all BOM rows produced by one parsed source document.
+        """Replace only BOM rows provably owned by one parsed source document.
 
-        Also clears any orphaned rows with source_document_id IS NULL for the
-        same project — these are legacy rows created before the linkage column
-        was added (TASK-DOC-BOM-ORPHAN-007) or rows left after a document was
-        deleted whose FK cascade could not reach them.
+        Rows with source_document_id IS NULL are ownership-unknown and may be
+        manual/user-authored. Ordinary parse/reparse must preserve them. Any
+        legacy cleanup requires a separate evidence-backed maintenance path.
         """
         await self._ensure_project_in_tenant(project_id, tenant_id)
         await self.session.execute(
@@ -111,15 +110,6 @@ class SQLAlchemyBOMRepository(IBOMRepository):
                 BOMItemORM.source_document_id == source_document_id,
             )
         )
-        # Sweep NULL-source orphans — they are either pre-column-migration rows
-        # or rows whose parent document was deleted and left without a FK.
-        await self.session.execute(
-            delete(BOMItemORM).where(
-                BOMItemORM.project_id == project_id,
-                BOMItemORM.source_document_id.is_(None),
-            )
-        )
-
         orms = []
         for item in bom_items:
             if item.project_id != project_id:
