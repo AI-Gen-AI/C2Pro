@@ -235,9 +235,9 @@ def create_application() -> FastAPI:
 
         ## Soporte
 
-        - ðŸ“§ Email: support@c2pro.app
-        - ðŸ“– Docs: https://docs.c2pro.app
-        - ðŸ’¬ Discord: https://discord.gg/c2pro
+        - 📧 Email: support@c2pro.app
+        - 📖 Docs: https://docs.c2pro.app
+        - 💬 Discord: https://discord.gg/c2pro
         """,
         docs_url="/docs",
         redoc_url="/redoc",
