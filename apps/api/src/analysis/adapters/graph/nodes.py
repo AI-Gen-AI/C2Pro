@@ -823,7 +823,7 @@ async def _save_to_db_fenced(state: ProjectState, provenance: Any) -> ProjectSta
 
 
 async def save_to_db_node(state: ProjectState) -> ProjectState:
-    """N17 — Persist analysis, alerts, and WBS via PersistAnalysisUseCase."""
+    """N17 — Persist analysis and alerts via PersistAnalysisUseCase (WBS stays a proposal, #830)."""
     if not state.get("tenant_id"):
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
@@ -875,18 +875,16 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         PersistAnalysisCommand,
         PersistAnalysisUseCase,
     )
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id = UUID(state["tenant_id"])
     try:
         async with get_session_with_tenant(tenant_id) as session:
-            # #711: analysis, alerts and canonical WBS commit only for the
-            # current processing owner (same transaction as the writes).
+            # #711: analysis and alerts commit only for the current processing
+            # owner (same transaction as the writes). #830: the extracted WBS is
+            # kept as a proposal in the analysis; canonical WBS is never written.
             await fence_current(session)
             result = await PersistAnalysisUseCase(
                 analysis_repo=SqlAlchemyAnalysisRepository(session),
-                wbs_repo=SQLAlchemyWBSRepository(session),
-                session=session,
             ).execute(
                 PersistAnalysisCommand(
                     project_id=UUID(state["project_id"]),
