@@ -833,7 +833,7 @@ def _is_validated_false_positive(record: Any | None) -> bool:
 
 
 def _coverage_from_breakdown(result: EnrichedCoherenceResult) -> tuple[dict[str, bool], set[str]]:
-    coverage = {category: False for category in COHERENCE_CATEGORIES}
+    coverage = dict.fromkeys(COHERENCE_CATEGORIES, False)
     budget_throttled: set[str] = set()
     for item in result.category_breakdown:
         category = canonical_category_name(str(item.category))
