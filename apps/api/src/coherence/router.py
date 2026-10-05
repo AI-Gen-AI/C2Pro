@@ -5,6 +5,7 @@ Refers to Test Suite ID: TASK-OPS-DOCFLOW-009.
 
 from collections.abc import Sequence
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -20,7 +21,7 @@ from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRe
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.application.dtos import AlertCreate
-from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.feature_flags import (
     coherence_canonical_canary_enabled_for_tenant,
@@ -53,9 +54,11 @@ from .canonical.live_rescore import (
 )
 from .domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 from .graph.graph import evaluate_coherence_async
+from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
 from .schedule_clause_builder import build_schedule_clauses
+from .scoring import ScoringService
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 logger = structlog.get_logger()
@@ -114,6 +117,14 @@ COHERENCE_WEIGHTS = {
     "LEGAL": 0.15,
     "TIME": 0.15,
 }
+
+
+@dataclass(frozen=True)
+class _CoherenceAlertReconciliation:
+    """Durable Alert reconciliation truth for the current evaluation transaction."""
+
+    finding_keys_by_alert_index: tuple[str, ...]
+    records_by_finding_key: dict[str, Any]
 
 
 def _normalize_utc_datetime(value: datetime | None) -> datetime | None:
@@ -757,17 +768,12 @@ async def _mirror_coherence_alerts_to_alerts_table(
     tenant_id: UUID,
     alerts: Sequence[Any],
     clauses: Sequence[Clause] = (),
-) -> None:
-    """Reconcile generated Coherence findings without destroying human state.
+) -> _CoherenceAlertReconciliation:
+    """Reconcile findings and return the durable disposition truth for this transaction.
 
-    The same documentary finding keeps the same alert row across evaluations.
-    Missing current findings are auto-resolved by the canonical alert service;
-    reviewed false positives remain dismissed; genuine resolved findings reopen
-    only if the same finding is detected again.
-
-    A project-scoped PostgreSQL transaction advisory lock serializes concurrent
-    evaluations. The service deliberately does not commit here: the caller owns
-    the transaction and releases the lock with its existing commit.
+    The project-scoped advisory lock serializes concurrent evaluations. The service
+    deliberately does not commit: the caller owns the transaction so Alert lifecycle
+    and the resulting Coherence score become durable together.
     """
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:mirror_key))"),
@@ -788,14 +794,143 @@ async def _mirror_coherence_alerts_to_alerts_table(
         )
         for alert in alerts
     ]
-    await AlertGeneratorService(
-        SqlAlchemyAlertRepository(db)
-    ).process_violations(
+    service = AlertGeneratorService(SqlAlchemyAlertRepository(db))
+    records = await service.process_violations(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
         auto_resolve=True,
         commit=False,
+    )
+    finding_keys = tuple(service.finding_key(payload) for payload in payloads)
+    records_by_finding_key: dict[str, Any] = {}
+    for record in records:
+        metadata = dict(getattr(record, "alert_metadata", None) or {})
+        key = metadata.get("finding_key") or metadata.get("fingerprint")
+        if isinstance(key, str) and key:
+            records_by_finding_key[key] = record
+    return _CoherenceAlertReconciliation(
+        finding_keys_by_alert_index=finding_keys,
+        records_by_finding_key=records_by_finding_key,
+    )
+
+
+def _is_validated_false_positive(record: Any | None) -> bool:
+    if record is None:
+        return False
+    status_value = str(getattr(getattr(record, "status", None), "value", getattr(record, "status", "")))
+    if status_value != AlertStatus.DISMISSED.value:
+        return False
+    metadata = dict(getattr(record, "alert_metadata", None) or {})
+    current_basis = metadata.get("current_observation_key")
+    reviewed_basis = metadata.get("disposition_basis_key")
+    return bool(
+        metadata.get("disposition") == "false_positive"
+        and isinstance(current_basis, str)
+        and current_basis
+        and reviewed_basis == current_basis
+    )
+
+
+def _coverage_from_breakdown(result: EnrichedCoherenceResult) -> tuple[dict[str, bool], set[str]]:
+    coverage = dict.fromkeys(COHERENCE_CATEGORIES, False)
+    budget_throttled: set[str] = set()
+    for item in result.category_breakdown:
+        category = canonical_category_name(str(item.category))
+        if category not in coverage:
+            continue
+        if item.state in {"assessed_clean", "assessed_findings"}:
+            coverage[category] = True
+        elif item.state == "budget_throttled":
+            budget_throttled.add(category)
+    return coverage, budget_throttled
+
+
+def _apply_disposition_aware_rescore(
+    result: EnrichedCoherenceResult,
+    reconciliation: _CoherenceAlertReconciliation,
+    *,
+    clauses: Sequence[Clause],
+    config: EvaluationConfig,
+) -> EnrichedCoherenceResult:
+    """Filter durable false positives before rerunning the same v1 ScoringService.
+
+    Alerts provide disposition authority only. Scoring continues to use the complete
+    FindingSignal objects (impact/confidence/materiality inputs), never a lossy Alert row.
+    """
+    signal_count = len(result.finding_signals)
+    if len(reconciliation.finding_keys_by_alert_index) < signal_count:
+        raise RuntimeError("COHERENCE_ALERT_SIGNAL_IDENTITY_MISMATCH")
+
+    eligible_signals = []
+    eligible_alert_indexes: list[int] = []
+    seen_families: set[str] = set()
+    excluded_false_positive_keys: set[str] = set()
+
+    for index, signal in enumerate(result.finding_signals):
+        finding_key = reconciliation.finding_keys_by_alert_index[index]
+        if finding_key in seen_families:
+            continue
+        seen_families.add(finding_key)
+        record = reconciliation.records_by_finding_key.get(finding_key)
+        if _is_validated_false_positive(record):
+            excluded_false_positive_keys.add(finding_key)
+            continue
+        eligible_signals.append(signal)
+        eligible_alert_indexes.append(index)
+
+    changed = (
+        len(eligible_signals) != len(result.finding_signals)
+        or len(seen_families) != len(result.finding_signals)
+    )
+    if not changed:
+        return result
+
+    coverage_map, budget_throttled = _coverage_from_breakdown(result)
+    diagnostics = ScoringService().calculate_detailed(
+        signals=eligible_signals,
+        num_clauses=len(clauses),
+        num_rules=12,
+        poor_extraction_quality=config.poor_extraction_quality,
+        coverage_map=coverage_map,
+    )
+    category_scores = diagnostics.category_scores or {}
+    category_breakdown = _build_category_breakdown(
+        eligible_signals,
+        coverage_map,
+        category_scores,
+        budget_throttled_categories=budget_throttled,
+    )
+
+    # format_output guarantees the first N alerts correspond 1:1 with all_signals;
+    # any trailing alert is a non-scoring meta alert and remains visible.
+    active_alerts = [result.alerts[index] for index in eligible_alert_indexes]
+    active_alerts.extend(result.alerts[signal_count:])
+
+    logger.info(
+        "coherence_disposition_rescore",
+        excluded_false_positives=len(excluded_false_positive_keys),
+        deduplicated_findings=len(result.finding_signals) - len(seen_families),
+        score_before=result.overall_score,
+        score_after=diagnostics.score,
+    )
+    return result.model_copy(
+        update={
+            "overall_score": diagnostics.score,
+            "alerts": active_alerts,
+            "category_breakdown": category_breakdown,
+            "score_reason": diagnostics.reason,
+            "score_missing_dimensions": diagnostics.missing_dimensions,
+            "finding_signals": eligible_signals,
+            "deterministic_findings_count": diagnostics.deterministic_findings,
+            "llm_findings_count": diagnostics.llm_findings,
+            "scope_factor": diagnostics.scope_factor,
+            "penalty_density": diagnostics.penalty_density,
+            "avg_impact": diagnostics.avg_impact,
+            "avg_confidence": diagnostics.avg_confidence,
+            "category_scores": diagnostics.category_scores,
+            "audit_coverage": diagnostics.audit_coverage,
+        }
     )
 
 
@@ -947,23 +1082,47 @@ async def evaluate_project_coherence(
     )
 
     logger.info(
-        "coherence_evaluate_complete",
+        "coherence_detection_complete",
         alerts_count=len(enriched_result.alerts),
         overall_score=enriched_result.overall_score,
     )
+
+    # B1-09: durable human disposition is part of the scoring input authority.
+    # Reconcile first (same transaction), then re-score the complete FindingSignals.
+    # A validated false positive is excluded; ACKNOWLEDGED/accepted variance remains.
+    if payload.project_id and enriched_result.overall_score is not None:
+        reconciliation = await _mirror_coherence_alerts_to_alerts_table(
+            db=db,
+            project_id=payload.project_id,
+            tenant_id=current_user.tenant_id,
+            alerts=enriched_result.alerts,
+            clauses=clauses,
+        )
+        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+            enriched_result = _apply_disposition_aware_rescore(
+                enriched_result,
+                reconciliation,
+                clauses=clauses,
+                config=config,
+            )
 
     # Referenced-but-missing hint: if the technical dimension was withheld for lack
     # of evidence but the documents reference a technical specifications pliego, tell
     # the user what to upload — honest and actionable, never a fabricated score.
     _annotate_missing_technical_hint(enriched_result, clauses)
 
-    # ADR-017 canary: for enrolled tenants, re-score the SAME findings through the canonical
-    # scorer (ADR-009 §G.1) — this flips the SCORER only; detection/alerts are unchanged.
-    # Always logs the v1↔canonical delta; substitutes the headline only when the tenant is
-    # enrolled. Default off (no tenant enrolled) ⇒ persistence + response below are
-    # byte-identical to the v1 path.
+    # ADR-017 canary runs only after B1 disposition filtering so both scorers see
+    # the same eligible finding set.
     enriched_result = await _maybe_apply_canonical_canary(
         enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
+    )
+
+    logger.info(
+        "coherence_evaluate_complete",
+        alerts_count=len(enriched_result.alerts),
+        findings_count=len(enriched_result.finding_signals),
+        overall_score=enriched_result.overall_score,
+        score_version=enriched_result.score_version,
     )
 
     # Persist result so the dashboard always reflects the latest evaluation
@@ -1020,16 +1179,8 @@ async def evaluate_project_coherence(
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
             )
         )
-        # B1: the canonical Coherence result and its Alert projection are one
-        # write boundary. The Alert service uses commit=False, so a reconciliation
-        # failure propagates before any durable Coherence commit can occur.
-        await _mirror_coherence_alerts_to_alerts_table(
-            db=db,
-            project_id=payload.project_id,
-            tenant_id=current_user.tenant_id,
-            alerts=enriched_result.alerts,
-            clauses=clauses,
-        )
+        # Alert lifecycle was reconciled before scoring with commit=False.
+        # This one commit makes the disposition-aware score and Alert state durable together.
         await db.commit()
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
@@ -1510,8 +1661,6 @@ async def _attach_trusted_projection(
             "projection_baseline_score": projection.baseline_score,
             "projected_score": projection.projected_score,
             "projected_delta": projection.projected_delta,
-            "projection_baseline_sub_scores": projection.projection_baseline_sub_scores,
-            "projected_sub_scores": projection.projected_sub_scores,
             "pending_review_count": projection.pending_review_count,
             "projection_score_version": version,
             "projection_status": projection.status.value,

@@ -471,6 +471,10 @@ class AlertGeneratorService:
         rule_id = (violation.rule_id or "").lower()
         return "penal" in rule_id or "penalty" in rule_id
 
+    def finding_key(self, violation: AlertCreate) -> str:
+        """Return the canonical durable family key for one Coherence finding."""
+        return self._fingerprint(violation)
+
     def _fingerprint(self, violation: AlertCreate) -> str:
         rule_id = violation.rule_id or "unknown_rule"
         metadata = dict(violation.alert_metadata or {})
