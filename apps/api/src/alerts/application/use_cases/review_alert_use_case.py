@@ -14,6 +14,7 @@ from src.alerts.application.mappers import AlertMapper
 from src.alerts.application.ports.alert_repository import IAlertRepository
 from src.alerts.domain.models import Alert
 
+PreReviewHandler = Callable[[UUID, UUID, str], Awaitable[None]]
 PostReviewHandler = Callable[[Alert, UUID, str], Awaitable[None]]
 
 
@@ -26,9 +27,11 @@ class ReviewAlertUseCase:
     def __init__(
         self,
         repository: IAlertRepository,
+        pre_review_handler: PreReviewHandler | None = None,
         post_review_handler: PostReviewHandler | None = None,
     ) -> None:
         self._repository = repository
+        self._pre_review_handler = pre_review_handler
         self._post_review_handler = post_review_handler
 
     async def execute(
@@ -40,6 +43,9 @@ class ReviewAlertUseCase:
         comment: str = "",
     ) -> AlertResponse:
         """Review an alert (approve or reject)."""
+        if self._pre_review_handler is not None:
+            await self._pre_review_handler(alert_id, tenant_id, decision)
+
         alert = await self._repository.get_by_id(alert_id, tenant_id)
         if not alert:
             raise AlertNotFoundError(f"Alert {alert_id} not found")
