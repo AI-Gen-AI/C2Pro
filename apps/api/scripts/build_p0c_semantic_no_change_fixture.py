@@ -46,11 +46,22 @@ def _blocks(pdf_bytes: bytes) -> list[tuple[int, str]]:
 
 
 def build() -> tuple[str, str]:
+    if DEFAULT_SOURCE.is_symlink():
+        raise RuntimeError("canonical source fixture must not be a symlink")
+    if DEFAULT_OUTPUT.is_symlink():
+        raise RuntimeError("canonical output fixture must not be a symlink")
     source = DEFAULT_SOURCE.resolve(strict=True)
-    output = DEFAULT_OUTPUT.resolve(strict=False)
-    if source != DEFAULT_SOURCE.resolve():
+    output_parent = DEFAULT_OUTPUT.parent.resolve()
+    output = output_parent / DEFAULT_OUTPUT.name
+    expected_source_parent = (
+        REPO_ROOT / "apps/web/src/tests/e2e/test-data/pj01"
+    ).resolve()
+    expected_output_parent = (
+        REPO_ROOT / "apps/web/playwright/.prod-p0c"
+    ).resolve()
+    if source.parent != expected_source_parent or source.name != "contract-b.pdf":
         raise RuntimeError("canonical source path resolution failed")
-    if output.parent != DEFAULT_OUTPUT.parent.resolve():
+    if output_parent != expected_output_parent:
         raise RuntimeError("canonical output path resolution failed")
 
     original = source.read_bytes()
