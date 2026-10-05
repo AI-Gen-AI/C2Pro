@@ -164,6 +164,26 @@ export default defineConfig({
       },
     },
     {
+      // Manual-only P0c continuation. It reuses the accepted P0b project and
+      // mutates only that synthetic document by uploading Contract B as revision 2.
+      name: "p0c-prod-qualification",
+      testMatch: [/(^|[\\/])prod-acceptance[\\/]p0c-production-qualification\.spec\.ts$/],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "ISSUE-686-P0C-PROD-QUALIFICATION",
+        type: "production-qualification",
+        priority: "p0",
+        manualOnly: true,
+        description:
+          "Accepted P0b project -> revision B of same document -> What Changed durable qualification",
+      },
+    },
+    {
       name: "cross-browser-chromium",
       testMatch: /cross-browser-smoke\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },

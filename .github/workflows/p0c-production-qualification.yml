@@ -1,0 +1,373 @@
+name: P0c Production Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "Type RUN-P0C-686 to acknowledge revision B plus the bounded identical revision C no-change control on the accepted synthetic project."
+        required: true
+        type: string
+      backend_commit_sha:
+        description: "Expected Railway production Git SHA observed independently."
+        required: true
+        type: string
+      backend_deployment_id:
+        description: "Expected Railway API deployment ID observed independently."
+        required: true
+        type: string
+      frontend_commit_sha:
+        description: "Expected Vercel production Git SHA observed independently."
+        required: true
+        type: string
+      frontend_deployment_id:
+        description: "Expected Vercel production deployment ID observed independently."
+        required: true
+        type: string
+      railway_staged_changes_clear:
+        description: "Operator verified Railway production has no unreviewed staged changes."
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c2pro-p0c-production-qualification
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+  PROD_ACCEPTANCE_BASE_URL: "https://c2pro.io"
+  P0C_EXPECTED_BACKEND_ORIGIN: "https://c2pro-production.up.railway.app"
+  P0C_ACCEPTED_P0B_BUNDLE: "evidence/product-qualification/p0b-prod-gh-37196092728-1.yaml"
+  PROD_ACCEPTANCE_RAILWAY_PROJECT_ID: "db60e356-d645-4561-a8c5-ddf5e5a2afa2"
+  PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID: "ecd39af1-2501-4b9b-8e2e-fafcc6a66570"
+  PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID: "dd372d3a-fb0a-4953-862b-63a10b9058ad"
+  PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID: "e2fac2e9-e9f7-42a8-b022-3c9309d0c763"
+  PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID: "d7952082-b1b3-46f4-b916-c66c8329452c"
+  PROD_ACCEPTANCE_VERCEL_TEAM_ID: "team_OD4wmtP2vMrbaA8K5C3WcVET"
+  PROD_ACCEPTANCE_VERCEL_PROJECT_ID: "prj_3CgujYjdedPU5ThQFi4JqHmnlwAr"
+
+jobs:
+  p0c-production-qualification:
+    name: "#686 P0c real production What Changed"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production-qualification
+
+    steps:
+      - name: Fail closed on operator intent and branch
+        env:
+          CONFIRM: ${{ inputs.confirm_production }}
+          STAGED_CLEAR: ${{ inputs.railway_staged_changes_clear }}
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRM" = "RUN-P0C-686" || {
+            echo "Refusing P0c production mutation: confirmation does not match." >&2
+            exit 2
+          }
+          test "${GITHUB_REF_NAME}" = "main" || {
+            echo "Refusing P0c qualification from non-main ref." >&2
+            exit 2
+          }
+          test "$STAGED_CLEAR" = "true" || {
+            echo "Refusing P0c qualification while Railway staged changes are unreviewed." >&2
+            exit 2
+          }
+          [[ "$BACKEND_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          [[ "$FRONTEND_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          [[ "$BACKEND_DEPLOYMENT" =~ ^[0-9a-fA-F-]{36}$ ]] || exit 2
+          [[ "$FRONTEND_DEPLOYMENT" =~ ^dpl_[A-Za-z0-9]{20,64}$ ]] || exit 2
+
+      - name: Fail closed on protected qualification prerequisites
+        env:
+          PROD_ACCEPTANCE_RAILWAY_API_TOKEN: ${{ secrets.PROD_ACCEPTANCE_RAILWAY_API_TOKEN }}
+          PROD_ACCEPTANCE_VERCEL_TOKEN: ${{ secrets.PROD_ACCEPTANCE_VERCEL_TOKEN }}
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            PROD_ACCEPTANCE_RAILWAY_API_TOKEN \
+            PROD_ACCEPTANCE_VERCEL_TOKEN \
+            PROD_ACCEPTANCE_DATABASE_URL_READONLY \
+            PROD_ACCEPTANCE_EXPECTED_TENANT_ID \
+            PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID \
+            PROD_ACCEPTANCE_CLERK_EMAIL \
+            PROD_ACCEPTANCE_CLERK_PASSWORD
+          do
+            test -n "${!name:-}" || {
+              echo "Required protected qualification prerequisite is absent: $name" >&2
+              exit 2
+            }
+          done
+
+      - name: Checkout exact control commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify control commit belongs to canonical main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test -f "$P0C_ACCEPTED_P0B_BUNDLE"
+          echo "CONTROL_COMMIT_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "P0C_QUAL_RUN_ID=p0c-gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      - name: Setup Python backend
+        uses: ./.github/actions/setup-python-backend
+        with:
+          python-version: "3.11"
+          install-system-deps: "false"
+
+      - name: Bind accepted P0b project identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_ENV"
+          import os
+          from pathlib import Path
+          import yaml
+
+          path = Path(os.environ["P0C_ACCEPTED_P0B_BUNDLE"])
+          bundle = yaml.safe_load(path.read_text(encoding="utf-8"))
+          if bundle.get("capability_id") != "P0b" or bundle.get("validator_verdict") != "PASS":
+              raise SystemExit("accepted P0b bundle is not PASS")
+          ids = bundle.get("scenario", {}).get("identifiers", {})
+          expected = ("project_id", "document_id", "source_revision_id")
+          if any(not isinstance(ids.get(k), str) or not ids[k] for k in expected):
+              raise SystemExit("accepted P0b identifiers are incomplete")
+          print(f"P0C_QUAL_PROJECT_ID={ids['project_id']}")
+          print(f"P0C_QUAL_DOCUMENT_ID={ids['document_id']}")
+          print(f"P0C_QUAL_SOURCE_REVISION_ID={ids['source_revision_id']}")
+          PY
+
+      - name: Observe production deployment identities from providers
+        env:
+          PROD_ACCEPTANCE_RAILWAY_API_TOKEN: ${{ secrets.PROD_ACCEPTANCE_RAILWAY_API_TOKEN }}
+          PROD_ACCEPTANCE_VERCEL_TOKEN: ${{ secrets.PROD_ACCEPTANCE_VERCEL_TOKEN }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/product-qualification/runtime/provider
+
+          railway_graphql() {
+            local payload="$1"
+            local output="$2"
+            local candidate="${output}.candidate"
+            local auth_mode header_name header_value
+            rm -f "$candidate"
+
+            for auth_mode in bearer project
+            do
+              if [ "$auth_mode" = "bearer" ]; then
+                header_name="Authorization"
+                header_value="Bearer ${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"
+              else
+                header_name="Project-Access-Token"
+                header_value="${PROD_ACCEPTANCE_RAILWAY_API_TOKEN}"
+              fi
+              if curl --fail --silent --show-error \
+                --request POST \
+                --url "https://backboard.railway.com/graphql/v2" \
+                --header "${header_name}: ${header_value}" \
+                --header "Content-Type: application/json" \
+                --data "$payload" \
+                --output "$candidate"
+              then
+                if jq -e '((.errors // []) | length == 0) and (((.data.serviceInstance.latestDeployment.id? // "") | length) > 0)' "$candidate" >/dev/null
+                then
+                  mv "$candidate" "$output"
+                  return 0
+                fi
+              fi
+            done
+            rm -f "$candidate"
+            echo "Railway provider observation failed." >&2
+            return 1
+          }
+
+          service_query='query serviceInstance($serviceId: String!, $environmentId: String!) { serviceInstance(serviceId: $serviceId, environmentId: $environmentId) { latestDeployment { id status meta } } }'
+          for pair in \
+            "api:${PROD_ACCEPTANCE_RAILWAY_API_SERVICE_ID}" \
+            "worker:${PROD_ACCEPTANCE_RAILWAY_WORKER_SERVICE_ID}" \
+            "scheduler:${PROD_ACCEPTANCE_RAILWAY_SCHEDULER_SERVICE_ID}"
+          do
+            name="${pair%%:*}"
+            service_id="${pair#*:}"
+            payload="$(jq -cn \
+              --arg q "$service_query" \
+              --arg environment "$PROD_ACCEPTANCE_RAILWAY_ENVIRONMENT_ID" \
+              --arg service "$service_id" \
+              '{query:$q,variables:{serviceId:$service,environmentId:$environment}}')"
+            railway_graphql "$payload" "evidence/product-qualification/runtime/provider/railway-${name}.json"
+          done
+
+          curl --fail --silent --show-error \
+            --url "https://api.vercel.com/v13/deployments/${FRONTEND_DEPLOYMENT}?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}" \
+            --header "Authorization: Bearer ${PROD_ACCEPTANCE_VERCEL_TOKEN}" \
+            --output evidence/product-qualification/runtime/provider/vercel-frontend.json
+
+      - name: Verify independently observed deployment identities
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python validation/product/verify_prod_deployment_identity.py \
+            --expected-backend-sha "$BACKEND_SHA" \
+            --expected-api-deployment "$BACKEND_DEPLOYMENT" \
+            --expected-frontend-sha "$FRONTEND_SHA" \
+            --expected-frontend-deployment "$FRONTEND_DEPLOYMENT" \
+            --expected-frontend-project "$PROD_ACCEPTANCE_VERCEL_PROJECT_ID"
+
+      - name: Verify synthetic tenant and accepted P0b continuation preflight
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/verify_prod_synthetic_journey.py \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
+          echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
+          python apps/api/scripts/verify_p0c_prod_journey.py \
+            --phase preflight \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --project-id "$P0C_QUAL_PROJECT_ID" \
+            --document-id "$P0C_QUAL_DOCUMENT_ID" \
+            --source-revision-id "$P0C_QUAL_SOURCE_REVISION_ID"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install production-qualification browser
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Execute P0c revision-B production journey
+        env:
+          PLAYWRIGHT_SKIP_WEBSERVER: "1"
+          PLAYWRIGHT_BASE_URL: "https://c2pro.io"
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec playwright test \
+            src/tests/e2e/prod-acceptance/p0c-production-qualification.spec.ts \
+            --project=p0c-prod-qualification \
+            --reporter=line \
+            --workers=1
+
+      - name: Read-only durable P0c post-run verification
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/verify_p0c_prod_journey.py \
+            --phase post \
+            --tenant-id "$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
+            --project-id "$P0C_QUAL_PROJECT_ID" \
+            --document-id "$P0C_QUAL_DOCUMENT_ID" \
+            --source-revision-id "$P0C_QUAL_SOURCE_REVISION_ID" \
+            --write-evidence
+
+      - name: Build non-authoritative P0c evidence bundle
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python validation/product/build_p0c_prod_qualification_bundle.py \
+            --control-commit-sha "$CONTROL_COMMIT_SHA" \
+            --backend-commit-sha "$BACKEND_SHA" \
+            --backend-deployment-id "$BACKEND_DEPLOYMENT" \
+            --frontend-commit-sha "$FRONTEND_SHA" \
+            --frontend-deployment-id "$FRONTEND_DEPLOYMENT" \
+            --github-run-id "$GITHUB_RUN_ID" \
+            --github-run-attempt "$GITHUB_RUN_ATTEMPT"
+
+      - name: Validate qualification evidence contract
+        run: python validation/product/validate_qualification_evidence.py
+
+      - name: Emit bounded run summary
+        if: always()
+        env:
+          BACKEND_SHA: ${{ inputs.backend_commit_sha }}
+          BACKEND_DEPLOYMENT: ${{ inputs.backend_deployment_id }}
+          FRONTEND_SHA: ${{ inputs.frontend_commit_sha }}
+          FRONTEND_DEPLOYMENT: ${{ inputs.frontend_deployment_id }}
+        shell: bash
+        run: |
+          {
+            echo "## C2Pro P0c Production Qualification"
+            echo
+            echo "- control commit: `$GITHUB_SHA`"
+            echo "- backend: `$BACKEND_DEPLOYMENT` @ `$BACKEND_SHA`"
+            echo "- frontend: `$FRONTEND_DEPLOYMENT` @ `$FRONTEND_SHA`"
+            echo "- accepted project: `$P0C_QUAL_PROJECT_ID`"
+            echo "- logical document: `$P0C_QUAL_DOCUMENT_ID`"
+            echo "- source revision A: `$P0C_QUAL_SOURCE_REVISION_ID`"
+            echo "- creates new project: **false**"
+            echo "- creates second logical document: **false**"
+            echo "- bounded negative control: exact Contract B bytes re-uploaded as revision C"
+            echo "- lifecycle authority: **false**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bounded P0c qualification artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          retention-days: 3
+          name: c2pro-p0c-production-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          path: |
+            apps/web/playwright/.p0c-prod/run.json
+            apps/web/playwright/.p0c-prod/timeline.json
+            apps/web/playwright/.p0c-prod/change-detail.json
+            apps/web/playwright/.p0c-prod/no-change-detail.json
+            apps/web/playwright/.p0c-prod/fresh-session-timeline.json
+            apps/web/playwright/.p0c-prod/fresh-session-change-detail.json
+            apps/web/playwright/.p0c-prod/pj01/**
+            evidence/product-qualification/runtime/p0c-verifier.json
+            evidence/product-qualification/runtime/deployment-identity.json
+            evidence/product-qualification/p0c-prod-gh-*.yaml
