@@ -387,6 +387,20 @@ class DashboardSummary(BaseModel):
         default=None,
         description="projected_score - projection_baseline_score (null when either is null).",
     )
+    projection_baseline_sub_scores: dict[str, float | None] | None = Field(
+        default=None,
+        description=(
+            "Canonical six-dimension subscores for the trusted artifact-set evaluation "
+            "used as the projection baseline. Null when no baseline is available."
+        ),
+    )
+    projected_sub_scores: dict[str, float | None] | None = Field(
+        default=None,
+        description=(
+            "PROVISIONAL six-dimension subscores for the pending scenario. Same "
+            "evaluator/score_version as projected_score; Unknown dimensions remain null."
+        ),
+    )
     pending_review_count: int = Field(
         default=0, description="Exact candidate versions currently awaiting human review."
     )

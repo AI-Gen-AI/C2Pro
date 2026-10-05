@@ -6,6 +6,69 @@
 **Basis:** Multi-model arbitration — DeepSeek / Codex / Claude / Gemini v3.0 ADR blueprints + Architecture Challenger verdict.
 **Related:** ADR-016 (change impact), ADR-018 (health/coherence project surface), ADR-020 (HITL), ADR-025 (canonical WBS Project Controls backbone). Shares the **"Action & Review" bounded context** and org/role model with ADR-020.
 
+## 2026-10-04 Amendment — Canonical finding identity and durable Alert reconciliation (GOVERNING)
+
+**Status:** Accepted product/architecture decision, 2026-10-04.
+**Implementation specification:** `docs/product/b1-canonical-alert-reconciliation-spec-v1-1.md`
+**B1 v1.1 merged baseline:** `8efa2af4eec1d29652d853c9c916b0626b895b01` (#828 + #829 + #834 + C3b-1/#838 merged on top of C3a).
+**Related:** ADR-009 governing HITL/scoring amendment, ADR-020, ADR-026, ADR-027, #829 (merged evidence addressability), #834 (merged reviewer integrity/durability), #838 (merged C3b-1 materialization), #831 (remaining C3b).
+
+**Implementation state at this amendment.** PR #828 has landed stable same-path Coherence Alert reconciliation: versioned legacy fingerprint recomputation, trusted-current provenance checks, duplicate collapse, preservation of ACKNOWLEDGED/DISMISSED human state, RESOLVED re-open behavior, OPEN-only auto-resolution, tenant/type scoping, and transaction-scoped project advisory locking. PR #829 has landed detector-provenance exposure in the Alerts API/Review Center and verified-only Evidence Viewer deep-links. PR #834 has landed complete review-state persistence, reviewer-attached evidence, fresh-session durability checks and fail-closed bulk-review integrity. This amendment must not cause those capabilities to be reimplemented. It governs the remaining atomicity, cross-revision evidence-basis semantics, legacy ambiguity, disposition-to-score integration and the C3b boundary.
+
+### One canonical reconciliation boundary
+
+Coherence owns typed finding detection and canonical scoring. The Alerts bounded context owns durable finding identity, human disposition and reconciliation. There is exactly one canonical Alert reconciliation boundary; temporal/C3b materialization must call the same boundary rather than introduce parallel semantics.
+
+The reconciler does not compute Coherence, grant trust, or commit its own transaction. The caller supplies trusted authority and owns commit/rollback.
+
+### Finding family vs observation identity
+
+A durable issue has two distinct identities:
+
+- **finding family identity** — the semantic issue family, stable across unchanged reevaluation and, when strong semantic anchors prove continuity, across trusted revisions;
+- **observation identity** — the exact trusted evidence basis for the current detected observation.
+
+A revision UUID is evidence/provenance, not automatically family identity. Family identity is versioned and is derived from producer/type, rule code, an explicit rule-identity version, canonical category, trigger and stable semantic anchors. Title, message, severity wording and other presentation text are forbidden family-identity inputs.
+
+A new authoritative revision is a new review basis by default. B1 does not infer that a human disposition remains valid merely because the family remains stable. Any future cross-revision equivalence shortcut requires an explicit, testable equivalence rule.
+
+### Human state is evidence-basis-bound and non-destructive
+
+Machine-owned detection fields may refresh. Human evidence, reviewer, rationale, disposition and history may not be silently erased by reevaluation.
+
+A human disposition records the observation basis that was reviewed.
+
+- same family + same observation preserves the disposition;
+- same family + new authoritative observation preserves history but revalidates basis-sensitive disposition;
+- a resolved family that genuinely reappears reuses the durable family row/id when continuity is provable and records a reopen transition;
+- an incompatible semantic identity/anchor change creates explicit successor/supersession lineage and does not inherit prior human disposition silently.
+
+### Atomicity, scoring order and concurrency
+
+Canonical Coherence persistence and canonical Alert reconciliation must not produce a durable split-brain state.
+
+Typed detector findings are reconciled against durable human dispositions before the canonical score is finalized. The reconciler does not score; it returns the disposition effect needed by the caller to derive the scoring-eligible finding set under ADR-009.
+
+Therefore:
+
+- acknowledged / accepted variance / explained conflict remain scoring-eligible and preserve raw Coherence impact;
+- a validated false positive may be excluded before canonical score finalization;
+- resolve without changed trusted evidence does not remove documentary score impact.
+
+The owning canonical path persists the resulting Alert state and Coherence result/projection in one transaction. If reconciliation or final score persistence fails, neither becomes newly durable.
+
+Reconciliation remains serialized per tenant/project, deduplicated within one run and idempotent under retry. Lock timeout/failure is fail-closed and retriable, never a fallback to destructive replacement.
+
+### Legacy identity ambiguity fails closed
+
+Versioned fingerprint recomputation is compatibility support, not authority to choose among ambiguous legacy rows. A legacy row may be adopted automatically only when one-to-one semantic ownership is provable. If multiple historical rows could own the same family, destructive reconciliation stops with an explicit legacy-identity conflict until remediation; the implementation must not silently pick the newest/first row or merge reviewer histories.
+
+### Scoring is not user approval
+
+This amendment does not alter ADR-009 scoring semantics. Acknowledge / accepted variance / explained conflict does not improve raw Coherence. Only ADR-009 epistemic changes — false positive, corrected data/extraction, changed trusted evidence, or supersession — may remove/replace the relevant finding and drive recalculation.
+
+B1 also consumes the already-shipped #714 **trusted vs projected Coherence** authority model. The trusted score remains the solid canonical score from trusted evidence. Any hypothetical score resulting from pending score-affecting candidates is provisional/projected, uses the same scorer and `score_version`, is rendered as non-approved, and cannot replace the trusted score or official report value. A pending Alert review that merely acknowledges/confirms an evidence-backed discrepancy does not create a better projection; the discrepancy already belongs in documentary Coherence. Null/unknown remains null and is never converted to 0 or default 100.
+
 ## 2026-09-13 Amendment — Alert category taxonomy and Project Controls attachment (GOVERNING)
 
 **Status:** Accepted product decision, 2026-09-13.
@@ -119,3 +182,7 @@ ADR-016, ADR-018, ADR-025.
 
 ## Implementation note
 **Month 6**, gated behind the Month-3 pilot signal. Launches scoped to the Contract-Manager persona alongside ADR-020.
+
+[executed on device: vmi3226522 (f25c3740-ed77-4837-8d92-d0f9660f9596)]
+
+[executed on device: vmi3226522 (f25c3740-ed77-4837-8d92-d0f9660f9596)]

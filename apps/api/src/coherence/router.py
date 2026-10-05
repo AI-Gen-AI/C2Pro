@@ -20,7 +20,7 @@ from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRe
 from src.analysis.adapters.persistence.models import Alert as AlertORM
 from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.application.dtos import AlertCreate
-from src.analysis.domain.enums import AlertSeverity, AlertType, AnalysisStatus
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.feature_flags import (
     coherence_canonical_canary_enabled_for_tenant,
@@ -53,9 +53,11 @@ from .canonical.live_rescore import (
 )
 from .domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
 from .graph.graph import evaluate_coherence_async
+from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
 from .schedule_clause_builder import build_schedule_clauses
+from .scoring import ScoringService
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
 logger = structlog.get_logger()
@@ -757,17 +759,12 @@ async def _mirror_coherence_alerts_to_alerts_table(
     tenant_id: UUID,
     alerts: Sequence[Any],
     clauses: Sequence[Clause] = (),
-) -> None:
+) -> tuple[list[AlertCreate], list[Any], AlertGeneratorService]:
     """Reconcile generated Coherence findings without destroying human state.
 
-    The same documentary finding keeps the same alert row across evaluations.
-    Missing current findings are auto-resolved by the canonical alert service;
-    reviewed false positives remain dismissed; genuine resolved findings reopen
-    only if the same finding is detected again.
-
-    A project-scoped PostgreSQL transaction advisory lock serializes concurrent
-    evaluations. The service deliberately does not commit here: the caller owns
-    the transaction and releases the lock with its existing commit.
+    Returns the exact payloads and durable reconciliation records so the caller
+    can apply basis-valid human dispositions to the full FindingSignal set
+    before the canonical score is finalized. The caller still owns commit.
     """
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtext(:mirror_key))"),
@@ -788,14 +785,137 @@ async def _mirror_coherence_alerts_to_alerts_table(
         )
         for alert in alerts
     ]
-    await AlertGeneratorService(
-        SqlAlchemyAlertRepository(db)
-    ).process_violations(
+    service = AlertGeneratorService(SqlAlchemyAlertRepository(db))
+    processed = await service.process_violations(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
         auto_resolve=True,
         commit=False,
+    )
+    return payloads, list(processed), service
+
+
+def _basis_valid_false_positive(alert: Any) -> bool:
+    """Only an explicit false-positive on the current observation can affect score."""
+    status_value = getattr(getattr(alert, "status", None), "value", getattr(alert, "status", None))
+    if str(status_value).lower() != AlertStatus.DISMISSED.value:
+        return False
+    metadata = dict(getattr(alert, "alert_metadata", None) or {})
+    if metadata.get("disposition") != "false_positive":
+        return False
+    basis = metadata.get("disposition_basis_key")
+    current = metadata.get("current_observation_key")
+    return bool(
+        isinstance(basis, str)
+        and basis
+        and isinstance(current, str)
+        and current
+        and basis == current
+    )
+
+
+def _coverage_for_rescore(
+    result: EnrichedCoherenceResult,
+) -> tuple[dict[str, bool], set[str]]:
+    coverage = dict.fromkeys(COHERENCE_CATEGORIES, False)
+    budget_throttled: set[str] = set()
+    for item in result.category_breakdown:
+        category = canonical_category_name(str(item.category))
+        if category not in coverage:
+            continue
+        state = str(getattr(item, "state", "") or "")
+        if state == "budget_throttled":
+            budget_throttled.add(category)
+        coverage[category] = state not in {"unassessed", "budget_throttled"}
+    return coverage, budget_throttled
+
+
+def _apply_reconciled_dispositions_to_score(
+    result: EnrichedCoherenceResult,
+    *,
+    clauses: Sequence[Clause],
+    config: EvaluationConfig,
+    reconciliation: tuple[list[AlertCreate], list[Any], AlertGeneratorService],
+) -> EnrichedCoherenceResult:
+    """Exclude only basis-valid false positives, then rerun the same v1 scorer."""
+    signals = list(result.finding_signals)
+    if not signals:
+        return result
+
+    payloads, processed, service = reconciliation
+    if len(payloads) < len(signals) or len(result.alerts) < len(signals):
+        raise RuntimeError("B1_RECONCILIATION_SIGNAL_ALIGNMENT_FAILED")
+
+    records_by_family: dict[str, Any] = {}
+    for record in processed:
+        metadata = dict(getattr(record, "alert_metadata", None) or {})
+        family = metadata.get("fingerprint")
+        if isinstance(family, str) and family:
+            records_by_family[family] = record
+
+    eligible_signals = []
+    eligible_alerts = []
+    excluded_families: list[str] = []
+    for signal, rendered_alert, payload in zip(
+        signals,
+        result.alerts[: len(signals)],
+        payloads[: len(signals)],
+        strict=True,
+    ):
+        family = service.family_key_for(payload)
+        record = records_by_family.get(family)
+        if record is not None and _basis_valid_false_positive(record):
+            excluded_families.append(family)
+            continue
+        eligible_signals.append(signal)
+        eligible_alerts.append(rendered_alert)
+
+    if not excluded_families:
+        return result
+
+    coverage_map, budget_throttled = _coverage_for_rescore(result)
+    diagnostics = ScoringService().calculate_detailed(
+        signals=eligible_signals,
+        num_clauses=max(1, len(clauses)),
+        poor_extraction_quality=config.poor_extraction_quality,
+        coverage_map=coverage_map,
+    )
+    category_breakdown = _build_category_breakdown(
+        eligible_signals,
+        coverage_map,
+        diagnostics.category_scores or {},
+        budget_throttled_categories=budget_throttled,
+    )
+
+    logger.info(
+        "coherence_false_positive_rescore",
+        excluded_count=len(excluded_families),
+        eligible_findings=len(eligible_signals),
+        previous_score=result.overall_score,
+        rescored=diagnostics.score,
+    )
+    return result.model_copy(
+        update={
+            "overall_score": diagnostics.score,
+            "alerts": eligible_alerts,
+            "category_breakdown": category_breakdown,
+            "finding_signals": eligible_signals,
+            "deterministic_findings_count": sum(
+                1 for signal in eligible_signals if signal.source == "deterministic"
+            ),
+            "llm_findings_count": sum(
+                1 for signal in eligible_signals if signal.source == "llm"
+            ),
+            "scope_factor": diagnostics.scope_factor,
+            "penalty_density": diagnostics.penalty_density,
+            "avg_impact": diagnostics.avg_impact,
+            "avg_confidence": diagnostics.avg_confidence,
+            "score_reason": diagnostics.reason,
+            "score_missing_dimensions": diagnostics.missing_dimensions,
+            "category_scores": diagnostics.category_scores,
+            "audit_coverage": diagnostics.audit_coverage,
+        }
     )
 
 
@@ -946,24 +1066,38 @@ async def evaluate_project_coherence(
         config=config,
     )
 
-    logger.info(
-        "coherence_evaluate_complete",
-        alerts_count=len(enriched_result.alerts),
-        overall_score=enriched_result.overall_score,
-    )
+    # B1-09: reconcile durable human disposition before finalizing score.
+    # Only a current-basis false-positive may leave the scoring set; ACK/accepted
+    # variance/explained conflict remain documentary inconsistencies.
+    if payload.project_id and enriched_result.overall_score is not None:
+        reconciliation = await _mirror_coherence_alerts_to_alerts_table(
+            db=db,
+            project_id=payload.project_id,
+            tenant_id=current_user.tenant_id,
+            alerts=enriched_result.alerts,
+            clauses=clauses,
+        )
+        enriched_result = _apply_reconciled_dispositions_to_score(
+            enriched_result,
+            clauses=clauses,
+            config=config,
+            reconciliation=reconciliation,
+        )
 
     # Referenced-but-missing hint: if the technical dimension was withheld for lack
     # of evidence but the documents reference a technical specifications pliego, tell
     # the user what to upload — honest and actionable, never a fabricated score.
     _annotate_missing_technical_hint(enriched_result, clauses)
 
-    # ADR-017 canary: for enrolled tenants, re-score the SAME findings through the canonical
-    # scorer (ADR-009 §G.1) — this flips the SCORER only; detection/alerts are unchanged.
-    # Always logs the v1↔canonical delta; substitutes the headline only when the tenant is
-    # enrolled. Default off (no tenant enrolled) ⇒ persistence + response below are
-    # byte-identical to the v1 path.
+    # ADR-017 canary: re-score the SAME, already disposition-filtered findings.
     enriched_result = await _maybe_apply_canonical_canary(
         enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
+    )
+
+    logger.info(
+        "coherence_evaluate_complete",
+        alerts_count=len(enriched_result.alerts),
+        overall_score=enriched_result.overall_score,
     )
 
     # Persist result so the dashboard always reflects the latest evaluation
@@ -1020,26 +1154,9 @@ async def evaluate_project_coherence(
                 score_missing_dimensions=enriched_result.score_missing_dimensions,
             )
         )
+        # B1: Alert reconciliation already happened above in this same
+        # transaction, before score finalization. Persist both with one COMMIT.
         await db.commit()
-        # Best-effort: mirror alerts into the alerts table so the alerts UI (which
-        # lists the alerts table, not coherence_results.alerts) surfaces them. Runs
-        # after the coherence result is committed so a mirroring failure can never
-        # fail the already-persisted evaluation.
-        try:
-            await _mirror_coherence_alerts_to_alerts_table(
-                db=db,
-                project_id=payload.project_id,
-                tenant_id=current_user.tenant_id,
-                alerts=enriched_result.alerts,
-                clauses=clauses,
-            )
-            await db.commit()
-        except Exception:
-            logger.warning(
-                "coherence_alert_mirror_failed",
-                project_id=str(payload.project_id),
-                exc_info=True,
-            )
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
     # Guard mirrors _maybe_add_v2_dashboard: only fires when both flags are True.
@@ -1519,6 +1636,8 @@ async def _attach_trusted_projection(
             "projection_baseline_score": projection.baseline_score,
             "projected_score": projection.projected_score,
             "projected_delta": projection.projected_delta,
+            "projection_baseline_sub_scores": projection.projection_baseline_sub_scores,
+            "projected_sub_scores": projection.projected_sub_scores,
             "pending_review_count": projection.pending_review_count,
             "projection_score_version": version,
             "projection_status": projection.status.value,
