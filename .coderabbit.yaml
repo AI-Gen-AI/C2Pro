@@ -90,6 +90,14 @@ reviews:
     base_branches:
       - "main"
 
+finishing_touches:
+  docstrings:
+    enabled: false
+  unit_tests:
+    enabled: false
+  simplify:
+    enabled: false
+
 chat:
   auto_reply: false
 
