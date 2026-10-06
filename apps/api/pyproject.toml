@@ -114,7 +114,11 @@ omit = [
     "src/core/ai/ab_experiment.py",
     "src/core/ai/example_*.py",
     "src/core/ai/langsmith_hub.py",
-    "src/core/ai/prompts/*",
+    "src/core/ai/prompts/i18n.py",
+    "src/core/ai/prompts/registry.py",
+    "src/core/ai/prompts/validator.py",
+    "src/core/ai/prompts/v1/*",
+    "src/core/ai/prompts/v1_1/*",
     "src/core/ai/test_*.py",
 ]
 
