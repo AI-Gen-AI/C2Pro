@@ -440,7 +440,15 @@ class AnthropicWrapper:
         self.total_cost_usd += cost_usd
 
         if cache_allowed and cache_key:
-            # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content
+            # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content.
+            # Only positive per-request TTLs are valid. Non-positive overrides
+            # fall back to the bounded task policy rather than becoming
+            # provider errors or accidental no-expiration entries.
+            cache_ttl = (
+                request.cache_ttl
+                if request.cache_ttl is not None and request.cache_ttl > 0
+                else self._get_cache_ttl_for_task(request.task_type)  # type: ignore[arg-type]
+            )
             await self._save_to_cache(
                 cache_key=cache_key,
                 content=llm_response.content,  # Caching the raw, anonymized response from the LLM
@@ -448,11 +456,7 @@ class AnthropicWrapper:
                 input_tokens=llm_response.input_tokens,
                 output_tokens=llm_response.output_tokens,
                 cost_usd=cost_usd,
-                ttl=(
-                    request.cache_ttl
-                    if request.cache_ttl is not None
-                    else self._get_cache_ttl_for_task(request.task_type)  # type: ignore[arg-type]
-                ),
+                ttl=cache_ttl,
             )
             logger.info(
                 "anthropic_wrapper_cached_anonymized_response", request_id=request.request_id
