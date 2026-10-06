@@ -39,3 +39,26 @@ def test_deleted_fallback_duplicate_is_not_hidden_from_coverage_config() -> None
     pyproject = (repo_root / "apps" / "api" / "pyproject.toml").read_text(encoding="utf-8")
 
     assert "src/core/ai/fallback_client.py" not in pyproject
+
+
+def test_privacy_anonymizer_authority_is_not_duplicated_under_core_ai() -> None:
+    """Privacy anonymizer ownership stays with the canonical privacy module."""
+
+    repo_root = _repo_root()
+    legacy = repo_root / "apps" / "api" / "src" / "core" / "ai" / "anonymizer.py"
+    canonical = repo_root / "apps" / "api" / "src" / "core" / "privacy" / "anonymizer.py"
+
+    assert not legacy.exists()
+    assert canonical.exists()
+    canonical_source = canonical.read_text(encoding="utf-8")
+    assert "class PiiAnonymizerService" in canonical_source
+    assert "def get_anonymizer()" in canonical_source
+
+
+def test_deleted_anonymizer_shim_is_not_hidden_from_coverage_config() -> None:
+    """Coverage config must not retain stale omissions for removed compatibility shims."""
+
+    repo_root = _repo_root()
+    pyproject = (repo_root / "apps" / "api" / "pyproject.toml").read_text(encoding="utf-8")
+
+    assert "src/core/ai/anonymizer.py" not in pyproject
