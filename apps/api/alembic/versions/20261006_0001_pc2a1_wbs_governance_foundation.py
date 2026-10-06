@@ -74,6 +74,25 @@ GOVERNANCE_TABLES = (
 _TENANT = "tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid"
 _DIGEST = "'^sha256:[0-9a-f]{64}$'"
 _CORE_TERMS = "'area', 'system', 'subsystem', 'discipline', 'deliverable', 'component', 'capability', 'phase', 'package', 'other'"
+_DICTIONARY_LIST_KEYS = (
+    "scope_included", "scope_excluded", "deliverables", "acceptance_criteria", "assumptions", "interface_notes",
+)
+# wbs-dictionary/v1 in full: known keys only (no relational links), scope_statement a string or
+# null, each list field absent/null or an array of strings (strict jsonpath: no lax unwrapping).
+_DICTIONARY_CHECK = (
+    "dictionary IS NULL OR ("
+    "jsonb_typeof(dictionary) = 'object' AND coalesce(dictionary ->> 'schema_version', '') = 'wbs-dictionary/v1' "
+    "AND dictionary - ARRAY['schema_version', 'scope_statement', "
+    + ", ".join(f"'{key}'" for key in _DICTIONARY_LIST_KEYS)
+    + "] = '{}'::jsonb "
+    "AND coalesce(jsonb_typeof(dictionary -> 'scope_statement'), 'null') IN ('string', 'null')"
+    + "".join(
+        f" AND coalesce(jsonb_typeof(dictionary -> '{key}'), 'null') IN ('array', 'null')"
+        f" AND NOT coalesce(jsonb_path_exists(dictionary, 'strict $.{key}[*] ? (@.type() != \"string\")', '{{}}', true), false)"
+        for key in _DICTIONARY_LIST_KEYS
+    )
+    + ")"
+)
 
 
 def _content_checks(prefix: str) -> str:
@@ -83,8 +102,7 @@ def _content_checks(prefix: str) -> str:
     CONSTRAINT ck_{prefix}_decomposition_kind CHECK (decomposition_kind IS NULL OR (
         decomposition_kind ~ '^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$'
         AND (split_part(decomposition_kind, ':', 1) <> 'core' OR split_part(decomposition_kind, ':', 2) IN ({_CORE_TERMS})))),
-    CONSTRAINT ck_{prefix}_dictionary CHECK (dictionary IS NULL OR (
-        jsonb_typeof(dictionary) = 'object' AND coalesce(dictionary ->> 'schema_version', '') = 'wbs-dictionary/v1'))"""
+    CONSTRAINT ck_{prefix}_dictionary CHECK ({_DICTIONARY_CHECK})"""
 
 
 LIVE_NODE_COLUMNS_SQL = (
@@ -97,8 +115,7 @@ LIVE_NODE_COLUMNS_SQL = (
     "ADD CONSTRAINT ck_wbs_nodes_decomposition_kind CHECK (decomposition_kind IS NULL OR ("
     "decomposition_kind ~ '^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$' "
     f"AND (split_part(decomposition_kind, ':', 1) <> 'core' OR split_part(decomposition_kind, ':', 2) IN ({_CORE_TERMS})))), "
-    "ADD CONSTRAINT ck_wbs_nodes_dictionary CHECK (dictionary IS NULL OR ("
-    "jsonb_typeof(dictionary) = 'object' AND coalesce(dictionary ->> 'schema_version', '') = 'wbs-dictionary/v1'))"
+    f"ADD CONSTRAINT ck_wbs_nodes_dictionary CHECK ({_DICTIONARY_CHECK})"
 )
 
 CHANGE_SETS_SQL = f"""

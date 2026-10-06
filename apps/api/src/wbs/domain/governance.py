@@ -165,6 +165,17 @@ def can_author(actor_kind: ActorKind | str, role: str | None) -> bool:
     return ActorKind(actor_kind) is ActorKind.HUMAN and (role or "") in _AUTHOR_ROLES
 
 
+def can_withdraw_or_reopen(
+    actor_kind: ActorKind | str, role: str | None, actor_id: UUID, *, proposers: Iterable[UUID | None]
+) -> bool:
+    """Withdraw/reopen: the proposer (who drafted or submitted it) or a human ``admin``.
+
+    Another tenant ``user`` can neither clear someone else's signed submission nor close it."""
+    if not can_author(actor_kind, role):
+        return False
+    return role == "admin" or actor_id in {proposer for proposer in proposers if proposer is not None}
+
+
 def can_decide(actor_kind: ActorKind | str, role: str | None) -> bool:
     """Approve/reject: a human ``admin`` only -- never an ``api`` user, AI or service."""
     return ActorKind(actor_kind) is ActorKind.HUMAN and (role or "") in _DECIDER_ROLES
@@ -331,6 +342,7 @@ __all__ = [
     "WBSAuthority",
     "can_author",
     "can_decide",
+    "can_withdraw_or_reopen",
     "require_distinct_approver",
     "require_transition",
     "resolve_authority",

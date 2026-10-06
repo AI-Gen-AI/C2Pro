@@ -21,9 +21,24 @@ DECOMPOSITION_KIND_CHECK = (
     + CORE_TERMS_SQL
     + ")))"
 )
+DICTIONARY_LIST_KEYS_SQL = (
+    "scope_included", "scope_excluded", "deliverables", "acceptance_criteria", "assumptions", "interface_notes",
+)
+# wbs-dictionary/v1 in full: known keys only (no relational links), scope_statement a string or
+# null, each list field absent/null or an array of strings (strict jsonpath: no lax unwrapping).
 DICTIONARY_CHECK = (
     "dictionary IS NULL OR ("
-    "jsonb_typeof(dictionary) = 'object' AND coalesce(dictionary ->> 'schema_version', '') = 'wbs-dictionary/v1')"
+    "jsonb_typeof(dictionary) = 'object' AND coalesce(dictionary ->> 'schema_version', '') = 'wbs-dictionary/v1' "
+    "AND dictionary - ARRAY['schema_version', 'scope_statement', "
+    + ", ".join(f"'{key}'" for key in DICTIONARY_LIST_KEYS_SQL)
+    + "] = '{}'::jsonb "
+    "AND coalesce(jsonb_typeof(dictionary -> 'scope_statement'), 'null') IN ('string', 'null')"
+    + "".join(
+        f" AND coalesce(jsonb_typeof(dictionary -> '{key}'), 'null') IN ('array', 'null')"
+        f" AND NOT coalesce(jsonb_path_exists(dictionary, 'strict $.{key}[*] ? (@.type() != \"string\")', '{{}}', true), false)"
+        for key in DICTIONARY_LIST_KEYS_SQL
+    )
+    + ")"
 )
 DIGEST_PATTERN_SQL = "'^sha256:[0-9a-f]{64}$'"
 

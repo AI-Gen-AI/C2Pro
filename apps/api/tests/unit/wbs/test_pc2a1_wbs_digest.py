@@ -20,6 +20,7 @@ from src.wbs.domain.digest import (
     LineageEdge,
     canonical_json,
     change_set_digest,
+    normalize_dictionary,
     tree_digest,
 )
 
@@ -143,3 +144,28 @@ def test_dictionary_with_unknown_keys_or_floats_is_rejected() -> None:
 def test_profile_refs_must_be_string_maps() -> None:
     with pytest.raises((TypeError, ValueError)):
         _v3(profile_refs=({"profile_id": "x", "profile_version": 1.0},))
+
+
+@pytest.mark.parametrize("value", [False, 0, "", {}, "deliverable"])
+def test_dictionary_list_fields_reject_falsey_and_other_non_lists(value: object) -> None:
+    with pytest.raises(TypeError, match="must be a list of strings"):
+        normalize_dictionary({"deliverables": value})
+
+
+def test_dictionary_list_fields_default_only_when_absent_or_null() -> None:
+    assert normalize_dictionary({"deliverables": None})["deliverables"] == []
+    assert normalize_dictionary({})["deliverables"] == []
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [
+        {"profile_id": "solar-pv-epc", "profile_version": "1.0.0"},
+        {"profile_id": "solar-pv-epc", "profile_version": "1.0.0", "profile_digest": ""},
+        {"profile_id": "solar-pv-epc", "profile_version": "1.0.0", "profile_digest": "sha256:" + "A" * 64},
+        {"profile_id": "solar-pv-epc", "profile_version": "1.0.0", "profile_digest": "0" * 64},
+    ],
+)
+def test_profile_refs_pin_a_sha256_profile_digest(ref: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match="profile_digest"):
+        _v3(profile_refs=(ref,))

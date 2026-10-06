@@ -26,6 +26,7 @@ from src.wbs.domain.governance import (
     LineageKind,
     can_author,
     can_decide,
+    can_withdraw_or_reopen,
     require_transition,
     resolve_authority,
     self_approval,
@@ -136,6 +137,19 @@ def test_only_a_human_admin_may_approve_or_reject(actor_kind: ActorKind, role: s
 )
 def test_only_human_users_or_admins_may_submit(actor_kind: ActorKind, role: str, allowed: bool) -> None:
     assert can_author(actor_kind, role) is allowed
+
+
+def test_only_the_proposer_or_an_admin_may_withdraw_or_reopen() -> None:
+    drafter, submitter, colleague = uuid4(), uuid4(), uuid4()
+    proposers = (drafter, submitter)
+    assert can_withdraw_or_reopen(ActorKind.HUMAN, "user", drafter, proposers=proposers) is True
+    assert can_withdraw_or_reopen(ActorKind.HUMAN, "user", submitter, proposers=proposers) is True
+    assert can_withdraw_or_reopen(ActorKind.HUMAN, "admin", colleague, proposers=proposers) is True
+    assert can_withdraw_or_reopen(ActorKind.HUMAN, "user", colleague, proposers=proposers) is False
+    assert can_withdraw_or_reopen(ActorKind.HUMAN, "user", colleague, proposers=(drafter, None)) is False
+    # Being the proposer never lifts the human-author requirement.
+    assert can_withdraw_or_reopen(ActorKind.AI, "user", drafter, proposers=proposers) is False
+    assert can_withdraw_or_reopen(ActorKind.HUMAN, "viewer", drafter, proposers=proposers) is False
 
 
 def test_separation_of_duties_defaults_to_distinct_approver() -> None:

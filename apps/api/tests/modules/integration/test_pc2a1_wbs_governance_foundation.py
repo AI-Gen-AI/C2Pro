@@ -626,6 +626,31 @@ async def test_n15_reopening_invalidates_the_submitted_digest(db: AsyncSession) 
     assert second != first  # the same content re-signed at a new revision is a new digest
 
 
+async def test_n15b_only_the_proposer_or_an_admin_can_reopen_or_withdraw(db: AsyncSession) -> None:
+    s = await _scope(db)
+    change_set_id, _ = await _draft_with_tree(db, s)
+    digest = await _submit(db, s, change_set_id)
+    colleague = await _user(db, s.tenant, UserRole.USER)
+    ai = Actor(user_id=s.author.user_id, kind=ActorKind.AI, role="user")
+    repo = WBSGovernanceRepository(db)
+    for actor in (colleague, ai):
+        with pytest.raises(GovernanceRuleError, match="only the proposer or a human admin can reopen"):
+            await repo.reopen(change_set_id, s.tenant, actor=actor)
+        await db.rollback()
+        with pytest.raises(GovernanceRuleError, match="only the proposer or a human admin can withdraw"):
+            await repo.withdraw(change_set_id, s.tenant, actor=actor)
+        await db.rollback()
+    change_set = await db.get(WBSChangeSetORM, change_set_id, populate_existing=True)
+    assert change_set is not None
+    assert (change_set.status, change_set.submitted_digest) == ("SUBMITTED", digest)  # signature intact
+    # An admin may reopen someone else's submission; the proposer may withdraw their own.
+    await repo.reopen(change_set_id, s.tenant, actor=s.admin)
+    await repo.withdraw(change_set_id, s.tenant, actor=s.author)
+    await db.commit()
+    change_set = await db.get(WBSChangeSetORM, change_set_id, populate_existing=True)
+    assert change_set is not None and change_set.status == "WITHDRAWN"
+
+
 async def test_n16_stale_base_is_represented(db: AsyncSession) -> None:
     s = await _scope(db)
     _, ids = await _baseline_one(db, s)
@@ -799,3 +824,44 @@ async def test_governed_vocabularies_are_enforced_by_the_database(db: AsyncSessi
                                {"n": legacy[0]}, "ck_wbs_nodes_control_level")
     live = await db.get(WBSNodeORM, legacy[0])
     assert live is not None and (live.control_level, live.decomposition_kind, live.dictionary) == ("none", None, None)
+
+
+# Direct writes cannot smuggle relational links or mistyped fields into wbs-dictionary/v1.
+_BAD_DICTIONARIES = (
+    '{"schema_version": "wbs-dictionary/v1", "risk_ids": ["r-1"]}',
+    '{"schema_version": "wbs-dictionary/v1", "deliverables": "Platform"}',
+    '{"schema_version": "wbs-dictionary/v1", "deliverables": false}',
+    '{"schema_version": "wbs-dictionary/v1", "assumptions": ["ok", 1]}',
+    '{"schema_version": "wbs-dictionary/v1", "interface_notes": ["ok", ["nested"]]}',
+    '{"schema_version": "wbs-dictionary/v1", "scope_statement": 42}',
+)
+
+
+async def test_the_database_enforces_the_complete_dictionary_schema(db: AsyncSession) -> None:
+    s = await _scope(db)
+    change_set_id, ids = await _draft_with_tree(db, s)
+    legacy = await _legacy_nodes(db, s.tenant, s.project, 1)
+    for value in _BAD_DICTIONARIES:
+        await _expect_db_rejection(
+            db, "UPDATE wbs_change_set_nodes SET dictionary = CAST(:v AS jsonb) WHERE change_set_id = :c AND node_id = :n",
+            {"v": value, "c": change_set_id, "n": ids["1"]}, "ck_wbs_change_set_nodes_dictionary")
+        await _expect_db_rejection(db, "UPDATE wbs_nodes SET dictionary = CAST(:v AS jsonb) WHERE id = :n",
+                                   {"v": value, "n": legacy[0]}, "ck_wbs_nodes_dictionary")
+    full = ('{"schema_version": "wbs-dictionary/v1", "scope_statement": null, "deliverables": ["Platform"], '
+            '"assumptions": [], "interface_notes": null}')
+    await db.execute(text("UPDATE wbs_nodes SET dictionary = CAST(:v AS jsonb) WHERE id = :n"),
+                     {"v": full, "n": legacy[0]})
+    await db.commit()
+
+
+async def test_a_profile_pin_without_its_digest_is_refused_at_drafting(db: AsyncSession) -> None:
+    s = await _scope(db)
+    repo = WBSGovernanceRepository(db)
+    with pytest.raises(ValueError, match="profile_digest"):
+        await repo.create_change_set(project_id=s.project, tenant_id=s.tenant, actor=s.author, title="unpinned",
+                                     profile_refs=({"profile_id": "solar-pv-epc", "profile_version": "1.0.0"},))
+    await db.rollback()
+    pin = {"profile_id": "solar-pv-epc", "profile_version": "1.0.0", "profile_digest": "sha256:" + "0" * 64}
+    change_set = await repo.create_change_set(project_id=s.project, tenant_id=s.tenant, actor=s.author,
+                                              title="pinned", profile_refs=(pin,))
+    assert change_set.profile_refs == [pin]

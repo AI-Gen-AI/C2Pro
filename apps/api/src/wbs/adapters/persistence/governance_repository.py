@@ -35,6 +35,7 @@ from src.wbs.domain.digest import (
     LineageEdge,
     change_set_digest,
     normalize_dictionary,
+    normalize_profile_ref,
     tree_digest,
 )
 from src.wbs.domain.governance import (
@@ -50,6 +51,7 @@ from src.wbs.domain.governance import (
     LineageKind,
     WBSAuthority,
     can_author,
+    can_withdraw_or_reopen,
     require_transition,
     resolve_authority,
     validate_control_level,
@@ -120,6 +122,12 @@ def baseline_digest_node(node: WBSBaselineNodeORM) -> DigestNode:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _require_proposer_or_admin(change_set: WBSChangeSetORM, actor: Actor, action: str) -> None:
+    proposers = (change_set.created_by, change_set.submitted_by)
+    if not can_withdraw_or_reopen(actor.kind, actor.role, actor.user_id, proposers=proposers):
+        raise GovernanceRuleError(f"only the proposer or a human admin can {action} a WBS change set")
 
 
 def _governed_dictionary(dictionary: Mapping[str, Any] | None) -> dict[str, Any] | None:
@@ -301,7 +309,7 @@ class WBSGovernanceRepository:
             revision=1,
             title=title,
             description=description,
-            profile_refs=[dict(ref) for ref in profile_refs],
+            profile_refs=[normalize_profile_ref(ref) for ref in profile_refs],
             evidence_refs=list(evidence_refs),
             created_by=actor.user_id,
             created_by_kind=actor.kind.value,
@@ -544,9 +552,8 @@ class WBSGovernanceRepository:
 
     async def reopen(self, change_set_id: UUID, tenant_id: UUID, *, actor: Actor) -> int:
         """SUBMITTED -> DRAFT: a new revision; the submitted digest is invalidated."""
-        if not can_author(actor.kind, actor.role):
-            raise GovernanceRuleError("only a human user or admin can reopen a WBS change set")
         change_set = await self._locked(change_set_id, tenant_id)
+        _require_proposer_or_admin(change_set, actor, "reopen")
         require_transition(ChangeSetStatus(change_set.status), ChangeSetStatus.DRAFT)
         change_set.status = ChangeSetStatus.DRAFT.value
         change_set.revision = change_set.revision + 1
@@ -558,9 +565,8 @@ class WBSGovernanceRepository:
         return change_set.revision
 
     async def withdraw(self, change_set_id: UUID, tenant_id: UUID, *, actor: Actor) -> None:
-        if not can_author(actor.kind, actor.role):
-            raise GovernanceRuleError("only a human user or admin can withdraw a WBS change set")
         change_set = await self._locked(change_set_id, tenant_id)
+        _require_proposer_or_admin(change_set, actor, "withdraw")
         require_transition(ChangeSetStatus(change_set.status), ChangeSetStatus.WITHDRAWN)
         change_set.status = ChangeSetStatus.WITHDRAWN.value
         change_set.closed_at = _now()

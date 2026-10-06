@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ DICTIONARY_LIST_KEYS = (
     "interface_notes",
 )
 _DICTIONARY_KEYS = frozenset({"schema_version", "scope_statement", *DICTIONARY_LIST_KEYS})
+_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
@@ -110,7 +112,9 @@ def normalize_dictionary(dictionary: Mapping[str, Any] | None) -> dict[str, Any]
         raise TypeError("scope_statement must be a string or null")
     out: dict[str, Any] = {"schema_version": DICTIONARY_SCHEMA_VERSION, "scope_statement": statement}
     for key in DICTIONARY_LIST_KEYS:
-        items = raw.get(key) or []
+        items = raw.get(key)
+        if items is None:  # only an absent or null list field defaults to []
+            items = []
         if not isinstance(items, list | tuple) or not all(isinstance(item, str) for item in items):
             raise TypeError(f"dictionary.{key} must be a list of strings")
         out[key] = list(items)
@@ -157,11 +161,14 @@ def tree_digest(project_id: UUID, nodes: Iterable[DigestNode]) -> str:
     return _sha256(tree_envelope(project_id, nodes))
 
 
-def _profile_ref(ref: Mapping[str, Any]) -> dict[str, str]:
+def normalize_profile_ref(ref: Mapping[str, Any]) -> dict[str, str]:
+    """A pinned methodology profile: ``profile_id``, ``profile_version`` and its ``sha256:`` digest."""
     if not isinstance(ref, Mapping) or not all(isinstance(value, str) for value in ref.values()):
         raise TypeError("profile refs must map strings to strings")
-    if "profile_id" not in ref or "profile_version" not in ref:
-        raise ValueError("profile refs require profile_id and profile_version")
+    if "profile_id" not in ref or "profile_version" not in ref or "profile_digest" not in ref:
+        raise ValueError("profile refs require profile_id, profile_version and profile_digest")
+    if not _DIGEST_RE.fullmatch(ref["profile_digest"]):
+        raise ValueError("profile_digest must be sha256:<64 lowercase hex>")
     return {str(key): value for key, value in ref.items()}
 
 
@@ -191,7 +198,7 @@ def change_set_digest(
         key=lambda item: (item["kind"], item["source_node_id"], item["target_node_id"]),
     )
     evidence = sorted({unicodedata.normalize("NFC", ref) for ref in _strings(evidence_refs)})
-    profiles = sorted((_profile_ref(ref) for ref in profile_refs), key=lambda p: (p["profile_id"], p["profile_version"]))
+    profiles = sorted((normalize_profile_ref(ref) for ref in profile_refs), key=lambda p: (p["profile_id"], p["profile_version"]))
     return _sha256(
         {
             "digest_version": CHANGE_SET_DIGEST_VERSION,
@@ -225,6 +232,7 @@ __all__ = [
     "canonical_json",
     "change_set_digest",
     "normalize_dictionary",
+    "normalize_profile_ref",
     "tree_digest",
     "tree_envelope",
 ]
