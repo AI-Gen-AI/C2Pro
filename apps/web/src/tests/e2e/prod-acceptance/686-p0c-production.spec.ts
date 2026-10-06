@@ -98,13 +98,17 @@ test.describe("Issue #686 P0c production qualification", () => {
               const row = page.getByTestId(`document-row-${documentId}`);
               const retry = row.getByRole("button", { name: /Retry processing/i });
               await expect(retry).toBeVisible({ timeout: 30_000 });
-              const retryPath =
+              const retryPathSuffix =
                 "/projects/" + projectId + "/documents/" + documentId + "/reprocess";
               const retryResponsePromise = page.waitForResponse(
-                (response) =>
-                  response.request().method() === "POST" &&
-                  (new URL(response.url()).pathname === retryPath ||
-                    new URL(response.url()).pathname === retryPath + "/"),
+                (response) => {
+                  const pathname = new URL(response.url()).pathname;
+                  return (
+                    response.request().method() === "POST" &&
+                    (pathname.endsWith(retryPathSuffix) ||
+                      pathname.endsWith(retryPathSuffix + "/"))
+                  );
+                },
                 { timeout: 30_000 },
               );
               await retry.click();
