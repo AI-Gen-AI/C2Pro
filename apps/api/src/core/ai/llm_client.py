@@ -16,8 +16,11 @@ Version: 1.2.0
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -222,8 +225,13 @@ class LLMClient:
         self.backoff_multiplier = backoff_multiplier
         self.timeout_seconds = timeout_seconds
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=self.api_key, timeout=timeout_seconds)
+        # C2Pro owns retry policy, observability, and circuit-breaker accounting.
+        # Disable the Anthropic SDK retry loop to avoid nested retry authorities.
+        self.client = Anthropic(
+            api_key=self.api_key,
+            timeout=timeout_seconds,
+            max_retries=0,
+        )
         self.model_router = ModelRouter()
 
         # Observability clients
@@ -487,17 +495,13 @@ class LLMClient:
                     error=str(e),
                 )
 
-                # Record failure in circuit breaker
-                # The circuit breaker's excluded_exceptions config handles which
-                # exceptions trip the circuit (AuthenticationError, BadRequestError, etc.)
-                if self.circuit_breaker:
-                    self.circuit_breaker.record_failure_sync(e)
-
+                # Retry attempts belong to one logical LLM request. Circuit-breaker
+                # accounting happens once: on eventual success or final failure.
                 # Check if we should retry
                 if attempt >= self.max_retries:
                     break  # No more retries
 
-                if not self._should_retry(error_type):
+                if not self._should_retry(error_type, e):
                     logger.error(
                         "llm_request_non_retryable_error",
                         request_id=request.request_id or str(uuid4()),
@@ -507,7 +511,7 @@ class LLMClient:
                     break  # Non-retryable error
 
                 # Calculate retry delay (exponential backoff)
-                delay = self._calculate_retry_delay(attempt, error_type)
+                delay = self._calculate_retry_delay(attempt, error_type, e)
 
                 retry_attempts.append(
                     RetryAttempt(
@@ -530,7 +534,13 @@ class LLMClient:
                 # Wait before retry (non-blocking)
                 await asyncio.sleep(delay)
 
-        # All retries exhausted
+        # All retries exhausted or a non-retryable error stopped the loop.
+        # Count this as one logical circuit-breaker failure, irrespective of
+        # how many internal retry attempts were made.
+        if self.circuit_breaker and last_error is not None:
+            breaker_error = self._circuit_breaker_accounting_error(last_error)
+            self.circuit_breaker.record_failure_sync(breaker_error)
+
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
         logger.error(
@@ -563,57 +573,176 @@ class LLMClient:
                 return block.text
         return ""
 
-    def _classify_error(self, error: Exception) -> LLMErrorType:
-        """Clasifica el tipo de error."""
-        if isinstance(error, anthropic.RateLimitError):
-            return LLMErrorType.RATE_LIMIT
-        elif isinstance(error, anthropic.AuthenticationError):
-            return LLMErrorType.AUTHENTICATION
-        elif isinstance(error, anthropic.BadRequestError):
-            return LLMErrorType.INVALID_REQUEST
-        elif isinstance(error, anthropic.NotFoundError):
-            return LLMErrorType.NOT_FOUND
-        elif isinstance(error, anthropic.InternalServerError):
-            return LLMErrorType.SERVER_ERROR
-        elif isinstance(error, anthropic.APITimeoutError):
-            return LLMErrorType.TIMEOUT
-        elif isinstance(error, anthropic.APIConnectionError):
-            return LLMErrorType.CONNECTION
-        else:
-            return LLMErrorType.UNKNOWN
+    @staticmethod
+    def _error_chain(error: Exception) -> list[Exception]:
+        """Return an exception and its explicit causes without looping forever."""
+        chain: list[Exception] = []
+        current: BaseException | None = error
+        seen: set[int] = set()
 
-    def _should_retry(self, error_type: LLMErrorType) -> bool:
-        """Determina si se debe reintentar según el tipo de error."""
+        while isinstance(current, Exception) and id(current) not in seen:
+            seen.add(id(current))
+            chain.append(current)
+            current = current.__cause__
+
+        return chain
+
+    def _circuit_breaker_accounting_error(self, error: Exception) -> Exception:
+        """Preserve breaker exclusions when middleware wraps provider client errors."""
+        if self.circuit_breaker is None:
+            return error
+
+        excluded = self.circuit_breaker.config.excluded_exceptions
+        if not excluded:
+            return error
+
+        for current in self._error_chain(error):
+            if isinstance(current, excluded):
+                return current
+
+        return error
+
+    def _classify_error(self, error: Exception) -> LLMErrorType:
+        """Classify a provider error, including explicitly wrapped causes."""
+        for current in self._error_chain(error):
+            if isinstance(current, anthropic.RateLimitError):
+                return LLMErrorType.RATE_LIMIT
+            if isinstance(current, anthropic.AuthenticationError):
+                return LLMErrorType.AUTHENTICATION
+            if isinstance(current, anthropic.BadRequestError):
+                return LLMErrorType.INVALID_REQUEST
+            if isinstance(current, anthropic.NotFoundError):
+                return LLMErrorType.NOT_FOUND
+            if isinstance(current, anthropic.InternalServerError):
+                return LLMErrorType.SERVER_ERROR
+            if isinstance(current, anthropic.APITimeoutError):
+                return LLMErrorType.TIMEOUT
+            if isinstance(current, anthropic.APIConnectionError):
+                return LLMErrorType.CONNECTION
+
+        return LLMErrorType.UNKNOWN
+
+    @staticmethod
+    def _response_should_retry(response: Any) -> bool:
+        """Apply the pinned Anthropic SDK retry policy to one HTTP response."""
+        should_retry_header = response.headers.get("x-should-retry")
+        if should_retry_header == "true":
+            return True
+        if should_retry_header == "false":
+            return False
+
+        return response.status_code in {408, 409, 429} or response.status_code >= 500
+
+    def _provider_retry_context(
+        self,
+        error: Exception,
+    ) -> tuple[bool | None, anthropic.APIStatusError | None]:
+        """Return provider retry decision and the response-bearing status error."""
+        for current in self._error_chain(error):
+            if isinstance(current, anthropic.RetryableError):
+                return True, None
+            if isinstance(current, anthropic.APIStatusError):
+                return self._response_should_retry(current.response), current
+            if isinstance(current, anthropic.APIConnectionError):
+                return True, None
+
+        return None, None
+
+    def _should_retry(
+        self,
+        error_type: LLMErrorType,
+        error: Exception | None = None,
+    ) -> bool:
+        """Determine retryability with provider directives taking precedence."""
+        if error is not None:
+            provider_directive, _ = self._provider_retry_context(error)
+            if provider_directive is not None:
+                return provider_directive
+
         retryable_errors = {
-            LLMErrorType.RATE_LIMIT,  # Always retry rate limits
-            LLMErrorType.SERVER_ERROR,  # Retry server errors
-            LLMErrorType.TIMEOUT,  # Retry timeouts
-            LLMErrorType.CONNECTION,  # Retry connection errors
+            LLMErrorType.RATE_LIMIT,
+            LLMErrorType.SERVER_ERROR,
+            LLMErrorType.TIMEOUT,
+            LLMErrorType.CONNECTION,
         }
         return error_type in retryable_errors
 
-    def _calculate_retry_delay(self, attempt: int, error_type: LLMErrorType) -> float:
-        """
-        Calcula el delay para el próximo retry usando exponential backoff.
+    @staticmethod
+    def _reasonable_retry_delay(seconds: float | None) -> float | None:
+        """Keep only finite provider delays in the SDK-supported 0-60 second window."""
+        if seconds is None or not math.isfinite(seconds) or not 0 < seconds <= 60:
+            return None
+        return seconds
 
-        Rate limits tienen delays más largos.
+    @classmethod
+    def _parse_retry_after_ms(cls, raw_value: str | None) -> float | None:
+        """Parse Anthropic's retry-after-ms extension."""
+        if raw_value is None:
+            return None
+        try:
+            parsed_seconds = float(raw_value) / 1000.0
+        except (TypeError, ValueError):
+            return None
+        return cls._reasonable_retry_delay(parsed_seconds)
+
+    @classmethod
+    def _parse_retry_after(cls, raw_value: str | None) -> float | None:
+        """Parse Retry-After as seconds or an HTTP date."""
+        if raw_value is None:
+            return None
+
+        try:
+            parsed_seconds = float(raw_value)
+        except (TypeError, ValueError):
+            try:
+                retry_at = parsedate_to_datetime(str(raw_value))
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                parsed_seconds = (retry_at - datetime.now(UTC)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                return None
+
+        return cls._reasonable_retry_delay(parsed_seconds)
+
+    def _provider_retry_after_seconds(self, error: Exception) -> float | None:
+        """Parse reasonable provider retry delay hints from the retrying status error."""
+        should_retry, status_error = self._provider_retry_context(error)
+        if should_retry is not True or status_error is None:
+            return None
+
+        headers = status_error.response.headers
+        retry_after_ms = self._parse_retry_after_ms(headers.get("retry-after-ms"))
+        if retry_after_ms is not None:
+            return retry_after_ms
+
+        return self._parse_retry_after(headers.get("retry-after"))
+
+    def _calculate_retry_delay(
+        self,
+        attempt: int,
+        error_type: LLMErrorType,
+        error: Exception | None = None,
+    ) -> float:
         """
+        Calculate the next retry delay.
+
+        Provider Retry-After hints take precedence; otherwise use C2Pro's
+        bounded exponential backoff with jitter.
+        """
+        if error is not None:
+            provider_delay = self._provider_retry_after_seconds(error)
+            if provider_delay is not None:
+                return min(provider_delay, self.max_retry_delay)
+
         base_delay = self.initial_retry_delay * (self.backoff_multiplier**attempt)
 
-        # Rate limits necesitan delays más largos
         if error_type == LLMErrorType.RATE_LIMIT:
             base_delay *= 2
 
-        # Cap at max delay
-        delay = min(base_delay, self.max_retry_delay)
-
-        # Add jitter (±20%)
         import random
 
         jitter = random.uniform(0.8, 1.2)
-        delay *= jitter
-
-        return delay
+        return min(base_delay * jitter, self.max_retry_delay)
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """

@@ -238,9 +238,10 @@ class AnthropicWrapper:
         self.model_router = get_model_router()
         self.cache_service = get_cache_service() if enable_cache else None
         resolved_timeout = timeout_seconds or settings.ai_timeout_seconds
+        effective_max_retries = max_retries if enable_retry else 0
         self.llm_client = LLMClient(
             api_key=self.api_key,
-            max_retries=max_retries,
+            max_retries=effective_max_retries,
             timeout_seconds=resolved_timeout,
         )
         self.anonymizer_service: PiiAnonymizerService = PiiAnonymizerService()

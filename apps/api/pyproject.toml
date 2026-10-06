@@ -117,7 +117,6 @@ omit = [
     "src/core/ai/anthropic_wrapper.py",
     "src/core/ai/example_*.py",
     "src/core/ai/langsmith_hub.py",
-    "src/core/ai/llm_timeout_handler.py",
     "src/core/ai/prompts/*",
     "src/core/ai/test_*.py",
 ]
