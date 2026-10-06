@@ -629,6 +629,66 @@ async def _seed_plain(db: AsyncSession, test_user: Any, worker: Any) -> Any:
     return document
 
 
+async def test_bounded_reprocess_generation_rejects_stale_revision_before_mutation(
+    db: AsyncSession, test_user: Any, worker: Any
+) -> None:
+    """#686: expected revision is a transactional CAS on processing authority."""
+    document, revision = await _upload(db, worker, test_user)
+    tenant = test_user.tenant_id
+
+    await db.execute(
+        text(
+            "UPDATE documents SET upload_status = 'error', parsing_error = 'fixture' "
+            "WHERE id = :d AND tenant_id = :t"
+        ),
+        {"d": document.id, "t": tenant},
+    )
+    await db.commit()
+
+    before = await _op(db, document.id)
+    assert before.revision_id == revision.revision_id
+    before_generation = int(before.generation)
+    stale_revision_id = uuid4()
+
+    with pytest.raises(pa.ProcessingAuthorityLost):
+        async with worker.tenant_session(tenant) as session:
+            await pa.begin_generation(
+                session,
+                tenant_id=tenant,
+                document_id=document.id,
+                revision_id=None,
+                expected_revision_id=stale_revision_id,
+            )
+
+    after_refusal = await _op(db, document.id)
+    assert int(after_refusal.generation) == before_generation
+    assert after_refusal.revision_id == revision.revision_id
+    status_after_refusal = (
+        await db.execute(
+            text(
+                "SELECT upload_status::text FROM documents "
+                "WHERE id = :d AND tenant_id = :t"
+            ),
+            {"d": document.id, "t": tenant},
+        )
+    ).scalar_one()
+    assert status_after_refusal == "error"
+
+    async with worker.tenant_session(tenant) as session:
+        generation = await pa.begin_generation(
+            session,
+            tenant_id=tenant,
+            document_id=document.id,
+            revision_id=None,
+            expected_revision_id=revision.revision_id,
+        )
+
+    after_success = await _op(db, document.id)
+    assert generation == before_generation + 1
+    assert int(after_success.generation) == generation
+    assert after_success.revision_id == revision.revision_id
+
+
 async def test_fence_is_monotonic_and_takeover_requires_expired_db_lease(
     db: AsyncSession, test_user: Any, worker: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
