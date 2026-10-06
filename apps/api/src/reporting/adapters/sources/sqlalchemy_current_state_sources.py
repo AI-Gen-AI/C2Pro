@@ -150,8 +150,10 @@ class SqlAlchemyCurrentStateSources:
         # authority (PC-2a.3): legacy rows are never reported as approved scope.
         scoped = require_tenant_id(tenant_id)
         async with self._session_scope(tenant_id) as session:
-            authority = await WBSGovernanceRepository(session).authority(project_id, scoped)
-            items = await SQLAlchemyWBSRepository(session).get_by_project(project_id, scoped)
+            repository = SQLAlchemyWBSRepository(session)
+            authority, items = await WBSGovernanceRepository(session).read_with_authority(
+                project_id, scoped, lambda: repository.get_by_project(project_id, scoped)
+            )
             return WbsInput(items=items, authority=authority)
 
     async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput:

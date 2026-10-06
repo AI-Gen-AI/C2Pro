@@ -210,9 +210,9 @@ async def test_wbs_is_read_from_the_persisted_procurement_items_served_to_the_wb
         def __init__(self, session: object) -> None:
             pass
 
-        async def authority(self, project_id: UUID, tenant_id: UUID) -> object:
+        async def read_with_authority(self, project_id: UUID, tenant_id: UUID, read: Any) -> tuple[object, object]:
             seen.append((project_id, tenant_id))
-            return authority
+            return authority, await read()
 
     class _Repository:
         def __init__(self, session: object) -> None:

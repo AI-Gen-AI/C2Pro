@@ -81,3 +81,39 @@ def test_legacy_wbs_write_routes_are_deprecated() -> None:
         if getattr(route, "deprecated", False)
     }
     assert {("POST", "/procurement/wbs"), ("DELETE", "/procurement/wbs/{wbs_id}")} <= deprecated
+
+
+@pytest.mark.asyncio
+async def test_a_read_racing_repeated_applies_falls_back_to_the_project_lock() -> None:
+    """Codex P2 follow-up: after ``attempts`` racing applies, the read waits them out under
+    FOR KEY SHARE on the project row instead of returning a mixed tree."""
+    from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
+
+    class _Session:
+        def __init__(self) -> None:
+            self.statements: list[str] = []
+
+        async def execute(self, statement: Any, _params: Any = None) -> None:
+            self.statements.append(str(statement))
+
+    session = _Session()
+    repository = WBSGovernanceRepository(session)  # type: ignore[arg-type]
+    baselines = iter(range(100))
+
+    async def moving_authority(_project: UUID, _tenant: UUID) -> Any:
+        baseline = BaselineRef(baseline_id=uuid4(), baseline_no=next(baselines) + 1,
+                               tree_digest="sha256:" + "0" * 64, applied_at=datetime(2026, 10, 6, tzinfo=UTC))
+        return resolve_authority(current_baseline=baseline, live_node_count=1, open_change_sets=0)
+
+    repository.authority = moving_authority  # type: ignore[method-assign]
+    reads: list[int] = []
+
+    async def read() -> int:
+        reads.append(len(session.statements))
+        return len(reads)
+
+    authority, result = await repository.read_with_authority(uuid4(), uuid4(), read, attempts=2)
+    assert len(reads) == 3 and result == 3  # two unstable attempts, then one read under the lock
+    assert session.statements == ["SELECT id FROM projects WHERE id = :p AND tenant_id = :t FOR KEY SHARE"]
+    assert reads[-1] == 1  # the final read ran after the lock was taken
+    assert authority.approved

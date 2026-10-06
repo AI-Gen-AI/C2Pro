@@ -752,3 +752,64 @@ async def test_25_link_gating_is_tenant_safe_under_concurrency(db: AsyncSession)
     finally:
         await engine.dispose()
     assert await _raci_rows(db, b.project) == 1 and await _raci_rows(db, a.project) == 0
+
+
+# =========================================================================== review follow-ups (#915)
+@pytest.mark.parametrize("approved", [False, True])
+async def test_21b_actual_only_wbs_dates_also_withhold_time(db: AsyncSession, approved: bool) -> None:
+    """Codex P1: actual_start / actual_end are WBS dates too -- never schedule evidence."""
+    s = await _scope(db)
+    if approved:
+        await _approved(db, s)
+    else:
+        await _legacy(db, s)
+    await db.execute(text("UPDATE wbs_nodes SET planned_start = NULL, planned_end = NULL, "
+                          "actual_end = '2026-02-01' WHERE project_id = :p"), {"p": s.project})
+    await db.commit()
+    marker = await _time_marker(await build_schedule_clauses(db, s.project, s.tenant))
+    reason = "WBS_DATES_NOT_SCHEDULE_AUTHORITY" if approved else "WBS_NOT_APPROVED"
+    assert marker["assessment_unavailable"] == {"TIME": reason}
+
+
+@pytest.mark.parametrize("between", ["authority_and_tree", "tree_and_flat"])
+async def test_26_wbs_read_never_mixes_baselines_across_a_concurrent_apply(
+        db: AsyncSession, monkeypatch: pytest.MonkeyPatch, between: str) -> None:
+    """Codex P2: an apply committing in the middle of GET /wbs never yields Baseline #N
+    authority with #N+1 rows, nor a tree and a flat list from different baselines."""
+    import src.projects.application.project_wbs_view as view
+
+    s = await _scope(db)
+    ids = await _approved(db, s)
+    change_set_id, candidate = await _draft_on_baseline(db, s, ids, submit=True)
+    submitted = await _cs(db, change_set_id)
+    engine, sessions = _engine_sessions()
+    fired: list[bool] = []
+
+    async def apply_once() -> None:
+        if fired:
+            return
+        fired.append(True)
+        async with sessions() as approver:
+            await WBSGovernedChangeService(approver).approve(
+                project_id=s.project, change_set_id=change_set_id, tenant_id=s.tenant, actor=s.admin,
+                expected_revision=submitted.revision, expected_digest=str(submitted.submitted_digest))
+            await approver.commit()
+
+    target = view.GetWBSTreeUseCase if between == "authority_and_tree" else view.ListWBSItemsUseCase
+    original = target.execute
+
+    async def racing_execute(self: Any, *args: Any, **kwargs: Any) -> Any:
+        await apply_once()
+        return await original(self, *args, **kwargs)
+
+    monkeypatch.setattr(target, "execute", racing_execute)
+    try:
+        result = await asyncio.wait_for(build_project_wbs_view(db, s.project, s.tenant), timeout=30)
+    finally:
+        await engine.dispose()
+    assert fired, "the apply did not run during the read"
+    tree_ids = _read_ids(result)
+    authority = result["authority"]
+    assert authority["baseline_no"] == 2, authority
+    assert str(candidate) in tree_ids and str(ids["2"]) not in tree_ids
+    assert result["total_items"] == len(tree_ids) == result["coverage"]["approved_scope_items"]

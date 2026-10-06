@@ -97,12 +97,19 @@ def build_wbs_coverage(items: Sequence[object], authority: WBSAuthority | None =
 
 
 async def build_project_wbs_view(session: AsyncSession, project_id: UUID, tenant_id: UUID) -> dict[str, object]:
-    """The project's live WBS tree, flat coverage, alerts and authority (resolved once)."""
+    """The project's live WBS tree, flat coverage, alerts and authority -- from one stable tree:
+    an apply committing mid-read never mixes baselines (``read_with_authority``)."""
     scoped = require_tenant_id(tenant_id)
     wbs_repo = SQLAlchemyWBSRepository(session)
-    authority = await WBSGovernanceRepository(session).authority(project_id, scoped)
-    tree_items = await GetWBSTreeUseCase(wbs_repo).execute(project_id, scoped)
-    flat_items = await ListWBSItemsUseCase(wbs_repo).execute(project_id, scoped)
+
+    async def read() -> tuple[list[WBSItem], list[WBSItem]]:
+        tree = await GetWBSTreeUseCase(wbs_repo).execute(project_id, scoped)
+        flat = await ListWBSItemsUseCase(wbs_repo).execute(project_id, scoped)
+        return tree, flat
+
+    authority, (tree_items, flat_items) = await WBSGovernanceRepository(session).read_with_authority(
+        project_id, scoped, read
+    )
     return {
         "project_id": str(project_id),
         "items": [serialize_wbs_item_tree(item) for item in tree_items],

@@ -5,7 +5,7 @@ not Schedule truth, and an approved WBS baseline confers authority on scope only
 those dates. Until a governed Schedule model exists there is no authoritative structured schedule
 source, so no schedule item, milestone or predecessor is derived from ``wbs_nodes``.
 
-When the project's WBS does carry dates (the input the TIME schedule rules would previously have
+When the project's WBS does carry dates -- planned or actual (the input the TIME schedule rules would previously have
 read), the evaluation assembly says so explicitly with a fail-closed marker, as #860 does for
 budget lines: ``assessment_unavailable = {"TIME": reason}`` keeps TIME unassessed instead of
 letting a partial rule pass read as clean. The reason is ``WBS_NOT_APPROVED`` for NO_WBS /
@@ -33,7 +33,8 @@ _DATED_WBS_ROWS = text("""
     FROM wbs_nodes
     WHERE project_id = CAST(:project_id AS uuid)
       AND tenant_id = CAST(:tenant_id AS uuid)
-      AND (planned_start IS NOT NULL OR planned_end IS NOT NULL)
+      AND (planned_start IS NOT NULL OR planned_end IS NOT NULL
+           OR actual_start IS NOT NULL OR actual_end IS NOT NULL)
 """)
 
 
