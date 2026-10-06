@@ -654,12 +654,18 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
         tenant_id: UUID,
         document_id: UUID,
         revision_id: UUID | None = None,
+        *,
+        expected_revision_id: UUID | None = None,
     ) -> int | None:
         """#711: supersede every earlier processing attempt, in this transaction."""
         from src.core.processing_authority import begin_generation
 
         return await begin_generation(
-            self.session, tenant_id=tenant_id, document_id=document_id, revision_id=revision_id
+            self.session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            revision_id=revision_id,
+            expected_revision_id=expected_revision_id,
         )
 
     async def commit(self) -> None:
