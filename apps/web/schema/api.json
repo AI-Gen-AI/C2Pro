@@ -5907,6 +5907,61 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Create Wbs Change Set",
+        "description": "Open a DRAFT against the current baseline (a CHANGE_BASELINE draft starts as that baseline).",
+        "operationId": "create_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWBSChangeSetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}": {
@@ -6111,6 +6166,441 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WBSBaselineDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/commands": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Execute Wbs Change Set Command",
+        "description": "One typed edit of the DRAFT candidate; 409 CHANGE_SET_REVISION_CONFLICT when the revision moved.",
+        "operationId": "execute_wbs_change_set_command_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__commands_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WBSChangeSetCommandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetCommandResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/submit": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Submit Wbs Change Set",
+        "operationId": "submit_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__submit_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WBSExpectedRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetSubmitResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/reopen": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Reopen Wbs Change Set",
+        "operationId": "reopen_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__reopen_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetRevisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/withdraw": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Withdraw Wbs Change Set",
+        "operationId": "withdraw_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__withdraw_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetRevisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/reject": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Reject Wbs Change Set",
+        "operationId": "reject_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__reject_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WBSRejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetRevisionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/approve": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Approve Wbs Change Set",
+        "description": "Approve = apply in ONE transaction; the snapshot is enqueued only after it commits.",
+        "operationId": "approve_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__approve_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WBSDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSApplyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}/rebase": {
+      "post": {
+        "tags": ["WBS governance"],
+        "summary": "Rebase Wbs Change Set",
+        "description": "A STALE change set stays as audit history; its proposal restarts as a NEW draft on the latest baseline.",
+        "operationId": "rebase_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__rebase_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Set Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSChangeSetSummary"
                 }
               }
             }
@@ -16082,6 +16572,13 @@
             },
             "type": "array",
             "title": "Lineage"
+          },
+          "retirements": {
+            "items": {
+              "$ref": "#/components/schemas/WBSRetirementResponse"
+            },
+            "type": "array",
+            "title": "Retirements"
           }
         },
         "type": "object",
@@ -16269,6 +16766,744 @@
         "type": "object",
         "required": ["kind", "source_node_id", "target_node_id"],
         "title": "WBSLineageEdgeResponse"
+      },
+      "CreateWBSChangeSetRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          },
+          "profile_refs": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Profile Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["title"],
+        "title": "CreateWBSChangeSetRequest"
+      },
+      "WBSAddNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "ADD_NODE",
+            "title": "Type"
+          },
+          "node": {
+            "$ref": "#/components/schemas/WBSNodeSpecRequest"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id",
+            "description": "a candidate node id (null = top level)"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position",
+            "description": "1-based sibling position (default: append)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "node"],
+        "title": "WBSAddNodeCommand"
+      },
+      "WBSAdoptLegacyNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "ADOPT_LEGACY_NODE",
+            "title": "Type"
+          },
+          "legacy_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Legacy Node Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "legacy_node_id"],
+        "title": "WBSAdoptLegacyNodeCommand"
+      },
+      "WBSApplyResponse": {
+        "properties": {
+          "change_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Set Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "APPLIED"
+          },
+          "baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Baseline Id"
+          },
+          "baseline_no": {
+            "type": "integer",
+            "title": "Baseline No"
+          },
+          "tree_digest": {
+            "type": "string",
+            "title": "Tree Digest"
+          },
+          "change_set_digest": {
+            "type": "string",
+            "title": "Change Set Digest"
+          },
+          "self_approved": {
+            "type": "boolean",
+            "title": "Self Approved"
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Applied At"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "retired": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Retired"
+          },
+          "stale_change_set_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Stale Change Set Ids"
+          },
+          "snapshot_enqueued": {
+            "type": "boolean",
+            "title": "Snapshot Enqueued"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_set_id",
+          "baseline_id",
+          "baseline_no",
+          "tree_digest",
+          "change_set_digest",
+          "self_approved",
+          "applied_at",
+          "event_id",
+          "retired",
+          "stale_change_set_ids",
+          "snapshot_enqueued"
+        ],
+        "title": "WBSApplyResponse"
+      },
+      "WBSChangeSetCommandRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "description": "the DRAFT revision the edit is based on"
+          },
+          "command": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WBSAddNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSUpdateNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSRecodeNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSMoveNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSReorderNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSRemoveNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSSplitNodeCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSMergeNodesCommand"
+              },
+              {
+                "$ref": "#/components/schemas/WBSAdoptLegacyNodeCommand"
+              }
+            ],
+            "title": "Command",
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "ADD_NODE": "#/components/schemas/WBSAddNodeCommand",
+                "ADOPT_LEGACY_NODE": "#/components/schemas/WBSAdoptLegacyNodeCommand",
+                "MERGE_NODES": "#/components/schemas/WBSMergeNodesCommand",
+                "MOVE_NODE": "#/components/schemas/WBSMoveNodeCommand",
+                "RECODE_NODE": "#/components/schemas/WBSRecodeNodeCommand",
+                "REMOVE_NODE": "#/components/schemas/WBSRemoveNodeCommand",
+                "REORDER_NODE": "#/components/schemas/WBSReorderNodeCommand",
+                "SPLIT_NODE": "#/components/schemas/WBSSplitNodeCommand",
+                "UPDATE_NODE": "#/components/schemas/WBSUpdateNodeCommand"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["expected_revision", "command"],
+        "title": "WBSChangeSetCommandRequest"
+      },
+      "WBSChangeSetCommandResponse": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "node_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Node Ids",
+            "description": "ids minted or affected by the command"
+          }
+        },
+        "type": "object",
+        "required": ["revision", "node_ids"],
+        "title": "WBSChangeSetCommandResponse"
+      },
+      "WBSChangeSetRevisionResponse": {
+        "properties": {
+          "change_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Set Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": ["change_set_id", "status", "revision"],
+        "title": "WBSChangeSetRevisionResponse"
+      },
+      "WBSChangeSetSubmitResponse": {
+        "properties": {
+          "change_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Set Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "submitted_revision": {
+            "type": "integer",
+            "title": "Submitted Revision"
+          },
+          "submitted_digest": {
+            "type": "string",
+            "title": "Submitted Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_set_id",
+          "status",
+          "submitted_revision",
+          "submitted_digest"
+        ],
+        "title": "WBSChangeSetSubmitResponse"
+      },
+      "WBSDecisionRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "description": "the submitted revision the reviewer looked at"
+          },
+          "expected_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Expected Digest",
+            "description": "the submitted digest reviewed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["expected_revision", "expected_digest"],
+        "title": "WBSDecisionRequest"
+      },
+      "WBSExpectedRevisionRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["expected_revision"],
+        "title": "WBSExpectedRevisionRequest"
+      },
+      "WBSMergeNodesCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "MERGE_NODES",
+            "title": "Type"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "minItems": 2,
+            "title": "Source Ids"
+          },
+          "target": {
+            "$ref": "#/components/schemas/WBSNodeSpecRequest"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id",
+            "description": "omit to place the result where the first source was"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "source_ids", "target"],
+        "title": "WBSMergeNodesCommand"
+      },
+      "WBSMoveNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "MOVE_NODE",
+            "title": "Type"
+          },
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "node_id", "parent_id"],
+        "title": "WBSMoveNodeCommand"
+      },
+      "WBSNodeSpecRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "control_level": {
+            "type": "string",
+            "title": "Control Level",
+            "default": "none"
+          },
+          "decomposition_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decomposition Kind"
+          },
+          "dictionary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dictionary"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name"],
+        "title": "WBSNodeSpecRequest"
+      },
+      "WBSRecodeNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "RECODE_NODE",
+            "title": "Type"
+          },
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "node_id", "code"],
+        "title": "WBSRecodeNodeCommand"
+      },
+      "WBSRejectRequest": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "description": "the submitted revision the reviewer looked at"
+          },
+          "expected_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Expected Digest",
+            "description": "the submitted digest reviewed"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["expected_revision", "expected_digest", "reason"],
+        "title": "WBSRejectRequest"
+      },
+      "WBSRemoveNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "REMOVE_NODE",
+            "title": "Type"
+          },
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "node_id"],
+        "title": "WBSRemoveNodeCommand"
+      },
+      "WBSReorderNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "REORDER_NODE",
+            "title": "Type"
+          },
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Position"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "node_id", "position"],
+        "title": "WBSReorderNodeCommand"
+      },
+      "WBSRetirementResponse": {
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "disposition": {
+            "type": "string",
+            "title": "Disposition",
+            "description": "REMOVED | SPLIT | MERGED | SUPERSEDED | RETIRED_ON_BASELINE"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "baseline | legacy"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Snapshot"
+          }
+        },
+        "type": "object",
+        "required": ["node_id", "disposition", "source", "snapshot"],
+        "title": "WBSRetirementResponse",
+        "description": "An identity that leaves the WBS through this change set, and what it was."
+      },
+      "WBSSplitNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "SPLIT_NODE",
+            "title": "Type"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/WBSNodeSpecRequest"
+            },
+            "type": "array",
+            "minItems": 2,
+            "title": "Targets"
+          },
+          "child_targets": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "type": "object",
+            "title": "Child Targets",
+            "description": "every child of the source -> target index"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "source_id", "targets"],
+        "title": "WBSSplitNodeCommand"
+      },
+      "WBSUpdateNodeCommand": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "UPDATE_NODE",
+            "title": "Type"
+          },
+          "node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "dictionary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dictionary"
+          },
+          "decomposition_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decomposition Kind"
+          },
+          "control_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Level"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["type", "node_id"],
+        "title": "WBSUpdateNodeCommand",
+        "description": "Rename / re-describe / reclassify. Only the fields present are changed; same identity."
       }
     },
     "securitySchemes": {

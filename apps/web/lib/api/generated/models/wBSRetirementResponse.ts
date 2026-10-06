@@ -37,34 +37,16 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSCandidateNodeResponse } from "./wBSCandidateNodeResponse";
-import type { WBSChangeSetDetailResponseProfileRefsItem } from "./wBSChangeSetDetailResponseProfileRefsItem";
-import type { WBSLineageEdgeResponse } from "./wBSLineageEdgeResponse";
-import type { WBSRetirementResponse } from "./wBSRetirementResponse";
+import type { WBSRetirementResponseSnapshot } from "./wBSRetirementResponseSnapshot";
 
-export interface WBSChangeSetDetailResponse {
-  id: string;
-  status: string;
-  revision: number;
-  /** manual | ai | import -- provenance only, never authority */
-  origin: string;
-  /** GENERATE | IMPORT_REVIEW | CHANGE_BASELINE */
-  entry_mode: string;
-  base_baseline_id: string | null;
-  title: string;
-  description: string | null;
-  submitted_digest: string | null;
-  submitted_revision: number | null;
-  submitted_at: string | null;
-  decided_at: string | null;
-  decision_reason: string | null;
-  created_at: string;
-  updated_at: string;
-  profile_refs: WBSChangeSetDetailResponseProfileRefsItem[];
-  evidence_refs: string[];
-  /** digest the change set would be signed with at its current revision */
-  current_digest: string;
-  nodes: WBSCandidateNodeResponse[];
-  lineage: WBSLineageEdgeResponse[];
-  retirements?: WBSRetirementResponse[];
+/**
+ * An identity that leaves the WBS through this change set, and what it was.
+ */
+export interface WBSRetirementResponse {
+  node_id: string;
+  /** REMOVED | SPLIT | MERGED | SUPERSEDED | RETIRED_ON_BASELINE */
+  disposition: string;
+  /** baseline | legacy */
+  source: string;
+  snapshot: WBSRetirementResponseSnapshot;
 }

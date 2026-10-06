@@ -37,34 +37,30 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSCandidateNodeResponse } from "./wBSCandidateNodeResponse";
-import type { WBSChangeSetDetailResponseProfileRefsItem } from "./wBSChangeSetDetailResponseProfileRefsItem";
-import type { WBSLineageEdgeResponse } from "./wBSLineageEdgeResponse";
-import type { WBSRetirementResponse } from "./wBSRetirementResponse";
+import type { WBSAddNodeCommand } from "./wBSAddNodeCommand";
+import type { WBSAdoptLegacyNodeCommand } from "./wBSAdoptLegacyNodeCommand";
+import type { WBSMergeNodesCommand } from "./wBSMergeNodesCommand";
+import type { WBSMoveNodeCommand } from "./wBSMoveNodeCommand";
+import type { WBSRecodeNodeCommand } from "./wBSRecodeNodeCommand";
+import type { WBSRemoveNodeCommand } from "./wBSRemoveNodeCommand";
+import type { WBSReorderNodeCommand } from "./wBSReorderNodeCommand";
+import type { WBSSplitNodeCommand } from "./wBSSplitNodeCommand";
+import type { WBSUpdateNodeCommand } from "./wBSUpdateNodeCommand";
 
-export interface WBSChangeSetDetailResponse {
-  id: string;
-  status: string;
-  revision: number;
-  /** manual | ai | import -- provenance only, never authority */
-  origin: string;
-  /** GENERATE | IMPORT_REVIEW | CHANGE_BASELINE */
-  entry_mode: string;
-  base_baseline_id: string | null;
-  title: string;
-  description: string | null;
-  submitted_digest: string | null;
-  submitted_revision: number | null;
-  submitted_at: string | null;
-  decided_at: string | null;
-  decision_reason: string | null;
-  created_at: string;
-  updated_at: string;
-  profile_refs: WBSChangeSetDetailResponseProfileRefsItem[];
-  evidence_refs: string[];
-  /** digest the change set would be signed with at its current revision */
-  current_digest: string;
-  nodes: WBSCandidateNodeResponse[];
-  lineage: WBSLineageEdgeResponse[];
-  retirements?: WBSRetirementResponse[];
+export interface WBSChangeSetCommandRequest {
+  /**
+   * the DRAFT revision the edit is based on
+   * @minimum 1
+   */
+  expected_revision: number;
+  command:
+    | WBSAddNodeCommand
+    | WBSUpdateNodeCommand
+    | WBSRecodeNodeCommand
+    | WBSMoveNodeCommand
+    | WBSReorderNodeCommand
+    | WBSRemoveNodeCommand
+    | WBSSplitNodeCommand
+    | WBSMergeNodesCommand
+    | WBSAdoptLegacyNodeCommand;
 }

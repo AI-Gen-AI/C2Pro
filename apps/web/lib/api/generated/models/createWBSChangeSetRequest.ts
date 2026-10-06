@@ -37,34 +37,15 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSCandidateNodeResponse } from "./wBSCandidateNodeResponse";
-import type { WBSChangeSetDetailResponseProfileRefsItem } from "./wBSChangeSetDetailResponseProfileRefsItem";
-import type { WBSLineageEdgeResponse } from "./wBSLineageEdgeResponse";
-import type { WBSRetirementResponse } from "./wBSRetirementResponse";
+import type { CreateWBSChangeSetRequestProfileRefsItem } from "./createWBSChangeSetRequestProfileRefsItem";
 
-export interface WBSChangeSetDetailResponse {
-  id: string;
-  status: string;
-  revision: number;
-  /** manual | ai | import -- provenance only, never authority */
-  origin: string;
-  /** GENERATE | IMPORT_REVIEW | CHANGE_BASELINE */
-  entry_mode: string;
-  base_baseline_id: string | null;
+export interface CreateWBSChangeSetRequest {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
   title: string;
-  description: string | null;
-  submitted_digest: string | null;
-  submitted_revision: number | null;
-  submitted_at: string | null;
-  decided_at: string | null;
-  decision_reason: string | null;
-  created_at: string;
-  updated_at: string;
-  profile_refs: WBSChangeSetDetailResponseProfileRefsItem[];
-  evidence_refs: string[];
-  /** digest the change set would be signed with at its current revision */
-  current_digest: string;
-  nodes: WBSCandidateNodeResponse[];
-  lineage: WBSLineageEdgeResponse[];
-  retirements?: WBSRetirementResponse[];
+  description?: string | null;
+  evidence_refs?: string[];
+  profile_refs?: CreateWBSChangeSetRequestProfileRefsItem[];
 }

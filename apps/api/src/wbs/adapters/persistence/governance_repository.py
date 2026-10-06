@@ -2,9 +2,10 @@
 
 Reads for the authority resolver and the governance read API, plus the DRAFT-side
 operations a change set needs (create, edit the candidate tree, lineage, submit, reopen,
-withdraw, stale). HTTP exposure of the drafting operations, approve = apply, and reader
-enforcement are PC-2a.2 (#896) / PC-2a.3 (#897): this module deliberately has NO operation
-that creates a baseline or mutates the live ``wbs_nodes`` tree.
+withdraw, stale). This module deliberately has NO operation that creates a baseline or
+mutates the live ``wbs_nodes`` tree: the governed edit commands and approve = apply live in
+``src.wbs.application.governed_change_service`` (PC-2a.2 #896); reader enforcement is
+PC-2a.3 (#897).
 
 Every query is scoped by tenant AND project in the application: the API connects as the
 table owner (BYPASSRLS), so RLS is defence in depth, not the primary filter. The database
@@ -28,6 +29,7 @@ from src.wbs.adapters.persistence.governance_models import (
     WBSChangeSetLineageORM,
     WBSChangeSetNodeORM,
     WBSChangeSetORM,
+    WBSChangeSetRetirementORM,
 )
 from src.wbs.adapters.persistence.models import WBSNodeORM
 from src.wbs.domain.digest import (
@@ -82,6 +84,7 @@ class ChangeSetDetail:
     change_set: WBSChangeSetORM
     nodes: list[WBSChangeSetNodeORM] = field(default_factory=list)
     lineage: list[WBSChangeSetLineageORM] = field(default_factory=list)
+    retirements: list[WBSChangeSetRetirementORM] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -213,7 +216,21 @@ class WBSGovernanceRepository:
             .order_by(WBSChangeSetLineageORM.kind, WBSChangeSetLineageORM.source_node_id)
             .execution_options(populate_existing=True)
         )
-        return ChangeSetDetail(change_set, list(nodes.scalars().all()), list(lineage.scalars().all()))
+        retirements = await self.session.execute(
+            select(WBSChangeSetRetirementORM)
+            .where(
+                WBSChangeSetRetirementORM.change_set_id == change_set_id,
+                WBSChangeSetRetirementORM.tenant_id == tenant_id,
+            )
+            .order_by(WBSChangeSetRetirementORM.node_id)
+            .execution_options(populate_existing=True)
+        )
+        return ChangeSetDetail(
+            change_set,
+            list(nodes.scalars().all()),
+            list(lineage.scalars().all()),
+            list(retirements.scalars().all()),
+        )
 
     def compute_change_set_digest(self, detail: ChangeSetDetail, revision: int) -> str:
         change_set = detail.change_set
@@ -337,6 +354,10 @@ class WBSGovernanceRepository:
         change_set = await self.session.get(WBSChangeSetORM, change_set_id, populate_existing=True)
         assert change_set is not None
         return change_set
+
+    async def bump_revision(self, change_set_id: UUID, tenant_id: UUID, expected_revision: int) -> WBSChangeSetORM:
+        """Optimistic lock for one governed edit command: DRAFT at ``expected_revision`` -> +1."""
+        return await self._bump_draft_revision(change_set_id, tenant_id, expected_revision)
 
     async def _raise_not_editable(self, change_set_id: UUID, tenant_id: UUID) -> None:
         current = await self.session.scalar(

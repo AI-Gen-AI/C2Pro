@@ -22,6 +22,7 @@ from src.core.database import Base, get_session_with_tenant
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.wbs.adapters.persistence.governance_models import WBSBaselineORM, WBSChangeSetORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
 
 
@@ -62,8 +63,12 @@ async def pg_engine():
             await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
             created_tenant_stub = (await conn.execute(text("SELECT to_regclass('public.tenants')"))).scalar() is None
             if created_tenant_stub:
-                await conn.execute(text("CREATE TABLE tenants (id uuid PRIMARY KEY)"))
-            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
+                await conn.execute(text("CREATE TABLE tenants (id uuid PRIMARY KEY, settings jsonb)"))
+            # PC-2a.2: the live repository consults the approved-baseline authority on every write.
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[WBSNodeORM.__table__, WBSChangeSetORM.__table__, WBSBaselineORM.__table__],
+            )
         database_module._session_factory = async_sessionmaker(
             bind=engine,
             expire_on_commit=False,
@@ -76,6 +81,7 @@ async def pg_engine():
                 async with engine.begin() as conn:
                     # Explicit drops: metadata.drop_all on a table subset also tries to drop
                     # enum types still used by projects.
+                    await conn.execute(text("DROP TABLE IF EXISTS wbs_baselines, wbs_change_sets CASCADE"))
                     await conn.execute(text("DROP TABLE IF EXISTS wbs_nodes CASCADE"))
                     await conn.execute(text("DROP TYPE IF EXISTS wbsnodetype"))
                     await conn.execute(text("DROP TYPE IF EXISTS wbsnodestatus"))

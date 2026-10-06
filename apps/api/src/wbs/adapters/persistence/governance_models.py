@@ -42,6 +42,12 @@ from src.wbs.adapters.persistence.governance_ddl import (
     FUNCTION_STATEMENTS,
     TRIGGER_STATEMENTS,
 )
+from src.wbs.adapters.persistence.governed_apply_ddl import (
+    LIVE_WRITE_GUARD_FUNCTION_SQL,
+    LIVE_WRITE_TRIGGER_SQL,
+    RETIREMENTS_GUARD_FUNCTION_SQL,
+    RETIREMENTS_TRIGGER_SQL,
+)
 
 # sqlalchemy.DDL is untyped; same pattern as src/wbs/adapters/persistence/models.py.
 _DDL: Any = DDL
@@ -344,6 +350,47 @@ class WBSBaselineNodeORM(Base):
     )
 
 
+class WBSChangeSetRetirementORM(Base):
+    """An identity that leaves the WBS through a change set, with its disposition (PC-2a.2).
+
+    Base-baseline identities, or -- for a first baseline only -- legacy live rows the reviewed
+    candidate does not adopt. ``snapshot`` keeps what the retired node was. Editable only
+    while the change set is DRAFT; never updated (database guard, revision 20261006_0002).
+    """
+
+    __tablename__ = "wbs_change_set_retirements"
+
+    change_set_id: Mapped[UUID] = mapped_column(_UUID, nullable=False)
+    node_id: Mapped[UUID] = mapped_column(_UUID, nullable=False)
+    tenant_id: Mapped[UUID] = mapped_column(_UUID, nullable=False)
+    project_id: Mapped[UUID] = mapped_column(_UUID, nullable=False)
+    disposition: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(_TS, nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        PrimaryKeyConstraint("change_set_id", "node_id", name="pk_wbs_change_set_retirements"),
+        ForeignKeyConstraint(
+            ["tenant_id", "project_id", "change_set_id"],
+            ["wbs_change_sets.tenant_id", "wbs_change_sets.project_id", "wbs_change_sets.id"],
+            name="fk_wbs_change_set_retirements_change_set", ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "disposition IN ('REMOVED', 'SPLIT', 'MERGED', 'SUPERSEDED', 'RETIRED_ON_BASELINE')",
+            name="ck_wbs_change_set_retirements_disposition",
+        ),
+        CheckConstraint("source IN ('baseline', 'legacy')", name="ck_wbs_change_set_retirements_source"),
+        CheckConstraint(
+            "disposition <> 'RETIRED_ON_BASELINE' OR source = 'legacy'",
+            name="ck_wbs_change_set_retirements_legacy_disposition",
+        ),
+        CheckConstraint("jsonb_typeof(snapshot) = 'object'", name="ck_wbs_change_set_retirements_snapshot"),
+        Index("ix_wbs_change_set_retirements_tenant_project", "tenant_id", "project_id"),
+        Index("ix_wbs_change_set_retirements_node", "node_id"),
+    )
+
+
 def _install(table: Any, statements: tuple[str, ...]) -> None:
     for statement in statements:
         event.listen(table, "after_create", _DDL(statement).execute_if(dialect="postgresql"))
@@ -358,6 +405,30 @@ for _model in (WBSChangeSetORM, WBSChangeSetNodeORM, WBSChangeSetLineageORM, WBS
         tuple(t for t in TRIGGER_STATEMENTS if f" ON public.{_model.__tablename__} " in t),
     )
 
+# PC-2a.2 (revision 20261006_0002): the retirement guard with its table; the live-write guard on
+# wbs_nodes once BOTH wbs_nodes and the governance tables it reads exist (create_all may build
+# them in any order, and subset test schemas may build wbs_nodes alone).
+_install(WBSChangeSetRetirementORM.__table__, (RETIREMENTS_GUARD_FUNCTION_SQL, RETIREMENTS_TRIGGER_SQL))
+
+
+@event.listens_for(Base.metadata, "after_create")
+def _install_live_write_guard(_target: Any, connection: Any, **_kw: Any) -> None:
+    if connection.dialect.name != "postgresql":
+        return
+    ready = connection.execute(text(
+        "SELECT to_regclass('public.wbs_nodes') IS NOT NULL AND to_regclass('public.wbs_baselines') IS NOT NULL "
+        "AND to_regclass('public.wbs_change_sets') IS NOT NULL"
+    )).scalar()
+    if not ready:
+        return
+    installed = connection.execute(text(
+        "SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_wbs_nodes_governed_write_guard' "
+        "AND tgrelid = 'public.wbs_nodes'::regclass)"
+    )).scalar()
+    if not installed:
+        connection.execute(_DDL(LIVE_WRITE_GUARD_FUNCTION_SQL))
+        connection.execute(_DDL(LIVE_WRITE_TRIGGER_SQL))
+
 
 __all__ = [
     "WBSBaselineNodeORM",
@@ -365,4 +436,5 @@ __all__ = [
     "WBSChangeSetLineageORM",
     "WBSChangeSetNodeORM",
     "WBSChangeSetORM",
+    "WBSChangeSetRetirementORM",
 ]

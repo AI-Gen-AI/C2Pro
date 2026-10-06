@@ -156,7 +156,12 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     # The PC-2a.1 governance router reads the canonical WBS's governance history (change sets,
     # immutable baselines); it is not a second WBS store and it may never write.
     governance = "src.wbs.adapters.http.governance_router"
-    allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance}
+    # PC-2a.2: the governed command router edits change sets (proposals, never live WBS) and its
+    # approve command applies an approved baseline to the ONE canonical store through the
+    # canonical repository (apply_governed_tree) -- it is not a second WBS store either.
+    governed = "src.wbs.adapters.http.governed_change_router"
+    allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance,
+                        governed}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -165,3 +170,17 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     assert wbs_routes, "the canonical WBS must be served"
     assert set(wbs_routes.values()) <= allowed_handlers
     assert all(methods == ("GET",) for (methods, _), module in wbs_routes.items() if module == governance)
+    governed_routes = {path for (methods, path), module in wbs_routes.items() if module == governed}
+    assert all(methods == ("POST",) for (methods, _), module in wbs_routes.items() if module == governed)
+    assert governed_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-governance/change-sets")
+                                   for path in governed_routes)
+
+
+def test_the_governed_apply_is_the_only_new_canonical_wbs_writer() -> None:
+    """Only the canonical repository writes wbs_nodes; the governed service goes through it."""
+    import src.wbs.application.governed_change_service as service
+
+    source = Path(service.__file__).read_text(encoding="utf-8")
+    assert "apply_governed_tree" in source
+    assert "insert(WBSNodeORM" not in source and "delete(WBSNodeORM" not in source
+    assert "update(WBSNodeORM" not in source and "INSERT INTO wbs_nodes" not in source

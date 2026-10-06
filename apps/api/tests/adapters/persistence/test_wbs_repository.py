@@ -25,6 +25,7 @@ from src.core.database import Base, get_session_with_tenant
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.wbs.adapters.persistence.governance_models import WBSBaselineORM, WBSChangeSetORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
 
 
@@ -58,9 +59,13 @@ async def pg_engine():
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
             # Minimal FK-target stubs for WBSNodeORM.tenant_id -> tenants.id and
             # WBSNodeORM.source_document_id -> documents.id.
-            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY)"))
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY, settings jsonb)"))
             await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
-            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
+            # PC-2a.2: the live repository consults the approved-baseline authority on every write.
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[WBSNodeORM.__table__, WBSChangeSetORM.__table__, WBSBaselineORM.__table__],
+            )
         yield engine
     finally:
         core_database._engine = None

@@ -37,34 +37,21 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { WBSCandidateNodeResponse } from "./wBSCandidateNodeResponse";
-import type { WBSChangeSetDetailResponseProfileRefsItem } from "./wBSChangeSetDetailResponseProfileRefsItem";
-import type { WBSLineageEdgeResponse } from "./wBSLineageEdgeResponse";
-import type { WBSRetirementResponse } from "./wBSRetirementResponse";
 
-export interface WBSChangeSetDetailResponse {
-  id: string;
-  status: string;
-  revision: number;
-  /** manual | ai | import -- provenance only, never authority */
-  origin: string;
-  /** GENERATE | IMPORT_REVIEW | CHANGE_BASELINE */
-  entry_mode: string;
-  base_baseline_id: string | null;
-  title: string;
-  description: string | null;
-  submitted_digest: string | null;
-  submitted_revision: number | null;
-  submitted_at: string | null;
-  decided_at: string | null;
-  decision_reason: string | null;
-  created_at: string;
-  updated_at: string;
-  profile_refs: WBSChangeSetDetailResponseProfileRefsItem[];
-  evidence_refs: string[];
-  /** digest the change set would be signed with at its current revision */
-  current_digest: string;
-  nodes: WBSCandidateNodeResponse[];
-  lineage: WBSLineageEdgeResponse[];
-  retirements?: WBSRetirementResponse[];
+export interface WBSRejectRequest {
+  /**
+   * the submitted revision the reviewer looked at
+   * @minimum 1
+   */
+  expected_revision: number;
+  /**
+   * the submitted digest reviewed
+   * @pattern ^sha256:[0-9a-f]{64}$
+   */
+  expected_digest: string;
+  /**
+   * @minLength 1
+   * @maxLength 4000
+   */
+  reason: string;
 }

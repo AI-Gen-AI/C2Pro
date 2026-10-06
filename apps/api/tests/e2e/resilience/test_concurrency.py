@@ -29,6 +29,7 @@ from testcontainers.postgres import PostgresContainer
 async def pg_engine():
     from src.core.database import Base
     from src.projects.adapters.persistence.models import ProjectORM
+    from src.wbs.adapters.persistence.governance_models import WBSBaselineORM, WBSChangeSetORM
     from src.wbs.adapters.persistence.models import WBSNodeORM
 
     engine = None
@@ -46,13 +47,18 @@ async def pg_engine():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
             # Minimal FK-target stubs for the canonical WBS (ADR-025): tenants and documents.
-            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY)"))
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY, settings jsonb)"))
             await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
-            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
+            # PC-2a.2: the live repository consults the approved-baseline authority on every write.
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[WBSNodeORM.__table__, WBSChangeSetORM.__table__, WBSBaselineORM.__table__],
+            )
         yield engine
     finally:
         if engine is not None:
             async with engine.begin() as conn:
+                await conn.execute(text("DROP TABLE IF EXISTS wbs_baselines, wbs_change_sets CASCADE"))
                 await conn.execute(text("DROP TABLE IF EXISTS wbs_nodes CASCADE"))
                 await conn.execute(text("DROP TYPE IF EXISTS wbsnodetype"))
                 await conn.execute(text("DROP TYPE IF EXISTS wbsnodestatus"))
