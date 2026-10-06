@@ -122,7 +122,7 @@ test.describe("Issue #686 P0c production qualification", () => {
               );
               await retry.click();
               const response = await responsePromise;
-              expect(response.ok()).toBe(true);
+              expect(response.status()).toBe(202);
               return { documentId, documentsListed: 1, version: 2 };
             },
           )
