@@ -53,6 +53,7 @@ test.describe("Issue #686 P0c production qualification", () => {
     const projectId = requiredEnv("PROD_P0C_PROJECT_ID");
     const documentId = requiredEnv("PROD_P0C_DOCUMENT_ID");
     const expectedSourceRevisionId = requiredEnv("PROD_P0C_SOURCE_REVISION_ID");
+    const recoveryRevisionId = process.env.PROD_P0C_RECOVERY_REVISION_ID || null;
     const noChangePdf = requiredEnv("PROD_P0C_NO_CHANGE_PDF");
     const expectedNoChangeSha256 = requiredEnv(
       "PROD_P0C_NO_CHANGE_EXPECTED_SHA256",
@@ -89,16 +90,32 @@ test.describe("Issue #686 P0c production qualification", () => {
         });
       });
 
-      const revision = await recorder.step(
-        "P0C-PROD-S3",
-        "Upload Contract B as revision of the same document",
-        async () =>
-          uploadNewVersionThroughUi(page, recorder, {
-            projectId,
-            documentId,
-            filePath: contractBPdfPath(revisionManifest),
-          }),
-      );
+      const revision = recoveryRevisionId
+        ? await recorder.step(
+            "P0C-PROD-S3",
+            "Retry the already-created Contract B revision through the canonical UI",
+            async () => {
+              const row = page.getByTestId(`document-row-${documentId}`);
+              const retry = row.getByRole("button", { name: /Retry processing/i });
+              await expect(retry).toBeVisible({ timeout: 30_000 });
+              await retry.click();
+              return {
+                documentId,
+                documentsListed: 1,
+                version: 2,
+              };
+            },
+          )
+        : await recorder.step(
+            "P0C-PROD-S3",
+            "Upload Contract B as revision of the same document",
+            async () =>
+              uploadNewVersionThroughUi(page, recorder, {
+                projectId,
+                documentId,
+                filePath: contractBPdfPath(revisionManifest),
+              }),
+          );
 
       expect(revision.documentId).toBe(documentId);
       expect(revision.documentsListed).toBe(1);
@@ -131,6 +148,9 @@ test.describe("Issue #686 P0c production qualification", () => {
 
       expect(whatChanged.sourceRevisionId).toBe(expectedSourceRevisionId);
       expect(whatChanged.targetRevisionId).not.toBe(expectedSourceRevisionId);
+      if (recoveryRevisionId) {
+        expect(whatChanged.targetRevisionId).toBe(recoveryRevisionId);
+      }
       expect(recorder.blockingFindings()).toEqual([]);
 
       await recorder.step(
