@@ -303,6 +303,10 @@ jobs:
           PROD_ACCEPTANCE_CLERK_PASSWORD: ${{ secrets.PROD_ACCEPTANCE_CLERK_PASSWORD }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: ${{ steps.parse.outputs.backend_sha }}
+          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ steps.runtime_identity.outputs.backend_sha }}
+          PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: ${{ steps.parse.outputs.frontend_sha }}
+          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ steps.runtime_identity.outputs.frontend_sha }}
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}

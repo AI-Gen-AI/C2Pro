@@ -1,9 +1,10 @@
 """WBS governance read API (PC-2a.1 #895, ADR-029).
 
-Read-only inspection of the DERIVED WBS authority, change sets (with their candidate tree
-and lineage) and the immutable baseline history, including "the approved WBS as of T".
-There are deliberately NO mutations here: governed editing and approve = apply are
-PC-2a.2 (#896); the live ``GET /projects/{id}/wbs`` reader is unchanged until PC-2a.3 (#897).
+Read-only inspection of the DERIVED WBS authority, change sets (with their candidate tree,
+lineage and retirements) and the immutable baseline history, including "the approved WBS as
+of T". There are deliberately NO mutations here: the governed commands and approve = apply
+live in ``governed_change_router`` (PC-2a.2 #896); the live ``GET /projects/{id}/wbs`` reader
+is unchanged until PC-2a.3 (#897).
 
 A candidate tree is always served as a PROPOSAL of its change set, never as live WBS.
 """
@@ -91,12 +92,22 @@ class WBSLineageEdgeResponse(BaseModel):
     target_node_id: UUID
 
 
+class WBSRetirementResponse(BaseModel):
+    """An identity that leaves the WBS through this change set, and what it was."""
+
+    node_id: UUID
+    disposition: str = Field(description="REMOVED | SPLIT | MERGED | SUPERSEDED | RETIRED_ON_BASELINE")
+    source: str = Field(description="baseline | legacy")
+    snapshot: dict[str, Any]
+
+
 class WBSChangeSetDetailResponse(WBSChangeSetSummary):
     profile_refs: list[dict[str, Any]]
     evidence_refs: list[str]
     current_digest: str = Field(description="digest the change set would be signed with at its current revision")
     nodes: list[WBSCandidateNodeResponse]
     lineage: list[WBSLineageEdgeResponse]
+    retirements: list[WBSRetirementResponse] = Field(default_factory=list)
 
 
 class WBSBaselineSummary(BaseModel):
@@ -140,7 +151,7 @@ async def _require_project(repository: WBSGovernanceRepository, project_id: UUID
         raise HTTPException(status_code=404, detail="Project not found")
 
 
-def _summary(change_set: WBSChangeSetORM) -> dict[str, Any]:
+def change_set_summary(change_set: WBSChangeSetORM) -> dict[str, Any]:
     return {
         "id": change_set.id,
         "status": change_set.status,
@@ -230,7 +241,7 @@ async def list_wbs_change_sets(
     tenant_id = require_tenant_id(current_user.tenant_id)
     await _require_project(repository, project_id, tenant_id)
     change_sets = await repository.list_change_sets(project_id, tenant_id, status)
-    return [WBSChangeSetSummary(**_summary(change_set)) for change_set in change_sets]
+    return [WBSChangeSetSummary(**change_set_summary(change_set)) for change_set in change_sets]
 
 
 @router.get(
@@ -249,7 +260,7 @@ async def get_wbs_change_set(
         raise HTTPException(status_code=404, detail="WBS change set not found")
     change_set = detail.change_set
     return WBSChangeSetDetailResponse(
-        **_summary(change_set),
+        **change_set_summary(change_set),
         profile_refs=list(change_set.profile_refs or []),
         evidence_refs=list(change_set.evidence_refs or []),
         current_digest=repository.compute_change_set_digest(detail, change_set.revision),
@@ -257,6 +268,10 @@ async def get_wbs_change_set(
         lineage=[
             WBSLineageEdgeResponse(kind=edge.kind, source_node_id=edge.source_node_id, target_node_id=edge.target_node_id)
             for edge in detail.lineage
+        ],
+        retirements=[
+            WBSRetirementResponse(node_id=r.node_id, disposition=r.disposition, source=r.source, snapshot=r.snapshot)
+            for r in detail.retirements
         ],
     )
 
@@ -304,4 +319,4 @@ async def get_wbs_baseline(
     return _baseline_detail(detail)
 
 
-__all__ = ["get_governance_repository", "router"]
+__all__ = ["WBSChangeSetSummary", "change_set_summary", "get_governance_repository", "router"]

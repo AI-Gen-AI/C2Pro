@@ -93,6 +93,29 @@ def test_p0c_provider_observation_resolves_the_serving_frontend_hostname() -> No
     )
 
 
+def test_p0c_browser_journey_receives_verified_runtime_identity() -> None:
+    source = _workflow()
+    browser = source.split("Execute real P0c production browser journey", 1)[1].split(
+        "Resolve target revision from bounded browser evidence", 1
+    )[0]
+    assert (
+        "PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: "
+        "${{ steps.parse.outputs.backend_sha }}"
+    ) in browser
+    assert (
+        "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: "
+        "${{ steps.runtime_identity.outputs.backend_sha }}"
+    ) in browser
+    assert (
+        "PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: "
+        "${{ steps.parse.outputs.frontend_sha }}"
+    ) in browser
+    assert (
+        "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: "
+        "${{ steps.runtime_identity.outputs.frontend_sha }}"
+    ) in browser
+
+
 def test_p0c_workflow_uses_only_protected_qualification_credentials() -> None:
     source = _workflow()
     for secret in (
@@ -145,6 +168,39 @@ def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
     assert "changes_type" in source
     assert "persisted semantic no-change revision matches generated Contract C" in source
     assert "no_change_expected_blob_hash" in source
+
+
+def test_p0c_verifier_uses_text_bind_values_for_json_uuid_fields() -> None:
+    source = VERIFIER.read_text(encoding="utf-8")
+    for field in (
+        "document_id",
+        "source_revision_id",
+        "target_revision_id",
+        "no_change_target_revision_id",
+    ):
+        assert f'"{field}_text": str({field})' in source
+
+    assert "payload->>'document_id'=:document_id_text" in source
+    assert (
+        "payload->'provenance'->>'source_revision_id'=:source_revision_id_text"
+        in source
+    )
+    assert (
+        "payload->'provenance'->>'target_revision_id'=:target_revision_id_text"
+        in source
+    )
+    assert (
+        "payload->'provenance'->>'target_revision_id'=:no_change_target_revision_id_text"
+        in source
+    )
+
+    for legacy in (
+        "payload->>'document_id'=CAST(:document_id AS text)",
+        "payload->'provenance'->>'source_revision_id'=CAST(:source_revision_id AS text)",
+        "payload->'provenance'->>'target_revision_id'=CAST(:target_revision_id AS text)",
+        "payload->'provenance'->>'target_revision_id'=CAST(:no_change_target_revision_id AS text)",
+    ):
+        assert legacy not in source
 
 
 def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority() -> None:

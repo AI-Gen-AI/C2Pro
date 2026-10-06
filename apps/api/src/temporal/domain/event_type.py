@@ -28,6 +28,11 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # canonical state became durable (idempotency lives in the DB, not here).
         "materialization.completed",
         "baseline.changed",
+        # PC-2a.2 (#896, ADR-029): governed WBS workflow. One applied event binds the change set
+        # AND the resulting baseline (no duplicate change/baseline events).
+        "wbs.change.submitted",
+        "wbs.change.rejected",
+        "wbs.baseline.applied",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

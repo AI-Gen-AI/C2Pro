@@ -37,28 +37,40 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
 import type {
+  CreateWBSChangeSetRequest,
   GetWbsBaselineAsOfApiV1ProjectsProjectIdWbsGovernanceBaselinesAsOfGetParams,
   HTTPValidationError,
   ListWbsChangeSetsApiV1ProjectsProjectIdWbsGovernanceChangeSetsGetParams,
+  WBSApplyResponse,
   WBSAuthorityResponse,
   WBSBaselineDetailResponse,
   WBSBaselineSummary,
+  WBSChangeSetCommandRequest,
+  WBSChangeSetCommandResponse,
   WBSChangeSetDetailResponse,
+  WBSChangeSetRevisionResponse,
+  WBSChangeSetSubmitResponse,
   WBSChangeSetSummary,
+  WBSDecisionRequest,
+  WBSExpectedRevisionRequest,
+  WBSRejectRequest,
 } from "../models";
 
 import { orvalApiClient } from "../../client";
@@ -588,6 +600,125 @@ export function useListWbsChangeSetsApiV1ProjectsProjectIdWbsGovernanceChangeSet
   return withQueryKey(query, queryOptions.queryKey);
 }
 
+/**
+ * Open a DRAFT against the current baseline (a CHANGE_BASELINE draft starts as that baseline).
+ * @summary Create Wbs Change Set
+ */
+export const createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost =
+  (
+    projectId: string,
+    createWBSChangeSetRequest: CreateWBSChangeSetRequest,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<WBSChangeSetSummary>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: createWBSChangeSetRequest,
+      signal,
+    });
+  };
+
+export const getCreateWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost
+        >
+      >,
+      TError,
+      { projectId: string; data: CreateWBSChangeSetRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost
+      >
+    >,
+    TError,
+    { projectId: string; data: CreateWBSChangeSetRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost
+        >
+      >,
+      { projectId: string; data: CreateWBSChangeSetRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost(
+        projectId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type CreateWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost
+      >
+    >
+  >;
+export type CreateWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPostMutationBody =
+  CreateWBSChangeSetRequest;
+export type CreateWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Create Wbs Change Set
+ */
+export const useCreateWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost
+          >
+        >,
+        TError,
+        { projectId: string; data: CreateWBSChangeSetRequest },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof createWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPost
+      >
+    >,
+    TError,
+    { projectId: string; data: CreateWBSChangeSetRequest },
+    TContext
+  > => {
+    return useMutation(
+      getCreateWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
 /**
  * @summary Get Wbs Change Set
  */
@@ -1604,3 +1735,860 @@ export function useGetWbsBaselineApiV1ProjectsProjectIdWbsGovernanceBaselinesBas
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+/**
+ * One typed edit of the DRAFT candidate; 409 CHANGE_SET_REVISION_CONFLICT when the revision moved.
+ * @summary Execute Wbs Change Set Command
+ */
+export const executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost =
+  (
+    projectId: string,
+    changeSetId: string,
+    wBSChangeSetCommandRequest: WBSChangeSetCommandRequest,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<WBSChangeSetCommandResponse>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/commands`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: wBSChangeSetCommandRequest,
+      signal,
+    });
+  };
+
+export const getExecuteWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost
+        >
+      >,
+      TError,
+      {
+        projectId: string;
+        changeSetId: string;
+        data: WBSChangeSetCommandRequest;
+      },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost
+      >
+    >,
+    TError,
+    {
+      projectId: string;
+      changeSetId: string;
+      data: WBSChangeSetCommandRequest;
+    },
+    TContext
+  > => {
+    const mutationKey = [
+      "executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost
+        >
+      >,
+      {
+        projectId: string;
+        changeSetId: string;
+        data: WBSChangeSetCommandRequest;
+      }
+    > = (props) => {
+      const { projectId, changeSetId, data } = props ?? {};
+
+      return executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost(
+        projectId,
+        changeSetId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ExecuteWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost
+      >
+    >
+  >;
+export type ExecuteWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPostMutationBody =
+  WBSChangeSetCommandRequest;
+export type ExecuteWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Execute Wbs Change Set Command
+ */
+export const useExecuteWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost
+          >
+        >,
+        TError,
+        {
+          projectId: string;
+          changeSetId: string;
+          data: WBSChangeSetCommandRequest;
+        },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof executeWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPost
+      >
+    >,
+    TError,
+    {
+      projectId: string;
+      changeSetId: string;
+      data: WBSChangeSetCommandRequest;
+    },
+    TContext
+  > => {
+    return useMutation(
+      getExecuteWbsChangeSetCommandApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdCommandsPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * @summary Submit Wbs Change Set
+ */
+export const submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost =
+  (
+    projectId: string,
+    changeSetId: string,
+    wBSExpectedRevisionRequest: WBSExpectedRevisionRequest,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<WBSChangeSetSubmitResponse>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/submit`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: wBSExpectedRevisionRequest,
+      signal,
+    });
+  };
+
+export const getSubmitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost
+        >
+      >,
+      TError,
+      {
+        projectId: string;
+        changeSetId: string;
+        data: WBSExpectedRevisionRequest;
+      },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost
+      >
+    >,
+    TError,
+    {
+      projectId: string;
+      changeSetId: string;
+      data: WBSExpectedRevisionRequest;
+    },
+    TContext
+  > => {
+    const mutationKey = [
+      "submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost
+        >
+      >,
+      {
+        projectId: string;
+        changeSetId: string;
+        data: WBSExpectedRevisionRequest;
+      }
+    > = (props) => {
+      const { projectId, changeSetId, data } = props ?? {};
+
+      return submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost(
+        projectId,
+        changeSetId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type SubmitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost
+      >
+    >
+  >;
+export type SubmitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPostMutationBody =
+  WBSExpectedRevisionRequest;
+export type SubmitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Submit Wbs Change Set
+ */
+export const useSubmitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost
+          >
+        >,
+        TError,
+        {
+          projectId: string;
+          changeSetId: string;
+          data: WBSExpectedRevisionRequest;
+        },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof submitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPost
+      >
+    >,
+    TError,
+    {
+      projectId: string;
+      changeSetId: string;
+      data: WBSExpectedRevisionRequest;
+    },
+    TContext
+  > => {
+    return useMutation(
+      getSubmitWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdSubmitPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * @summary Reopen Wbs Change Set
+ */
+export const reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost =
+  (projectId: string, changeSetId: string, signal?: AbortSignal) => {
+    return orvalApiClient<WBSChangeSetRevisionResponse>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/reopen`,
+      method: "POST",
+      signal,
+    });
+  };
+
+export const getReopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost
+        >
+      >,
+      TError,
+      { projectId: string; changeSetId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost
+        >
+      >,
+      { projectId: string; changeSetId: string }
+    > = (props) => {
+      const { projectId, changeSetId } = props ?? {};
+
+      return reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost(
+        projectId,
+        changeSetId,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ReopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost
+      >
+    >
+  >;
+
+export type ReopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Reopen Wbs Change Set
+ */
+export const useReopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost
+          >
+        >,
+        TError,
+        { projectId: string; changeSetId: string },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof reopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string },
+    TContext
+  > => {
+    return useMutation(
+      getReopenWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdReopenPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * @summary Withdraw Wbs Change Set
+ */
+export const withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost =
+  (projectId: string, changeSetId: string, signal?: AbortSignal) => {
+    return orvalApiClient<WBSChangeSetRevisionResponse>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/withdraw`,
+      method: "POST",
+      signal,
+    });
+  };
+
+export const getWithdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost
+        >
+      >,
+      TError,
+      { projectId: string; changeSetId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost
+        >
+      >,
+      { projectId: string; changeSetId: string }
+    > = (props) => {
+      const { projectId, changeSetId } = props ?? {};
+
+      return withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost(
+        projectId,
+        changeSetId,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type WithdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost
+      >
+    >
+  >;
+
+export type WithdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Withdraw Wbs Change Set
+ */
+export const useWithdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost
+          >
+        >,
+        TError,
+        { projectId: string; changeSetId: string },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof withdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string },
+    TContext
+  > => {
+    return useMutation(
+      getWithdrawWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdWithdrawPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * @summary Reject Wbs Change Set
+ */
+export const rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost =
+  (
+    projectId: string,
+    changeSetId: string,
+    wBSRejectRequest: WBSRejectRequest,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<WBSChangeSetRevisionResponse>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/reject`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: wBSRejectRequest,
+      signal,
+    });
+  };
+
+export const getRejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost
+        >
+      >,
+      TError,
+      { projectId: string; changeSetId: string; data: WBSRejectRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string; data: WBSRejectRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost
+        >
+      >,
+      { projectId: string; changeSetId: string; data: WBSRejectRequest }
+    > = (props) => {
+      const { projectId, changeSetId, data } = props ?? {};
+
+      return rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost(
+        projectId,
+        changeSetId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type RejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost
+      >
+    >
+  >;
+export type RejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPostMutationBody =
+  WBSRejectRequest;
+export type RejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Reject Wbs Change Set
+ */
+export const useRejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost
+          >
+        >,
+        TError,
+        { projectId: string; changeSetId: string; data: WBSRejectRequest },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof rejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string; data: WBSRejectRequest },
+    TContext
+  > => {
+    return useMutation(
+      getRejectWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRejectPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * Approve = apply in ONE transaction; the snapshot is enqueued only after it commits.
+ * @summary Approve Wbs Change Set
+ */
+export const approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost =
+  (
+    projectId: string,
+    changeSetId: string,
+    wBSDecisionRequest: WBSDecisionRequest,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<WBSApplyResponse>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/approve`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: wBSDecisionRequest,
+      signal,
+    });
+  };
+
+export const getApproveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost
+        >
+      >,
+      TError,
+      { projectId: string; changeSetId: string; data: WBSDecisionRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string; data: WBSDecisionRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost
+        >
+      >,
+      { projectId: string; changeSetId: string; data: WBSDecisionRequest }
+    > = (props) => {
+      const { projectId, changeSetId, data } = props ?? {};
+
+      return approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost(
+        projectId,
+        changeSetId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ApproveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost
+      >
+    >
+  >;
+export type ApproveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePostMutationBody =
+  WBSDecisionRequest;
+export type ApproveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Approve Wbs Change Set
+ */
+export const useApproveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost
+          >
+        >,
+        TError,
+        { projectId: string; changeSetId: string; data: WBSDecisionRequest },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof approveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string; data: WBSDecisionRequest },
+    TContext
+  > => {
+    return useMutation(
+      getApproveWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdApprovePostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * A STALE change set stays as audit history; its proposal restarts as a NEW draft on the latest baseline.
+ * @summary Rebase Wbs Change Set
+ */
+export const rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost =
+  (projectId: string, changeSetId: string, signal?: AbortSignal) => {
+    return orvalApiClient<WBSChangeSetSummary>({
+      url: `/api/v1/projects/${projectId}/wbs-governance/change-sets/${changeSetId}/rebase`,
+      method: "POST",
+      signal,
+    });
+  };
+
+export const getRebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost
+        >
+      >,
+      TError,
+      { projectId: string; changeSetId: string },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      "rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost
+        >
+      >,
+      { projectId: string; changeSetId: string }
+    > = (props) => {
+      const { projectId, changeSetId } = props ?? {};
+
+      return rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost(
+        projectId,
+        changeSetId,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type RebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost
+      >
+    >
+  >;
+
+export type RebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePostMutationError =
+  HTTPValidationError;
+
+/**
+ * @summary Rebase Wbs Change Set
+ */
+export const useRebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost
+          >
+        >,
+        TError,
+        { projectId: string; changeSetId: string },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof rebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePost
+      >
+    >,
+    TError,
+    { projectId: string; changeSetId: string },
+    TContext
+  > => {
+    return useMutation(
+      getRebaseWbsChangeSetApiV1ProjectsProjectIdWbsGovernanceChangeSetsChangeSetIdRebasePostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };

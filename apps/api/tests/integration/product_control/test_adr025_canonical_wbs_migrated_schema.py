@@ -15,6 +15,8 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from tests.support.legacy_wbs import seed_legacy_from_dicts
+
 DSN = os.environ.get("C2PRO_MIGRATED_TEST_DSN")
 REQUIRED = os.environ.get("C2PRO_REQUIRE_MIGRATED_TEST_DSN") == "1"
 
@@ -74,7 +76,7 @@ async def test_wbs_written_by_the_application_lands_only_in_the_canonical_hierar
     from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id, project_id = await _project(session)
-    await SQLAlchemyWBSRepository(session).bulk_create_from_dicts(project_id, WBS_DICTS, tenant_id)
+    await seed_legacy_from_dicts(session, project_id, WBS_DICTS, tenant_id)
     await session.flush()
 
     assert await _count(session, "wbs_nodes", project_id) == 4
@@ -121,10 +123,9 @@ async def test_parallel_wbs_tables_are_not_writable(session: AsyncSession) -> No
 
 
 async def test_raci_and_procurement_reference_canonical_nodes_with_integrity(session: AsyncSession) -> None:
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id, project_id = await _project(session)
-    await SQLAlchemyWBSRepository(session).bulk_create_from_dicts(project_id, WBS_DICTS, tenant_id)
+    await seed_legacy_from_dicts(session, project_id, WBS_DICTS, tenant_id)
     node_id = (
         await session.execute(sa.text("SELECT id FROM wbs_nodes WHERE project_id = :pid AND code = '1.1'"), {"pid": project_id})
     ).scalar_one()
@@ -177,10 +178,9 @@ async def test_raci_and_procurement_reference_canonical_nodes_with_integrity(ses
 async def test_schedule_and_spend_are_derived_from_the_canonical_wbs(session: AsyncSession) -> None:
     from src.coherence.schedule_clause_builder import build_schedule_clauses
     from src.procurement.adapters.persistence.budget_repository import SQLAlchemyBudgetRepository
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id, project_id = await _project(session)
-    await SQLAlchemyWBSRepository(session).bulk_create_from_dicts(project_id, WBS_DICTS, tenant_id)
+    await seed_legacy_from_dicts(session, project_id, WBS_DICTS, tenant_id)
     await session.execute(
         sa.text("UPDATE wbs_nodes SET budget_spent = 125.25 WHERE project_id = :pid AND code = '1.1'"), {"pid": project_id}
     )
@@ -197,10 +197,9 @@ async def test_schedule_and_spend_are_derived_from_the_canonical_wbs(session: As
 
 
 async def test_mcp_views_expose_only_the_canonical_wbs(session: AsyncSession) -> None:
-    from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 
     tenant_id, project_id = await _project(session)
-    await SQLAlchemyWBSRepository(session).bulk_create_from_dicts(project_id, WBS_DICTS, tenant_id)
+    await seed_legacy_from_dicts(session, project_id, WBS_DICTS, tenant_id)
     rows = (await session.execute(sa.text("SELECT wbs_code, title, parent_id FROM v_project_wbs ORDER BY wbs_code"))).all()
     assert [r.wbs_code for r in rows] == ["1", "1.1", "1.1.1", "1.2"]
     dependencies = (

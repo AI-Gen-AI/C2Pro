@@ -63,6 +63,7 @@ from src.projects.adapters.http.router import router as projects_router
 from src.reporting.adapters.http.router import router as project_reports_router
 from src.temporal.adapters.http.router import router as temporal_router
 from src.wbs.adapters.http.governance_router import router as wbs_governance_router
+from src.wbs.adapters.http.governed_change_router import router as wbs_governed_change_router
 
 configure_logging()
 logger = structlog.get_logger()
@@ -306,6 +307,7 @@ def create_application() -> FastAPI:
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(temporal_router, prefix=api_v1_prefix)
     app.include_router(wbs_governance_router, prefix=api_v1_prefix)  # PC-2a.1 read-only
+    app.include_router(wbs_governed_change_router, prefix=api_v1_prefix)  # PC-2a.2 governed commands
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(project_alerts_router, prefix=api_v1_prefix)
     # COMPATIBILITY: Register project alerts without v1 prefix for legacy frontend calls

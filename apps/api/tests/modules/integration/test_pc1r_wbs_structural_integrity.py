@@ -3,18 +3,23 @@
 TS-INT-PC1R-WBS-001. The project is the implicit root: top-level branches are
 ``parent_id IS NULL`` and there may be many of them. Hierarchy authority is
 ``(parent_id, sort_order)``; ``depth``/``lft``/``rgt`` are derived caches and the
-visible ``code`` is display data, never identity. This suite proves:
+visible ``code`` is display data, never identity.
 
-* parenting is same-tenant AND same-project, in the repository and in the database;
-* deleting a document, a parent row, or a node with RACI/BOM links never silently
-  deletes or re-roots governed scope or downstream relationships;
-* sibling order is ``sort_order`` (not code); recode keeps id, links and position;
-* reorder / code swaps work inside one transaction (deferred uniqueness);
-* corrupting the derived depth cache or forming a cycle cannot commit;
-* node ids are minted by the repository, never taken from the caller;
-* structural writes on one project serialize on the project row lock.
+Since PC-2a.2 (#896) governed live content changes ONLY through the governed approve = apply
+of a WBS change set, in every authority state: every direct repository write (create, bulk
+create, reparent, recode, reposition, delete) is refused with ``WBS_GOVERNANCE_REQUIRED`` and
+changes nothing (the governed equivalents -- minted ids, identity-preserving recode/move,
+dense order, links failing closed, serialized concurrent applies -- are proven in
+tests/modules/integration/test_pc2a2_wbs_governed_apply.py). The DATABASE structural invariants
+below still guard the apply path itself, so they are exercised inside the database state of an
+in-flight apply (``governed_apply_state``) and must fail for their OWN reason:
 
-No baseline / change-set / approval semantics are exercised here (PC-2a).
+* parenting is same-tenant AND same-project;
+* deleting a document, a parent row, or a node with RACI/BOM links never silently deletes or
+  re-roots governed scope or downstream relationships;
+* sibling order is ``sort_order`` (not code); reorder / code swaps work inside one
+  transaction (deferred uniqueness);
+* corrupting the derived depth cache or forming a cycle cannot commit.
 """
 
 from __future__ import annotations
@@ -30,19 +35,23 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.auth.models import SubscriptionPlan, Tenant
-from src.core.exceptions import ConflictError
 from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.procurement.adapters.persistence.wbs_repository import (
+    SQLAlchemyWBSRepository,
+    WBSGovernanceRequiredError,
+)
 from src.procurement.application.dtos import WBSItemCreate
 from src.procurement.application.use_cases.wbs_use_cases import CreateWBSItemUseCase
 from src.procurement.domain.models import WBSItem
 from src.shared_kernel.enums import RACIRole
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.support.legacy_wbs import governed_apply_state, seed_legacy_wbs
 
 pytestmark = pytest.mark.asyncio
 
 DB_ERRORS = (IntegrityError, DBAPIError)
+GOVERNANCE_REQUIRED = "WBS_GOVERNANCE_REQUIRED"
 
 
 # --------------------------------------------------------------------------- helpers
@@ -79,11 +88,10 @@ async def _document(db: AsyncSession, tenant_id: UUID, project_id: UUID) -> UUID
 
 async def _node(db: AsyncSession, tenant_id: UUID, project_id: UUID, code: str, *,
                 parent_id: UUID | None = None, source_document_id: UUID | None = None) -> WBSItem:
-    created = await SQLAlchemyWBSRepository(db).create(
-        tenant_id,
+    """A live row loaded out of band (LEGACY_UNGOVERNED data: no application path writes it)."""
+    (created,) = await seed_legacy_wbs(db, tenant_id, [
         WBSItem(project_id=project_id, code=code, name=f"Node {code}", level=1,
-                parent_id=parent_id, source_document_id=source_document_id),
-    )
+                parent_id=parent_id, source_document_id=source_document_id)])
     await db.commit()
     return created
 
@@ -145,76 +153,126 @@ async def _bom(db: AsyncSession, project_id: UUID, node_id: UUID) -> UUID:
     return bom.id
 
 
-async def _expect_db_rejection(db: AsyncSession, sql: str, params: dict[str, Any]) -> None:
-    """The statement (or the commit that validates deferred checks) is rejected."""
-    with pytest.raises(DB_ERRORS):
-        await db.execute(text(sql), params)
+async def _expect_structural_rejection(db: AsyncSession, tenant_id: UUID, project_id: UUID, sql: str,
+                                      params: dict[str, Any]) -> None:
+    """Even inside an in-flight apply, the statement (or the commit running the deferred checks)
+    is rejected -- by a structural constraint, never merely by the governance guard."""
+    with pytest.raises(DB_ERRORS) as caught:
+        async with governed_apply_state(db, tenant_id, project_id):
+            await db.execute(text(sql), params)
         await db.commit()
     await db.rollback()
+    assert GOVERNANCE_REQUIRED not in str(caught.value), "rejected by the governance guard, not the invariant"
 
 
-# --------------------------------------------------------------------------- R1 / R2 / R14
-async def test_r1_create_rejects_parent_from_another_project_in_same_tenant(db: AsyncSession) -> None:
+async def _structural_write(db: AsyncSession, tenant_id: UUID, project_id: UUID, *statements: tuple[str, dict[str, Any]]) -> None:
+    """Statements that the structural invariants accept, committed as an apply would."""
+    async with governed_apply_state(db, tenant_id, project_id):
+        for sql, params in statements:
+            await db.execute(text(sql), params)
+    await db.commit()
+
+
+async def _expect_refused(db: AsyncSession, write: Any) -> None:
+    with pytest.raises(WBSGovernanceRequiredError) as caught:
+        await write()
+    assert (caught.value.code, caught.value.status_code) == (GOVERNANCE_REQUIRED, 409)
+    await db.rollback()
+
+
+# --------------------------------------------------------------------------- direct writes are refused (PC-2a.2)
+async def test_every_direct_repository_write_is_refused_and_changes_nothing(db: AsyncSession) -> None:
+    """R1/R2/R5/R6/R8/R9/R12/R14/R15/bulk: what these writes used to do is now a governed apply."""
+    tenant = await _tenant(db)
+    project, other = await _project(db, tenant), await _project(db, tenant)
+    a = await _node(db, tenant, project, "A")
+    b = await _node(db, tenant, project, "B")
+    b1 = await _node(db, tenant, project, "B.1", parent_id=b.id)
+    foreign = await _node(db, tenant, other, "1")
+    await _raci(db, tenant, project, b1.id)
+    await _bom(db, project, a.id)
+    before = await _rows(db, project)
+    repository = SQLAlchemyWBSRepository(db)
+
+    def changed(item: WBSItem, **values: Any) -> WBSItem:
+        for key, value in values.items():
+            setattr(item, key, value)
+        return item
+
+    async def fresh(node: WBSItem) -> WBSItem:
+        item = await repository.get_by_id(node.id, tenant)
+        assert item is not None
+        return item
+
+    writes = [
+        lambda: repository.create(tenant, WBSItem(project_id=project, code="C", name="c", level=1)),
+        lambda: repository.create(tenant, WBSItem(project_id=project, code="X", name="x", level=2, parent_id=foreign.id)),
+        lambda: repository.create(tenant, WBSItem(id=a.id, project_id=project, code="2", name="caller id", level=1)),
+        lambda: repository.bulk_create([WBSItem(project_id=project, code="1", name="P", level=1)], tenant),
+        lambda: repository.bulk_create_from_dicts(project, [{"code": "1", "name": "P"}], tenant),
+        lambda: repository.delete(a.id, tenant),   # BOM-linked
+        lambda: repository.delete(b.id, tenant),   # RACI in its subtree
+        lambda: repository.delete(b1.id, tenant),
+    ]
+    for write in writes:
+        await _expect_refused(db, write)
+    for node, values in ((a, {"code": "ZZZ"}), (a, {"name": "Renamed"}), (b, {"parent_id": a.id}),
+                         (b, {"parent_id": foreign.id}), (b, {"sort_order": 1}), (a, {"parent_id": b1.id})):
+        item = changed(await fresh(node), **values)
+        await _expect_refused(db, lambda item=item, node=node: repository.update(node.id, item, tenant))
+    use_case = CreateWBSItemUseCase(repository)
+    with pytest.raises((ValueError, WBSGovernanceRequiredError)):  # R14: never a foreign parent via its code
+        await use_case.execute(WBSItemCreate(project_id=project, parent_id=foreign.id, wbs_code="1.1", name="child",
+                                             level=2), tenant)
+    await db.rollback()
+    assert await _rows(db, project) == before
+    assert await repository.delete(uuid4(), tenant) is False  # an unknown node is still simply "not found"
+
+
+async def test_concurrent_direct_writes_are_refused_without_waiting(test_session_factory: async_sessionmaker) -> None:
+    """C1/C2/C3: direct structural writes no longer compete for the project lock -- they are refused."""
+    async with test_session_factory() as setup:
+        tenant = await _tenant(setup)
+        project = await _project(setup, tenant)
+        a = await _node(setup, tenant, project, "A")
+        before = await _rows(setup, project)
+
+    async def attempt(session: AsyncSession) -> str:
+        try:
+            await SQLAlchemyWBSRepository(session).create(tenant, WBSItem(project_id=project, code="N", name="n", level=1))
+            await session.commit()
+            return "committed"
+        except WBSGovernanceRequiredError:
+            await session.rollback()
+            return "refused"
+
+    async with test_session_factory() as s1, test_session_factory() as s2:
+        outcomes = await asyncio.wait_for(asyncio.gather(attempt(s1), attempt(s2)), timeout=10)
+    assert outcomes == ["refused", "refused"]
+    async with test_session_factory() as check:
+        assert await _rows(check, project) == before and a.id in before
+
+
+# --------------------------------------------------------------------------- R1 / R2 (database)
+async def test_r1_r2_the_database_rejects_a_parent_from_another_project(db: AsyncSession) -> None:
     tenant = await _tenant(db)
     project_a, project_b = await _project(db, tenant), await _project(db, tenant)
+    node = await _node(db, tenant, project_a, "1")
     foreign_parent = await _node(db, tenant, project_b, "1")
-
-    with pytest.raises(ValueError):
-        await SQLAlchemyWBSRepository(db).create(
-            tenant, WBSItem(project_id=project_a, code="1.1", name="x", level=2, parent_id=foreign_parent.id)
-        )
-    await db.rollback()
-    assert await _rows(db, project_a) == {}
-
-    await _expect_db_rejection(
-        db,
+    await _expect_structural_rejection(
+        db, tenant, project_a,
         "INSERT INTO wbs_nodes (id, project_id, tenant_id, parent_id, code, name, lft, rgt, depth, sort_order) "
         "VALUES (:id, :pid, :tid, :parent, 'X', 'x', 1, 2, 1, 1)",
         {"id": uuid4(), "pid": project_a, "tid": tenant, "parent": foreign_parent.id},
     )
-
-
-async def test_r2_reparent_rejects_parent_from_another_project(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project_a, project_b = await _project(db, tenant), await _project(db, tenant)
-    node = await _node(db, tenant, project_a, "1")
-    foreign_parent = await _node(db, tenant, project_b, "9")
-    repository = SQLAlchemyWBSRepository(db)
-
-    existing = await repository.get_by_id(node.id, tenant)
-    assert existing is not None
-    existing.parent_id = foreign_parent.id
-    with pytest.raises(ValueError):
-        await repository.update(node.id, existing, tenant)
-    await db.rollback()
-    assert (await _rows(db, project_a))[node.id]["parent_id"] is None
-
-    await _expect_db_rejection(
-        db, "UPDATE wbs_nodes SET parent_id = :parent, depth = 1 WHERE id = :id",
+    await _expect_structural_rejection(
+        db, tenant, project_a, "UPDATE wbs_nodes SET parent_id = :parent, depth = 1 WHERE id = :id",
         {"parent": foreign_parent.id, "id": node.id},
     )
+    assert (await _rows(db, project_a))[node.id]["parent_id"] is None
 
 
-async def test_r14_use_case_never_links_a_foreign_parent_through_its_code(db: AsyncSession) -> None:
-    """The old use case resolved parent_id -> parent.code in ANY project, then re-resolved
-    that code in the child's project: it silently linked an unrelated same-code node."""
-    tenant = await _tenant(db)
-    project_a, project_b = await _project(db, tenant), await _project(db, tenant)
-    await _node(db, tenant, project_a, "1")  # same visible code as the foreign parent
-    foreign_parent = await _node(db, tenant, project_b, "1")
-
-    use_case = CreateWBSItemUseCase(SQLAlchemyWBSRepository(db))
-    with pytest.raises(ValueError):
-        await use_case.execute(
-            WBSItemCreate(project_id=project_a, parent_id=foreign_parent.id, wbs_code="1.1", name="child",
-                          level=2),
-            tenant,
-        )
-    await db.rollback()
-    assert {r["code"] for r in (await _rows(db, project_a)).values()} == {"1"}
-
-
-async def test_r14_children_are_parented_by_id_not_code(db: AsyncSession) -> None:
+async def test_r14_seeded_children_are_parented_by_id_not_code(db: AsyncSession) -> None:
     tenant = await _tenant(db)
     project = await _project(db, tenant)
     parent = await _node(db, tenant, project, "A")
@@ -252,58 +310,25 @@ async def test_r4_raw_parent_delete_cannot_silently_reroot_children(db: AsyncSes
     parent = await _node(db, tenant, project, "1")
     child = await _node(db, tenant, project, "1.1", parent_id=parent.id)
 
-    await _expect_db_rejection(db, "DELETE FROM wbs_nodes WHERE id = :id", {"id": parent.id})
+    await _expect_structural_rejection(db, tenant, project, "DELETE FROM wbs_nodes WHERE id = :id", {"id": parent.id})
     rows = await _rows(db, project)
     assert rows[child.id]["parent_id"] == parent.id
 
 
 # --------------------------------------------------------------------------- R5 / R6 / R7
-async def test_r5_deleting_a_node_with_raci_is_a_conflict_and_keeps_raci(db: AsyncSession) -> None:
+async def test_r5_r6_the_database_never_deletes_a_node_with_raci_or_bom_links(db: AsyncSession) -> None:
     tenant = await _tenant(db)
     project = await _project(db, tenant)
-    parent = await _node(db, tenant, project, "1")
-    child = await _node(db, tenant, project, "1.1", parent_id=parent.id)
-    raci_id = await _raci(db, tenant, project, child.id)
+    raci_node = await _node(db, tenant, project, "1")
+    bom_node = await _node(db, tenant, project, "2")
+    raci_id = await _raci(db, tenant, project, raci_node.id)
+    bom_id = await _bom(db, project, bom_node.id)
 
-    with pytest.raises(ConflictError):
-        await SQLAlchemyWBSRepository(db).delete(parent.id, tenant)  # the subtree holds RACI
-    await db.rollback()
-    assert set(await _rows(db, project)) == {parent.id, child.id}
+    for node in (raci_node, bom_node):
+        await _expect_structural_rejection(db, tenant, project, "DELETE FROM wbs_nodes WHERE id = :id", {"id": node.id})
     assert await db.get(StakeholderWBSRaciORM, raci_id, populate_existing=True) is not None
-
-    await _expect_db_rejection(db, "DELETE FROM wbs_nodes WHERE id = :id", {"id": child.id})
-    assert await db.get(StakeholderWBSRaciORM, raci_id, populate_existing=True) is not None
-
-
-async def test_r6_deleting_a_node_with_bom_links_is_a_conflict_and_keeps_the_link(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    node = await _node(db, tenant, project, "1")
-    bom_id = await _bom(db, project, node.id)
-
-    with pytest.raises(ConflictError):
-        await SQLAlchemyWBSRepository(db).delete(node.id, tenant)
-    await db.rollback()
-
-    await _expect_db_rejection(db, "DELETE FROM wbs_nodes WHERE id = :id", {"id": node.id})
     bom = await db.get(BOMItemORM, bom_id, populate_existing=True)
-    assert bom is not None and bom.wbs_item_id == node.id
-
-
-async def test_r5_unlinked_subtree_delete_still_works_and_compacts_order(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    first = await _node(db, tenant, project, "1")
-    second = await _node(db, tenant, project, "2")
-    await _node(db, tenant, project, "2.1", parent_id=second.id)
-    third = await _node(db, tenant, project, "3")
-
-    assert await SQLAlchemyWBSRepository(db).delete(second.id, tenant) is True
-    await db.commit()
-    rows = await _rows(db, project)
-    assert set(rows) == {first.id, third.id}
-    assert (rows[first.id]["sort_order"], rows[third.id]["sort_order"]) == (1, 2)
-    _assert_nested_set_consistent(rows)
+    assert bom is not None and bom.wbs_item_id == bom_node.id
 
 
 async def test_r7_project_deletion_still_cascades_everything(db: AsyncSession) -> None:
@@ -321,7 +346,7 @@ async def test_r7_project_deletion_still_cascades_everything(db: AsyncSession) -
     assert await db.get(BOMItemORM, bom_id, populate_existing=True) is None
 
 
-# --------------------------------------------------------------------------- R8 / R9
+# --------------------------------------------------------------------------- R8
 async def test_r8_sibling_order_is_sort_order_not_code(db: AsyncSession) -> None:
     tenant = await _tenant(db)
     project = await _project(db, tenant)
@@ -334,50 +359,6 @@ async def test_r8_sibling_order_is_sort_order_not_code(db: AsyncSession) -> None
     assert [item.id for item in tree] == [later_lexically.id, earlier_lexically.id]
 
 
-async def test_r9_recode_keeps_identity_links_and_position(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    first = await _node(db, tenant, project, "A")
-    second = await _node(db, tenant, project, "B")
-    raci_id = await _raci(db, tenant, project, first.id)
-    bom_id = await _bom(db, project, first.id)
-    repository = SQLAlchemyWBSRepository(db)
-
-    existing = await repository.get_by_id(first.id, tenant)
-    assert existing is not None
-    existing.code = "ZZZ"
-    updated = await repository.update(first.id, existing, tenant)
-    await db.commit()
-
-    assert updated is not None and updated.id == first.id and updated.code == "ZZZ"
-    rows = await _rows(db, project)
-    assert (rows[first.id]["code"], rows[first.id]["sort_order"]) == ("ZZZ", 1)
-    assert rows[second.id]["sort_order"] == 2
-    raci = await db.get(StakeholderWBSRaciORM, raci_id, populate_existing=True)
-    bom = await db.get(BOMItemORM, bom_id, populate_existing=True)
-    assert raci is not None and raci.wbs_item_id == first.id
-    assert bom is not None and bom.wbs_item_id == first.id
-
-
-async def test_r8_explicit_position_reorders_siblings(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    a = await _node(db, tenant, project, "A")
-    b = await _node(db, tenant, project, "B")
-    c = await _node(db, tenant, project, "C")
-    repository = SQLAlchemyWBSRepository(db)
-
-    moved = await repository.get_by_id(c.id, tenant)
-    assert moved is not None
-    moved.sort_order = 1
-    await repository.update(c.id, moved, tenant)
-    await db.commit()
-
-    rows = await _rows(db, project)
-    assert [rows[x.id]["sort_order"] for x in (c, a, b)] == [1, 2, 3]
-    _assert_nested_set_consistent(rows)
-
-
 # --------------------------------------------------------------------------- R10 / R11
 async def test_r10_sort_order_swap_in_one_transaction_and_duplicate_rejected(db: AsyncSession) -> None:
     tenant = await _tenant(db)
@@ -385,14 +366,15 @@ async def test_r10_sort_order_swap_in_one_transaction_and_duplicate_rejected(db:
     a = await _node(db, tenant, project, "A")
     b = await _node(db, tenant, project, "B")
 
-    await db.execute(text("UPDATE wbs_nodes SET sort_order = 2 WHERE id = :id"), {"id": a.id})
-    await db.execute(text("UPDATE wbs_nodes SET sort_order = 1 WHERE id = :id"), {"id": b.id})
-    await db.commit()
+    await _structural_write(db, tenant, project,
+                            ("UPDATE wbs_nodes SET sort_order = 2 WHERE id = :id", {"id": a.id}),
+                            ("UPDATE wbs_nodes SET sort_order = 1 WHERE id = :id", {"id": b.id}))
     rows = await _rows(db, project)
     assert (rows[a.id]["sort_order"], rows[b.id]["sort_order"]) == (2, 1)
 
     # Two TOP-LEVEL siblings (parent_id NULL) may not share a position: NULLS NOT DISTINCT.
-    await _expect_db_rejection(db, "UPDATE wbs_nodes SET sort_order = 1 WHERE id = :id", {"id": a.id})
+    await _expect_structural_rejection(db, tenant, project, "UPDATE wbs_nodes SET sort_order = 1 WHERE id = :id",
+                                       {"id": a.id})
 
 
 async def test_r11_code_swap_in_one_transaction(db: AsyncSession) -> None:
@@ -401,73 +383,30 @@ async def test_r11_code_swap_in_one_transaction(db: AsyncSession) -> None:
     a = await _node(db, tenant, project, "A")
     b = await _node(db, tenant, project, "B")
 
-    await db.execute(text("UPDATE wbs_nodes SET code = 'B' WHERE id = :id"), {"id": a.id})
-    await db.execute(text("UPDATE wbs_nodes SET code = 'A' WHERE id = :id"), {"id": b.id})
-    await db.commit()
+    await _structural_write(db, tenant, project,
+                            ("UPDATE wbs_nodes SET code = 'B' WHERE id = :id", {"id": a.id}),
+                            ("UPDATE wbs_nodes SET code = 'A' WHERE id = :id", {"id": b.id}))
     rows = await _rows(db, project)
     assert (rows[a.id]["code"], rows[b.id]["code"]) == ("B", "A")
 
-    await _expect_db_rejection(db, "UPDATE wbs_nodes SET code = 'A' WHERE id = :id", {"id": a.id})
+    await _expect_structural_rejection(db, tenant, project, "UPDATE wbs_nodes SET code = 'A' WHERE id = :id",
+                                       {"id": a.id})
 
 
-# --------------------------------------------------------------------------- R12 / R13
-async def test_r12_move_keeps_identity_and_subtree_and_recomputes_caches(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    a = await _node(db, tenant, project, "A")
-    b = await _node(db, tenant, project, "B")
-    b1 = await _node(db, tenant, project, "B.1", parent_id=b.id)
-    repository = SQLAlchemyWBSRepository(db)
-
-    moving = await repository.get_by_id(b.id, tenant)
-    assert moving is not None
-    moving.parent_id = a.id
-    await repository.update(b.id, moving, tenant)
-    await db.commit()
-
-    rows = await _rows(db, project)
-    assert rows[b.id]["parent_id"] == a.id and rows[b1.id]["parent_id"] == b.id
-    assert (rows[b.id]["depth"], rows[b1.id]["depth"]) == (1, 2)
-    _assert_nested_set_consistent(rows)
-
-    cyclic = await repository.get_by_id(a.id, tenant)
-    assert cyclic is not None
-    cyclic.parent_id = b1.id
-    with pytest.raises(ValueError):
-        await repository.update(a.id, cyclic, tenant)
-    await db.rollback()
-
-
-async def test_r12_reparent_without_a_new_position_appends_to_the_new_siblings(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    a = await _node(db, tenant, project, "A")
-    a1 = await _node(db, tenant, project, "A.1", parent_id=a.id)
-    a2 = await _node(db, tenant, project, "A.2", parent_id=a.id)
-    b = await _node(db, tenant, project, "B")
-    repository = SQLAlchemyWBSRepository(db)
-
-    # The fetched item still carries its old position (2 among the top level); that is not a
-    # request to land at position 2 under A.
-    moving = await repository.get_by_id(b.id, tenant)
-    assert moving is not None and moving.sort_order == 2
-    moving.parent_id = a.id
-    await repository.update(b.id, moving, tenant)
-    await db.commit()
-
-    rows = await _rows(db, project)
-    assert [rows[x.id]["sort_order"] for x in (a1, a2, b)] == [1, 2, 3]
-    _assert_nested_set_consistent(rows)
-
-
+# --------------------------------------------------------------------------- R13
 async def test_r13_corrupt_depth_cache_cannot_commit(db: AsyncSession) -> None:
     tenant = await _tenant(db)
     project = await _project(db, tenant)
     parent = await _node(db, tenant, project, "1")
     child = await _node(db, tenant, project, "1.1", parent_id=parent.id)
 
-    await _expect_db_rejection(db, "UPDATE wbs_nodes SET depth = 5 WHERE id = :id", {"id": child.id})
-    await _expect_db_rejection(db, "UPDATE wbs_nodes SET depth = 3 WHERE id = :id", {"id": parent.id})
+    # depth is a cache outside the governance guard: rejected by its own check, apply or not
+    with pytest.raises(DB_ERRORS):
+        await db.execute(text("UPDATE wbs_nodes SET depth = 5 WHERE id = :id"), {"id": child.id})
+        await db.commit()
+    await db.rollback()
+    await _expect_structural_rejection(db, tenant, project, "UPDATE wbs_nodes SET depth = 3 WHERE id = :id",
+                                       {"id": parent.id})
 
 
 async def test_r13_raw_sql_cycle_cannot_commit(db: AsyncSession) -> None:
@@ -476,26 +415,12 @@ async def test_r13_raw_sql_cycle_cannot_commit(db: AsyncSession) -> None:
     a = await _node(db, tenant, project, "A")
     b = await _node(db, tenant, project, "B", parent_id=a.id)
 
-    await _expect_db_rejection(
-        db, "UPDATE wbs_nodes SET parent_id = :b, depth = 2 WHERE id = :a", {"a": a.id, "b": b.id}
+    await _expect_structural_rejection(
+        db, tenant, project, "UPDATE wbs_nodes SET parent_id = :b, depth = 2 WHERE id = :a", {"a": a.id, "b": b.id}
     )
 
 
-# --------------------------------------------------------------------------- R15 / R18
-async def test_r15_node_ids_are_minted_by_the_repository(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    existing = await _node(db, tenant, project, "1")
-
-    created = await SQLAlchemyWBSRepository(db).create(
-        tenant, WBSItem(id=existing.id, project_id=project, code="2", name="caller id", level=1)
-    )
-    await db.commit()
-    assert created.id != existing.id
-    rows = await _rows(db, project)
-    assert rows[existing.id]["code"] == "1" and rows[created.id]["code"] == "2"
-
-
+# --------------------------------------------------------------------------- R18
 async def test_r18_project_is_the_implicit_root(db: AsyncSession) -> None:
     tenant = await _tenant(db)
     project = await _project(db, tenant)
@@ -512,124 +437,3 @@ async def test_r18_project_is_the_implicit_root(db: AsyncSession) -> None:
         ))
     ).scalars().all()
     assert single_root_indexes == []
-
-
-async def test_bulk_create_mints_ids_and_keeps_batch_hierarchy(db: AsyncSession) -> None:
-    tenant = await _tenant(db)
-    project = await _project(db, tenant)
-    parent = WBSItem(project_id=project, code="1", name="Parent", level=1)
-    child = WBSItem(project_id=project, code="1.1", name="Child", level=2, parent_id=parent.id)
-    by_code = WBSItem(project_id=project, code="1.2", name="By code", level=2, parent_code="1")
-
-    created = await SQLAlchemyWBSRepository(db).bulk_create([parent, child, by_code], tenant)
-    await db.commit()
-    assert [item.code for item in created] == ["1", "1.1", "1.2"]
-    assert created[0].id != parent.id
-    rows = await _rows(db, project)
-    assert rows[created[1].id]["parent_id"] == created[0].id
-    assert rows[created[2].id]["parent_id"] == created[0].id
-    assert [rows[c.id]["sort_order"] for c in created] == [1, 1, 2]
-    _assert_nested_set_consistent(rows)
-
-
-# --------------------------------------------------------------------------- C1 / C2 / C3 (real concurrency)
-async def _hold_then_release(first: AsyncSession, operation: Any, second_operation: Any) -> list[Any]:
-    """Run ``operation`` in ``first`` (uncommitted), start ``second_operation`` concurrently,
-    let it block on the project lock, then commit ``first``."""
-    first_result = await operation()
-    second_task = asyncio.create_task(second_operation())
-    await asyncio.sleep(0.5)
-    assert not second_task.done(), "the second structural write must wait for the project lock"
-    await first.commit()
-    second_result = await second_task
-    return [first_result, second_result]
-
-
-async def test_c1_concurrent_top_level_inserts_serialize(test_session_factory: async_sessionmaker) -> None:
-    async with test_session_factory() as setup:
-        tenant = await _tenant(setup)
-        project = await _project(setup, tenant)
-
-    async with test_session_factory() as s1, test_session_factory() as s2:
-        async def first() -> WBSItem:
-            return await SQLAlchemyWBSRepository(s1).create(
-                tenant, WBSItem(project_id=project, code="A", name="a", level=1))
-
-        async def second() -> WBSItem:
-            created = await SQLAlchemyWBSRepository(s2).create(
-                tenant, WBSItem(project_id=project, code="B", name="b", level=1))
-            await s2.commit()
-            return created
-
-        await _hold_then_release(s1, first, second)
-
-    async with test_session_factory() as check:
-        rows = await _rows(check, project)
-        assert sorted(r["sort_order"] for r in rows.values()) == [1, 2]
-        _assert_nested_set_consistent(rows)
-
-
-async def test_c2_concurrent_move_and_delete_serialize(test_session_factory: async_sessionmaker) -> None:
-    async with test_session_factory() as setup:
-        tenant = await _tenant(setup)
-        project = await _project(setup, tenant)
-        a = await _node(setup, tenant, project, "A")
-        b = await _node(setup, tenant, project, "B")
-        c = await _node(setup, tenant, project, "C")
-
-    async with test_session_factory() as s1, test_session_factory() as s2:
-        async def move() -> Any:
-            repository = SQLAlchemyWBSRepository(s1)
-            moving = await repository.get_by_id(c.id, tenant)
-            assert moving is not None
-            moving.parent_id = a.id
-            return await repository.update(c.id, moving, tenant)
-
-        async def delete() -> bool:
-            deleted = await SQLAlchemyWBSRepository(s2).delete(b.id, tenant)
-            await s2.commit()
-            return deleted
-
-        await _hold_then_release(s1, move, delete)
-
-    async with test_session_factory() as check:
-        rows = await _rows(check, project)
-        assert set(rows) == {a.id, c.id} and rows[c.id]["parent_id"] == a.id
-        _assert_nested_set_consistent(rows)
-
-
-async def test_c3_concurrent_reparents_cannot_form_a_cycle(test_session_factory: async_sessionmaker) -> None:
-    async with test_session_factory() as setup:
-        tenant = await _tenant(setup)
-        project = await _project(setup, tenant)
-        a = await _node(setup, tenant, project, "A")
-        b = await _node(setup, tenant, project, "B")
-
-    async with test_session_factory() as s1, test_session_factory() as s2:
-        async def a_under_b() -> Any:
-            repository = SQLAlchemyWBSRepository(s1)
-            node = await repository.get_by_id(a.id, tenant)
-            assert node is not None
-            node.parent_id = b.id
-            return await repository.update(a.id, node, tenant)
-
-        async def b_under_a() -> str:
-            repository = SQLAlchemyWBSRepository(s2)
-            node = await repository.get_by_id(b.id, tenant)
-            assert node is not None
-            node.parent_id = a.id
-            try:
-                await repository.update(b.id, node, tenant)
-                await s2.commit()
-                return "committed"
-            except (ValueError, *DB_ERRORS):
-                await s2.rollback()
-                return "rejected"
-
-        _, outcome = await _hold_then_release(s1, a_under_b, b_under_a)
-        assert outcome == "rejected"
-
-    async with test_session_factory() as check:
-        rows = await _rows(check, project)
-        assert rows[a.id]["parent_id"] == b.id and rows[b.id]["parent_id"] is None
-        _assert_nested_set_consistent(rows)

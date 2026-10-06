@@ -31,10 +31,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.persistence.models import Alert, Analysis
 from src.core.auth.models import SubscriptionPlan, Tenant
 from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.shared_kernel.enums import RACIRole
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.support.legacy_wbs import seed_legacy_from_dicts
 from tests.support.processing_authority_fakes import install_permissive_authority
 
 pytestmark = pytest.mark.asyncio
@@ -76,8 +76,8 @@ async def _project(db: AsyncSession, tenant_id: UUID | None = None) -> tuple[UUI
 
 async def _canonical_wbs(db: AsyncSession, tenant_id: UUID, project_id: UUID) -> tuple[UUID, UUID, UUID]:
     """An approved canonical WBS node carrying a manually verified RACI and a BOM link."""
-    [node] = await SQLAlchemyWBSRepository(db).bulk_create_from_dicts(
-        project_id, [{"code": "1", "name": "Civil works (approved baseline)"}], tenant_id
+    [node] = await seed_legacy_from_dicts(
+        db, project_id, [{"code": "1", "name": "Civil works (approved baseline)"}], tenant_id
     )
     await db.commit()
     stakeholder = StakeholderORM(id=uuid4(), tenant_id=tenant_id, project_id=project_id, name="PM")
