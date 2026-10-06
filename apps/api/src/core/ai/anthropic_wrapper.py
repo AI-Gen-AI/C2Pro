@@ -347,6 +347,7 @@ class AnthropicWrapper:
                 model=model_config.name,
                 temperature=request.temperature,
                 max_tokens=max_tokens,
+                tenant_id=request.tenant_id,
             )
             cached_response = await self._get_from_cache(cache_key)
 
@@ -435,7 +436,11 @@ class AnthropicWrapper:
                 input_tokens=llm_response.input_tokens,
                 output_tokens=llm_response.output_tokens,
                 cost_usd=cost_usd,
-                ttl=self._get_cache_ttl_for_task(request.task_type),  # type: ignore[arg-type]
+                ttl=(
+                    request.cache_ttl
+                    if request.cache_ttl is not None
+                    else self._get_cache_ttl_for_task(request.task_type)  # type: ignore[arg-type]
+                ),
             )
             logger.info(
                 "anthropic_wrapper_cached_anonymized_response", request_id=request.request_id
@@ -499,6 +504,7 @@ class AnthropicWrapper:
         model: str,
         temperature: float,
         max_tokens: int,
+        tenant_id: UUID | None = None,
     ) -> str:
         """
         Construye cache key único basado en todos los parámetros relevantes.
@@ -506,7 +512,11 @@ class AnthropicWrapper:
         Usa SHA256 hash del prompt + parámetros para tener keys cortas y únicas.
         """
         # Create unique string from all parameters
+        # Tenant scope is part of the hashed material so cached LLM responses
+        # cannot cross the multi-tenant security boundary.
+        tenant_scope = str(tenant_id) if tenant_id is not None else "system"
         key_parts = [
+            tenant_scope,
             prompt,
             system_prompt,
             model,
