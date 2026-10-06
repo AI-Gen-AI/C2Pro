@@ -267,7 +267,7 @@ def test_p0c_recovery_fails_closed_on_exact_failed_revision_before_retry() -> No
     assert pre < browser < post < bundle < validator
     assert "--recovery-target-revision-id" in source
     assert "PROD_P0C_RECOVERY_TARGET_REVISION_ID" in source
-    assert "PROD_P0C_RECOVERY_MODE: "1"" in source
+    assert 'PROD_P0C_RECOVERY_MODE: "1"' in source
     assert "--recovery-mode" in source
 
 
