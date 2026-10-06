@@ -295,7 +295,6 @@ jobs:
           PROD_P0C_DOCUMENT_ID: ${{ inputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
           PROD_P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
-          PROD_P0C_NO_CHANGE_EXPECTED_SHA256: ${{ env.PROD_P0C_NO_CHANGE_EXPECTED_SHA256 }}
         working-directory: apps/web
         shell: bash
         run: |
