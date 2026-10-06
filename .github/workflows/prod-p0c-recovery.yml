@@ -56,6 +56,7 @@ jobs:
               r"project_id=(?P<project_id>[0-9a-fA-F-]{36}) "
               r"document_id=(?P<document_id>[0-9a-fA-F-]{36}) "
               r"source_revision_id=(?P<source_revision_id>[0-9a-fA-F-]{36}) "
+              r"target_revision_id=(?P<target_revision_id>[0-9a-fA-F-]{36}) "
               r"staged_clear=(?P<staged_clear>true)$"
           )
           match = pattern.fullmatch(body)
