@@ -21,12 +21,18 @@ def _workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_p0c_workflow_is_reusable_only_and_uses_protected_environment() -> None:
+def test_p0c_workflow_is_owner_comment_only_and_uses_protected_environment() -> None:
     source = _workflow()
-    assert "workflow_call:" in source
+    assert "issue_comment:" in source
+    assert "types: [created]" in source
     assert "workflow_dispatch:" not in source
-    assert "issue_comment:" not in source
+    assert "workflow_call:" not in source
     assert "schedule:" not in source
+    assert "actions: write" not in source
+    assert "github.event.issue.number == 686" in source
+    assert "github.event.comment.user.login == github.repository_owner" in source
+    assert "github.triggering_actor == github.repository_owner" in source
+    assert "startsWith(github.event.comment.body, 'RUN-ISSUE-686 ')" in source
     assert "environment: production-qualification" in source
     assert 'test "$CONFIRM" = "RUN-ISSUE-686"' in source
     assert 'test "${GITHUB_REF_NAME}" = "main"' in source
