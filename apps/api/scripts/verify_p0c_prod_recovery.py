@@ -46,6 +46,9 @@ async def main_async(args: argparse.Namespace) -> None:
                     "document": UUID(args.document_id),
                     "source": UUID(args.source_revision_id),
                     "target": UUID(args.target_revision_id),
+                    "document_text": args.document_id,
+                    "source_text": args.source_revision_id,
+                    "target_text": args.target_revision_id,
                 }
                 revisions = (
                     await conn.execute(
@@ -87,9 +90,9 @@ async def main_async(args: argparse.Namespace) -> None:
                               FROM project_events
                              WHERE tenant_id=:tenant AND project_id=:project
                                AND event_type='revision.changed'
-                               AND payload->>'document_id'=CAST(:document AS text)
-                               AND payload->'provenance'->>'source_revision_id'=CAST(:source AS text)
-                               AND payload->'provenance'->>'target_revision_id'=CAST(:target AS text)
+                               AND payload->>'document_id'=:document_text
+                               AND payload->'provenance'->>'source_revision_id'=:source_text
+                               AND payload->'provenance'->>'target_revision_id'=:target_text
                             """),
                             p,
                         )
