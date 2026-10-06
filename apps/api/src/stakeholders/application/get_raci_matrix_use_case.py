@@ -17,6 +17,7 @@ from src.stakeholders.application.dtos import (
 )
 from src.stakeholders.domain.models import RACIRole
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
+from src.wbs.domain.governance import WBSAuthorityReader
 
 ROLE_LABELS = {
     RACIRole.RESPONSIBLE: "RESPONSIBLE",
@@ -38,10 +39,12 @@ class GetRaciMatrixUseCase:
         stakeholder_repository: IStakeholderRepository,
         wbs_repository: IWBSRepository,
         project_repository: ProjectRepository,
+        wbs_authority_reader: WBSAuthorityReader,
     ) -> None:
         self.stakeholder_repository = stakeholder_repository
         self.wbs_repository = wbs_repository
         self.project_repository = project_repository
+        self.wbs_authority_reader = wbs_authority_reader
 
     async def execute(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse:
         scoped_tenant_id = require_tenant_id(tenant_id)
@@ -55,6 +58,8 @@ class GetRaciMatrixUseCase:
         wbs_items = await self.wbs_repository.get_by_project(project_id, scoped_tenant_id)
         if not wbs_items:
             return RaciMatrixViewResponse(matrix=[])
+        # PC-2a.3: rows of a legacy (unapproved) WBS stay readable, explicitly qualified.
+        authority = await self.wbs_authority_reader.authority(project_id, scoped_tenant_id)
 
         assignments = await self.stakeholder_repository.list_raci_assignments(
             project_id,
@@ -86,6 +91,8 @@ class GetRaciMatrixUseCase:
                 planned_start=item.planned_start,
                 planned_end=item.planned_end,
                 assignments=assignments_by_task.get(item.id, []),
+                wbs_authority_state=authority.state.value,
+                wbs_unapproved=not authority.approved,
             )
             for index, item in enumerate(ordered_wbs_items)
         ]

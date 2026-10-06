@@ -1,255 +1,108 @@
-"""TS-UD-COH-SCH-002: tenant-scoped WBS schedules become TIME clauses."""
+"""TS-UD-COH-SCH-002 / PC-2a.3 (#897): WBS dates are never TIME (schedule) evidence.
+
+SCHEDULE ACTIVITY != WBS NODE. Dated WBS rows yield no schedule item, milestone or predecessor;
+they yield one fail-closed marker that keeps TIME unassessed -- ``WBS_NOT_APPROVED`` without an
+approved baseline, ``WBS_DATES_NOT_SCHEDULE_AUTHORITY`` with one (approved scope is not schedule
+authority). The database-backed authority states are proven in
+tests/modules/integration/test_pc2a3_wbs_authority_enforcement.py.
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 
-from src.coherence.alert_generator import AlertGenerator
+from src.coherence import schedule_clause_builder
 from src.coherence.graph.nodes import deterministic_evaluate, scoring_arbiter
 from src.coherence.graph.state import CoherenceGraphState, EvaluationConfig
-from src.coherence.rules_engine.registry import get_evaluator
 from src.coherence.schedule_clause_builder import build_schedule_clauses
+from src.wbs.domain.governance import BaselineRef, resolve_authority
 
 
 class _Result:
-    def __init__(self, rows: list[object]) -> None:
-        self._rows = rows
+    def __init__(self, value: int) -> None:
+        self._value = value
 
-    def fetchall(self) -> list[object]:
-        return self._rows
+    def scalar_one(self) -> int:
+        return self._value
 
 
 class _Session:
-    def __init__(self, rows: list[object]) -> None:
-        self._rows = rows
+    """Answers the dated-row count; records every statement's parameters."""
+
+    def __init__(self, dated_rows: int) -> None:
+        self._dated_rows = dated_rows
         self.params: list[dict[str, object]] = []
 
     async def execute(self, _stmt: object, params: dict[str, object]) -> _Result:
         self.params.append(params)
-        limit = params.get("limit")
-        rows = self._rows[: int(limit)] if isinstance(limit, int) else self._rows
-        return _Result(rows)
+        return _Result(self._dated_rows)
 
 
-class _FallbackSession:
-    def __init__(self, rows: list[object]) -> None:
-        self._results = [_Result([]), _Result(rows)]
-        self.params: list[dict[str, object]] = []
+def _authority(monkeypatch: pytest.MonkeyPatch, *, approved: bool) -> list[tuple[UUID, UUID]]:
+    calls: list[tuple[UUID, UUID]] = []
+    baseline = BaselineRef(baseline_id=uuid4(), baseline_no=1, tree_digest="sha256:" + "0" * 64,
+                           applied_at=datetime(2026, 10, 6, tzinfo=UTC))
+    authority = resolve_authority(current_baseline=baseline if approved else None, live_node_count=2,
+                                  open_change_sets=0)
 
-    async def execute(self, _stmt: object, params: dict[str, object]) -> _Result:
-        self.params.append(params)
-        return self._results.pop(0)
+    class _Repo:
+        def __init__(self, _session: Any) -> None:
+            pass
 
+        async def authority(self, project_id: UUID, tenant_id: UUID) -> Any:
+            calls.append((project_id, tenant_id))
+            return authority
 
-def _row(
-    *,
-    node_id: UUID,
-    code: str,
-    name: str,
-    start: datetime,
-    end: datetime,
-    status: str = "on_track",
-    predecessor_id: str | None = None,
-    source: str = "wbs_nodes",
-) -> object:
-    return SimpleNamespace(
-        id=node_id,
-        code=code,
-        name=name,
-        planned_start=start,
-        planned_end=end,
-        status=status,
-        predecessor_id=predecessor_id,
-        source=source,
-    )
+    monkeypatch.setattr(schedule_clause_builder, "WBSGovernanceRepository", _Repo)
+    return calls
 
 
 @pytest.mark.asyncio
-async def test_build_schedule_clauses_preserves_tenant_scope_and_schedule_facts() -> None:
-    """TS-UD-COH-SCH-002: WBS rows yield TIME facts without cross-tenant leakage."""
-    project_id = uuid4()
-    tenant_id = uuid4()
-    predecessor = uuid4()
-    successor = uuid4()
-    session = _Session(
-        [
-            _row(
-                node_id=predecessor,
-                code="SCH-001",
-                name="Foundation",
-                start=datetime(2026, 1, 1, tzinfo=UTC),
-                end=datetime(2026, 4, 15, tzinfo=UTC),
-            ),
-            _row(
-                node_id=successor,
-                code="SCH-002",
-                name="Structure",
-                start=datetime(2026, 4, 1, tzinfo=UTC),
-                end=datetime(2026, 8, 1, tzinfo=UTC),
-                status="delayed",
-                predecessor_id="SCH-001",
-            ),
-        ]
-    )
+@pytest.mark.parametrize(("approved", "reason"), [
+    (False, "WBS_NOT_APPROVED"),
+    (True, "WBS_DATES_NOT_SCHEDULE_AUTHORITY"),
+])
+async def test_dated_wbs_rows_yield_only_a_time_withheld_marker(
+        monkeypatch: pytest.MonkeyPatch, approved: bool, reason: str) -> None:
+    project_id, tenant_id = uuid4(), uuid4()
+    calls = _authority(monkeypatch, approved=approved)
+    session = _Session(dated_rows=2)
 
     clauses = await build_schedule_clauses(session, project_id, tenant_id)  # type: ignore[arg-type]
 
-    assert len(clauses) == 3
-    assert all(clause.data["document_type"] == "schedule" for clause in clauses)
-    assert all(clause.data["category"] == "TIME" for clause in clauses)
-    timeline = next(clause for clause in clauses if clause.id == f"schedule-timeline-{project_id}")
-    assert timeline.data["schedule_items"] == [
-        {
-            "id": "SCH-001",
-            "wbs_node_id": str(predecessor),
-            "code": "SCH-001",
-            "name": "Foundation",
-            "start_date": "2026-01-01",
-            "end_date": "2026-04-15",
-            "status": "on_track",
-            "predecessor_id": None,
-        },
-        {
-            "id": "SCH-002",
-            "wbs_node_id": str(successor),
-            "code": "SCH-002",
-            "name": "Structure",
-            "start_date": "2026-04-01",
-            "end_date": "2026-08-01",
-            "status": "delayed",
-            "predecessor_id": "SCH-001",
-        },
-    ]
-    assert get_evaluator("DET-TIM-GAP") is not None
-    assert get_evaluator("DET-TIM-GAP")().evaluate_v3(timeline) is not None
-    assert get_evaluator("DET-TIM-PREDECESSOR") is not None
-    assert get_evaluator("DET-TIM-PREDECESSOR")().evaluate_v3(timeline) is not None
-    assert session.params == [{"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": 50}]
+    assert len(clauses) == 1
+    data = clauses[0].data
+    assert data["category"] == "TIME" and data["assessment_unavailable"] == {"TIME": reason}
+    assert not {"schedule_items", "milestones", "wbs_node_id", "start_date", "end_date"} & set(data)
+    # tenant scope on the read and one authority resolution for the project
+    assert session.params == [{"project_id": str(project_id), "tenant_id": str(tenant_id)}]
+    assert calls == [(project_id, tenant_id)]
 
 
 @pytest.mark.asyncio
-async def test_build_schedule_clauses_bounds_wbs_candidates() -> None:
-    """TS-UD-COH-SCH-002: schedule evidence cannot bypass the retrieval limit."""
-    session = _Session(
-        [
-            _row(
-                node_id=uuid4(),
-                code="SCH-001",
-                name="Foundation",
-                start=datetime(2026, 1, 1, tzinfo=UTC),
-                end=datetime(2026, 4, 15, tzinfo=UTC),
-            ),
-            _row(
-                node_id=uuid4(),
-                code="SCH-002",
-                name="Structure",
-                start=datetime(2026, 4, 1, tzinfo=UTC),
-                end=datetime(2026, 8, 1, tzinfo=UTC),
-            ),
-        ]
-    )
-
-    clauses = await build_schedule_clauses(session, uuid4(), uuid4(), max_items=1)  # type: ignore[arg-type]
-
-    assert len(clauses) == 2
-    assert session.params[0]["limit"] == 1
+async def test_no_dated_wbs_rows_yield_nothing_and_skip_the_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _authority(monkeypatch, approved=True)
+    assert await build_schedule_clauses(_Session(dated_rows=0), uuid4(), uuid4()) == []  # type: ignore[arg-type]
+    assert calls == []
 
 
 @pytest.mark.asyncio
-async def test_build_schedule_clauses_has_no_parallel_wbs_fallback() -> None:
-    """ADR-025: an empty canonical WBS is not replaced by rows from a parallel WBS store."""
+@pytest.mark.parametrize("approved", [False, True])
+async def test_wbs_dates_never_make_time_an_assessed_dimension(
+        monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
     project_id = uuid4()
-    tenant_id = uuid4()
-    session = _FallbackSession(
-        [
-            _row(
-                node_id=uuid4(),
-                code="SCH-001",
-                name="Foundation",
-                start=datetime(2026, 1, 1, tzinfo=UTC),
-                end=datetime(2026, 4, 15, tzinfo=UTC),
-                status="delayed",
-                source="procurement_wbs_items",
-            )
-        ]
-    )
-
-    clauses = await build_schedule_clauses(session, project_id, tenant_id)  # type: ignore[arg-type]
-
-    assert clauses == []
-    assert session.params == [{"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": 50}]
-
-
-@pytest.mark.asyncio
-async def test_build_schedule_clauses_returns_no_synthetic_facts_without_wbs_rows() -> None:
-    """TS-UD-COH-SCH-002: absent WBS data stays honestly absent."""
-    clauses = await build_schedule_clauses(_Session([]), uuid4(), uuid4())  # type: ignore[arg-type]
-
-    assert clauses == []
-
-
-@pytest.mark.asyncio
-async def test_wbs_schedule_data_produces_an_assessed_time_dimension() -> None:
-    """TS-IA-COH-SCH-002: WBS facts flow through live rules into TIME scoring."""
-    project_id = uuid4()
-    tenant_id = uuid4()
-    predecessor = uuid4()
-    session = _Session(
-        [
-            _row(
-                node_id=predecessor,
-                code="SCH-001",
-                name="Foundation",
-                start=datetime(2026, 1, 1, tzinfo=UTC),
-                end=datetime(2026, 4, 15, tzinfo=UTC),
-            ),
-            _row(
-                node_id=uuid4(),
-                code="SCH-002",
-                name="Structure",
-                start=datetime(2026, 4, 1, tzinfo=UTC),
-                end=datetime(2026, 8, 1, tzinfo=UTC),
-                status="delayed",
-                predecessor_id="SCH-001",
-            ),
-        ]
-    )
-
-    clauses = await build_schedule_clauses(session, project_id, tenant_id)  # type: ignore[arg-type]
+    _authority(monkeypatch, approved=approved)
+    clauses = await build_schedule_clauses(_Session(dated_rows=3), project_id, uuid4())  # type: ignore[arg-type]
+    config = EvaluationConfig(low_budget_mode=True)
     deterministic = deterministic_evaluate(
-        CoherenceGraphState(
-            project_id=str(project_id),
-            clauses=clauses,
-            config=EvaluationConfig(low_budget_mode=True),
-        )
-    )
-    scored = scoring_arbiter(
-        CoherenceGraphState(
-            project_id=str(project_id),
-            clauses=clauses,
-            config=EvaluationConfig(low_budget_mode=True),
-            deterministic_signals=deterministic["deterministic_signals"],
-            coverage_map=deterministic["coverage_map"],
-        )
-    )
+        CoherenceGraphState(project_id=str(project_id), clauses=clauses, config=config))
+    scored = scoring_arbiter(CoherenceGraphState(
+        project_id=str(project_id), clauses=clauses, config=config,
+        deterministic_signals=deterministic["deterministic_signals"], coverage_map=deterministic["coverage_map"]))
 
-    rule_ids = {signal.rule_id for signal in deterministic["deterministic_signals"]}
-    assert {"DET-TIM-GAP", "DET-TIM-PREDECESSOR"} <= rule_ids
-    assert deterministic["coverage_map"]["TIME"] is True
-    assert scored["diagnostics"]["category_scores"]["TIME"] is not None
-    assert "TIME" not in scored["diagnostics"]["missing_dimensions"]
-    predecessor_signal = next(
-        signal for signal in deterministic["deterministic_signals"] if signal.rule_id == "DET-TIM-PREDECESSOR"
-    )
-    assert predecessor_signal.raw_data["predecessor_id"] == str(predecessor)
-    affected = AlertGenerator(project_id)._affected_entities(
-        "DET-TIM-PREDECESSOR", predecessor_signal.raw_data
-    )
-    assert set(affected["schedule_item_ids"]) == {
-        str(predecessor),
-        predecessor_signal.raw_data["successor_id"],
-    }
+    assert not {s.rule_id for s in deterministic["deterministic_signals"]} & {"DET-TIM-GAP", "DET-TIM-PREDECESSOR"}
+    assert scored["diagnostics"]["category_scores"].get("TIME") is None

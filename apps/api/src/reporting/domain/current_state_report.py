@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import ClassVar
+from typing import ClassVar, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -343,6 +343,12 @@ class BudgetData(BaseModel):
     notes: list[str]
     items: list[BudgetLineItem]
     truncated: bool = False
+    spent_amount_source: str = Field(
+        default="LEGACY_WBS_BUDGET_SPENT", description="Spend is the sum of the WBS rows' legacy budget_spent field."
+    )
+    spent_amount_cost_authority: bool = Field(
+        default=False, description="Always false: WBS budget_spent is not Cost authority, even on an approved WBS."
+    )
 
 
 class BudgetSection(ReportSectionBase):
@@ -369,9 +375,25 @@ class WbsItemSummary(BaseModel):
 
 
 class WbsData(BaseModel):
-    """The persisted procurement WBS items: served by GET /projects/{id}/wbs and used as RACI rows."""
+    """The live WBS rows (as GET /projects/{id}/wbs serves them), qualified by WBS authority.
+
+    PC-2a.3: only an approved baseline is approved scope; LEGACY_UNGOVERNED rows are reported as
+    "Unapproved / Legacy WBS" and never counted as approved scope, completeness or controlled
+    coverage. WBS dates / budgets are never Schedule / Cost authority.
+    """
 
     model_config = _CONTRACT
+
+    authority_state: Literal["NO_WBS", "LEGACY_UNGOVERNED", "APPROVED_BASELINE"]
+    approved: bool
+    scope_label: str
+    baseline_no: int | None = None
+    approved_scope_item_count: int = Field(description="Items of the current approved baseline; 0 unless approved.")
+    unapproved_item_count: int = Field(description="Live items that are not approved scope (legacy rows).")
+    dates_schedule_authority: bool = Field(
+        default=False, description="Always false: WBS dates are not Schedule authority."
+    )
+    budget_cost_authority: bool = Field(default=False, description="Always false: WBS budgets are not Cost authority.")
 
     item_count: int
     root_count: int

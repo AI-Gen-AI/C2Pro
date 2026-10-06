@@ -59,6 +59,14 @@ class BudgetResponse(BaseModel):
     spent_amount: Decimal = Decimal(0)
     remaining_budget: Decimal = Decimal(0)
     currency: str = "EUR"
+    # PC-2a.3 (#897): spend is the sum of the WBS rows' legacy budget_spent field. An approved WBS
+    # baseline confers authority on scope only, so this is never Cost authority (kept, qualified).
+    spent_amount_source: str = Field(
+        default="LEGACY_WBS_BUDGET_SPENT", description="Spend is summed from the WBS rows' legacy budget_spent field."
+    )
+    spent_amount_cost_authority: bool = Field(
+        default=False, description="Always false: WBS budget_spent is not Cost authority (nor remaining_budget)."
+    )
 
 
 class GetBudgetUseCase:

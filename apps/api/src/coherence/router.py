@@ -1355,6 +1355,14 @@ async def _run_v2_shadow_on_evaluate(
         # authoritative structured budget-line source exists (the BOM table is
         # not budget truth), so BUDGET is applicable but unassessed.
         assessment_by_category, assessment_reason_by_category = structured_budget_assessment()
+        # PC-2a.3: WBS dates are never schedule evidence; when the project's WBS carries them,
+        # TIME is applicable but unassessed -- the same decision as the v1 TIME marker clause.
+        from src.coherence.schedule_clause_builder import wbs_schedule_withheld_reason
+
+        time_reason = await wbs_schedule_withheld_reason(db, project_id, tenant_id)
+        if time_reason is not None:
+            assessment_by_category["TIME"] = False
+            assessment_reason_by_category["TIME"] = time_reason
         # An unassessed category is never scored, so its v1 findings are passed
         # only to stay visible (``available_rule_signals``) -- independent rules
         # such as retention / advance yield no conflict candidate. Assessed

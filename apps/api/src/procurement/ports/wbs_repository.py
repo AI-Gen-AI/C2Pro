@@ -2,10 +2,12 @@
 Repository port (interface) for WBS operations.
 """
 from abc import ABC, abstractmethod
+from collections.abc import Collection
 from uuid import UUID
 
 from src.core.tenants.types import TenantId
 from src.procurement.domain.models import WBSItem
+from src.wbs.domain.governance import WBSAuthority
 
 
 class IWBSRepository(ABC):
@@ -132,3 +134,19 @@ class IWBSRepository(ABC):
         ``WBS_GOVERNANCE_REQUIRED``).
         """
         pass
+
+    async def project_of_node(self, node_id: UUID, tenant_id: TenantId) -> UUID | None:
+        """The caller tenant's project a WBS id belongs to -- live, baselined, retired or a
+        change-set candidate (PC-2a.3) -- or None when the tenant knows no such id."""
+        raise NotImplementedError
+
+    async def require_linkable_nodes(self, project_id: UUID, node_ids: Collection[UUID], tenant_id: TenantId) -> None:
+        """PC-2a.3 (#897): refuse (409) a new RACI / BOM link unless every node is in the project's
+        CURRENT approved WBS baseline (``WBS_NOT_APPROVED`` / ``WBS_NODE_NOT_CURRENT_BASELINE`` /
+        ``WBS_CANDIDATE_NOT_CANONICAL``). Runs in the caller's transaction and holds the project
+        row (``FOR KEY SHARE``) until it ends, so it must share the link insert's transaction."""
+        raise NotImplementedError
+
+    async def authority(self, project_id: UUID, tenant_id: TenantId) -> WBSAuthority:
+        """The project's WBS authority from the single resolver (PC-2a.3)."""
+        raise NotImplementedError

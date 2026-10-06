@@ -100,6 +100,9 @@ class _RecordingSession:
             def fetchall(self_inner):  # noqa: N805
                 return []
 
+            def scalar_one(self_inner):  # noqa: N805 - no dated WBS rows
+                return 0
+
         return _Result()
 
 

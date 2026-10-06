@@ -1,8 +1,20 @@
-"""TS-UD-COH-SCH-002: structured TIME clauses from tenant-scoped WBS schedules."""
+"""TS-UD-COH-SCH-002 / PC-2a.3 (#897): WBS dates are never TIME (schedule) evidence.
+
+SCHEDULE ACTIVITY != WBS NODE. A WBS row's planned / actual dates are legacy operational columns,
+not Schedule truth, and an approved WBS baseline confers authority on scope only -- never on
+those dates. Until a governed Schedule model exists there is no authoritative structured schedule
+source, so no schedule item, milestone or predecessor is derived from ``wbs_nodes``.
+
+When the project's WBS does carry dates (the input the TIME schedule rules would previously have
+read), the evaluation assembly says so explicitly with a fail-closed marker, as #860 does for
+budget lines: ``assessment_unavailable = {"TIME": reason}`` keeps TIME unassessed instead of
+letting a partial rule pass read as clean. The reason is ``WBS_NOT_APPROVED`` for NO_WBS /
+DRAFT_ONLY / LEGACY_UNGOVERNED projects and ``WBS_DATES_NOT_SCHEDULE_AUTHORITY`` for an approved
+baseline. Change-set candidates are never read (they carry no dates and are not project scope).
+"""
 
 from __future__ import annotations
 
-from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -10,15 +22,28 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.models import Clause
+from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
+from src.wbs.domain.governance import (
+    WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON,
+    WBS_NOT_APPROVED_REASON,
+)
+
+_DATED_WBS_ROWS = text("""
+    SELECT count(*)
+    FROM wbs_nodes
+    WHERE project_id = CAST(:project_id AS uuid)
+      AND tenant_id = CAST(:tenant_id AS uuid)
+      AND (planned_start IS NOT NULL OR planned_end IS NOT NULL)
+""")
 
 
-def _as_date_string(value: object) -> str | None:
-    """Serialize an explicit WBS schedule date without inventing a value."""
-    if isinstance(value, datetime):
-        return value.date().isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    return None
+async def wbs_schedule_withheld_reason(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> str | None:
+    """Why the WBS dates of this project cannot be TIME evidence; None when it has no dated rows."""
+    params = {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    if not (await db.execute(_DATED_WBS_ROWS, params)).scalar_one():
+        return None
+    authority = await WBSGovernanceRepository(db).authority(project_id, tenant_id)
+    return WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON if authority.approved else WBS_NOT_APPROVED_REASON
 
 
 async def build_schedule_clauses(
@@ -26,93 +51,27 @@ async def build_schedule_clauses(
     project_id: UUID,
     tenant_id: UUID,
     *,
-    max_items: int = 50,
+    max_items: int = 50,  # noqa: ARG001 - kept for the callers' contract; nothing is listed any more
 ) -> list[Clause]:
-    """Build bounded TIME clauses from the canonical tenant-scoped project WBS (ADR-025)."""
-    params = {
-        "project_id": str(project_id),
-        "tenant_id": str(tenant_id),
-        "limit": max(0, max_items),
-    }
-    # The canonical Project Controls WBS is the only schedule source: application WBS writes land
-    # in wbs_nodes, so there is no fallback to procurement_wbs_items or legacy wbs_items.
-    wbs_nodes_stmt = text("""
-        SELECT
-            id,
-            code,
-            name,
-            planned_start,
-            planned_end,
-            status::text AS status,
-            metadata->>'predecessor_id' AS predecessor_id,
-            'wbs_nodes'::text AS source
-        FROM wbs_nodes
-        WHERE project_id = CAST(:project_id AS uuid)
-          AND tenant_id = CAST(:tenant_id AS uuid)
-          AND (planned_start IS NOT NULL OR planned_end IS NOT NULL)
-        ORDER BY planned_start ASC NULLS LAST, code ASC
-        LIMIT :limit
-    """)
-    result = await db.execute(wbs_nodes_stmt, params)
-    rows = result.fetchall()
-    if not rows:
+    """At most one fail-closed TIME marker; never schedule items derived from WBS rows."""
+    reason = await wbs_schedule_withheld_reason(db, project_id, tenant_id)
+    if reason is None:
         return []
-
-    clauses: list[Clause] = []
-    schedule_items: list[dict[str, Any]] = []
-    milestones: list[dict[str, str]] = []
-    for row in rows:
-        start_date = _as_date_string(row.planned_start)
-        end_date = _as_date_string(row.planned_end)
-        item_id = str(row.code or row.id)
-        item: dict[str, Any] = {
-            # Parsers express dependencies by WBS code, not database UUID.
-            "id": item_id,
-            "wbs_node_id": str(row.id),
-            "code": str(row.code),
-            "name": str(row.name),
-            "start_date": start_date,
-            "end_date": end_date,
-            "status": str(row.status),
-            # WBS parent_id is hierarchy, not a scheduling predecessor.
-            "predecessor_id": str(row.predecessor_id) if row.predecessor_id else None,
-        }
-        schedule_items.append(item)
-        if end_date:
-            milestones.append(
-                {
-                    "id": item["id"],
-                    "wbs_node_id": item["wbs_node_id"],
-                    "name": item["name"],
-                    "date": end_date,
-                }
-            )
-        clauses.append(
-            Clause(
-                id=f"{row.source}-schedule-{row.id}",
-                text=f"{item['name']}: {start_date or 'unscheduled'} to {end_date or 'unscheduled'}",
-                data={
-                    "document_type": "schedule",
-                    "source": str(row.source),
-                    "category": "TIME",
-                    "affected_categories": ["TIME"],
-                    **item,
-                },
-            )
-        )
-
-    clauses.append(
+    data: dict[str, Any] = {
+        "document_type": "schedule",
+        "source": "wbs_dates_withheld",
+        "category": "TIME",
+        "affected_categories": ["TIME"],
+        "schedule_source_reason": reason,
+        "assessment_unavailable": {"TIME": reason},
+    }
+    return [
         Clause(
-            id=f"schedule-timeline-{project_id}",
-            text="Project schedule timeline from WBS activities",
-            data={
-                "document_type": "schedule",
-                "source": "wbs_schedule",
-                "category": "TIME",
-                "affected_categories": ["TIME"],
-                "schedule_items": schedule_items,
-                "milestones": milestones,
-            },
+            id=f"schedule-wbs-withheld-{project_id}",
+            text="WBS dates are not schedule evidence: schedule coherence is not assessed",
+            data=data,
         )
-    )
-    return clauses
+    ]
+
+
+__all__ = ["build_schedule_clauses", "wbs_schedule_withheld_reason"]

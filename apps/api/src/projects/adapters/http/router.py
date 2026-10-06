@@ -34,11 +34,9 @@ from src.core.database import get_session_with_tenant
 from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
 from src.procurement.adapters.persistence.budget_repository import SQLAlchemyBudgetRepository
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.application.budget_use_cases import GetBudgetUseCase
-from src.procurement.application.use_cases import GetWBSTreeUseCase, ListWBSItemsUseCase
-from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
+from src.projects.application.project_wbs_view import build_project_wbs_view
 from src.projects.domain.models import ProjectType
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -1011,71 +1009,56 @@ class ProjectWBSNode(BaseModel):
 
 
 class ProjectWBSCoverage(BaseModel):
-    """Evidence coverage over every WBS item of the project (not only roots)."""
+    """Evidence coverage over every WBS item of the project (not only roots).
+
+    The descriptive counts cover every live row, approved or not; only ``approved_scope_items``
+    is approved scope (PC-2a.3). Dates and budgets on WBS rows are never Schedule / Cost authority.
+    """
 
     total_items: int
     items_with_budget: int
     items_with_dates: int
     items_with_alerts: int
     completion_average: float
+    approved_scope_items: int = Field(
+        default=0, description="Items of the current approved WBS baseline (0 unless the WBS is approved)."
+    )
+    unapproved_legacy_items: int = Field(
+        default=0, description="LEGACY_UNGOVERNED items: readable, never counted as approved scope."
+    )
+
+
+class ProjectWBSAuthority(BaseModel):
+    """The project WBS authority from the single resolver (PC-2a.3 / ADR-029)."""
+
+    state: Literal["NO_WBS", "LEGACY_UNGOVERNED", "APPROVED_BASELINE"]
+    display_state: Literal["NO_WBS", "DRAFT_ONLY", "LEGACY_UNGOVERNED", "APPROVED_BASELINE"]
+    approved: bool = Field(..., description="True only for an approved baseline: the canonical project scope.")
+    scope_label: str = Field(..., description='e.g. "Approved WBS Baseline #2" or "Unapproved / Legacy WBS".')
+    baseline_id: str | None = None
+    baseline_no: int | None = None
+    tree_digest: str | None = None
+    applied_at: str | None = Field(None, description="ISO 8601 timestamp of the current baseline's apply")
+    draft_exists: bool = Field(
+        ..., description="An open change set exists; it never replaces the current scope until approved."
+    )
+    dates_schedule_authority: bool = Field(
+        default=False, description="Always false: WBS planned/actual dates are not Schedule authority."
+    )
+    budget_cost_authority: bool = Field(
+        default=False, description="Always false: WBS budget_allocated / budget_spent are not Cost authority."
+    )
 
 
 class ProjectWBSResponse(BaseModel):
-    """Authoritative WBS contract: root items with nested children (procurement WBS store)."""
+    """Live WBS rows with nested children, qualified by the project's WBS authority."""
 
     project_id: str
     items: list[ProjectWBSNode]
     coverage: ProjectWBSCoverage
     alerts: list[dict[str, Any]]
     total_items: int
-
-
-def _serialize_wbs_item_tree(item: WBSItem) -> dict[str, object]:
-    """TS-E2E-FLW-BLK-001: serialize procurement WBS domain rows as a hierarchy."""
-    return {
-        "id": str(item.id),
-        "project_id": str(item.project_id),
-        "code": item.code,
-        "name": item.name,
-        "level": item.level,
-        "description": item.description,
-        "parent_code": item.parent_code,
-        "item_type": item.item_type.value if item.item_type else None,
-        "budget_allocated": float(item.budget_allocated)
-        if item.budget_allocated is not None
-        else None,
-        "budget_spent": float(item.budget_spent),
-        "planned_start": item.planned_start.isoformat() if item.planned_start else None,
-        "planned_end": item.planned_end.isoformat() if item.planned_end else None,
-        "actual_start": item.actual_start.isoformat() if item.actual_start else None,
-        "actual_end": item.actual_end.isoformat() if item.actual_end else None,
-        "source_clause_id": str(item.source_clause_id) if item.source_clause_id else None,
-        "version": item.version,
-        "metadata": item.wbs_metadata,
-        "children": [_serialize_wbs_item_tree(child) for child in item.children],
-    }
-
-
-def _build_wbs_coverage(items: Sequence[object]) -> dict[str, object]:
-    """TS-E2E-FLW-BLK-001: summarize project WBS evidence coverage."""
-    total_items = len(items)
-    completed_items = sum(1 for item in items if getattr(item, "actual_end", None) is not None)
-    return {
-        "total_items": total_items,
-        "items_with_budget": sum(
-            1 for item in items if getattr(item, "budget_allocated", None) is not None
-        ),
-        "items_with_dates": sum(
-            1
-            for item in items
-            if getattr(item, "planned_start", None) is not None
-            and getattr(item, "planned_end", None) is not None
-        ),
-        "items_with_alerts": 0,
-        "completion_average": 0.0
-        if total_items == 0
-        else round((completed_items / total_items) * 100, 2),
-    }
+    authority: ProjectWBSAuthority
 
 
 @router.get(
@@ -1097,21 +1080,4 @@ async def get_project_wbs(
 ) -> dict[str, object]:
     """Get WBS tree for project."""
     async with get_session_with_tenant(current_user.tenant_id) as session:
-        wbs_repo = SQLAlchemyWBSRepository(session)
-        wbs_use_case = GetWBSTreeUseCase(wbs_repo)
-        tree_items = await wbs_use_case.execute(
-            project_id, require_tenant_id(current_user.tenant_id)
-        )
-
-        list_use_case = ListWBSItemsUseCase(wbs_repo)
-        flat_items = await list_use_case.execute(
-            project_id, require_tenant_id(current_user.tenant_id)
-        )
-
-    return {
-        "project_id": str(project_id),
-        "items": [_serialize_wbs_item_tree(item) for item in tree_items],
-        "coverage": _build_wbs_coverage(flat_items),
-        "alerts": [],
-        "total_items": len(flat_items),
-    }
+        return await build_project_wbs_view(session, project_id, require_tenant_id(current_user.tenant_id))

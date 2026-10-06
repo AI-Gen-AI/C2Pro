@@ -185,13 +185,11 @@ async def test_schedule_and_spend_are_derived_from_the_canonical_wbs(session: As
         sa.text("UPDATE wbs_nodes SET budget_spent = 125.25 WHERE project_id = :pid AND code = '1.1'"), {"pid": project_id}
     )
 
-    node_id = (
-        await session.execute(sa.text("SELECT id FROM wbs_nodes WHERE project_id = :pid AND code = '1.1'"), {"pid": project_id})
-    ).scalar_one()
+    # PC-2a.3 (#897): the canonical WBS is the only store read, but its dates are never schedule
+    # evidence -- dated legacy rows only withhold TIME (WBS_NOT_APPROVED).
     clauses = await build_schedule_clauses(session, project_id, tenant_id)
-    assert "Quay wall: 2026-10-01 to 2027-06-30" in [clause.text for clause in clauses]
-    timeline = next(clause for clause in clauses if clause.id == f"schedule-timeline-{project_id}")
-    assert [item["wbs_node_id"] for item in timeline.data["schedule_items"]] == [str(node_id)]
+    assert [clause.data["assessment_unavailable"] for clause in clauses] == [{"TIME": "WBS_NOT_APPROVED"}]
+    assert "schedule_items" not in clauses[0].data
     spent = await SQLAlchemyBudgetRepository(session).get_total_spent_by_project(project_id, tenant_id)
     assert float(spent) == 125.25
 

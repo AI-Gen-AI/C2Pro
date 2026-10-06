@@ -374,6 +374,13 @@ class RaciMatrixTaskRow(BaseModel):
     assignments: list[RaciMatrixAssignment] = Field(
         default_factory=list, description="Assignments for this task"
     )
+    wbs_authority_state: str | None = Field(
+        None, description="The task's project WBS authority (NO_WBS / LEGACY_UNGOVERNED / APPROVED_BASELINE)"
+    )
+    wbs_unapproved: bool | None = Field(
+        None,
+        description="True when the task is a legacy (unapproved) WBS row: its links are historical, not governed",
+    )
 
 
 class RaciMatrixViewResponse(BaseModel):

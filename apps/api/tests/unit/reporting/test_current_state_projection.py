@@ -38,6 +38,7 @@ from src.reporting.application.ports import (
     SourceOk,
     SourceUnavailable,
     StakeholdersInput,
+    WbsInput,
 )
 from src.reporting.domain.current_state_report import (
     CANONICAL_HEALTH_CATEGORIES,
@@ -57,6 +58,7 @@ from src.stakeholders.application.dtos import (
 )
 from src.stakeholders.domain.models import InterestLevel, PowerLevel, Stakeholder
 from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
+from src.wbs.domain.governance import BaselineRef, resolve_authority
 
 GENERATED_AT = datetime(2026, 9, 13, 12, 0, tzinfo=UTC)
 PROJECT_ID = uuid4()
@@ -385,6 +387,14 @@ def _raci() -> RaciMatrixViewResponse:
     )
 
 
+def _wbs(items: list[WBSItem], *, approved: bool = False, draft: bool = False) -> WbsInput:
+    """WBS rows with their authority: legacy (unapproved) unless ``approved``."""
+    baseline = BaselineRef(baseline_id=uuid4(), baseline_no=2, tree_digest="sha256:" + "0" * 64,
+                           applied_at=GENERATED_AT) if approved else None
+    return WbsInput(items=items, authority=resolve_authority(
+        current_baseline=baseline, live_node_count=len(items), open_change_sets=1 if draft else 0))
+
+
 def _full_inputs(**overrides: object) -> CurrentStateInputs:
     base: dict[str, object] = {
         "documents": SourceOk(DocumentsInput(documents=[_document()], total=1)),
@@ -393,7 +403,7 @@ def _full_inputs(**overrides: object) -> CurrentStateInputs:
         "alerts": SourceOk([_alert()]),
         "hitl": SourceOk(HitlInput(items=[], pending_count=0)),
         "budget": SourceOk(_budget([("Civil works", "B-01", "1000.00")])),
-        "wbs": SourceOk([_wbs_item(code="1", level=1)]),
+        "wbs": SourceOk(_wbs([_wbs_item(code="1", level=1)])),
         "stakeholders": SourceOk(StakeholdersInput(stakeholders=[_stakeholder(name="Ana")], total=1)),
         "raci": SourceOk(_raci()),
     }
@@ -773,7 +783,7 @@ def test_wbs_structure_summary_uses_the_parent_codes_of_the_wbs_tab_items() -> N
         _wbs_item(code="1", level=1, item_type=WBSItemType.DELIVERABLE),
         _wbs_item(code="1.1", level=2, parent_code="1", item_type=None),
     ]
-    section = _report(wbs=SourceOk(items)).sections.wbs
+    section = _report(wbs=SourceOk(_wbs(items))).sections.wbs
     assert section.status is SectionStatus.AVAILABLE
     assert section.source_domain == "wbs"
     assert section.data is not None
@@ -795,7 +805,7 @@ def test_wbs_evidence_tier_follows_clause_and_document_links() -> None:
         _wbs_item(code="1", level=1, source_clause_id=uuid4()),
         _wbs_item(code="1.1", level=2, parent_code="1", source_document_id=uuid4()),
     ]
-    section = _report(wbs=SourceOk(items)).sections.wbs
+    section = _report(wbs=SourceOk(_wbs(items))).sections.wbs
     assert section.data is not None
     assert section.data.evidence_breakdown.strong_linked == 1
     assert section.data.evidence_breakdown.weak_linked == 1
@@ -809,7 +819,7 @@ def test_wbs_fully_clause_linked_is_strong_and_still_says_items_carry_no_timesta
         _wbs_item(code="1", level=1, source_clause_id=uuid4()),
         _wbs_item(code="1.1", level=2, parent_code="1", source_clause_id=uuid4()),
     ]
-    section = _report(wbs=SourceOk(items)).sections.wbs
+    section = _report(wbs=SourceOk(_wbs(items))).sections.wbs
     assert section.evidence_tier is ReportEvidenceTier.STRONG_LINKED
     assert section.evidence_note is not None
     assert "record no timestamps" in section.evidence_note
@@ -818,7 +828,7 @@ def test_wbs_fully_clause_linked_is_strong_and_still_says_items_carry_no_timesta
 
 def test_wbs_roots_are_listed_in_code_order_and_truncated() -> None:
     items = [_wbs_item(code=f"{index:03d}", level=1) for index in range(60, 0, -1)]
-    section = _report(wbs=SourceOk(items)).sections.wbs
+    section = _report(wbs=SourceOk(_wbs(items))).sections.wbs
     assert section.data is not None
     assert section.data.root_count == 60
     assert [root.code for root in section.data.roots][:2] == ["001", "002"]
@@ -827,9 +837,46 @@ def test_wbs_roots_are_listed_in_code_order_and_truncated() -> None:
 
 
 def test_wbs_empty() -> None:
-    section = _report(wbs=SourceOk([])).sections.wbs
+    section = _report(wbs=SourceOk(_wbs([]))).sections.wbs
     assert section.status is SectionStatus.EMPTY
     assert section.data is None
+
+
+def test_a_draft_wbs_is_not_reported_as_project_scope() -> None:
+    """PC-2a.3: DRAFT_ONLY -- candidates never reach the report; the gap says why."""
+    section = _report(wbs=SourceOk(_wbs([], draft=True))).sections.wbs
+    assert section.status is SectionStatus.EMPTY and section.data is None
+    assert "not project scope until approved" in (section.status_reason or "")
+
+
+def test_legacy_wbs_is_reported_as_unapproved_and_never_as_approved_scope() -> None:
+    """PC-2a.3: LEGACY_UNGOVERNED rows stay visible, labelled, excluded from approved scope."""
+    items = [_wbs_item(code="1", level=1), _wbs_item(code="1.1", level=2, parent_code="1", planned=True)]
+    section = _report(wbs=SourceOk(_wbs(items))).sections.wbs
+    assert section.data is not None and section.data.item_count == 2
+    assert (section.data.authority_state, section.data.approved) == ("LEGACY_UNGOVERNED", False)
+    assert section.data.scope_label == "Unapproved / Legacy WBS"
+    assert (section.data.approved_scope_item_count, section.data.unapproved_item_count) == (0, 2)
+    assert section.evidence_note is not None and section.evidence_note.startswith("Unapproved / Legacy WBS")
+    assert section.data.dates_schedule_authority is False and section.data.budget_cost_authority is False
+
+
+def test_an_approved_baseline_is_approved_scope_but_never_schedule_or_cost_authority() -> None:
+    items = [_wbs_item(code="1", level=1, budget_allocated=Decimal("10.00"), planned=True)]
+    section = _report(wbs=SourceOk(_wbs(items, approved=True))).sections.wbs
+    assert section.data is not None
+    assert (section.data.approved, section.data.baseline_no, section.data.scope_label) == (
+        True, 2, "Approved WBS Baseline #2")
+    assert (section.data.approved_scope_item_count, section.data.unapproved_item_count) == (1, 0)
+    assert section.data.dates_schedule_authority is False and section.data.budget_cost_authority is False
+
+
+def test_budget_spend_from_wbs_is_qualified_as_not_cost_authority() -> None:
+    section = _report(budget=SourceOk(_budget([("Civil works", "B-01", "1000.00")]))).sections.budget
+    assert section.data is not None
+    assert section.data.spent_amount_source == "LEGACY_WBS_BUDGET_SPENT"
+    assert section.data.spent_amount_cost_authority is False
+    assert any("not cost authority" in note for note in section.data.notes)
 
 
 @pytest.mark.parametrize("status", list(DocumentStatus))

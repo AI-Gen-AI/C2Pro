@@ -17,8 +17,9 @@ from src.reporting.adapters.http.router import (
     get_project_repository,
     router,
 )
-from src.reporting.application.ports import DocumentsInput, HitlInput, StakeholdersInput
+from src.reporting.application.ports import DocumentsInput, HitlInput, StakeholdersInput, WbsInput
 from src.stakeholders.application.dtos import RaciMatrixViewResponse
+from src.wbs.domain.governance import resolve_authority
 
 
 class _Projects:
@@ -70,9 +71,10 @@ class _Sources:
         await self._seen(tenant_id)
         return BudgetResponse(project_id=project_id, items=[])
 
-    async def load_wbs(self, project_id: UUID, tenant_id: UUID):  # noqa: ANN201
+    async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> WbsInput:
         await self._seen(tenant_id)
-        return []
+        return WbsInput(items=[], authority=resolve_authority(current_baseline=None, live_node_count=0,
+                                                              open_change_sets=0))
 
     async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput:
         await self._seen(tenant_id)

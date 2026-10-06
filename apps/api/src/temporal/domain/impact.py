@@ -49,6 +49,9 @@ class ImpactTarget(BaseModel):
     # Read-time only: the target's basis was affected by a newer revision.
     # None when staleness is not assessed for this entity type.
     potentially_stale: bool | None = None
+    # PC-2a.3: a WBS target outside an approved baseline (a legacy row) is historical, not
+    # governed scope. None for non-WBS targets; candidates are never targets.
+    wbs_unapproved: bool | None = None
 
 
 class ImpactRelationship(BaseModel):

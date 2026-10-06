@@ -79,6 +79,7 @@ from src.reporting.domain.current_state_report import (
     WbsItemSummary,
     WbsSection,
 )
+from src.wbs.domain.governance import wbs_scope_label
 
 MAX_LISTED_ITEMS = 50
 MAX_LISTED_REVIEW_ITEMS = 25
@@ -119,7 +120,8 @@ NOT_MODELED_REASONS = {
 
 BUDGET_NOTES = (
     "Currency is the system default; it is not extracted from contract evidence.",
-    "Spent amount is the sum of spend recorded on procurement WBS items; zero can mean no spend has been recorded.",
+    "Spent amount is the sum of the legacy budget_spent field of WBS items; it is not cost authority, even for an "
+    "approved WBS; zero can mean no spend has been recorded.",
 )
 BUDGET_NO_SPEND_NOTE = "Remaining budget is not shown because no spend has been recorded."
 
@@ -552,6 +554,8 @@ def project_budget(result: Any) -> BudgetSection:
             notes=notes,
             items=items,
             truncated=len(budget.items) > len(items),
+            spent_amount_source=budget.spent_amount_source,
+            spent_amount_cost_authority=budget.spent_amount_cost_authority,
         ),
     )
 
@@ -561,9 +565,17 @@ def project_wbs(result: Any) -> WbsSection:
     if not isinstance(result, SourceOk):
         return _not_ok(WbsSection, domain, result)
 
-    items = list(result.value)
+    authority = result.value.authority
+    items = list(result.value.items)
     if not items:
-        return _without_data(WbsSection, domain, SectionStatus.EMPTY, "No WBS items have been defined.")
+        reason = (
+            "No approved WBS: a draft WBS change set exists but is not project scope until approved."
+            if authority.draft_exists
+            else "No WBS items have been defined."
+        )
+        return _without_data(WbsSection, domain, SectionStatus.EMPTY, reason)
+    scope_label = wbs_scope_label(authority)
+    scope_note = f"{scope_label}." if authority.approved else f"{scope_label}: not approved project scope."
 
     parent_codes = {item.parent_code for item in items if item.parent_code is not None}
     roots = sorted((item for item in items if item.parent_code is None), key=lambda item: (item.code, str(item.id)))
@@ -589,13 +601,20 @@ def project_wbs(result: Any) -> WbsSection:
         # WBS items record no timestamps, so freshness is not claimed.
         source_as_of=None,
         evidence_tier=tier,
-        evidence_note=_tier_note(
+        evidence_note=f"{scope_note} "
+        + _tier_note(
             tier,
             strong="Every WBS item links to its source clause. WBS items record no timestamps.",
             weak="Some WBS items reference only their source document. WBS items record no timestamps.",
             unlinked="Some WBS items record no source document or clause. WBS items record no timestamps.",
         ),
         data=WbsData(
+            authority_state=authority.state.value,
+            approved=authority.approved,
+            scope_label=scope_label,
+            baseline_no=authority.baseline_no,
+            approved_scope_item_count=len(items) if authority.approved else 0,
+            unapproved_item_count=0 if authority.approved else len(items),
             item_count=len(items),
             root_count=len(roots),
             leaf_count=sum(1 for item in items if item.code not in parent_codes),

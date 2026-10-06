@@ -53,8 +53,16 @@ class UpsertRaciAssignmentUseCase:
         scoped_tenant_id = require_tenant_id(tenant_id)
         wbs_item = await self.wbs_repository.get_by_id(payload.task_id, scoped_tenant_id)
         if wbs_item is None:
+            # PC-2a.3: a candidate or retired id is a 409 (not canonical / not current), never a
+            # 404; an id the tenant does not know stays "not found" (no cross-tenant disclosure).
+            known_project = await self.wbs_repository.project_of_node(payload.task_id, scoped_tenant_id)
+            if known_project is not None:
+                await self.wbs_repository.require_linkable_nodes(known_project, [payload.task_id], scoped_tenant_id)
             raise ValueError("task_not_found")
         project_id = wbs_item.project_id
+        # PC-2a.3 (#897): a RACI link binds only to a node of the CURRENT approved baseline; the
+        # check holds the project row until this transaction commits the link.
+        await self.wbs_repository.require_linkable_nodes(project_id, [payload.task_id], scoped_tenant_id)
 
         stakeholder = await self.stakeholder_repository.get_by_id(
             payload.stakeholder_id,

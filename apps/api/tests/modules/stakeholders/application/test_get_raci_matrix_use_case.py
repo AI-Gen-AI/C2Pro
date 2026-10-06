@@ -22,7 +22,14 @@ from src.stakeholders.domain.models import (
     Stakeholder,
     StakeholderQuadrant,
 )
+from src.wbs.domain.governance import resolve_authority
 
+
+def _legacy_authority() -> AsyncMock:
+    """PC-2a.3: the project's WBS authority (LEGACY_UNGOVERNED: rows qualified unapproved)."""
+    reader = AsyncMock()
+    reader.authority.return_value = resolve_authority(current_baseline=None, live_node_count=1, open_change_sets=0)
+    return reader
 
 @pytest.mark.asyncio
 async def test_get_raci_matrix_use_case_includes_timeline_sequence_and_schedule_dates() -> None:
@@ -85,6 +92,7 @@ async def test_get_raci_matrix_use_case_includes_timeline_sequence_and_schedule_
         stakeholder_repository=stakeholder_repo,
         wbs_repository=wbs_repo,
         project_repository=project_repo,
+        wbs_authority_reader=_legacy_authority(),
     )
 
     response = await use_case.execute(project_id=project_id, tenant_id=tenant_id)
@@ -100,3 +108,5 @@ async def test_get_raci_matrix_use_case_includes_timeline_sequence_and_schedule_
     assert response.matrix[1].task_code == "1.2"
     assert response.matrix[1].planned_start == datetime(2026, 4, 7, 0, 0, 0)
     assert response.matrix[1].planned_end == datetime(2026, 4, 11, 0, 0, 0)
+    # PC-2a.3: rows of a legacy (unapproved) WBS stay readable, explicitly qualified
+    assert {(row.wbs_authority_state, row.wbs_unapproved) for row in response.matrix} == {("LEGACY_UNGOVERNED", True)}

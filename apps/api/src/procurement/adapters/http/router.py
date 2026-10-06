@@ -159,14 +159,15 @@ async def build_procurement_plan(
 # ==========================================
 
 
-@router.post("/wbs", response_model=WBSItemResponse, status_code=http_status.HTTP_201_CREATED)
+@router.post("/wbs", response_model=WBSItemResponse, status_code=http_status.HTTP_201_CREATED, deprecated=True)
 async def create_wbs_item(
     wbs_create: WBSItemCreate,
     tenant_id: CurrentTenantId,
     use_case: CreateWBSItemUseCase = Depends(get_create_wbs_item_use_case),
 ) -> WBSItemResponse:
     """
-    Create a new WBS item.
+    Deprecated: always 409 ``WBS_GOVERNANCE_REQUIRED``. Canonical WBS nodes are created only by
+    approving a WBS change set (approve = apply; PC-2a.2 / ADR-029).
     """
     try:
         wbs_item = await use_case.execute(wbs_create, tenant_id)
@@ -250,14 +251,15 @@ async def update_wbs_item(
     return WBSItemResponse.model_validate(wbs_item)
 
 
-@router.delete("/wbs/{wbs_id}", status_code=http_status.HTTP_204_NO_CONTENT)
+@router.delete("/wbs/{wbs_id}", status_code=http_status.HTTP_204_NO_CONTENT, deprecated=True)
 async def delete_wbs_item(
     wbs_id: UUID,
     tenant_id: CurrentTenantId,
     use_case: DeleteWBSItemUseCase = Depends(get_delete_wbs_item_use_case),
 ) -> None:
     """
-    Delete a WBS item and its children. A subtree with RACI or BOM links is a 409 conflict.
+    Deprecated: an existing node is a 409 ``WBS_GOVERNANCE_REQUIRED`` (an unknown id is 404).
+    Nodes leave the WBS only as dispositioned retirements of a governed apply (PC-2a.2 / ADR-029).
     """
     deleted = await use_case.execute(wbs_id, tenant_id)
     if not deleted:
@@ -286,6 +288,8 @@ async def create_bom_item(
     try:
         bom_item = await use_case.execute(bom_create, tenant_id)
         return BOMItemResponse.model_validate(bom_item)
+    except C2ProException:  # e.g. 409 WBS_NOT_APPROVED: a WBS link binds only to approved scope (PC-2a.3)
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,

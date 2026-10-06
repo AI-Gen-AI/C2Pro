@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 import structlog
 
+from src.core.exceptions import C2ProException
 from src.core.tenants.types import require_tenant_id
 from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.ports.wbs_repository import IWBSRepository
@@ -73,6 +74,8 @@ class RaciGenerationService:
                 assignments=result.assignments,
                 known_stakeholder_ids={stakeholder.id for stakeholder in stakeholders},
             )
+        except C2ProException:  # e.g. 409 WBS_NOT_APPROVED: links bind only to approved WBS scope (PC-2a.3)
+            raise
         # Persistence failures are sanitized before they cross the application boundary.
         except Exception as exc:  # noqa: BLE001
             logger.warning(
