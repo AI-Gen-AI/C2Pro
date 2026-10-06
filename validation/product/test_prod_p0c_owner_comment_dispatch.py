@@ -25,6 +25,8 @@ def test_p0c_owner_command_is_exactly_parsed_without_shell_interpolation() -> No
     assert 'body = os.environ["COMMENT_BODY"].strip()' in source
     assert "pattern.fullmatch(body)" in source
     assert "staged_clear=(?P<staged_clear>true)$" in source
+    assert 'print(f"{key}={value}", file=output)' in source
+    assert 'output.write(f"{key}={value}' not in source
     parse_block = source.split("Parse exact bounded owner command", 1)[1].split(
         "Fail closed on owner intent and bounded inputs", 1
     )[0]
