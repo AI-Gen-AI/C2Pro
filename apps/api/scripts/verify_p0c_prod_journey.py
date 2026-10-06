@@ -453,7 +453,6 @@ async def verify_post(
                    AND tenant_id=:tenant_id
                    AND event_type='revision.analysis_failed'
                    AND payload->>'document_id'=:document_id_text
-                   AND payload->'provenance'->>'target_revision_id'=:target_revision_id_text
                    AND occurred_at > :accepted_event_at
                 """,
                 p,
