@@ -15,15 +15,40 @@ from src.core.json_types import JsonDict
 logger = structlog.get_logger()
 
 
+_INVALID_TIMEFRAME_MESSAGE = (
+    "Invalid timeframe. Use a positive duration such as 24h, 7d, 30d, 12w"
+)
+
+
 def _parse_timeframe(timeframe: str) -> timedelta:
     raw = timeframe.strip().lower()
-    if raw.endswith("d") and raw[:-1].isdigit():
-        return timedelta(days=int(raw[:-1]))
-    if raw.endswith("h") and raw[:-1].isdigit():
-        return timedelta(hours=int(raw[:-1]))
-    if raw.endswith("w") and raw[:-1].isdigit():
-        return timedelta(weeks=int(raw[:-1]))
-    raise ValueError("Invalid timeframe. Use formats like 24h, 7d, 30d, 12w")
+    if len(raw) < 2 or not raw[:-1].isdigit():
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE)
+
+    amount = int(raw[:-1])
+    if amount <= 0:
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE)
+
+    unit = raw[-1]
+    try:
+        if unit == "d":
+            return timedelta(days=amount)
+        if unit == "h":
+            return timedelta(hours=amount)
+        if unit == "w":
+            return timedelta(weeks=amount)
+    except OverflowError as exc:
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE) from exc
+
+    raise ValueError(_INVALID_TIMEFRAME_MESSAGE)
+
+
+def _window_start(timeframe: str) -> datetime:
+    delta = _parse_timeframe(timeframe)
+    try:
+        return datetime.now(UTC) - delta
+    except OverflowError as exc:
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE) from exc
 
 
 class AIAnalyticsService:
@@ -66,7 +91,7 @@ class AIAnalyticsService:
         if cached := await self._get_cached(key):
             return cached
 
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
+        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
@@ -130,7 +155,7 @@ class AIAnalyticsService:
         if cached := await self._get_cached(key):
             return cached
 
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
+        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
@@ -190,7 +215,7 @@ class AIAnalyticsService:
         if cached := await self._get_cached(key):
             return cached
 
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
+        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
@@ -261,7 +286,7 @@ class AIAnalyticsService:
         if cached := await self._get_cached(key):
             return cached
 
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
+        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
