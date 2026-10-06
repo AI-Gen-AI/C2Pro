@@ -82,8 +82,11 @@ BEGIN
             WHEN TG_OP = 'INSERT' THEN ARRAY[NEW.project_id]
             WHEN TG_OP = 'DELETE' THEN ARRAY[OLD.project_id]
             ELSE ARRAY[OLD.project_id, NEW.project_id] END LOOP
-        -- A project being deleted takes its WBS with it (cascade).
-        CONTINUE WHEN NOT EXISTS (SELECT 1 FROM public.projects p WHERE p.id = v_project);
+        -- Serialize with a governed apply, which holds the project row FOR UPDATE until its baseline
+        -- commits: a racing write waits here (KEY SHARE, as the wbs_nodes FK check already takes)
+        -- and then reads that baseline. A project being deleted takes its WBS with it (cascade).
+        PERFORM 1 FROM public.projects p WHERE p.id = v_project FOR KEY SHARE;
+        CONTINUE WHEN NOT FOUND;
         SELECT b.id INTO v_current FROM public.wbs_baselines b
          WHERE b.project_id = v_project ORDER BY b.baseline_no DESC LIMIT 1;
         CONTINUE WHEN v_current IS NULL;  -- no approved baseline: LEGACY_UNGOVERNED / NO_WBS

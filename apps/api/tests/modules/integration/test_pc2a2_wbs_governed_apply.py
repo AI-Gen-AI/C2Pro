@@ -588,6 +588,122 @@ async def test_34b_concurrent_approvals_produce_exactly_one_baseline(db: AsyncSe
     assert sorted([(await _cs(db, first)).status, (await _cs(db, second)).status]) == ["APPLIED", "STALE"]
 
 
+async def _while_an_approval_is_uncommitted(db: AsyncSession, s: Scope, racer: Any) -> tuple[UUID, Any]:
+    """Approve a first baseline in one session and, before it commits, run ``racer(session)`` in another.
+
+    The racer must WAIT for the apply transaction (not finish before it); returns (baseline id,
+    the racer's outcome -- its return value or the exception it raised).
+    """
+    change_set_id = await _new(db, s, "Baseline 1")
+    await _cmd(db, s, change_set_id, AddNode(NodeSpec("Civil", "1")))
+    await _submit(db, s, change_set_id)
+    submitted = await _cs(db, change_set_id)
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://"))
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def race() -> Any:
+        async with sessions() as session:
+            try:
+                outcome = await racer(session)
+                await session.commit()
+                return outcome
+            except Exception as exc:  # noqa: BLE001 - the outcome under test
+                await session.rollback()
+                return exc
+
+    try:
+        async with sessions() as approver:
+            result = await WBSGovernedChangeService(approver).approve(
+                project_id=s.project, change_set_id=change_set_id, tenant_id=s.tenant, actor=s.admin,
+                expected_revision=submitted.revision, expected_digest=str(submitted.submitted_digest))
+            task = asyncio.create_task(race())
+            done, _ = await asyncio.wait({task}, timeout=1.0)
+            assert not done, f"the racer did not wait for the apply transaction: {task.result()!r}"
+            await approver.commit()
+        outcome = await asyncio.wait_for(task, timeout=30)
+    finally:
+        await engine.dispose()
+    return result.baseline_id, outcome
+
+
+@pytest.mark.parametrize("writer", ["repository", "raw_sql"])
+async def test_34c_a_live_writer_racing_a_first_baseline_waits_and_is_then_refused(db: AsyncSession, writer: str) -> None:
+    s = await _scope(db)
+
+    async def legacy_writer(session: AsyncSession) -> Any:
+        if writer == "repository":
+            return await SQLAlchemyWBSRepository(session).create(
+                s.tenant, WBSItem(project_id=s.project, code="LATE-1", name="Late legacy row", level=1))
+        # a writer outside the repository: no project lock taken before the row trigger runs
+        return await session.execute(text(
+            "INSERT INTO wbs_nodes (id, project_id, tenant_id, code, name, lft, rgt, depth, sort_order, node_type, "
+            "metadata, created_at, updated_at) VALUES (:id, :project, :tenant, 'LATE-1', 'Late legacy row', 1000, 1001, "
+            "0, 99, 'activity', '{}'::jsonb, now(), now())"), {"id": uuid4(), "project": s.project, "tenant": s.tenant})
+
+    baseline_id, outcome = await _while_an_approval_is_uncommitted(db, s, legacy_writer)
+    assert isinstance(outcome, Exception) and "governed by an approved baseline" in str(outcome), outcome
+    live = await _live(db, s.project)
+    assert [row.code for row in live.values()] == ["1"]
+    baseline = await db.get(WBSBaselineORM, baseline_id)
+    assert baseline is not None and _live_digest(s.project, live) == baseline.tree_digest
+
+
+@pytest.mark.parametrize("writer", ["repository", "raw_sql"])
+async def test_34e_an_approval_racing_an_uncommitted_live_write_waits_then_refuses_without_deadlock(
+        db: AsyncSession, writer: str) -> None:
+    s = await _scope(db)
+    change_set_id = await _new(db, s, "Baseline 1")
+    await _cmd(db, s, change_set_id, AddNode(NodeSpec("Civil", "1")))
+    await _submit(db, s, change_set_id)
+    submitted = await _cs(db, change_set_id)
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://"))
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def approve() -> Any:
+        async with sessions() as session:
+            try:
+                return await WBSGovernedChangeService(session).approve(
+                    project_id=s.project, change_set_id=change_set_id, tenant_id=s.tenant, actor=s.admin,
+                    expected_revision=submitted.revision, expected_digest=str(submitted.submitted_digest))
+            except Exception as exc:  # noqa: BLE001 - the outcome under test
+                await session.rollback()
+                return exc
+
+    try:
+        async with sessions() as live_writer:
+            if writer == "repository":
+                await SQLAlchemyWBSRepository(live_writer).create(
+                    s.tenant, WBSItem(project_id=s.project, code="LATE-1", name="Late legacy row", level=1))
+            else:
+                await live_writer.execute(text(
+                    "INSERT INTO wbs_nodes (id, project_id, tenant_id, code, name, lft, rgt, depth, sort_order, "
+                    "node_type, metadata, created_at, updated_at) VALUES (:id, :project, :tenant, 'LATE-1', 'Late', "
+                    "1000, 1001, 0, 99, 'activity', '{}'::jsonb, now(), now())"),
+                    {"id": uuid4(), "project": s.project, "tenant": s.tenant})
+            task = asyncio.create_task(approve())
+            done, _ = await asyncio.wait({task}, timeout=1.0)
+            assert not done, f"the approval did not wait for the live write: {task.result()!r}"
+            await live_writer.commit()
+        outcome = await asyncio.wait_for(task, timeout=30)
+    finally:
+        await engine.dispose()
+    # the reviewed legacy set changed under the approval: refused, never a deadlock or a divergent baseline
+    assert isinstance(outcome, LegacyWBSChangedError), outcome
+    assert await db.scalar(select(func.count()).select_from(WBSBaselineORM).where(WBSBaselineORM.project_id == s.project)) == 0
+
+
+async def test_34d_a_draft_opened_during_an_apply_is_based_on_the_new_baseline(db: AsyncSession) -> None:
+    s = await _scope(db)
+
+    async def open_draft(session: AsyncSession) -> UUID | None:
+        change_set = await WBSGovernedChangeService(session).create_change_set(
+            project_id=s.project, tenant_id=s.tenant, actor=s.author, title="Opened during the apply")
+        return change_set.base_baseline_id
+
+    baseline_id, outcome = await _while_an_approval_is_uncommitted(db, s, open_draft)
+    assert outcome == baseline_id
+
+
 async def test_35_a_failure_inside_apply_leaves_everything_unchanged(db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     s = await _scope(db)
     _, ids, first = await _baseline_one(db, s)

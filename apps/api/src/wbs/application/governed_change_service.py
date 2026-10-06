@@ -517,7 +517,9 @@ class WBSGovernedChangeService:
         """A new DRAFT against the current baseline; a CHANGE_BASELINE draft starts as that baseline."""
         if not can_author(actor.kind, actor.role):
             raise WBSGovernanceForbiddenError("only a human user or admin can open a governed WBS change set")
-        await self._require_project(project_id, tenant_id)
+        # The project lock orders this against an approval: the base is read after it commits, or the
+        # approval sees (and stales) this draft.
+        await self._require_project(project_id, tenant_id, lock=True)
         try:
             refs = normalize_evidence_refs(evidence_refs)
             pins = [normalize_profile_ref(ref) for ref in profile_refs]
@@ -544,6 +546,7 @@ class WBSGovernedChangeService:
 
     async def rebase(self, *, project_id: UUID, change_set_id: UUID, tenant_id: UUID, actor: Actor) -> WBSChangeSetORM:
         """STALE -> a NEW draft seeded from the latest baseline; the STALE record stays untouched."""
+        await self._require_project(project_id, tenant_id, lock=True)  # project before change set, as approve
         stale = await self._scoped(change_set_id, project_id, tenant_id, lock=True)
         if stale.status != ChangeSetStatus.STALE.value:
             raise ChangeSetStateError("only a STALE change set is rebased", stale.status)
@@ -904,6 +907,8 @@ class WBSGovernedChangeService:
     ) -> tuple[WBSChangeSetORM, bool]:
         if not can_decide(actor.kind, actor.role):
             raise WBSGovernanceForbiddenError(f"{action} requires a human admin (never AI, api or service)")
+        # FOR UPDATE until commit: the live-write guard takes KEY SHARE on this row, so a racing
+        # live write waits for an apply and then sees its baseline.
         await self._require_project(project_id, tenant_id, lock=True)
         change_set = await self._scoped(change_set_id, project_id, tenant_id, lock=True)
         if change_set.status == ChangeSetStatus.STALE.value:
