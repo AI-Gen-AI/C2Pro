@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.core.processing_authority import ProcessingAuthorityLost
 from src.documents.adapters.http import router
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
@@ -187,6 +188,60 @@ async def test_reprocess_rejects_every_non_retryable_lifecycle_without_mutation(
 
     assert exc_info.value.status_code == 409
     assert expected_lifecycle in str(exc_info.value.detail)
+    repo.update_status.assert_not_awaited()
+    repo.update_metadata.assert_not_awaited()
+    repo.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_expected_revision_mismatch_fails_before_any_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    document_id = uuid4()
+    expected_revision_id = uuid4()
+    document = Document(
+        id=document_id,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_type=DocumentType.CONTRACT,
+        filename="contract.pdf",
+        upload_status=DocumentStatus.ERROR,
+        document_metadata={"business_metadata": "preserve-me"},
+    )
+    repo = Mock()
+    repo.get_by_id = AsyncMock(return_value=document)
+    repo.update_status = AsyncMock()
+    repo.update_metadata = AsyncMock()
+    repo.commit = AsyncMock()
+    repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock(
+        side_effect=ProcessingAuthorityLost("expected revision no longer current")
+    )
+    monkeypatch.setattr(
+        router,
+        "_enqueue_document_processing",
+        lambda *_args, **_kwargs: pytest.fail("must not enqueue on revision mismatch"),
+    )
+
+    with pytest.raises(router.HTTPException) as exc_info:
+        await router.reprocess_document_endpoint(
+            project_id=project_id,
+            document_id=document_id,
+            expected_revision_id=expected_revision_id,
+            user_id=uuid4(),
+            tenant_id=tenant_id,
+            repo=repo,
+            pending_review_lookup=lambda _tenant_id, _document_ids: {},
+        )
+
+    assert exc_info.value.status_code == 409
+    repo.begin_processing_generation.assert_awaited_once_with(
+        tenant_id,
+        document_id,
+        expected_revision_id=expected_revision_id,
+    )
     repo.update_status.assert_not_awaited()
     repo.update_metadata.assert_not_awaited()
     repo.commit.assert_not_awaited()
