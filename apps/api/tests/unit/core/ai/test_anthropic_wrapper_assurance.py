@@ -5,6 +5,8 @@ Test Suite ID: TS-DEV15-AI-WRAPPER-001
 
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
@@ -92,6 +94,16 @@ def _bare_wrapper(*, cache: _FakeCache | None = None) -> AnthropicWrapper:
     )
     wrapper.llm_client.get_statistics.return_value = {"total_requests": 1}
     return wrapper
+
+
+def test_anthropic_wrapper_is_measured_by_coverage() -> None:
+    repo_root = Path(__file__).resolve().parents[6]
+    pyproject = tomllib.loads(
+        (repo_root / "apps" / "api" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    omitted = set(pyproject["tool"]["coverage"]["run"]["omit"])
+
+    assert "src/core/ai/anthropic_wrapper.py" not in omitted
 
 
 def test_ai_request_normalizes_string_task_type() -> None:
