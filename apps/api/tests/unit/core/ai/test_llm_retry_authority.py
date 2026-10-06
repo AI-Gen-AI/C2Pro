@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -302,3 +304,120 @@ def test_fallback_retry_delay_never_exceeds_configured_max(monkeypatch) -> None:
     )
 
     assert delay == pytest.approx(5.0)
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [
+        (None, None),
+        (float("nan"), None),
+        (float("inf"), None),
+        (0.0, None),
+        (60.1, None),
+        (60.0, 60.0),
+    ],
+)
+def test_reasonable_retry_delay_window(
+    seconds: float | None,
+    expected: float | None,
+) -> None:
+    """Provider delay acceptance matches the pinned SDK's finite 0-60s window."""
+
+    assert LLMClient._reasonable_retry_delay(seconds) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        (None, None),
+        ("not-a-number", None),
+        ("0", None),
+        ("2500", 2.5),
+        ("61000", None),
+    ],
+)
+def test_retry_after_ms_parser(raw_value: str | None, expected: float | None) -> None:
+    """retry-after-ms parsing is deterministic and bounded."""
+
+    assert LLMClient._parse_retry_after_ms(raw_value) == expected
+
+
+def test_retry_after_parser_supports_seconds_and_http_date() -> None:
+    """Retry-After accepts numeric seconds and a reasonable future HTTP date."""
+
+    assert LLMClient._parse_retry_after("7") == pytest.approx(7.0)
+    assert LLMClient._parse_retry_after(None) is None
+    assert LLMClient._parse_retry_after("not-a-date") is None
+
+    future = format_datetime(datetime.now(UTC) + timedelta(seconds=30), usegmt=True)
+    parsed = LLMClient._parse_retry_after(future)
+
+    assert parsed is not None
+    assert 0 < parsed <= 30
+
+
+def test_invalid_retry_after_ms_falls_through_to_retry_after() -> None:
+    """An invalid extension header must not hide a valid standard Retry-After."""
+
+    client = _bare_retry_client()
+    error = _provider_error(
+        429,
+        {
+            "retry-after-ms": "invalid",
+            "retry-after": "4",
+        },
+    )
+
+    assert client._provider_retry_after_seconds(error) == pytest.approx(4.0)
+
+
+def test_retry_after_requires_retryable_status_context() -> None:
+    """Retry delay headers do not override a provider decision not to retry."""
+
+    client = _bare_retry_client()
+    error = _provider_error(
+        400,
+        {
+            "x-should-retry": "false",
+            "retry-after": "4",
+        },
+    )
+
+    assert client._provider_retry_after_seconds(error) is None
+
+
+@pytest.mark.parametrize(
+    ("error_type", "status_code", "expected"),
+    [
+        (anthropic.RateLimitError, 429, LLMErrorType.RATE_LIMIT),
+        (anthropic.AuthenticationError, 401, LLMErrorType.AUTHENTICATION),
+        (anthropic.BadRequestError, 400, LLMErrorType.INVALID_REQUEST),
+        (anthropic.NotFoundError, 404, LLMErrorType.NOT_FOUND),
+        (anthropic.InternalServerError, 500, LLMErrorType.SERVER_ERROR),
+    ],
+)
+def test_classify_provider_status_errors(
+    error_type,
+    status_code: int,
+    expected: LLMErrorType,
+) -> None:
+    """Known Anthropic status errors keep their application classification."""
+
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(status_code, request=request)
+    error = error_type("provider error", response=response, body=None)
+
+    assert _bare_retry_client()._classify_error(error) == expected
+
+
+def test_classify_provider_connection_and_timeout_errors() -> None:
+    """Connection and timeout errors retain their distinct retry categories."""
+
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    timeout = anthropic.APITimeoutError(request)
+    connection = anthropic.APIConnectionError(request=request)
+
+    client = _bare_retry_client()
+
+    assert client._classify_error(timeout) == LLMErrorType.TIMEOUT
+    assert client._classify_error(connection) == LLMErrorType.CONNECTION
