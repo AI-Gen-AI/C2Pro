@@ -992,7 +992,7 @@ async def reprocess_document_endpoint(
     document_id: UUID,
     user_id: CurrentUserId,  # noqa: ARG001
     tenant_id: CurrentTenantId,
-    expected_revision_id: UUID | None = Query(default=None),
+    expected_revision_id: UUID | None = None,
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
     revision_repo: SqlAlchemyDocumentRevisionRepository = Depends(
         get_document_revision_repository
