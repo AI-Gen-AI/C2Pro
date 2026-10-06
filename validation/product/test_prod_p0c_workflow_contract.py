@@ -78,6 +78,21 @@ def test_p0c_workflow_propagates_observed_runtime_identity_to_browser_preflight(
     assert "${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}" not in preflight
 
 
+def test_p0c_provider_observation_resolves_the_serving_frontend_hostname() -> None:
+    source = _workflow()
+    provider = source.split(
+        "Observe production deployment identities from providers", 1
+    )[1].split("Verify exact provider deployment identities", 1)[0]
+    assert (
+        "https://api.vercel.com/v13/deployments/c2pro.io"
+        "?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}"
+    ) in provider
+    assert (
+        "/v13/deployments/${PROD_INPUT_FRONTEND_DEPLOYMENT_ID}?teamId="
+        not in provider
+    )
+
+
 def test_p0c_workflow_uses_only_protected_qualification_credentials() -> None:
     source = _workflow()
     for secret in (
