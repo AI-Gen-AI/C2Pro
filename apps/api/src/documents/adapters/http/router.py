@@ -1100,10 +1100,10 @@ async def reprocess_document_endpoint(
     await repo.refresh(document)
 
     response_data = DocumentResponse.model_validate(document).model_dump()
-    response_data["task_id"] = _enqueue_document_processing(
-        document_id,
-        expected_revision_id if expected_revision_id is not None else None,
-        generation,
+    response_data["task_id"] = (
+        _enqueue_document_processing(document_id, expected_revision_id, generation)
+        if expected_revision_id is not None
+        else _enqueue_document_processing(document_id, generation=generation)
     )
     response_data["processing_status"] = DocumentPollingStatus.QUEUED
     response_data["status_detail"] = (
