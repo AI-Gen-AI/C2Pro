@@ -538,7 +538,8 @@ class LLMClient:
         # Count this as one logical circuit-breaker failure, irrespective of
         # how many internal retry attempts were made.
         if self.circuit_breaker and last_error is not None:
-            self.circuit_breaker.record_failure_sync(last_error)
+            breaker_error = self._circuit_breaker_accounting_error(last_error)
+            self.circuit_breaker.record_failure_sync(breaker_error)
 
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -585,6 +586,21 @@ class LLMClient:
             current = current.__cause__
 
         return chain
+
+    def _circuit_breaker_accounting_error(self, error: Exception) -> Exception:
+        """Preserve breaker exclusions when middleware wraps provider client errors."""
+        if self.circuit_breaker is None:
+            return error
+
+        excluded = self.circuit_breaker.config.excluded_exceptions
+        if not excluded:
+            return error
+
+        for current in self._error_chain(error):
+            if isinstance(current, excluded):
+                return current
+
+        return error
 
     def _classify_error(self, error: Exception) -> LLMErrorType:
         """Classify a provider error, including explicitly wrapped causes."""
