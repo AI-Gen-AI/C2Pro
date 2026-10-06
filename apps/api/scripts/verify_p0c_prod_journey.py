@@ -138,6 +138,7 @@ async def verify_post(
     source_revision_id: UUID,
     target_revision_id: UUID,
     no_change_target_revision_id: UUID,
+    no_change_expected_blob_hash: str,
 ) -> tuple[list[Check], dict[str, str]]:
     p = {
         "tenant_id": tenant_id,
@@ -216,7 +217,17 @@ async def verify_post(
             SELECT event_id,
                    payload->>'state' AS state,
                    payload->>'change_cause' AS change_cause,
-                   jsonb_array_length(coalesce(payload->'changeset'->'changes','[]'::jsonb)) AS changes
+                   payload ? 'change_cause' AS has_change_cause,
+                   jsonb_typeof(payload->'change_cause') AS change_cause_type,
+                   payload ? 'changeset' AS has_changeset,
+                   jsonb_typeof(payload->'changeset') AS changeset_type,
+                   (payload->'changeset') ? 'changes' AS has_changes,
+                   jsonb_typeof(payload->'changeset'->'changes') AS changes_type,
+                   CASE
+                     WHEN jsonb_typeof(payload->'changeset'->'changes') = 'array'
+                     THEN jsonb_array_length(payload->'changeset'->'changes')
+                     ELSE NULL
+                   END AS changes
               FROM project_events
              WHERE project_id=:project_id
                AND tenant_id=:tenant_id
@@ -246,12 +257,15 @@ async def verify_post(
         p,
     )
     hashes = {row.revision_id: row.blob_hash for row in hash_result.all()}
+    persisted_target_hash = hashes.get(target_revision_id)
+    persisted_no_change_hash = hashes.get(no_change_target_revision_id)
     no_change_hash_distinct = (
-        target_revision_id in hashes
-        and no_change_target_revision_id in hashes
-        and bool(hashes[target_revision_id])
-        and bool(hashes[no_change_target_revision_id])
-        and hashes[target_revision_id] != hashes[no_change_target_revision_id]
+        bool(persisted_target_hash)
+        and bool(persisted_no_change_hash)
+        and persisted_target_hash != persisted_no_change_hash
+    )
+    no_change_hash_matches_fixture = (
+        persisted_no_change_hash == no_change_expected_blob_hash
     )
 
     failure_count = await _scalar(
@@ -299,19 +313,55 @@ async def verify_post(
             f"state={no_change_event['state'] if no_change_event else None}",
         ),
         Check(
-            "semantic no-change event has null cause",
-            bool(no_change_event and no_change_event["change_cause"] is None),
-            f"change_cause={no_change_event['change_cause'] if no_change_event else None}",
+            "semantic no-change cause key is explicitly persisted as JSON null",
+            bool(
+                no_change_event
+                and no_change_event["has_change_cause"]
+                and no_change_event["change_cause_type"] == "null"
+                and no_change_event["change_cause"] is None
+            ),
+            (
+                "has_change_cause="
+                f"{no_change_event['has_change_cause'] if no_change_event else None} "
+                "type="
+                f"{no_change_event['change_cause_type'] if no_change_event else None}"
+            ),
         ),
         Check(
-            "semantic no-change event has empty changeset",
-            bool(no_change_event and int(no_change_event["changes"]) == 0),
-            f"changes={no_change_event['changes'] if no_change_event else None}",
+            "semantic no-change changeset is explicitly persisted as an empty array",
+            bool(
+                no_change_event
+                and no_change_event["has_changeset"]
+                and no_change_event["changeset_type"] == "object"
+                and no_change_event["has_changes"]
+                and no_change_event["changes_type"] == "array"
+                and no_change_event["changes"] == 0
+            ),
+            (
+                "has_changeset="
+                f"{no_change_event['has_changeset'] if no_change_event else None} "
+                "changeset_type="
+                f"{no_change_event['changeset_type'] if no_change_event else None} "
+                "has_changes="
+                f"{no_change_event['has_changes'] if no_change_event else None} "
+                "changes_type="
+                f"{no_change_event['changes_type'] if no_change_event else None} "
+                "changes="
+                f"{no_change_event['changes'] if no_change_event else None}"
+            ),
         ),
         Check(
             "semantic no-change revision is byte-distinct",
             no_change_hash_distinct,
             "revision B and parser-equivalent revision C have different blob hashes",
+        ),
+        Check(
+            "persisted semantic no-change revision matches generated Contract C",
+            no_change_hash_matches_fixture,
+            (
+                f"persisted={persisted_no_change_hash} "
+                f"expected={no_change_expected_blob_hash}"
+            ),
         ),
         Check(
             "no revision analysis failure masks accepted outcome",
@@ -325,6 +375,7 @@ async def verify_post(
         "from_revision_id": str(source_revision_id),
         "to_revision_id": str(target_revision_id),
         "no_change_target_revision_id": str(no_change_target_revision_id),
+        "no_change_blob_hash": str(persisted_no_change_hash or ""),
     }
     if event:
         identifiers["change_event_id"] = str(event["event_id"])
@@ -341,6 +392,7 @@ async def verify(
     source_revision_id: UUID,
     target_revision_id: UUID | None,
     no_change_target_revision_id: UUID | None,
+    no_change_expected_blob_hash: str | None,
 ) -> tuple[list[Check], dict[str, str]]:
     engine = create_async_engine(_normalize_database_url(database_url))
     try:
@@ -365,6 +417,10 @@ async def verify(
                         raise VerificationFailure(
                             "no-change target revision id required for post verification"
                         )
+                    if no_change_expected_blob_hash is None:
+                        raise VerificationFailure(
+                            "no-change expected blob hash required for post verification"
+                        )
                     result = await verify_post(
                         conn,
                         tenant_id=tenant_id,
@@ -373,6 +429,7 @@ async def verify(
                         source_revision_id=source_revision_id,
                         target_revision_id=target_revision_id,
                         no_change_target_revision_id=no_change_target_revision_id,
+                        no_change_expected_blob_hash=no_change_expected_blob_hash,
                     )
                 await tx.rollback()
                 return result
@@ -391,6 +448,7 @@ def main() -> int:
     parser.add_argument("--source-revision-id", required=True)
     parser.add_argument("--target-revision-id")
     parser.add_argument("--no-change-target-revision-id")
+    parser.add_argument("--no-change-expected-blob-hash")
     parser.add_argument("--write-evidence", action="store_true")
     args = parser.parse_args()
 
@@ -413,6 +471,11 @@ def main() -> int:
             no_change_target_revision_id=(
                 _uuid(args.no_change_target_revision_id, "no-change target revision id")
                 if args.no_change_target_revision_id
+                else None
+            ),
+            no_change_expected_blob_hash=(
+                args.no_change_expected_blob_hash.lower()
+                if args.no_change_expected_blob_hash
                 else None
             ),
         )
