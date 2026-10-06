@@ -715,7 +715,7 @@ class LLMClient:
         if error is not None:
             provider_delay = self._provider_retry_after_seconds(error)
             if provider_delay is not None:
-                return provider_delay
+                return min(provider_delay, self.max_retry_delay)
 
         base_delay = self.initial_retry_delay * (self.backoff_multiplier**attempt)
 
