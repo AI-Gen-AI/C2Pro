@@ -12,7 +12,17 @@ def test_recovery_workflow_is_owner_only_and_bounded() -> None:
     assert "github.event.comment.user.login == github.repository_owner" in source
     assert "github.triggering_actor == github.repository_owner" in source
     assert "startsWith(github.event.comment.body, 'RECOVER-ISSUE-686 ')" in source
-    assert "target_revision_id=(?P<target_revision_id>" in source
+    assert (
+        'r"source_revision_id=(?P<source_revision_id>[0-9a-fA-F-]{36}) "'
+        in source
+    )
+    assert (
+        'r"target_revision_id=(?P<target_revision_id>[0-9a-fA-F-]{36}) "'
+        in source
+    )
+    assert source.index("target_revision_id=(?P<target_revision_id>") < source.index(
+        "staged_clear=(?P<staged_clear>true)"
+    )
     assert "verify_p0c_prod_recovery.py" in source
     assert "686-p0c-recovery-production.spec.ts" in source
     assert "verify_p0c_prod_journey.py" in source
