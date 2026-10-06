@@ -152,13 +152,14 @@ async def test_independent_v1_budget_findings_are_kept_on_the_unassessed_categor
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reason", ["WBS_NOT_APPROVED", "WBS_DATES_NOT_SCHEDULE_AUTHORITY"])
-async def test_wbs_dates_withheld_in_v1_keep_v2_time_unassessed(reason: str) -> None:
-    """PC-2a.3 (#897): the v1 TIME marker (WBS dates are never schedule evidence) is the v2
-    shadow's decision too -- TIME is never scored from them, and no second read is made."""
-    marker = Clause(id="schedule-wbs-withheld-p", text="WBS dates are not schedule evidence", data={
+async def test_a_category_the_v1_inputs_declare_unassessable_stays_unassessed_in_v2() -> None:
+    """The generic ``assessment_unavailable`` declaration (as #860 uses for BUDGET) is the v2
+    shadow's decision too, for any category, with no second read. (The WBS-dates TIME case is a
+    source limitation, not a veto: tests/unit/coherence/test_pc2a3_time_source_authority.py.)"""
+    reason = "declared_source_unavailable"
+    marker = Clause(id="declared-time-unavailable", text="Schedule source declared unavailable", data={
         "document_type": "schedule", "category": "TIME", "assessment_unavailable": {"TIME": reason}})
-    # a schedule document makes TIME applicable; WBS dates still never make it assessed
+    # a schedule document makes TIME applicable; the declaration still keeps it unassessed
     payload = await _run_shadow(clauses=[Clause(id="B-1", text="Budget", data={}), marker],
                                 extra_document_types=("schedule",))
 

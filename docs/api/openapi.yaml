@@ -5533,6 +5533,15 @@ components:
           title: Baseline Estimated
           description: True when score is the inherent-risk baseline (clean).
           default: false
+        limitations:
+          items:
+            type: string
+          type: array
+          title: Limitations
+          description: Evidence sources unavailable for this category, e.g. WBS_DATES_NOT_SCHEDULE_AUTHORITY
+            (governed Schedule evidence unavailable). The category may still be assessed
+            from other valid evidence (e.g. contract dates); schedule-dependent rules
+            are not evaluated.
       type: object
       required:
       - category
@@ -7324,6 +7333,13 @@ components:
           - type: 'null'
           title: Score Missing Dimensions
           description: Dimensions that prevented a complete score, when applicable.
+        evidence_limitations:
+          additionalProperties:
+            type: string
+          type: object
+          title: Evidence Limitations
+          description: 'Category -> unavailable evidence source (e.g. TIME: WBS_DATES_NOT_SCHEDULE_AUTHORITY,
+            governed Schedule evidence unavailable). Not a category-wide veto (PC-2a.3).'
         finding_signals:
           items:
             $ref: '#/components/schemas/FindingSignal'

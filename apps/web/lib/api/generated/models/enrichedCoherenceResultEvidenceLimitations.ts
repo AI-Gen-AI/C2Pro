@@ -37,27 +37,10 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { CategoryBreakdownCategory } from "./categoryBreakdownCategory";
-import type { SeverityCount } from "./severityCount";
 
 /**
- * Represents the coherence score breakdown for a specific category.
+ * Category -> unavailable evidence source (e.g. TIME: WBS_DATES_NOT_SCHEDULE_AUTHORITY, governed Schedule evidence unavailable). Not a category-wide veto (PC-2a.3).
  */
-export interface CategoryBreakdown {
-  /** The alert category. */
-  category: CategoryBreakdownCategory;
-  /** Category score (null when UNASSESSED). */
-  score?: number | null;
-  /** Total number of alerts in this category. */
-  alert_count: number;
-  /** Breakdown of alerts by severity within this category. */
-  severity_breakdown: SeverityCount;
-  /** Percentage of impact this category has on the overall score. */
-  impact_percentage: number;
-  /** unassessed | assessed_clean | assessed_findings */
-  state?: string;
-  /** True when score is the inherent-risk baseline (clean). */
-  baseline_estimated?: boolean;
-  /** Evidence sources unavailable for this category, e.g. WBS_DATES_NOT_SCHEDULE_AUTHORITY (governed Schedule evidence unavailable). The category may still be assessed from other valid evidence (e.g. contract dates); schedule-dependent rules are not evaluated. */
-  limitations?: string[];
-}
+export type EnrichedCoherenceResultEvidenceLimitations = {
+  [key: string]: string;
+};

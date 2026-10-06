@@ -147,6 +147,29 @@ def merge_coverage(
     return merged
 
 
+def split_evidence(clauses: list[Clause]) -> tuple[list[Clause], dict[str, str]]:
+    """(evidence clauses, category -> unavailable-source reason).
+
+    A clause flagged ``non_evidence`` is only a record that an evidence SOURCE is unavailable
+    (``evidence_limitations = {category: reason}``, e.g. PC-2a.3: TIME's schedule source when the
+    only dates are WBS dates). It is never evaluated, routed or scored, and -- unlike
+    ``assessment_unavailable`` -- never vetoes the category: other valid evidence (contract
+    dates, deadlines) still assesses it, with the limitation reported beside it.
+    """
+    evidence: list[Clause] = []
+    limitations: dict[str, str] = {}
+    for clause in clauses:
+        data = clause.data or {}
+        if data.get("non_evidence") is True:
+            declared = data.get("evidence_limitations")
+            if isinstance(declared, dict):
+                for category, reason in declared.items():
+                    limitations.setdefault(str(category).upper(), str(reason))
+            continue
+        evidence.append(clause)
+    return evidence, limitations
+
+
 # =============================================================================
 # COHERENCE GRAPH STATE
 # =============================================================================
@@ -212,6 +235,10 @@ class CoherenceGraphState:
     coverage_map: Annotated[dict[str, bool], merge_coverage] = field(
         default_factory=dict
     )
+    # Category -> reason an evidence SOURCE for it is unavailable (e.g. TIME: WBS dates are not
+    # schedule authority). Never evidence, never a category-wide veto: a category stays assessed
+    # when other valid evidence covers it, and the limitation is reported beside it (PC-2a.3).
+    evidence_limitations: dict[str, str] = field(default_factory=dict)
 
     # Scoring output
     all_signals: list[FindingSignal] = field(default_factory=list)
@@ -226,6 +253,14 @@ class CoherenceGraphState:
     errors: Annotated[list[str], operator.add] = field(default_factory=list)
     llm_cost_usd: float = 0.0
     llm_calls_count: int = 0
+
+    def __post_init__(self) -> None:
+        # Non-evidence limitation records never reach a node as evidence, however the state was
+        # built; idempotent, so LangGraph's own state rebuilds keep the limitations (PC-2a.3).
+        evidence, found = split_evidence(self.clauses)
+        if found:
+            self.clauses = evidence
+            self.evidence_limitations = {**found, **self.evidence_limitations}
 
     @property
     def num_clauses(self) -> int:

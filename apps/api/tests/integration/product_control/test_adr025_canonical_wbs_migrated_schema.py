@@ -186,10 +186,11 @@ async def test_schedule_and_spend_are_derived_from_the_canonical_wbs(session: As
     )
 
     # PC-2a.3 (#897): the canonical WBS is the only store read, but its dates are never schedule
-    # evidence -- dated legacy rows only withhold TIME (WBS_NOT_APPROVED).
+    # evidence -- dated rows yield only a non-evidence record of the unavailable schedule source.
     clauses = await build_schedule_clauses(session, project_id, tenant_id)
-    assert [clause.data["assessment_unavailable"] for clause in clauses] == [{"TIME": "WBS_NOT_APPROVED"}]
-    assert "schedule_items" not in clauses[0].data
+    assert [clause.data["evidence_limitations"] for clause in clauses] == [
+        {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}]
+    assert clauses[0].data["non_evidence"] is True and "schedule_items" not in clauses[0].data
     spent = await SQLAlchemyBudgetRepository(session).get_total_spent_by_project(project_id, tenant_id)
     assert float(spent) == 125.25
 

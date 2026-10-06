@@ -1,10 +1,10 @@
-"""TS-UD-COH-SCH-002 / PC-2a.3 (#897): WBS dates are never TIME (schedule) evidence.
+"""TS-UD-COH-SCH-002 / PC-2a.3 (#897): WBS dates are never schedule evidence -- source-specific.
 
-SCHEDULE ACTIVITY != WBS NODE. Dated WBS rows yield no schedule item, milestone or predecessor;
-they yield one fail-closed marker that keeps TIME unassessed -- ``WBS_NOT_APPROVED`` without an
-approved baseline, ``WBS_DATES_NOT_SCHEDULE_AUTHORITY`` with one (approved scope is not schedule
-authority). The database-backed authority states are proven in
-tests/modules/integration/test_pc2a3_wbs_authority_enforcement.py.
+SCHEDULE ACTIVITY != WBS NODE. Dated WBS rows yield no schedule item, milestone, status or
+predecessor; they yield one NON-evidence record of the unavailable schedule source
+(WBS_DATES_NOT_SCHEDULE_AUTHORITY, in every authority state). It never vetoes TIME: contract TIME
+evidence still assesses it; with none, TIME is not evaluated. The database-backed states are
+proven in tests/modules/integration/test_pc2a3_wbs_authority_enforcement.py.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import pytest
 from src.coherence import schedule_clause_builder
 from src.coherence.graph.nodes import deterministic_evaluate, scoring_arbiter
 from src.coherence.graph.state import CoherenceGraphState, EvaluationConfig
+from src.coherence.models import Clause
 from src.coherence.schedule_clause_builder import build_schedule_clauses
 from src.wbs.domain.governance import BaselineRef, resolve_authority
 
@@ -62,12 +63,9 @@ def _authority(monkeypatch: pytest.MonkeyPatch, *, approved: bool) -> list[tuple
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("approved", "reason"), [
-    (False, "WBS_NOT_APPROVED"),
-    (True, "WBS_DATES_NOT_SCHEDULE_AUTHORITY"),
-])
-async def test_dated_wbs_rows_yield_only_a_time_withheld_marker(
-        monkeypatch: pytest.MonkeyPatch, approved: bool, reason: str) -> None:
+@pytest.mark.parametrize("approved", [False, True])
+async def test_dated_wbs_rows_yield_only_a_non_evidence_limitation_record(
+        monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
     project_id, tenant_id = uuid4(), uuid4()
     calls = _authority(monkeypatch, approved=approved)
     session = _Session(dated_rows=2)
@@ -76,8 +74,12 @@ async def test_dated_wbs_rows_yield_only_a_time_withheld_marker(
 
     assert len(clauses) == 1
     data = clauses[0].data
-    assert data["category"] == "TIME" and data["assessment_unavailable"] == {"TIME": reason}
-    assert not {"schedule_items", "milestones", "wbs_node_id", "start_date", "end_date"} & set(data)
+    assert data["non_evidence"] is True
+    assert data["evidence_limitations"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+    assert data["wbs_authority_state"] == ("APPROVED_BASELINE" if approved else "LEGACY_UNGOVERNED")
+    # zero schedule evidence, and never a category-wide veto
+    assert not {"schedule_items", "milestones", "wbs_node_id", "start_date", "end_date", "status",
+                "category", "assessment_unavailable"} & set(data)
     # tenant scope on the read and one authority resolution for the project
     assert session.params == [{"project_id": str(project_id), "tenant_id": str(tenant_id)}]
     assert calls == [(project_id, tenant_id)]
@@ -92,17 +94,35 @@ async def test_no_dated_wbs_rows_yield_nothing_and_skip_the_resolver(monkeypatch
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("approved", [False, True])
-async def test_wbs_dates_never_make_time_an_assessed_dimension(
+async def test_wbs_dates_alone_never_make_time_assessed_even_driving_the_nodes_directly(
         monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
+    """The limitation record is not evidence however the state is built (node-level path)."""
     project_id = uuid4()
     _authority(monkeypatch, approved=approved)
     clauses = await build_schedule_clauses(_Session(dated_rows=3), project_id, uuid4())  # type: ignore[arg-type]
     config = EvaluationConfig(low_budget_mode=True)
-    deterministic = deterministic_evaluate(
-        CoherenceGraphState(project_id=str(project_id), clauses=clauses, config=config))
+    state = CoherenceGraphState(project_id=str(project_id), clauses=clauses, config=config)
+    assert state.clauses == [] and state.evidence_limitations == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+    deterministic = deterministic_evaluate(state)
     scored = scoring_arbiter(CoherenceGraphState(
         project_id=str(project_id), clauses=clauses, config=config,
         deterministic_signals=deterministic["deterministic_signals"], coverage_map=deterministic["coverage_map"]))
 
-    assert not {s.rule_id for s in deterministic["deterministic_signals"]} & {"DET-TIM-GAP", "DET-TIM-PREDECESSOR"}
+    assert not deterministic["deterministic_signals"]
     assert scored["diagnostics"]["category_scores"].get("TIME") is None
+
+
+@pytest.mark.asyncio
+async def test_contract_time_evidence_keeps_time_assessed_beside_the_limitation(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    project_id = uuid4()
+    _authority(monkeypatch, approved=True)
+    clauses = [Clause(id="contract-period", text="Works from 1 June 2026, completed by 1 January 2026.",
+                      data={"document_type": "contract", "category": "TIME",
+                            "start_date": "2026-06-01", "end_date": "2026-01-01"}),
+               *await build_schedule_clauses(_Session(dated_rows=3), project_id, uuid4())]  # type: ignore[arg-type]
+    config = EvaluationConfig(low_budget_mode=True)
+    deterministic = deterministic_evaluate(CoherenceGraphState(project_id=str(project_id), clauses=clauses,
+                                                               config=config))
+    assert {s.rule_id for s in deterministic["deterministic_signals"]} == {"DET-TIM-DURATION"}
+    assert deterministic["coverage_map"]["TIME"] is True

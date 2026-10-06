@@ -1,16 +1,17 @@
-"""TS-UD-COH-SCH-002 / PC-2a.3 (#897): WBS dates are never TIME (schedule) evidence.
+"""TS-UD-COH-SCH-002 / PC-2a.3 (#897): WBS dates are never schedule evidence -- source-specific.
 
 SCHEDULE ACTIVITY != WBS NODE. A WBS row's planned / actual dates are legacy operational columns,
 not Schedule truth, and an approved WBS baseline confers authority on scope only -- never on
-those dates. Until a governed Schedule model exists there is no authoritative structured schedule
-source, so no schedule item, milestone or predecessor is derived from ``wbs_nodes``.
+those dates. So no schedule item, milestone, activity status or predecessor is ever derived
+from ``wbs_nodes``.
 
-When the project's WBS does carry dates -- planned or actual (the input the TIME schedule rules would previously have
-read), the evaluation assembly says so explicitly with a fail-closed marker, as #860 does for
-budget lines: ``assessment_unavailable = {"TIME": reason}`` keeps TIME unassessed instead of
-letting a partial rule pass read as clean. The reason is ``WBS_NOT_APPROVED`` for NO_WBS /
-DRAFT_ONLY / LEGACY_UNGOVERNED projects and ``WBS_DATES_NOT_SCHEDULE_AUTHORITY`` for an approved
-baseline. Change-set candidates are never read (they carry no dates and are not project scope).
+That limits the SCHEDULE-derived TIME evidence only. When the project's WBS carries dates, the
+assembly adds one NON-evidence record (``non_evidence`` + ``evidence_limitations = {"TIME":
+WBS_DATES_NOT_SCHEDULE_AUTHORITY}``): it is never evaluated, routed or scored, and it never
+vetoes TIME. Contract / obligation TIME evidence (contract period, deadlines) still assesses
+TIME, with "governed Schedule evidence unavailable" reported beside it; with no other TIME
+evidence, TIME stays not evaluated for that reason. Schedule-dependent rules need a schedule
+structure to apply at all, so they never pass by absence. Change-set candidates are never read.
 """
 
 from __future__ import annotations
@@ -23,10 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.models import Clause
 from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
-from src.wbs.domain.governance import (
-    WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON,
-    WBS_NOT_APPROVED_REASON,
-)
+from src.wbs.domain.governance import WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON
 
 _DATED_WBS_ROWS = text("""
     SELECT count(*)
@@ -38,15 +36,6 @@ _DATED_WBS_ROWS = text("""
 """)
 
 
-async def wbs_schedule_withheld_reason(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> str | None:
-    """Why the WBS dates of this project cannot be TIME evidence; None when it has no dated rows."""
-    params = {"project_id": str(project_id), "tenant_id": str(tenant_id)}
-    if not (await db.execute(_DATED_WBS_ROWS, params)).scalar_one():
-        return None
-    authority = await WBSGovernanceRepository(db).authority(project_id, tenant_id)
-    return WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON if authority.approved else WBS_NOT_APPROVED_REASON
-
-
 async def build_schedule_clauses(
     db: AsyncSession,
     project_id: UUID,
@@ -54,25 +43,24 @@ async def build_schedule_clauses(
     *,
     max_items: int = 50,  # noqa: ARG001 - kept for the callers' contract; nothing is listed any more
 ) -> list[Clause]:
-    """At most one fail-closed TIME marker; never schedule items derived from WBS rows."""
-    reason = await wbs_schedule_withheld_reason(db, project_id, tenant_id)
-    if reason is None:
+    """At most one non-evidence limitation record; never schedule evidence derived from WBS rows."""
+    params = {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    if not (await db.execute(_DATED_WBS_ROWS, params)).scalar_one():
         return []
+    authority = await WBSGovernanceRepository(db).authority(project_id, tenant_id)
     data: dict[str, Any] = {
-        "document_type": "schedule",
-        "source": "wbs_dates_withheld",
-        "category": "TIME",
-        "affected_categories": ["TIME"],
-        "schedule_source_reason": reason,
-        "assessment_unavailable": {"TIME": reason},
+        "non_evidence": True,
+        "source": "wbs_dates",
+        "evidence_limitations": {"TIME": WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON},
+        "wbs_authority_state": authority.state.value,
     }
     return [
         Clause(
-            id=f"schedule-wbs-withheld-{project_id}",
-            text="WBS dates are not schedule evidence: schedule coherence is not assessed",
+            id=f"schedule-source-limitation-{project_id}",
+            text="Governed Schedule evidence unavailable: WBS dates are not schedule authority",
             data=data,
         )
     ]
 
 
-__all__ = ["build_schedule_clauses", "wbs_schedule_withheld_reason"]
+__all__ = ["build_schedule_clauses"]

@@ -76,6 +76,7 @@ from tests.modules.integration.test_pc2a2_wbs_governed_apply import (
     _baseline_one,
     _cmd,
     _cs,
+    _live,
     _new,
     _submit,
 )
@@ -229,10 +230,12 @@ async def _link_clause(db: AsyncSession, node_ids: list[UUID]) -> UUID:
 
 
 async def _time_marker(clauses: list[Any]) -> dict[str, Any]:
-    """The schedule evidence the coherence assembly derives from the WBS: exactly one withheld marker."""
+    """What the coherence assembly derives from dated WBS rows: one NON-evidence record of the
+    schedule-source limitation -- zero schedule evidence, and never a category-wide TIME veto."""
     assert len(clauses) == 1, [clause.id for clause in clauses]
     data = clauses[0].data
-    assert "schedule_items" not in data and "milestones" not in data
+    assert data.get("non_evidence") is True
+    assert not {"schedule_items", "milestones", "assessment_unavailable"} & set(data)
     return data
 
 
@@ -344,7 +347,7 @@ async def test_07_baseline_n_stays_canonical_while_n_plus_1_is_drafted(db: Async
     await db.execute(text("UPDATE wbs_nodes SET planned_start = now() WHERE id = :n"), {"n": ids["2"]})
     await db.commit()
     marker = await _time_marker(await build_schedule_clauses(db, s.project, s.tenant))
-    assert marker["assessment_unavailable"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+    assert marker["evidence_limitations"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
     assert (await _cs(db, change_set_id)).status == "SUBMITTED"
 
 
@@ -427,8 +430,8 @@ async def test_13_legacy_wbs_is_not_wbs_coherence_or_temporal_truth(db: AsyncSes
     s = await _scope(db)
     legacy = await _legacy(db, s, dated=True)
     marker = await _time_marker(await build_schedule_clauses(db, s.project, s.tenant))
-    assert marker["assessment_unavailable"] == {"TIME": "WBS_NOT_APPROVED"}
-    assert marker["category"] == "TIME"
+    assert marker["evidence_limitations"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+    assert marker["wbs_authority_state"] == "LEGACY_UNGOVERNED"
     clause_id = await _link_clause(db, legacy)
     targets = await _impact_wbs_targets(db, s, clause_id)
     assert {t.entity_id for t in targets} == set(legacy)
@@ -557,7 +560,7 @@ async def test_21_an_approved_wbs_date_is_not_schedule_authority(db: AsyncSessio
                           "WHERE project_id = :p"), {"p": s.project})
     await db.commit()
     marker = await _time_marker(await build_schedule_clauses(db, s.project, s.tenant))
-    assert marker["assessment_unavailable"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+    assert marker["evidence_limitations"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
     authority = (await _read(db, s))["authority"]
     assert authority["approved"] is True and authority["dates_schedule_authority"] is False
     section = await _report(db, s)
@@ -767,8 +770,8 @@ async def test_21b_actual_only_wbs_dates_also_withhold_time(db: AsyncSession, ap
                           "actual_end = '2026-02-01' WHERE project_id = :p"), {"p": s.project})
     await db.commit()
     marker = await _time_marker(await build_schedule_clauses(db, s.project, s.tenant))
-    reason = "WBS_DATES_NOT_SCHEDULE_AUTHORITY" if approved else "WBS_NOT_APPROVED"
-    assert marker["assessment_unavailable"] == {"TIME": reason}
+    assert marker["evidence_limitations"] == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+    assert marker["wbs_authority_state"] == ("APPROVED_BASELINE" if approved else "LEGACY_UNGOVERNED")
 
 
 @pytest.mark.parametrize("between", ["authority_and_tree", "tree_and_flat"])
@@ -813,3 +816,77 @@ async def test_26_wbs_read_never_mixes_baselines_across_a_concurrent_apply(
     assert authority["baseline_no"] == 2, authority
     assert str(candidate) in tree_ids and str(ids["2"]) not in tree_ids
     assert result["total_items"] == len(tree_ids) == result["coverage"]["approved_scope_items"]
+
+
+# =========================================================================== final review: source-specific TIME
+def _contract_period() -> Any:
+    """Contract TIME evidence: a contractual period whose end precedes its start (DET-TIM-DURATION)."""
+    from src.coherence.models import Clause
+
+    return Clause(id="contract-period-1",
+                  text="The Works shall be carried out from 1 June 2026 and completed by 1 January 2026.",
+                  data={"document_type": "contract", "category": "TIME",
+                        "start_date": "2026-06-01", "end_date": "2026-01-01"})
+
+
+async def _coherence(clauses: list[Any]) -> Any:
+    from src.coherence.graph.graph import evaluate_coherence_async
+    from src.coherence.graph.state import EvaluationConfig
+
+    return await evaluate_coherence_async(clauses=clauses, project_id="p",
+                                          config=EvaluationConfig(low_budget_mode=True))
+
+
+def _schedule_category(result: Any) -> Any:
+    return next(item for item in result.category_breakdown if item.category == "schedule")
+
+
+@pytest.mark.parametrize(("state", "dates"), [
+    ("legacy", "planned"), ("legacy", "actual"), ("approved", "planned"), ("approved", "actual")])
+async def test_27_contract_time_evidence_survives_dated_wbs(db: AsyncSession, state: str, dates: str) -> None:
+    """A/B/E/F: dated WBS (legacy or approved, planned or actual) contributes no TIME evidence and
+    does not disable the contract's TIME evidence; the schedule-source limitation is surfaced."""
+    s = await _scope(db)
+    if state == "approved":
+        await _approved(db, s)
+    else:
+        await _legacy(db, s)
+    columns = "planned_start = '2026-01-01', planned_end = '2026-06-30'" if dates == "planned" else (
+        "actual_start = '2026-01-05', actual_end = '2026-02-01'")
+    await db.execute(text(f"UPDATE wbs_nodes SET {columns} WHERE project_id = :p"), {"p": s.project})
+    await db.commit()
+    result = await _coherence([_contract_period(), *await build_schedule_clauses(db, s.project, s.tenant)])
+
+    rule_ids = {signal.rule_id for signal in result.finding_signals}
+    assert "DET-TIM-DURATION" in rule_ids  # the contractual TIME rule still evaluates
+    assert not rule_ids & {"DET-TIM-GAP", "DET-TIM-PREDECESSOR", "DET-TIM-STATUS"}  # no WBS schedule evidence
+    schedule = _schedule_category(result)
+    assert schedule.state != "unassessed"
+    assert schedule.limitations == ["WBS_DATES_NOT_SCHEDULE_AUTHORITY"]
+    # the WBS ids never appear in any TIME signal
+    live = {str(node_id) for node_id in (await _live(db, s.project))}
+    assert not live & set(repr([signal.raw_data for signal in result.finding_signals]).split("'"))
+
+
+async def test_27d_wbs_dates_alone_leave_schedule_time_not_evaluated(db: AsyncSession) -> None:
+    """D/I: only WBS dates, no other TIME evidence -> TIME not evaluated (no pass-by-absence)."""
+    s = await _scope(db)
+    await _legacy(db, s, dated=True)
+    result = await _coherence(await build_schedule_clauses(db, s.project, s.tenant))
+    schedule = _schedule_category(result)
+    assert schedule.state == "unassessed" and schedule.score is None
+    assert schedule.limitations == ["WBS_DATES_NOT_SCHEDULE_AUTHORITY"]
+    assert result.evidence_limitations == {"TIME": "WBS_DATES_NOT_SCHEDULE_AUTHORITY"}
+
+
+async def test_28_a_candidate_has_no_time_effect(db: AsyncSession) -> None:
+    """G: Baseline #N with dates + a #N+1 draft -> identical TIME inputs; the candidate is never read."""
+    s = await _scope(db)
+    ids = await _approved(db, s)
+    await db.execute(text("UPDATE wbs_nodes SET planned_start = '2026-01-01' WHERE project_id = :p"), {"p": s.project})
+    await db.commit()
+    before = [(c.id, c.data) for c in await build_schedule_clauses(db, s.project, s.tenant)]
+    _, candidate = await _draft_on_baseline(db, s, ids)
+    after = [(c.id, c.data) for c in await build_schedule_clauses(db, s.project, s.tenant)]
+    assert before == after
+    assert str(candidate) not in repr(after)

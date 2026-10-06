@@ -45,7 +45,7 @@ from .nodes import (
     rag_similarity_check_async,
     scoring_arbiter,
 )
-from .state import CoherenceGraphState, EvaluationConfig
+from .state import CoherenceGraphState, EvaluationConfig, split_evidence
 
 CoherenceStateGraph = StateGraph[CoherenceGraphState, None, CoherenceGraphState, CoherenceGraphState]
 
@@ -83,6 +83,7 @@ def _honest_null_result(final_state: dict[str, Any]) -> EnrichedCoherenceResult:
         score_reason=reason,
         score_missing_dimensions=diagnostics.get("missing_dimensions"),
         finding_signals=[],
+        evidence_limitations=dict(final_state.get("evidence_limitations") or {}),
     )
 
 
@@ -343,6 +344,7 @@ def evaluate_coherence(
         >>> result = evaluate_coherence(clauses)
         >>> print(f"Score: {result.overall_score}")
     """
+    clauses, limitations = split_evidence(clauses)
     router_coverage = _seed_coverage_from_category_router(clauses)
 
     # Create initial state
@@ -351,6 +353,7 @@ def evaluate_coherence(
         clauses=clauses,
         config=config or EvaluationConfig(),
         coverage_map=router_coverage,
+        evidence_limitations=limitations,
     )
 
     graph = get_coherence_subgraph()
@@ -402,6 +405,7 @@ async def evaluate_coherence_async(
     Returns:
         EnrichedCoherenceResult with score, alerts, and diagnostics
     """
+    clauses, limitations = split_evidence(clauses)
     router_coverage = _seed_coverage_from_category_router(clauses)
     coverage_seed = dict(router_coverage)
     if seed_coverage:
@@ -415,6 +419,7 @@ async def evaluate_coherence_async(
         config=config or EvaluationConfig(),
         deterministic_signals=seed_signals or [],
         coverage_map=coverage_seed,
+        evidence_limitations=limitations,
     )
 
     # Get compiled graph
@@ -450,10 +455,12 @@ def evaluate_coherence_with_streaming(
     Yields:
         Tuple of (node_name, partial_state) as each node completes
     """
+    clauses, limitations = split_evidence(clauses)
     initial_state = CoherenceGraphState(
         project_id=project_id,
         clauses=clauses,
         config=config or EvaluationConfig(),
+        evidence_limitations=limitations,
     )
 
     graph = get_coherence_subgraph()

@@ -165,6 +165,7 @@ export * from "./documentUploadResponse";
 export * from "./enrichedCoherenceResult";
 export * from "./enrichedCoherenceResultAuditCoverage";
 export * from "./enrichedCoherenceResultCategoryScores";
+export * from "./enrichedCoherenceResultEvidenceLimitations";
 export * from "./enrichedCoherenceResultScoreVersion";
 export * from "./epistemicBasis";
 export * from "./evaluateProjectCoherenceApiV1CoherenceEvaluatePostParams";
