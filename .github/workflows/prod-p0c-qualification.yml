@@ -230,7 +230,11 @@ jobs:
         run: |
           set -euo pipefail
           python apps/api/scripts/build_p0c_semantic_no_change_fixture.py
-          test -f apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
+          fixture="apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf"
+          test -f "$fixture"
+          fixture_sha="$(sha256sum "$fixture" | awk '{print $1}')"
+          [[ "$fixture_sha" =~ ^[0-9a-f]{64}$ ]]
+          echo "PROD_P0C_NO_CHANGE_EXPECTED_SHA256=$fixture_sha" >> "$GITHUB_ENV"
 
       - name: Read-only synthetic tenant preflight
         env:
@@ -291,6 +295,7 @@ jobs:
           PROD_P0C_DOCUMENT_ID: ${{ inputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
           PROD_P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
+          PROD_P0C_NO_CHANGE_EXPECTED_SHA256: ${{ env.PROD_P0C_NO_CHANGE_EXPECTED_SHA256 }}
         working-directory: apps/web
         shell: bash
         run: |
@@ -343,6 +348,7 @@ jobs:
             --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID" \
             --target-revision-id "$PROD_P0C_TARGET_REVISION_ID" \
             --no-change-target-revision-id "$PROD_P0C_NO_CHANGE_TARGET_REVISION_ID" \
+            --no-change-expected-blob-hash "$PROD_P0C_NO_CHANGE_EXPECTED_SHA256" \
             --write-evidence
 
       - name: Build non-authoritative P0c evidence bundle
