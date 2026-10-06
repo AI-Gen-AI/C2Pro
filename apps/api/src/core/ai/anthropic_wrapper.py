@@ -353,6 +353,7 @@ class AnthropicWrapper:
             )
 
         if cache_allowed:
+            assert request.tenant_id is not None
             cache_key = self._build_cache_key(
                 prompt=safe_prompt,  # Use safe prompt for cache key
                 system_prompt=safe_system_prompt or "",
