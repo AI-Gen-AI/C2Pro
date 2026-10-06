@@ -65,7 +65,7 @@ jobs:
   p0c-production-qualification:
     name: "#686 P0c exact-runtime production qualification"
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     environment: production-qualification
 
     steps:
@@ -225,6 +225,17 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Build byte-distinct semantic no-change fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/build_p0c_semantic_no_change_fixture.py
+          fixture="apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf"
+          test -f "$fixture"
+          fixture_sha="$(sha256sum "$fixture" | awk '{print $1}')"
+          [[ "$fixture_sha" =~ ^[0-9a-f]{64}$ ]]
+          echo "PROD_P0C_NO_CHANGE_EXPECTED_SHA256=$fixture_sha" >> "$GITHUB_ENV"
+
       - name: Read-only synthetic tenant preflight
         env:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
@@ -283,6 +294,7 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ inputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ inputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ inputs.source_revision_id }}
+          PROD_P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
         working-directory: apps/web
         shell: bash
         run: |
@@ -306,7 +318,18 @@ jobs:
           print(value)
           PY
           )"
+          no_change_target="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('apps/web/playwright/.prod-p0c/run.json').read_text())
+          value=data.get('no_change_target_revision_id')
+          if not isinstance(value,str) or not value:
+              raise SystemExit(2)
+          print(value)
+          PY
+          )"
           echo "PROD_P0C_TARGET_REVISION_ID=$target" >> "$GITHUB_ENV"
+          echo "PROD_P0C_NO_CHANGE_TARGET_REVISION_ID=$no_change_target" >> "$GITHUB_ENV"
 
       - name: Read-only durable post-run P0c verification
         env:
@@ -323,6 +346,8 @@ jobs:
             --document-id "$PROD_P0C_DOCUMENT_ID" \
             --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID" \
             --target-revision-id "$PROD_P0C_TARGET_REVISION_ID" \
+            --no-change-target-revision-id "$PROD_P0C_NO_CHANGE_TARGET_REVISION_ID" \
+            --no-change-expected-blob-hash "$PROD_P0C_NO_CHANGE_EXPECTED_SHA256" \
             --write-evidence
 
       - name: Build non-authoritative P0c evidence bundle
@@ -381,6 +406,7 @@ jobs:
           if-no-files-found: warn
           path: |
             apps/web/playwright/.prod-p0c/run.json
+            apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
             apps/web/playwright/.prod-p0c/pj01/**
             evidence/product-qualification/runtime/deployment-identity.json
             evidence/product-qualification/runtime/p0c-verifier.json

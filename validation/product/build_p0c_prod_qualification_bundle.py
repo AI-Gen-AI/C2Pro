@@ -108,6 +108,14 @@ def build_bundle(
     source_revision_id = _required(identifiers, "from_revision_id")
     target_revision_id = _required(identifiers, "to_revision_id")
     change_event_id = _required(identifiers, "change_event_id")
+    no_change_target_revision_id = _required(
+        identifiers, "no_change_target_revision_id"
+    )
+    no_change_event_id = _required(identifiers, "no_change_event_id")
+    no_change_blob_hash = _sha(
+        _required(identifiers, "no_change_blob_hash"),
+        "no-change persisted blob hash",
+    )
 
     expected_run = {
         "project_id": project_id,
@@ -115,6 +123,10 @@ def build_bundle(
         "source_revision_id": source_revision_id,
         "target_revision_id": target_revision_id,
         "change_event_id": change_event_id,
+        "no_change_source_revision_id": target_revision_id,
+        "no_change_target_revision_id": no_change_target_revision_id,
+        "no_change_event_id": no_change_event_id,
+        "no_change_fixture_sha256": no_change_blob_hash,
     }
     disagreements = [
         key for key, expected in expected_run.items() if run.get(key) != expected
@@ -131,6 +143,15 @@ def build_bundle(
         raise BundleBuildError("new-version flow did not preserve one logical document")
     if run.get("blocking_findings") != []:
         raise BundleBuildError("browser recorder has blocking findings")
+    if (
+        "no_change_change_cause" not in run
+        or run.get("no_change_change_cause") is not None
+    ):
+        raise BundleBuildError("semantic no-change browser proof is not honest")
+    if run.get("no_change_fixture_class") != "byte-distinct-parser-equivalent":
+        raise BundleBuildError("semantic no-change fixture class is not proven")
+    if run.get("no_change_processing_outcome") != "analyzed":
+        raise BundleBuildError("semantic no-change revision did not settle as analyzed")
 
     control_sha = _sha(control_commit_sha, "control commit")
     control = _control_at(control_sha)
@@ -175,6 +196,20 @@ def build_bundle(
             "id": "change-event",
             "kind": "persisted_entity",
             "ref": f"postgres:project_event:{change_event_id}",
+            "immutable": True,
+            "sha256": None,
+        },
+        {
+            "id": "no-change-target-revision",
+            "kind": "persisted_entity",
+            "ref": f"postgres:document_revision:{no_change_target_revision_id}",
+            "immutable": True,
+            "sha256": no_change_blob_hash,
+        },
+        {
+            "id": "no-change-event",
+            "kind": "persisted_entity",
+            "ref": f"postgres:project_event:{no_change_event_id}",
             "immutable": True,
             "sha256": None,
         },
@@ -265,10 +300,15 @@ def build_bundle(
             {
                 "id": "absent_evidence_does_not_invent_change",
                 "status": "PASS",
-                "evidence_refs": ["browser-run", "durable-verifier"],
+                "evidence_refs": [
+                    "browser-run",
+                    "durable-verifier",
+                    "no-change-target-revision",
+                    "no-change-event",
+                ],
                 "note": (
-                    "The canonical PJ-01 evaluator rejects unchanged control facts "
-                    "reported as changes and requires evidence_refs on every reported change."
+                    "A byte-distinct parser-equivalent derivative of revision B "
+                    "persisted as revision C with change_cause=null and an empty changeset."
                 ),
             },
         ],
