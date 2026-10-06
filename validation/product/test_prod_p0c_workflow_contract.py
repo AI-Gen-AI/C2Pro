@@ -167,6 +167,7 @@ def test_p0c_browser_recovery_reuses_existing_revision_before_no_change() -> Non
     assert "PROD_P0C_RECOVERY_REVISION_ID" in source
     assert "Retry processing" in source
     assert "recoveryRevisionId" in source
+    assert "expected_revision_id" in source
     assert "expect(whatChanged.targetRevisionId).toBe(recoveryRevisionId)" in source
     assert "uploadNewVersionThroughUi" in source
 
