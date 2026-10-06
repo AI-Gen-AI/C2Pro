@@ -47,4 +47,5 @@ export interface ImpactTarget {
   label?: string | null;
   status?: string | null;
   potentially_stale?: boolean | null;
+  wbs_unapproved?: boolean | null;
 }

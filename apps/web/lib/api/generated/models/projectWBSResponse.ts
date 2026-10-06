@@ -37,12 +37,13 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { ProjectWBSAuthority } from "./projectWBSAuthority";
 import type { ProjectWBSCoverage } from "./projectWBSCoverage";
 import type { ProjectWBSNode } from "./projectWBSNode";
 import type { ProjectWBSResponseAlertsItem } from "./projectWBSResponseAlertsItem";
 
 /**
- * Authoritative WBS contract: root items with nested children (procurement WBS store).
+ * Live WBS rows with nested children, qualified by the project's WBS authority.
  */
 export interface ProjectWBSResponse {
   project_id: string;
@@ -50,4 +51,5 @@ export interface ProjectWBSResponse {
   coverage: ProjectWBSCoverage;
   alerts: ProjectWBSResponseAlertsItem[];
   total_items: number;
+  authority: ProjectWBSAuthority;
 }

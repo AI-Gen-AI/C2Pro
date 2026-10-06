@@ -7616,6 +7616,18 @@
             "type": "boolean",
             "title": "Truncated",
             "default": false
+          },
+          "spent_amount_source": {
+            "type": "string",
+            "title": "Spent Amount Source",
+            "description": "Spend is the sum of the WBS rows' legacy budget_spent field.",
+            "default": "LEGACY_WBS_BUDGET_SPENT"
+          },
+          "spent_amount_cost_authority": {
+            "type": "boolean",
+            "title": "Spent Amount Cost Authority",
+            "description": "Always false: WBS budget_spent is not Cost authority, even on an approved WBS.",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -11993,6 +12005,17 @@
               }
             ],
             "title": "Potentially Stale"
+          },
+          "wbs_unapproved": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Unapproved"
           }
         },
         "additionalProperties": false,
@@ -13123,6 +13146,18 @@
           "completion_average": {
             "type": "number",
             "title": "Completion Average"
+          },
+          "approved_scope_items": {
+            "type": "integer",
+            "title": "Approved Scope Items",
+            "description": "Items of the current approved WBS baseline (0 unless the WBS is approved).",
+            "default": 0
+          },
+          "unapproved_legacy_items": {
+            "type": "integer",
+            "title": "Unapproved Legacy Items",
+            "description": "LEGACY_UNGOVERNED items: readable, never counted as approved scope.",
+            "default": 0
           }
         },
         "type": "object",
@@ -13134,7 +13169,7 @@
           "completion_average"
         ],
         "title": "ProjectWBSCoverage",
-        "description": "Evidence coverage over every WBS item of the project (not only roots)."
+        "description": "Evidence coverage over every WBS item of the project (not only roots).\n\nThe descriptive counts cover every live row, approved or not; only ``approved_scope_items``\nis approved scope (PC-2a.3). Dates and budgets on WBS rows are never Schedule / Cost authority."
       },
       "ProjectWBSNode": {
         "properties": {
@@ -13324,6 +13359,9 @@
           "total_items": {
             "type": "integer",
             "title": "Total Items"
+          },
+          "authority": {
+            "$ref": "#/components/schemas/ProjectWBSAuthority"
           }
         },
         "type": "object",
@@ -13332,10 +13370,11 @@
           "items",
           "coverage",
           "alerts",
-          "total_items"
+          "total_items",
+          "authority"
         ],
         "title": "ProjectWBSResponse",
-        "description": "Authoritative WBS contract: root items with nested children (procurement WBS store)."
+        "description": "Live WBS rows with nested children, qualified by the project's WBS authority."
       },
       "ProjectionCandidate": {
         "properties": {
@@ -15803,6 +15842,52 @@
       },
       "WbsData": {
         "properties": {
+          "authority_state": {
+            "type": "string",
+            "enum": ["NO_WBS", "LEGACY_UNGOVERNED", "APPROVED_BASELINE"],
+            "title": "Authority State"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "scope_label": {
+            "type": "string",
+            "title": "Scope Label"
+          },
+          "baseline_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline No"
+          },
+          "approved_scope_item_count": {
+            "type": "integer",
+            "title": "Approved Scope Item Count",
+            "description": "Items of the current approved baseline; 0 unless approved."
+          },
+          "unapproved_item_count": {
+            "type": "integer",
+            "title": "Unapproved Item Count",
+            "description": "Live items that are not approved scope (legacy rows)."
+          },
+          "dates_schedule_authority": {
+            "type": "boolean",
+            "title": "Dates Schedule Authority",
+            "description": "Always false: WBS dates are not Schedule authority.",
+            "default": false
+          },
+          "budget_cost_authority": {
+            "type": "boolean",
+            "title": "Budget Cost Authority",
+            "description": "Always false: WBS budgets are not Cost authority.",
+            "default": false
+          },
           "item_count": {
             "type": "integer",
             "title": "Item Count"
@@ -15854,6 +15939,11 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "authority_state",
+          "approved",
+          "scope_label",
+          "approved_scope_item_count",
+          "unapproved_item_count",
           "item_count",
           "root_count",
           "leaf_count",
@@ -15865,7 +15955,7 @@
           "evidence_breakdown"
         ],
         "title": "WbsData",
-        "description": "The persisted procurement WBS items: served by GET /projects/{id}/wbs and used as RACI rows."
+        "description": "The live WBS rows (as GET /projects/{id}/wbs serves them), qualified by WBS authority.\n\nPC-2a.3: only an approved baseline is approved scope; LEGACY_UNGOVERNED rows are reported as\n\"Unapproved / Legacy WBS\" and never counted as approved scope, completeness or controlled\ncoverage. WBS dates / budgets are never Schedule / Cost authority."
       },
       "WbsItemSummary": {
         "properties": {
@@ -17504,6 +17594,107 @@
         "required": ["type", "node_id"],
         "title": "WBSUpdateNodeCommand",
         "description": "Rename / re-describe / reclassify. Only the fields present are changed; same identity."
+      },
+      "ProjectWBSAuthority": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["NO_WBS", "LEGACY_UNGOVERNED", "APPROVED_BASELINE"],
+            "title": "State"
+          },
+          "display_state": {
+            "type": "string",
+            "enum": [
+              "NO_WBS",
+              "DRAFT_ONLY",
+              "LEGACY_UNGOVERNED",
+              "APPROVED_BASELINE"
+            ],
+            "title": "Display State"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved",
+            "description": "True only for an approved baseline: the canonical project scope."
+          },
+          "scope_label": {
+            "type": "string",
+            "title": "Scope Label",
+            "description": "e.g. \"Approved WBS Baseline #2\" or \"Unapproved / Legacy WBS\"."
+          },
+          "baseline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Id"
+          },
+          "baseline_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline No"
+          },
+          "tree_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tree Digest"
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At",
+            "description": "ISO 8601 timestamp of the current baseline's apply"
+          },
+          "draft_exists": {
+            "type": "boolean",
+            "title": "Draft Exists",
+            "description": "An open change set exists; it never replaces the current scope until approved."
+          },
+          "dates_schedule_authority": {
+            "type": "boolean",
+            "title": "Dates Schedule Authority",
+            "description": "Always false: WBS planned/actual dates are not Schedule authority.",
+            "default": false
+          },
+          "budget_cost_authority": {
+            "type": "boolean",
+            "title": "Budget Cost Authority",
+            "description": "Always false: WBS budget_allocated / budget_spent are not Cost authority.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "display_state",
+          "approved",
+          "scope_label",
+          "draft_exists"
+        ],
+        "title": "ProjectWBSAuthority",
+        "description": "The project WBS authority from the single resolver (PC-2a.3 / ADR-029)."
       }
     },
     "securitySchemes": {
