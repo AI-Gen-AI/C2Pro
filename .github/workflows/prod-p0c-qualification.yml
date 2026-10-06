@@ -74,7 +74,7 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               for key, value in values.items():
-                  print(f"{key}={value}", file=output)
+                  print(f"{key}={value or ''}", file=output)
 
       - name: Fail closed on owner intent and bounded inputs
         env:
