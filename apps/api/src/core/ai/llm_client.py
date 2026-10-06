@@ -605,36 +605,31 @@ class LLMClient:
 
         return LLMErrorType.UNKNOWN
 
-    def _provider_retry_directive(self, error: Exception) -> bool | None:
-        """Return the provider's retry decision, including wrapped causes."""
+    @staticmethod
+    def _response_should_retry(response: Any) -> bool:
+        """Apply the pinned Anthropic SDK retry policy to one HTTP response."""
+        should_retry_header = response.headers.get("x-should-retry")
+        if should_retry_header == "true":
+            return True
+        if should_retry_header == "false":
+            return False
+
+        return response.status_code in {408, 409, 429} or response.status_code >= 500
+
+    def _provider_retry_context(
+        self,
+        error: Exception,
+    ) -> tuple[bool | None, anthropic.APIStatusError | None]:
+        """Return provider retry decision and the response-bearing status error."""
         for current in self._error_chain(error):
             if isinstance(current, anthropic.RetryableError):
-                return True
-
-            response = getattr(current, "response", None)
-            headers = getattr(response, "headers", None)
-            if headers is not None:
-                raw_directive = headers.get("x-should-retry")
-                if isinstance(raw_directive, str):
-                    directive = raw_directive.strip().lower()
-                    if directive == "true":
-                        return True
-                    if directive == "false":
-                        return False
-
-            status_code = getattr(current, "status_code", None)
-            if status_code is None:
-                status_code = getattr(response, "status_code", None)
-
-            if isinstance(status_code, int) and (
-                status_code in {408, 409, 429} or status_code >= 500
-            ):
-                return True
-
+                return True, None
+            if isinstance(current, anthropic.APIStatusError):
+                return self._response_should_retry(current.response), current
             if isinstance(current, anthropic.APIConnectionError):
-                return True
+                return True, None
 
-        return None
+        return None, None
 
     def _should_retry(
         self,
@@ -643,7 +638,7 @@ class LLMClient:
     ) -> bool:
         """Determine retryability with provider directives taking precedence."""
         if error is not None:
-            provider_directive = self._provider_retry_directive(error)
+            provider_directive, _ = self._provider_retry_context(error)
             if provider_directive is not None:
                 return provider_directive
 
@@ -656,42 +651,41 @@ class LLMClient:
         return error_type in retryable_errors
 
     def _provider_retry_after_seconds(self, error: Exception) -> float | None:
-        """Parse provider retry delay hints across wrapped causes."""
-        for current in self._error_chain(error):
-            response = getattr(current, "response", None)
-            headers = getattr(response, "headers", None)
-            if headers is None:
-                continue
+        """Parse reasonable provider retry delay hints from the retrying status error."""
+        should_retry, status_error = self._provider_retry_context(error)
+        if should_retry is not True or status_error is None:
+            return None
 
-            retry_after_ms = headers.get("retry-after-ms")
-            if retry_after_ms is not None:
-                try:
-                    seconds = float(retry_after_ms) / 1000.0
-                except (TypeError, ValueError):
-                    seconds = None
-                if seconds is not None and math.isfinite(seconds) and seconds > 0:
-                    return min(seconds, self.max_retry_delay)
-
-            retry_after = headers.get("retry-after")
-            if retry_after is None:
-                continue
-
-            seconds: float | None
+        headers = status_error.response.headers
+        retry_after_ms = headers.get("retry-after-ms")
+        if retry_after_ms is not None:
             try:
-                seconds = float(retry_after)
+                seconds = float(retry_after_ms) / 1000.0
             except (TypeError, ValueError):
-                try:
-                    retry_at = parsedate_to_datetime(str(retry_after))
-                    if retry_at.tzinfo is None:
-                        retry_at = retry_at.replace(tzinfo=UTC)
-                    seconds = (retry_at - datetime.now(UTC)).total_seconds()
-                except (TypeError, ValueError, OverflowError):
-                    seconds = None
+                seconds = None
+            if seconds is not None and math.isfinite(seconds) and 0 < seconds <= 60:
+                return seconds
 
-            if seconds is not None and math.isfinite(seconds) and seconds > 0:
-                return min(seconds, self.max_retry_delay)
+        retry_after = headers.get("retry-after")
+        if retry_after is None:
+            return None
 
-        return None
+        seconds: float | None
+        try:
+            seconds = float(retry_after)
+        except (TypeError, ValueError):
+            try:
+                retry_at = parsedate_to_datetime(str(retry_after))
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                seconds = (retry_at - datetime.now(UTC)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                seconds = None
+
+        if seconds is None or not math.isfinite(seconds) or not 0 < seconds <= 60:
+            return None
+
+        return seconds
 
     def _calculate_retry_delay(
         self,
