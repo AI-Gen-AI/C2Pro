@@ -93,6 +93,29 @@ def test_p0c_provider_observation_resolves_the_serving_frontend_hostname() -> No
     )
 
 
+def test_p0c_browser_journey_receives_verified_runtime_identity() -> None:
+    source = _workflow()
+    browser = source.split("Execute real P0c production browser journey", 1)[1].split(
+        "Resolve target revision from bounded browser evidence", 1
+    )[0]
+    assert (
+        "PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: "
+        "${{ steps.parse.outputs.backend_sha }}"
+    ) in browser
+    assert (
+        "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: "
+        "${{ steps.runtime_identity.outputs.backend_sha }}"
+    ) in browser
+    assert (
+        "PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: "
+        "${{ steps.parse.outputs.frontend_sha }}"
+    ) in browser
+    assert (
+        "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: "
+        "${{ steps.runtime_identity.outputs.frontend_sha }}"
+    ) in browser
+
+
 def test_p0c_workflow_uses_only_protected_qualification_credentials() -> None:
     source = _workflow()
     for secret in (
