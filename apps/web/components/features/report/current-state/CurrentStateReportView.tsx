@@ -538,6 +538,12 @@ function WbsBody({ data }: { data: SectionData<"wbs"> }) {
   if (!data) return null;
   return (
     <>
+      <p data-testid="wbs-scope" className="font-medium">
+        {data.scope_label}
+        {data.approved ? null : (
+          <span className="font-normal text-muted-foreground"> · not approved project scope</span>
+        )}
+      </p>
       <p>
         <span className="text-lg font-semibold">{data.item_count}</span> item(s) · {data.root_count} top-level ·{" "}
         {data.leaf_count} leaf · deepest level {data.max_level}

@@ -306,6 +306,11 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
       const data = sections.wbs.data;
       if (!data) return [];
       return [
+        metric("authority_state", data.authority_state),
+        metric("approved", data.approved),
+        metric("scope_label", data.scope_label),
+        metric("approved_scope_item_count", data.approved_scope_item_count),
+        metric("unapproved_item_count", data.unapproved_item_count),
         metric("item_count", data.item_count),
         metric("root_count", data.root_count),
         metric("leaf_count", data.leaf_count),

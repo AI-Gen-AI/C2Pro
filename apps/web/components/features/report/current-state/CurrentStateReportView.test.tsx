@@ -266,6 +266,14 @@ describe("CurrentStateReportView", () => {
           evidence_tier: "unlinked",
           evidence_note: "Some WBS items record no source document or clause. WBS items record no timestamps.",
           data: {
+            authority_state: "LEGACY_UNGOVERNED",
+            approved: false,
+            scope_label: "Unapproved / Legacy WBS",
+            baseline_no: null,
+            approved_scope_item_count: 0,
+            unapproved_item_count: 3,
+            dates_schedule_authority: false,
+            budget_cost_authority: false,
             item_count: 3,
             root_count: 1,
             leaf_count: 2,
@@ -293,6 +301,10 @@ describe("CurrentStateReportView", () => {
       },
     });
     const card = section("wbs");
+    // PC-2a.3: a legacy WBS is shown, explicitly unapproved
+    expect(within(card).getByTestId("wbs-scope")).toHaveTextContent(
+      "Unapproved / Legacy WBS · not approved project scope",
+    );
     expect(card).toHaveTextContent("3 item(s) · 1 top-level · 2 leaf · deepest level 2");
     expect(within(card).getByTestId("wbs-coverage")).toHaveTextContent(
       "1 of 3 with a budget · 0 of 3 with planned start and end",
