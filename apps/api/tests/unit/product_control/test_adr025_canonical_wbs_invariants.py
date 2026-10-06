@@ -153,7 +153,10 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
 
     from src.main import create_application
 
-    allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router"}
+    # The PC-2a.1 governance router reads the canonical WBS's governance history (change sets,
+    # immutable baselines); it is not a second WBS store and it may never write.
+    governance = "src.wbs.adapters.http.governance_router"
+    allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -161,3 +164,4 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
             wbs_routes[(tuple(sorted(context.methods or ())), context.path_format)] = route.endpoint.__module__
     assert wbs_routes, "the canonical WBS must be served"
     assert set(wbs_routes.values()) <= allowed_handlers
+    assert all(methods == ("GET",) for (methods, _), module in wbs_routes.items() if module == governance)

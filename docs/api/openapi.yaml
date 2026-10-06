@@ -1648,6 +1648,220 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-governance/authority:
+    get:
+      tags:
+      - WBS governance
+      summary: Get Wbs Authority
+      operationId: get_wbs_authority_api_v1_projects__project_id__wbs_governance_authority_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSAuthorityResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-governance/change-sets:
+    get:
+      tags:
+      - WBS governance
+      summary: List Wbs Change Sets
+      operationId: list_wbs_change_sets_api_v1_projects__project_id__wbs_governance_change_sets_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/ChangeSetStatus'
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WBSChangeSetSummary'
+                title: Response List Wbs Change Sets Api V1 Projects  Project Id  Wbs
+                  Governance Change Sets Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-governance/change-sets/{change_set_id}:
+    get:
+      tags:
+      - WBS governance
+      summary: Get Wbs Change Set
+      operationId: get_wbs_change_set_api_v1_projects__project_id__wbs_governance_change_sets__change_set_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: change_set_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Change Set Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSChangeSetDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-governance/baselines:
+    get:
+      tags:
+      - WBS governance
+      summary: List Wbs Baselines
+      operationId: list_wbs_baselines_api_v1_projects__project_id__wbs_governance_baselines_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WBSBaselineSummary'
+                title: Response List Wbs Baselines Api V1 Projects  Project Id  Wbs
+                  Governance Baselines Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-governance/baselines/as-of:
+    get:
+      tags:
+      - WBS governance
+      summary: Get Wbs Baseline As Of
+      operationId: get_wbs_baseline_as_of_api_v1_projects__project_id__wbs_governance_baselines_as_of_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: at
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+          description: Timezone-aware instant; the approved WBS in force at that time
+          title: At
+        description: Timezone-aware instant; the approved WBS in force at that time
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSBaselineDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-governance/baselines/{baseline_no}:
+    get:
+      tags:
+      - WBS governance
+      summary: Get Wbs Baseline
+      operationId: get_wbs_baseline_api_v1_projects__project_id__wbs_governance_baselines__baseline_no__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: baseline_no
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Baseline No
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSBaselineDetailResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts/workspace-settings:
     get:
       tags:
@@ -5243,6 +5457,16 @@ components:
       - assessment
       title: ChangeImpact
       description: The impact of one change within a stored change event.
+    ChangeSetStatus:
+      type: string
+      enum:
+      - DRAFT
+      - SUBMITTED
+      - APPLIED
+      - REJECTED
+      - WITHDRAWN
+      - STALE
+      title: ChangeSetStatus
     Clause:
       properties:
         id:
@@ -10402,6 +10626,494 @@ components:
       - view_name
       title: ViewQueryRequest
       description: Request para query de vista.
+    WBSAuthorityResponse:
+      properties:
+        state:
+          type: string
+          title: State
+          description: NO_WBS | LEGACY_UNGOVERNED | APPROVED_BASELINE
+        display_state:
+          type: string
+          title: Display State
+          description: state, or DRAFT_ONLY for NO_WBS with an open change set
+        approved:
+          type: boolean
+          title: Approved
+        draft_exists:
+          type: boolean
+          title: Draft Exists
+        baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Baseline Id
+        baseline_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Baseline No
+        tree_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tree Digest
+        applied_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Applied At
+        open_change_sets:
+          type: integer
+          title: Open Change Sets
+        legacy_node_count:
+          type: integer
+          title: Legacy Node Count
+          description: live WBS rows that no approved baseline governs
+      type: object
+      required:
+      - state
+      - display_state
+      - approved
+      - draft_exists
+      - baseline_id
+      - baseline_no
+      - tree_digest
+      - applied_at
+      - open_change_sets
+      - legacy_node_count
+      title: WBSAuthorityResponse
+      description: The single derived authority of a project's WBS (never a stored
+        flag).
+    WBSBaselineDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        baseline_no:
+          type: integer
+          title: Baseline No
+        parent_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Baseline Id
+        source_change_set_id:
+          type: string
+          format: uuid
+          title: Source Change Set Id
+        tree_digest:
+          type: string
+          title: Tree Digest
+        change_set_digest:
+          type: string
+          title: Change Set Digest
+        node_count:
+          type: integer
+          title: Node Count
+        self_approved:
+          type: boolean
+          title: Self Approved
+        applied_at:
+          type: string
+          format: date-time
+          title: Applied At
+        digest_verified:
+          type: boolean
+          title: Digest Verified
+          description: the snapshot recomputes to its recorded tree digest
+        nodes:
+          items:
+            $ref: '#/components/schemas/WBSBaselineNodeResponse'
+          type: array
+          title: Nodes
+      type: object
+      required:
+      - id
+      - baseline_no
+      - parent_baseline_id
+      - source_change_set_id
+      - tree_digest
+      - change_set_digest
+      - node_count
+      - self_approved
+      - applied_at
+      - digest_verified
+      - nodes
+      title: WBSBaselineDetailResponse
+    WBSBaselineNodeResponse:
+      properties:
+        node_id:
+          type: string
+          format: uuid
+          title: Node Id
+        parent_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Id
+        sort_order:
+          type: integer
+          title: Sort Order
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        control_level:
+          type: string
+          title: Control Level
+        decomposition_kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decomposition Kind
+        dictionary:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Dictionary
+      type: object
+      required:
+      - node_id
+      - parent_id
+      - sort_order
+      - code
+      - name
+      - control_level
+      - decomposition_kind
+      - dictionary
+      title: WBSBaselineNodeResponse
+    WBSBaselineSummary:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        baseline_no:
+          type: integer
+          title: Baseline No
+        parent_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Baseline Id
+        source_change_set_id:
+          type: string
+          format: uuid
+          title: Source Change Set Id
+        tree_digest:
+          type: string
+          title: Tree Digest
+        change_set_digest:
+          type: string
+          title: Change Set Digest
+        node_count:
+          type: integer
+          title: Node Count
+        self_approved:
+          type: boolean
+          title: Self Approved
+        applied_at:
+          type: string
+          format: date-time
+          title: Applied At
+      type: object
+      required:
+      - id
+      - baseline_no
+      - parent_baseline_id
+      - source_change_set_id
+      - tree_digest
+      - change_set_digest
+      - node_count
+      - self_approved
+      - applied_at
+      title: WBSBaselineSummary
+    WBSCandidateNodeResponse:
+      properties:
+        node_id:
+          type: string
+          format: uuid
+          title: Node Id
+        parent_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Parent Id
+        sort_order:
+          type: integer
+          title: Sort Order
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        name:
+          type: string
+          title: Name
+        control_level:
+          type: string
+          title: Control Level
+        decomposition_kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decomposition Kind
+        dictionary:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Dictionary
+        origin_kind:
+          type: string
+          title: Origin Kind
+          description: existing | minted | adopted_legacy
+      type: object
+      required:
+      - node_id
+      - parent_id
+      - sort_order
+      - code
+      - name
+      - control_level
+      - decomposition_kind
+      - dictionary
+      - origin_kind
+      title: WBSCandidateNodeResponse
+      description: A PROPOSED node of a change set's candidate tree -- not live WBS.
+    WBSChangeSetDetailResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+        origin:
+          type: string
+          title: Origin
+          description: manual | ai | import -- provenance only, never authority
+        entry_mode:
+          type: string
+          title: Entry Mode
+          description: GENERATE | IMPORT_REVIEW | CHANGE_BASELINE
+        base_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Base Baseline Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        submitted_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Submitted Digest
+        submitted_revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Submitted Revision
+        submitted_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Submitted At
+        decided_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Decided At
+        decision_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decision Reason
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        profile_refs:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Profile Refs
+        evidence_refs:
+          items:
+            type: string
+          type: array
+          title: Evidence Refs
+        current_digest:
+          type: string
+          title: Current Digest
+          description: digest the change set would be signed with at its current revision
+        nodes:
+          items:
+            $ref: '#/components/schemas/WBSCandidateNodeResponse'
+          type: array
+          title: Nodes
+        lineage:
+          items:
+            $ref: '#/components/schemas/WBSLineageEdgeResponse'
+          type: array
+          title: Lineage
+      type: object
+      required:
+      - id
+      - status
+      - revision
+      - origin
+      - entry_mode
+      - base_baseline_id
+      - title
+      - description
+      - submitted_digest
+      - submitted_revision
+      - submitted_at
+      - decided_at
+      - decision_reason
+      - created_at
+      - updated_at
+      - profile_refs
+      - evidence_refs
+      - current_digest
+      - nodes
+      - lineage
+      title: WBSChangeSetDetailResponse
+    WBSChangeSetSummary:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        revision:
+          type: integer
+          title: Revision
+        origin:
+          type: string
+          title: Origin
+          description: manual | ai | import -- provenance only, never authority
+        entry_mode:
+          type: string
+          title: Entry Mode
+          description: GENERATE | IMPORT_REVIEW | CHANGE_BASELINE
+        base_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Base Baseline Id
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        submitted_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Submitted Digest
+        submitted_revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Submitted Revision
+        submitted_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Submitted At
+        decided_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Decided At
+        decision_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decision Reason
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - status
+      - revision
+      - origin
+      - entry_mode
+      - base_baseline_id
+      - title
+      - description
+      - submitted_digest
+      - submitted_revision
+      - submitted_at
+      - decided_at
+      - decision_reason
+      - created_at
+      - updated_at
+      title: WBSChangeSetSummary
+    WBSLineageEdgeResponse:
+      properties:
+        kind:
+          type: string
+          title: Kind
+        source_node_id:
+          type: string
+          format: uuid
+          title: Source Node Id
+        target_node_id:
+          type: string
+          format: uuid
+          title: Target Node Id
+      type: object
+      required:
+      - kind
+      - source_node_id
+      - target_node_id
+      title: WBSLineageEdgeResponse
     WbsData:
       properties:
         item_count:

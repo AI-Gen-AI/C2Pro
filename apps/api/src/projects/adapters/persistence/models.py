@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, Float, String, Text
+from sqlalchemy import DateTime, Enum, Float, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,6 +27,8 @@ def _utcnow_naive() -> datetime:
 
 class ProjectORM(Base):
     __tablename__ = "projects"
+    # Target of the composite (tenant_id, project_id) FKs of WBS governance (PC-2a.1).
+    __table_args__ = (UniqueConstraint("tenant_id", "id", name="uq_projects_tenant_id"),)
 
     # Primary identifiers
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
