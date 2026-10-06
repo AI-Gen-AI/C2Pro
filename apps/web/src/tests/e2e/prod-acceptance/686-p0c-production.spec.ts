@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { expect, test } from "@playwright/test";
@@ -53,6 +54,17 @@ test.describe("Issue #686 P0c production qualification", () => {
     const documentId = requiredEnv("PROD_P0C_DOCUMENT_ID");
     const expectedSourceRevisionId = requiredEnv("PROD_P0C_SOURCE_REVISION_ID");
     const noChangePdf = requiredEnv("PROD_P0C_NO_CHANGE_PDF");
+    const expectedNoChangeSha256 = requiredEnv(
+      "PROD_P0C_NO_CHANGE_EXPECTED_SHA256",
+    );
+    const noChangeFixtureSha256 = createHash("sha256")
+      .update(readFileSync(noChangePdf))
+      .digest("hex");
+    if (noChangeFixtureSha256 !== expectedNoChangeSha256) {
+      throw new Error(
+        `P0C_NO_CHANGE_FIXTURE_HASH_MISMATCH:${noChangeFixtureSha256}`,
+      );
+    }
 
     const recorder = new Pj01RunRecorder({
       runId,
@@ -224,6 +236,7 @@ test.describe("Issue #686 P0c production qualification", () => {
             occurredAt: outcome.occurred_at,
             changeCause: outcome.change_cause,
             fixtureClass: "byte-distinct-parser-equivalent",
+            fixtureSha256: noChangeFixtureSha256,
             processingOutcome: processed.evaluation.outcome,
           };
         },
@@ -250,6 +263,7 @@ test.describe("Issue #686 P0c production qualification", () => {
         no_change_occurred_at: noChange.occurredAt,
         no_change_change_cause: noChange.changeCause,
         no_change_fixture_class: noChange.fixtureClass,
+        no_change_fixture_sha256: noChange.fixtureSha256,
         no_change_processing_outcome: noChange.processingOutcome,
         blocking_findings: recorder.blockingFindings(),
       });
