@@ -202,6 +202,14 @@ def _withheld_coverage(clauses: list[Clause]) -> dict[str, str]:
     return withheld
 
 
+def withheld_categories(clauses: list[Clause]) -> dict[str, str]:
+    """Public: the categories the assembled inputs declare unassessable (category -> reason).
+
+    The v2 shadow takes the same decision as v1 coverage from it (PC-2a.3).
+    """
+    return _withheld_coverage(clauses)
+
+
 def _effective_coverage(
     coverage_map: dict[str, bool], clauses: list[Clause]
 ) -> dict[str, bool]:

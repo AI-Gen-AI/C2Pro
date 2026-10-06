@@ -29,6 +29,7 @@ from src.coherence.feature_flags import (
     coherence_llm_crosscheck_enabled_for_tenant,
     coherence_v2_enabled_for_tenant,
 )
+from src.coherence.graph.nodes import withheld_categories
 from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
@@ -1215,6 +1216,7 @@ async def evaluate_project_coherence(
                 project_id=payload.project_id,
                 tenant_id=current_user.tenant_id,
                 db=db,
+                withheld_categories=withheld_categories(clauses),
             )
 
     # Return diagnostics if requested (Task 7.4)
@@ -1291,6 +1293,7 @@ async def _run_v2_shadow_on_evaluate(
     project_id: UUID,
     tenant_id: UUID,
     db: AsyncSession,
+    withheld_categories: dict[str, str] | None = None,
 ) -> None:
     """Run the real CoherenceV2Orchestrator in shadow mode (TASK-COH-V2-WIRE-ORCHESTRATOR).
 
@@ -1355,14 +1358,12 @@ async def _run_v2_shadow_on_evaluate(
         # authoritative structured budget-line source exists (the BOM table is
         # not budget truth), so BUDGET is applicable but unassessed.
         assessment_by_category, assessment_reason_by_category = structured_budget_assessment()
-        # PC-2a.3: WBS dates are never schedule evidence; when the project's WBS carries them,
-        # TIME is applicable but unassessed -- the same decision as the v1 TIME marker clause.
-        from src.coherence.schedule_clause_builder import wbs_schedule_withheld_reason
-
-        time_reason = await wbs_schedule_withheld_reason(db, project_id, tenant_id)
-        if time_reason is not None:
-            assessment_by_category["TIME"] = False
-            assessment_reason_by_category["TIME"] = time_reason
+        # PC-2a.3: the v1 evaluation inputs' declared-unassessable categories (e.g. TIME when the
+        # only schedule input is WBS dates, which are never schedule authority) stay unassessed
+        # in v2 too -- one decision, taken where the inputs were assembled, no second read.
+        for category, reason in (withheld_categories or {}).items():
+            assessment_by_category[category] = False
+            assessment_reason_by_category.setdefault(category, reason)
         # An unassessed category is never scored, so its v1 findings are passed
         # only to stay visible (``available_rule_signals``) -- independent rules
         # such as retention / advance yield no conflict candidate. Assessed
