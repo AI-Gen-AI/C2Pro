@@ -992,7 +992,11 @@ async def reprocess_document_endpoint(
     document_id: UUID,
     user_id: CurrentUserId,  # noqa: ARG001
     tenant_id: CurrentTenantId,
+    expected_revision_id: UUID | None = Query(default=None),
     repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    revision_repo: SqlAlchemyDocumentRevisionRepository = Depends(
+        get_document_revision_repository
+    ),
     pending_review_lookup: PendingReviewLookup = Depends(
         get_pending_review_document_ids
     ),
@@ -1002,12 +1006,35 @@ async def reprocess_document_endpoint(
     or error state. Resets the document status to UPLOADED and enqueues a fresh
     parse + analysis run.
     """
+    if expected_revision_id is not None:
+        # #686 recovery: serialize with re-upload lineage changes and lock the
+        # mutable document row before checking the exact current revision.
+        await revision_repo.lock_lineage(document_id, tenant_id)
+        try:
+            await repo.lock_document_for_update(tenant_id, document_id)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found or access denied.",
+            ) from exc
+
     document = await repo.get_by_id(tenant_id, document_id)
     if not document or document.project_id != project_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or access denied.",
         )
+
+    if expected_revision_id is not None:
+        current_revision = await revision_repo.get_current(document_id, tenant_id)
+        if (
+            current_revision is None
+            or current_revision.revision_id != expected_revision_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Document revision changed; bounded retry refused.",
+            )
 
     review_count = 0
     if document.upload_status == DocumentStatus.PARSED_PENDING_ANALYSIS:
@@ -1044,12 +1071,22 @@ async def reprocess_document_endpoint(
     await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
     # #711: an explicit reprocess starts a new processing generation in the
     # same transaction, superseding any earlier (possibly still running) worker.
-    generation = await repo.begin_processing_generation(tenant_id, document_id)
+    generation = (
+        await repo.begin_processing_generation(
+            tenant_id, document_id, expected_revision_id
+        )
+        if expected_revision_id is not None
+        else await repo.begin_processing_generation(tenant_id, document_id)
+    )
     await repo.commit()
     await repo.refresh(document)
 
     response_data = DocumentResponse.model_validate(document).model_dump()
-    response_data["task_id"] = _enqueue_document_processing(document_id, generation=generation)
+    response_data["task_id"] = _enqueue_document_processing(
+        document_id,
+        expected_revision_id if expected_revision_id is not None else None,
+        generation,
+    )
     response_data["processing_status"] = DocumentPollingStatus.QUEUED
     response_data["status_detail"] = (
         "Document status reset successfully. Background reprocessing will start when the worker is available."
