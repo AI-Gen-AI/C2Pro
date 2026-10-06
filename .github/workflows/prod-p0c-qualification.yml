@@ -30,7 +30,8 @@ jobs:
       github.event.issue.number == 686 &&
       github.event.comment.user.login == github.repository_owner &&
       github.triggering_actor == github.repository_owner &&
-      startsWith(github.event.comment.body, 'RUN-ISSUE-686 ')
+      (startsWith(github.event.comment.body, 'RUN-ISSUE-686 ') ||
+       startsWith(github.event.comment.body, 'RECOVER-ISSUE-686 '))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production-qualification
@@ -47,8 +48,7 @@ jobs:
           import uuid
 
           body = os.environ["COMMENT_BODY"].strip()
-          pattern = re.compile(
-              r"^RUN-ISSUE-686 "
+          common = (
               r"backend_sha=(?P<backend_sha>[0-9a-f]{40}) "
               r"backend_deployment=(?P<backend_deployment>[0-9a-fA-F-]{36}) "
               r"frontend_sha=(?P<frontend_sha>[0-9a-f]{40}) "
@@ -56,26 +56,49 @@ jobs:
               r"project_id=(?P<project_id>[0-9a-fA-F-]{36}) "
               r"document_id=(?P<document_id>[0-9a-fA-F-]{36}) "
               r"source_revision_id=(?P<source_revision_id>[0-9a-fA-F-]{36}) "
-              r"staged_clear=(?P<staged_clear>true)$"
           )
-          match = pattern.fullmatch(body)
-          if not match:
+          clean_pattern = re.compile(r"^RUN-ISSUE-686 " + common + r"staged_clear=(?P<staged_clear>true)$")
+          recovery_pattern = re.compile(
+              r"^RECOVER-ISSUE-686 "
+              + common
+              + r"recovery_revision_id=(?P<recovery_revision_id>[0-9a-fA-F-]{36}) "
+              + r"staged_clear=(?P<staged_clear>true)$"
+          )
+
+          match = clean_pattern.fullmatch(body)
+          mode = "clean"
+          confirm = "RUN-ISSUE-686"
+          if match is None:
+              match = recovery_pattern.fullmatch(body)
+              mode = "recovery"
+              confirm = "RECOVER-ISSUE-686"
+          if match is None:
               raise SystemExit("Refusing owner command: exact bounded format required.")
 
           values = match.groupdict()
+          values.setdefault("recovery_revision_id", "")
           for key in ("backend_deployment", "project_id", "document_id", "source_revision_id"):
               try:
                   uuid.UUID(values[key])
               except ValueError as exc:
                   raise SystemExit(f"Refusing owner command: malformed {key}.") from exc
+          if values["recovery_revision_id"]:
+              try:
+                  uuid.UUID(values["recovery_revision_id"])
+              except ValueError as exc:
+                  raise SystemExit("Refusing owner command: malformed recovery_revision_id.") from exc
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"mode={mode}", file=output)
+              print(f"confirm={confirm}", file=output)
               for key, value in values.items():
                   print(f"{key}={value}", file=output)
 
       - name: Fail closed on owner intent and bounded inputs
         env:
-          CONFIRM: RUN-ISSUE-686
+          CONFIRM: ${{ steps.parse.outputs.confirm }}
+          MODE: ${{ steps.parse.outputs.mode }}
+          RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
           STAGED_CLEAR: ${{ steps.parse.outputs.staged_clear }}
           BACKEND_SHA: ${{ steps.parse.outputs.backend_sha }}
           FRONTEND_SHA: ${{ steps.parse.outputs.frontend_sha }}
@@ -87,7 +110,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$CONFIRM" = "RUN-ISSUE-686"
+          test "$CONFIRM" = "RUN-ISSUE-686" || test "$CONFIRM" = "RECOVER-ISSUE-686"
+          case "$MODE" in
+            clean) test -z "$RECOVERY_REVISION_ID" ;;
+            recovery) [[ "$RECOVERY_REVISION_ID" =~ ^[0-9a-fA-F-]{36}$ ]] ;;
+            *) exit 2 ;;
+          esac
           test "${GITHUB_REF_NAME}" = "main"
           test "$STAGED_CLEAR" = "true"
           [[ "$BACKEND_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -281,6 +309,7 @@ jobs:
             --reporter=line --workers=1
 
       - name: Fail closed if accepted P0b project is no longer clean
+        if: steps.parse.outputs.mode == 'clean'
         env:
           PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
@@ -294,6 +323,24 @@ jobs:
             --project-id "$PROD_P0C_PROJECT_ID" \
             --document-id "$PROD_P0C_DOCUMENT_ID" \
             --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID"
+
+      - name: Fail closed on bounded P0c recovery state
+        if: steps.parse.outputs.mode == 'recovery'
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
+          PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
+          PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/verify_p0c_recovery_preflight.py \
+            --project-id "$PROD_P0C_PROJECT_ID" \
+            --document-id "$PROD_P0C_DOCUMENT_ID" \
+            --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID" \
+            --recovery-revision-id "$PROD_P0C_RECOVERY_REVISION_ID"
 
       - name: Execute real P0c production browser journey
         env:
@@ -310,6 +357,7 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
           PROD_P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
         working-directory: apps/web
         shell: bash
