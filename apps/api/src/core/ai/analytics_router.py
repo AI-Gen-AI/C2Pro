@@ -19,7 +19,7 @@ def get_analytics_service(db: AsyncSession = Depends(get_session)) -> AIAnalytic
 
 
 @router.get("/cost", summary="Cost and token analytics over time")
-@cached(ttl=300, endpoint="/cost")
+@cached(ttl=300, endpoint="/cost", cache_key_version="timeframe-v2")
 async def get_cost_analytics(
     tenant_id: CurrentTenantId,
     timeframe: str = Query(default="7d", examples=["24h", "7d", "30d"]),
@@ -32,7 +32,7 @@ async def get_cost_analytics(
 
 
 @router.get("/versions", summary="Prompt version leaderboard and quality performance")
-@cached(ttl=300, endpoint="/versions")
+@cached(ttl=300, endpoint="/versions", cache_key_version="timeframe-v2")
 async def get_version_analytics(
     tenant_id: CurrentTenantId,
     timeframe: str = Query(default="30d", examples=["7d", "30d", "90d"]),
@@ -45,7 +45,7 @@ async def get_version_analytics(
 
 
 @router.get("/comparison", summary="Compare two prompt versions")
-@cached(ttl=300, endpoint="/comparison")
+@cached(ttl=300, endpoint="/comparison", cache_key_version="timeframe-v2")
 async def compare_prompt_versions(
     tenant_id: CurrentTenantId,
     baseline_version: str = Query(min_length=1),
@@ -65,7 +65,7 @@ async def compare_prompt_versions(
 
 
 @router.get("/quality-drift", summary="Detect quality and latency drift")
-@cached(ttl=60, endpoint="/quality-drift")
+@cached(ttl=60, endpoint="/quality-drift", cache_key_version="timeframe-v2")
 async def get_quality_drift(
     tenant_id: CurrentTenantId,
     timeframe: str = Query(default="30d", examples=["7d", "30d", "90d"]),
