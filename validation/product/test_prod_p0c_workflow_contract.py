@@ -15,6 +15,7 @@ BUILDER = REPO_ROOT / "validation/product/build_p0c_prod_qualification_bundle.py
 NO_CHANGE_FIXTURE_BUILDER = (
     REPO_ROOT / "apps/api/scripts/build_p0c_semantic_no_change_fixture.py"
 )
+RECOVERY_PREFLIGHT = REPO_ROOT / "apps/api/scripts/verify_p0c_recovery_preflight.py"
 
 
 def _workflow() -> str:
@@ -114,6 +115,60 @@ def test_p0c_browser_journey_receives_verified_runtime_identity() -> None:
         "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: "
         "${{ steps.runtime_identity.outputs.frontend_sha }}"
     ) in browser
+
+
+def test_p0c_recovery_is_explicit_and_does_not_weaken_clean_run_guard() -> None:
+    source = _workflow()
+    assert "RECOVER-ISSUE-686 " in source
+    assert "recovery_revision_id=" in source
+    assert "mode=recovery" in source
+    assert "mode=clean" in source
+
+    clean = source.split(
+        "Fail closed if accepted P0b project is no longer clean", 1
+    )[1].split("Fail closed on bounded P0c recovery state", 1)[0]
+    assert "if: steps.parse.outputs.mode == 'clean'" in clean
+    assert "verify_p0c_prod_journey.py" in clean
+
+    recovery = source.split(
+        "Fail closed on bounded P0c recovery state", 1
+    )[1].split("Execute real P0c production browser journey", 1)[0]
+    assert "if: steps.parse.outputs.mode == 'recovery'" in recovery
+    assert "verify_p0c_recovery_preflight.py" in recovery
+    assert "--recovery-revision-id" in recovery
+
+    browser = source.split(
+        "Execute real P0c production browser journey", 1
+    )[1].split("Resolve target revision from bounded browser evidence", 1)[0]
+    assert (
+        "PROD_P0C_RECOVERY_REVISION_ID: "
+        "${{ steps.parse.outputs.recovery_revision_id }}"
+    ) in browser
+
+
+def test_p0c_recovery_preflight_is_read_only_and_exactly_bounded() -> None:
+    source = RECOVERY_PREFLIGHT.read_text(encoding="utf-8")
+    assert "SET TRANSACTION READ ONLY" in source
+    assert "app.current_tenant" in source
+    assert "revision_count" in source
+    assert "revision_count != 2" in source
+    assert "upload_status" in source
+    assert '"error"' in source
+    assert "recovery_clause_count" in source
+    assert "recovery_clause_count != 0" in source
+    assert "source_revision_id" in source
+    assert "recovery_revision_id" in source
+    assert "parent_revision_id" in source
+    assert "revision.changed" in source
+
+
+def test_p0c_browser_recovery_reuses_existing_revision_before_no_change() -> None:
+    source = SPEC.read_text(encoding="utf-8")
+    assert "PROD_P0C_RECOVERY_REVISION_ID" in source
+    assert "Retry processing" in source
+    assert "recoveryRevisionId" in source
+    assert "expect(whatChanged.targetRevisionId).toBe(recoveryRevisionId)" in source
+    assert "uploadNewVersionThroughUi" in source
 
 
 def test_p0c_workflow_uses_only_protected_qualification_credentials() -> None:
