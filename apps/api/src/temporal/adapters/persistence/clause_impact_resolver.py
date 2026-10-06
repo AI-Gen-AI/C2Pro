@@ -12,6 +12,11 @@ Direct, unknown strength: alerts.related_clause_ids -- an aggregated list of
 Indirect (one hop): stakeholders.source_clause_id -> stakeholder_wbs_raci -> wbs_nodes.
 The RACI hop is generated, so its link confidence is unknown.
 
+PC-2a.3 (#897): WBS targets are live ``wbs_nodes`` rows only (change-set candidates are never
+read). A project without an approved baseline reports them qualified ``wbs_unapproved=True``.
+Governed WBS change evidence is the ``wbs.baseline.applied`` event (change set, baseline,
+digests, lineage), never ``wbs_nodes.updated_at``.
+
 Every target must belong to the verified clause's tenant AND project; a
 reference from another project is never reported.
 
@@ -35,6 +40,7 @@ from src.temporal.adapters.persistence.models import DocumentRevisionORM
 from src.temporal.application.impact_assessment import ResolvedLink, ResolverResult
 from src.temporal.domain.entity_ref import TemporalEntityRef
 from src.temporal.domain.impact import ImpactRelationship, ImpactTarget
+from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
 from src.wbs.adapters.persistence.models import WBSNodeORM
 
 # An alert still acting on the earlier interpretation of the clause.
@@ -176,6 +182,10 @@ class SqlAlchemyClauseImpactResolver:
             .scalars()
             .all()
         )
+        wbs_unapproved: bool | None = None
+        if wbs_nodes:
+            authority = await WBSGovernanceRepository(self._session).authority(project_id, self._tenant_id)
+            wbs_unapproved = not authority.approved
         links += [
             ResolvedLink(
                 target=ImpactTarget(
@@ -183,6 +193,7 @@ class SqlAlchemyClauseImpactResolver:
                     entity_id=row.id,
                     label=f"{row.code} {row.name}",
                     status=_status(row.status),
+                    wbs_unapproved=wbs_unapproved,
                 ),
                 relationship=_direct("wbs_nodes.source_clause_id"),
             )
@@ -215,6 +226,9 @@ class SqlAlchemyClauseImpactResolver:
         stakeholder_ids = [row.id for row in stakeholders]
         if stakeholder_ids:
             direct_wbs = {row.id for row in wbs_nodes}
+            if wbs_unapproved is None:
+                hop_authority = await WBSGovernanceRepository(self._session).authority(project_id, self._tenant_id)
+                wbs_unapproved = not hop_authority.approved
             hop_rows = (
                 (
                     await self._session.execute(
@@ -244,6 +258,7 @@ class SqlAlchemyClauseImpactResolver:
                         entity_id=row.id,
                         label=f"{row.code} {row.name}",
                         status=_status(row.status),
+                        wbs_unapproved=wbs_unapproved,
                     ),
                     relationship=ImpactRelationship(
                         kind="indirect",

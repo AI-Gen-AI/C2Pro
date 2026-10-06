@@ -67,6 +67,25 @@ ALLOWED_VIEWS = {
     "v_raci_matrix",
 }
 
+# PC-2a.3 (#897): rows of these views are WBS scope or links to it. Each row carries the
+# project's WBS authority from the single resolver: legacy rows stay readable but explicitly
+# unapproved, and WBS dates are never Schedule authority.
+WBS_QUALIFIED_VIEWS = frozenset({"v_project_wbs", "v_raci_matrix"})
+
+
+async def _qualify_wbs_rows(data: list[dict[str, Any]], tenant_id: UUID, db: AsyncSession) -> None:
+    from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
+
+    states: dict[str, Any] = {}
+    for project_id in sorted({str(row["project_id"]) for row in data if row.get("project_id")}):
+        states[project_id] = await WBSGovernanceRepository(db).authority(UUID(project_id), tenant_id)
+    for row in data:
+        authority = states.get(str(row.get("project_id")))
+        row["wbs_authority_state"] = authority.state.value if authority is not None else None
+        row["wbs_unapproved"] = not authority.approved if authority is not None else True
+        row["wbs_dates_schedule_authority"] = False
+
+
 # ALLOWLIST de funciones permitidas
 ALLOWED_FUNCTIONS = {
     "fn_get_clause_by_id",
@@ -492,6 +511,9 @@ class DatabaseMCPServer:
             for key, value in row.items():
                 if isinstance(value, UUID):
                     row[key] = str(value)
+
+        if request.view_name in WBS_QUALIFIED_VIEWS:
+            await _qualify_wbs_rows(data, tenant_id, db)
 
         return QueryResult(
             data=data,

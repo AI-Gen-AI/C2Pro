@@ -41,6 +41,7 @@ import type { Alert } from "./alert";
 import type { CategoryBreakdown } from "./categoryBreakdown";
 import type { EnrichedCoherenceResultAuditCoverage } from "./enrichedCoherenceResultAuditCoverage";
 import type { EnrichedCoherenceResultCategoryScores } from "./enrichedCoherenceResultCategoryScores";
+import type { EnrichedCoherenceResultEvidenceLimitations } from "./enrichedCoherenceResultEvidenceLimitations";
 import type { EnrichedCoherenceResultScoreVersion } from "./enrichedCoherenceResultScoreVersion";
 import type { FindingSignal } from "./findingSignal";
 
@@ -65,6 +66,8 @@ export interface EnrichedCoherenceResult {
   score_reason?: string | null;
   /** Dimensions that prevented a complete score, when applicable. */
   score_missing_dimensions?: string[] | null;
+  /** Category -> unavailable evidence source (e.g. TIME: WBS_DATES_NOT_SCHEDULE_AUTHORITY, governed Schedule evidence unavailable). Not a category-wide veto (PC-2a.3). */
+  evidence_limitations?: EnrichedCoherenceResultEvidenceLimitations;
   /** Raw signals from all evaluators (det + llm) */
   finding_signals?: FindingSignal[];
   /** Number of findings from deterministic rules */

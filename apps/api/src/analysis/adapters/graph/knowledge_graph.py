@@ -21,6 +21,7 @@ from src.documents.ports.document_repository import IDocumentRepository
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.shared_kernel.enums import RACIRole
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
+from src.wbs.domain.governance import WBSAuthority
 
 
 @dataclass
@@ -68,6 +69,9 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
                 },
             )
 
+        # PC-2a.3: TASK nodes are live WBS rows; outside an approved baseline they are legacy,
+        # unapproved scope -- qualified, never presented as governed WBS.
+        authority = await self._wbs_authority(project_id, normalized_tenant_id) if tasks else None
         code_to_id = {task.code: task.id for task in tasks if task.code}
         for task in tasks:
             parent_id = code_to_id.get(task.parent_code) if task.parent_code else None
@@ -78,6 +82,8 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
                 properties={
                     "wbs_code": task.code,
                     "parent_id": str(parent_id) if parent_id else None,
+                    "wbs_authority_state": authority.state.value if authority is not None else None,
+                    "wbs_unapproved": not authority.approved if authority is not None else True,
                 },
             )
             if parent_id:
@@ -222,6 +228,12 @@ class ProjectKnowledgeGraph(KnowledgeGraphPort):
             tenant_id, list(clause_ids)
         )
         return list(clauses)
+
+    async def _wbs_authority(self, project_id: UUID, tenant_id: TenantId) -> WBSAuthority | None:
+        try:
+            return await self.wbs_repository.authority(project_id, tenant_id)
+        except NotImplementedError:  # a repository without the resolver: unknown, reported unapproved
+            return None
 
     async def _load_raci(
         self, project_id: UUID, tenant_id: TenantId

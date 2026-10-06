@@ -58,4 +58,6 @@ export interface CategoryBreakdown {
   state?: string;
   /** True when score is the inherent-risk baseline (clean). */
   baseline_estimated?: boolean;
+  /** Evidence sources unavailable for this category, e.g. WBS_DATES_NOT_SCHEDULE_AUTHORITY (governed Schedule evidence unavailable). The category may still be assessed from other valid evidence (e.g. contract dates); schedule-dependent rules are not evaluated. */
+  limitations?: string[];
 }

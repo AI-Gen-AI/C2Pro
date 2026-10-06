@@ -17,6 +17,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.stakeholders.domain.models import RaciAssignment, RACIRole, Stakeholder
 from src.stakeholders.ports.stakeholder_repository import IStakeholderRepository
+from src.wbs.adapters.persistence.link_authority import require_linkable_wbs_nodes
 
 
 class SqlAlchemyStakeholderRepository(IStakeholderRepository):
@@ -253,13 +254,22 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def add_raci_assignment(
         self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
-        """Add a RACI assignment."""
+        """Add a RACI assignment.
+
+        PC-2a.3 (#897): every RACI writer (manual upsert, AI generation) passes here, so this is
+        where a new link is bound to approved scope: the node must be in the project's CURRENT
+        approved WBS baseline, checked in this transaction (409 otherwise).
+        """
         if tenant_id is not None:
             assignment.tenant_id = tenant_id
             if assignment.project_id:
                 proj_tenant = await self._get_project_tenant_id(assignment.project_id)
                 if proj_tenant is None or proj_tenant != tenant_id:
                     raise PermissionError("Cannot add RACI assignment for project outside tenant")
+        await require_linkable_wbs_nodes(
+            self.session, tenant_id=assignment.tenant_id, project_id=assignment.project_id,
+            node_ids=[assignment.wbs_item_id],
+        )
         self.session.add(self._to_raci_orm(assignment))
         try:
             await self.session.flush()
@@ -334,7 +344,7 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
     async def update_raci_assignment(
         self, assignment: RaciAssignment, tenant_id: UUID
     ) -> None:
-        """Update a RACI assignment."""
+        """Update a RACI assignment (re-asserting a link: only to a current approved node, PC-2a.3)."""
         stmt = select(StakeholderWBSRaciORM).where(
             StakeholderWBSRaciORM.id == assignment.id,
             StakeholderWBSRaciORM.tenant_id == tenant_id,
@@ -343,6 +353,9 @@ class SqlAlchemyStakeholderRepository(IStakeholderRepository):
         orm = result.scalar_one_or_none()
         if not orm:
             return
+        await require_linkable_wbs_nodes(
+            self.session, tenant_id=tenant_id, project_id=orm.project_id, node_ids=[orm.wbs_item_id]
+        )
         orm.raci_role = assignment.raci_role
         orm.evidence_text = assignment.evidence_text
         orm.generated_automatically = assignment.generated_automatically

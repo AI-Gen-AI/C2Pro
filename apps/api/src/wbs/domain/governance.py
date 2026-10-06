@@ -21,7 +21,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.wbs.domain.digest import LineageEdge, normalize_dictionary
@@ -322,11 +322,40 @@ def resolve_authority(
     )
 
 
+class WBSAuthorityReader(Protocol):
+    """Port to the single authority resolver (implemented by ``WBSGovernanceRepository``)."""
+
+    async def authority(self, project_id: UUID, tenant_id: UUID) -> WBSAuthority: ...
+
+
+# PC-2a.3 (#897) consumer vocabulary. An approved baseline confers authority on SCOPE only
+# (identity, hierarchy, order, code, name, control level, decomposition, dictionary) -- never on
+# the legacy date / cost columns of the live rows: WBS dates are not Schedule authority and
+# budget_allocated / budget_spent are not Cost authority, in every state.
+LEGACY_WBS_SCOPE_LABEL = "Unapproved / Legacy WBS"
+DRAFT_WBS_SCOPE_LABEL = "Draft WBS (not approved)"
+NO_WBS_SCOPE_LABEL = "No WBS"
+WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON = "WBS_DATES_NOT_SCHEDULE_AUTHORITY"
+
+
+def wbs_scope_label(authority: WBSAuthority) -> str:
+    """How a consumer names the project's WBS scope: approved scope is never implied."""
+    if authority.approved:
+        return f"Approved WBS Baseline #{authority.baseline_no}"
+    if authority.state is AuthorityState.LEGACY_UNGOVERNED:
+        return LEGACY_WBS_SCOPE_LABEL
+    return DRAFT_WBS_SCOPE_LABEL if authority.draft_exists else NO_WBS_SCOPE_LABEL
+
+
 __all__ = [
     "ALLOWED_TRANSITIONS",
     "CORE_DECOMPOSITION_TERMS",
+    "DRAFT_WBS_SCOPE_LABEL",
+    "LEGACY_WBS_SCOPE_LABEL",
+    "NO_WBS_SCOPE_LABEL",
     "OPEN_STATUSES",
     "TERMINAL_STATUSES",
+    "WBS_DATES_NOT_SCHEDULE_AUTHORITY_REASON",
     "ActorKind",
     "AuthorityState",
     "BaselineRef",
@@ -340,6 +369,7 @@ __all__ = [
     "LineageEdge",
     "LineageKind",
     "WBSAuthority",
+    "WBSAuthorityReader",
     "can_author",
     "can_decide",
     "can_withdraw_or_reopen",
@@ -350,4 +380,5 @@ __all__ = [
     "validate_control_level",
     "validate_decomposition_kind",
     "validate_for_submit",
+    "wbs_scope_label",
 ]

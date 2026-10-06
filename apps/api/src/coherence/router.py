@@ -29,6 +29,7 @@ from src.coherence.feature_flags import (
     coherence_llm_crosscheck_enabled_for_tenant,
     coherence_v2_enabled_for_tenant,
 )
+from src.coherence.graph.nodes import v1_unassessed_reasons
 from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
@@ -1215,6 +1216,7 @@ async def evaluate_project_coherence(
                 project_id=payload.project_id,
                 tenant_id=current_user.tenant_id,
                 db=db,
+                withheld_categories=v1_unassessed_reasons(clauses, enriched_result),
             )
 
     # Return diagnostics if requested (Task 7.4)
@@ -1291,6 +1293,7 @@ async def _run_v2_shadow_on_evaluate(
     project_id: UUID,
     tenant_id: UUID,
     db: AsyncSession,
+    withheld_categories: dict[str, str] | None = None,
 ) -> None:
     """Run the real CoherenceV2Orchestrator in shadow mode (TASK-COH-V2-WIRE-ORCHESTRATOR).
 
@@ -1355,6 +1358,13 @@ async def _run_v2_shadow_on_evaluate(
         # authoritative structured budget-line source exists (the BOM table is
         # not budget truth), so BUDGET is applicable but unassessed.
         assessment_by_category, assessment_reason_by_category = structured_budget_assessment()
+        # PC-2a.3: the categories v1 left unassessed for a source reason (declared unassessable,
+        # or -- e.g. TIME -- whose only evidence source was unavailable because WBS dates are not
+        # schedule authority) stay unassessed in v2 too: one evidence decision, reused, no second
+        # read. A category v1 assessed from other valid evidence (contract dates) is not withheld.
+        for category, reason in (withheld_categories or {}).items():
+            assessment_by_category[category] = False
+            assessment_reason_by_category.setdefault(category, reason)
         # An unassessed category is never scored, so its v1 findings are passed
         # only to stay visible (``available_rule_signals``) -- independent rules
         # such as retention / advance yield no conflict candidate. Assessed

@@ -37,40 +37,28 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { EvidenceBreakdown } from "./evidenceBreakdown";
-import type { WbsDataAuthorityState } from "./wbsDataAuthorityState";
-import type { WbsDataByItemType } from "./wbsDataByItemType";
-import type { WbsItemSummary } from "./wbsItemSummary";
+import type { ProjectWBSAuthorityDisplayState } from "./projectWBSAuthorityDisplayState";
+import type { ProjectWBSAuthorityState } from "./projectWBSAuthorityState";
 
 /**
- * The live WBS rows (as GET /projects/{id}/wbs serves them), qualified by WBS authority.
- *
- * PC-2a.3: only an approved baseline is approved scope; LEGACY_UNGOVERNED rows are reported as
- * "Unapproved / Legacy WBS" and never counted as approved scope, completeness or controlled
- * coverage. WBS dates / budgets are never Schedule / Cost authority.
+ * The project WBS authority from the single resolver (PC-2a.3 / ADR-029).
  */
-export interface WbsData {
-  authority_state: WbsDataAuthorityState;
+export interface ProjectWBSAuthority {
+  state: ProjectWBSAuthorityState;
+  display_state: ProjectWBSAuthorityDisplayState;
+  /** True only for an approved baseline: the canonical project scope. */
   approved: boolean;
+  /** e.g. "Approved WBS Baseline #2" or "Unapproved / Legacy WBS". */
   scope_label: string;
+  baseline_id?: string | null;
   baseline_no?: number | null;
-  /** Items of the current approved baseline; 0 unless approved. */
-  approved_scope_item_count: number;
-  /** Live items that are not approved scope (legacy rows). */
-  unapproved_item_count: number;
-  /** Always false: WBS dates are not Schedule authority. */
+  tree_digest?: string | null;
+  /** ISO 8601 timestamp of the current baseline's apply */
+  applied_at?: string | null;
+  /** An open change set exists; it never replaces the current scope until approved. */
+  draft_exists: boolean;
+  /** Always false: WBS planned/actual dates are not Schedule authority. */
   dates_schedule_authority?: boolean;
-  /** Always false: WBS budgets are not Cost authority. */
+  /** Always false: WBS budget_allocated / budget_spent are not Cost authority. */
   budget_cost_authority?: boolean;
-  item_count: number;
-  root_count: number;
-  leaf_count: number;
-  max_level: number;
-  by_item_type: WbsDataByItemType;
-  items_with_budget: number;
-  /** Items with both a planned start and a planned end. */
-  items_with_planned_dates: number;
-  roots: WbsItemSummary[];
-  truncated?: boolean;
-  evidence_breakdown: EvidenceBreakdown;
 }

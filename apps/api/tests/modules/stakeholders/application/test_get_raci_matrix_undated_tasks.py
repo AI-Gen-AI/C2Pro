@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from src.procurement.domain.models import WBSItem
 from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixUseCase
+from src.wbs.domain.governance import resolve_authority
 
 
 def _task(project_id, code: str, name: str, planned_start: datetime | None = None) -> WBSItem:
@@ -25,6 +26,13 @@ def _task(project_id, code: str, name: str, planned_start: datetime | None = Non
         planned_start=planned_start,
     )
 
+
+
+def _legacy_authority() -> AsyncMock:
+    """PC-2a.3: the project's WBS authority (LEGACY_UNGOVERNED: rows qualified unapproved)."""
+    reader = AsyncMock()
+    reader.authority.return_value = resolve_authority(current_baseline=None, live_node_count=1, open_change_sets=0)
+    return reader
 
 async def test_undated_tasks_do_not_break_the_matrix_and_follow_dated_tasks() -> None:
     tenant_id = uuid4()
@@ -45,6 +53,7 @@ async def test_undated_tasks_do_not_break_the_matrix_and_follow_dated_tasks() ->
         stakeholder_repository=stakeholder_repo,
         wbs_repository=wbs_repo,
         project_repository=project_repo,
+        wbs_authority_reader=_legacy_authority(),
     ).execute(project_id=project_id, tenant_id=tenant_id)
 
     assert [(row.task_code, row.sequence_index) for row in response.matrix] == [

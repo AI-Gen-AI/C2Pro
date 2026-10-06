@@ -40,6 +40,9 @@
 
 /**
  * Evidence coverage over every WBS item of the project (not only roots).
+ *
+ * The descriptive counts cover every live row, approved or not; only ``approved_scope_items``
+ * is approved scope (PC-2a.3). Dates and budgets on WBS rows are never Schedule / Cost authority.
  */
 export interface ProjectWBSCoverage {
   total_items: number;
@@ -47,4 +50,8 @@ export interface ProjectWBSCoverage {
   items_with_dates: number;
   items_with_alerts: number;
   completion_average: number;
+  /** Items of the current approved WBS baseline (0 unless the WBS is approved). */
+  approved_scope_items?: number;
+  /** LEGACY_UNGOVERNED items: readable, never counted as approved scope. */
+  unapproved_legacy_items?: number;
 }

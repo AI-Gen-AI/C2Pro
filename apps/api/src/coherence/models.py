@@ -219,6 +219,14 @@ class CategoryBreakdown(BaseModel):
     baseline_estimated: bool = Field(
         default=False, description="True when score is the inherent-risk baseline (clean)."
     )
+    limitations: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Evidence sources unavailable for this category, e.g. WBS_DATES_NOT_SCHEDULE_AUTHORITY "
+            "(governed Schedule evidence unavailable). The category may still be assessed from other "
+            "valid evidence (e.g. contract dates); schedule-dependent rules are not evaluated."
+        ),
+    )
 
 
 class CoherenceResult(BaseModel):
@@ -291,6 +299,14 @@ class EnrichedCoherenceResult(BaseModel):
     score_missing_dimensions: list[str] | None = Field(
         default=None,
         description="Dimensions that prevented a complete score, when applicable.",
+    )
+
+    evidence_limitations: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Category -> unavailable evidence source (e.g. TIME: WBS_DATES_NOT_SCHEDULE_AUTHORITY, "
+            "governed Schedule evidence unavailable). Not a category-wide veto (PC-2a.3)."
+        ),
     )
 
     # v0.3 diagnostic fields

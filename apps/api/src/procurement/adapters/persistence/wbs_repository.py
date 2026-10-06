@@ -50,9 +50,15 @@ from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.adapters.persistence.models import ProjectORM
 from src.shared_kernel.enums import WBSItemType
 from src.stakeholders.adapters.persistence.models import StakeholderWBSRaciORM
+from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
+from src.wbs.adapters.persistence.link_authority import (
+    project_of_wbs_node,
+    require_linkable_wbs_nodes,
+)
 from src.wbs.adapters.persistence.models import WBSNodeORM
 from src.wbs.domain.digest import DigestNode
 from src.wbs.domain.enums import WBSNodeType
+from src.wbs.domain.governance import WBSAuthority
 
 # Reserved metadata key for canonical-WBS bookkeeping; never exposed through WBSItem.wbs_metadata.
 _CANONICAL_KEY = "_adr025"
@@ -458,6 +464,15 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         if project_id is None:
             return False
         raise WBSGovernanceRequiredError(project_id)
+
+    async def authority(self, project_id: UUID, tenant_id: TenantId) -> WBSAuthority:
+        return await WBSGovernanceRepository(self.session).authority(project_id, tenant_id)
+
+    async def project_of_node(self, node_id: UUID, tenant_id: TenantId) -> UUID | None:
+        return await project_of_wbs_node(self.session, tenant_id, node_id)
+
+    async def require_linkable_nodes(self, project_id: UUID, node_ids: Collection[UUID], tenant_id: TenantId) -> None:
+        await require_linkable_wbs_nodes(self.session, tenant_id=tenant_id, project_id=project_id, node_ids=node_ids)
 
     async def linked_node_counts(self, node_ids: Collection[UUID]) -> tuple[int, int]:
         """(RACI assignments, BOM links) still pointing at these nodes."""

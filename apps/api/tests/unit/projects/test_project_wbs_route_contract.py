@@ -19,6 +19,12 @@ from fastapi.routing import APIRoute, iter_route_contexts
 from src.main import create_application
 from src.procurement.domain.models import WBSItem, WBSItemType
 from src.projects.adapters.http import router as projects_router_module
+from src.projects.application.project_wbs_view import (
+    build_wbs_coverage,
+    serialize_wbs_item_tree,
+    wbs_authority_view,
+)
+from src.wbs.domain.governance import resolve_authority
 
 WBS_PATH = "/api/v1/projects/{project_id}/wbs"
 
@@ -58,7 +64,10 @@ def test_openapi_documents_the_payload_the_runtime_handler_returns() -> None:
     ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
     response_schema = schema["components"]["schemas"][ref.rsplit("/", 1)[-1]]
 
-    assert set(response_schema["properties"]) == {"project_id", "items", "coverage", "alerts", "total_items"}
+    assert set(response_schema["properties"]) == {
+        "project_id", "items", "coverage", "alerts", "total_items", "authority"}
+    # PC-2a.3: the authority block is additive and required; it never claims date / cost authority
+    assert "authority" in response_schema["required"]
     node_ref = response_schema["properties"]["items"]["items"]["$ref"]
     node_schema = schema["components"]["schemas"][node_ref.rsplit("/", 1)[-1]]
     assert {"parent_code", "planned_start", "budget_allocated", "item_type", "children"} <= set(
@@ -84,12 +93,14 @@ def test_response_model_keeps_the_serialized_payload_values_and_key_order() -> N
         wbs_metadata={"source": "contract", "confidence": 0.8},
     )
     root = WBSItem(project_id=project_id, code="1", name="Harbour", level=1, children=[child])
+    authority = resolve_authority(current_baseline=None, live_node_count=2, open_change_sets=0)
     payload = {
         "project_id": str(project_id),
-        "items": [projects_router_module._serialize_wbs_item_tree(root)],
-        "coverage": projects_router_module._build_wbs_coverage([root, child]),
+        "items": [serialize_wbs_item_tree(root)],
+        "coverage": build_wbs_coverage([root, child], authority),
         "alerts": [],
         "total_items": 2,
+        "authority": wbs_authority_view(authority),
     }
 
     dumped = projects_router_module.ProjectWBSResponse.model_validate(payload).model_dump(mode="json")
@@ -97,3 +108,5 @@ def test_response_model_keeps_the_serialized_payload_values_and_key_order() -> N
     assert dumped == payload
     assert list(dumped) == list(payload)
     assert list(dumped["items"][0]["children"][0]) == list(payload["items"][0]["children"][0])
+    assert dumped["authority"]["state"] == "LEGACY_UNGOVERNED" and dumped["authority"]["approved"] is False
+    assert dumped["coverage"]["approved_scope_items"] == 0 and dumped["coverage"]["unapproved_legacy_items"] == 2

@@ -202,6 +202,22 @@ def _withheld_coverage(clauses: list[Clause]) -> dict[str, str]:
     return withheld
 
 
+def v1_unassessed_reasons(clauses: list[Clause], result: EnrichedCoherenceResult) -> dict[str, str]:
+    """The v1 decision the v2 shadow must reuse: category -> reason, for categories v1 left
+    unassessed because the inputs withheld them (``assessment_unavailable``) or because their
+    only evidence source was unavailable (``evidence_limitations``). One evidence decision, two
+    scoring versions -- no second read (PC-2a.3)."""
+    reasons = dict(_withheld_coverage(clauses))
+    unassessed = {
+        canonical for canonical, legacy in _CAT_LEGACY.items()
+        if any(item.category == legacy and item.state == "unassessed" for item in result.category_breakdown)
+    }
+    for category, reason in (result.evidence_limitations or {}).items():
+        if category in unassessed:
+            reasons.setdefault(category, reason)
+    return reasons
+
+
 def _effective_coverage(
     coverage_map: dict[str, bool], clauses: list[Clause]
 ) -> dict[str, bool]:
@@ -1291,8 +1307,8 @@ def scoring_arbiter(state: CoherenceGraphState) -> NodeOutput:
     )
     if budget_exhausted:
         for cat in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"):
-            # A withheld category is unassessed for a source reason, not a cap.
-            if not coverage.get(cat, False) and cat not in withheld:
+            # A withheld / source-limited category is unassessed for a source reason, not a cap.
+            if not coverage.get(cat, False) and cat not in withheld and cat not in state.evidence_limitations:
                 budget_throttled.append(cat)
 
     return {
@@ -1358,6 +1374,7 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         budget_throttled_categories=set(
             state.diagnostics.get("budget_throttled_categories") or []
         ),
+        limitations=state.evidence_limitations,
     )
 
     # Build enriched result
@@ -1380,6 +1397,7 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         evaluation_mode="low_budget" if state.config.low_budget_mode else "standard",
         category_scores=state.diagnostics.get("category_scores") or None,
         audit_coverage=state.diagnostics.get("audit_coverage"),
+        evidence_limitations=dict(state.evidence_limitations),
     )
 
     logger.info(
@@ -1454,6 +1472,7 @@ def _build_category_breakdown(
     coverage_map: dict[str, bool],
     category_scores: dict[str, float | None],
     budget_throttled_categories: set[str] | None = None,
+    limitations: dict[str, str] | None = None,
 ) -> list[CategoryBreakdown]:
     """Honest per-category breakdown: unassessed / assessed_clean / assessed_findings.
 
@@ -1500,6 +1519,7 @@ def _build_category_breakdown(
                 impact_percentage=round(cat_impact / total_impact * 100, 2),
                 state=state,
                 baseline_estimated=baseline_estimated,
+                limitations=[limitations[canonical]] if limitations and canonical in limitations else [],
             )
         )
     breakdown.sort(key=lambda b: b.impact_percentage, reverse=True)

@@ -59,12 +59,13 @@ def _db() -> Mock:
     return db
 
 
-async def _run_shadow(finding_signals: list | None = None) -> object:
+async def _run_shadow(finding_signals: list | None = None, clauses: list[Clause] | None = None,
+                      extra_document_types: tuple[str, ...] = ()) -> object:
     from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
     from src.coherence.services.v2.shadow_runner import ShadowRunner
 
     settings = SimpleNamespace(coherence_v2_enabled=True, coherence_v2_shadow_mode=True)
-    docs = [SimpleNamespace(document_type="budget"), SimpleNamespace(document_type="contract")]
+    docs = [SimpleNamespace(document_type=t) for t in ("budget", "contract", *extra_document_types)]
     persisted_v2: list = []
 
     def _spy_emit(self: object, delta: object, feature_flag_state: object = None) -> None:
@@ -85,7 +86,7 @@ async def _run_shadow(finding_signals: list | None = None) -> object:
     ):
         await evaluate_project_coherence(
             payload=CoherenceEvaluateRequest(
-                project_id=uuid4(), clauses=[Clause(id="B-1", text="Budget", data={})]
+                project_id=uuid4(), clauses=clauses or [Clause(id="B-1", text="Budget", data={})]
             ),
             include_diagnostics=False,
             db=_db(),
@@ -147,3 +148,22 @@ async def test_independent_v1_budget_findings_are_kept_on_the_unassessed_categor
         "DET-BUD-RETENTION", "DET-BUD-ADVANCE",
     ]
     assert _category(payload, "LEGAL") == _category(baseline, "LEGAL")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_a_category_the_v1_inputs_declare_unassessable_stays_unassessed_in_v2() -> None:
+    """The generic ``assessment_unavailable`` declaration (as #860 uses for BUDGET) is the v2
+    shadow's decision too, for any category, with no second read. (The WBS-dates TIME case is a
+    source limitation, not a veto: tests/unit/coherence/test_pc2a3_time_source_authority.py.)"""
+    reason = "declared_source_unavailable"
+    marker = Clause(id="declared-time-unavailable", text="Schedule source declared unavailable", data={
+        "document_type": "schedule", "category": "TIME", "assessment_unavailable": {"TIME": reason}})
+    # a schedule document makes TIME applicable; the declaration still keeps it unassessed
+    payload = await _run_shadow(clauses=[Clause(id="B-1", text="Budget", data={}), marker],
+                                extra_document_types=("schedule",))
+
+    time = _category(payload, "TIME")
+    assert time.status is CategoryStatus.INSUFFICIENT_EVIDENCE and time.coherence_score is None
+    assert time.rationale == reason
+    assert _category(payload, "BUDGET").rationale == "structured_budget_source_unavailable"

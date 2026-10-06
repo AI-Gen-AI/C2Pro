@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from src.stakeholders.application.dtos import RaciMatrixViewResponse
     from src.stakeholders.domain.models import Stakeholder
     from src.temporal.domain.project_snapshot import ProjectSnapshot
+    from src.wbs.domain.governance import WBSAuthority
 
 T = TypeVar("T")
 
@@ -65,6 +66,14 @@ class StakeholdersInput:
 
 
 @dataclass(frozen=True)
+class WbsInput:
+    """The live WBS rows plus the project's WBS authority from the single resolver (PC-2a.3)."""
+
+    items: list[WBSItem]
+    authority: WBSAuthority
+
+
+@dataclass(frozen=True)
 class HitlInput:
     items: list[ReviewItem]
     pending_count: int
@@ -78,7 +87,7 @@ class CurrentStateInputs:
     alerts: SourceOk[list[Alert]] | SourceUnavailable | SourceFailed
     hitl: SourceOk[HitlInput] | SourceUnavailable | SourceFailed
     budget: SourceOk[BudgetResponse] | SourceUnavailable | SourceFailed
-    wbs: SourceOk[list[WBSItem]] | SourceUnavailable | SourceFailed
+    wbs: SourceOk[WbsInput] | SourceUnavailable | SourceFailed
     stakeholders: SourceOk[StakeholdersInput] | SourceUnavailable | SourceFailed
     raci: SourceOk[RaciMatrixViewResponse] | SourceUnavailable | SourceFailed
 
@@ -96,7 +105,7 @@ class CurrentStateSources(Protocol):
 
     async def load_budget(self, project_id: UUID, tenant_id: UUID) -> BudgetResponse: ...
 
-    async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]: ...
+    async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> WbsInput: ...
 
     async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput: ...
 

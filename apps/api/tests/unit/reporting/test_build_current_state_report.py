@@ -16,9 +16,11 @@ from src.reporting.application.ports import (
     HitlInput,
     SourceUnavailableError,
     StakeholdersInput,
+    WbsInput,
 )
 from src.reporting.domain.current_state_report import ProjectIdentity, SectionStatus
 from src.stakeholders.application.dtos import RaciMatrixViewResponse
+from src.wbs.domain.governance import resolve_authority
 
 NOW = datetime(2026, 9, 13, 9, 30, tzinfo=UTC)
 PROJECT_ID = uuid4()
@@ -63,9 +65,10 @@ class _Sources:
         await self._guard("budget", project_id, tenant_id)
         return BudgetResponse(project_id=project_id, items=[])
 
-    async def load_wbs(self, project_id: UUID, tenant_id: UUID):  # noqa: ANN201
+    async def load_wbs(self, project_id: UUID, tenant_id: UUID) -> WbsInput:
         await self._guard("wbs", project_id, tenant_id)
-        return []
+        return WbsInput(items=[], authority=resolve_authority(current_baseline=None, live_node_count=0,
+                                                              open_change_sets=0))
 
     async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput:
         await self._guard("stakeholders", project_id, tenant_id)

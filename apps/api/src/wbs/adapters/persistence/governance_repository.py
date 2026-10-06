@@ -14,13 +14,13 @@ re-enforces the governance invariants with constraints and triggers.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.wbs.adapters.persistence.governance_models import (
@@ -60,6 +60,8 @@ from src.wbs.domain.governance import (
     validate_decomposition_kind,
     validate_for_submit,
 )
+
+T = TypeVar("T")
 
 
 class ChangeSetNotFoundError(LookupError):
@@ -179,6 +181,33 @@ class WBSGovernanceRepository:
             else None
         )
         return resolve_authority(current_baseline=ref, live_node_count=int(live or 0), open_change_sets=int(open_sets or 0))
+
+    async def read_with_authority(
+        self, project_id: UUID, tenant_id: UUID, read: Callable[[], Awaitable[T]], *, attempts: int = 3
+    ) -> tuple[WBSAuthority, T]:
+        """``read()`` of live WBS rows plus the authority they belong to, from one stable tree.
+
+        Under READ COMMITTED each statement sees the latest commit, so an approve = apply
+        committing mid-read could pair Baseline #N authority with #N+1 rows. Live structure
+        changes only through an apply, and an apply always changes the current baseline, so an
+        unchanged authority around the read proves the rows belong to it. After ``attempts``
+        racing applies the read waits them out under ``FOR KEY SHARE`` on the project row (the
+        lock the apply's ``FOR UPDATE`` conflicts with), held until the caller's transaction ends.
+        """
+        for _ in range(attempts):
+            before = await self.authority(project_id, tenant_id)
+            result = await read()
+            after = await self.authority(project_id, tenant_id)
+            if (before.state, before.baseline_id, before.legacy_node_count) == (
+                after.state, after.baseline_id, after.legacy_node_count
+            ):
+                return after, result
+        await self.session.execute(
+            text("SELECT id FROM projects WHERE id = :p AND tenant_id = :t FOR KEY SHARE"),
+            {"p": project_id, "t": tenant_id},
+        )
+        result = await read()
+        return await self.authority(project_id, tenant_id), result
 
     # ------------------------------------------------------------------ change-set reads
     async def list_change_sets(

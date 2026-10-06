@@ -13,6 +13,9 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from src.stakeholders.adapters.persistence import (
+    sqlalchemy_stakeholder_repository as repository_module,
+)
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
 )
@@ -63,7 +66,11 @@ def _repository(session: _Session, tenant_id, monkeypatch: pytest.MonkeyPatch) -
     async def _project_tenant(_project_id):  # noqa: ANN001
         return tenant_id
 
+    async def _linkable(*_args, **_kwargs) -> None:  # noqa: ANN002, ANN003 - PC-2a.3 gate: proven on PostgreSQL
+        return None
+
     monkeypatch.setattr(repository, "_get_project_tenant_id", _project_tenant)
+    monkeypatch.setattr(repository_module, "require_linkable_wbs_nodes", _linkable)
     return repository
 
 

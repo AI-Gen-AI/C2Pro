@@ -34,6 +34,8 @@ from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixU
 from src.stakeholders.application.upsert_raci_assignment_use_case import (
     UpsertRaciAssignmentUseCase,
 )
+from src.wbs.adapters.persistence.governance_repository import WBSGovernanceRepository
+from src.wbs.domain.governance import WBSAuthorityReader
 
 logger = structlog.get_logger()
 
@@ -67,15 +69,20 @@ def get_project_repository(
 ) -> ProjectRepository:
     return repository
 
+def get_wbs_authority_reader(db: AsyncSession = Depends(get_session)) -> WBSAuthorityReader:
+    return WBSGovernanceRepository(db)
+
 def get_matrix_use_case(
     stakeholder_repo: SqlAlchemyStakeholderRepository = Depends(get_stakeholder_repository),
     wbs_repo: IWBSRepository = Depends(get_wbs_repository),
     project_repo: ProjectRepository = Depends(get_project_repository),
+    wbs_authority_reader: WBSAuthorityReader = Depends(get_wbs_authority_reader),
 ) -> GetRaciMatrixUseCase:
     return GetRaciMatrixUseCase(
         stakeholder_repository=stakeholder_repo,
         wbs_repository=wbs_repo,
         project_repository=project_repo,
+        wbs_authority_reader=wbs_authority_reader,
     )
 
 

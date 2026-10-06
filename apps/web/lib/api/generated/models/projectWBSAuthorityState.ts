@@ -37,24 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { BudgetLineItem } from "./budgetLineItem";
 
-export interface BudgetData {
-  item_count: number;
-  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
-  total_budget: string;
-  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
-  spent_amount: string;
-  /** False when no spend has been recorded, so a zero spent_amount is not a confirmed zero. */
-  spend_recorded: boolean;
-  /** Null when no spend has been recorded, because remaining would merely restate total. */
-  remaining_budget?: string | null;
-  currency: string;
-  notes: string[];
-  items: BudgetLineItem[];
-  truncated?: boolean;
-  /** Spend is the sum of the WBS rows' legacy budget_spent field. */
-  spent_amount_source?: string;
-  /** Always false: WBS budget_spent is not Cost authority, even on an approved WBS. */
-  spent_amount_cost_authority?: boolean;
-}
+export type ProjectWBSAuthorityState =
+  (typeof ProjectWBSAuthorityState)[keyof typeof ProjectWBSAuthorityState];
+
+export const ProjectWBSAuthorityState = {
+  NO_WBS: "NO_WBS",
+  LEGACY_UNGOVERNED: "LEGACY_UNGOVERNED",
+  APPROVED_BASELINE: "APPROVED_BASELINE",
+} as const;

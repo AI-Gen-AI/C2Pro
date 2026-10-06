@@ -13,6 +13,7 @@ from src.procurement.adapters.persistence.models import BOMItemORM
 from src.procurement.domain.models import BOMCategory, BOMItem, ProcurementStatus
 from src.procurement.ports.bom_repository import IBOMRepository
 from src.projects.adapters.persistence.models import ProjectORM
+from src.wbs.adapters.persistence.link_authority import require_linkable_wbs_nodes
 
 
 class SQLAlchemyBOMRepository(IBOMRepository):
@@ -79,9 +80,22 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         if result.scalar_one_or_none() is None:
             raise PermissionError("Cannot create BOM items for project outside tenant")
 
+    async def _require_linkable(self, bom_items: list[BOMItem], tenant_id: UUID) -> None:
+        """PC-2a.3 (#897): a BOM item may link only a node of its project's CURRENT approved WBS
+        baseline (409 otherwise), checked in this transaction. Unlinked items are unaffected."""
+        linked: dict[UUID, list[UUID]] = {}
+        for item in bom_items:
+            if item.wbs_item_id is not None:
+                linked.setdefault(item.project_id, []).append(item.wbs_item_id)
+        for project_id in sorted(linked, key=str):
+            await require_linkable_wbs_nodes(
+                self.session, tenant_id=tenant_id, project_id=project_id, node_ids=linked[project_id]
+            )
+
     async def create(self, bom_item: BOMItem, tenant_id: UUID) -> BOMItem:
         """Create a new BOM item with tenant isolation."""
         await self._ensure_project_in_tenant(bom_item.project_id, tenant_id)
+        await self._require_linkable([bom_item], tenant_id)
         orm = self._domain_to_orm(bom_item)
         self.session.add(orm)
         await self.session.flush()
@@ -241,6 +255,7 @@ class SQLAlchemyBOMRepository(IBOMRepository):
         """Create multiple BOM items at once with tenant isolation."""
         for project_id in {bom_item.project_id for bom_item in bom_items}:
             await self._ensure_project_in_tenant(project_id, tenant_id)
+        await self._require_linkable(bom_items, tenant_id)
 
         orms = [self._domain_to_orm(item) for item in bom_items]
 

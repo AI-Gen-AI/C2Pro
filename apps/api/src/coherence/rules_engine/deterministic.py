@@ -459,6 +459,18 @@ class MilestoneGapEvaluator(RuleEvaluator):
     def __init__(self, config: EvaluatorConfig = DEFAULT_CONFIG):
         self.config = config
 
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        # SCHEDULE_SOURCE_REQUIRED: only a schedule structure (>= 2 dated milestones) is evidence.
+        # A TIME clause without one gave the rule nothing to assess -- never a pass (PC-2a.3).
+        milestones = clause.data.get("milestones") or clause.data.get("schedule_items", [])
+        if isinstance(milestones, list) and sum(
+            1 for milestone in milestones
+            if isinstance(milestone, dict)
+            and _parse_date(milestone.get("date") or milestone.get("end_date") or milestone.get("due_date"))
+        ) >= 2:
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
+
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)
         return Finding(triggered_clause=clause, raw_data=s.raw_data) if s else None
@@ -511,6 +523,16 @@ class PredecessorOverlapEvaluator(RuleEvaluator):
     rule_id = "DET-TIM-PREDECESSOR"
     rule_name = "Predecessor Overlap Detection"
     category = "TIME"
+
+    def applicability(self, clause: Clause) -> ApplicabilityState:
+        # SCHEDULE_SOURCE_REQUIRED: needs schedule activities linked by predecessor -- never a
+        # pass for a TIME clause that carries no schedule structure (PC-2a.3).
+        items = clause.data.get("schedule_items", [])
+        if isinstance(items, list) and len(items) >= 2 and any(
+            isinstance(item, dict) and item.get("predecessor_id") for item in items
+        ):
+            return ApplicabilityState.EVALUATED
+        return ApplicabilityState.SKIPPED_MISSING_INPUTS
 
     def evaluate(self, clause: Clause) -> Finding | None:
         s = self.evaluate_v3(clause)

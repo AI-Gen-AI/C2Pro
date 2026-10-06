@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 
 from src.analysis.adapters.graph.knowledge_graph import ProjectKnowledgeGraph
+from src.wbs.domain.governance import resolve_authority
 
 
 def _graph() -> tuple[
@@ -26,6 +27,9 @@ def _graph() -> tuple[
 
     wbs_repository = MagicMock()
     wbs_repository.get_by_project = AsyncMock(return_value=[])
+    wbs_repository.authority = AsyncMock(
+        return_value=resolve_authority(current_baseline=None, live_node_count=1, open_change_sets=0)
+    )
 
     alert_repository = MagicMock()
     alert_repository.list_for_project = AsyncMock(
@@ -76,6 +80,10 @@ async def test_build_graph_propagates_authenticated_tenant_to_all_project_reads(
     result = await graph.build_graph(project_id, tenant_id)
 
     assert len(result) == 1
+    # PC-2a.3: the WBS authority is read for the authenticated tenant; legacy tasks are qualified
+    wbs_repository.authority.assert_awaited_once_with(project_id, tenant_id)
+    task_properties = next(iter(result.nodes.values()))
+    assert task_properties["properties"]["wbs_unapproved"] is True
     stakeholder_repository.get_stakeholders_by_project.assert_awaited_once_with(
         project_id=project_id,
         tenant_id=tenant_id,

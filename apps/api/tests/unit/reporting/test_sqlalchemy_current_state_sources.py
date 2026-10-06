@@ -201,9 +201,18 @@ async def test_budget_is_read_through_the_budget_use_case(monkeypatch: pytest.Mo
 async def test_wbs_is_read_from_the_persisted_procurement_items_served_to_the_wbs_tab(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # At runtime GET /projects/{id}/wbs is the projects router's handler (it shadows the in-memory wbs
-    # router) and reads procurement_wbs_items via SQLAlchemyWBSRepository, as RACI does; not wbs_nodes.
+    # The live WBS rows as GET /projects/{id}/wbs serves them (SQLAlchemyWBSRepository), with the
+    # project's WBS authority from the single resolver (PC-2a.3), in the same tenant session.
     seen: list[tuple[UUID, UUID]] = []
+    authority = object()
+
+    class _Governance:
+        def __init__(self, session: object) -> None:
+            pass
+
+        async def read_with_authority(self, project_id: UUID, tenant_id: UUID, read: Any) -> tuple[object, object]:
+            seen.append((project_id, tenant_id))
+            return authority, await read()
 
     class _Repository:
         def __init__(self, session: object) -> None:
@@ -214,8 +223,10 @@ async def test_wbs_is_read_from_the_persisted_procurement_items_served_to_the_wb
             return ["i1"]
 
     monkeypatch.setattr(module, "SQLAlchemyWBSRepository", _Repository)
-    assert await _sources(_SessionLog()).load_wbs(PROJECT_ID, TENANT_ID) == ["i1"]
-    assert seen == [(PROJECT_ID, TENANT_ID)]
+    monkeypatch.setattr(module, "WBSGovernanceRepository", _Governance)
+    loaded = await _sources(_SessionLog()).load_wbs(PROJECT_ID, TENANT_ID)
+    assert loaded.items == ["i1"] and loaded.authority is authority
+    assert seen == [(PROJECT_ID, TENANT_ID), (PROJECT_ID, TENANT_ID)]
     assert not hasattr(module, "WBSNodeRepository")
 
 
@@ -224,7 +235,8 @@ async def test_raci_matrix_is_read_through_the_raci_use_case(monkeypatch: pytest
     matrix = object()
 
     class _UseCase:
-        def __init__(self, *, stakeholder_repository: object, wbs_repository: object, project_repository: object) -> None:
+        def __init__(self, *, stakeholder_repository: object, wbs_repository: object, project_repository: object,
+                     wbs_authority_reader: object) -> None:
             pass
 
         async def execute(self, project_id: UUID, tenant_id: UUID) -> object:
@@ -234,6 +246,7 @@ async def test_raci_matrix_is_read_through_the_raci_use_case(monkeypatch: pytest
     monkeypatch.setattr(module, "SqlAlchemyStakeholderRepository", lambda session: object())
     monkeypatch.setattr(module, "SQLAlchemyWBSRepository", lambda session: object())
     monkeypatch.setattr(module, "SQLAlchemyProjectRepository", lambda session: object())
+    monkeypatch.setattr(module, "WBSGovernanceRepository", lambda session: object())
     monkeypatch.setattr(module, "GetRaciMatrixUseCase", _UseCase)
     assert await _sources(_SessionLog()).load_raci(PROJECT_ID, TENANT_ID) is matrix
     assert seen == [(PROJECT_ID, TENANT_ID)]
