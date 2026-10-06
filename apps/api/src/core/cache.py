@@ -738,10 +738,17 @@ def build_endpoint_cache_key(*, endpoint: str, query_params: dict[str, Any], ten
 
 
 def cached(
-    *, ttl: int, endpoint: str
+    *,
+    ttl: int,
+    endpoint: str,
+    cache_key_version: str | None = None,
 ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
     """
     TS-AI-020: Cache async route responses by endpoint, query params, and tenant_id.
+
+    `cache_key_version` changes only cache-key identity, not the endpoint label
+    used for cache hit/miss metrics. It allows bounded contract changes to stop
+    reading stale payloads from older application versions during rolling deploys.
 
     The decorator intentionally fails open: cache outages never block the route.
     """
@@ -769,8 +776,15 @@ def cached(
                 for key, value in bound.arguments.items()
                 if key not in {"tenant_id", "service"} and not key.startswith("_")
             }
+            cache_endpoint = (
+                endpoint
+                if cache_key_version is None
+                else f"{endpoint}#{cache_key_version}"
+            )
             cache_key = build_endpoint_cache_key(
-                endpoint=endpoint, query_params=query_params, tenant_id=tenant_id
+                endpoint=cache_endpoint,
+                query_params=query_params,
+                tenant_id=tenant_id,
             )
             cache = get_cache_service()
             cache_type = f"{CACHE_TYPE_AI_ANALYTICS}:{endpoint.strip('/')}"
