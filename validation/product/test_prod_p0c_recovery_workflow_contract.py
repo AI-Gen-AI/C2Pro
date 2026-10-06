@@ -47,3 +47,9 @@ def test_recovery_preflight_is_read_only_and_exactly_two_revisions() -> None:
     assert "document must be error before recovery" in source
     assert "ingestion_failed" in source
     assert "A→B revision.changed must not pre-exist" in source
+    assert "payload->>'document_id'=:document_text" in source
+    assert "source_revision_id'=:source_text" in source
+    assert "target_revision_id'=:target_text" in source
+    assert "CAST(:document AS text)" not in source
+    assert "CAST(:source AS text)" not in source
+    assert "CAST(:target AS text)" not in source
