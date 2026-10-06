@@ -650,6 +650,43 @@ class LLMClient:
         }
         return error_type in retryable_errors
 
+    @staticmethod
+    def _reasonable_retry_delay(seconds: float | None) -> float | None:
+        """Keep only finite provider delays in the SDK-supported 0-60 second window."""
+        if seconds is None or not math.isfinite(seconds) or not 0 < seconds <= 60:
+            return None
+        return seconds
+
+    @classmethod
+    def _parse_retry_after_ms(cls, raw_value: str | None) -> float | None:
+        """Parse Anthropic's retry-after-ms extension."""
+        if raw_value is None:
+            return None
+        try:
+            parsed_seconds = float(raw_value) / 1000.0
+        except (TypeError, ValueError):
+            return None
+        return cls._reasonable_retry_delay(parsed_seconds)
+
+    @classmethod
+    def _parse_retry_after(cls, raw_value: str | None) -> float | None:
+        """Parse Retry-After as seconds or an HTTP date."""
+        if raw_value is None:
+            return None
+
+        try:
+            parsed_seconds = float(raw_value)
+        except (TypeError, ValueError):
+            try:
+                retry_at = parsedate_to_datetime(str(raw_value))
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                parsed_seconds = (retry_at - datetime.now(UTC)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                return None
+
+        return cls._reasonable_retry_delay(parsed_seconds)
+
     def _provider_retry_after_seconds(self, error: Exception) -> float | None:
         """Parse reasonable provider retry delay hints from the retrying status error."""
         should_retry, status_error = self._provider_retry_context(error)
@@ -657,35 +694,11 @@ class LLMClient:
             return None
 
         headers = status_error.response.headers
-        retry_after_ms = headers.get("retry-after-ms")
+        retry_after_ms = self._parse_retry_after_ms(headers.get("retry-after-ms"))
         if retry_after_ms is not None:
-            try:
-                seconds = float(retry_after_ms) / 1000.0
-            except (TypeError, ValueError):
-                seconds = None
-            if seconds is not None and math.isfinite(seconds) and 0 < seconds <= 60:
-                return seconds
+            return retry_after_ms
 
-        retry_after = headers.get("retry-after")
-        if retry_after is None:
-            return None
-
-        seconds: float | None
-        try:
-            seconds = float(retry_after)
-        except (TypeError, ValueError):
-            try:
-                retry_at = parsedate_to_datetime(str(retry_after))
-                if retry_at.tzinfo is None:
-                    retry_at = retry_at.replace(tzinfo=UTC)
-                seconds = (retry_at - datetime.now(UTC)).total_seconds()
-            except (TypeError, ValueError, OverflowError):
-                seconds = None
-
-        if seconds is None or not math.isfinite(seconds) or not 0 < seconds <= 60:
-            return None
-
-        return seconds
+        return self._parse_retry_after(headers.get("retry-after"))
 
     def _calculate_retry_delay(
         self,
