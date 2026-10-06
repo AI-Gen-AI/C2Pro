@@ -21,10 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.models import SubscriptionPlan, Tenant
 from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.shared_kernel.enums import RACIRole
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.support.legacy_wbs import seed_legacy_from_dicts
 
 pytestmark = pytest.mark.asyncio
 
@@ -55,9 +55,8 @@ async def _project(db: AsyncSession) -> tuple[UUID, UUID]:
 
 async def test_destructive_wbs_replacement_cannot_drop_raci_or_unlink_bom(db: AsyncSession) -> None:
     tenant_id, project_id = await _project(db)
-    wbs = SQLAlchemyWBSRepository(db)
-    [node] = await wbs.bulk_create_from_dicts(
-        project_id, [{"code": "1", "name": "Civil works (V1)"}], tenant_id
+    [node] = await seed_legacy_from_dicts(
+        db, project_id, [{"code": "1", "name": "Civil works (V1)"}], tenant_id
     )
     await db.commit()
     stakeholder = StakeholderORM(id=uuid4(), tenant_id=tenant_id, project_id=project_id, name="PM")

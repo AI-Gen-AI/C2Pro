@@ -12,18 +12,18 @@ class IWBSRepository(ABC):
     """
     Repository interface for WBS Item operations.
     Implementations must be provided by adapters (e.g., SQLAlchemy).
+
+    PC-2a.2 / ADR-029: governed WBS content (identity, hierarchy, position, code, name) changes
+    only through the governed approve = apply of a WBS change set. ``create``, ``bulk_create``,
+    ``delete`` and governed-field ``update`` raise a 409 ``WBS_GOVERNANCE_REQUIRED`` in every
+    authority state; only non-governed attributes stay directly editable.
     """
 
     @abstractmethod
     async def create(self, tenant_id: TenantId, wbs_item: WBSItem) -> WBSItem:
         """
-        Create a new WBS item.
-
-        Args:
-            wbs_item: The WBS item to create
-
-        Returns:
-            The created WBS item with ID
+        Refused: canonical WBS nodes are created only by a governed apply (409
+        ``WBS_GOVERNANCE_REQUIRED``).
         """
         pass
 
@@ -101,7 +101,8 @@ class IWBSRepository(ABC):
     @abstractmethod
     async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: TenantId) -> WBSItem | None:
         """
-        Update an existing WBS item.
+        Update the non-governed attributes of a WBS item (a code, name, parent or position change
+        raises 409 ``WBS_GOVERNANCE_REQUIRED``).
 
         Args:
             wbs_id: The WBS item ID to update
@@ -116,30 +117,18 @@ class IWBSRepository(ABC):
     @abstractmethod
     async def delete(self, wbs_id: UUID, tenant_id: TenantId) -> bool:
         """
-        Delete a WBS item and its children (cascade).
-
-        Never deletes a subtree that still carries RACI or BOM links: implementations raise a
-        409 conflict instead (PC-1R).
-
-        Args:
-            wbs_id: The WBS item ID to delete
-            tenant_id: The tenant ID for isolation
+        Refused for an existing node (409 ``WBS_GOVERNANCE_REQUIRED``): nodes leave the WBS only
+        as dispositioned retirements of a governed apply.
 
         Returns:
-            True if deleted, False if not found
+            False if the node does not exist (otherwise it raises)
         """
         pass
 
     @abstractmethod
     async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: TenantId) -> list[WBSItem]:
         """
-        Create multiple WBS items at once (used for AI generation).
-
-        Args:
-            wbs_items: List of WBS items to create
-            tenant_id: The tenant ID for isolation
-
-        Returns:
-            List of created WBS items with IDs
+        Refused: a WBS proposal (AI generation, import) belongs in a change set candidate (409
+        ``WBS_GOVERNANCE_REQUIRED``).
         """
         pass

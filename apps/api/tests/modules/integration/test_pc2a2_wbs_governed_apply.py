@@ -17,12 +17,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core.auth.models import UserRole
 from src.procurement.adapters.persistence.wbs_repository import (
     SQLAlchemyWBSRepository,
-    WBSGovernedByBaselineError,
+    WBSGovernanceRequiredError,
 )
 from src.procurement.domain.models import WBSItem
 from src.shared_kernel.enums import RACIRole
@@ -70,12 +71,14 @@ from tests.modules.integration.test_pc2a1_wbs_governance_foundation import (
     _expect_db_rejection,
     _legacy_nodes,
     _project,
-    _rejected,
     _scope,
     _user,
 )
+from tests.support.legacy_wbs import legacy_wbs_writes, seed_legacy_wbs
 
 pytestmark = pytest.mark.asyncio
+
+GOVERNANCE_REQUIRED = "WBS_GOVERNANCE_REQUIRED"
 
 
 # =========================================================================== helpers
@@ -626,31 +629,17 @@ async def _while_an_approval_is_uncommitted(db: AsyncSession, s: Scope, racer: A
     return result.baseline_id, outcome
 
 
-@pytest.mark.parametrize("writer", ["repository", "raw_sql"])
-async def test_34c_a_live_writer_racing_a_first_baseline_waits_and_is_then_refused(db: AsyncSession, writer: str) -> None:
-    s = await _scope(db)
-
-    async def legacy_writer(session: AsyncSession) -> Any:
-        if writer == "repository":
-            return await SQLAlchemyWBSRepository(session).create(
-                s.tenant, WBSItem(project_id=s.project, code="LATE-1", name="Late legacy row", level=1))
-        # a writer outside the repository: no project lock taken before the row trigger runs
-        return await session.execute(text(
-            "INSERT INTO wbs_nodes (id, project_id, tenant_id, code, name, lft, rgt, depth, sort_order, node_type, "
-            "metadata, created_at, updated_at) VALUES (:id, :project, :tenant, 'LATE-1', 'Late legacy row', 1000, 1001, "
-            "0, 99, 'activity', '{}'::jsonb, now(), now())"), {"id": uuid4(), "project": s.project, "tenant": s.tenant})
-
-    baseline_id, outcome = await _while_an_approval_is_uncommitted(db, s, legacy_writer)
-    assert isinstance(outcome, Exception) and "governed by an approved baseline" in str(outcome), outcome
-    live = await _live(db, s.project)
-    assert [row.code for row in live.values()] == ["1"]
-    baseline = await db.get(WBSBaselineORM, baseline_id)
-    assert baseline is not None and _live_digest(s.project, live) == baseline.tree_digest
+_RAW_LIVE_INSERT = (
+    "INSERT INTO wbs_nodes (id, project_id, tenant_id, code, name, lft, rgt, depth, sort_order, node_type, "
+    "metadata, created_at, updated_at) VALUES (:id, :project, :tenant, 'LATE-1', 'Late legacy row', 1000, 1001, "
+    "0, 99, 'activity', '{}'::jsonb, now(), now())"
+)
 
 
-@pytest.mark.parametrize("writer", ["repository", "raw_sql"])
-async def test_34e_an_approval_racing_an_uncommitted_live_write_waits_then_refuses_without_deadlock(
+@pytest.mark.parametrize("writer", ["repository", "READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"])
+async def test_34c_a_live_writer_racing_a_first_baseline_never_commits_governed_content(
         db: AsyncSession, writer: str) -> None:
+    """Refused DURING the uncommitted apply and AFTER it, even from a snapshot that predates it."""
     s = await _scope(db)
     change_set_id = await _new(db, s, "Baseline 1")
     await _cmd(db, s, change_set_id, AddNode(NodeSpec("Civil", "1")))
@@ -659,37 +648,86 @@ async def test_34e_an_approval_racing_an_uncommitted_live_write_waits_then_refus
     engine = create_async_engine(os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://"))
     sessions = async_sessionmaker(engine, expire_on_commit=False)
 
+    async def attempt(session: AsyncSession) -> Exception | None:
+        try:
+            async with session.begin_nested():
+                if writer == "repository":
+                    await SQLAlchemyWBSRepository(session).create(
+                        s.tenant, WBSItem(project_id=s.project, code="LATE-1", name="Late legacy row", level=1))
+                else:  # a writer outside the repository, under its own isolation level
+                    await session.execute(text(_RAW_LIVE_INSERT), {"id": uuid4(), "project": s.project, "tenant": s.tenant})
+            return None
+        except Exception as exc:  # noqa: BLE001 - the outcome under test
+            return exc
+
+    try:
+        async with sessions() as live_writer, sessions() as approver:
+            if writer != "repository":
+                await live_writer.connection(execution_options={"isolation_level": writer})
+            # the writer's snapshot is taken BEFORE the baseline exists
+            await live_writer.execute(text("SELECT count(*) FROM wbs_nodes WHERE project_id = :p"), {"p": s.project})
+            result = await WBSGovernedChangeService(approver).approve(
+                project_id=s.project, change_set_id=change_set_id, tenant_id=s.tenant, actor=s.admin,
+                expected_revision=submitted.revision, expected_digest=str(submitted.submitted_digest))
+            during = await asyncio.wait_for(attempt(live_writer), timeout=10)
+            await approver.commit()
+            after = await asyncio.wait_for(attempt(live_writer), timeout=10)
+            await live_writer.commit()
+    finally:
+        await engine.dispose()
+    for outcome in (during, after):
+        assert outcome is not None, "a governed live write committed outside approve = apply"
+        assert GOVERNANCE_REQUIRED in (str(outcome) + str(getattr(outcome, "code", ""))), outcome
+    live = await _live(db, s.project)
+    assert [row.code for row in live.values()] == ["1"]
+    baseline = await db.get(WBSBaselineORM, result.baseline_id)
+    assert baseline is not None and _live_digest(s.project, live) == baseline.tree_digest
+
+
+@pytest.mark.parametrize("touched", ["adopted", "retired"])
+async def test_34e_an_approval_waits_for_an_in_flight_non_governed_edit_without_deadlock(
+        db: AsyncSession, touched: str) -> None:
+    """Non-governed attributes stay writable; an apply never reads around an uncommitted edit."""
+    s = await _scope(db)
+    legacy = await _legacy_nodes(db, s.tenant, s.project, 2)
+    change_set_id = await _new(db, s, "Baseline 1")
+    await _cmd(db, s, change_set_id, AdoptLegacyNode(legacy[0]))
+    await _submit(db, s, change_set_id)  # legacy[1] is RETIRED_ON_BASELINE with its snapshot
+    submitted = await _cs(db, change_set_id)
+    target = legacy[0] if touched == "adopted" else legacy[1]
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://"))
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+
     async def approve() -> Any:
         async with sessions() as session:
             try:
-                return await WBSGovernedChangeService(session).approve(
+                applied = await WBSGovernedChangeService(session).approve(
                     project_id=s.project, change_set_id=change_set_id, tenant_id=s.tenant, actor=s.admin,
                     expected_revision=submitted.revision, expected_digest=str(submitted.submitted_digest))
+                await session.commit()
+                return applied
             except Exception as exc:  # noqa: BLE001 - the outcome under test
                 await session.rollback()
                 return exc
 
     try:
-        async with sessions() as live_writer:
-            if writer == "repository":
-                await SQLAlchemyWBSRepository(live_writer).create(
-                    s.tenant, WBSItem(project_id=s.project, code="LATE-1", name="Late legacy row", level=1))
-            else:
-                await live_writer.execute(text(
-                    "INSERT INTO wbs_nodes (id, project_id, tenant_id, code, name, lft, rgt, depth, sort_order, "
-                    "node_type, metadata, created_at, updated_at) VALUES (:id, :project, :tenant, 'LATE-1', 'Late', "
-                    "1000, 1001, 0, 99, 'activity', '{}'::jsonb, now(), now())"),
-                    {"id": uuid4(), "project": s.project, "tenant": s.tenant})
+        async with sessions() as editor:
+            await editor.execute(update(WBSNodeORM).where(WBSNodeORM.id == target).values(description="edited in review"))
             task = asyncio.create_task(approve())
             done, _ = await asyncio.wait({task}, timeout=1.0)
-            assert not done, f"the approval did not wait for the live write: {task.result()!r}"
-            await live_writer.commit()
+            assert not done, f"the approval did not wait for the in-flight edit: {task.result()!r}"
+            await editor.commit()
         outcome = await asyncio.wait_for(task, timeout=30)
     finally:
         await engine.dispose()
-    # the reviewed legacy set changed under the approval: refused, never a deadlock or a divergent baseline
-    assert isinstance(outcome, LegacyWBSChangedError), outcome
-    assert await db.scalar(select(func.count()).select_from(WBSBaselineORM).where(WBSBaselineORM.project_id == s.project)) == 0
+    if touched == "adopted":
+        assert not isinstance(outcome, Exception), outcome
+        live = await _live(db, s.project)
+        assert set(live) == {legacy[0]} and live[legacy[0]].description == "edited in review"
+    else:  # the reviewed snapshot of the retired row no longer holds: refused, never silently lost
+        assert isinstance(outcome, LegacyWBSChangedError), outcome
+        assert await db.scalar(select(func.count()).select_from(WBSBaselineORM)
+                               .where(WBSBaselineORM.project_id == s.project)) == 0
 
 
 async def test_34d_a_draft_opened_during_an_apply_is_based_on_the_new_baseline(db: AsyncSession) -> None:
@@ -835,8 +873,8 @@ async def test_legacy_rows_changed_after_submission_fail_closed(db: AsyncSession
     change_set_id = await _new(db, s)
     await _cmd(db, s, change_set_id, AdoptLegacyNode(legacy[0]))
     await _submit(db, s, change_set_id)
-    # pre-baseline transitional writer still works, so a new legacy row can appear after submit
-    await SQLAlchemyWBSRepository(db).create(s.tenant, WBSItem(project_id=s.project, code="LATE-1", name="Late", level=1))
+    # no application path writes live WBS any more; an out-of-band load after submit is still caught
+    await seed_legacy_wbs(db, s.tenant, [WBSItem(project_id=s.project, code="LATE-1", name="Late", level=1)])
     await db.commit()
     with pytest.raises(LegacyWBSChangedError):
         await _approve(db, s, change_set_id)
@@ -855,38 +893,158 @@ async def test_legacy_rows_changed_after_submission_fail_closed(db: AsyncSession
 
 
 # =========================================================================== DIRECT BYPASS 48-52
-async def test_48_to_51_direct_writes_are_closed_after_the_first_baseline(db: AsyncSession) -> None:
+_GOVERNED_LIVE_WRITES = (
+    "UPDATE wbs_nodes SET name = 'x' WHERE id = :n",
+    "UPDATE wbs_nodes SET code = 'X-1' WHERE id = :n",
+    "UPDATE wbs_nodes SET parent_id = NULL, sort_order = 9 WHERE id = :n",
+    "UPDATE wbs_nodes SET sort_order = 7 WHERE id = :n",
+    "UPDATE wbs_nodes SET control_level = 'work_package' WHERE id = :n",
+    "UPDATE wbs_nodes SET decomposition_kind = 'core:other' WHERE id = :n",
+    "UPDATE wbs_nodes SET dictionary = '{\"scope_statement\": \"x\"}'::jsonb WHERE id = :n",
+    "DELETE FROM wbs_nodes WHERE id = :n",
+)
+
+
+@pytest.mark.parametrize("state", ["NO_WBS", "LEGACY_UNGOVERNED", "APPROVED_BASELINE"])
+async def test_48_to_51_direct_live_writes_are_closed_in_every_authority_state(db: AsyncSession, state: str) -> None:
+    """#896 hardening A-D: governed live content changes ONLY by approve = apply, baseline or not."""
     s = await _scope(db)
-    _, ids, _ = await _baseline_one(db, s)
+    ids: list[UUID] = []
+    if state == "LEGACY_UNGOVERNED":
+        ids = await _legacy_nodes(db, s.tenant, s.project, 3)
+    elif state == "APPROVED_BASELINE":
+        _, by_code, _ = await _baseline_one(db, s)
+        ids = [by_code["1"], by_code["1.1"], by_code["2"]]
+    governance = WBSGovernanceRepository(db)
+    assert (await governance.authority(s.project, s.tenant)).state.value == state
+    live_before = _live_digest(s.project, await _live(db, s.project))
     repo = SQLAlchemyWBSRepository(db)
-    with pytest.raises(WBSGovernedByBaselineError):  # 48 create
-        await repo.create(s.tenant, WBSItem(project_id=s.project, code="9", name="Sneaky", level=1))
-    await db.rollback()
-    with pytest.raises(WBSGovernedByBaselineError):  # bulk paths too
-        await repo.bulk_create_from_dicts(s.project, [{"code": "9", "name": "Sneaky"}], s.tenant)
-    await db.rollback()
-    item = await repo.get_by_id(ids["2"], s.tenant)
-    assert item is not None
-    for change in ({"name": "Renamed"}, {"code": "2X"}, {"parent_id": ids["1"]}, {"sort_order": 1}):  # 49 / 50
-        with pytest.raises(WBSGovernedByBaselineError):
-            await repo.update(ids["2"], dataclasses.replace(item, **change), s.tenant)
+    item = WBSItem(project_id=s.project, code="9", name="Sneaky", level=1)
+    for write in (lambda: repo.create(s.tenant, item), lambda: repo.bulk_create([item], s.tenant),  # A create
+                  lambda: repo.bulk_create_from_dicts(s.project, [{"code": "9", "name": "Sneaky"}], s.tenant)):
+        with pytest.raises(WBSGovernanceRequiredError) as caught:
+            await write()
+        assert (caught.value.code, caught.value.status_code) == ("WBS_GOVERNANCE_REQUIRED", 409)
         await db.rollback()
-    with pytest.raises(WBSGovernedByBaselineError):  # 51 delete
-        await repo.delete(ids["2"], s.tenant)
-    await db.rollback()
-    # non-governed attributes stay directly editable (schedule/cost data, PC-2a.3/PC-2b consumers)
-    updated = await repo.update(ids["2"], dataclasses.replace(item, description="Cables", planned_start=datetime(2026, 1, 5, tzinfo=UTC)), s.tenant)
+    await _expect_db_rejection(db, _RAW_LIVE_INSERT, {"id": uuid4(), "project": s.project, "tenant": s.tenant},
+                               GOVERNANCE_REQUIRED)
+    if ids:
+        current = await repo.get_by_id(ids[-1], s.tenant)
+        assert current is not None
+        for change in ({"name": "Renamed"}, {"code": "X-1"}, {"parent_id": ids[0]}, {"sort_order": 1}):  # B / C
+            with pytest.raises(WBSGovernanceRequiredError):
+                await repo.update(ids[-1], dataclasses.replace(current, **change), s.tenant)
+            await db.rollback()
+        with pytest.raises(WBSGovernanceRequiredError):  # D delete
+            await repo.delete(ids[-1], s.tenant)
+        await db.rollback()
+        for sql in _GOVERNED_LIVE_WRITES:  # the database refuses every writer, not only the repository
+            await _expect_db_rejection(db, sql, {"n": ids[-1]}, GOVERNANCE_REQUIRED)
+        # non-governed attributes (schedule/cost data outside the baseline digest) stay writable
+        updated = await repo.update(ids[-1], dataclasses.replace(
+            current, description="Cables", planned_start=datetime(2026, 1, 5, tzinfo=UTC)), s.tenant)
+        await db.execute(text("UPDATE wbs_nodes SET budget_allocated = 10 WHERE id = :n"), {"n": ids[-1]})
+        await db.commit()
+        assert updated is not None and (updated.description, updated.code) == ("Cables", current.code)
+    assert (await governance.authority(s.project, s.tenant)).state.value == state
+    assert _live_digest(s.project, await _live(db, s.project)) == live_before
+
+
+_NO_BASELINE = object()
+
+
+async def test_apply_authority_is_database_backed_never_a_session_setting(db: AsyncSession) -> None:
+    """#896 hardening J-O: the apply correlation alone never opens the live-write guard."""
+    s = await _scope(db)
+    stale = await _new(db, s, "Becomes stale")
+    applied, ids, first = await _baseline_one(db, s)
+    pending = await _new(db, s, "Submitted")
+    await _cmd(db, s, pending, UpdateNode(ids["2"], {"name": "Electrical works"}))
+    await _submit(db, s, pending)
+    draft = await _new(db, s, "Draft")
+    rejected = await _new(db, s, "Rejected")
+    await _cmd(db, s, rejected, UpdateNode(ids["2"], {"name": "Nope"}))
+    await _submit(db, s, rejected)
+    refused = await _cs(db, rejected)
+    await _svc(db).reject(project_id=s.project, change_set_id=rejected, tenant_id=s.tenant, actor=s.admin,
+                          expected_revision=refused.revision, expected_digest=str(refused.submitted_digest), reason="no")
     await db.commit()
-    assert updated is not None and updated.description == "Cables" and updated.code == "2"
-    # the database refuses the same bypasses for any writer, even with a forged apply marker
-    for sql in ("UPDATE wbs_nodes SET name = 'x' WHERE id = :n", "UPDATE wbs_nodes SET parent_id = NULL, sort_order = 9 WHERE id = :n",
-                "DELETE FROM wbs_nodes WHERE id = :n"):
-        await _expect_db_rejection(db, sql, {"n": ids["1.1"]}, "governed by an approved baseline")
-    applied = (await db.execute(select(WBSChangeSetORM.id).where(WBSChangeSetORM.project_id == s.project))).scalar_one()
-    await db.execute(text("SELECT set_config('c2pro.wbs_governed_apply', :c, true)"), {"c": str(applied)})
-    with _rejected("governed by an approved baseline"):
-        await db.execute(text("UPDATE wbs_nodes SET name = 'x' WHERE id = :n"), {"n": ids["1.1"]})
-    await db.rollback()
+    other = Scope(s.tenant, await _project(db, s.tenant), s.author, s.admin, s.admin2)
+    other_project = await _new(db, other, "Other project")
+    await _cmd(db, other, other_project, AddNode(NodeSpec("X", "1")))
+    await _submit(db, other, other_project)
+    intruder = await _scope(db)
+    other_tenant = await _new(db, intruder, "Other tenant")
+    await _cmd(db, intruder, other_tenant, AddNode(NodeSpec("X", "1")))
+    await _submit(db, intruder, other_tenant)
+    assert [(await _cs(db, c)).status for c in (stale, applied, pending, draft, rejected)] == [
+        "STALE", "APPLIED", "SUBMITTED", "DRAFT", "REJECTED"]
+    target = ids["1.1"]
+
+    async def write(marker: str | None, *, baseline_parent: object = _NO_BASELINE,
+                    baseline_for: UUID | None = None) -> Exception | None:
+        try:
+            if baseline_parent is not _NO_BASELINE:  # an in-transaction authority row, loaded out of band
+                async with legacy_wbs_writes(db):
+                    db.add(WBSBaselineORM(
+                        id=uuid4(), tenant_id=s.tenant, project_id=s.project, baseline_no=2,
+                        parent_baseline_id=baseline_parent, source_change_set_id=baseline_for,
+                        tree_digest="sha256:" + "0" * 64, change_set_digest="sha256:" + "0" * 64, node_count=4,
+                        approved_by=s.admin.user_id, approved_by_kind="human", self_approved=False, profile_refs=[],
+                        applied_at=datetime.now(UTC)))
+            if marker is not None:
+                await db.execute(text("SELECT set_config('c2pro.wbs_governed_apply', :c, true)"), {"c": marker})
+            await db.execute(text("UPDATE wbs_nodes SET name = 'forged' WHERE id = :n"), {"n": target})
+            await db.flush()
+            return None
+        except DBAPIError as exc:
+            return exc
+        finally:
+            await db.rollback()
+
+    refusals = {
+        "J no marker": await write(None),
+        "J submitted change set, no apply state": await write(str(pending)),
+        "K unknown change set": await write(str(uuid4())),
+        "K not a uuid": await write("'; DROP TABLE wbs_nodes; --"),
+        "L other project": await write(str(other_project)),
+        "M other tenant": await write(str(other_tenant)),
+        "N draft": await write(str(draft)),
+        "N rejected": await write(str(rejected)),
+        "N stale": await write(str(stale)),
+        "N applied (committed baseline)": await write(str(applied)),
+        "O baseline with the wrong base": await write(str(pending), baseline_parent=uuid4(), baseline_for=pending),
+        "O baseline of another change set": await write(str(pending), baseline_parent=first.baseline_id,
+                                                       baseline_for=draft),
+    }
+    for case, outcome in refusals.items():
+        assert outcome is not None and GOVERNANCE_REQUIRED in str(outcome), case
+    # control: the same write passes only with the real apply state in THIS transaction
+    assert await write(str(pending), baseline_parent=first.baseline_id, baseline_for=pending) is None
+    assert (await _live(db, s.project))[target].name == "Earthworks"
+
+
+async def test_deleting_a_project_still_cascades_through_the_guard(db: AsyncSession) -> None:
+    """#896 hardening R / 16: the guard never blocks a cascade, and no governance row is orphaned.
+
+    (The tenant -> project cascade only exists in the migrated schema: proven on a scratch
+    database in test_pc2a2_wbs_governed_apply_migration_db.py.)
+    """
+    s = await _scope(db)
+    legacy_project = await _project(db, s.tenant)
+    await _legacy_nodes(db, s.tenant, legacy_project, 2)
+    _, ids, _ = await _baseline_one(db, s)
+    pending = await _new(db, s, "Pending")
+    await _cmd(db, s, pending, RemoveNode(ids["2"]))
+    await _submit(db, s, pending)
+    for project in (s.project, legacy_project):
+        await db.execute(text("DELETE FROM projects WHERE id = :p"), {"p": project})
+    await db.commit()
+    projects = [s.project, legacy_project]
+    for model in (WBSNodeORM, WBSChangeSetORM, WBSChangeSetNodeORM, WBSChangeSetLineageORM, WBSChangeSetRetirementORM,
+                  WBSBaselineORM, WBSBaselineNodeORM):
+        remaining = await db.scalar(select(func.count()).select_from(model).where(model.project_id.in_(projects)))
+        assert remaining == 0, model.__tablename__
 
 
 async def test_52_candidate_editing_stays_open_after_the_baseline(db: AsyncSession) -> None:

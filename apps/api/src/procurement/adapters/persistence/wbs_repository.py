@@ -17,10 +17,13 @@ PC-1R / ADR-029 structural rules:
 - a parent must belong to the same tenant AND project;
 - every structural write first locks the project row, so concurrent writes serialize;
 - deleting a node deletes its subtree, but never one that still carries RACI or BOM links;
-- PC-2a.2 / ADR-029: once a project has an APPROVED baseline, its live WBS structure and
-  governed content change ONLY through the governed apply of a WBS change set
-  (``apply_governed_tree``); direct creates, deletes and governed-field updates are refused
-  (``WBS_GOVERNED_BY_BASELINE``) here and by the ``wbs_nodes`` database guard.
+- PC-2a.2 / ADR-029: governed live WBS content (identity, hierarchy, order, code, name and the
+  dictionary fields) changes ONLY through the governed approve = apply of a WBS change set
+  (``apply_governed_tree``), in every authority state -- NO_WBS, LEGACY_UNGOVERNED and
+  APPROVED_BASELINE alike. Direct creates, bulk creates, deletes and governed-field updates are
+  refused here (``WBS_GOVERNANCE_REQUIRED``) and by the ``wbs_nodes`` database guard; before
+  Baseline #1 the WBS is edited as a separate candidate. Non-governed attributes (description,
+  type, budget, dates, metadata) stay directly editable. Legacy rows stay readable.
 - ``item_type`` maps to ``node_type``; an unset type is stored as the column default and marked
   as inferred so it round-trips as ``None``.
 
@@ -47,7 +50,6 @@ from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.adapters.persistence.models import ProjectORM
 from src.shared_kernel.enums import WBSItemType
 from src.stakeholders.adapters.persistence.models import StakeholderWBSRaciORM
-from src.wbs.adapters.persistence.governance_models import WBSBaselineORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
 from src.wbs.domain.digest import DigestNode
 from src.wbs.domain.enums import WBSNodeType
@@ -78,19 +80,19 @@ class WBSNodeLinkedError(ConflictError):
         )
 
 
-class WBSGovernedByBaselineError(ConflictError):
-    """The project's WBS is governed by an approved baseline: change it through a change set."""
+class WBSGovernanceRequiredError(ConflictError):
+    """Canonical WBS content changes only through a governed WBS change set (approve = apply)."""
 
-    def __init__(self, project_id: UUID) -> None:
+    def __init__(self, project_id: UUID | None = None) -> None:
         C2ProException.__init__(
             self,
             message=(
-                f"The WBS of project {project_id} is governed by an approved baseline: create, move, "
-                "recode, rename and delete nodes through a WBS change set (submit, then approve)."
+                "Canonical WBS scope is governed through a WBS change set: create or edit a candidate, "
+                "submit it, and approve it (approve = apply)."
             ),
-            code="WBS_GOVERNED_BY_BASELINE",
+            code="WBS_GOVERNANCE_REQUIRED",
             status_code=409,
-            details={"project_id": str(project_id)},
+            details={"project_id": str(project_id)} if project_id is not None else {},
         )
 
 
@@ -208,19 +210,6 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         if result.scalar_one_or_none() is None:
             raise PermissionError("Cannot write WBS items for project outside tenant")
 
-    async def has_approved_baseline(self, project_id: UUID, tenant_id: UUID) -> bool:
-        """APPROVED_BASELINE authority (PC-2a.2): structural writes go through change sets only."""
-        found = await self.session.scalar(
-            select(WBSBaselineORM.id)
-            .where(WBSBaselineORM.project_id == project_id, WBSBaselineORM.tenant_id == tenant_id)
-            .limit(1)
-        )
-        return found is not None
-
-    async def _require_ungoverned(self, project_id: UUID, tenant_id: UUID) -> None:
-        if await self.has_approved_baseline(project_id, tenant_id):
-            raise WBSGovernedByBaselineError(project_id)
-
     async def _locked_node(self, wbs_id: UUID, tenant_id: UUID) -> WBSNodeORM | None:
         """Lock the node's project, then re-read the node as it stands after the lock."""
         project_id = (
@@ -256,31 +245,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         )
         return {row.id: row.code for row in result.all()}
 
-    async def _structure(self, project_id: UUID, tenant_id: UUID) -> dict[UUID, tuple[UUID | None, int]]:
-        result = await self.session.execute(
-            select(WBSNodeORM.id, WBSNodeORM.parent_id, WBSNodeORM.sort_order).where(
-                WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id
-            )
-        )
-        return {row.id: (row.parent_id, row.sort_order) for row in result.all()}
-
-    async def _project_parent(self, parent_id: UUID, project_id: UUID, tenant_id: UUID) -> UUID:
-        """A parent must be a node of the SAME project and tenant (never resolved through its code)."""
-        found = (
-            await self.session.execute(
-                select(WBSNodeORM.id).where(
-                    WBSNodeORM.id == parent_id,
-                    WBSNodeORM.project_id == project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if found is None:
-            raise ValueError(f"WBS parent {parent_id} is not a node of project {project_id}")
-        return found
-
-    async def _parent_by_code(self, parent_code: str, project_id: UUID, tenant_id: UUID) -> UUID:
-        found = (
+    async def _parent_by_code(self, parent_code: str, project_id: UUID, tenant_id: UUID) -> UUID | None:
+        return (
             await self.session.execute(
                 select(WBSNodeORM.id).where(
                     WBSNodeORM.project_id == project_id,
@@ -289,9 +255,6 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                 )
             )
         ).scalar_one_or_none()
-        if found is None:
-            raise ValueError(f"WBS parent code {parent_code!r} does not exist in project {project_id}")
-        return found
 
     async def _rebuild(
         self, project_id: UUID, tenant_id: UUID, positions: dict[UUID, int] | None = None
@@ -363,74 +326,10 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             if isinstance(instance, WBSNodeORM) and instance.project_id == project_id:
                 self.session.expire(instance, ["lft", "rgt", "depth", "sort_order", "parent_id"])
 
-    async def _insert(self, project_id: UUID, items: list[WBSItem], tenant_id: UUID) -> list[WBSNodeORM]:
-        """Insert a batch (parents may appear in any order) under the project lock, then rebuild."""
-        await self._lock_project(project_id, tenant_id)
-        await self._require_ungoverned(project_id, tenant_id)
-        minted = {item.id: uuid4() for item in items}  # node ids are always minted here
-        batch_by_code = {item.code: minted[item.id] for item in items}
-        orms = [
-            self._new_orm(item, node_id=minted[item.id], tenant_id=tenant_id, position=position)
-            for position, item in enumerate(items)
-        ]
-        self.session.add_all(orms)
-        await self.session.flush()
-
-        parent_links: list[dict[str, Any]] = []
-        positions: dict[UUID, int] = {}
-        for item in items:
-            node_id = minted[item.id]
-            parent_id: UUID | None = None
-            if item.parent_id is not None:
-                parent_id = minted.get(item.parent_id) or await self._project_parent(
-                    item.parent_id, project_id, tenant_id
-                )
-            elif item.parent_code:
-                parent_id = batch_by_code.get(item.parent_code) or await self._parent_by_code(
-                    item.parent_code, project_id, tenant_id
-                )
-            if parent_id == node_id:
-                raise ValueError(f"WBS item {item.code!r} cannot be its own parent")
-            if parent_id is not None:
-                parent_links.append({"b_id": node_id, "b_parent": parent_id})
-            if item.sort_order is not None:
-                positions[node_id] = item.sort_order
-        if parent_links:
-            table = cast(Table, WBSNodeORM.__table__)
-            await self.session.execute(
-                update(table).where(table.c.id == bindparam("b_id")).values(parent_id=bindparam("b_parent")),
-                parent_links,
-                execution_options={"synchronize_session": False},
-            )
-        await self._rebuild(project_id, tenant_id, positions)
-        return orms
-
-    async def _subtree_ids(self, root_ids: set[UUID], project_id: UUID, tenant_id: UUID) -> set[UUID]:
-        children: dict[UUID, list[UUID]] = defaultdict(list)
-        for node_id, (parent_id, _order) in (await self._structure(project_id, tenant_id)).items():
-            if parent_id is not None:
-                children[parent_id].append(node_id)
-        collected: set[UUID] = set()
-        stack = list(root_ids)
-        while stack:
-            node_id = stack.pop()
-            if node_id in collected:
-                continue
-            collected.add(node_id)
-            stack.extend(children.get(node_id, []))
-        return collected
-
-    async def _to_domain_list(self, orms: list[WBSNodeORM], project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
-        code_by_id = await self._code_by_id(project_id, tenant_id)
-        for orm in orms:
-            await self.session.refresh(orm)
-        return [self._orm_to_domain(orm, code_by_id) for orm in orms]
-
     # ------------------------------------------------------------------ port
-    async def create(self, tenant_id: TenantId, wbs_item: WBSItem) -> WBSItem:
-        """Create a new WBS item in the canonical project WBS (the id is minted here)."""
-        orms = await self._insert(wbs_item.project_id, [wbs_item], tenant_id)
-        return (await self._to_domain_list(orms, wbs_item.project_id, tenant_id))[0]
+    async def create(self, tenant_id: TenantId, wbs_item: WBSItem) -> WBSItem:  # noqa: ARG002 - port signature
+        """Refused: a canonical WBS node is created only by a governed apply (WBS_GOVERNANCE_REQUIRED)."""
+        raise WBSGovernanceRequiredError(wbs_item.project_id)
 
     async def get_by_id(self, wbs_id: UUID, tenant_id: UUID) -> WBSItem | None:
         """Retrieve a WBS item by ID."""
@@ -505,37 +404,33 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         return roots
 
     async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> WBSItem | None:
-        """Update a WBS item (optimistic locking on ``version``).
+        """Update the NON-governed attributes of a WBS node (optimistic locking on ``version``).
 
-        ``code`` may change (recode keeps the identity). The parent is taken from ``parent_id``;
-        ``parent_code`` is only consulted when ``parent_id`` is None. A changed parent appends the
-        node to its new siblings unless ``sort_order`` asks for a different position.
+        Description, type, budget, dates and metadata are schedule/cost data outside the baseline
+        digest and stay directly editable. A change of a governed field -- code, name, parent
+        (``parent_id``, or ``parent_code`` when ``parent_id`` is None) or sibling position -- is
+        refused with ``WBS_GOVERNANCE_REQUIRED``: it goes through a WBS change set.
         """
         orm = await self._locked_node(wbs_id, tenant_id)
         if orm is None:
             return None
         if wbs_item.version != orm.version:
             raise ConflictError("WBSItem", field="version", value=str(wbs_id))
-        if await self.has_approved_baseline(orm.project_id, tenant_id):
-            # Governed: only non-structural attributes (dates, budget, description, metadata) remain
-            # directly editable; identity, hierarchy, code and name change through a change set.
-            if wbs_item.parent_id is not None:
-                requested_parent: UUID | None = wbs_item.parent_id
-            elif wbs_item.parent_code:
-                requested_parent = await self._parent_by_code(wbs_item.parent_code, orm.project_id, tenant_id)
-            else:
-                requested_parent = None
-            if (
-                wbs_item.code != orm.code
-                or wbs_item.name != orm.name
-                or requested_parent != orm.parent_id
-                or (wbs_item.sort_order is not None and wbs_item.sort_order != orm.sort_order)
-            ):
-                raise WBSGovernedByBaselineError(orm.project_id)
+        if wbs_item.parent_id is not None:
+            requested_parent: UUID | None = wbs_item.parent_id
+        elif wbs_item.parent_code:
+            requested_parent = await self._parent_by_code(wbs_item.parent_code, orm.project_id, tenant_id) or uuid4()
+        else:
+            requested_parent = None
+        if (
+            wbs_item.code != orm.code
+            or wbs_item.name != orm.name
+            or requested_parent != orm.parent_id
+            or (wbs_item.sort_order is not None and wbs_item.sort_order != orm.sort_order)
+        ):
+            raise WBSGovernanceRequiredError(orm.project_id)
 
         node_type, inferred = _node_type(wbs_item.item_type)
-        orm.code = wbs_item.code
-        orm.name = wbs_item.name
         orm.description = wbs_item.description
         orm.node_type = node_type
         orm.budget_allocated = cast(Any, wbs_item.budget_allocated)
@@ -548,69 +443,21 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             wbs_item.wbs_metadata, node_type_inferred=inferred, previous=orm.metadata_json
         )
         orm.version = orm.version + 1
-
-        if wbs_item.parent_id is not None:
-            new_parent: UUID | None = await self._project_parent(wbs_item.parent_id, orm.project_id, tenant_id)
-        elif wbs_item.parent_code:
-            new_parent = await self._parent_by_code(wbs_item.parent_code, orm.project_id, tenant_id)
-        else:
-            new_parent = None
-
-        # Items read back from this repository carry their stored position, so an unchanged
-        # sort_order is "no position requested", not "keep index N under the new parent".
-        requested = wbs_item.sort_order if wbs_item.sort_order != orm.sort_order else None
-        positions: dict[UUID, int] = {}
-        structural_change = False
-        if new_parent != orm.parent_id:
-            if new_parent is not None and new_parent in await self._subtree_ids({orm.id}, orm.project_id, tenant_id):
-                raise ValueError("A WBS item cannot be moved under itself or its descendants")
-            depth = 0 if new_parent is None else (
-                await self.session.execute(select(WBSNodeORM.depth).where(WBSNodeORM.id == new_parent))
-            ).scalar_one() + 1
-            orm.parent_id = new_parent
-            orm.depth = depth  # the rebuild below fixes the whole moved subtree
-            orm.sort_order = _APPEND_BASE
-            structural_change = True
-        if requested is not None:
-            positions[orm.id] = requested
-            structural_change = True
-
         await self.session.flush()
-        if structural_change:
-            await self._rebuild(orm.project_id, tenant_id, positions)
         await self.session.refresh(orm)
         return self._orm_to_domain(orm, await self._code_by_id(orm.project_id, tenant_id))
 
     async def delete(self, wbs_id: UUID, tenant_id: UUID) -> bool:
-        """Delete a WBS item and its whole subtree -- never one that still has RACI or BOM links."""
-        orm = await self._locked_node(wbs_id, tenant_id)
-        if orm is None:
+        """Refused for an existing node (``WBS_GOVERNANCE_REQUIRED``): nodes leave the WBS only as
+        dispositioned retirements of a governed apply. ``False`` when the node does not exist."""
+        project_id = (
+            await self.session.execute(
+                select(WBSNodeORM.project_id).where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
+            )
+        ).scalar_one_or_none()
+        if project_id is None:
             return False
-        project_id = orm.project_id
-        await self._require_ungoverned(project_id, tenant_id)
-        subtree = await self._subtree_ids({orm.id}, project_id, tenant_id)
-        raci_links = (
-            await self.session.execute(
-                select(func.count()).select_from(StakeholderWBSRaciORM).where(
-                    StakeholderWBSRaciORM.wbs_item_id.in_(subtree)
-                )
-            )
-        ).scalar_one()
-        bom_links = (
-            await self.session.execute(
-                select(func.count()).select_from(BOMItemORM).where(BOMItemORM.wbs_item_id.in_(subtree))
-            )
-        ).scalar_one()
-        if raci_links or bom_links:
-            raise WBSNodeLinkedError(wbs_id, raci_links, bom_links)
-        await self.session.execute(
-            delete(WBSNodeORM).where(WBSNodeORM.id.in_(subtree)).execution_options(synchronize_session=False)
-        )
-        for instance in list(self.session.identity_map.values()):
-            if isinstance(instance, WBSNodeORM) and instance.id in subtree:
-                self.session.expunge(instance)
-        await self._rebuild(project_id, tenant_id)
-        return True
+        raise WBSGovernanceRequiredError(project_id)
 
     async def linked_node_counts(self, node_ids: Collection[UUID]) -> tuple[int, int]:
         """(RACI assignments, BOM links) still pointing at these nodes."""
@@ -636,8 +483,9 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         """Make the live WBS EXACTLY the approved candidate tree (PC-2a.2 approve = apply ONLY).
 
         Called solely by the governed apply service, inside its transaction, after it locked the
-        project, verified the approval and set ``c2pro.wbs_governed_apply`` (the database guard
-        refuses these writes otherwise once a baseline exists). Kept nodes keep their canonical
+        project, verified the approval, inserted the baseline row and set the
+        ``c2pro.wbs_governed_apply`` correlation (the ``wbs_nodes`` database guard refuses these
+        writes without that in-transaction apply state). Kept nodes keep their canonical
         ids; minted ids are inserted; retired ids leave the live tree. Non-governed attributes
         (dates, budget, description, metadata) of kept nodes are preserved.
         """
@@ -702,74 +550,15 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         await self.session.flush()
         await self._rebuild(project_id, tenant_id)
 
-    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
-        """Create multiple WBS items at once with tenant isolation (ids are minted here)."""
-        by_project: dict[UUID, list[WBSItem]] = defaultdict(list)
-        for wbs_item in wbs_items:
-            by_project[wbs_item.project_id].append(wbs_item)
-
-        created: dict[int, WBSItem] = {}
-        for project_id, items in by_project.items():
-            orms = await self._insert(project_id, items, tenant_id)
-            for item, created_item in zip(items, await self._to_domain_list(orms, project_id, tenant_id), strict=True):
-                created[id(item)] = created_item
-        return [created[id(item)] for item in wbs_items]
+    async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:  # noqa: ARG002
+        """Refused: canonical WBS nodes are created only by a governed apply (WBS_GOVERNANCE_REQUIRED)."""
+        raise WBSGovernanceRequiredError(wbs_items[0].project_id if wbs_items else None)
 
     async def bulk_create_from_dicts(
         self,
         project_id: UUID,
-        items: list[dict[str, object]],
-        tenant_id: UUID,
+        items: list[dict[str, object]],  # noqa: ARG002 - port signature
+        tenant_id: UUID,  # noqa: ARG002
     ) -> list[WBSItem]:
-        """Build WBSItem domain objects from raw dicts and persist them.
-
-        This is the cross-context entry point: callers outside the procurement
-        bounded context pass plain dicts and the repository handles domain-object
-        construction internally.
-        """
-
-        def _parse_decimal(value: Any) -> Decimal | None:
-            if value is None:
-                return None
-            try:
-                return Decimal(str(value))
-            except Exception:
-                return None
-
-        def _parse_datetime(value: Any) -> datetime | None:
-            # Extraction payloads carry ISO-8601 strings; the canonical WBS stores timestamptz.
-            if value is None or isinstance(value, datetime):
-                return value
-            try:
-                return datetime.fromisoformat(str(value))
-            except ValueError:
-                return None
-
-        wbs_items: list[WBSItem] = []
-        for item in items:
-            code = str(item.get("code") or "").strip() or f"T{len(wbs_items) + 1}"
-            level = code.count(".") + 1 if code else 1
-            item_type_raw = str(item.get("item_type") or "").lower()
-            item_type = None
-            for candidate in WBSItemType:
-                if candidate.value == item_type_raw:
-                    item_type = candidate
-                    break
-
-            wbs_items.append(
-                WBSItem(
-                    project_id=project_id,
-                    code=code,
-                    name=cast("str", item.get("name") or "WBS Item"),
-                    description=cast("str | None", item.get("description")),
-                    level=level,
-                    parent_code=cast("str | None", item.get("parent_code")),
-                    item_type=item_type,
-                    budget_allocated=_parse_decimal(item.get("budget_allocated")),
-                    planned_start=_parse_datetime(item.get("planned_start")),
-                    planned_end=_parse_datetime(item.get("planned_end")),
-                    wbs_metadata={"confidence": item.get("confidence"), "raw": item},
-                )
-            )
-
-        return await self.bulk_create(wbs_items, tenant_id)
+        """Refused: a WBS proposal (import, extraction) belongs in a change set candidate, never live."""
+        raise WBSGovernanceRequiredError(project_id)

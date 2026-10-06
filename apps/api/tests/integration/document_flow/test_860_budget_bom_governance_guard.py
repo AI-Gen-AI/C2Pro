@@ -66,7 +66,6 @@ from src.documents.application.reupload_document_use_case import ReuploadDocumen
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import Document, DocumentType
 from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.procurement.domain.models import ProcurementStatus
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
@@ -75,6 +74,7 @@ from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
 from src.temporal.application import project_snapshot_trigger
+from tests.support.legacy_wbs import seed_legacy_from_dicts
 
 pytestmark = pytest.mark.asyncio
 
@@ -252,8 +252,8 @@ async def _procurement_edited_legacy_row(
     db: AsyncSession, tenant_id: UUID, project_id: UUID, budget_document_id: UUID
 ) -> UUID:
     """A row an earlier (pre-#860) budget parse produced, since edited by procurement."""
-    [node] = await SQLAlchemyWBSRepository(db).bulk_create_from_dicts(
-        project_id, [{"code": "1", "name": "Structure (human WBS)"}], tenant_id
+    [node] = await seed_legacy_from_dicts(
+        db, project_id, [{"code": "1", "name": "Structure (human WBS)"}], tenant_id
     )
     await db.commit()
     row = BOMItemORM(

@@ -28,7 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
-from src.procurement.domain.models import WBSItem
 from src.wbs.adapters.persistence.governance_models import (
     WBSBaselineNodeORM,
     WBSBaselineORM,
@@ -53,6 +52,7 @@ from src.wbs.domain.governance import (
     GovernanceRuleError,
     LineageKind,
 )
+from tests.support.legacy_wbs import governed_apply_state, seed_legacy_rows
 
 pytestmark = pytest.mark.asyncio
 
@@ -91,12 +91,8 @@ async def _user(db: AsyncSession, tenant_id: UUID, role: UserRole) -> Actor:
 
 
 async def _legacy_nodes(db: AsyncSession, tenant_id: UUID, project_id: UUID, count: int) -> list[UUID]:
-    repo = SQLAlchemyWBSRepository(db)
-    ids = []
-    for index in range(1, count + 1):
-        created = await repo.create(tenant_id, WBSItem(project_id=project_id, code=f"SCH-{index:03d}",
-                                                       name=f"Schedule activity {index}", level=1))
-        ids.append(created.id)
+    """LEGACY_UNGOVERNED rows (pre-governance data, loaded out of band: no app path writes them)."""
+    ids = await seed_legacy_rows(db, tenant_id, project_id, count)
     await db.commit()
     return ids
 
@@ -126,6 +122,16 @@ async def _expect_db_rejection(db: AsyncSession, sql: str, params: dict[str, Any
     """The statement (or the commit that runs deferred checks) is rejected for that reason."""
     with _rejected(*fragments):
         await db.execute(text(sql), params)
+        await db.commit()
+    await db.rollback()
+
+
+async def _expect_live_rejection(db: AsyncSession, s: Scope, sql: str, params: dict[str, Any], *fragments: str) -> None:
+    """Governed live columns are writable only inside an apply (PC-2a.2); even there, the
+    database's own constraints still refuse a bad value."""
+    with _rejected(*fragments):
+        async with governed_apply_state(db, s.tenant, s.project):
+            await db.execute(text(sql), params)
         await db.commit()
     await db.rollback()
 
@@ -820,8 +826,8 @@ async def test_governed_vocabularies_are_enforced_by_the_database(db: AsyncSessi
             db, f"UPDATE wbs_change_set_nodes SET {column} = CAST(:v AS {cast}) WHERE change_set_id = :c AND node_id = :n",
             {"v": value, "c": change_set_id, "n": ids["1"]}, "ck_wbs_change_set_nodes_")
     legacy = await _legacy_nodes(db, s.tenant, s.project, 1)
-    await _expect_db_rejection(db, "UPDATE wbs_nodes SET control_level = 'cost_account' WHERE id = :n",
-                               {"n": legacy[0]}, "ck_wbs_nodes_control_level")
+    await _expect_live_rejection(db, s, "UPDATE wbs_nodes SET control_level = 'cost_account' WHERE id = :n",
+                                 {"n": legacy[0]}, "ck_wbs_nodes_control_level")
     live = await db.get(WBSNodeORM, legacy[0])
     assert live is not None and (live.control_level, live.decomposition_kind, live.dictionary) == ("none", None, None)
 
@@ -845,12 +851,13 @@ async def test_the_database_enforces_the_complete_dictionary_schema(db: AsyncSes
         await _expect_db_rejection(
             db, "UPDATE wbs_change_set_nodes SET dictionary = CAST(:v AS jsonb) WHERE change_set_id = :c AND node_id = :n",
             {"v": value, "c": change_set_id, "n": ids["1"]}, "ck_wbs_change_set_nodes_dictionary")
-        await _expect_db_rejection(db, "UPDATE wbs_nodes SET dictionary = CAST(:v AS jsonb) WHERE id = :n",
-                                   {"v": value, "n": legacy[0]}, "ck_wbs_nodes_dictionary")
+        await _expect_live_rejection(db, s, "UPDATE wbs_nodes SET dictionary = CAST(:v AS jsonb) WHERE id = :n",
+                                     {"v": value, "n": legacy[0]}, "ck_wbs_nodes_dictionary")
     full = ('{"schema_version": "wbs-dictionary/v1", "scope_statement": null, "deliverables": ["Platform"], '
             '"assumptions": [], "interface_notes": null}')
-    await db.execute(text("UPDATE wbs_nodes SET dictionary = CAST(:v AS jsonb) WHERE id = :n"),
-                     {"v": full, "n": legacy[0]})
+    async with governed_apply_state(db, s.tenant, s.project):
+        await db.execute(text("UPDATE wbs_nodes SET dictionary = CAST(:v AS jsonb) WHERE id = :n"),
+                         {"v": full, "n": legacy[0]})
     await db.commit()
 
 

@@ -54,6 +54,7 @@ from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.entity_ref import TemporalEntityRef
 from src.temporal.domain.impact import ImpactStatus
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.support.legacy_wbs import legacy_wbs_writes
 
 pytestmark = pytest.mark.asyncio
 
@@ -294,8 +295,10 @@ async def test_clause_impact_follows_only_persisted_links(
         quantity=1,
         contract_clause_id=v1_clause.id,
     )
-    db.add_all([live, resolved, unrelated, direct_wbs, raci_wbs, bom])
-    db.add_all([foreign_alert, foreign_stakeholder, foreign_wbs, foreign_raci_wbs, foreign_bom])
+    async with legacy_wbs_writes(db):  # live WBS rows load out of band (no app path writes them)
+        db.add_all([direct_wbs, raci_wbs, foreign_wbs, foreign_raci_wbs])
+    db.add_all([live, resolved, unrelated, bom])
+    db.add_all([foreign_alert, foreign_stakeholder, foreign_bom])
     await db.flush()
     db.add_all(
         [

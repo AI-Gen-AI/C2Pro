@@ -13,12 +13,15 @@ approve = apply command (application code) the two database primitives it needs:
   baseline only, legacy live rows that the reviewed candidate does not adopt. Editable only
   while the change set is DRAFT, never updated; it is the frozen, auditable disposition set
   that apply verifies and executes. History disappears only with its project (cascade).
-* ``wbs_nodes_governed_write_guard`` -- once a project has an approved baseline, a live
-  ``wbs_nodes`` INSERT / DELETE / governed-column UPDATE is refused unless the transaction is
-  the governed apply of a SUBMITTED change set of that project against its CURRENT baseline
-  (``c2pro.wbs_governed_apply``). Non-governed attributes (dates, budget, description,
-  metadata, hierarchy caches) stay writable. Projects without a baseline are untouched
-  (LEGACY_UNGOVERNED transitional writers, PC-1R).
+* ``wbs_nodes_governed_write_guard`` -- in EVERY authority state (NO_WBS, LEGACY_UNGOVERNED,
+  APPROVED_BASELINE) a live ``wbs_nodes`` INSERT / DELETE / governed-column UPDATE is refused
+  (``WBS_GOVERNANCE_REQUIRED``) unless the transaction is a real governed apply: the
+  correlation ``c2pro.wbs_governed_apply`` names a SUBMITTED change set of the row's tenant and
+  project AND this same transaction already inserted that change set's ``wbs_baselines`` row,
+  chained to its base (NULL-safe). The setting alone authorizes nothing; rows hidden by the
+  writer's RLS context fail closed; project/tenant delete cascades pass. Non-governed
+  attributes (dates, budget, description, metadata, hierarchy caches) stay writable. Legacy
+  rows stay readable and change only through a first-baseline apply (adopt or retire).
 
 SECURITY: RLS ENABLED + FORCED with fail-closed per-operation policies on the new table;
 ``anon``/``authenticated`` get nothing (guarded on role existence); functions are SECURITY
@@ -131,35 +134,51 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-    v_project uuid;
-    v_current uuid;
     v_apply text;
+    v_projects uuid[];
+    v_tenants uuid[];
 BEGIN
     IF TG_OP = 'UPDATE' AND (NEW.id, NEW.tenant_id, NEW.project_id, NEW.parent_id, NEW.sort_order, NEW.code,
                              NEW.name, NEW.control_level, NEW.decomposition_kind, NEW.dictionary)
                     IS NOT DISTINCT FROM (OLD.id, OLD.tenant_id, OLD.project_id, OLD.parent_id, OLD.sort_order,
                              OLD.code, OLD.name, OLD.control_level, OLD.decomposition_kind, OLD.dictionary) THEN
-        RETURN NEW;
+        RETURN NEW;  -- non-governed attributes (dates, budget, description, metadata, caches)
     END IF;
-    FOREACH v_project IN ARRAY CASE
-            WHEN TG_OP = 'INSERT' THEN ARRAY[NEW.project_id]
-            WHEN TG_OP = 'DELETE' THEN ARRAY[OLD.project_id]
-            ELSE ARRAY[OLD.project_id, NEW.project_id] END LOOP
-        -- Serialize with a governed apply, which holds the project row FOR UPDATE until its baseline
-        -- commits: a racing write waits here (KEY SHARE, as the wbs_nodes FK check already takes)
-        -- and then reads that baseline. A project being deleted takes its WBS with it (cascade).
-        PERFORM 1 FROM public.projects p WHERE p.id = v_project FOR KEY SHARE;
-        CONTINUE WHEN NOT FOUND;
-        SELECT b.id INTO v_current FROM public.wbs_baselines b
-         WHERE b.project_id = v_project ORDER BY b.baseline_no DESC LIMIT 1;
-        CONTINUE WHEN v_current IS NULL;  -- no approved baseline: LEGACY_UNGOVERNED / NO_WBS
-        v_apply := NULLIF(current_setting('c2pro.wbs_governed_apply', true), '');
-        IF v_apply IS NULL OR NOT EXISTS (
-               SELECT 1 FROM public.wbs_change_sets cs
-                WHERE cs.id::text = v_apply AND cs.project_id = v_project AND cs.status = 'SUBMITTED'
-                  AND cs.base_baseline_id = v_current) THEN
+    -- A project or tenant being deleted takes its WBS with it: the FK cascade runs after its row is gone.
+    IF TG_OP = 'DELETE' AND pg_trigger_depth() > 1
+       AND (NOT EXISTS (SELECT 1 FROM public.projects p WHERE p.id = OLD.project_id)
+            OR NOT EXISTS (SELECT 1 FROM public.tenants t WHERE t.id = OLD.tenant_id)) THEN
+        RETURN OLD;
+    END IF;
+    -- Governed live WBS content (identity, ownership, hierarchy, order, code, name, control level,
+    -- decomposition, dictionary) changes ONLY inside a governed approve = apply, in every authority
+    -- state (NO_WBS, LEGACY_UNGOVERNED, APPROVED_BASELINE). The apply correlation must name a
+    -- SUBMITTED change set of the row's tenant and project for which THIS transaction already
+    -- inserted the baseline, chained to that change set's base. A committed baseline always
+    -- belongs to an APPLIED change set (deferred commit check), so neither the session setting
+    -- alone nor another transaction's baseline opens this gate. Rows hidden by the writer's RLS
+    -- context (missing or foreign app.current_tenant) are simply not found: fail closed.
+    v_apply := current_setting('c2pro.wbs_governed_apply', true);
+    v_projects := CASE TG_OP WHEN 'INSERT' THEN ARRAY[NEW.project_id] WHEN 'DELETE' THEN ARRAY[OLD.project_id]
+                  ELSE ARRAY[OLD.project_id, NEW.project_id] END;
+    v_tenants := CASE TG_OP WHEN 'INSERT' THEN ARRAY[NEW.tenant_id] WHEN 'DELETE' THEN ARRAY[OLD.tenant_id]
+                 ELSE ARRAY[OLD.tenant_id, NEW.tenant_id] END;
+    FOR i IN 1 .. array_length(v_projects, 1) LOOP
+        IF v_apply IS NULL
+           OR v_apply !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+           OR NOT EXISTS (
+               SELECT 1
+                 FROM public.wbs_change_sets cs
+                 JOIN public.wbs_baselines b ON b.source_change_set_id = cs.id
+                WHERE cs.id = v_apply::uuid
+                  AND cs.project_id = v_projects[i] AND cs.tenant_id = v_tenants[i]
+                  AND cs.status = 'SUBMITTED'
+                  AND b.project_id = cs.project_id AND b.tenant_id = cs.tenant_id
+                  AND b.parent_baseline_id IS NOT DISTINCT FROM cs.base_baseline_id
+                  AND b.xmin = pg_current_xact_id()::xid) THEN
             RAISE EXCEPTION USING ERRCODE = 'restrict_violation',
-                MESSAGE = 'the WBS of this project is governed by an approved baseline: change it through a WBS change set';
+                MESSAGE = 'WBS_GOVERNANCE_REQUIRED: canonical WBS scope is governed through a WBS change set '
+                          '(create or edit a candidate, submit it, approve = apply)';
         END IF;
     END LOOP;
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;

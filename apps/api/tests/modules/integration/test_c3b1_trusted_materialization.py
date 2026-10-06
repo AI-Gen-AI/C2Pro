@@ -30,7 +30,6 @@ from src.core.auth.models import Tenant, User
 from src.core.tasks import materialization_tasks
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.shared_kernel.enums import RACIRole
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.temporal.adapters.persistence.models import ProjectEventORM
@@ -53,6 +52,7 @@ from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
     independent_sessions,  # noqa: F401 - pytest fixture
     real_saver,  # noqa: F401 - pytest fixture
 )
+from tests.support.legacy_wbs import seed_legacy_from_dicts
 
 pytestmark = pytest.mark.asyncio
 
@@ -548,8 +548,8 @@ _PROPOSED_WBS = [
 
 
 async def _canonical_wbs_with_relationships(db: AsyncSession, tenant_id: UUID, project_id: UUID):
-    [node] = await SQLAlchemyWBSRepository(db).bulk_create_from_dicts(
-        project_id, [{"code": "1", "name": "Civil works (approved baseline)"}], tenant_id
+    [node] = await seed_legacy_from_dicts(
+        db, project_id, [{"code": "1", "name": "Civil works (approved baseline)"}], tenant_id
     )
     await db.commit()
     stakeholder = StakeholderORM(id=uuid4(), tenant_id=tenant_id, project_id=project_id, name="PM")

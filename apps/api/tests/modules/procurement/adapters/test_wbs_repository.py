@@ -24,6 +24,7 @@ from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
 from src.wbs.adapters.persistence.governance_models import WBSBaselineORM, WBSChangeSetORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.support.legacy_wbs import seed_legacy_wbs
 
 
 async def _seed_tenants(session: AsyncSession, *tenant_ids) -> None:
@@ -154,8 +155,7 @@ class TestWBSRepositoryIntegration:
 
         async with get_session_with_tenant(tenant_a) as tenant_a_session:
             repo = SQLAlchemyWBSRepository(tenant_a_session)
-            await repo.create(tenant_id=tenant_a, wbs_item=parent)
-            await repo.create(tenant_id=tenant_a, wbs_item=child)
+            await seed_legacy_wbs(tenant_a_session, tenant_a, [parent, child])  # live rows load out of band
 
             tree = await repo.get_tree(project_id=project_a.id, tenant_id=tenant_a)
             assert len(tree) == 1
@@ -225,9 +225,7 @@ class TestWBSRepositoryIntegration:
         item_b = WBSItem(project_id=project_b.id, code=code, name="B", level=1)
 
         async with get_session_with_tenant(tenant_id) as tenant_session:
-            repo = SQLAlchemyWBSRepository(tenant_session)
-            created_a = await repo.create(tenant_id=tenant_id, wbs_item=item_a)
-            created_b = await repo.create(tenant_id=tenant_id, wbs_item=item_b)
+            created_a, created_b = await seed_legacy_wbs(tenant_session, tenant_id, [item_a, item_b])
 
             assert created_a.code == code
             assert created_b.code == code

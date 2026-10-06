@@ -77,12 +77,19 @@ def test_functions_are_invoker_with_a_pinned_search_path() -> None:
         assert "SECURITY DEFINER" not in statement
 
 
-def test_the_live_write_guard_closes_governed_projects_only_and_needs_a_real_submitted_apply() -> None:
+def test_the_live_write_guard_closes_every_authority_state_and_needs_the_db_apply_state() -> None:
     guard = re.sub(r"\s+", " ", _load().LIVE_WRITE_GUARD_FUNCTION_SQL)
-    assert "FROM public.wbs_baselines b WHERE b.project_id = v_project ORDER BY b.baseline_no DESC LIMIT 1" in guard
-    assert "CONTINUE WHEN v_current IS NULL" in guard  # LEGACY_UNGOVERNED / NO_WBS untouched
-    assert "current_setting('c2pro.wbs_governed_apply', true)" in guard
-    assert "cs.status = 'SUBMITTED' AND cs.base_baseline_id = v_current" in guard  # never an old/forged change set
+    # no "no baseline yet -> direct writes allowed" exemption (NO_WBS / LEGACY_UNGOVERNED are closed too)
+    assert "v_current" not in guard and "CONTINUE WHEN" not in guard
+    assert "current_setting('c2pro.wbs_governed_apply', true)" in guard  # a correlation only...
+    # ...the gate needs this transaction's baseline row of a SUBMITTED change set of the row's scope
+    assert "JOIN public.wbs_baselines b ON b.source_change_set_id = cs.id" in guard
+    assert "cs.project_id = v_projects[i] AND cs.tenant_id = v_tenants[i] AND cs.status = 'SUBMITTED'" in guard
+    assert "b.parent_baseline_id IS NOT DISTINCT FROM cs.base_baseline_id" in guard  # first baseline: NULL-safe
+    assert "b.xmin = pg_current_xact_id()::xid" in guard
+    assert "MESSAGE = 'WBS_GOVERNANCE_REQUIRED: " in guard
+    # cascades only: inside an FK action, after the project or tenant row is gone
+    assert "TG_OP = 'DELETE' AND pg_trigger_depth() > 1" in guard
     trigger = _load().TRIGGER_STATEMENTS[1]
     assert "BEFORE INSERT OR DELETE OR UPDATE OF id, tenant_id, project_id, parent_id, sort_order, code, name" in trigger
     assert "lft" not in trigger and "planned_start" not in trigger  # caches and schedule/cost data stay writable

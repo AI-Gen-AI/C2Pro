@@ -58,7 +58,6 @@ from src.documents.application.reupload_document_use_case import ReuploadDocumen
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import Document, DocumentType
 from src.procurement.adapters.persistence.models import BOMItemORM
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.shared_kernel.enums import RACIRole
 from src.stakeholders.adapters.persistence.models import StakeholderORM, StakeholderWBSRaciORM
 from src.temporal.adapters.persistence.document_revision_repository import (
@@ -68,6 +67,7 @@ from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
 from src.temporal.application import project_snapshot_trigger
+from tests.support.legacy_wbs import seed_legacy_from_dicts
 
 pytestmark = pytest.mark.asyncio
 
@@ -237,8 +237,8 @@ async def _human_wbs(
     ``root_source_document_id`` reproduces a root a pre-#852 schedule parse produced
     (legacy data that already exists): the child beneath it is human work.
     """
-    root, child = await SQLAlchemyWBSRepository(db).bulk_create_from_dicts(
-        project_id,
+    root, child = await seed_legacy_from_dicts(
+        db, project_id,
         [
             {"code": root_code, "name": "Civil works (human)"},
             {"code": f"{root_code}.1", "name": "Foundations (human child)",

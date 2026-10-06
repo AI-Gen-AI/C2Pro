@@ -41,7 +41,6 @@ from src.documents.application.get_document_with_clauses_use_case import (
     GetDocumentWithClausesUseCase,
 )
 from src.documents.domain.models import Document
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
 from src.temporal.adapters.http.router import (
     get_event_repository,
     get_impact_assessor,
@@ -68,6 +67,7 @@ from tests.modules.integration.test_c3a_revision_bound_clauses import (
 from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
     independent_sessions,  # noqa: F401 - pytest fixture
 )
+from tests.support.legacy_wbs import seed_legacy_from_dicts
 
 pytestmark = pytest.mark.asyncio
 
@@ -456,8 +456,8 @@ async def test_existing_wbs_baseline_is_never_changed_by_an_approved_revision(
     [v1] = await j.world.lineage(document)
     await j.trusted_v1(document, v1)
     # A canonical WBS that governance already owns (same visible code as the proposal).
-    await SQLAlchemyWBSRepository(db).bulk_create_from_dicts(
-        j.world.project, [{"code": "1", "name": "Civil works (approved baseline)"}], j.world.tenant
+    await seed_legacy_from_dicts(
+        db, j.world.project, [{"code": "1", "name": "Civil works (approved baseline)"}], j.world.tenant
     )
     await db.commit()
     baseline = await _wbs_rows(db, j.world.project)

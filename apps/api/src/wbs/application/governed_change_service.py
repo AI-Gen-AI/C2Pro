@@ -1,7 +1,7 @@
 """Governed WBS edit / submit / approve = apply (PC-2a.2 #896, ADR-029).
 
-The ONLY path that creates an approved WBS baseline and the only writer of a governed project's
-live ``wbs_nodes`` structure:
+The ONLY path that creates an approved WBS baseline and the ONLY writer of governed live
+``wbs_nodes`` content, in every authority state (NO_WBS, LEGACY_UNGOVERNED, APPROVED_BASELINE):
 
     DRAFT candidate -> human edit commands -> validate -> SUBMIT (digest frozen)
       -> human admin APPROVE = APPLY (one transaction) -> Baseline #N -> canonical live WBS
@@ -15,8 +15,9 @@ live ``wbs_nodes`` structure:
   legacy row the candidate does not adopt is recorded at submit as RETIRED_ON_BASELINE with a
   snapshot of the row. Apply refuses if the legacy rows changed after submission.
 * Approve = apply: project lock, compare-and-set (status, revision, digest), human admin,
-  separation of duties, current base, digest recomputation, full re-validation, live
-  materialization, immutable baseline, APPLIED, competing change sets STALE, ProjectEvent --
+  separation of duties, current base, digest recomputation, full re-validation, the immutable
+  baseline row (the database authority the ``wbs_nodes`` guard checks), live materialization
+  proven equal to it, APPLIED, competing change sets STALE, ProjectEvent --
   all in one transaction. Any failure leaves the live WBS, baselines and the change set as they
   were. The ProjectSnapshot is enqueued only after commit (fail-open, never baseline authority).
 * Actor identity always comes from the authenticated session; AI, service and ``api``
@@ -103,6 +104,8 @@ from src.wbs.domain.governed_change import (
 
 logger = structlog.get_logger(__name__)
 
+# Correlation only: names the change set being applied. It authorizes nothing by itself -- the
+# wbs_nodes guard also requires this transaction's uncommitted baseline row for that change set.
 APPLY_SETTING: Final = "c2pro.wbs_governed_apply"
 EVENT_SUBMITTED: Final = "wbs.change.submitted"
 EVENT_REJECTED: Final = "wbs.change.rejected"
@@ -373,6 +376,15 @@ class WBSGovernedChangeService:
     async def _tenant_requires_distinct_approver(self, tenant_id: UUID) -> bool:
         settings = await self.session.scalar(select(Tenant.settings).where(Tenant.id == tenant_id))
         return require_distinct_approver(settings)
+
+    async def _lock_live_rows(self, project_id: UUID, tenant_id: UUID) -> frozenset[UUID]:
+        rows = await self.session.execute(
+            select(WBSNodeORM.id)
+            .where(WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id)
+            .order_by(WBSNodeORM.id)
+            .with_for_update()
+        )
+        return frozenset(row.id for row in rows)
 
     async def _legacy_ids(self, project_id: UUID, tenant_id: UUID) -> frozenset[UUID]:
         rows = await self.session.execute(
@@ -972,7 +984,9 @@ class WBSGovernedChangeService:
             raise ChangeSetDigestMismatchError("the candidate no longer hashes to the submitted digest")
         candidate_ids = {node.node_id for node in detail.nodes}
         retired_ids = {r.node_id for r in detail.retirements}
-        live_ids = await self._legacy_ids(project_id, tenant_id)
+        # Lock every live row first: an in-flight (non-governed) edit commits before the checks
+        # below read what this apply is about to replace, never after them.
+        live_ids = await self._lock_live_rows(project_id, tenant_id)
         if change_set.base_baseline_id is None:
             # The legacy rows the reviewer saw dispositioned must be exactly the live ones, unchanged.
             adopted = {n.node_id for n in detail.nodes if n.origin_kind == CandidateOriginKind.ADOPTED_LEGACY.value}
@@ -992,6 +1006,20 @@ class WBSGovernedChangeService:
 
         digest_nodes = [candidate_digest_node(node) for node in detail.nodes]
         approved_tree_digest = tree_digest(project_id, digest_nodes)
+        now = datetime.now(UTC)
+        # The authority row comes FIRST: the wbs_nodes guard admits live writes only in the
+        # transaction that holds the uncommitted baseline of this SUBMITTED change set (chained
+        # to its base); the setting below is merely the correlation that names it.
+        baseline = WBSBaselineORM(
+            id=uuid4(), tenant_id=tenant_id, project_id=project_id,
+            baseline_no=(current.baseline_no if current else 0) + 1, parent_baseline_id=change_set.base_baseline_id,
+            source_change_set_id=change_set.id, tree_digest=approved_tree_digest,
+            change_set_digest=change_set.submitted_digest, node_count=len(detail.nodes), approved_by=actor.user_id,
+            approved_by_kind="human", self_approved=self_approved, profile_refs=list(change_set.profile_refs or []),
+            applied_at=now,
+        )
+        self.session.add(baseline)
+        await self.session.flush()
         await self.session.execute(text("SELECT set_config(:name, :value, true)"),
                                    {"name": APPLY_SETTING, "value": str(change_set.id)})
         await self.live.apply_governed_tree(project_id, tenant_id, nodes=digest_nodes, retired_ids=retired_ids)
@@ -1006,17 +1034,6 @@ class WBSGovernedChangeService:
         if live_digest != approved_tree_digest or {row.id for row in live_rows} != candidate_ids:
             raise WBSLiveTreeDivergedError(project_id, "the materialized live WBS differs from the approved tree")
 
-        now = datetime.now(UTC)
-        baseline = WBSBaselineORM(
-            id=uuid4(), tenant_id=tenant_id, project_id=project_id,
-            baseline_no=(current.baseline_no if current else 0) + 1, parent_baseline_id=change_set.base_baseline_id,
-            source_change_set_id=change_set.id, tree_digest=approved_tree_digest,
-            change_set_digest=change_set.submitted_digest, node_count=len(detail.nodes), approved_by=actor.user_id,
-            approved_by_kind="human", self_approved=self_approved, profile_refs=list(change_set.profile_refs or []),
-            applied_at=now,
-        )
-        self.session.add(baseline)
-        await self.session.flush()
         for node in detail.nodes:
             self.session.add(WBSBaselineNodeORM(
                 baseline_id=baseline.id, node_id=node.node_id, tenant_id=tenant_id, project_id=project_id,

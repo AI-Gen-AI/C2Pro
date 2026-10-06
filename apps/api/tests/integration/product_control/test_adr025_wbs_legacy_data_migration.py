@@ -361,7 +361,10 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
                 ("v_raci_matrix", "wbs_nodes"),
             ]
 
-            # --- application activity after the upgrade (repository semantics) -------------------
+            # --- activity after the upgrade --------------------------------------------------------
+            # At head (PC-2a.2) governed live content is written only by a governed apply; the
+            # same row changes are loaded out of band here so the downgrade proof keeps them.
+            await conn.execute("SET session_replication_role = replica")
             await conn.execute(
                 "UPDATE wbs_nodes SET name = 'Quay wall (rev. B)', version = version + 1 WHERE id = $1", ids["A_1_1"]
             )
@@ -374,6 +377,7 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
                 "now())",
                 ids["A_7"], ids["project_A"], ids["tenant"], ids["A_1"],
             )
+            await conn.execute("SET session_replication_role = DEFAULT")
         finally:
             await conn.close()
 

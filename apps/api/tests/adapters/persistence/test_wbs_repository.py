@@ -22,11 +22,15 @@ from testcontainers.postgres import PostgresContainer
 
 from src.core import database as core_database
 from src.core.database import Base, get_session_with_tenant
-from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRepository
+from src.procurement.adapters.persistence.wbs_repository import (
+    SQLAlchemyWBSRepository,
+    WBSGovernanceRequiredError,
+)
 from src.procurement.domain.models import WBSItem
 from src.projects.adapters.persistence.models import ProjectORM
 from src.wbs.adapters.persistence.governance_models import WBSBaselineORM, WBSChangeSetORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.support.legacy_wbs import legacy_wbs_writes
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -135,7 +139,8 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         rgt=4,
         depth=0,
     )
-    session.add(parent)
+    async with legacy_wbs_writes(session):  # live rows load out of band (no app path writes them)
+        session.add(parent)
     await session.commit()
     child = WBSNodeORM(
         id=uuid4(),
@@ -149,7 +154,8 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         rgt=3,
         depth=1,
     )
-    session.add(child)
+    async with legacy_wbs_writes(session):
+        session.add(child)
     await session.commit()
 
     repo = SQLAlchemyWBSRepository(session)
@@ -170,9 +176,10 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_wbs_bulk_create_rejects_project_outside_tenant(session: AsyncSession):
+async def test_wbs_bulk_create_is_refused_in_and_outside_the_tenant(session: AsyncSession):
     """
-    WBS bulk_create should reject writes when the project is outside the caller tenant.
+    WBS bulk_create never writes live WBS (PC-2a.2): a proposal belongs in a change set candidate,
+    whatever the caller tenant -- so a project outside the tenant is refused too.
     """
     tenant_a = uuid4()
     tenant_b = uuid4()
@@ -187,5 +194,6 @@ async def test_wbs_bulk_create_rejects_project_outside_tenant(session: AsyncSess
         WBSItem(project_id=project_a.id, code="1.1", name="Child", level=2, parent_code="1"),
     ]
 
-    with pytest.raises(PermissionError, match="outside tenant"):
-        await repo.bulk_create(items, tenant_b)
+    for tenant in (tenant_b, tenant_a):
+        with pytest.raises(WBSGovernanceRequiredError):
+            await repo.bulk_create(items, tenant)
