@@ -84,7 +84,12 @@ class WBSItem:
     # Optional/default fields after
     id: UUID = field(default_factory=uuid4)
     description: str | None = None
+    # PC-1R / ADR-029: hierarchy authority is (parent_id, sort_order). parent_code is display
+    # data (and an input convenience resolved inside the same project); the id is minted by the
+    # repository, never taken from the caller.
+    parent_id: UUID | None = None
     parent_code: str | None = None
+    sort_order: int | None = None
     item_type: WBSItemType | None = None
     budget_allocated: Decimal | None = None
     budget_spent: Decimal = field(default=Decimal(0))

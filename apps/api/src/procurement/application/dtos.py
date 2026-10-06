@@ -17,7 +17,10 @@ class WBSItemBase(BaseModel):
 
     project_id: UUID = Field(..., description="ID of the project this WBS item belongs to")
     parent_id: UUID | None = Field(
-        None, description="ID of the parent WBS item for hierarchical structure"
+        None, description="ID of the parent WBS item (same project); None for a top-level branch"
+    )
+    sort_order: int | None = Field(
+        None, ge=1, description="1-based position among siblings (sibling order is never derived from the code)"
     )
     wbs_code: str = Field(
         ..., max_length=50, description="Unique code for the WBS item (e.g., '1.2.1')"
@@ -81,6 +84,8 @@ class WBSItemUpdate(BaseModel):
 
     expected_version: int | None = Field(None, ge=1)
     parent_id: UUID | None = None
+    sort_order: int | None = Field(None, ge=1)
+    wbs_code: str | None = Field(None, max_length=50)
     name: str | None = Field(None, max_length=255)
     description: str | None = None
     budget_allocated: Decimal | None = None

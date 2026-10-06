@@ -865,60 +865,18 @@ class TestProjectBudgetEndpoint:
 
 
 class TestBulkWBSCompatibilityEndpoint:
-    """Tests for POST /projects/{project_id}/wbs/bulk."""
+    """POST /projects/{project_id}/wbs/bulk is retired (PC-1R #886, #885)."""
 
     @pytest.mark.asyncio
-    async def test_bulk_create_wbs_items_are_visible_from_wbs_read_endpoint(
-        self,
-        client,
-        test_project,
-        auth_headers,
-    ):
-        """TS-E2E-FLW-BLK-001: bulk-created WBS rows must be readable as hierarchy through GET /wbs."""
-        create_response = await client.post(
+    async def test_bulk_wbs_endpoint_is_retired(self, client, test_project, auth_headers):
+        """The endpoint acknowledged >=100 items with 202 and never persisted them; a governed
+        WBS import becomes a DRAFT change set (ADR-029, PC-2a)."""
+        response = await client.post(
             f"{API_PREFIX}/projects/{test_project.id}/wbs/bulk",
-            json={
-                "items": [
-                    {
-                        "code": "1",
-                        "name": "Project Delivery",
-                        "level": 1,
-                        "description": "Root package",
-                    },
-                    {
-                        "code": "1.1",
-                        "name": "Engineering",
-                        "level": 2,
-                        "parent_code": "1",
-                        "description": "Engineering package",
-                    },
-                ],
-                "atomic": True,
-            },
+            json={"items": [{"code": "1", "name": "Project Delivery", "level": 1}], "atomic": True},
             headers=auth_headers,
         )
-
-        assert create_response.status_code == status.HTTP_201_CREATED
-        assert create_response.json()["created_count"] == 2
-
-        read_response = await client.get(
-            f"{API_PREFIX}/projects/{test_project.id}/wbs",
-            headers=auth_headers,
-        )
-
-        assert read_response.status_code == status.HTTP_200_OK
-        payload = read_response.json()
-        assert payload["total_items"] == 2
-        assert payload["coverage"] == {
-            "total_items": 2,
-            "items_with_budget": 0,
-            "items_with_dates": 0,
-            "items_with_alerts": 0,
-            "completion_average": 0.0,
-        }
-        assert [item["code"] for item in payload["items"]] == ["1"]
-        assert payload["items"][0]["children"][0]["code"] == "1.1"
-        assert payload["items"][0]["children"][0]["parent_code"] == "1"
+        assert response.status_code in (status.HTTP_404_NOT_FOUND, status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 # ===========================================

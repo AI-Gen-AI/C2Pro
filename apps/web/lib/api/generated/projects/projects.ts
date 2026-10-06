@@ -57,7 +57,6 @@ import type {
   BulkDocumentRequest,
   BulkExportRequest,
   BulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost202,
-  BulkWBSRequest,
   ExportProjectDataApiV1ProjectsProjectIdExportPost202,
   GetProjectBudgetApiV1ProjectsProjectIdBudgetGet200,
   GetProjectStatsApiV1ProjectsStatsGet200,
@@ -1535,108 +1534,6 @@ export const useBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPost = <
     getBulkUploadDocumentsApiV1ProjectsProjectIdDocumentsBulkPostMutationOptions(
       options,
     ),
-    queryClient,
-  );
-};
-/**
- * Create multiple WBS items in bulk.
- *
- *     **For TS-E2E-FLW-BLK-001 E2E tests.**
- *
- *     Supports:
- *     - Partial success (some items fail, others succeed)
- *     - Atomic transactions (atomic=true, all or nothing)
- *     - Parent-child hierarchy validation
- * @summary Bulk Create WBS Items
- */
-export const bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost = (
-  projectId: string,
-  bulkWBSRequest: BulkWBSRequest,
-  signal?: AbortSignal,
-) => {
-  return orvalApiClient<unknown>({
-    url: `/api/v1/projects/${projectId}/wbs/bulk`,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    data: bulkWBSRequest,
-    signal,
-  });
-};
-
-export const getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-      >,
-      TError,
-      { projectId: string; data: BulkWBSRequest },
-      TContext
-    >;
-  }): UseMutationOptions<
-    Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>,
-    TError,
-    { projectId: string; data: BulkWBSRequest },
-    TContext
-  > => {
-    const mutationKey = ["bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost"];
-    const { mutation: mutationOptions } = options
-      ? options.mutation &&
-        "mutationKey" in options.mutation &&
-        options.mutation.mutationKey
-        ? options
-        : { ...options, mutation: { ...options.mutation, mutationKey } }
-      : { mutation: { mutationKey } };
-
-    const mutationFn: MutationFunction<
-      Awaited<
-        ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-      >,
-      { projectId: string; data: BulkWBSRequest }
-    > = (props) => {
-      const { projectId, data } = props ?? {};
-
-      return bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost(projectId, data);
-    };
-
-    return { mutationFn, ...mutationOptions };
-  };
-
-export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationResult =
-  NonNullable<
-    Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>
-  >;
-export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationBody =
-  BulkWBSRequest;
-export type BulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationError =
-  HTTPValidationError;
-
-/**
- * @summary Bulk Create WBS Items
- */
-export const useBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost = <
-  TError = HTTPValidationError,
-  TContext = unknown,
->(
-  options?: {
-    mutation?: UseMutationOptions<
-      Awaited<
-        ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>
-      >,
-      TError,
-      { projectId: string; data: BulkWBSRequest },
-      TContext
-    >;
-  },
-  queryClient?: QueryClient,
-): UseMutationResult<
-  Awaited<ReturnType<typeof bulkCreateWbsApiV1ProjectsProjectIdWbsBulkPost>>,
-  TError,
-  { projectId: string; data: BulkWBSRequest },
-  TContext
-> => {
-  return useMutation(
-    getBulkCreateWbsApiV1ProjectsProjectIdWbsBulkPostMutationOptions(options),
     queryClient,
   );
 };

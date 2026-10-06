@@ -116,6 +116,7 @@ async def _canonical_node(session: AsyncSession, project: ProjectORM, code: str)
         code=code,
         name="Root",
         lft=1,
+        sort_order=1,
         rgt=2,
         depth=0,
     )

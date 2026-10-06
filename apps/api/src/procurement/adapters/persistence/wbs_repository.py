@@ -2,17 +2,23 @@
 SQLAlchemy implementation of the WBS repository over the canonical Project Controls WBS.
 
 ADR-025 / MASTER: one project owns one canonical hierarchical WBS, persisted in ``wbs_nodes``
-(nested set). Every application WBS read and write (projects WBS API, document ingestion, analysis
-persistence, RACI, procurement, reporting) goes through this adapter, so no caller can create a
-parallel hierarchy. The ``IWBSRepository`` port and the ``WBSItem`` domain shape are unchanged:
+(nested set). Every application WBS read and write (projects WBS API, RACI, procurement,
+reporting) goes through this adapter, so no caller can create a parallel hierarchy.
 
-- ``parent_code`` is resolved to/from ``parent_id`` within the project;
-- ``level`` is the tree level (``depth + 1``) of the canonical hierarchy;
+PC-1R / ADR-029 structural rules:
+
+- the project is the implicit root: top-level branches have ``parent_id IS NULL``;
+- hierarchy authority is ``(parent_id, sort_order)``; ``lft``/``rgt``/``depth`` are derived
+  caches rebuilt deterministically after every structural write (siblings ordered by
+  ``sort_order``, never by code), and ``level`` is ``depth + 1``;
+- the visible ``code`` is display data: parents are resolved by id (``parent_code`` is only a
+  convenience resolved inside the same project) and a recode keeps the node's identity;
+- node ids are minted here, never taken from the caller;
+- a parent must belong to the same tenant AND project;
+- every structural write first locks the project row, so concurrent writes serialize;
+- deleting a node deletes its subtree, but never one that still carries RACI or BOM links.
 - ``item_type`` maps to ``node_type``; an unset type is stored as the column default and marked
-  as inferred so it round-trips as ``None``;
-- the nested set (``lft``/``rgt``/``depth``) is renumbered deterministically per project after
-  every structural write (children ordered by code);
-- deleting a node deletes its subtree (the previous store cascaded children via its parent FK).
+  as inferred so it round-trips as ``None``.
 
 Refers to Suite ID: TS-INT-DB-WBS-001.
 """
@@ -23,17 +29,19 @@ from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from sqlalchemy import Table, bindparam, delete, select, update
+from sqlalchemy import Table, bindparam, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions import ConflictError
+from src.core.exceptions import C2ProException, ConflictError
 from src.core.tenants.types import TenantId
+from src.procurement.adapters.persistence.models import BOMItemORM
 from src.procurement.domain.models import WBSItem
 from src.procurement.ports.wbs_repository import IWBSRepository
 from src.projects.adapters.persistence.models import ProjectORM
 from src.shared_kernel.enums import WBSItemType
+from src.stakeholders.adapters.persistence.models import StakeholderWBSRaciORM
 from src.wbs.adapters.persistence.models import WBSNodeORM
 from src.wbs.domain.enums import WBSNodeType
 
@@ -42,6 +50,25 @@ _CANONICAL_KEY = "_adr025"
 # Temporary nested-set coordinates for freshly inserted rows (satisfy lft > 0 and lft < rgt)
 # until the project is renumbered in the same unit of work.
 _TEMP_OFFSET = 1_000_000_000
+# Temporary sibling positions that sort after every real one ("append"); the rebuild densifies
+# them in the same transaction (uq_wbs_nodes_sibling_order is deferred to commit).
+_APPEND_BASE = 1_000_000
+
+
+class WBSNodeLinkedError(ConflictError):
+    """A WBS node (or its subtree) still carries RACI or BOM links: it cannot be deleted silently."""
+
+    def __init__(self, wbs_id: UUID, raci_links: int, bom_links: int) -> None:
+        C2ProException.__init__(
+            self,
+            message=(
+                f"WBS node {wbs_id} cannot be deleted: its subtree still has {raci_links} RACI "
+                f"assignment(s) and {bom_links} BOM link(s). Reassign or remove them first."
+            ),
+            code="WBS_NODE_HAS_LINKS",
+            status_code=409,
+            details={"wbs_id": str(wbs_id), "raci_links": raci_links, "bom_links": bom_links},
+        )
 
 
 def _node_type(item_type: WBSItemType | None) -> tuple[WBSNodeType, bool]:
@@ -87,7 +114,9 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             name=orm.name,
             description=orm.description,
             level=orm.depth + 1,
+            parent_id=orm.parent_id,
             parent_code=code_by_id.get(orm.parent_id) if orm.parent_id else None,
+            sort_order=orm.sort_order,
             item_type=_item_type(orm),
             # Numeric columns load as Decimal (the ORM annotation says float for wbs_node callers).
             budget_allocated=cast("Decimal | None", orm.budget_allocated),
@@ -103,13 +132,15 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             children=[],
         )
 
-    def _new_orm(self, item: WBSItem, tenant_id: UUID, position: int) -> WBSNodeORM:
+    def _new_orm(self, item: WBSItem, *, node_id: UUID, tenant_id: UUID, position: int) -> WBSNodeORM:
         node_type, inferred = _node_type(item.item_type)
         return WBSNodeORM(
-            id=item.id,
+            id=node_id,
             project_id=item.project_id,
             tenant_id=tenant_id,
+            # Linked after the whole batch exists (the parent FK is not deferrable).
             parent_id=None,
+            sort_order=_APPEND_BASE + position,
             code=item.code,
             name=item.name,
             description=item.description,
@@ -125,26 +156,46 @@ class SQLAlchemyWBSRepository(IWBSRepository):
             actual_end=item.actual_end,
             source_clause_id=item.source_clause_id,
             source_document_id=item.source_document_id,
-            version=item.version or 1,
+            version=1,
             metadata_json=_stored_metadata(item.wbs_metadata, node_type_inferred=inferred),
         )
 
     # ------------------------------------------------------------------ helpers
-    async def _ensure_project_in_tenant(self, project_id: UUID, tenant_id: UUID) -> None:
-        """Reject writes for projects outside the caller tenant."""
+    async def _lock_project(self, project_id: UUID, tenant_id: UUID) -> None:
+        """Serialize structural writes per project (and reject projects outside the tenant)."""
         result = await self.session.execute(
             select(ProjectORM.id)
             .where(ProjectORM.id == project_id)
             .where(ProjectORM.tenant_id == tenant_id)
+            .with_for_update()
         )
         if result.scalar_one_or_none() is None:
-            raise PermissionError("Cannot create WBS items for project outside tenant")
+            raise PermissionError("Cannot write WBS items for project outside tenant")
+
+    async def _locked_node(self, wbs_id: UUID, tenant_id: UUID) -> WBSNodeORM | None:
+        """Lock the node's project, then re-read the node as it stands after the lock."""
+        project_id = (
+            await self.session.execute(
+                select(WBSNodeORM.project_id).where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
+            )
+        ).scalar_one_or_none()
+        if project_id is None:
+            return None
+        await self._lock_project(project_id, tenant_id)
+        return (
+            await self.session.execute(
+                select(WBSNodeORM)
+                .where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
 
     async def _project_nodes(self, project_id: UUID, tenant_id: UUID) -> list[WBSNodeORM]:
+        """All project nodes in hierarchy order (the nested set is derived from sort_order)."""
         result = await self.session.execute(
             select(WBSNodeORM)
             .where(WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id)
-            .order_by(WBSNodeORM.code)
+            .order_by(WBSNodeORM.lft, WBSNodeORM.id)
         )
         return list(result.scalars().all())
 
@@ -156,71 +207,144 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         )
         return {row.id: row.code for row in result.all()}
 
-    async def _renumber(self, project_id: UUID, tenant_id: UUID) -> None:
-        """Recompute lft/rgt/depth for the whole project (children ordered by code)."""
+    async def _structure(self, project_id: UUID, tenant_id: UUID) -> dict[UUID, tuple[UUID | None, int]]:
         result = await self.session.execute(
-            select(WBSNodeORM.id, WBSNodeORM.parent_id, WBSNodeORM.code).where(
+            select(WBSNodeORM.id, WBSNodeORM.parent_id, WBSNodeORM.sort_order).where(
                 WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id
             )
         )
-        rows = result.all()
+        return {row.id: (row.parent_id, row.sort_order) for row in result.all()}
+
+    async def _project_parent(self, parent_id: UUID, project_id: UUID, tenant_id: UUID) -> UUID:
+        """A parent must be a node of the SAME project and tenant (never resolved through its code)."""
+        found = (
+            await self.session.execute(
+                select(WBSNodeORM.id).where(
+                    WBSNodeORM.id == parent_id,
+                    WBSNodeORM.project_id == project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if found is None:
+            raise ValueError(f"WBS parent {parent_id} is not a node of project {project_id}")
+        return found
+
+    async def _parent_by_code(self, parent_code: str, project_id: UUID, tenant_id: UUID) -> UUID:
+        found = (
+            await self.session.execute(
+                select(WBSNodeORM.id).where(
+                    WBSNodeORM.project_id == project_id,
+                    WBSNodeORM.code == parent_code,
+                    WBSNodeORM.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if found is None:
+            raise ValueError(f"WBS parent code {parent_code!r} does not exist in project {project_id}")
+        return found
+
+    async def _rebuild(
+        self, project_id: UUID, tenant_id: UUID, positions: dict[UUID, int] | None = None
+    ) -> None:
+        """Densify sibling order and recompute lft/rgt/depth for the whole project.
+
+        ``positions`` places the given nodes at a 1-based position among their siblings; every
+        other sibling keeps its relative ``sort_order``. Only rows whose values change are written.
+        """
+        result = await self.session.execute(
+            select(
+                WBSNodeORM.id, WBSNodeORM.parent_id, WBSNodeORM.sort_order,
+                WBSNodeORM.lft, WBSNodeORM.rgt, WBSNodeORM.depth,
+            ).where(WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id)
+        )
+        rows = {row.id: row for row in result.all()}
         if not rows:
             return
-        ids = {row.id for row in rows}
-        children: dict[UUID | None, list[tuple[str, UUID]]] = defaultdict(list)
-        for row in rows:
-            parent = row.parent_id if row.parent_id in ids else None
-            children[parent].append((row.code, row.id))
-        for siblings in children.values():
-            siblings.sort()
+        placed = positions or {}
+        children: dict[UUID | None, list[UUID]] = defaultdict(list)
+        for row in rows.values():
+            if row.parent_id is not None and row.parent_id not in rows:
+                raise ValueError(f"WBS node {row.id} has a parent outside project {project_id}")
+            children[row.parent_id].append(row.id)
+        for parent, siblings in children.items():
+            ordered = sorted(
+                (sibling for sibling in siblings if sibling not in placed),
+                key=lambda node_id: (rows[node_id].sort_order, str(node_id)),
+            )
+            for node_id in sorted((s for s in siblings if s in placed), key=lambda s: placed[s]):
+                ordered.insert(max(0, min(placed[node_id] - 1, len(ordered))), node_id)
+            children[parent] = ordered
 
         coordinates: list[dict[str, Any]] = []
         counter = 0
+        visited: set[UUID] = set()
 
-        def visit(node_id: UUID, depth: int) -> None:
+        def visit(node_id: UUID, depth: int, position: int) -> None:
             nonlocal counter
+            visited.add(node_id)
             counter += 1
-            lft = counter
-            for _code, child_id in children.get(node_id, []):
-                visit(child_id, depth + 1)
+            left = counter
+            for child_position, child_id in enumerate(children.get(node_id, []), start=1):
+                visit(child_id, depth + 1, child_position)
             counter += 1
-            coordinates.append({"b_id": node_id, "b_lft": lft, "b_rgt": counter, "b_depth": depth})
+            row = rows[node_id]
+            if (row.lft, row.rgt, row.depth, row.sort_order) != (left, counter, depth, position):
+                coordinates.append(
+                    {"b_id": node_id, "b_lft": left, "b_rgt": counter, "b_depth": depth, "b_sort": position}
+                )
 
-        for _code, root_id in children[None]:
-            visit(root_id, 0)
-
-        table = cast(Table, WBSNodeORM.__table__)
-        await self.session.execute(
-            update(table)
-            .where(table.c.id == bindparam("b_id"))
-            .values(lft=bindparam("b_lft"), rgt=bindparam("b_rgt"), depth=bindparam("b_depth")),
-            coordinates,
-            execution_options={"synchronize_session": False},
-        )
+        for position, top_id in enumerate(children.get(None, []), start=1):
+            visit(top_id, 0, position)
+        if len(visited) != len(rows):
+            raise ValueError(f"WBS hierarchy of project {project_id} contains a cycle")
+        if coordinates:
+            table = cast(Table, WBSNodeORM.__table__)
+            await self.session.execute(
+                update(table)
+                .where(table.c.id == bindparam("b_id"))
+                .values(
+                    lft=bindparam("b_lft"), rgt=bindparam("b_rgt"),
+                    depth=bindparam("b_depth"), sort_order=bindparam("b_sort"),
+                ),
+                coordinates,
+                execution_options={"synchronize_session": False},
+            )
         for instance in list(self.session.identity_map.values()):
             if isinstance(instance, WBSNodeORM) and instance.project_id == project_id:
-                self.session.expire(instance, ["lft", "rgt", "depth"])
+                self.session.expire(instance, ["lft", "rgt", "depth", "sort_order", "parent_id"])
 
     async def _insert(self, project_id: UUID, items: list[WBSItem], tenant_id: UUID) -> list[WBSNodeORM]:
-        """Insert items (parents may appear in any order in the batch) and renumber the project."""
-        existing = {code: node_id for node_id, code in (await self._code_by_id(project_id, tenant_id)).items()}
-        batch_codes = {item.code: item.id for item in items}
-        orms = [self._new_orm(item, tenant_id, position) for position, item in enumerate(items)]
+        """Insert a batch (parents may appear in any order) under the project lock, then rebuild."""
+        await self._lock_project(project_id, tenant_id)
+        minted = {item.id: uuid4() for item in items}  # node ids are always minted here
+        batch_by_code = {item.code: minted[item.id] for item in items}
+        orms = [
+            self._new_orm(item, node_id=minted[item.id], tenant_id=tenant_id, position=position)
+            for position, item in enumerate(items)
+        ]
         self.session.add_all(orms)
         await self.session.flush()
 
         parent_links: list[dict[str, Any]] = []
+        positions: dict[UUID, int] = {}
         for item in items:
-            if not item.parent_code:
-                continue
-            parent_id = batch_codes.get(item.parent_code) or existing.get(item.parent_code)
-            if parent_id is None:
-                raise ValueError(
-                    f"WBS parent code {item.parent_code!r} does not exist in project {project_id}"
+            node_id = minted[item.id]
+            parent_id: UUID | None = None
+            if item.parent_id is not None:
+                parent_id = minted.get(item.parent_id) or await self._project_parent(
+                    item.parent_id, project_id, tenant_id
                 )
-            if parent_id == item.id:
+            elif item.parent_code:
+                parent_id = batch_by_code.get(item.parent_code) or await self._parent_by_code(
+                    item.parent_code, project_id, tenant_id
+                )
+            if parent_id == node_id:
                 raise ValueError(f"WBS item {item.code!r} cannot be its own parent")
-            parent_links.append({"b_id": item.id, "b_parent": parent_id})
+            if parent_id is not None:
+                parent_links.append({"b_id": node_id, "b_parent": parent_id})
+            if item.sort_order is not None:
+                positions[node_id] = item.sort_order
         if parent_links:
             table = cast(Table, WBSNodeORM.__table__)
             await self.session.execute(
@@ -228,21 +352,14 @@ class SQLAlchemyWBSRepository(IWBSRepository):
                 parent_links,
                 execution_options={"synchronize_session": False},
             )
-            for orm in orms:
-                self.session.expire(orm, ["parent_id"])
-        await self._renumber(project_id, tenant_id)
+        await self._rebuild(project_id, tenant_id, positions)
         return orms
 
     async def _subtree_ids(self, root_ids: set[UUID], project_id: UUID, tenant_id: UUID) -> set[UUID]:
-        result = await self.session.execute(
-            select(WBSNodeORM.id, WBSNodeORM.parent_id).where(
-                WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id
-            )
-        )
         children: dict[UUID, list[UUID]] = defaultdict(list)
-        for row in result.all():
-            if row.parent_id is not None:
-                children[row.parent_id].append(row.id)
+        for node_id, (parent_id, _order) in (await self._structure(project_id, tenant_id)).items():
+            if parent_id is not None:
+                children[parent_id].append(node_id)
         collected: set[UUID] = set()
         stack = list(root_ids)
         while stack:
@@ -261,8 +378,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
 
     # ------------------------------------------------------------------ port
     async def create(self, tenant_id: TenantId, wbs_item: WBSItem) -> WBSItem:
-        """Create a new WBS item in the canonical project WBS."""
-        await self._ensure_project_in_tenant(wbs_item.project_id, tenant_id)
+        """Create a new WBS item in the canonical project WBS (the id is minted here)."""
         orms = await self._insert(wbs_item.project_id, [wbs_item], tenant_id)
         return (await self._to_domain_list(orms, wbs_item.project_id, tenant_id))[0]
 
@@ -270,7 +386,9 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         """Retrieve a WBS item by ID."""
         orm = (
             await self.session.execute(
-                select(WBSNodeORM).where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
+                select(WBSNodeORM)
+                .where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
         if orm is None:
@@ -278,13 +396,13 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         return self._orm_to_domain(orm, await self._code_by_id(orm.project_id, tenant_id))
 
     async def get_by_project(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
-        """Retrieve all WBS items for a project (ordered by code)."""
+        """Retrieve all WBS items for a project, in hierarchy order."""
         orms = await self._project_nodes(project_id, tenant_id)
         code_by_id = {orm.id: orm.code for orm in orms}
         return [self._orm_to_domain(orm, code_by_id) for orm in orms]
 
     async def get_by_code(self, project_id: UUID, wbs_code: str, tenant_id: UUID) -> WBSItem | None:
-        """Retrieve a WBS item by its code within a project."""
+        """Retrieve a WBS item by its (display) code within a project."""
         orm = (
             await self.session.execute(
                 select(WBSNodeORM).where(
@@ -299,7 +417,7 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         return self._orm_to_domain(orm, await self._code_by_id(project_id, tenant_id))
 
     async def get_children(self, parent_id: UUID, tenant_id: UUID) -> list[WBSItem]:
-        """Retrieve the direct children of a WBS item."""
+        """Retrieve the direct children of a WBS item, in sibling order."""
         parent = (
             await self.session.execute(
                 select(WBSNodeORM).where(WBSNodeORM.id == parent_id, WBSNodeORM.tenant_id == tenant_id)
@@ -310,20 +428,24 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         orms = (
             await self.session.execute(
                 select(WBSNodeORM)
-                .where(WBSNodeORM.parent_id == parent.id, WBSNodeORM.tenant_id == tenant_id)
-                .order_by(WBSNodeORM.code)
+                .where(
+                    WBSNodeORM.parent_id == parent.id,
+                    WBSNodeORM.project_id == parent.project_id,
+                    WBSNodeORM.tenant_id == tenant_id,
+                )
+                .order_by(WBSNodeORM.sort_order, WBSNodeORM.id)
             )
         ).scalars().all()
         code_by_id = {parent.id: parent.code, **{orm.id: orm.code for orm in orms}}
         return [self._orm_to_domain(orm, code_by_id) for orm in orms]
 
     async def get_tree(self, project_id: UUID, tenant_id: UUID) -> list[WBSItem]:
-        """Retrieve the complete canonical WBS tree for a project."""
+        """Retrieve the complete canonical WBS tree: top-level branches with nested children."""
         orms = await self._project_nodes(project_id, tenant_id)
         code_by_id = {orm.id: orm.code for orm in orms}
         items = {orm.id: self._orm_to_domain(orm, code_by_id) for orm in orms}
         roots: list[WBSItem] = []
-        for orm in orms:  # ordered by code, so children lists are ordered by code too
+        for orm in orms:  # nested-set order, so every children list is in sibling order
             item = items[orm.id]
             parent = items.get(orm.parent_id) if orm.parent_id else None
             if parent is None:
@@ -333,18 +455,20 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         return roots
 
     async def update(self, wbs_id: UUID, wbs_item: WBSItem, tenant_id: UUID) -> WBSItem | None:
-        """Update an existing WBS item (optimistic locking on ``version``)."""
-        orm = (
-            await self.session.execute(
-                select(WBSNodeORM).where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
-            )
-        ).scalar_one_or_none()
+        """Update a WBS item (optimistic locking on ``version``).
+
+        ``code`` may change (recode keeps the identity). The parent is taken from ``parent_id``;
+        ``parent_code`` is only consulted when ``parent_id`` is None. A changed parent appends the
+        node to its new siblings unless ``sort_order`` asks for a different position.
+        """
+        orm = await self._locked_node(wbs_id, tenant_id)
         if orm is None:
             return None
         if wbs_item.version != orm.version:
             raise ConflictError("WBSItem", field="version", value=str(wbs_id))
 
         node_type, inferred = _node_type(wbs_item.item_type)
+        orm.code = wbs_item.code
         orm.name = wbs_item.name
         orm.description = wbs_item.description
         orm.node_type = node_type
@@ -359,116 +483,80 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         )
         orm.version = orm.version + 1
 
+        if wbs_item.parent_id is not None:
+            new_parent: UUID | None = await self._project_parent(wbs_item.parent_id, orm.project_id, tenant_id)
+        elif wbs_item.parent_code:
+            new_parent = await self._parent_by_code(wbs_item.parent_code, orm.project_id, tenant_id)
+        else:
+            new_parent = None
+
+        # Items read back from this repository carry their stored position, so an unchanged
+        # sort_order is "no position requested", not "keep index N under the new parent".
+        requested = wbs_item.sort_order if wbs_item.sort_order != orm.sort_order else None
+        positions: dict[UUID, int] = {}
         structural_change = False
-        if wbs_item.parent_code:
-            parent = (
-                await self.session.execute(
-                    select(WBSNodeORM).where(
-                        WBSNodeORM.project_id == orm.project_id,
-                        WBSNodeORM.code == wbs_item.parent_code,
-                        WBSNodeORM.tenant_id == tenant_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if parent is None:
-                raise ValueError(f"WBS parent code {wbs_item.parent_code!r} does not exist in project")
-            if parent.id != orm.parent_id:
-                if parent.id in await self._subtree_ids({orm.id}, orm.project_id, tenant_id):
-                    raise ValueError("A WBS item cannot be moved under itself or its descendants")
-                orm.parent_id = parent.id
-                structural_change = True
+        if new_parent != orm.parent_id:
+            if new_parent is not None and new_parent in await self._subtree_ids({orm.id}, orm.project_id, tenant_id):
+                raise ValueError("A WBS item cannot be moved under itself or its descendants")
+            depth = 0 if new_parent is None else (
+                await self.session.execute(select(WBSNodeORM.depth).where(WBSNodeORM.id == new_parent))
+            ).scalar_one() + 1
+            orm.parent_id = new_parent
+            orm.depth = depth  # the rebuild below fixes the whole moved subtree
+            orm.sort_order = _APPEND_BASE
+            structural_change = True
+        if requested is not None:
+            positions[orm.id] = requested
+            structural_change = True
 
         await self.session.flush()
         if structural_change:
-            await self._renumber(orm.project_id, tenant_id)
+            await self._rebuild(orm.project_id, tenant_id, positions)
         await self.session.refresh(orm)
         return self._orm_to_domain(orm, await self._code_by_id(orm.project_id, tenant_id))
 
     async def delete(self, wbs_id: UUID, tenant_id: UUID) -> bool:
-        """Delete a WBS item and its whole subtree."""
-        orm = (
-            await self.session.execute(
-                select(WBSNodeORM).where(WBSNodeORM.id == wbs_id, WBSNodeORM.tenant_id == tenant_id)
-            )
-        ).scalar_one_or_none()
+        """Delete a WBS item and its whole subtree -- never one that still has RACI or BOM links."""
+        orm = await self._locked_node(wbs_id, tenant_id)
         if orm is None:
             return False
         project_id = orm.project_id
         subtree = await self._subtree_ids({orm.id}, project_id, tenant_id)
+        raci_links = (
+            await self.session.execute(
+                select(func.count()).select_from(StakeholderWBSRaciORM).where(
+                    StakeholderWBSRaciORM.wbs_item_id.in_(subtree)
+                )
+            )
+        ).scalar_one()
+        bom_links = (
+            await self.session.execute(
+                select(func.count()).select_from(BOMItemORM).where(BOMItemORM.wbs_item_id.in_(subtree))
+            )
+        ).scalar_one()
+        if raci_links or bom_links:
+            raise WBSNodeLinkedError(wbs_id, raci_links, bom_links)
         await self.session.execute(
             delete(WBSNodeORM).where(WBSNodeORM.id.in_(subtree)).execution_options(synchronize_session=False)
         )
         for instance in list(self.session.identity_map.values()):
             if isinstance(instance, WBSNodeORM) and instance.id in subtree:
                 self.session.expunge(instance)
-        await self._renumber(project_id, tenant_id)
+        await self._rebuild(project_id, tenant_id)
         return True
 
-    async def delete_for_project(self, project_id: UUID, tenant_id: UUID) -> None:
-        """Remove the project's whole WBS (used when an analysis replaces it)."""
-        await self.session.execute(
-            delete(WBSNodeORM)
-            .where(WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id)
-            .execution_options(synchronize_session=False)
-        )
-
-    async def replace_for_source_document(
-        self,
-        *,
-        project_id: UUID,
-        source_document_id: UUID,
-        wbs_items: list[WBSItem],
-        tenant_id: UUID,
-    ) -> list[WBSItem]:
-        """Replace all WBS nodes produced by one parsed source document.
-
-        Idempotent per source document: deletes the nodes previously produced by the same
-        ``source_document_id`` (with their subtrees) and inserts the new set. Nodes without a
-        source document (manual or AI-generated) are not swept (TS-UD-PROC-WBS-IDEM-001).
-        """
-        await self._ensure_project_in_tenant(project_id, tenant_id)
-        previous = (
-            await self.session.execute(
-                select(WBSNodeORM.id).where(
-                    WBSNodeORM.project_id == project_id,
-                    WBSNodeORM.tenant_id == tenant_id,
-                    WBSNodeORM.source_document_id == source_document_id,
-                )
-            )
-        ).scalars().all()
-        if previous:
-            subtree = await self._subtree_ids(set(previous), project_id, tenant_id)
-            await self.session.execute(
-                delete(WBSNodeORM).where(WBSNodeORM.id.in_(subtree)).execution_options(synchronize_session=False)
-            )
-            for instance in list(self.session.identity_map.values()):
-                if isinstance(instance, WBSNodeORM) and instance.id in subtree:
-                    self.session.expunge(instance)
-
-        for item in wbs_items:
-            if item.project_id != project_id:
-                raise ValueError("WBS item project_id must match replacement project_id")
-            item.source_document_id = source_document_id
-        if not wbs_items:
-            await self._renumber(project_id, tenant_id)
-            return []
-        orms = await self._insert(project_id, wbs_items, tenant_id)
-        return await self._to_domain_list(orms, project_id, tenant_id)
-
     async def bulk_create(self, wbs_items: list[WBSItem], tenant_id: UUID) -> list[WBSItem]:
-        """Create multiple WBS items at once with tenant isolation (used for AI generation)."""
+        """Create multiple WBS items at once with tenant isolation (ids are minted here)."""
         by_project: dict[UUID, list[WBSItem]] = defaultdict(list)
         for wbs_item in wbs_items:
             by_project[wbs_item.project_id].append(wbs_item)
-        for project_id in by_project:
-            await self._ensure_project_in_tenant(project_id, tenant_id)
 
-        created: dict[UUID, WBSItem] = {}
+        created: dict[int, WBSItem] = {}
         for project_id, items in by_project.items():
             orms = await self._insert(project_id, items, tenant_id)
-            for item in await self._to_domain_list(orms, project_id, tenant_id):
-                created[item.id] = item
-        return [created[item.id] for item in wbs_items]
+            for item, created_item in zip(items, await self._to_domain_list(orms, project_id, tenant_id), strict=True):
+                created[id(item)] = created_item
+        return [created[id(item)] for item in wbs_items]
 
     async def bulk_create_from_dicts(
         self,
@@ -479,8 +567,8 @@ class SQLAlchemyWBSRepository(IWBSRepository):
         """Build WBSItem domain objects from raw dicts and persist them.
 
         This is the cross-context entry point: callers outside the procurement
-        bounded context pass plain dicts (e.g. from AI extraction) and the
-        repository handles domain-object construction internally.
+        bounded context pass plain dicts and the repository handles domain-object
+        construction internally.
         """
 
         def _parse_decimal(value: Any) -> Decimal | None:

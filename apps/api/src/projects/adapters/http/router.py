@@ -354,31 +354,6 @@ def _build_bulk_job_payload(
     }
 
 
-def _validate_wbs_items(
-    items: Sequence["BulkWBSItem"],
-) -> tuple[list["BulkWBSItem"], list[dict[str, object]]]:
-    valid_items: list[BulkWBSItem] = []
-    errors: list[dict[str, object]] = []
-
-    for index, item in enumerate(items):
-        missing_fields = [
-            field for field in ("code", "name", "level") if getattr(item, field) in (None, "")
-        ]
-        if missing_fields:
-            errors.append(
-                {
-                    "index": index,
-                    "code": "validation_error",
-                    "message": f"Missing required fields: {', '.join(missing_fields)}",
-                    "fields": missing_fields,
-                }
-            )
-            continue
-        valid_items.append(item)
-
-    return valid_items, errors
-
-
 # ===========================================
 # HEALTH CHECK ENDPOINT (must be before /{project_id})
 # ===========================================
@@ -808,23 +783,6 @@ class BulkDocumentRequest(BaseModel):
     documents: list[BulkDocumentItem]
 
 
-class BulkWBSItem(BaseModel):
-    """Single WBS item in bulk creation."""
-
-    code: str | None = None
-    name: str | None = None
-    level: int | None = None
-    parent_code: str | None = None
-    description: str | None = None
-
-
-class BulkWBSRequest(BaseModel):
-    """Bulk WBS creation request."""
-
-    items: list[BulkWBSItem]
-    atomic: bool = False
-
-
 class BulkExportRequest(BaseModel):
     """Bulk export request."""
 
@@ -884,109 +842,6 @@ async def bulk_upload_documents(
         "document_ids": document_ids,
         "status": "accepted",
     }
-
-
-@router.post(
-    "/{project_id}/wbs/bulk",
-    status_code=201,
-    response_model=None,
-    summary="Bulk Create WBS Items",
-    description="""
-    Create multiple WBS items in bulk.
-
-    **For TS-E2E-FLW-BLK-001 E2E tests.**
-
-    Supports:
-    - Partial success (some items fail, others succeed)
-    - Atomic transactions (atomic=true, all or nothing)
-    - Parent-child hierarchy validation
-    """,
-)
-async def bulk_create_wbs(
-    project_id: UUID,
-    request: BulkWBSRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    _response: Response,
-) -> dict[str, object] | JSONResponse:
-    """
-    Bulk create WBS items.
-
-    GREEN PHASE implementation using "Fake It" pattern.
-
-    Args:
-        project_id: UUID of the project
-        request: Bulk WBS creation request
-        current_user: Authenticated user
-
-    Returns:
-        Summary of created/failed items
-
-    Raises:
-        404: Project not found or belongs to another tenant
-        400: Atomic transaction failed (all or nothing)
-    """
-    async with get_session_with_tenant(current_user.tenant_id) as session:
-        project = await _get_project_for_tenant(session, project_id, current_user.tenant_id)
-
-    if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not found",
-        )
-
-    valid_items, errors = _validate_wbs_items(request.items)
-
-    if request.atomic and errors:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={
-                "project_id": str(project_id),
-                "created_count": 0,
-                "failed_count": len(errors),
-                "errors": errors,
-                "status": "rolled_back",
-            },
-        )
-
-    if len(request.items) >= 100 and not errors:
-        job_id = str(uuid4())
-        register_job(
-            job_id,
-            _build_bulk_job_payload(total_items=len(request.items)),
-            tenant_id=require_tenant_id(current_user.tenant_id),
-        )
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content={
-                "job_id": job_id,
-                "status": "processing",
-                "total_items": len(request.items),
-            },
-        )
-
-    async with get_session_with_tenant(current_user.tenant_id) as session:
-        wbs_repository = SQLAlchemyWBSRepository(session)
-        await wbs_repository.bulk_create_from_dicts(
-            project_id,
-            [item.model_dump() for item in valid_items],
-            current_user.tenant_id,
-        )
-
-    response_payload = {
-        "project_id": str(project_id),
-        "created_count": len(valid_items),
-        "failed_count": len(errors),
-        "errors": errors,
-        "status": "completed" if not errors else "partial_success",
-    }
-
-    if errors:
-        return JSONResponse(
-            status_code=status.HTTP_207_MULTI_STATUS,
-            content=response_payload,
-        )
-
-    return response_payload
 
 
 @router.post(
