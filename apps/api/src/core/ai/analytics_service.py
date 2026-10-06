@@ -87,11 +87,10 @@ class AIAnalyticsService:
                 await self._cache.delete(self._cache_key(tenant_id=tenant_id, metric=metric, timeframe=timeframe))
 
     async def cost_breakdown(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
+        window_start = _window_start(timeframe)
         key = self._cache_key(tenant_id=tenant_id, metric="cost", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
-
-        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
@@ -151,11 +150,10 @@ class AIAnalyticsService:
         return payload
 
     async def version_performance(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
+        window_start = _window_start(timeframe)
         key = self._cache_key(tenant_id=tenant_id, metric="versions", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
-
-        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
@@ -205,6 +203,7 @@ class AIAnalyticsService:
         baseline_version: str,
         candidate_version: str,
     ) -> JsonDict:
+        window_start = _window_start(timeframe)
         compare_scope = hashlib.sha1(f"{baseline_version}:{candidate_version}".encode()).hexdigest()[:12]
         key = self._cache_key(
             tenant_id=tenant_id,
@@ -215,7 +214,6 @@ class AIAnalyticsService:
         if cached := await self._get_cached(key):
             return cached
 
-        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
@@ -282,11 +280,10 @@ class AIAnalyticsService:
         return payload
 
     async def quality_drift(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
+        window_start = _window_start(timeframe)
         key = self._cache_key(tenant_id=tenant_id, metric="quality-drift", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
-
-        window_start = _window_start(timeframe)
         query = text(
             """
             SELECT
