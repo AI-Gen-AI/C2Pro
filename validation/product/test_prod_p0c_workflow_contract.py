@@ -286,3 +286,29 @@ def test_p0c_verifier_preserves_historic_failures_but_rejects_new_failures_after
     assert "historic recovery failures are preserved" in source
     assert "no analysis failure occurs after accepted recovery event" in source
     assert "occurred_at > :accepted_event_at" in source
+
+
+def test_p0c_recovery_reobserves_exact_runtime_immediately_before_mutation() -> None:
+    source = RECOVERY_WORKFLOW.read_text(encoding="utf-8")
+    pre = source.index("Read-only failed-revision recovery preflight")
+    observe = source.index(
+        "Re-observe exact production runtime immediately before recovery mutation"
+    )
+    verify = source.index(
+        "Re-verify exact production runtime immediately before recovery mutation"
+    )
+    browser = source.index("Execute governed P0c recovery browser journey")
+    assert pre < observe < verify < browser
+    block = source[verify:browser]
+    assert "id: runtime_identity_final" in block
+    browser_block = source.split(
+        "Execute governed P0c recovery browser journey", 1
+    )[1].split("Resolve target revision from bounded browser evidence", 1)[0]
+    assert (
+        "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: "
+        "${{ steps.runtime_identity_final.outputs.backend_sha }}"
+    ) in browser_block
+    assert (
+        "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: "
+        "${{ steps.runtime_identity_final.outputs.frontend_sha }}"
+    ) in browser_block
