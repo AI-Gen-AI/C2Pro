@@ -15,15 +15,40 @@ from src.core.json_types import JsonDict
 logger = structlog.get_logger()
 
 
+_INVALID_TIMEFRAME_MESSAGE = (
+    "Invalid timeframe. Use a positive duration such as 24h, 7d, 30d, 12w"
+)
+
+
 def _parse_timeframe(timeframe: str) -> timedelta:
     raw = timeframe.strip().lower()
-    if raw.endswith("d") and raw[:-1].isdigit():
-        return timedelta(days=int(raw[:-1]))
-    if raw.endswith("h") and raw[:-1].isdigit():
-        return timedelta(hours=int(raw[:-1]))
-    if raw.endswith("w") and raw[:-1].isdigit():
-        return timedelta(weeks=int(raw[:-1]))
-    raise ValueError("Invalid timeframe. Use formats like 24h, 7d, 30d, 12w")
+    if len(raw) < 2 or not raw[:-1].isdigit():
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE)
+
+    amount = int(raw[:-1])
+    if amount <= 0:
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE)
+
+    unit = raw[-1]
+    try:
+        if unit == "d":
+            return timedelta(days=amount)
+        if unit == "h":
+            return timedelta(hours=amount)
+        if unit == "w":
+            return timedelta(weeks=amount)
+    except OverflowError as exc:
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE) from exc
+
+    raise ValueError(_INVALID_TIMEFRAME_MESSAGE)
+
+
+def _window_start(timeframe: str) -> datetime:
+    delta = _parse_timeframe(timeframe)
+    try:
+        return datetime.now(UTC) - delta
+    except OverflowError as exc:
+        raise ValueError(_INVALID_TIMEFRAME_MESSAGE) from exc
 
 
 class AIAnalyticsService:
@@ -62,11 +87,10 @@ class AIAnalyticsService:
                 await self._cache.delete(self._cache_key(tenant_id=tenant_id, metric=metric, timeframe=timeframe))
 
     async def cost_breakdown(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
+        window_start = _window_start(timeframe)
         key = self._cache_key(tenant_id=tenant_id, metric="cost", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
-
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
         query = text(
             """
             SELECT
@@ -126,11 +150,10 @@ class AIAnalyticsService:
         return payload
 
     async def version_performance(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
+        window_start = _window_start(timeframe)
         key = self._cache_key(tenant_id=tenant_id, metric="versions", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
-
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
         query = text(
             """
             SELECT
@@ -180,6 +203,7 @@ class AIAnalyticsService:
         baseline_version: str,
         candidate_version: str,
     ) -> JsonDict:
+        window_start = _window_start(timeframe)
         compare_scope = hashlib.sha1(f"{baseline_version}:{candidate_version}".encode()).hexdigest()[:12]
         key = self._cache_key(
             tenant_id=tenant_id,
@@ -190,7 +214,6 @@ class AIAnalyticsService:
         if cached := await self._get_cached(key):
             return cached
 
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
         query = text(
             """
             SELECT
@@ -257,11 +280,10 @@ class AIAnalyticsService:
         return payload
 
     async def quality_drift(self, *, tenant_id: UUID, timeframe: str) -> JsonDict:
+        window_start = _window_start(timeframe)
         key = self._cache_key(tenant_id=tenant_id, metric="quality-drift", timeframe=timeframe)
         if cached := await self._get_cached(key):
             return cached
-
-        window_start = datetime.now(UTC) - _parse_timeframe(timeframe)
         query = text(
             """
             SELECT

@@ -112,8 +112,6 @@ omit = [
     "*/tests/*",
     "*/__pycache__/*",
     "src/core/ai/ab_experiment.py",
-    "src/core/ai/analytics_router.py",
-    "src/core/ai/analytics_service.py",
     "src/core/ai/example_*.py",
     "src/core/ai/langsmith_hub.py",
     "src/core/ai/prompts/*",
