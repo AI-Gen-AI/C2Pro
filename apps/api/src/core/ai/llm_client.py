@@ -607,9 +607,10 @@ class LLMClient:
         if status_code is None:
             status_code = getattr(response, "status_code", None)
 
-        if isinstance(status_code, int):
-            if status_code in {408, 409, 429} or status_code >= 500:
-                return True
+        if isinstance(status_code, int) and (
+            status_code in {408, 409, 429} or status_code >= 500
+        ):
+            return True
 
         return None
 
