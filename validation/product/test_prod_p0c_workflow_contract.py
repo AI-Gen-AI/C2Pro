@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github/workflows/prod-p0c-qualification.yml"
+RECOVERY_WORKFLOW = REPO_ROOT / ".github/workflows/prod-p0c-recovery.yml"
 SPEC = (
     REPO_ROOT
     / "apps/web/src/tests/e2e/prod-acceptance/686-p0c-production.spec.ts"
@@ -240,3 +241,48 @@ def test_p0c_workflow_does_not_interpolate_dispatch_inputs_inside_shell() -> Non
     for block in run_blocks:
         shell_body = block.split("\n      - name:", 1)[0]
         assert "${{ inputs." not in shell_body
+
+
+def test_p0c_recovery_workflow_is_owner_only_and_separate_from_clean_qualification() -> None:
+    source = RECOVERY_WORKFLOW.read_text(encoding="utf-8")
+    assert "issue_comment:" in source
+    assert "workflow_dispatch:" not in source
+    assert "github.event.issue.number == 686" in source
+    assert "github.event.comment.user.login == github.repository_owner" in source
+    assert "github.triggering_actor == github.repository_owner" in source
+    assert "startsWith(github.event.comment.body, 'RECOVER-ISSUE-686 ')" in source
+    assert 'test "$CONFIRM" = "RECOVER-ISSUE-686"' in source
+    assert "environment: production-qualification" in source
+    assert "concurrency:" in source
+    assert "c2pro-p0c-production-qualification" in source
+
+
+def test_p0c_recovery_fails_closed_on_exact_failed_revision_before_retry() -> None:
+    source = RECOVERY_WORKFLOW.read_text(encoding="utf-8")
+    pre = source.index("Read-only failed-revision recovery preflight")
+    browser = source.index("Execute governed P0c recovery browser journey")
+    post = source.index("Read-only durable post-recovery P0c verification")
+    bundle = source.index("Build non-authoritative P0c evidence bundle")
+    validator = source.index("Validate canonical qualification evidence contract")
+    assert pre < browser < post < bundle < validator
+    assert "--recovery-target-revision-id" in source
+    assert "PROD_P0C_RECOVERY_TARGET_REVISION_ID" in source
+    assert "PROD_P0C_RECOVERY_MODE: "1"" in source
+    assert "--recovery-mode" in source
+
+
+def test_p0c_browser_recovery_retries_existing_b_instead_of_uploading_another_b() -> None:
+    source = SPEC.read_text(encoding="utf-8")
+    assert "PROD_P0C_RECOVERY_TARGET_REVISION_ID" in source
+    assert 'getByRole("button", { name: /Retry processing / })' in source
+    assert "expectedRecoveryTargetRevisionId" in source
+    assert "whatChanged.targetRevisionId).toBe(expectedRecoveryTargetRevisionId)" in source
+
+
+def test_p0c_verifier_preserves_historic_failures_but_rejects_new_failures_after_recovery() -> None:
+    source = VERIFIER.read_text(encoding="utf-8")
+    assert "verify_recovery_pre" in source
+    assert "recovery_target_revision_id" in source
+    assert "historic recovery failures are preserved" in source
+    assert "no analysis failure occurs after accepted recovery event" in source
+    assert "occurred_at > :accepted_event_at" in source
