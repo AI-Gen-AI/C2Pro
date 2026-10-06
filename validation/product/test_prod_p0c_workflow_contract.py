@@ -72,6 +72,9 @@ def test_p0c_browser_reuses_canonical_revision_and_what_changed_helpers() -> Non
     assert "No material change found" in source
     assert "no_change_target_revision_id" in source
     assert "byte-distinct-parser-equivalent" in source
+    assert "PROD_P0C_NO_CHANGE_EXPECTED_SHA256" in source
+    assert 'createHash("sha256")' in source
+    assert "no_change_fixture_sha256" in source
 
 
 def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
@@ -87,6 +90,12 @@ def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
     assert "semantic no-change event has null cause" in source
     assert "semantic no-change event has empty changeset" in source
     assert "semantic no-change revision is byte-distinct" in source
+    assert "payload ? 'change_cause'" in source
+    assert "change_cause_type" in source
+    assert "(payload->'changeset') ? 'changes'" in source
+    assert "changes_type" in source
+    assert "persisted semantic no-change revision matches generated Contract C" in source
+    assert "no_change_expected_blob_hash" in source
 
 
 def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority() -> None:
@@ -104,6 +113,8 @@ def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority(
     assert '"id": "no-change-target-revision"' in source
     assert '"id": "no-change-event"' in source
     assert "byte-distinct parser-equivalent derivative" in source
+    assert '"no_change_fixture_sha256": no_change_blob_hash' in source
+    assert '"sha256": no_change_blob_hash' in source
 
 
 def test_p0c_semantic_no_change_fixture_is_fail_closed_by_construction() -> None:
@@ -113,6 +124,9 @@ def test_p0c_semantic_no_change_fixture_is_fail_closed_by_construction() -> None
     assert "_blocks(original) != _blocks(derived)" in source
     assert "PJ01-P0C-NO-CHANGE" in source
     assert "contract-c-semantic-no-change.pdf" in source
+    workflow = _workflow()
+    assert "PROD_P0C_NO_CHANGE_EXPECTED_SHA256" in workflow
+    assert "--no-change-expected-blob-hash" in workflow
 
 
 def test_p0c_workflow_does_not_interpolate_dispatch_inputs_inside_shell() -> None:
