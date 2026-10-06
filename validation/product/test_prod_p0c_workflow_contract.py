@@ -87,8 +87,8 @@ def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
     assert "payload->'provenance'->>'target_revision_id'" in source
     assert "every reported change carries evidence" in source
     assert "no_change_target_revision_id" in source
-    assert "semantic no-change event has null cause" in source
-    assert "semantic no-change event has empty changeset" in source
+    assert "semantic no-change cause key is explicitly persisted as JSON null" in source
+    assert "semantic no-change changeset is explicitly persisted as an empty array" in source
     assert "semantic no-change revision is byte-distinct" in source
     assert "payload ? 'change_cause'" in source
     assert "change_cause_type" in source
