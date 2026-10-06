@@ -12,13 +12,21 @@ import pytest
 from src.core.ai.llm_client import LLMClient, LLMErrorType, LLMRequest
 
 
-def _provider_error(status_code: int, headers: dict[str, str] | None = None) -> Exception:
-    error = RuntimeError(f"provider status {status_code}")
-    error.response = SimpleNamespace(  # type: ignore[attr-defined]
-        status_code=status_code,
+def _provider_error(
+    status_code: int,
+    headers: dict[str, str] | None = None,
+) -> anthropic.APIStatusError:
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(
+        status_code,
         headers=headers or {},
+        request=request,
     )
-    return error
+    return anthropic.APIStatusError(
+        f"provider status {status_code}",
+        response=response,
+        body=None,
+    )
 
 
 def _bare_retry_client(*, max_retries: int = 1) -> LLMClient:
@@ -109,19 +117,30 @@ def test_provider_retry_header_overrides_default_classification() -> None:
     assert client._should_retry(LLMErrorType.SERVER_ERROR, force_stop) is False
 
 
+def test_non_retryable_status_error_stops_cause_chain() -> None:
+    """A status error rejected by provider policy must not inherit a retryable inner cause."""
+
+    client = _bare_retry_client()
+    outer = _provider_error(400)
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    outer.__cause__ = anthropic.APITimeoutError(request)
+
+    assert client._should_retry(LLMErrorType.UNKNOWN, outer) is False
+
+
 @pytest.mark.parametrize(
     ("headers", "expected"),
     [
         ({"retry-after-ms": "2500"}, 2.5),
         ({"retry-after": "7"}, 7.0),
-        ({"retry-after": "120"}, 32.0),
+        ({"retry-after": "60"}, 60.0),
     ],
 )
-def test_provider_retry_after_controls_bounded_delay(
+def test_provider_retry_after_controls_delay(
     headers: dict[str, str],
     expected: float,
 ) -> None:
-    """Provider retry delay hints are honored but remain bounded by C2Pro policy."""
+    """Reasonable provider Retry-After hints override C2Pro fallback backoff."""
 
     client = _bare_retry_client()
     error = _provider_error(429, headers)
@@ -129,6 +148,21 @@ def test_provider_retry_after_controls_bounded_delay(
     assert client._calculate_retry_delay(0, LLMErrorType.RATE_LIMIT, error) == pytest.approx(
         expected
     )
+
+
+def test_unreasonable_provider_retry_after_falls_back_to_c2pro_backoff(monkeypatch) -> None:
+    """Provider delays above 60 seconds follow the SDK policy and are ignored."""
+
+    client = _bare_retry_client()
+    error = _provider_error(429, {"retry-after": "120"})
+    monkeypatch.setattr("random.uniform", lambda *_args: 1.0)
+
+    assert client._provider_retry_after_seconds(error) is None
+    assert client._calculate_retry_delay(
+        0,
+        LLMErrorType.RATE_LIMIT,
+        error,
+    ) == pytest.approx(2.0)
 
 
 @pytest.mark.asyncio
