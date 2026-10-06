@@ -52,6 +52,21 @@ def test_p0c_workflow_fails_closed_before_product_mutation() -> None:
     assert "--write-evidence" in source
 
 
+def test_p0c_workflow_propagates_observed_runtime_identity_to_browser_preflight() -> None:
+    source = _workflow()
+    assert 'deployment-identity.json"))["backend"]["api"]["commit_sha"]' in source
+    assert 'deployment-identity.json"))["frontend"]["commit_sha"]' in source
+    assert 'PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA=$backend_sha' in source
+    assert 'PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA=$frontend_sha' in source
+    preflight = source.split("Non-mutating real production identity preflight", 1)[1].split(
+        "Fail closed if accepted P0b project is no longer clean", 1
+    )[0]
+    assert "PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA:" in preflight
+    assert "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA:" in preflight
+    assert "PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA:" in preflight
+    assert "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA:" in preflight
+
+
 def test_p0c_workflow_uses_only_protected_qualification_credentials() -> None:
     source = _workflow()
     for secret in (
