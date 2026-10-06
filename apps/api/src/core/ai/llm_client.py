@@ -715,14 +715,10 @@ class LLMClient:
         if error_type == LLMErrorType.RATE_LIMIT:
             base_delay *= 2
 
-        delay = min(base_delay, self.max_retry_delay)
-
         import random
 
         jitter = random.uniform(0.8, 1.2)
-        delay *= jitter
-
-        return delay
+        return min(base_delay * jitter, self.max_retry_delay)
 
     def _calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """
