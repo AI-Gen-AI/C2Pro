@@ -1,0 +1,219 @@
+"""C2PRO-DEV-15 contracts for one authoritative LLM retry loop."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import anthropic
+import httpx
+import pytest
+
+from src.core.ai.llm_client import LLMClient, LLMErrorType, LLMRequest
+
+
+def _provider_error(status_code: int, headers: dict[str, str] | None = None) -> Exception:
+    error = RuntimeError(f"provider status {status_code}")
+    error.response = SimpleNamespace(  # type: ignore[attr-defined]
+        status_code=status_code,
+        headers=headers or {},
+    )
+    return error
+
+
+def _bare_retry_client(*, max_retries: int = 1) -> LLMClient:
+    client = object.__new__(LLMClient)
+    client.circuit_breaker = None
+    client.total_requests = 0
+    client.total_retries = 0
+    client.total_cost_usd = 0.0
+    client.max_retries = max_retries
+    client.initial_retry_delay = 1.0
+    client.backoff_multiplier = 2.0
+    client.max_retry_delay = 32.0
+    client.flash_cache = SimpleNamespace(
+        get=AsyncMock(return_value=None),
+        set=AsyncMock(),
+        size=0,
+    )
+    client._calculate_cost = lambda **_kwargs: 0.0
+    return client
+
+
+def test_llm_client_disables_anthropic_sdk_retries(monkeypatch) -> None:
+    """C2Pro owns retries; the provider SDK must execute one attempt per outer attempt."""
+
+    from src.core.ai import llm_client as module
+
+    captured: dict[str, object] = {}
+
+    class FakeAnthropic:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(module, "Anthropic", FakeAnthropic)
+    monkeypatch.setattr(module, "ModelRouter", lambda: MagicMock())
+    monkeypatch.setattr(module, "LangSmithClient", lambda: MagicMock())
+    monkeypatch.setattr(module, "AIUsageLogger", lambda: MagicMock())
+    monkeypatch.setattr(module, "get_flash_cache_service", lambda: MagicMock())
+
+    LLMClient(api_key="test-key", enable_circuit_breaker=False)
+
+    assert captured["max_retries"] == 0
+
+
+def test_anthropic_wrapper_enable_retry_false_is_effective(monkeypatch) -> None:
+    """The public wrapper flag must disable the C2Pro retry loop."""
+
+    from src.core.ai import anthropic_wrapper as module
+
+    captured: dict[str, object] = {}
+
+    class FakeLLMClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(module, "LLMClient", FakeLLMClient)
+    monkeypatch.setattr(module, "get_model_router", lambda: MagicMock())
+    monkeypatch.setattr(module, "PiiAnonymizerService", lambda: MagicMock())
+
+    module.AnthropicWrapper(
+        api_key="test-key",
+        enable_cache=False,
+        enable_retry=False,
+        max_retries=7,
+    )
+
+    assert captured["max_retries"] == 0
+
+
+@pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503])
+def test_provider_retryable_statuses_are_preserved(status_code: int) -> None:
+    """Provider retryable HTTP statuses remain retryable after SDK retries are disabled."""
+
+    client = _bare_retry_client()
+    error = _provider_error(status_code)
+
+    assert client._should_retry(LLMErrorType.UNKNOWN, error) is True
+
+
+def test_provider_retry_header_overrides_default_classification() -> None:
+    """x-should-retry is authoritative in both directions."""
+
+    client = _bare_retry_client()
+
+    force_retry = _provider_error(400, {"x-should-retry": "true"})
+    force_stop = _provider_error(503, {"x-should-retry": "false"})
+
+    assert client._should_retry(LLMErrorType.UNKNOWN, force_retry) is True
+    assert client._should_retry(LLMErrorType.SERVER_ERROR, force_stop) is False
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected"),
+    [
+        ({"retry-after-ms": "2500"}, 2.5),
+        ({"retry-after": "7"}, 7.0),
+        ({"retry-after": "120"}, 32.0),
+    ],
+)
+def test_provider_retry_after_controls_bounded_delay(
+    headers: dict[str, str],
+    expected: float,
+) -> None:
+    """Provider retry delay hints are honored but remain bounded by C2Pro policy."""
+
+    client = _bare_retry_client()
+    error = _provider_error(429, headers)
+
+    assert client._calculate_retry_delay(0, LLMErrorType.RATE_LIMIT, error) == pytest.approx(
+        expected
+    )
+
+
+@pytest.mark.asyncio
+async def test_real_llm_client_timeout_retries_once_then_succeeds(monkeypatch) -> None:
+    """A provider timeout exercises the real LLMClient retry loop without network I/O."""
+
+    from src.core.ai import llm_client as module
+
+    client = _bare_retry_client(max_retries=1)
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    timeout = anthropic.APITimeoutError(request)
+    provider_response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=2, output_tokens=1),
+    )
+    client.client = MagicMock()
+    client.client.messages.create.side_effect = [timeout, provider_response]
+
+    sleep = AsyncMock()
+    monkeypatch.setattr(module.asyncio, "sleep", sleep)
+    monkeypatch.setattr(module, "record_ai_cache_miss", lambda *_args: None)
+    monkeypatch.setattr(module, "record_ai_cache_size", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "get_token_counter",
+        lambda: SimpleNamespace(
+            estimate_request=lambda **_kwargs: SimpleNamespace(
+                input_tokens=2,
+                estimated_output_tokens=1,
+                total_cost_usd=0.0,
+                context_usage_percent=0.0,
+                warnings=[],
+            )
+        ),
+    )
+
+    response = await client.generate(
+        LLMRequest(
+            model="claude-haiku-test",
+            messages=[{"role": "user", "content": "hello"}],
+        )
+    )
+
+    assert response.content == "ok"
+    assert response.retries == 1
+    assert client.client.messages.create.call_count == 2
+    sleep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_real_llm_client_timeout_exhaustion_raises_provider_error(monkeypatch) -> None:
+    """Timeout exhaustion re-raises the provider error after the configured attempts."""
+
+    from src.core.ai import llm_client as module
+
+    client = _bare_retry_client(max_retries=1)
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    timeout = anthropic.APITimeoutError(request)
+    client.client = MagicMock()
+    client.client.messages.create.side_effect = [timeout, timeout]
+
+    sleep = AsyncMock()
+    monkeypatch.setattr(module.asyncio, "sleep", sleep)
+    monkeypatch.setattr(module, "record_ai_cache_miss", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "get_token_counter",
+        lambda: SimpleNamespace(
+            estimate_request=lambda **_kwargs: SimpleNamespace(
+                input_tokens=2,
+                estimated_output_tokens=1,
+                total_cost_usd=0.0,
+                context_usage_percent=0.0,
+                warnings=[],
+            )
+        ),
+    )
+
+    with pytest.raises(anthropic.APITimeoutError):
+        await client.generate(
+            LLMRequest(
+                model="claude-haiku-test",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+        )
+
+    assert client.client.messages.create.call_count == 2
+    sleep.assert_awaited_once()
