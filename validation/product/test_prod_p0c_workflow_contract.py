@@ -63,7 +63,7 @@ def test_p0c_workflow_propagates_observed_runtime_identity_to_browser_preflight(
     assert '>> "$GITHUB_OUTPUT"' in source
 
     preflight = source.split("Non-mutating real production identity preflight", 1)[1].split(
-        "Fail closed if accepted P0b project is no longer clean", 1
+        "Execute real P0c production browser journey", 1
     )[0]
     assert "PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA:" in preflight
     assert (
@@ -117,6 +117,19 @@ def test_p0c_browser_journey_receives_verified_runtime_identity() -> None:
     ) in browser
 
 
+def test_p0c_runtime_is_rebound_after_data_preflights_immediately_before_browser() -> None:
+    source = _workflow()
+    fixture = source.index("Build byte-distinct semantic no-change fixture")
+    clean = source.index("Fail closed if accepted P0b project is no longer clean")
+    recovery = source.index("Fail closed on bounded P0c recovery state")
+    observe = source.index("Observe production deployment identities from providers")
+    verify = source.index("Verify exact provider deployment identities")
+    identity = source.index("Non-mutating real production identity preflight")
+    browser = source.index("Execute real P0c production browser journey")
+
+    assert fixture < clean < recovery < observe < verify < identity < browser
+
+
 def test_p0c_recovery_is_explicit_and_does_not_weaken_clean_run_guard() -> None:
     source = _workflow()
     assert "RECOVER-ISSUE-686 " in source
@@ -159,6 +172,11 @@ def test_p0c_recovery_preflight_is_read_only_and_exactly_bounded() -> None:
     assert "source_revision_id" in source
     assert "recovery_revision_id" in source
     assert "parent_revision_id" in source
+    assert "source_historical_count" in source
+    assert "valid_to IS NOT NULL" in source
+    assert "document_processing_operations" in source
+    assert "recovery_authority_count" in source
+    assert 'row["recovery_authority_count"]' in source
     assert "revision.changed" in source
 
 
@@ -168,6 +186,8 @@ def test_p0c_browser_recovery_reuses_existing_revision_before_no_change() -> Non
     assert "Retry processing" in source
     assert "recoveryRevisionId" in source
     assert "expected_revision_id" in source
+    assert 'url.searchParams.set("expected_revision_id", recoveryRevisionId)' in source
+    assert "expect(response.status()).toBe(202)" in source
     assert "expect(whatChanged.targetRevisionId).toBe(recoveryRevisionId)" in source
     assert "uploadNewVersionThroughUi" in source
 
