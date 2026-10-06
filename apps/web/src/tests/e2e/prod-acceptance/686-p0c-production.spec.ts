@@ -103,10 +103,21 @@ test.describe("Issue #686 P0c production qualification", () => {
               });
               await expect(retry).toBeVisible({ timeout: 30_000 });
               const expectedPath = `/projects/${projectId}/documents/${documentId}/reprocess`;
+              await page.route(
+                `**${expectedPath}*`,
+                async (route) => {
+                  const url = new URL(route.request().url());
+                  url.searchParams.set("expected_revision_id", recoveryRevisionId);
+                  await route.continue({ url: url.toString() });
+                },
+                { times: 1 },
+              );
               const responsePromise = page.waitForResponse(
                 (response) =>
                   response.request().method() === "POST" &&
-                  new URL(response.url()).pathname.replace(/\/$/, "") === expectedPath,
+                  new URL(response.url()).pathname.replace(/\/$/, "").endsWith(expectedPath) &&
+                  new URL(response.url()).searchParams.get("expected_revision_id") ===
+                    recoveryRevisionId,
                 { timeout: 60_000 },
               );
               await retry.click();
