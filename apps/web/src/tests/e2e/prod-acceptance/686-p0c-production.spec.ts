@@ -53,6 +53,8 @@ test.describe("Issue #686 P0c production qualification", () => {
     const projectId = requiredEnv("PROD_P0C_PROJECT_ID");
     const documentId = requiredEnv("PROD_P0C_DOCUMENT_ID");
     const expectedSourceRevisionId = requiredEnv("PROD_P0C_SOURCE_REVISION_ID");
+    const expectedRecoveryTargetRevisionId =
+      process.env.PROD_P0C_RECOVERY_TARGET_REVISION_ID ?? null;
     const noChangePdf = requiredEnv("PROD_P0C_NO_CHANGE_PDF");
     const expectedNoChangeSha256 = requiredEnv(
       "PROD_P0C_NO_CHANGE_EXPECTED_SHA256",
@@ -89,16 +91,39 @@ test.describe("Issue #686 P0c production qualification", () => {
         });
       });
 
-      const revision = await recorder.step(
-        "P0C-PROD-S3",
-        "Upload Contract B as revision of the same document",
-        async () =>
-          uploadNewVersionThroughUi(page, recorder, {
-            projectId,
-            documentId,
-            filePath: contractBPdfPath(revisionManifest),
-          }),
-      );
+      const revision = expectedRecoveryTargetRevisionId
+        ? await recorder.step(
+            "P0C-PROD-S3",
+            "Retry processing the already-persisted Contract B revision",
+            async () => {
+              const row = page.getByTestId(`document-row-${documentId}`);
+              await expect(row).toBeVisible({ timeout: 30_000 });
+              const retry = row.getByRole("button", { name: /Retry processing / });
+              await expect(retry).toBeVisible({ timeout: 30_000 });
+              const response = page.waitForResponse(
+                (candidate) =>
+                  candidate.request().method() === "POST" &&
+                  candidate.ok() &&
+                  new RegExp(
+                    `/projects/${projectId}/documents/${documentId}/reprocess/?$`,
+                  ).test(new URL(candidate.url()).pathname),
+                { timeout: 60_000 },
+              );
+              await retry.click();
+              await response;
+              return { documentId, documentsListed: 1, version: 2 };
+            },
+          )
+        : await recorder.step(
+            "P0C-PROD-S3",
+            "Upload Contract B as revision of the same document",
+            async () =>
+              uploadNewVersionThroughUi(page, recorder, {
+                projectId,
+                documentId,
+                filePath: contractBPdfPath(revisionManifest),
+              }),
+          );
 
       expect(revision.documentId).toBe(documentId);
       expect(revision.documentsListed).toBe(1);
@@ -130,7 +155,11 @@ test.describe("Issue #686 P0c production qualification", () => {
       );
 
       expect(whatChanged.sourceRevisionId).toBe(expectedSourceRevisionId);
-      expect(whatChanged.targetRevisionId).not.toBe(expectedSourceRevisionId);
+      if (expectedRecoveryTargetRevisionId) {
+        expect(whatChanged.targetRevisionId).toBe(expectedRecoveryTargetRevisionId);
+      } else {
+        expect(whatChanged.targetRevisionId).not.toBe(expectedSourceRevisionId);
+      }
       expect(recorder.blockingFindings()).toEqual([]);
 
       await recorder.step(
@@ -256,6 +285,7 @@ test.describe("Issue #686 P0c production qualification", () => {
         revision_version: revision.version,
         documents_listed: revision.documentsListed,
         processing_outcome: processing.evaluation.outcome,
+        recovery_mode: Boolean(expectedRecoveryTargetRevisionId),
         relogin_verified: true,
         no_change_event_id: noChange.eventId,
         no_change_source_revision_id: noChange.sourceRevisionId,

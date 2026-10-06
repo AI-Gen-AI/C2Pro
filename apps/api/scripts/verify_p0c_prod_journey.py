@@ -131,6 +131,155 @@ async def verify_pre(
     }
 
 
+async def verify_recovery_pre(
+    conn: AsyncConnection,
+    *,
+    tenant_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    source_revision_id: UUID,
+    recovery_target_revision_id: UUID,
+) -> tuple[list[Check], dict[str, str]]:
+    p = {
+        "tenant_id": tenant_id,
+        "project_id": project_id,
+        "document_id": document_id,
+        "source_revision_id": source_revision_id,
+        "target_revision_id": recovery_target_revision_id,
+        "document_id_text": str(document_id),
+        "source_revision_id_text": str(source_revision_id),
+        "target_revision_id_text": str(recovery_target_revision_id),
+    }
+    project_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM projects
+         WHERE id=:project_id AND tenant_id=:tenant_id
+        """,
+        p,
+    )
+    document_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM documents
+         WHERE id=:document_id AND project_id=:project_id AND tenant_id=:tenant_id
+        """,
+        p,
+    )
+    source_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_revisions
+         WHERE revision_id=:source_revision_id
+           AND document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND valid_to IS NOT NULL
+        """,
+        p,
+    )
+    target_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_revisions
+         WHERE revision_id=:target_revision_id
+           AND parent_revision_id=:source_revision_id
+           AND document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND valid_to IS NULL
+        """,
+        p,
+    )
+    revision_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_revisions
+         WHERE document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+        """,
+        p,
+    )
+    target_clause_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM clauses
+         WHERE document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND revision_id=:target_revision_id
+        """,
+        p,
+    )
+    failed_processing_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_processing_operations
+         WHERE document_id=:document_id
+           AND tenant_id=:tenant_id
+           AND revision_id=:target_revision_id
+           AND stage='INGESTION'
+           AND outcome='ingestion_failed'
+        """,
+        p,
+    )
+    document_error_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM documents
+         WHERE id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND upload_status='error'
+        """,
+        p,
+    )
+    change_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM project_events
+         WHERE project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND event_type='revision.changed'
+           AND payload->>'document_id'=:document_id_text
+           AND payload->'provenance'->>'source_revision_id'=:source_revision_id_text
+           AND payload->'provenance'->>'target_revision_id'=:target_revision_id_text
+        """,
+        p,
+    )
+    historic_failure_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM project_events
+         WHERE project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND event_type='revision.analysis_failed'
+           AND payload->>'document_id'=:document_id_text
+           AND payload->'provenance'->>'target_revision_id'=:target_revision_id_text
+        """,
+        p,
+    )
+    checks = [
+        Check("qualification project exists", project_count == 1, f"projects={project_count}"),
+        Check("accepted document exists", document_count == 1, f"documents={document_count}"),
+        Check("source revision is superseded by failed B", source_count == 1, f"source={source_count}"),
+        Check("failed B is the current child of source", target_count == 1, f"target={target_count}"),
+        Check("document has exactly two revisions before recovery", revision_count == 2, f"revisions={revision_count}"),
+        Check("failed B has no partially committed clauses", target_clause_count == 0, f"target_clauses={target_clause_count}"),
+        Check("processing authority is pinned to failed B", failed_processing_count == 1, f"failed_processing={failed_processing_count}"),
+        Check("document remains retryable error before recovery", document_error_count == 1, f"document_error={document_error_count}"),
+        Check("A to B change event does not pre-exist recovery", change_count == 0, f"change_events={change_count}"),
+        Check("historic recovery failures are preserved", historic_failure_count > 0, f"historic_failures={historic_failure_count}"),
+    ]
+    return checks, {
+        "project_id": str(project_id),
+        "document_id": str(document_id),
+        "source_revision_id": str(source_revision_id),
+        "recovery_target_revision_id": str(recovery_target_revision_id),
+    }
+
+
 async def verify_post(
     conn: AsyncConnection,
     *,
@@ -141,6 +290,7 @@ async def verify_post(
     target_revision_id: UUID,
     no_change_target_revision_id: UUID,
     no_change_expected_blob_hash: str,
+    recovery_mode: bool,
 ) -> tuple[list[Check], dict[str, str]]:
     p = {
         "tenant_id": tenant_id,
@@ -193,6 +343,7 @@ async def verify_post(
         text(
             """
             SELECT event_id,
+                   occurred_at,
                    payload->>'state' AS state,
                    payload->>'change_cause' AS change_cause,
                    jsonb_array_length(coalesce(payload->'changeset'->'changes','[]'::jsonb)) AS changes,
@@ -274,17 +425,69 @@ async def verify_post(
         persisted_no_change_hash == no_change_expected_blob_hash
     )
 
-    failure_count = await _scalar(
-        conn,
-        """
-        SELECT count(*) FROM project_events
-         WHERE project_id=:project_id
-           AND tenant_id=:tenant_id
-           AND event_type='revision.analysis_failed'
-           AND payload->>'document_id'=:document_id_text
-        """,
-        p,
-    )
+    if recovery_mode:
+        accepted_event_at = event["occurred_at"] if event else None
+        if accepted_event_at is None:
+            historic_failure_count = 0
+            post_recovery_failure_count = 1
+        else:
+            p["accepted_event_at"] = accepted_event_at
+            historic_failure_count = await _scalar(
+                conn,
+                """
+                SELECT count(*) FROM project_events
+                 WHERE project_id=:project_id
+                   AND tenant_id=:tenant_id
+                   AND event_type='revision.analysis_failed'
+                   AND payload->>'document_id'=:document_id_text
+                   AND payload->'provenance'->>'target_revision_id'=:target_revision_id_text
+                   AND occurred_at < :accepted_event_at
+                """,
+                p,
+            )
+            post_recovery_failure_count = await _scalar(
+                conn,
+                """
+                SELECT count(*) FROM project_events
+                 WHERE project_id=:project_id
+                   AND tenant_id=:tenant_id
+                   AND event_type='revision.analysis_failed'
+                   AND payload->>'document_id'=:document_id_text
+                   AND occurred_at > :accepted_event_at
+                """,
+                p,
+            )
+        failure_checks = [
+            Check(
+                "historic recovery failures are preserved",
+                historic_failure_count > 0,
+                f"historic_failures={historic_failure_count}",
+            ),
+            Check(
+                "no analysis failure occurs after accepted recovery event",
+                post_recovery_failure_count == 0,
+                f"post_recovery_failures={post_recovery_failure_count}",
+            ),
+        ]
+    else:
+        failure_count = await _scalar(
+            conn,
+            """
+            SELECT count(*) FROM project_events
+             WHERE project_id=:project_id
+               AND tenant_id=:tenant_id
+               AND event_type='revision.analysis_failed'
+               AND payload->>'document_id'=:document_id_text
+            """,
+            p,
+        )
+        failure_checks = [
+            Check(
+                "no revision analysis failure masks accepted outcome",
+                failure_count == 0,
+                f"analysis_failures={failure_count}",
+            )
+        ]
 
     checks = [
         Check("target revision persists as child of source", target_count == 1, f"target_revisions={target_count}"),
@@ -369,11 +572,7 @@ async def verify_post(
                 f"expected={no_change_expected_blob_hash}"
             ),
         ),
-        Check(
-            "no revision analysis failure masks accepted outcome",
-            failure_count == 0,
-            f"analysis_failures={failure_count}",
-        ),
+        *failure_checks,
     ]
     identifiers = {
         "project_id": str(project_id),
@@ -399,6 +598,8 @@ async def verify(
     target_revision_id: UUID | None,
     no_change_target_revision_id: UUID | None,
     no_change_expected_blob_hash: str | None,
+    recovery_target_revision_id: UUID | None,
+    recovery_mode: bool,
 ) -> tuple[list[Check], dict[str, str]]:
     engine = create_async_engine(_normalize_database_url(database_url))
     try:
@@ -411,13 +612,23 @@ async def verify(
                     {"tenant_id": str(tenant_id)},
                 )
                 if target_revision_id is None:
-                    result = await verify_pre(
-                        conn,
-                        tenant_id=tenant_id,
-                        project_id=project_id,
-                        document_id=document_id,
-                        source_revision_id=source_revision_id,
-                    )
+                    if recovery_target_revision_id is not None:
+                        result = await verify_recovery_pre(
+                            conn,
+                            tenant_id=tenant_id,
+                            project_id=project_id,
+                            document_id=document_id,
+                            source_revision_id=source_revision_id,
+                            recovery_target_revision_id=recovery_target_revision_id,
+                        )
+                    else:
+                        result = await verify_pre(
+                            conn,
+                            tenant_id=tenant_id,
+                            project_id=project_id,
+                            document_id=document_id,
+                            source_revision_id=source_revision_id,
+                        )
                 else:
                     if no_change_target_revision_id is None:
                         raise VerificationFailure(
@@ -436,6 +647,7 @@ async def verify(
                         target_revision_id=target_revision_id,
                         no_change_target_revision_id=no_change_target_revision_id,
                         no_change_expected_blob_hash=no_change_expected_blob_hash,
+                        recovery_mode=recovery_mode,
                     )
                 await tx.rollback()
                 return result
@@ -453,6 +665,8 @@ def main() -> int:
     parser.add_argument("--document-id", required=True)
     parser.add_argument("--source-revision-id", required=True)
     parser.add_argument("--target-revision-id")
+    parser.add_argument("--recovery-target-revision-id")
+    parser.add_argument("--recovery-mode", action="store_true")
     parser.add_argument("--no-change-target-revision-id")
     parser.add_argument("--no-change-expected-blob-hash")
     parser.add_argument("--write-evidence", action="store_true")
@@ -484,13 +698,26 @@ def main() -> int:
                 if args.no_change_expected_blob_hash
                 else None
             ),
+            recovery_target_revision_id=(
+                _uuid(args.recovery_target_revision_id, "recovery target revision id")
+                if args.recovery_target_revision_id
+                else None
+            ),
+            recovery_mode=args.recovery_mode,
         )
     )
     verdict = "PASS" if all(check.passed for check in checks) else "FAIL"
     payload = {
         "schema": "c2pro-p0c-prod-verifier/v1",
         "verdict": verdict,
-        "phase": "post" if args.target_revision_id else "pre",
+        "phase": (
+            "post"
+            if args.target_revision_id
+            else "recovery-pre"
+            if args.recovery_target_revision_id
+            else "pre"
+        ),
+        "recovery_mode": args.recovery_mode,
         "identifiers": identifiers,
         "checks": [asdict(check) for check in checks],
     }
