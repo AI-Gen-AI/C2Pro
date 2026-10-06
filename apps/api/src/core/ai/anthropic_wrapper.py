@@ -340,13 +340,27 @@ class AnthropicWrapper:
         # ===========================================
 
         cache_key = None
-        if request.use_cache and self.cache_service:
+        cache_allowed = (
+            request.use_cache
+            and self.cache_service is not None
+            and request.tenant_id is not None
+        )
+        if request.use_cache and self.cache_service is not None and request.tenant_id is None:
+            logger.warning(
+                "anthropic_wrapper_cache_bypassed",
+                request_id=request.request_id,
+                reason="tenant_id_required",
+            )
+
+        if cache_allowed:
+            assert request.tenant_id is not None
             cache_key = self._build_cache_key(
                 prompt=safe_prompt,  # Use safe prompt for cache key
                 system_prompt=safe_system_prompt or "",
                 model=model_config.name,
                 temperature=request.temperature,
                 max_tokens=max_tokens,
+                tenant_id=request.tenant_id,
             )
             cached_response = await self._get_from_cache(cache_key)
 
@@ -426,8 +440,16 @@ class AnthropicWrapper:
         )
         self.total_cost_usd += cost_usd
 
-        if request.use_cache and self.cache_service and cache_key:
-            # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content
+        if cache_allowed and cache_key:
+            # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content.
+            # Only positive per-request TTLs are valid. Non-positive overrides
+            # fall back to the bounded task policy rather than becoming
+            # provider errors or accidental no-expiration entries.
+            cache_ttl = (
+                request.cache_ttl
+                if request.cache_ttl is not None and request.cache_ttl > 0
+                else self._get_cache_ttl_for_task(request.task_type)  # type: ignore[arg-type]
+            )
             await self._save_to_cache(
                 cache_key=cache_key,
                 content=llm_response.content,  # Caching the raw, anonymized response from the LLM
@@ -435,7 +457,7 @@ class AnthropicWrapper:
                 input_tokens=llm_response.input_tokens,
                 output_tokens=llm_response.output_tokens,
                 cost_usd=cost_usd,
-                ttl=self._get_cache_ttl_for_task(request.task_type),  # type: ignore[arg-type]
+                ttl=cache_ttl,
             )
             logger.info(
                 "anthropic_wrapper_cached_anonymized_response", request_id=request.request_id
@@ -499,6 +521,7 @@ class AnthropicWrapper:
         model: str,
         temperature: float,
         max_tokens: int,
+        tenant_id: UUID,
     ) -> str:
         """
         Construye cache key único basado en todos los parámetros relevantes.
@@ -506,7 +529,10 @@ class AnthropicWrapper:
         Usa SHA256 hash del prompt + parámetros para tener keys cortas y únicas.
         """
         # Create unique string from all parameters
+        # Tenant scope is part of the hashed material so cached LLM responses
+        # cannot cross the multi-tenant security boundary.
         key_parts = [
+            str(tenant_id),
             prompt,
             system_prompt,
             model,
