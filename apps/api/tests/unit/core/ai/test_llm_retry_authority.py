@@ -217,3 +217,39 @@ async def test_real_llm_client_timeout_exhaustion_raises_provider_error(monkeypa
 
     assert client.client.messages.create.call_count == 2
     sleep.assert_awaited_once()
+
+
+def test_wrapped_provider_timeout_remains_retryable() -> None:
+    """Wrapped provider failures keep their retry semantics through __cause__."""
+
+    client = _bare_retry_client()
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    inner = anthropic.APITimeoutError(request)
+    outer = RuntimeError("middleware wrapper")
+    outer.__cause__ = inner
+
+    assert client._should_retry(LLMErrorType.UNKNOWN, outer) is True
+
+
+def test_provider_retryable_error_opt_in_is_preserved() -> None:
+    """Anthropic middleware RetryableError still opts into C2Pro retries."""
+
+    client = _bare_retry_client()
+    error = anthropic.RetryableError("retry from middleware")
+
+    assert client._should_retry(LLMErrorType.UNKNOWN, error) is True
+
+
+def test_wrapped_provider_retry_after_is_preserved() -> None:
+    """Retry-After hints survive middleware exception wrapping."""
+
+    client = _bare_retry_client()
+    inner = _provider_error(429, {"retry-after": "5"})
+    outer = RuntimeError("middleware wrapper")
+    outer.__cause__ = inner
+
+    assert client._calculate_retry_delay(
+        0,
+        LLMErrorType.UNKNOWN,
+        outer,
+    ) == pytest.approx(5.0)
