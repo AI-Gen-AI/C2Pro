@@ -16,8 +16,11 @@ Version: 1.2.0
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -222,8 +225,13 @@ class LLMClient:
         self.backoff_multiplier = backoff_multiplier
         self.timeout_seconds = timeout_seconds
 
-        # Initialize Anthropic client
-        self.client = Anthropic(api_key=self.api_key, timeout=timeout_seconds)
+        # C2Pro owns retry policy, observability, and circuit-breaker accounting.
+        # Disable the Anthropic SDK retry loop to avoid nested retry authorities.
+        self.client = Anthropic(
+            api_key=self.api_key,
+            timeout=timeout_seconds,
+            max_retries=0,
+        )
         self.model_router = ModelRouter()
 
         # Observability clients
@@ -497,7 +505,7 @@ class LLMClient:
                 if attempt >= self.max_retries:
                     break  # No more retries
 
-                if not self._should_retry(error_type):
+                if not self._should_retry(error_type, e):
                     logger.error(
                         "llm_request_non_retryable_error",
                         request_id=request.request_id or str(uuid4()),
@@ -507,7 +515,7 @@ class LLMClient:
                     break  # Non-retryable error
 
                 # Calculate retry delay (exponential backoff)
-                delay = self._calculate_retry_delay(attempt, error_type)
+                delay = self._calculate_retry_delay(attempt, error_type, e)
 
                 retry_attempts.append(
                     RetryAttempt(
@@ -582,32 +590,109 @@ class LLMClient:
         else:
             return LLMErrorType.UNKNOWN
 
-    def _should_retry(self, error_type: LLMErrorType) -> bool:
-        """Determina si se debe reintentar según el tipo de error."""
+    def _provider_retry_directive(self, error: Exception) -> bool | None:
+        """Return the provider's explicit retry decision when one is available."""
+        response = getattr(error, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers is not None:
+            raw_directive = headers.get("x-should-retry")
+            if isinstance(raw_directive, str):
+                directive = raw_directive.strip().lower()
+                if directive == "true":
+                    return True
+                if directive == "false":
+                    return False
+
+        status_code = getattr(error, "status_code", None)
+        if status_code is None:
+            status_code = getattr(response, "status_code", None)
+
+        if isinstance(status_code, int):
+            if status_code in {408, 409, 429} or status_code >= 500:
+                return True
+
+        return None
+
+    def _should_retry(
+        self,
+        error_type: LLMErrorType,
+        error: Exception | None = None,
+    ) -> bool:
+        """Determine retryability with provider directives taking precedence."""
+        if error is not None:
+            provider_directive = self._provider_retry_directive(error)
+            if provider_directive is not None:
+                return provider_directive
+
         retryable_errors = {
-            LLMErrorType.RATE_LIMIT,  # Always retry rate limits
-            LLMErrorType.SERVER_ERROR,  # Retry server errors
-            LLMErrorType.TIMEOUT,  # Retry timeouts
-            LLMErrorType.CONNECTION,  # Retry connection errors
+            LLMErrorType.RATE_LIMIT,
+            LLMErrorType.SERVER_ERROR,
+            LLMErrorType.TIMEOUT,
+            LLMErrorType.CONNECTION,
         }
         return error_type in retryable_errors
 
-    def _calculate_retry_delay(self, attempt: int, error_type: LLMErrorType) -> float:
-        """
-        Calcula el delay para el próximo retry usando exponential backoff.
+    def _provider_retry_after_seconds(self, error: Exception) -> float | None:
+        """Parse provider retry delay hints and bound them to C2Pro policy."""
+        response = getattr(error, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers is None:
+            return None
 
-        Rate limits tienen delays más largos.
+        retry_after_ms = headers.get("retry-after-ms")
+        if retry_after_ms is not None:
+            try:
+                seconds = float(retry_after_ms) / 1000.0
+            except (TypeError, ValueError):
+                seconds = None
+            if seconds is not None and math.isfinite(seconds) and seconds > 0:
+                return min(seconds, self.max_retry_delay)
+
+        retry_after = headers.get("retry-after")
+        if retry_after is None:
+            return None
+
+        seconds: float | None
+        try:
+            seconds = float(retry_after)
+        except (TypeError, ValueError):
+            try:
+                retry_at = parsedate_to_datetime(str(retry_after))
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                seconds = (retry_at - datetime.now(UTC)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                seconds = None
+
+        if seconds is None or not math.isfinite(seconds) or seconds <= 0:
+            return None
+
+        return min(seconds, self.max_retry_delay)
+
+    def _calculate_retry_delay(
+        self,
+        attempt: int,
+        error_type: LLMErrorType,
+        error: Exception | None = None,
+    ) -> float:
         """
+        Calculate the next retry delay.
+
+        Provider Retry-After hints take precedence; otherwise use C2Pro's
+        bounded exponential backoff with jitter.
+        """
+        if error is not None:
+            provider_delay = self._provider_retry_after_seconds(error)
+            if provider_delay is not None:
+                return provider_delay
+
         base_delay = self.initial_retry_delay * (self.backoff_multiplier**attempt)
 
-        # Rate limits necesitan delays más largos
         if error_type == LLMErrorType.RATE_LIMIT:
             base_delay *= 2
 
-        # Cap at max delay
         delay = min(base_delay, self.max_retry_delay)
 
-        # Add jitter (±20%)
         import random
 
         jitter = random.uniform(0.8, 1.2)
