@@ -340,7 +340,19 @@ class AnthropicWrapper:
         # ===========================================
 
         cache_key = None
-        if request.use_cache and self.cache_service:
+        cache_allowed = (
+            request.use_cache
+            and self.cache_service is not None
+            and request.tenant_id is not None
+        )
+        if request.use_cache and self.cache_service is not None and request.tenant_id is None:
+            logger.warning(
+                "anthropic_wrapper_cache_bypassed",
+                request_id=request.request_id,
+                reason="tenant_id_required",
+            )
+
+        if cache_allowed:
             cache_key = self._build_cache_key(
                 prompt=safe_prompt,  # Use safe prompt for cache key
                 system_prompt=safe_system_prompt or "",
@@ -427,7 +439,7 @@ class AnthropicWrapper:
         )
         self.total_cost_usd += cost_usd
 
-        if request.use_cache and self.cache_service and cache_key:
+        if cache_allowed and cache_key:
             # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content
             await self._save_to_cache(
                 cache_key=cache_key,
@@ -504,7 +516,7 @@ class AnthropicWrapper:
         model: str,
         temperature: float,
         max_tokens: int,
-        tenant_id: UUID | None = None,
+        tenant_id: UUID,
     ) -> str:
         """
         Construye cache key único basado en todos los parámetros relevantes.
@@ -514,9 +526,8 @@ class AnthropicWrapper:
         # Create unique string from all parameters
         # Tenant scope is part of the hashed material so cached LLM responses
         # cannot cross the multi-tenant security boundary.
-        tenant_scope = str(tenant_id) if tenant_id is not None else "system"
         key_parts = [
-            tenant_scope,
+            str(tenant_id),
             prompt,
             system_prompt,
             model,
