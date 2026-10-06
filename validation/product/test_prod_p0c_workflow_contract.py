@@ -147,6 +147,39 @@ def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
     assert "no_change_expected_blob_hash" in source
 
 
+def test_p0c_verifier_uses_text_bind_values_for_json_uuid_fields() -> None:
+    source = VERIFIER.read_text(encoding="utf-8")
+    for field in (
+        "document_id",
+        "source_revision_id",
+        "target_revision_id",
+        "no_change_target_revision_id",
+    ):
+        assert f'"{field}_text": str({field})' in source
+
+    assert "payload->>'document_id'=:document_id_text" in source
+    assert (
+        "payload->'provenance'->>'source_revision_id'=:source_revision_id_text"
+        in source
+    )
+    assert (
+        "payload->'provenance'->>'target_revision_id'=:target_revision_id_text"
+        in source
+    )
+    assert (
+        "payload->'provenance'->>'target_revision_id'=:no_change_target_revision_id_text"
+        in source
+    )
+
+    for legacy in (
+        "payload->>'document_id'=CAST(:document_id AS text)",
+        "payload->'provenance'->>'source_revision_id'=CAST(:source_revision_id AS text)",
+        "payload->'provenance'->>'target_revision_id'=CAST(:target_revision_id AS text)",
+        "payload->'provenance'->>'target_revision_id'=CAST(:no_change_target_revision_id AS text)",
+    ):
+        assert legacy not in source
+
+
 def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority() -> None:
     source = BUILDER.read_text(encoding="utf-8")
     assert '"capability_id": "P0c"' in source
