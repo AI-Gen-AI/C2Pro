@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.core.processing_authority import ProcessingAuthorityLost
 from src.documents.adapters.http import router
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
@@ -248,10 +249,67 @@ async def test_reprocess_expected_revision_is_cas_bound_and_pinned(
     repo.lock_document_for_update.assert_awaited_once_with(tenant_id, document_id)
     revision_repo.get_current.assert_awaited_once_with(document_id, tenant_id)
     repo.begin_processing_generation.assert_awaited_once_with(
-        tenant_id, document_id, expected_revision_id
+        tenant_id,
+        document_id,
+        expected_revision_id=expected_revision_id,
     )
     assert enqueued == [(document_id, expected_revision_id, 7)]
     assert response.task_id == "retry-cas"
+
+
+@pytest.mark.asyncio
+async def test_reprocess_processing_authority_mismatch_fails_before_mutation() -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    document_id = uuid4()
+    expected_revision_id = uuid4()
+    document = Document(
+        id=document_id,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_type=DocumentType.CONTRACT,
+        filename="contract.pdf",
+        upload_status=DocumentStatus.ERROR,
+    )
+    repo = Mock()
+    repo.get_by_id = AsyncMock(return_value=document)
+    repo.lock_document_for_update = AsyncMock()
+    repo.update_status = AsyncMock()
+    repo.update_metadata = AsyncMock()
+    repo.commit = AsyncMock()
+    repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock(
+        side_effect=ProcessingAuthorityLost("processing revision changed")
+    )
+
+    revision_repo = Mock()
+    revision_repo.lock_lineage = AsyncMock()
+    revision_repo.get_current = AsyncMock(
+        return_value=SimpleNamespace(revision_id=expected_revision_id)
+    )
+
+    with pytest.raises(router.HTTPException) as exc_info:
+        await router.reprocess_document_endpoint(
+            project_id=project_id,
+            document_id=document_id,
+            expected_revision_id=expected_revision_id,
+            user_id=uuid4(),
+            tenant_id=tenant_id,
+            repo=repo,
+            revision_repo=revision_repo,
+            pending_review_lookup=lambda _tenant_id, _document_ids: {},
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "processing authority changed" in str(exc_info.value.detail).lower()
+    repo.begin_processing_generation.assert_awaited_once_with(
+        tenant_id,
+        document_id,
+        expected_revision_id=expected_revision_id,
+    )
+    repo.update_metadata.assert_not_awaited()
+    repo.update_status.assert_not_awaited()
+    repo.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
