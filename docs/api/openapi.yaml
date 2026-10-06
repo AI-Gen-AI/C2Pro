@@ -1484,6 +1484,15 @@ paths:
           type: string
           format: uuid
           title: Document Id
+      - name: expected_revision_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Expected Revision Id
       responses:
         '202':
           description: Successful Response
