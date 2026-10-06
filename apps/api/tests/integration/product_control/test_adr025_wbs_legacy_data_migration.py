@@ -329,6 +329,9 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
             # ...and an unknown WBS id is rejected for every new write.
             with pytest.raises(asyncpg.exceptions.ForeignKeyViolationError):
                 async with conn.transaction():
+                    # PC-1R (#886) defers this FK to COMMIT (cascade-order safety); a savepoint does
+                    # not commit, so ask for the check now -- the rejection itself is unchanged.
+                    await conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
                     await conn.execute(new_raci, uuid4(), ids["tenant"], ids["project_A"], ids["stakeholder_A"], uuid4())
             await probe.rollback()
 
@@ -364,9 +367,11 @@ async def test_legacy_wbs_data_reaches_one_canonical_wbs_and_round_trips() -> No
             )
             ids["A_7"] = uuid4()
             await conn.execute(
+                # PC-1R (#886): sort_order is the sibling-order authority at head.
                 "INSERT INTO wbs_nodes (id, project_id, tenant_id, parent_id, code, name, lft, rgt, depth, node_type, "
-                "metadata, created_at, updated_at) VALUES ($1, $2, $3, $4, '7', 'Added after upgrade', 1000, 1001, 1, "
-                "'activity', '{\"_adr025\": {\"node_type_inferred\": false}}'::jsonb, now(), now())",
+                "metadata, sort_order, created_at, updated_at) VALUES ($1, $2, $3, $4, '7', 'Added after upgrade', "
+                "1000, 1001, 1, 'activity', '{\"_adr025\": {\"node_type_inferred\": false}}'::jsonb, 1000, now(), "
+                "now())",
                 ids["A_7"], ids["project_A"], ids["tenant"], ids["A_1"],
             )
         finally:

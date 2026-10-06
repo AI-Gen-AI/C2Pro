@@ -145,6 +145,9 @@ async def test_raci_and_procurement_reference_canonical_nodes_with_integrity(ses
 
     nested = await session.begin_nested()
     with pytest.raises(sa.exc.IntegrityError):
+        # PC-1R (#886) defers this FK to COMMIT (cascade-order safety); a savepoint does not
+        # commit, so ask for the check now -- the rejection itself is unchanged.
+        await session.execute(sa.text("SET CONSTRAINTS ALL IMMEDIATE"))
         await session.execute(sa.text(raci), {"tid": tenant_id, "pid": project_id, "sid": stakeholder_id, "wid": uuid4()})
     await nested.rollback()
 

@@ -15,15 +15,6 @@ class ICoherenceRepository(ABC):
         ...
 
     @abstractmethod
-    async def persist_wbs_bom_items(
-        self,
-        project_id: UUID,
-        wbs_items: list[JsonDict],
-        bom_items: list[JsonDict],
-    ) -> tuple[list[Any], list[Any]]:
-        ...
-
-    @abstractmethod
     async def save_analysis_and_alerts(
         self,
         project_id: UUID,

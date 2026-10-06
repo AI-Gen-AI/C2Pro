@@ -126,6 +126,7 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         code=root_code,
         name="Root",
         lft=1,
+        sort_order=1,
         rgt=4,
         depth=0,
     )
@@ -139,6 +140,7 @@ async def test_wbs_tree_hierarchy_and_tenant_filtering(session: AsyncSession):
         code=child_code,
         name="Child",
         lft=2,
+        sort_order=1,
         rgt=3,
         depth=1,
     )

@@ -59,7 +59,10 @@ class CreateWBSItemUseCase:
             name=wbs_create.name,
             description=wbs_create.description,
             level=wbs_create.level,
-            parent_code=None,  # Will be resolved from parent_id
+            # PC-1R: the parent is resolved by id inside the SAME project by the repository; it is
+            # never translated into a code (a same-code node elsewhere must not be linked).
+            parent_id=wbs_create.parent_id,
+            sort_order=wbs_create.sort_order,
             item_type=wbs_create.item_type,
             budget_allocated=wbs_create.budget_allocated,
             budget_spent=wbs_create.budget_spent,
@@ -71,58 +74,7 @@ class CreateWBSItemUseCase:
             wbs_metadata=wbs_create.wbs_metadata,
         )
 
-        # If parent_id is provided, resolve parent_code
-        if wbs_create.parent_id:
-            parent = await self.wbs_repository.get_by_id(wbs_create.parent_id, tenant_id)
-            if parent:
-                wbs_item.parent_code = parent.code
-
         return await self.wbs_repository.create(tenant_id, wbs_item)
-
-    async def replace_for_source_document(
-        self,
-        *,
-        project_id: UUID,
-        source_document_id: UUID,
-        wbs_items: list[WBSItemCreate],
-        tenant_id: TenantId,
-    ) -> list[WBSItem]:
-        """Replace parsed WBS rows for one source document in a single operation.
-
-        Makes schedule re-parsing idempotent: the rows produced by this document
-        are replaced instead of appended, so regenerated codes (e.g. SCH-001) no
-        longer collide on ``uq_procurement_wbs_project_code``.
-        """
-        domain_items = [
-            WBSItem(
-                project_id=item.project_id,
-                code=item.wbs_code,
-                name=item.name,
-                description=item.description,
-                level=item.level,
-                parent_code=None,
-                item_type=item.item_type,
-                budget_allocated=item.budget_allocated,
-                budget_spent=item.budget_spent,
-                planned_start=item.planned_start,
-                planned_end=item.planned_end,
-                actual_start=item.actual_start,
-                actual_end=item.actual_end,
-                source_clause_id=item.funded_by_clause_id,
-                source_document_id=source_document_id,
-                wbs_metadata={
-                    **item.wbs_metadata,
-                    "source_document_id": str(source_document_id),
-                },
-            )
-            for item in wbs_items
-        ]
-        return await self.wbs_repository.replace_for_source_document(
-            project_id=project_id,
-            source_document_id=source_document_id,
-            wbs_items=domain_items,
-            tenant_id=tenant_id,
-        )
 
 
 class ListWBSItemsUseCase:
@@ -210,11 +162,13 @@ class UpdateWBSItemUseCase:
         if wbs_update.wbs_metadata is not None:
             existing.wbs_metadata = wbs_update.wbs_metadata
 
-        # Handle parent update if parent_id is provided
+        if wbs_update.wbs_code is not None:
+            existing.code = wbs_update.wbs_code  # recode: the node keeps its identity
+        # PC-1R: reparent by id; the repository rejects a parent from another project.
         if wbs_update.parent_id is not None:
-            parent = await self.wbs_repository.get_by_id(wbs_update.parent_id, tenant_id)
-            if parent:
-                existing.parent_code = parent.code
+            existing.parent_id = wbs_update.parent_id
+        if wbs_update.sort_order is not None:
+            existing.sort_order = wbs_update.sort_order
 
         if wbs_update.expected_version is not None:
             existing.version = wbs_update.expected_version

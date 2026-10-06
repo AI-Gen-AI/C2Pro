@@ -237,67 +237,6 @@ async def test_002_bulk_alert_approval_with_progress(
 # ===========================================
 
 
-@pytest.mark.asyncio
-@pytest.mark.e2e
-@pytest.mark.flow
-async def test_003_bulk_wbs_creation(
-    client,
-    bulk_user: User,
-    bulk_tenant: Tenant,
-    bulk_project,
-    generate_token,
-):
-    """
-    GIVEN A project with no WBS structure
-    WHEN User creates 50 WBS items in bulk
-    THEN All items are created
-    AND Hierarchy is validated
-    AND Parent-child relationships are correct
-
-    Validates: Bulk WBS creation efficiency
-    """
-    token = generate_token(
-        user_id=bulk_user.id,
-        tenant_id=bulk_tenant.id,
-        email=bulk_user.email,
-        role="admin",
-    )
-    headers = {"Authorization": f"Bearer {token}"}
-
-    project_id = bulk_project["id"]
-
-    # Create 50 WBS items (1 root + 49 children)
-    wbs_items = [
-        {
-            "code": "1",
-            "name": "Root WBS",
-            "level": 1,
-            "description": "Project root",
-        }
-    ]
-
-    # Add 49 level-2 items
-    for i in range(1, 50):
-        wbs_items.append({
-            "code": f"1.{i}",
-            "name": f"Work Package {i}",
-            "level": 2,
-            "parent_code": "1",
-        })
-
-    # Bulk create
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/wbs/bulk",
-        json={"items": wbs_items},
-        headers=headers,
-    )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert body["created_count"] == 50
-    assert body["failed_count"] == 0
-
-
 # ===========================================
 # TEST 4: Bulk Data Export
 # ===========================================
@@ -350,111 +289,9 @@ async def test_004_bulk_export_project_data(
 # ===========================================
 
 
-@pytest.mark.asyncio
-@pytest.mark.e2e
-@pytest.mark.flow
-async def test_005_bulk_operation_partial_success(
-    client,
-    bulk_user: User,
-    bulk_tenant: Tenant,
-    bulk_project,
-    generate_token,
-):
-    """
-    GIVEN Bulk operation with some invalid items
-    WHEN User submits 10 items (5 valid, 5 invalid)
-    THEN 5 items succeed, 5 items fail
-    AND Error details are provided for failed items
-    AND Valid items are still processed
-
-    Validates: Partial success handling
-    """
-    token = generate_token(
-        user_id=bulk_user.id,
-        tenant_id=bulk_tenant.id,
-        email=bulk_user.email,
-        role="admin",
-    )
-    headers = {"Authorization": f"Bearer {token}"}
-
-    project_id = bulk_project["id"]
-
-    # Mix of valid and invalid WBS items
-    wbs_items = [
-        # Valid items
-        {"code": "1", "name": "Valid Root", "level": 1},
-        {"code": "1.1", "name": "Valid Child", "level": 2, "parent_code": "1"},
-        # Invalid items (missing required fields)
-        {"code": "2"},  # Missing name and level
-        {"code": "1.2", "level": 2},  # Missing name
-        {"name": "Invalid", "level": 2},  # Missing code
-    ]
-
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/wbs/bulk",
-        json={"items": wbs_items},
-        headers=headers,
-    )
-
-    assert response.status_code == 207
-    body = response.json()
-    assert body["created_count"] == 2
-    assert body["failed_count"] == 3
-    assert len(body["errors"]) == 3
-
-
 # ===========================================
 # TEST 6: Progress Tracking
 # ===========================================
-
-
-@pytest.mark.asyncio
-@pytest.mark.e2e
-@pytest.mark.flow
-@pytest.mark.slow
-async def test_006_bulk_operation_progress_tracking(
-    client,
-    bulk_user: User,
-    bulk_tenant: Tenant,
-    bulk_project,
-    generate_token,
-):
-    """
-    GIVEN A long-running bulk operation
-    WHEN User polls progress endpoint
-    THEN Progress percentage is returned
-    AND Status transitions: pending → processing → completed
-    AND Estimated time remaining is provided
-
-    Validates: Progress tracking for long operations
-    """
-    token = generate_token(
-        user_id=bulk_user.id,
-        tenant_id=bulk_tenant.id,
-        email=bulk_user.email,
-        role="admin",
-    )
-    headers = {"Authorization": f"Bearer {token}"}
-
-    project_id = bulk_project["id"]
-
-    # Initiate large bulk operation
-    wbs_items = [{"code": f"{i}", "name": f"Item {i}", "level": 1} for i in range(100)]
-
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/wbs/bulk",
-        json={"items": wbs_items},
-        headers=headers,
-    )
-
-    assert response.status_code == 202
-    job_id = response.json()["job_id"]
-    progress_response = await client.get(
-        f"/api/v1/bulk-operations/{job_id}/progress",
-        headers=headers,
-    )
-    assert progress_response.status_code == 200
-    assert "percentage" in progress_response.json()
 
 
 # ===========================================
@@ -462,185 +299,14 @@ async def test_006_bulk_operation_progress_tracking(
 # ===========================================
 
 
-@pytest.mark.asyncio
-@pytest.mark.e2e
-@pytest.mark.flow
-async def test_007_bulk_operations_rate_limited(
-    client,
-    bulk_user: User,
-    bulk_tenant: Tenant,
-    bulk_project,
-    generate_token,
-):
-    """
-    GIVEN User has exceeded bulk operation limits
-    WHEN User attempts another bulk operation
-    THEN Request is rate limited with 429
-    AND Retry-After header is provided
-
-    Validates: Rate limiting prevents abuse
-    """
-    token = generate_token(
-        user_id=bulk_user.id,
-        tenant_id=bulk_tenant.id,
-        email=bulk_user.email,
-        role="admin",
-    )
-    headers = {"Authorization": f"Bearer {token}"}
-
-    project_id = bulk_project["id"]
-
-    # Make 5 rapid bulk operations
-    for i in range(5):
-        wbs_items = [{"code": f"batch{i}-{j}", "name": f"Item {j}", "level": 1} for j in range(10)]
-
-        response = await client.post(
-            f"/api/v1/projects/{project_id}/wbs/bulk",
-            json={"items": wbs_items},
-            headers=headers,
-        )
-
-    # Compatibility path currently keeps accepting these requests.
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/wbs/bulk",
-        json={"items": [{"code": "final", "name": "Final", "level": 1}]},
-        headers=headers,
-    )
-
-    assert response.status_code == 201
-    assert response.json()["created_count"] == 1
-
-
 # ===========================================
 # TEST 8: Tenant Isolation in Bulk Operations
 # ===========================================
 
 
-@pytest.mark.asyncio
-@pytest.mark.e2e
-@pytest.mark.flow
-async def test_008_bulk_operations_respect_tenant_isolation(
-    client,
-    db,
-    bulk_user: User,
-    bulk_tenant: Tenant,
-    bulk_project,
-    generate_token,
-):
-    """
-    GIVEN Tenant A has a project
-    WHEN Tenant B tries bulk operation on Tenant A's project
-    THEN Request is denied with 404
-
-    Validates: Security in bulk operations
-    """
-    # Create Tenant B
-    tenant_b = Tenant(
-        id=uuid4(),
-        name="Tenant B",
-        slug=f"tenant-b-{uuid4().hex[:8]}",
-        subscription_plan=SubscriptionPlan.STARTER,
-        subscription_status="active",
-        ai_budget_monthly=50.0,
-        ai_spend_current=0.0,
-        max_projects=10,
-        max_users=5,
-        max_storage_gb=50,
-        is_active=True,
-    )
-    db.add(tenant_b)
-    await db.commit()
-    await db.refresh(tenant_b)
-
-    user_b = User(
-        id=uuid4(),
-        tenant_id=tenant_b.id,
-        email="user_b@test.com",
-        hashed_password=hash_password("Password123!"),
-        first_name="User",
-        last_name="B",
-        role=UserRole.ADMIN,
-        is_active=True,
-        is_verified=True,
-    )
-    db.add(user_b)
-    await db.commit()
-    await db.refresh(user_b)
-
-    token_b = generate_token(
-        user_id=user_b.id,
-        tenant_id=tenant_b.id,
-        email=user_b.email,
-        role="admin",
-    )
-    headers_b = {"Authorization": f"Bearer {token_b}"}
-
-    # Tenant A's project
-    project_id = bulk_project["id"]
-
-    # Tenant B tries bulk operation
-    wbs_items = [{"code": "1", "name": "Hacker Item", "level": 1}]
-
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/wbs/bulk",
-        json={"items": wbs_items},
-        headers=headers_b,
-    )
-
-    # Should be blocked
-    assert response.status_code == 404
-
-
 # ===========================================
 # TEST 9: Atomic Transactions (All or Nothing)
 # ===========================================
-
-
-@pytest.mark.asyncio
-@pytest.mark.e2e
-@pytest.mark.flow
-async def test_009_bulk_operation_atomic_transaction(
-    client,
-    bulk_user: User,
-    bulk_tenant: Tenant,
-    bulk_project,
-    generate_token,
-):
-    """
-    GIVEN Bulk operation with atomic=true flag
-    WHEN One item fails validation
-    THEN Entire batch is rolled back (all or nothing)
-    AND No partial data is persisted
-
-    Validates: Atomic transaction handling
-    """
-    token = generate_token(
-        user_id=bulk_user.id,
-        tenant_id=bulk_tenant.id,
-        email=bulk_user.email,
-        role="admin",
-    )
-    headers = {"Authorization": f"Bearer {token}"}
-
-    project_id = bulk_project["id"]
-
-    # Mix of valid items + 1 invalid (should fail entire batch)
-    wbs_items = [
-        {"code": "1", "name": "Valid 1", "level": 1},
-        {"code": "1.1", "name": "Valid 2", "level": 2, "parent_code": "1"},
-        {"code": "INVALID"},  # Missing required fields
-    ]
-
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/wbs/bulk",
-        json={"items": wbs_items, "atomic": True},
-        headers=headers,
-    )
-
-    assert response.status_code == 409
-    body = response.json()
-    assert body["created_count"] == 0
-    assert body["failed_count"] == 1
 
 
 # ===========================================
@@ -705,3 +371,27 @@ async def test_010_bulk_delete_alerts(
 
     assert response.status_code == 200
     assert response.json()["deleted_count"] == 10
+
+
+@pytest.mark.asyncio
+@pytest.mark.e2e
+@pytest.mark.flow
+async def test_bulk_wbs_creation_endpoint_is_retired(
+    client,
+    bulk_user: User,
+    bulk_tenant: Tenant,
+    bulk_project,
+    generate_token,
+):
+    """PC-1R (#886) retired POST /projects/{id}/wbs/bulk (#885): it acknowledged >=100 items
+    with 202 and never persisted them, and persisted partial trees otherwise. A governed WBS
+    import becomes a DRAFT change set (ADR-029, PC-2a)."""
+    token = generate_token(
+        user_id=bulk_user.id, tenant_id=bulk_tenant.id, email=bulk_user.email, role="admin"
+    )
+    response = await client.post(
+        f"/api/v1/projects/{bulk_project['id']}/wbs/bulk",
+        json={"items": [{"code": "1", "name": "Root", "level": 1}], "atomic": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code in (404, 405)
