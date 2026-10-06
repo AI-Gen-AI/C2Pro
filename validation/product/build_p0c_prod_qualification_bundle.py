@@ -112,6 +112,10 @@ def build_bundle(
         identifiers, "no_change_target_revision_id"
     )
     no_change_event_id = _required(identifiers, "no_change_event_id")
+    no_change_blob_hash = _sha(
+        _required(identifiers, "no_change_blob_hash"),
+        "no-change persisted blob hash",
+    )
 
     expected_run = {
         "project_id": project_id,
@@ -122,6 +126,7 @@ def build_bundle(
         "no_change_source_revision_id": target_revision_id,
         "no_change_target_revision_id": no_change_target_revision_id,
         "no_change_event_id": no_change_event_id,
+        "no_change_fixture_sha256": no_change_blob_hash,
     }
     disagreements = [
         key for key, expected in expected_run.items() if run.get(key) != expected
@@ -199,7 +204,7 @@ def build_bundle(
             "kind": "persisted_entity",
             "ref": f"postgres:document_revision:{no_change_target_revision_id}",
             "immutable": True,
-            "sha256": None,
+            "sha256": no_change_blob_hash,
         },
         {
             "id": "no-change-event",
