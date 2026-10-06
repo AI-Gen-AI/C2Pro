@@ -137,6 +137,7 @@ async def verify_post(
     document_id: UUID,
     source_revision_id: UUID,
     target_revision_id: UUID,
+    no_change_target_revision_id: UUID,
 ) -> tuple[list[Check], dict[str, str]]:
     p = {
         "tenant_id": tenant_id,
@@ -144,6 +145,7 @@ async def verify_post(
         "document_id": document_id,
         "source_revision_id": source_revision_id,
         "target_revision_id": target_revision_id,
+        "no_change_target_revision_id": no_change_target_revision_id,
     }
     target_count = await _scalar(
         conn,
@@ -151,6 +153,18 @@ async def verify_post(
         SELECT count(*) FROM document_revisions
          WHERE revision_id=:target_revision_id
            AND parent_revision_id=:source_revision_id
+           AND document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+        """,
+        p,
+    )
+    no_change_target_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_revisions
+         WHERE revision_id=:no_change_target_revision_id
+           AND parent_revision_id=:target_revision_id
            AND document_id=:document_id
            AND project_id=:project_id
            AND tenant_id=:tenant_id
@@ -195,9 +209,71 @@ async def verify_post(
     )
     events = result.mappings().all()
     event = events[0] if len(events) == 1 else None
+
+    no_change_result = await conn.execute(
+        text(
+            """
+            SELECT event_id,
+                   payload->>'state' AS state,
+                   payload->>'change_cause' AS change_cause,
+                   jsonb_array_length(coalesce(payload->'changeset'->'changes','[]'::jsonb)) AS changes
+              FROM project_events
+             WHERE project_id=:project_id
+               AND tenant_id=:tenant_id
+               AND event_type='revision.changed'
+               AND payload->>'document_id'=CAST(:document_id AS text)
+               AND payload->'provenance'->>'source_revision_id'=CAST(:target_revision_id AS text)
+               AND payload->'provenance'->>'target_revision_id'=CAST(:no_change_target_revision_id AS text)
+             ORDER BY occurred_at, event_id
+            """
+        ),
+        p,
+    )
+    no_change_events = no_change_result.mappings().all()
+    no_change_event = no_change_events[0] if len(no_change_events) == 1 else None
+
+    hash_result = await conn.execute(
+        text(
+            """
+            SELECT revision_id, blob_hash
+              FROM document_revisions
+             WHERE tenant_id=:tenant_id
+               AND project_id=:project_id
+               AND document_id=:document_id
+               AND revision_id IN (:target_revision_id, :no_change_target_revision_id)
+            """
+        ),
+        p,
+    )
+    hashes = {row.revision_id: row.blob_hash for row in hash_result.all()}
+    no_change_hash_distinct = (
+        target_revision_id in hashes
+        and no_change_target_revision_id in hashes
+        and bool(hashes[target_revision_id])
+        and bool(hashes[no_change_target_revision_id])
+        and hashes[target_revision_id] != hashes[no_change_target_revision_id]
+    )
+
+    failure_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM project_events
+         WHERE project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND event_type='revision.analysis_failed'
+           AND payload->>'document_id'=CAST(:document_id AS text)
+        """,
+        p,
+    )
+
     checks = [
         Check("target revision persists as child of source", target_count == 1, f"target_revisions={target_count}"),
-        Check("document has exactly two revisions", revision_count == 2, f"revisions={revision_count}"),
+        Check(
+            "semantic no-change revision persists as child of target",
+            no_change_target_count == 1,
+            f"no_change_target_revisions={no_change_target_count}",
+        ),
+        Check("document has exactly three revisions", revision_count == 3, f"revisions={revision_count}"),
         Check("one durable revision.changed event", len(events) == 1, f"change_events={len(events)}"),
         Check("change event is ready", bool(event and event["state"] == "ready"), f"state={event['state'] if event else None}"),
         Check(
@@ -212,17 +288,49 @@ async def verify_post(
             bool(event and int(event["changes_without_evidence"]) == 0),
             f"changes_without_evidence={event['changes_without_evidence'] if event else None}",
         ),
+        Check(
+            "one durable semantic no-change event",
+            len(no_change_events) == 1,
+            f"no_change_events={len(no_change_events)}",
+        ),
+        Check(
+            "semantic no-change event is ready",
+            bool(no_change_event and no_change_event["state"] == "ready"),
+            f"state={no_change_event['state'] if no_change_event else None}",
+        ),
+        Check(
+            "semantic no-change event has null cause",
+            bool(no_change_event and no_change_event["change_cause"] is None),
+            f"change_cause={no_change_event['change_cause'] if no_change_event else None}",
+        ),
+        Check(
+            "semantic no-change event has empty changeset",
+            bool(no_change_event and int(no_change_event["changes"]) == 0),
+            f"changes={no_change_event['changes'] if no_change_event else None}",
+        ),
+        Check(
+            "semantic no-change revision is byte-distinct",
+            no_change_hash_distinct,
+            "revision B and parser-equivalent revision C have different blob hashes",
+        ),
+        Check(
+            "no revision analysis failure masks accepted outcome",
+            failure_count == 0,
+            f"analysis_failures={failure_count}",
+        ),
     ]
     identifiers = {
         "project_id": str(project_id),
         "document_id": str(document_id),
         "from_revision_id": str(source_revision_id),
         "to_revision_id": str(target_revision_id),
+        "no_change_target_revision_id": str(no_change_target_revision_id),
     }
     if event:
         identifiers["change_event_id"] = str(event["event_id"])
+    if no_change_event:
+        identifiers["no_change_event_id"] = str(no_change_event["event_id"])
     return checks, identifiers
-
 
 async def verify(
     *,
@@ -232,6 +340,7 @@ async def verify(
     document_id: UUID,
     source_revision_id: UUID,
     target_revision_id: UUID | None,
+    no_change_target_revision_id: UUID | None,
 ) -> tuple[list[Check], dict[str, str]]:
     engine = create_async_engine(_normalize_database_url(database_url))
     try:
@@ -252,6 +361,10 @@ async def verify(
                         source_revision_id=source_revision_id,
                     )
                 else:
+                    if no_change_target_revision_id is None:
+                        raise VerificationFailure(
+                            "no-change target revision id required for post verification"
+                        )
                     result = await verify_post(
                         conn,
                         tenant_id=tenant_id,
@@ -259,6 +372,7 @@ async def verify(
                         document_id=document_id,
                         source_revision_id=source_revision_id,
                         target_revision_id=target_revision_id,
+                        no_change_target_revision_id=no_change_target_revision_id,
                     )
                 await tx.rollback()
                 return result
@@ -276,6 +390,7 @@ def main() -> int:
     parser.add_argument("--document-id", required=True)
     parser.add_argument("--source-revision-id", required=True)
     parser.add_argument("--target-revision-id")
+    parser.add_argument("--no-change-target-revision-id")
     parser.add_argument("--write-evidence", action="store_true")
     args = parser.parse_args()
 
@@ -293,6 +408,11 @@ def main() -> int:
             target_revision_id=(
                 _uuid(args.target_revision_id, "target revision id")
                 if args.target_revision_id
+                else None
+            ),
+            no_change_target_revision_id=(
+                _uuid(args.no_change_target_revision_id, "no-change target revision id")
+                if args.no_change_target_revision_id
                 else None
             ),
         )
