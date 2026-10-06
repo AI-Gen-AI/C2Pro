@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.core.database import get_session
 from src.core.json_types import JsonDict
+from src.core.processing_authority import ProcessingAuthorityLost
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -1062,21 +1063,38 @@ async def reprocess_document_endpoint(
             ),
         )
 
+    # #686/#711: acquire the next processing generation before changing
+    # document state. In governed recovery mode the processing-authority layer
+    # re-checks the exact expected revision while the lineage + document locks
+    # above are still held, and requires that revision to remain the errored
+    # processing authority. A stale recovery therefore fails before mutation.
+    try:
+        generation = (
+            await repo.begin_processing_generation(
+                tenant_id,
+                document_id,
+                expected_revision_id=expected_revision_id,
+            )
+            if expected_revision_id is not None
+            else await repo.begin_processing_generation(tenant_id, document_id)
+        )
+    except ProcessingAuthorityLost as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document processing authority changed; bounded retry refused.",
+        ) from exc
+
     # An explicit user retry starts a fresh bounded recovery budget while
     # preserving every unrelated piece of document metadata.
     metadata = dict(document.document_metadata or {})
     if metadata.pop("processing_recovery", None) is not None:
         await repo.update_metadata(tenant_id, document_id, metadata)
 
-    await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
-    # #711: an explicit reprocess starts a new processing generation in the
-    # same transaction, superseding any earlier (possibly still running) worker.
-    generation = (
-        await repo.begin_processing_generation(
-            tenant_id, document_id, expected_revision_id
-        )
-        if expected_revision_id is not None
-        else await repo.begin_processing_generation(tenant_id, document_id)
+    await repo.update_status(
+        tenant_id,
+        document_id,
+        DocumentStatus.UPLOADED,
+        parsing_error=None,
     )
     await repo.commit()
     await repo.refresh(document)
