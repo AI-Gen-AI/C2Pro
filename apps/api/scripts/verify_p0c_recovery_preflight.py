@@ -64,6 +64,10 @@ async def verify(*, project_id: UUID, document_id: UUID, source_revision_id: UUI
                             WHERE revision_id=:source_revision_id
                               AND document_id=:document_id AND project_id=:project_id AND tenant_id=:tenant_id) AS source_count,
                           (SELECT count(*) FROM document_revisions
+                            WHERE revision_id=:source_revision_id
+                              AND document_id=:document_id AND project_id=:project_id AND tenant_id=:tenant_id
+                              AND valid_to IS NOT NULL) AS source_historical_count,
+                          (SELECT count(*) FROM document_revisions
                             WHERE revision_id=:recovery_revision_id
                               AND parent_revision_id=:source_revision_id
                               AND document_id=:document_id AND project_id=:project_id AND tenant_id=:tenant_id
@@ -71,6 +75,10 @@ async def verify(*, project_id: UUID, document_id: UUID, source_revision_id: UUI
                           (SELECT count(*) FROM clauses
                             WHERE tenant_id=:tenant_id AND project_id=:project_id
                               AND document_id=:document_id AND revision_id=:recovery_revision_id) AS recovery_clause_count,
+                          (SELECT count(*) FROM document_processing_operations
+                            WHERE tenant_id=:tenant_id
+                              AND document_id=:document_id
+                              AND revision_id=:recovery_revision_id) AS recovery_authority_count,
                           (SELECT count(*) FROM project_events
                             WHERE tenant_id=:tenant_id AND project_id=:project_id
                               AND event_type='revision.changed'
@@ -95,11 +103,19 @@ async def verify(*, project_id: UUID, document_id: UUID, source_revision_id: UUI
                 failures.append(f"revision_count={revision_count}")
             if int(row["source_count"]) != 1:
                 failures.append(f"source_count={row['source_count']}")
+            if int(row["source_historical_count"]) != 1:
+                failures.append(
+                    f"source_historical_count={row['source_historical_count']}"
+                )
             if int(row["recovery_count"]) != 1:
                 failures.append(f"recovery_count={row['recovery_count']}")
             recovery_clause_count = int(row["recovery_clause_count"])
             if recovery_clause_count != 0:
                 failures.append(f"recovery_clause_count={recovery_clause_count}")
+            if int(row["recovery_authority_count"]) != 1:
+                failures.append(
+                    f"recovery_authority_count={row['recovery_authority_count']}"
+                )
             if int(row["qualified_change_count"]) != 0:
                 failures.append(f"qualified_change_count={row['qualified_change_count']}")
 
@@ -112,7 +128,8 @@ async def verify(*, project_id: UUID, document_id: UUID, source_revision_id: UUI
                 f"recovery_revision_id={recovery_revision_id} "
                 f"revision_count={revision_count} "
                 f"upload_status={row['upload_status']} "
-                f"recovery_clause_count={recovery_clause_count}"
+                f"recovery_clause_count={recovery_clause_count} "
+                f"recovery_authority_count={row['recovery_authority_count']}"
             )
     finally:
         await engine.dispose()
