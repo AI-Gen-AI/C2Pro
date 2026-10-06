@@ -135,7 +135,7 @@ def test_non_retryable_status_error_stops_cause_chain() -> None:
     [
         ({"retry-after-ms": "2500"}, 2.5),
         ({"retry-after": "7"}, 7.0),
-        ({"retry-after": "60"}, 60.0),
+        ({"retry-after": "60"}, 32.0),
     ],
 )
 def test_provider_retry_after_controls_delay(
@@ -150,6 +150,20 @@ def test_provider_retry_after_controls_delay(
     assert client._calculate_retry_delay(0, LLMErrorType.RATE_LIMIT, error) == pytest.approx(
         expected
     )
+
+
+def test_provider_retry_after_never_exceeds_c2pro_max_delay() -> None:
+    """Provider hints are honored but the C2Pro policy cap remains authoritative."""
+
+    client = _bare_retry_client()
+    client.max_retry_delay = 5.0
+    error = _provider_error(429, {"retry-after": "30"})
+
+    assert client._calculate_retry_delay(
+        0,
+        LLMErrorType.RATE_LIMIT,
+        error,
+    ) == pytest.approx(5.0)
 
 
 def test_unreasonable_provider_retry_after_falls_back_to_c2pro_backoff(monkeypatch) -> None:
