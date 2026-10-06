@@ -3,19 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = REPO_ROOT / ".github/workflows/prod-p0c-owner-comment-dispatch.yml"
+DISPATCHER = REPO_ROOT / ".github/workflows/prod-p0c-owner-comment-dispatch.yml"
+TARGET = REPO_ROOT / ".github/workflows/prod-p0c-qualification.yml"
 
 
 def _source() -> str:
-    return WORKFLOW.read_text(encoding="utf-8")
+    return DISPATCHER.read_text(encoding="utf-8")
 
 
-def test_dispatcher_is_issue_686_owner_only_and_actions_write_bounded() -> None:
+def test_dispatcher_is_issue_686_owner_only_and_minimum_permission() -> None:
     source = _source()
     assert "issue_comment:" in source
     assert "types: [created]" in source
-    assert "actions: write" in source
     assert "contents: read" in source
+    assert "actions: write" not in source
     assert "github.event.issue.number == 686" in source
     assert "github.event.comment.user.login == github.repository_owner" in source
     assert "github.triggering_actor == github.repository_owner" in source
@@ -35,15 +36,17 @@ def test_dispatcher_parses_comment_via_environment_not_shell_interpolation() -> 
     assert 'body = os.environ["COMMENT_BODY"].strip()' in source
     assert "pattern.fullmatch(body)" in source
     assert "staged_clear=(?P<staged_clear>true)$" in source
-    run_block = source.split("Dispatch governed P0c qualification workflow", 1)[1]
-    assert "github.event.comment.body" not in run_block
+    assert "github.event.comment.body" not in source.split("qualification:", 1)[1]
 
 
-def test_dispatcher_only_invokes_existing_governed_p0c_workflow() -> None:
+def test_dispatcher_calls_reusable_workflow_without_actions_token() -> None:
     source = _source()
-    assert "gh workflow run prod-p0c-qualification.yml" in source
-    assert "--ref main" in source
-    assert "-f confirm_production=RUN-ISSUE-686" in source
+    assert "uses: ./.github/workflows/prod-p0c-qualification.yml" in source
+    assert "needs: authorize" in source
+    assert "secrets: inherit" in source
+    assert "gh workflow run" not in source
+    assert "GH_TOKEN" not in source
+    assert "confirm_production: RUN-ISSUE-686" in source
     for field in (
         "backend_commit_sha",
         "backend_deployment_id",
@@ -54,4 +57,11 @@ def test_dispatcher_only_invokes_existing_governed_p0c_workflow() -> None:
         "source_revision_id",
         "railway_staged_changes_clear",
     ):
-        assert f"-f {field}=" in source
+        assert f"{field}:" in source
+
+
+def test_target_has_no_direct_dispatch_entrypoint() -> None:
+    source = TARGET.read_text(encoding="utf-8")
+    assert "workflow_call:" in source
+    assert "workflow_dispatch:" not in source
+    assert "issue_comment:" not in source
