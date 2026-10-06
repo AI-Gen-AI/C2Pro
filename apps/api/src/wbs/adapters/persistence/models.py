@@ -31,6 +31,11 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.core.database import Base
+from src.wbs.adapters.persistence.governance_ddl import (
+    CONTROL_LEVEL_CHECK,
+    DECOMPOSITION_KIND_CHECK,
+    DICTIONARY_CHECK,
+)
 from src.wbs.domain.enums import WBSNodeStatus, WBSNodeType
 
 if TYPE_CHECKING:
@@ -124,6 +129,14 @@ class WBSNodeORM(Base):
         "metadata", JSONB, nullable=False, server_default="{}"
     )
 
+    # Governed node semantics (PC-2a.1, ADR-029). control_level is vocabulary only;
+    # decomposition_kind is namespace:term; dictionary is descriptive wbs-dictionary/v1.
+    control_level: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
+    decomposition_kind: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dictionary: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+
     # Timestamps
     @staticmethod
     def _utcnow_naive() -> datetime:
@@ -189,6 +202,9 @@ class WBSNodeORM(Base):
         CheckConstraint("lft > 0", name="ck_wbs_nodes_lft_positive"),
         CheckConstraint("depth >= 0", name="ck_wbs_nodes_depth_non_negative"),
         CheckConstraint("budget_spent >= 0", name="ck_wbs_nodes_budget_spent_non_negative"),
+        CheckConstraint(CONTROL_LEVEL_CHECK, name="ck_wbs_nodes_control_level"),
+        CheckConstraint(DECOMPOSITION_KIND_CHECK, name="ck_wbs_nodes_decomposition_kind"),
+        CheckConstraint(DICTIONARY_CHECK, name="ck_wbs_nodes_dictionary"),
         {"info": {"rls_policy": "wbs_nodes_tenant_isolation"}},
     )
 
