@@ -495,12 +495,8 @@ class LLMClient:
                     error=str(e),
                 )
 
-                # Record failure in circuit breaker
-                # The circuit breaker's excluded_exceptions config handles which
-                # exceptions trip the circuit (AuthenticationError, BadRequestError, etc.)
-                if self.circuit_breaker:
-                    self.circuit_breaker.record_failure_sync(e)
-
+                # Retry attempts belong to one logical LLM request. Circuit-breaker
+                # accounting happens once: on eventual success or final failure.
                 # Check if we should retry
                 if attempt >= self.max_retries:
                     break  # No more retries
@@ -538,7 +534,12 @@ class LLMClient:
                 # Wait before retry (non-blocking)
                 await asyncio.sleep(delay)
 
-        # All retries exhausted
+        # All retries exhausted or a non-retryable error stopped the loop.
+        # Count this as one logical circuit-breaker failure, irrespective of
+        # how many internal retry attempts were made.
+        if self.circuit_breaker and last_error is not None:
+            self.circuit_breaker.record_failure_sync(last_error)
+
         execution_time_ms = (time.perf_counter() - start_time) * 1000
 
         logger.error(
