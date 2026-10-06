@@ -632,6 +632,23 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             return []
         return list(order_clause_evidence(await self.get_clauses_by_ids(tenant_id, clause_ids)))
 
+    async def lock_document_for_update(
+        self,
+        tenant_id: UUID,
+        document_id: UUID,
+    ) -> None:
+        """Serialize a bounded retry against concurrent document mutation."""
+        result = await self.session.execute(
+            select(DocumentORM.id)
+            .where(
+                DocumentORM.id == document_id,
+                DocumentORM.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        if result.scalar_one_or_none() is None:
+            raise ValueError(f"Document {document_id} not found or access denied")
+
     async def begin_processing_generation(
         self,
         tenant_id: UUID,
