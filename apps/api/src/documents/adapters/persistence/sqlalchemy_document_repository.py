@@ -632,17 +632,40 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
             return []
         return list(order_clause_evidence(await self.get_clauses_by_ids(tenant_id, clause_ids)))
 
+    async def lock_document_for_update(
+        self,
+        tenant_id: UUID,
+        document_id: UUID,
+    ) -> None:
+        """Serialize a bounded retry against concurrent document mutation."""
+        result = await self.session.execute(
+            select(DocumentORM.id)
+            .where(
+                DocumentORM.id == document_id,
+                DocumentORM.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        if result.scalar_one_or_none() is None:
+            raise ValueError(f"Document {document_id} not found or access denied")
+
     async def begin_processing_generation(
         self,
         tenant_id: UUID,
         document_id: UUID,
         revision_id: UUID | None = None,
+        *,
+        expected_revision_id: UUID | None = None,
     ) -> int | None:
         """#711: supersede every earlier processing attempt, in this transaction."""
         from src.core.processing_authority import begin_generation
 
         return await begin_generation(
-            self.session, tenant_id=tenant_id, document_id=document_id, revision_id=revision_id
+            self.session,
+            tenant_id=tenant_id,
+            document_id=document_id,
+            revision_id=revision_id,
+            expected_revision_id=expected_revision_id,
         )
 
     async def commit(self) -> None:

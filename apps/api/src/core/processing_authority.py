@@ -161,6 +161,20 @@ _LOCK_SQL = text(
     """
 )
 
+_EXPECTED_REPROCESS_STATE_SQL = text(
+    """
+    SELECT d.upload_status::text AS upload_status,
+           o.revision_id
+      FROM documents d
+      JOIN document_processing_operations o
+        ON o.document_id = d.id
+       AND o.tenant_id = d.tenant_id
+     WHERE d.id = CAST(:document_id AS uuid)
+       AND d.tenant_id = CAST(:tenant_id AS uuid)
+     FOR UPDATE OF o
+    """
+)
+
 _INSERT_SQL = text(
     """
     INSERT INTO document_processing_operations (
@@ -329,7 +343,12 @@ async def _lock(session: Any, *, tenant_id: UUID, document_id: UUID) -> Any:
 
 
 async def begin_generation(
-    session: Any, *, tenant_id: UUID, document_id: UUID, revision_id: UUID | None
+    session: Any,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    revision_id: UUID | None,
+    expected_revision_id: UUID | None = None,
 ) -> int:
     """Start a new processing generation (new revision or explicit reprocess).
 
@@ -352,6 +371,31 @@ async def begin_generation(
     await _set_tenant(session, tenant_id)
     # Document first: ORM status/version updates may still be staged until flush.
     await _lock_document(session, tenant_id=tenant_id, document_id=document_id)
+
+    # A governed recovery may bind the retry to the exact revision observed by
+    # its read-only preflight. Lock the processing-authority row after the
+    # document (canonical #758 lock order) and fail closed unless that same
+    # revision is still authoritative and the document is still in ERROR.
+    if expected_revision_id is not None:
+        expected_state = (
+            await session.execute(
+                _EXPECTED_REPROCESS_STATE_SQL,
+                {
+                    "document_id": str(document_id),
+                    "tenant_id": str(tenant_id),
+                },
+            )
+        ).first()
+        if (
+            expected_state is None
+            or expected_state.revision_id != expected_revision_id
+            or expected_state.upload_status != "error"
+        ):
+            raise ProcessingAuthorityLost(
+                "bounded reprocess precondition failed: expected revision "
+                f"{expected_revision_id} is no longer the errored processing authority"
+            )
+
     row = (
         await session.execute(
             _BEGIN_GENERATION_SQL,

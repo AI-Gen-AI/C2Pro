@@ -15,6 +15,7 @@ BUILDER = REPO_ROOT / "validation/product/build_p0c_prod_qualification_bundle.py
 NO_CHANGE_FIXTURE_BUILDER = (
     REPO_ROOT / "apps/api/scripts/build_p0c_semantic_no_change_fixture.py"
 )
+RECOVERY_PREFLIGHT = REPO_ROOT / "apps/api/scripts/verify_p0c_recovery_preflight.py"
 
 
 def _workflow() -> str:
@@ -62,7 +63,7 @@ def test_p0c_workflow_propagates_observed_runtime_identity_to_browser_preflight(
     assert '>> "$GITHUB_OUTPUT"' in source
 
     preflight = source.split("Non-mutating real production identity preflight", 1)[1].split(
-        "Fail closed if accepted P0b project is no longer clean", 1
+        "Execute real P0c production browser journey", 1
     )[0]
     assert "PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA:" in preflight
     assert (
@@ -114,6 +115,81 @@ def test_p0c_browser_journey_receives_verified_runtime_identity() -> None:
         "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: "
         "${{ steps.runtime_identity.outputs.frontend_sha }}"
     ) in browser
+
+
+def test_p0c_runtime_is_rebound_after_data_preflights_immediately_before_browser() -> None:
+    source = _workflow()
+    fixture = source.index("Build byte-distinct semantic no-change fixture")
+    clean = source.index("Fail closed if accepted P0b project is no longer clean")
+    recovery = source.index("Fail closed on bounded P0c recovery state")
+    observe = source.index("Observe production deployment identities from providers")
+    verify = source.index("Verify exact provider deployment identities")
+    identity = source.index("Non-mutating real production identity preflight")
+    browser = source.index("Execute real P0c production browser journey")
+
+    assert fixture < clean < recovery < observe < verify < identity < browser
+
+
+def test_p0c_recovery_is_explicit_and_does_not_weaken_clean_run_guard() -> None:
+    source = _workflow()
+    assert "RECOVER-ISSUE-686 " in source
+    assert "recovery_revision_id=" in source
+    assert 'mode = "recovery"' in source
+    assert 'mode = "clean"' in source
+
+    clean = source.split(
+        "Fail closed if accepted P0b project is no longer clean", 1
+    )[1].split("Fail closed on bounded P0c recovery state", 1)[0]
+    assert "if: steps.parse.outputs.mode == 'clean'" in clean
+    assert "verify_p0c_prod_journey.py" in clean
+
+    recovery = source.split(
+        "Fail closed on bounded P0c recovery state", 1
+    )[1].split("Execute real P0c production browser journey", 1)[0]
+    assert "if: steps.parse.outputs.mode == 'recovery'" in recovery
+    assert "verify_p0c_recovery_preflight.py" in recovery
+    assert "--recovery-revision-id" in recovery
+
+    browser = source.split(
+        "Execute real P0c production browser journey", 1
+    )[1].split("Resolve target revision from bounded browser evidence", 1)[0]
+    assert (
+        "PROD_P0C_RECOVERY_REVISION_ID: "
+        "${{ steps.parse.outputs.recovery_revision_id }}"
+    ) in browser
+
+
+def test_p0c_recovery_preflight_is_read_only_and_exactly_bounded() -> None:
+    source = RECOVERY_PREFLIGHT.read_text(encoding="utf-8")
+    assert "SET TRANSACTION READ ONLY" in source
+    assert "app.current_tenant" in source
+    assert "revision_count" in source
+    assert "revision_count != 2" in source
+    assert "upload_status" in source
+    assert '"error"' in source
+    assert "recovery_clause_count" in source
+    assert "recovery_clause_count != 0" in source
+    assert "source_revision_id" in source
+    assert "recovery_revision_id" in source
+    assert "parent_revision_id" in source
+    assert "source_historical_count" in source
+    assert "valid_to IS NOT NULL" in source
+    assert "document_processing_operations" in source
+    assert "recovery_authority_count" in source
+    assert 'row["recovery_authority_count"]' in source
+    assert "revision.changed" in source
+
+
+def test_p0c_browser_recovery_reuses_existing_revision_before_no_change() -> None:
+    source = SPEC.read_text(encoding="utf-8")
+    assert "PROD_P0C_RECOVERY_REVISION_ID" in source
+    assert "Retry processing" in source
+    assert "recoveryRevisionId" in source
+    assert "expected_revision_id" in source
+    assert 'url.searchParams.set("expected_revision_id", recoveryRevisionId)' in source
+    assert "expect(response.status()).toBe(202)" in source
+    assert "expect(whatChanged.targetRevisionId).toBe(recoveryRevisionId)" in source
+    assert "uploadNewVersionThroughUi" in source
 
 
 def test_p0c_workflow_uses_only_protected_qualification_credentials() -> None:
