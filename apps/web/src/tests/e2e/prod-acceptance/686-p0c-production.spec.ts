@@ -98,110 +98,13 @@ test.describe("Issue #686 P0c production qualification", () => {
               const row = page.getByTestId(`document-row-${documentId}`);
               const retry = row.getByRole("button", { name: /Retry processing/i });
               await expect(retry).toBeVisible({ timeout: 30_000 });
+              const retryPath =
+                "/projects/" + projectId + "/documents/" + documentId + "/reprocess";
               const retryResponsePromise = page.waitForResponse(
                 (response) =>
                   response.request().method() === "POST" &&
-                  new RegExp(
-                    `/projects/${projectId}/documents/${documentId}/reprocess/?import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-
-import { expect, test } from "@playwright/test";
-
-import { contractAPdfPath, loadContractAManifest } from "../../pj01/fixture-contract";
-import { contractBPdfPath, loadContractBManifest } from "../../pj01/revision-fixture";
-import { clickProjectTab } from "../support/pj01/health";
-import { observeProcessingWithoutReload } from "../support/pj01/processing";
-import { uploadNewVersionThroughUi } from "../support/pj01/revision";
-import { Pj01RunRecorder } from "../support/pj01/run-recorder";
-import { assertWhatChangedThroughNavigation } from "../support/pj01/what-changed";
-import {
-  signInSyntheticProductionUser,
-  signOutThroughUi,
-} from "./support/prod-auth.synthetic";
-import { requireProductionOrigin } from "./support/prod-preflight";
-
-const RUN_OUTPUT = path.join(
-  process.cwd(),
-  "playwright",
-  ".prod-p0c",
-  "run.json",
-);
-const JOURNEY_TIMEOUT_MS = 20 * 60_000;
-
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`PROD_P0C_MISSING_ENV:${name}`);
-  return value;
-}
-
-function baseUrl(): string {
-  return requireProductionOrigin(
-    process.env.PROD_ACCEPTANCE_BASE_URL ?? "https://c2pro.io",
-  );
-}
-
-function writeRunEvidence(value: Record<string, unknown>): void {
-  const directory = path.dirname(RUN_OUTPUT);
-  if (!existsSync(directory)) mkdirSync(directory, { recursive: true });
-  writeFileSync(RUN_OUTPUT, JSON.stringify(value, null, 2), "utf8");
-}
-
-test.describe("Issue #686 P0c production qualification", () => {
-  test.describe.configure({ mode: "serial", timeout: JOURNEY_TIMEOUT_MS });
-
-  test("accepted P0b document evolves through revision B and What Changed", async ({
-    page,
-  }) => {
-    const runId = requiredEnv("PROD_ACCEPTANCE_RUN_ID");
-    const projectId = requiredEnv("PROD_P0C_PROJECT_ID");
-    const documentId = requiredEnv("PROD_P0C_DOCUMENT_ID");
-    const expectedSourceRevisionId = requiredEnv("PROD_P0C_SOURCE_REVISION_ID");
-    const recoveryRevisionId = process.env.PROD_P0C_RECOVERY_REVISION_ID || null;
-    const noChangePdf = requiredEnv("PROD_P0C_NO_CHANGE_PDF");
-    const expectedNoChangeSha256 = requiredEnv(
-      "PROD_P0C_NO_CHANGE_EXPECTED_SHA256",
-    );
-    const noChangeFixtureSha256 = createHash("sha256")
-      .update(readFileSync(noChangePdf))
-      .digest("hex");
-    if (noChangeFixtureSha256 !== expectedNoChangeSha256) {
-      throw new Error(
-        `P0C_NO_CHANGE_FIXTURE_HASH_MISMATCH:${noChangeFixtureSha256}`,
-      );
-    }
-
-    const recorder = new Pj01RunRecorder({
-      runId,
-      rootDir: path.join(process.cwd(), "playwright", ".prod-p0c", "pj01"),
-      mode: "strict",
-    });
-    const baseManifest = loadContractAManifest();
-    const revisionManifest = loadContractBManifest();
-
-    try {
-      await recorder.step("P0C-PROD-S1", "Real production sign-in", async () => {
-        await signInSyntheticProductionUser(page);
-      });
-
-      await recorder.step("P0C-PROD-S2", "Bind accepted P0b document", async () => {
-        await page.goto(`${baseUrl()}/projects/${projectId}/documents`);
-        await expect(page.getByTestId("documents-page")).toBeVisible({
-          timeout: 30_000,
-        });
-        await expect(page.getByTestId(`document-row-${documentId}`)).toBeVisible({
-          timeout: 30_000,
-        });
-      });
-
-      const revision = recoveryRevisionId
-        ? await recorder.step(
-            "P0C-PROD-S3",
-            "Retry the already-created Contract B revision through the canonical UI",
-            async () => {
-              const row = page.getByTestId(`document-row-${documentId}`);
-,
-                  ).test(new URL(response.url()).pathname),
+                  (new URL(response.url()).pathname === retryPath ||
+                    new URL(response.url()).pathname === retryPath + "/"),
                 { timeout: 30_000 },
               );
               await retry.click();
