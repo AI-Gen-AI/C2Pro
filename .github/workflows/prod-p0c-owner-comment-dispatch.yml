@@ -1,0 +1,87 @@
+name: P0c Owner Comment Dispatcher
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: c2pro-p0c-owner-comment-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.issue.number == 686 &&
+      github.event.comment.user.login == github.repository_owner &&
+      startsWith(github.event.comment.body, 'RUN-ISSUE-686 ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Parse exact bounded owner command
+        id: parse
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: python
+        run: |
+          import os
+          import re
+          import uuid
+
+          body = os.environ["COMMENT_BODY"].strip()
+          pattern = re.compile(
+              r"^RUN-ISSUE-686 "
+              r"backend_sha=(?P<backend_sha>[0-9a-f]{40}) "
+              r"backend_deployment=(?P<backend_deployment>[0-9a-fA-F-]{36}) "
+              r"frontend_sha=(?P<frontend_sha>[0-9a-f]{40}) "
+              r"frontend_deployment=(?P<frontend_deployment>dpl_[A-Za-z0-9]{20,64}) "
+              r"project_id=(?P<project_id>[0-9a-fA-F-]{36}) "
+              r"document_id=(?P<document_id>[0-9a-fA-F-]{36}) "
+              r"source_revision_id=(?P<source_revision_id>[0-9a-fA-F-]{36}) "
+              r"staged_clear=(?P<staged_clear>true)$"
+          )
+          match = pattern.fullmatch(body)
+          if not match:
+              raise SystemExit("Refusing owner command: exact bounded format required.")
+
+          values = match.groupdict()
+          for key in ("backend_deployment", "project_id", "document_id", "source_revision_id"):
+              try:
+                  uuid.UUID(values[key])
+              except ValueError as exc:
+                  raise SystemExit(f"Refusing owner command: malformed {key}.") from exc
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              for key, value in values.items():
+                  output.write(f"{key}={value}\n")
+
+      - name: Dispatch governed P0c qualification workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKEND_SHA: ${{ steps.parse.outputs.backend_sha }}
+          BACKEND_DEPLOYMENT: ${{ steps.parse.outputs.backend_deployment }}
+          FRONTEND_SHA: ${{ steps.parse.outputs.frontend_sha }}
+          FRONTEND_DEPLOYMENT: ${{ steps.parse.outputs.frontend_deployment }}
+          PROJECT_ID: ${{ steps.parse.outputs.project_id }}
+          DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
+          SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          STAGED_CLEAR: ${{ steps.parse.outputs.staged_clear }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run prod-p0c-qualification.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f confirm_production=RUN-ISSUE-686 \
+            -f backend_commit_sha="$BACKEND_SHA" \
+            -f backend_deployment_id="$BACKEND_DEPLOYMENT" \
+            -f frontend_commit_sha="$FRONTEND_SHA" \
+            -f frontend_deployment_id="$FRONTEND_DEPLOYMENT" \
+            -f project_id="$PROJECT_ID" \
+            -f document_id="$DOCUMENT_ID" \
+            -f source_revision_id="$SOURCE_REVISION_ID" \
+            -f railway_staged_changes_clear="$STAGED_CLEAR"
