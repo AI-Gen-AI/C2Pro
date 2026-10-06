@@ -5,7 +5,6 @@ on:
     types: [created]
 
 permissions:
-  actions: write
   contents: read
 
 concurrency:
@@ -13,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  dispatch:
+  authorize:
     if: >-
       github.event.issue.number == 686 &&
       github.event.comment.user.login == github.repository_owner &&
@@ -21,6 +20,15 @@ jobs:
       startsWith(github.event.comment.body, 'RUN-ISSUE-686 ')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      backend_sha: ${{ steps.parse.outputs.backend_sha }}
+      backend_deployment: ${{ steps.parse.outputs.backend_deployment }}
+      frontend_sha: ${{ steps.parse.outputs.frontend_sha }}
+      frontend_deployment: ${{ steps.parse.outputs.frontend_deployment }}
+      project_id: ${{ steps.parse.outputs.project_id }}
+      document_id: ${{ steps.parse.outputs.document_id }}
+      source_revision_id: ${{ steps.parse.outputs.source_revision_id }}
+      staged_clear: ${{ steps.parse.outputs.staged_clear }}
 
     steps:
       - name: Parse exact bounded owner command
@@ -60,29 +68,17 @@ jobs:
               for key, value in values.items():
                   output.write(f"{key}={value}\n")
 
-      - name: Dispatch governed P0c qualification workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BACKEND_SHA: ${{ steps.parse.outputs.backend_sha }}
-          BACKEND_DEPLOYMENT: ${{ steps.parse.outputs.backend_deployment }}
-          FRONTEND_SHA: ${{ steps.parse.outputs.frontend_sha }}
-          FRONTEND_DEPLOYMENT: ${{ steps.parse.outputs.frontend_deployment }}
-          PROJECT_ID: ${{ steps.parse.outputs.project_id }}
-          DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
-          SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
-          STAGED_CLEAR: ${{ steps.parse.outputs.staged_clear }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh workflow run prod-p0c-qualification.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f confirm_production=RUN-ISSUE-686 \
-            -f backend_commit_sha="$BACKEND_SHA" \
-            -f backend_deployment_id="$BACKEND_DEPLOYMENT" \
-            -f frontend_commit_sha="$FRONTEND_SHA" \
-            -f frontend_deployment_id="$FRONTEND_DEPLOYMENT" \
-            -f project_id="$PROJECT_ID" \
-            -f document_id="$DOCUMENT_ID" \
-            -f source_revision_id="$SOURCE_REVISION_ID" \
-            -f railway_staged_changes_clear="$STAGED_CLEAR"
+  qualification:
+    needs: authorize
+    uses: ./.github/workflows/prod-p0c-qualification.yml
+    with:
+      confirm_production: RUN-ISSUE-686
+      backend_commit_sha: ${{ needs.authorize.outputs.backend_sha }}
+      backend_deployment_id: ${{ needs.authorize.outputs.backend_deployment }}
+      frontend_commit_sha: ${{ needs.authorize.outputs.frontend_sha }}
+      frontend_deployment_id: ${{ needs.authorize.outputs.frontend_deployment }}
+      project_id: ${{ needs.authorize.outputs.project_id }}
+      document_id: ${{ needs.authorize.outputs.document_id }}
+      source_revision_id: ${{ needs.authorize.outputs.source_revision_id }}
+      railway_staged_changes_clear: ${{ needs.authorize.outputs.staged_clear }}
+    secrets: inherit
