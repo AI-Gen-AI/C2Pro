@@ -12,6 +12,9 @@ SPEC = (
 )
 VERIFIER = REPO_ROOT / "apps/api/scripts/verify_p0c_prod_journey.py"
 BUILDER = REPO_ROOT / "validation/product/build_p0c_prod_qualification_bundle.py"
+NO_CHANGE_FIXTURE_BUILDER = (
+    REPO_ROOT / "apps/api/scripts/build_p0c_semantic_no_change_fixture.py"
+)
 
 
 def _workflow() -> str:
@@ -29,12 +32,13 @@ def test_p0c_workflow_is_manual_and_uses_protected_environment() -> None:
 
 def test_p0c_workflow_fails_closed_before_product_mutation() -> None:
     source = _workflow()
+    fixture = source.index("Build byte-distinct semantic no-change fixture")
     preflight = source.index("Fail closed if accepted P0b project is no longer clean")
     browser = source.index("Execute real P0c production browser journey")
     post = source.index("Read-only durable post-run P0c verification")
     bundle = source.index("Build non-authoritative P0c evidence bundle")
     validator = source.index("Validate canonical qualification evidence contract")
-    assert preflight < browser < post < bundle < validator
+    assert fixture < preflight < browser < post < bundle < validator
     assert "--source-revision-id" in source
     assert "--target-revision-id" in source
     assert "--write-evidence" in source
@@ -64,6 +68,10 @@ def test_p0c_browser_reuses_canonical_revision_and_what_changed_helpers() -> Non
     assert "signOutThroughUi(page)" in source
     assert "documentsListed" in source
     assert "expectedSourceRevisionId" in source
+    assert "PROD_P0C_NO_CHANGE_PDF" in source
+    assert "No material change found" in source
+    assert "no_change_target_revision_id" in source
+    assert "byte-distinct-parser-equivalent" in source
 
 
 def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
@@ -75,6 +83,10 @@ def test_p0c_verifier_is_read_only_and_exactly_revision_bound() -> None:
     assert "payload->'provenance'->>'source_revision_id'" in source
     assert "payload->'provenance'->>'target_revision_id'" in source
     assert "every reported change carries evidence" in source
+    assert "no_change_target_revision_id" in source
+    assert "semantic no-change event has null cause" in source
+    assert "semantic no-change event has empty changeset" in source
+    assert "semantic no-change revision is byte-distinct" in source
 
 
 def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority() -> None:
@@ -89,6 +101,18 @@ def test_p0c_bundle_uses_canonical_phase_a_contract_without_lifecycle_authority(
         "absent_evidence_does_not_invent_change",
     ):
         assert f'"id": "{assertion}"' in source
+    assert '"id": "no-change-target-revision"' in source
+    assert '"id": "no-change-event"' in source
+    assert "byte-distinct parser-equivalent derivative" in source
+
+
+def test_p0c_semantic_no_change_fixture_is_fail_closed_by_construction() -> None:
+    source = NO_CHANGE_FIXTURE_BUILDER.read_text(encoding="utf-8")
+    assert "import fitz" in source
+    assert "original_sha == derived_sha" in source
+    assert "_blocks(original) != _blocks(derived)" in source
+    assert "PJ01-P0C-NO-CHANGE" in source
+    assert "contract-c-semantic-no-change.pdf" in source
 
 
 def test_p0c_workflow_does_not_interpolate_dispatch_inputs_inside_shell() -> None:
