@@ -1,14 +1,14 @@
 name: P0c Production Qualification
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       confirm_production:
-        description: "Type RUN-ISSUE-686 to authorize the bounded P0c production journey."
+        description: "Exact bounded production authorization marker."
         required: true
         type: string
       backend_commit_sha:
-        description: "Expected Railway production Git SHA, observed independently immediately before dispatch."
+        description: "Expected Railway production Git SHA, observed independently immediately before execution."
         required: true
         type: string
       backend_deployment_id:
@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       frontend_commit_sha:
-        description: "Expected Vercel production Git SHA, observed independently immediately before dispatch."
+        description: "Expected Vercel production Git SHA, observed independently immediately before execution."
         required: true
         type: string
       frontend_deployment_id:
@@ -36,11 +36,9 @@ on:
         required: true
         type: string
       railway_staged_changes_clear:
-        description: "Operator verified no unreviewed Railway staged changes."
+        description: "Owner verified no unreviewed Railway staged changes."
         required: true
-        default: "false"
-        type: choice
-        options: ["false", "true"]
+        type: string
 
 permissions:
   contents: read
