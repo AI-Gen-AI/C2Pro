@@ -294,6 +294,26 @@ async def test_generate_uses_task_ttl_when_request_has_no_override() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_ttl", [0, -1, -60])
+async def test_generate_non_positive_cache_ttl_falls_back_to_task_policy(
+    invalid_ttl: int,
+) -> None:
+    cache = _FakeCache()
+    wrapper = _bare_wrapper(cache=cache)
+
+    await wrapper.generate(
+        AIRequest(
+            prompt="prompt",
+            task_type=AITaskType.COHERENCE_CHECK,
+            tenant_id=uuid4(),
+            cache_ttl=invalid_ttl,
+        )
+    )
+
+    assert cache.set_calls[0][2] == 60 * 30
+
+
+@pytest.mark.asyncio
 async def test_generate_bypass_anonymization_preserves_raw_transport_payload() -> None:
     wrapper = _bare_wrapper(cache=None)
     wrapper.anonymizer_service.anonymize_document.side_effect = AssertionError(
