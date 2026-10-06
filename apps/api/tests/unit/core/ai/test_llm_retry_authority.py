@@ -12,6 +12,7 @@ import httpx
 import pytest
 
 from src.core.ai.llm_client import LLMClient, LLMErrorType, LLMRequest
+from src.core.resilience import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerState
 
 
 def _provider_error(
@@ -435,3 +436,114 @@ def test_classify_provider_connection_and_timeout_errors() -> None:
 
     assert client._classify_error(timeout) == LLMErrorType.TIMEOUT
     assert client._classify_error(connection) == LLMErrorType.CONNECTION
+
+
+@pytest.mark.asyncio
+async def test_retry_attempts_do_not_poison_logical_request_circuit_breaker(
+    monkeypatch,
+) -> None:
+    """Transient internal retries must not open the breaker when the request succeeds."""
+
+    from src.core.ai import llm_client as module
+
+    client = _bare_retry_client(max_retries=5)
+    client.circuit_breaker = CircuitBreaker(
+        CircuitBreakerConfig(
+            service_name="anthropic-test",
+            failure_threshold=5,
+        )
+    )
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    timeout = anthropic.APITimeoutError(request)
+    provider_response = SimpleNamespace(
+        content=[SimpleNamespace(text="ok")],
+        usage=SimpleNamespace(input_tokens=2, output_tokens=1),
+    )
+    client.client = MagicMock()
+    client.client.messages.create.side_effect = [
+        timeout,
+        timeout,
+        timeout,
+        timeout,
+        timeout,
+        provider_response,
+    ]
+
+    monkeypatch.setattr(module.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(module, "record_ai_cache_miss", lambda *_args: None)
+    monkeypatch.setattr(module, "record_ai_cache_size", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "get_token_counter",
+        lambda: SimpleNamespace(
+            estimate_request=lambda **_kwargs: SimpleNamespace(
+                input_tokens=2,
+                estimated_output_tokens=1,
+                total_cost_usd=0.0,
+                context_usage_percent=0.0,
+                warnings=[],
+            )
+        ),
+    )
+
+    response = await client.generate(
+        LLMRequest(
+            model="claude-haiku-test",
+            messages=[{"role": "user", "content": "hello"}],
+        )
+    )
+
+    assert response.content == "ok"
+    assert response.retries == 5
+    assert client.client.messages.create.call_count == 6
+    assert client.circuit_breaker.state == CircuitBreakerState.CLOSED
+    assert client.circuit_breaker.failure_count == 0
+
+
+@pytest.mark.asyncio
+async def test_retry_exhaustion_records_one_logical_circuit_breaker_failure(
+    monkeypatch,
+) -> None:
+    """One exhausted logical request contributes one breaker failure, not one per attempt."""
+
+    from src.core.ai import llm_client as module
+
+    client = _bare_retry_client(max_retries=5)
+    client.circuit_breaker = CircuitBreaker(
+        CircuitBreakerConfig(
+            service_name="anthropic-test",
+            failure_threshold=5,
+        )
+    )
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    timeout = anthropic.APITimeoutError(request)
+    client.client = MagicMock()
+    client.client.messages.create.side_effect = [timeout] * 6
+
+    monkeypatch.setattr(module.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(module, "record_ai_cache_miss", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "get_token_counter",
+        lambda: SimpleNamespace(
+            estimate_request=lambda **_kwargs: SimpleNamespace(
+                input_tokens=2,
+                estimated_output_tokens=1,
+                total_cost_usd=0.0,
+                context_usage_percent=0.0,
+                warnings=[],
+            )
+        ),
+    )
+
+    with pytest.raises(anthropic.APITimeoutError):
+        await client.generate(
+            LLMRequest(
+                model="claude-haiku-test",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+        )
+
+    assert client.client.messages.create.call_count == 6
+    assert client.circuit_breaker.state == CircuitBreakerState.CLOSED
+    assert client.circuit_breaker.failure_count == 1
