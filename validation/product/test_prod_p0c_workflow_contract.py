@@ -121,8 +121,8 @@ def test_p0c_recovery_is_explicit_and_does_not_weaken_clean_run_guard() -> None:
     source = _workflow()
     assert "RECOVER-ISSUE-686 " in source
     assert "recovery_revision_id=" in source
-    assert "mode=recovery" in source
-    assert "mode=clean" in source
+    assert 'mode = "recovery"' in source
+    assert 'mode = "clean"' in source
 
     clean = source.split(
         "Fail closed if accepted P0b project is no longer clean", 1
