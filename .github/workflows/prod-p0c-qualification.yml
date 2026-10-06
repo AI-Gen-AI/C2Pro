@@ -413,6 +413,7 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
         shell: bash
         run: |
           {
