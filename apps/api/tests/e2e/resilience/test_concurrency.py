@@ -29,6 +29,7 @@ from testcontainers.postgres import PostgresContainer
 async def pg_engine():
     from src.core.database import Base
     from src.projects.adapters.persistence.models import ProjectORM
+    from src.wbs.adapters.persistence.governance_models import WBSBaselineORM, WBSChangeSetORM
     from src.wbs.adapters.persistence.models import WBSNodeORM
 
     engine = None
@@ -46,13 +47,18 @@ async def pg_engine():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all, tables=[ProjectORM.__table__])
             # Minimal FK-target stubs for the canonical WBS (ADR-025): tenants and documents.
-            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY)"))
+            await conn.execute(text("CREATE TABLE IF NOT EXISTS tenants (id uuid PRIMARY KEY, settings jsonb)"))
             await conn.execute(text("CREATE TABLE IF NOT EXISTS documents (id uuid PRIMARY KEY)"))
-            await conn.run_sync(Base.metadata.create_all, tables=[WBSNodeORM.__table__])
+            # PC-2a.2: the live repository consults the approved-baseline authority on every write.
+            await conn.run_sync(
+                Base.metadata.create_all,
+                tables=[WBSNodeORM.__table__, WBSChangeSetORM.__table__, WBSBaselineORM.__table__],
+            )
         yield engine
     finally:
         if engine is not None:
             async with engine.begin() as conn:
+                await conn.execute(text("DROP TABLE IF EXISTS wbs_baselines, wbs_change_sets CASCADE"))
                 await conn.execute(text("DROP TABLE IF EXISTS wbs_nodes CASCADE"))
                 await conn.execute(text("DROP TYPE IF EXISTS wbsnodetype"))
                 await conn.execute(text("DROP TYPE IF EXISTS wbsnodestatus"))
@@ -113,10 +119,10 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
     from src.procurement.application.use_cases.wbs_use_cases import UpdateWBSItemUseCase
     from src.procurement.domain.models import WBSItem
     from src.projects.adapters.persistence.models import ProjectORM
+    from tests.support.legacy_wbs import seed_legacy_wbs
 
     repo = SQLAlchemyWBSRepository(session)
 
-    wbs_id = uuid4()
     tenant_id = uuid4()
     project_id = uuid4()
     root_code = f"1-{uuid4().hex[:6]}"
@@ -143,16 +149,11 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
     session.add(project)
     await session.commit()
 
-    seeded = await repo.create(
-        tenant_id,
-        WBSItem(
-            id=wbs_id,
-            project_id=project_id,
-            code=root_code,
-            name="Original WBS",
-            level=1,
-        )
-    )
+    # a live row loaded out of band (no application path writes governed WBS content directly)
+    (seeded,) = await seed_legacy_wbs(session, tenant_id, [
+        WBSItem(project_id=project_id, code=root_code, name="Original WBS", level=1)
+    ])
+    wbs_id = seeded.id
 
     # User A fetches v1
     item_v1_a = await repo.get_by_id(wbs_id, tenant_id)
@@ -161,13 +162,12 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
 
     assert item_v1_a is not None
     assert item_v1_b is not None
-    assert seeded.id == wbs_id
 
     # User A updates -> v2
     use_case = UpdateWBSItemUseCase(repo)
     await use_case.execute(
         wbs_id=wbs_id,
-        wbs_update=WBSItemUpdate(name="Updated by A", expected_version=item_v1_a.version),
+        wbs_update=WBSItemUpdate(description="Updated by A", expected_version=item_v1_a.version),
         tenant_id=tenant_id,
     )
 
@@ -175,7 +175,7 @@ async def test_optimistic_locking_on_wbs_item(session: AsyncSession):
     with pytest.raises(ConflictError):
         await use_case.execute(
             wbs_id=wbs_id,
-            wbs_update=WBSItemUpdate(name="Updated by B", expected_version=item_v1_b.version),
+            wbs_update=WBSItemUpdate(description="Updated by B", expected_version=item_v1_b.version),
             tenant_id=tenant_id,
         )
 

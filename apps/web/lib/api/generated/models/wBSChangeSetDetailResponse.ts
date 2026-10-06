@@ -40,6 +40,7 @@
 import type { WBSCandidateNodeResponse } from "./wBSCandidateNodeResponse";
 import type { WBSChangeSetDetailResponseProfileRefsItem } from "./wBSChangeSetDetailResponseProfileRefsItem";
 import type { WBSLineageEdgeResponse } from "./wBSLineageEdgeResponse";
+import type { WBSRetirementResponse } from "./wBSRetirementResponse";
 
 export interface WBSChangeSetDetailResponse {
   id: string;
@@ -65,4 +66,5 @@ export interface WBSChangeSetDetailResponse {
   current_digest: string;
   nodes: WBSCandidateNodeResponse[];
   lineage: WBSLineageEdgeResponse[];
+  retirements?: WBSRetirementResponse[];
 }

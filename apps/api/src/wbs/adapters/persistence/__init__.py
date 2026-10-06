@@ -6,6 +6,7 @@ from src.wbs.adapters.persistence.governance_models import (
     WBSChangeSetLineageORM,
     WBSChangeSetNodeORM,
     WBSChangeSetORM,
+    WBSChangeSetRetirementORM,
 )
 from src.wbs.adapters.persistence.models import WBSNodeORM
 
@@ -15,5 +16,6 @@ __all__ = [
     "WBSChangeSetLineageORM",
     "WBSChangeSetNodeORM",
     "WBSChangeSetORM",
+    "WBSChangeSetRetirementORM",
     "WBSNodeORM",
 ]
