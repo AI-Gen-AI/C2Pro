@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 
 import { contractAPdfPath, loadContractAManifest } from "../../pj01/fixture-contract";
 import { contractBPdfPath, loadContractBManifest } from "../../pj01/revision-fixture";
+import { clickProjectTab } from "../support/pj01/health";
 import { observeProcessingWithoutReload } from "../support/pj01/processing";
 import { uploadNewVersionThroughUi } from "../support/pj01/revision";
 import { Pj01RunRecorder } from "../support/pj01/run-recorder";
@@ -21,7 +22,7 @@ const RUN_OUTPUT = path.join(
   ".prod-p0c",
   "run.json",
 );
-const JOURNEY_TIMEOUT_MS = 12 * 60_000;
+const JOURNEY_TIMEOUT_MS = 20 * 60_000;
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -51,6 +52,7 @@ test.describe("Issue #686 P0c production qualification", () => {
     const projectId = requiredEnv("PROD_P0C_PROJECT_ID");
     const documentId = requiredEnv("PROD_P0C_DOCUMENT_ID");
     const expectedSourceRevisionId = requiredEnv("PROD_P0C_SOURCE_REVISION_ID");
+    const noChangePdf = requiredEnv("PROD_P0C_NO_CHANGE_PDF");
 
     const recorder = new Pj01RunRecorder({
       runId,
@@ -132,6 +134,103 @@ test.describe("Issue #686 P0c production qualification", () => {
         },
       );
 
+      const noChange = await recorder.step(
+        "P0C-PROD-S7",
+        "Prove byte-distinct parser-equivalent revision is NO_CHANGE",
+        async () => {
+          const uploaded = await uploadNewVersionThroughUi(page, recorder, {
+            projectId,
+            documentId,
+            filePath: noChangePdf,
+          });
+          expect(uploaded.documentId).toBe(documentId);
+          expect(uploaded.documentsListed).toBe(1);
+
+          const processed = await observeProcessingWithoutReload(page, recorder, {
+            projectId,
+            documentId,
+          });
+          expect(processed.evaluation.outcome).toBe("analyzed");
+          expect(processed.evaluation.violations).toEqual([]);
+
+          const timelineResponse = page.waitForResponse(
+            (response) =>
+              response.request().method() === "GET" &&
+              response.ok() &&
+              new RegExp(`/projects/${projectId}/timeline/?$`).test(
+                new URL(response.url()).pathname,
+              ),
+            { timeout: 60_000 },
+          );
+
+          await clickProjectTab(
+            page,
+            recorder,
+            projectId,
+            "changes",
+            "P0C_NO_CHANGE_TAB_NOT_NAVIGABLE",
+          );
+
+          const payload = (await (await timelineResponse).json()) as {
+            items?: Array<{
+              event_id: string;
+              event_type: string;
+              state: string;
+              change_cause: string | null;
+              document_id: string | null;
+              occurred_at: string;
+              provenance?: Record<string, unknown>;
+            }>;
+          };
+
+          const afterPositive = Date.parse(whatChanged.occurredAt);
+          const outcome = (payload.items ?? [])
+            .filter(
+              (item) =>
+                item.event_type === "revision.changed" &&
+                item.document_id === documentId &&
+                Date.parse(item.occurred_at) > afterPositive,
+            )
+            .sort(
+              (a, b) =>
+                Date.parse(b.occurred_at) - Date.parse(a.occurred_at),
+            )[0];
+
+          if (!outcome) throw new Error("P0C_NO_CHANGE_OUTCOME_MISSING");
+          expect(outcome.state).toBe("ready");
+          expect(outcome.change_cause).toBeNull();
+
+          const sourceRevisionId = String(
+            outcome.provenance?.source_revision_id ?? "",
+          );
+          const targetRevisionId = String(
+            outcome.provenance?.target_revision_id ?? "",
+          );
+          expect(sourceRevisionId).toBe(whatChanged.targetRevisionId);
+          if (!targetRevisionId || targetRevisionId === sourceRevisionId) {
+            throw new Error("P0C_NO_CHANGE_REVISION_IDENTITY_INVALID");
+          }
+
+          const card = page.getByTestId(`change-item-${outcome.event_id}`);
+          await expect(card.getByText("No material change found")).toBeVisible({
+            timeout: 30_000,
+          });
+          await recorder.screenshot(page, "h3-no-material-change");
+
+          return {
+            eventId: outcome.event_id,
+            sourceRevisionId,
+            targetRevisionId,
+            occurredAt: outcome.occurred_at,
+            changeCause: outcome.change_cause,
+            fixtureClass: "byte-distinct-parser-equivalent",
+            processingOutcome: processed.evaluation.outcome,
+          };
+        },
+      );
+
+      expect(recorder.blockingFindings()).toEqual([]);
+
       writeRunEvidence({
         schema: "c2pro-p0c-prod-run/v1",
         run_id: runId,
@@ -145,6 +244,13 @@ test.describe("Issue #686 P0c production qualification", () => {
         documents_listed: revision.documentsListed,
         processing_outcome: processing.evaluation.outcome,
         relogin_verified: true,
+        no_change_event_id: noChange.eventId,
+        no_change_source_revision_id: noChange.sourceRevisionId,
+        no_change_target_revision_id: noChange.targetRevisionId,
+        no_change_occurred_at: noChange.occurredAt,
+        no_change_change_cause: noChange.changeCause,
+        no_change_fixture_class: noChange.fixtureClass,
+        no_change_processing_outcome: noChange.processingOutcome,
         blocking_findings: recorder.blockingFindings(),
       });
     } finally {
