@@ -253,3 +253,18 @@ def test_wrapped_provider_retry_after_is_preserved() -> None:
         LLMErrorType.UNKNOWN,
         outer,
     ) == pytest.approx(5.0)
+
+
+def test_fallback_retry_delay_never_exceeds_configured_max(monkeypatch) -> None:
+    """Jitter must not push C2Pro's fallback delay above max_retry_delay."""
+
+    client = _bare_retry_client()
+    client.max_retry_delay = 5.0
+    monkeypatch.setattr("random.uniform", lambda *_args: 1.2)
+
+    delay = client._calculate_retry_delay(
+        10,
+        LLMErrorType.CONNECTION,
+    )
+
+    assert delay == pytest.approx(5.0)
