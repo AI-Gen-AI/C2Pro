@@ -187,7 +187,7 @@ jobs:
           done
 
           curl --fail --silent --show-error \
-            --url "https://api.vercel.com/v13/deployments/${PROD_INPUT_FRONTEND_DEPLOYMENT_ID}?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}" \
+            --url "https://api.vercel.com/v13/deployments/c2pro.io?teamId=${PROD_ACCEPTANCE_VERCEL_TEAM_ID}" \
             --header "Authorization: Bearer ${PROD_ACCEPTANCE_VERCEL_TOKEN}" \
             --output evidence/product-qualification/runtime/provider/vercel-frontend.json
 
