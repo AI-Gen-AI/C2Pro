@@ -18,7 +18,15 @@ def test_dispatcher_is_issue_686_owner_only_and_actions_write_bounded() -> None:
     assert "contents: read" in source
     assert "github.event.issue.number == 686" in source
     assert "github.event.comment.user.login == github.repository_owner" in source
+    assert "github.triggering_actor == github.repository_owner" in source
     assert "startsWith(github.event.comment.body, 'RUN-ISSUE-686 ')" in source
+
+
+def test_dispatcher_rejects_non_owner_reruns() -> None:
+    source = _source()
+    job_if = source.split("if: >-", 1)[1].split("runs-on:", 1)[0]
+    assert "github.event.comment.user.login == github.repository_owner" in job_if
+    assert "github.triggering_actor == github.repository_owner" in job_if
 
 
 def test_dispatcher_parses_comment_via_environment_not_shell_interpolation() -> None:
