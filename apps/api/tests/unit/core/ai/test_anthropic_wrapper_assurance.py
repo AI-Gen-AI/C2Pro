@@ -138,26 +138,31 @@ def test_cache_key_is_deterministic_within_tenant_and_isolated_across_tenants() 
     assert a_first.startswith("llm_response:")
 
 
-def test_cache_key_has_separate_system_scope_when_tenant_is_absent() -> None:
-    wrapper = _bare_wrapper()
-    tenant_key = wrapper._build_cache_key(
-        prompt="prompt",
-        system_prompt="system",
-        model="model",
-        temperature=0.0,
-        max_tokens=100,
-        tenant_id=uuid4(),
+@pytest.mark.asyncio
+async def test_generate_without_tenant_fails_closed_by_bypassing_cache() -> None:
+    cache = _FakeCache(
+        {
+            "content": "must-not-be-used",
+            "model": "claude-haiku-test",
+            "input_tokens": 1,
+            "output_tokens": 1,
+            "cost_usd": 0.0,
+        }
     )
-    system_key = wrapper._build_cache_key(
-        prompt="prompt",
-        system_prompt="system",
-        model="model",
-        temperature=0.0,
-        max_tokens=100,
-        tenant_id=None,
+    wrapper = _bare_wrapper(cache=cache)
+
+    response = await wrapper.generate(
+        AIRequest(
+            prompt="prompt",
+            task_type=AITaskType.CONTRACT_EXTRACTION,
+            tenant_id=None,
+        )
     )
 
-    assert tenant_key != system_key
+    assert response.cached is False
+    assert cache.get_calls == []
+    assert cache.set_calls == []
+    wrapper.llm_client.generate.assert_awaited_once()
 
 
 @pytest.mark.asyncio
