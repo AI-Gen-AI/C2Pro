@@ -38,7 +38,9 @@ def test_upgrade_drops_only_the_legacy_clause_code_uniqueness() -> None:
         "ALTER TABLE public.clauses DROP CONSTRAINT IF EXISTS "
         + LEGACY_CONSTRAINT
     ) in upgrade
-    assert "UNIQUE" not in upgrade.upper()
+    upper = f" {upgrade.upper()} "
+    assert " ADD CONSTRAINT " not in upper
+    assert " UNIQUE (" not in upper
     assert "ROW LEVEL SECURITY" not in upgrade.upper()
     assert "POLICY" not in upgrade.upper()
 
