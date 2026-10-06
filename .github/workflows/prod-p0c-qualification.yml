@@ -192,6 +192,7 @@ jobs:
             --output evidence/product-qualification/runtime/provider/vercel-frontend.json
 
       - name: Verify exact provider deployment identities
+        id: runtime_identity
         env:
           BACKEND_SHA: ${{ steps.parse.outputs.backend_sha }}
           BACKEND_DEPLOYMENT: ${{ steps.parse.outputs.backend_deployment }}
@@ -209,8 +210,8 @@ jobs:
 
           backend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["backend"]["api"]["commit_sha"])')"
           frontend_sha="$(python -c 'import json; print(json.load(open("evidence/product-qualification/runtime/deployment-identity.json"))["frontend"]["commit_sha"])')"
-          echo "PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA=$backend_sha" >> "$GITHUB_ENV"
-          echo "PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA=$frontend_sha" >> "$GITHUB_ENV"
+          echo "backend_sha=$backend_sha" >> "$GITHUB_OUTPUT"
+          echo "frontend_sha=$frontend_sha" >> "$GITHUB_OUTPUT"
 
       - name: Setup Python backend
         uses: ./.github/actions/setup-python-backend
@@ -267,9 +268,9 @@ jobs:
           PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
           PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
           PROD_ACCEPTANCE_EXPECTED_BACKEND_SHA: ${{ steps.parse.outputs.backend_sha }}
-          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA }}
+          PROD_ACCEPTANCE_OBSERVED_BACKEND_SHA: ${{ steps.runtime_identity.outputs.backend_sha }}
           PROD_ACCEPTANCE_EXPECTED_FRONTEND_SHA: ${{ steps.parse.outputs.frontend_sha }}
-          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA }}
+          PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA: ${{ steps.runtime_identity.outputs.frontend_sha }}
         working-directory: apps/web
         shell: bash
         run: |
