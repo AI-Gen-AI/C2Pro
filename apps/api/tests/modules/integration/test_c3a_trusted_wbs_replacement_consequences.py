@@ -1,15 +1,12 @@
-"""C3a: what a genuine TRUSTED canonical WBS replacement does downstream (TS-INT-C3A-WBS-001).
+"""C3a -> PC-1R: a delete-and-recreate WBS "replacement" can no longer drop RACI/BOM (TS-INT-C3A-WBS-001).
 
-Only a genuine TRUSTED approval path may replace the project's canonical WBS
-(N17 skips every canonical write while human approval is still required). When
-it does, the replacement is ``DELETE wbs_nodes`` + re-create, exactly as N17 and
-the fenced resume do it. This pins the consequences a reviewer must know before
-approving a revision -- they are database-enforced, not application choices:
-
-* RACI assignments on replaced nodes are DELETED (``ON DELETE CASCADE``);
-* BOM lines keep existing but are UNLINKED (``wbs_item_id`` -> NULL, ``SET NULL``).
-
-Reconciling them across revisions (remapping RACI/BOM to the new nodes) is C3b.
+C3a pinned what the old canonical WBS replacement (``DELETE wbs_nodes`` + re-create) did
+downstream: RACI on replaced nodes was cascade-DELETED and BOM lines were silently UNLINKED.
+#830 removed every automated replacement, and PC-1R (#886, ADR-029) makes the consequence
+impossible at the database level: ``stakeholder_wbs_raci.wbs_item_id`` and
+``procurement_bom_items.wbs_item_id`` are ``ON DELETE NO ACTION`` (checked at commit), so
+deleting a node that still carries accountability or procurement links fails and the links
+survive. Governed replacement with explicit link dispositions is PC-2a (change sets).
 """
 
 from __future__ import annotations
@@ -19,6 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.models import SubscriptionPlan, Tenant
@@ -55,7 +53,7 @@ async def _project(db: AsyncSession) -> tuple[UUID, UUID]:
     return tenant_id, project_id
 
 
-async def test_trusted_wbs_replacement_cascades_raci_and_unlinks_bom(db: AsyncSession) -> None:
+async def test_destructive_wbs_replacement_cannot_drop_raci_or_unlink_bom(db: AsyncSession) -> None:
     tenant_id, project_id = await _project(db)
     wbs = SQLAlchemyWBSRepository(db)
     [node] = await wbs.bulk_create_from_dicts(
@@ -85,28 +83,27 @@ async def test_trusted_wbs_replacement_cascades_raci_and_unlinks_bom(db: AsyncSe
     )
     await db.commit()
 
-    # The genuine TRUSTED replacement (same statements as N17 / the fenced resume).
-    await db.execute(
-        delete(WBSNodeORM).where(
-            WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id
+    # The old replacement statements are now rejected (at commit: the FKs are deferred).
+    with pytest.raises(DBAPIError):
+        await db.execute(
+            delete(WBSNodeORM).where(
+                WBSNodeORM.project_id == project_id, WBSNodeORM.tenant_id == tenant_id
+            )
         )
-    )
-    await wbs.bulk_create_from_dicts(
-        project_id, [{"code": "1", "name": "Civil works (V2)"}], tenant_id
-    )
-    await db.commit()
+        await db.commit()
+    await db.rollback()
 
     raci_left = await db.scalar(
         select(func.count()).select_from(StakeholderWBSRaciORM).where(
             StakeholderWBSRaciORM.project_id == project_id
         )
     )
-    assert raci_left == 0  # cascade-deleted with the replaced node
+    assert raci_left == 1  # accountability survives
     bom = (
         await db.execute(select(BOMItemORM).where(BOMItemORM.project_id == project_id))
     ).scalar_one()
-    assert bom.wbs_item_id is None  # kept, but unlinked
+    assert bom.wbs_item_id == node.id  # still linked
     names = (
         await db.execute(select(WBSNodeORM.name).where(WBSNodeORM.project_id == project_id))
     ).scalars().all()
-    assert names == ["Civil works (V2)"]
+    assert names == ["Civil works (V1)"]

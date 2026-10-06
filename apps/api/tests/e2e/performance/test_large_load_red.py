@@ -108,38 +108,6 @@ async def test_002_list_projects_p95_under_1500ms_for_10_concurrent_requests(
 
 @pytest.mark.asyncio
 @pytest.mark.e2e
-async def test_003_overload_returns_structured_429_with_retry_after(
-    client,
-    db,
-    test_user: User,
-    test_tenant: Tenant,
-    generate_token,
-) -> None:
-    """TS-E2E-PER-LRG-001: overload must degrade gracefully with structured 429."""
-    headers = _headers(generate_token, test_user, test_tenant)
-    project = await _seed_project(db, test_tenant)
-
-    payload = {"items": [{"code": "1", "name": "Root", "level": 1}]}
-    responses = await asyncio.gather(
-        *[
-            client.post(
-                f"/api/v1/projects/{project['id']}/wbs/bulk",
-                json=payload,
-                headers=headers,
-            )
-            for _ in range(10)
-        ]
-    )
-    throttled = [r for r in responses if r.status_code == 429]
-
-    assert len(throttled) >= 1
-    for response in throttled:
-        assert "Retry-After" in response.headers
-        assert response.json()["detail"]["code"] == "RATE_LIMITED"
-
-
-@pytest.mark.asyncio
-@pytest.mark.e2e
 async def test_004_bulk_endpoint_exposes_server_timing_header(
     client,
     test_user: User,

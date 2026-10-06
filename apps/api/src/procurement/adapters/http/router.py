@@ -9,6 +9,7 @@ from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_session
+from src.core.exceptions import C2ProException
 from src.core.security import CurrentTenantId
 
 # Repositories
@@ -170,6 +171,10 @@ async def create_wbs_item(
     try:
         wbs_item = await use_case.execute(wbs_create, tenant_id)
         return WBSItemResponse.model_validate(wbs_item)
+    except C2ProException:
+        raise
+    except ValueError as e:  # e.g. a parent outside the project (PC-1R)
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -230,9 +235,12 @@ async def update_wbs_item(
     use_case: UpdateWBSItemUseCase = Depends(get_update_wbs_item_use_case),
 ) -> WBSItemResponse:
     """
-    Update a WBS item.
+    Update a WBS item (recode / reparent / reposition keep the node's identity).
     """
-    wbs_item = await use_case.execute(wbs_id, wbs_update, tenant_id)
+    try:
+        wbs_item = await use_case.execute(wbs_id, wbs_update, tenant_id)
+    except ValueError as e:  # a parent outside the project, or a move under its own subtree
+        raise HTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
     if not wbs_item:
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -249,7 +257,7 @@ async def delete_wbs_item(
     use_case: DeleteWBSItemUseCase = Depends(get_delete_wbs_item_use_case),
 ) -> None:
     """
-    Delete a WBS item and its children (cascade).
+    Delete a WBS item and its children. A subtree with RACI or BOM links is a 409 conflict.
     """
     deleted = await use_case.execute(wbs_id, tenant_id)
     if not deleted:

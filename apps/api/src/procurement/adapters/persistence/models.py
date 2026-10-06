@@ -139,9 +139,12 @@ class BOMItemORM(Base):
     item_name: Mapped[str] = mapped_column(String, nullable=False)
     quantity: Mapped[Decimal] = mapped_column(DECIMAL(18, 4), nullable=False)
     # ADR-025: procurement is downstream of the canonical WBS; a BOM line points at a
-    # canonical node and never defines a WBS hierarchy of its own.
+    # canonical node and never defines a WBS hierarchy of its own. PC-1R: a linked node cannot
+    # be deleted silently (NO ACTION; the repository returns 409).
     wbs_item_id: Mapped[UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("wbs_nodes.id", ondelete="SET NULL"), nullable=True
+        PGUUID(as_uuid=True),
+        ForeignKey("wbs_nodes.id", ondelete="NO ACTION", deferrable=True, initially="DEFERRED"),
+        nullable=True,
     )
     item_code: Mapped[str | None] = mapped_column(String, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

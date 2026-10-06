@@ -178,10 +178,11 @@ class StakeholderWBSRaciORM(Base):
         nullable=False,
         index=True,
     )
-    # ADR-025: RACI assigns accountability on the canonical Project Controls WBS.
+    # ADR-025: RACI assigns accountability on the canonical Project Controls WBS. PC-1R: deleting
+    # a WBS node never silently deletes accountability (NO ACTION; the repository returns 409).
     wbs_item_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("wbs_nodes.id", ondelete="CASCADE"),
+        ForeignKey("wbs_nodes.id", ondelete="NO ACTION", deferrable=True, initially="DEFERRED"),
         nullable=False,
         index=True,
     )

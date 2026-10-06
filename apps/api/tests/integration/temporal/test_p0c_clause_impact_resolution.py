@@ -178,6 +178,7 @@ def _wbs(tenant_id: UUID, project_id: UUID, code: str, lft: int, **links: object
         lft=lft,
         rgt=lft + 1,
         depth=0,
+        sort_order=(lft + 1) // 2,  # PC-1R: top-level sibling position (sort_order is authoritative)
         **links,
     )
 
