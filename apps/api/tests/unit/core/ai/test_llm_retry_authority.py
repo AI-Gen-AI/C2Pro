@@ -547,3 +547,72 @@ async def test_retry_exhaustion_records_one_logical_circuit_breaker_failure(
     assert client.client.messages.create.call_count == 6
     assert client.circuit_breaker.state == CircuitBreakerState.CLOSED
     assert client.circuit_breaker.failure_count == 1
+
+
+@pytest.mark.parametrize(
+    ("error_type", "status_code"),
+    [
+        (anthropic.AuthenticationError, 401),
+        (anthropic.BadRequestError, 400),
+        (anthropic.NotFoundError, 404),
+    ],
+)
+@pytest.mark.asyncio
+async def test_wrapped_client_errors_remain_excluded_from_circuit_breaker(
+    monkeypatch,
+    error_type,
+    status_code: int,
+) -> None:
+    """Explicit client-error causes must not trip the shared Anthropic breaker."""
+
+    from src.core.ai import llm_client as module
+
+    client = _bare_retry_client(max_retries=5)
+    client.circuit_breaker = CircuitBreaker(
+        CircuitBreakerConfig(
+            service_name="anthropic-test",
+            failure_threshold=1,
+            excluded_exceptions=(
+                anthropic.AuthenticationError,
+                anthropic.BadRequestError,
+                anthropic.NotFoundError,
+            ),
+        )
+    )
+
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(status_code, request=request)
+    inner = error_type("client error", response=response, body=None)
+    outer = RuntimeError("middleware wrapper")
+    outer.__cause__ = inner
+
+    client.client = MagicMock()
+    client.client.messages.create.side_effect = outer
+
+    monkeypatch.setattr(module.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(module, "record_ai_cache_miss", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "get_token_counter",
+        lambda: SimpleNamespace(
+            estimate_request=lambda **_kwargs: SimpleNamespace(
+                input_tokens=2,
+                estimated_output_tokens=1,
+                total_cost_usd=0.0,
+                context_usage_percent=0.0,
+                warnings=[],
+            )
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="middleware wrapper"):
+        await client.generate(
+            LLMRequest(
+                model="claude-haiku-test",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+        )
+
+    assert client.client.messages.create.call_count == 1
+    assert client.circuit_breaker.state == CircuitBreakerState.CLOSED
+    assert client.circuit_breaker.failure_count == 0
