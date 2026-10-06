@@ -64,6 +64,8 @@ async def verify_pre(
         "project_id": project_id,
         "document_id": document_id,
         "source_revision_id": source_revision_id,
+        "document_id_text": str(document_id),
+        "source_revision_id_text": str(source_revision_id),
     }
     project_count = await _scalar(
         conn,
@@ -110,8 +112,8 @@ async def verify_pre(
          WHERE project_id=:project_id
            AND tenant_id=:tenant_id
            AND event_type='revision.changed'
-           AND payload->>'document_id'=CAST(:document_id AS text)
-           AND payload->'provenance'->>'target_revision_id'<>CAST(:source_revision_id AS text)
+           AND payload->>'document_id'=:document_id_text
+           AND payload->'provenance'->>'target_revision_id'<>:source_revision_id_text
         """,
         p,
     )
@@ -147,6 +149,10 @@ async def verify_post(
         "source_revision_id": source_revision_id,
         "target_revision_id": target_revision_id,
         "no_change_target_revision_id": no_change_target_revision_id,
+        "document_id_text": str(document_id),
+        "source_revision_id_text": str(source_revision_id),
+        "target_revision_id_text": str(target_revision_id),
+        "no_change_target_revision_id_text": str(no_change_target_revision_id),
     }
     target_count = await _scalar(
         conn,
@@ -200,9 +206,9 @@ async def verify_post(
              WHERE project_id=:project_id
                AND tenant_id=:tenant_id
                AND event_type='revision.changed'
-               AND payload->>'document_id'=CAST(:document_id AS text)
-               AND payload->'provenance'->>'source_revision_id'=CAST(:source_revision_id AS text)
-               AND payload->'provenance'->>'target_revision_id'=CAST(:target_revision_id AS text)
+               AND payload->>'document_id'=:document_id_text
+               AND payload->'provenance'->>'source_revision_id'=:source_revision_id_text
+               AND payload->'provenance'->>'target_revision_id'=:target_revision_id_text
              ORDER BY occurred_at, event_id
             """
         ),
@@ -232,9 +238,9 @@ async def verify_post(
              WHERE project_id=:project_id
                AND tenant_id=:tenant_id
                AND event_type='revision.changed'
-               AND payload->>'document_id'=CAST(:document_id AS text)
-               AND payload->'provenance'->>'source_revision_id'=CAST(:target_revision_id AS text)
-               AND payload->'provenance'->>'target_revision_id'=CAST(:no_change_target_revision_id AS text)
+               AND payload->>'document_id'=:document_id_text
+               AND payload->'provenance'->>'source_revision_id'=:target_revision_id_text
+               AND payload->'provenance'->>'target_revision_id'=:no_change_target_revision_id_text
              ORDER BY occurred_at, event_id
             """
         ),
@@ -275,7 +281,7 @@ async def verify_post(
          WHERE project_id=:project_id
            AND tenant_id=:tenant_id
            AND event_type='revision.analysis_failed'
-           AND payload->>'document_id'=CAST(:document_id AS text)
+           AND payload->>'document_id'=:document_id_text
         """,
         p,
     )
