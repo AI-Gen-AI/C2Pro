@@ -18,7 +18,7 @@ from src.core.ai.analytics_service import (
     _parse_timeframe,
     _window_start,
 )
-from src.core.cache import CacheService
+from src.core.cache import CacheService, build_endpoint_cache_key
 from src.core.security import get_current_tenant_id
 
 
@@ -352,6 +352,26 @@ async def test_quality_drift_emits_feedback_and_latency_alerts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_invalid_timeframe_is_rejected_before_service_cache_lookup() -> None:
+    cache = MagicMock()
+    cache.get = AsyncMock(
+        return_value={
+            "timeframe": "0h",
+            "series": [],
+            "summary": {"total_cost": 0, "total_tokens": 0, "total_requests": 0},
+        }
+    )
+    db = AsyncMock()
+    service = AIAnalyticsService(db=db, cache=cache)
+
+    with pytest.raises(ValueError, match="Invalid timeframe"):
+        await service.cost_breakdown(tenant_id=uuid4(), timeframe="0h")
+
+    cache.get.assert_not_awaited()
+    db.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_service_cache_hit_short_circuits_database() -> None:
     cache = MagicMock()
     cache.get = AsyncMock(return_value={"timeframe": "7d", "versions": [{"cached": True}]})
@@ -475,6 +495,45 @@ async def test_route_cache_isolated_by_tenant_and_query(
     assert [call[2] for call in service.calls] == ["7d", "7d", "30d"]
     assert len({key for key, _ in cache.set_calls}) == 3
     assert all(ttl == 300 for _, ttl in cache.set_calls)
+
+
+@pytest.mark.asyncio
+async def test_route_cache_contract_version_ignores_legacy_invalid_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    tenant_holder = {"tenant_id": tenant_id}
+    service = _RouterService()
+    service.raise_value_error = True
+    cache = _RecordingRouteCache()
+    app = _analytics_app(service, tenant_holder)
+
+    legacy_key = build_endpoint_cache_key(
+        endpoint="/cost",
+        query_params={"timeframe": "0h"},
+        tenant_id=tenant_id,
+    )
+    await cache.set(
+        legacy_key,
+        {
+            "tenant_id": str(tenant_id),
+            "timeframe": "0h",
+            "series": [],
+            "summary": {"total_cost": 0, "total_tokens": 0, "total_requests": 1},
+        },
+        ttl=300,
+    )
+    cache.set_calls.clear()
+
+    monkeypatch.setattr("src.core.cache.get_cache_service", lambda: cache)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/v1/ai/analytics/cost?timeframe=0h")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid timeframe"
+    assert cache.set_calls == []
 
 
 @pytest.mark.asyncio
