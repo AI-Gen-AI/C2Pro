@@ -4,12 +4,8 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import {
-  contractAPdfPath,
-  contractBPdfPath,
-  loadContractAManifest,
-  loadContractBManifest,
-} from "../support/pj01/revision-fixture";
+import { contractAPdfPath, loadContractAManifest } from "../../pj01/fixture-contract";
+import { contractBPdfPath, loadContractBManifest } from "../../pj01/revision-fixture";
 import { clickProjectTab } from "../support/pj01/health";
 import { observeProcessingWithoutReload } from "../support/pj01/processing";
 import { uploadNewVersionThroughUi } from "../support/pj01/revision";
