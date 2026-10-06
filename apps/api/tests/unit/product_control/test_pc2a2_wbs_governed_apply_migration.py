@@ -35,8 +35,12 @@ def _sql(statements: tuple[str, ...]) -> str:
 def test_extends_the_single_chain_after_pc2a1() -> None:
     module = _load()
     assert (module.revision, module.down_revision) == ("20261006_0002", "20261006_0001")
-    heads = [p.name for p in MIGRATION.parent.glob("*.py") if "down_revision = \"20261006_0002\"" in p.read_text()]
-    assert heads == []  # nothing branches off it
+    children = [
+        p.name
+        for p in MIGRATION.parent.glob("*.py")
+        if "down_revision = \"20261006_0002\"" in p.read_text(encoding="utf-8")
+    ]
+    assert children == ["20261006_0003_drop_legacy_clause_code_unique.py"]
 
 
 def test_supabase_mirror_is_rendered_from_the_alembic_statements() -> None:

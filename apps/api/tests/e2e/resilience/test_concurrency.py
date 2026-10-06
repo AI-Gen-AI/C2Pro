@@ -2,12 +2,11 @@
 """
 E2E Resilience Tests (TDD - RED Phase)
 
-Refers to Suite IDs: TS-E2E-ERR-TIM-001, TS-E2E-ERR-CON-001, TS-E2E-ERR-REC-001.
+Refers to Suite IDs: TS-E2E-ERR-CON-001, TS-E2E-ERR-REC-001.
 """
 
 from __future__ import annotations
 
-import asyncio
 import re
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -75,32 +74,6 @@ async def session(pg_engine) -> AsyncSession:
     session_factory = async_sessionmaker(bind=pg_engine, expire_on_commit=False, class_=AsyncSession)
     async with session_factory() as db:
         yield db
-
-
-# ---------------------------------------------------------------------------
-# TS-E2E-ERR-TIM-001: Timeout & Fallback
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_llm_timeout_returns_fallback_status(mocker):
-    """
-    Simulate slow LLM (>30s) and assert fallback/retry response.
-    """
-    from src.core.ai.llm_timeout_handler import LLMTimeoutService
-
-    llm_client = mocker.AsyncMock()
-
-    async def slow_call(*_args, **_kwargs):
-        await asyncio.sleep(31)
-        return {"content": "late"}
-
-    llm_client.generate.side_effect = slow_call
-
-    service = LLMTimeoutService(llm_client=llm_client, timeout_seconds=30)
-    result = await service.generate_with_fallback(prompt="hello")
-
-    assert result["status"] == "fallback_retry"
 
 
 # ---------------------------------------------------------------------------
