@@ -764,3 +764,34 @@ async def test_preview_performs_zero_writes(db: AsyncSession) -> None:
     assert preview.applicable and [n.name for n in preview.resulting_nodes if n.key.startswith("label:")] == [
         "MV system", "MV cables"]
     assert await state() == before
+
+
+async def test_a_run_captures_one_consistent_candidate_identity_under_concurrent_edits(db: AsyncSession) -> None:
+    """Codex P1: the revision and the nodes of a candidate run come from the same locked state."""
+    s = await _scope(db)
+    change_set_id = await _new(db, s)
+    await _tree(db, s, change_set_id)
+    revision = await _rev(db, change_set_id)
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://"))
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with sessions() as editor, sessions() as requester:
+            # an author's edit is in flight (revision bumped, node added, not yet committed)
+            await WBSGovernedChangeService(editor).execute(
+                project_id=s.project, change_set_id=change_set_id, tenant_id=s.tenant, actor=s.author,
+                expected_revision=revision, command=AddNode(NodeSpec("Mechanical", "3")))
+            racing = asyncio.create_task(WBSIntelligenceService(requester).request_deterministic_run(
+                project_id=s.project, tenant_id=s.tenant, actor=s.author, target_kind=TargetKind.CANDIDATE,
+                change_set_id=change_set_id))
+            await asyncio.sleep(0.5)
+            assert not racing.done()  # the run waits for the candidate instead of mixing two states
+            await editor.commit()
+            result = await asyncio.wait_for(racing, timeout=20)
+            await requester.commit()
+    finally:
+        await engine.dispose()
+    run = result.run
+    change_set = await _cs(db, change_set_id)
+    snapshot = _candidate_snapshot(s.project, await _svc(db)._candidate_nodes(change_set))
+    assert run.target_change_set_revision == revision + 1 == change_set.revision
+    assert run.target_digest == snapshot.digest  # the digest of exactly that revision's nodes

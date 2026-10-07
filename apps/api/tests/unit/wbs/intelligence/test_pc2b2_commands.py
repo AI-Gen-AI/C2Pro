@@ -129,3 +129,32 @@ def test_run_contract_keeps_status_and_outcome_apart() -> None:
     assert {s.value for s in TERMINAL_STATUSES} == {"COMPLETED", "FAILED", "CANCELLED"}
     assert RunOutcome.FAILED not in REUSABLE_OUTCOMES and RunOutcome.CANCELLED not in REUSABLE_OUTCOMES
     assert RunStatus("REQUESTED") is RunStatus.REQUESTED and RunScope(tenant_id=A, project_id=B).tenant_id == A
+
+
+def test_an_explicit_root_merge_placement_survives_storage_simulation_and_apply() -> None:
+    """``parent: null`` on a MERGE means the top level; an absent parent means the first source's parent."""
+    from src.wbs.intelligence.contracts.proposal import ModelProposalItem
+    from src.wbs.intelligence.validation.output_validator import proposal_payload
+    from src.wbs.intelligence.validation.simulation import SimulatedTree
+
+    root = SnapshotNode(node_id=A, parent_id=None, sort_order=1, code="1", name="Root")
+    left = SnapshotNode(node_id=B, parent_id=A, sort_order=1, code="1.1", name="Left")
+    right = SnapshotNode(node_id=C, parent_id=A, sort_order=2, code="1.2", name="Right")
+    snapshot = TargetSnapshot(project_id=uuid4(), nodes=(root, left, right))
+    base = {"ref": "m", "operation": "MERGE_NODES", "sources": [{"node_id": str(B)}, {"node_id": str(C)}],
+            "creates_label": "lr", "spec": {"name": "Left and right"}, "rationale": "r", "confidence_pct": 50}
+    to_root = ModelProposalItem.model_validate({**base, "parent": None})
+    payload = proposal_payload(to_root)
+    assert "parent" in payload and payload["parent"] is None  # stored, not dropped
+    tree = SimulatedTree.of(snapshot, {})
+    tree.apply(ModelProposalItem.model_validate({**payload, "ref": "m", "operation": "MERGE_NODES",
+                                                 "rationale": "r", "confidence_pct": 50}))
+    assert tree.nodes["label:lr"].parent is None  # preview shows the top level
+    command = to_command(OP.MERGE_NODES, payload, {})
+    assert isinstance(command, MergeNodes) and command.parent_id is None  # apply places it at the top level
+    # an omitted parent still means "where the first source was"
+    kept = ModelProposalItem.model_validate(base)
+    assert "parent" not in proposal_payload(kept)
+    tree = SimulatedTree.of(snapshot, {})
+    tree.apply(kept)
+    assert tree.nodes["label:lr"].parent == str(A)

@@ -298,6 +298,8 @@ def proposal_payload(item: ModelProposalItem) -> dict[str, Any]:
     """The normalised command payload of an item (snapshot ids or local labels only)."""
     payload: dict[str, Any] = item.model_dump(
         mode="json", include=_OPERATION_FIELDS, exclude_none=True, exclude_defaults=True)
+    if item.operation is ProposalOperation.MERGE_NODES and "parent" in item.model_fields_set and item.parent is None:
+        payload["parent"] = None  # an explicit top-level placement (absent = where the first source was)
     return payload
 
 

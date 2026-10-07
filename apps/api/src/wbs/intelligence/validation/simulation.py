@@ -345,7 +345,9 @@ class SimulatedTree:
         if any(key in subtrees[other] for key in keys for other in keys if other != key):
             raise SimulationError("merge sources cannot contain one another")
         first = self.nodes[keys[0]]
-        parent = self.resolve(item.parent) if item.parent is not None else first.parent
+        # An explicit ``parent`` (null = top level) places the target; an omitted one keeps the
+        # first source's parent -- exactly the PC-2a MergeNodes default.
+        parent = self.resolve(item.parent) if "parent" in item.model_fields_set else first.parent
         if parent is not None and any(parent in subtree for subtree in subtrees.values()):
             raise SimulationError("a merge target cannot sit under one of its sources")
         position = item.position if item.position is not None else (

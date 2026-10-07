@@ -378,14 +378,14 @@ class WBSIntelligenceService:
             raise WBSIntelligenceNotFoundError("WBS intelligence run", run_id)
         return run
 
-    async def _change_set(self, change_set_id: UUID, project_id: UUID, tenant_id: UUID, *, lock: bool = False
-                          ) -> WBSChangeSetORM:
+    async def _change_set(self, change_set_id: UUID, project_id: UUID, tenant_id: UUID, *, lock: bool = False,
+                          share: bool = False) -> WBSChangeSetORM:
         query = select(WBSChangeSetORM).where(
             WBSChangeSetORM.id == change_set_id, WBSChangeSetORM.project_id == project_id,
             WBSChangeSetORM.tenant_id == tenant_id,
         ).execution_options(populate_existing=True)
-        if lock:
-            query = query.with_for_update()
+        if lock or share:
+            query = query.with_for_update(read=share and not lock)
         change_set = await self.session.scalar(query)
         if change_set is None:
             raise WBSIntelligenceNotFoundError("WBS change set", change_set_id)
@@ -570,7 +570,9 @@ class WBSIntelligenceService:
         if target_kind is TargetKind.CANDIDATE:
             if change_set_id is None or baseline_id is not None:
                 raise WBSIntelligenceInvalidError("a candidate run names exactly its change set")
-            change_set = await self._change_set(change_set_id, project_id, tenant_id)
+            # FOR SHARE until commit: an edit in flight finishes first, so the revision and the nodes
+            # this run binds are one consistent state (an edit bumps the revision on this row).
+            change_set = await self._change_set(change_set_id, project_id, tenant_id, share=True)
             if change_set.status != ChangeSetStatus.DRAFT.value:
                 raise WBSIntelligenceStateError(f"only a DRAFT candidate is qualified (this one is {change_set.status})",
                                                 code="WBS_INTELLIGENCE_TARGET_NOT_DRAFT", status=change_set.status)
@@ -701,7 +703,7 @@ class WBSIntelligenceService:
         """The human's command for this item, authored against the CURRENT candidate (the proposal is untouched)."""
         if edit is None:
             raise WBSIntelligenceInvalidError("APPLY_WITH_HUMAN_EDIT carries the human's edit")
-        fields = edit.model_dump(exclude_defaults=True)
+        fields = edit.model_dump(exclude_unset=True)  # an explicit null (e.g. a root merge) is kept
         try:
             model = ModelProposalItem.model_validate({**_bind(fields, minted), "ref": original.ref,
                                                       "operation": original.operation, "rationale": original.rationale,
