@@ -8,7 +8,7 @@ Version: 1.0.0
 Sprint: P2-02
 """
 
-from src.core.ai.prompts.registry import PromptRegistry, PromptTemplate
+from src.core.ai.prompts.legacy.registry import LegacyPromptRegistry, PromptTemplate
 from src.core.json_types import JsonDict
 
 # ===========================================
@@ -381,7 +381,7 @@ def build_cross_clause_prompt(clauses: list[JsonDict]) -> str:
 # ===========================================
 
 
-def register_coherence_prompts(registry: PromptRegistry) -> None:
+def register_coherence_prompts(registry: LegacyPromptRegistry) -> None:
     """Registra los templates de coherencia en el registry."""
     # Clause analysis
     registry.register(
