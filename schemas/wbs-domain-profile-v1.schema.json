@@ -1,0 +1,897 @@
+{
+  "$defs": {
+    "Archetype": {
+      "additionalProperties": false,
+      "properties": {
+        "project_types": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Project Types",
+          "type": "array"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "title": "Archetype",
+      "type": "object"
+    },
+    "Composition": {
+      "additionalProperties": false,
+      "properties": {
+        "compatible_with": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{1,40}$",
+            "type": "string"
+          },
+          "title": "Compatible With",
+          "type": "array"
+        },
+        "conflicts_with": {
+          "default": [],
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]{1,40}$",
+            "type": "string"
+          },
+          "title": "Conflicts With",
+          "type": "array"
+        },
+        "includes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProfilePin"
+          },
+          "title": "Includes",
+          "type": "array"
+        }
+      },
+      "title": "Composition",
+      "type": "object"
+    },
+    "ControlLevelNesting": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "title": "Allowed",
+          "type": "boolean"
+        },
+        "ancestor": {
+          "title": "Ancestor",
+          "type": "string"
+        },
+        "descendant": {
+          "title": "Descendant",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "predicate": {
+          "const": "control_level_nesting",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "WARNING",
+          "enum": [
+            "INFO",
+            "WARNING"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "message",
+        "predicate",
+        "ancestor",
+        "descendant",
+        "allowed"
+      ],
+      "title": "ControlLevelNesting",
+      "type": "object"
+    },
+    "DecompositionPattern": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/PatternLevel"
+          },
+          "minItems": 1,
+          "title": "Levels",
+          "type": "array"
+        },
+        "pattern_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Pattern Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern_id",
+        "description",
+        "levels"
+      ],
+      "title": "DecompositionPattern",
+      "type": "object"
+    },
+    "Example": {
+      "additionalProperties": false,
+      "properties": {
+        "example_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Example Id",
+          "type": "string"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/ExampleNode"
+          },
+          "minItems": 1,
+          "title": "Nodes",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "example_id",
+        "title",
+        "nodes"
+      ],
+      "title": "Example",
+      "type": "object"
+    },
+    "ExampleNode": {
+      "additionalProperties": false,
+      "properties": {
+        "control_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Control Level"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "name": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "parent_ref": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{1,40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Ref"
+        },
+        "ref": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "name"
+      ],
+      "title": "ExampleNode",
+      "type": "object"
+    },
+    "FanoutBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "applies_to_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applies To Kind"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "predicate": {
+          "const": "fanout_bounds",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "WARNING",
+          "enum": [
+            "INFO",
+            "WARNING"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "message",
+        "predicate"
+      ],
+      "title": "FanoutBounds",
+      "type": "object"
+    },
+    "ForbiddenParentChildKinds": {
+      "additionalProperties": false,
+      "properties": {
+        "child_kind": {
+          "title": "Child Kind",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "parent_kind": {
+          "title": "Parent Kind",
+          "type": "string"
+        },
+        "predicate": {
+          "const": "forbidden_parent_child_kinds",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "WARNING",
+          "enum": [
+            "INFO",
+            "WARNING"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "message",
+        "predicate",
+        "parent_kind",
+        "child_kind"
+      ],
+      "title": "ForbiddenParentChildKinds",
+      "type": "object"
+    },
+    "KindDeclaration": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "term": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Term",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "description"
+      ],
+      "title": "KindDeclaration",
+      "type": "object"
+    },
+    "MaxDepth": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Max",
+          "type": "integer"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "predicate": {
+          "const": "max_depth",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "WARNING",
+          "enum": [
+            "INFO",
+            "WARNING"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "message",
+        "predicate",
+        "max"
+      ],
+      "title": "MaxDepth",
+      "type": "object"
+    },
+    "PatternLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "control_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Control Level"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "title": "PatternLevel",
+      "type": "object"
+    },
+    "ProfilePin": {
+      "additionalProperties": false,
+      "description": "An exact profile identity: what change sets, baselines and bundles pin.",
+      "properties": {
+        "namespace": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Namespace"
+        },
+        "profile_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Profile Digest",
+          "type": "string"
+        },
+        "profile_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "profile_version": {
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+          "title": "Profile Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "profile_digest"
+      ],
+      "title": "ProfilePin",
+      "type": "object"
+    },
+    "RecommendedControlLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "control_level": {
+          "title": "Control Level",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "control_level"
+      ],
+      "title": "RecommendedControlLevel",
+      "type": "object"
+    },
+    "RequiredDictionaryFields": {
+      "additionalProperties": false,
+      "properties": {
+        "control_level": {
+          "title": "Control Level",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Fields",
+          "type": "array"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "predicate": {
+          "const": "required_dictionary_fields",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "WARNING",
+          "enum": [
+            "INFO",
+            "WARNING"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "message",
+        "predicate",
+        "control_level",
+        "fields"
+      ],
+      "title": "RequiredDictionaryFields",
+      "type": "object"
+    },
+    "ScopeCategory": {
+      "additionalProperties": false,
+      "properties": {
+        "category_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Category Id",
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "evidence_cues": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Evidence Cues",
+          "type": "array"
+        },
+        "expectation": {
+          "enum": [
+            "expected",
+            "conditional",
+            "optional"
+          ],
+          "title": "Expectation",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category_id",
+        "label",
+        "expectation"
+      ],
+      "title": "ScopeCategory",
+      "type": "object"
+    },
+    "SiblingKindHomogeneity": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "predicate": {
+          "const": "sibling_kind_homogeneity",
+          "title": "Predicate",
+          "type": "string"
+        },
+        "rule_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "WARNING",
+          "enum": [
+            "INFO",
+            "WARNING"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "message",
+        "predicate"
+      ],
+      "title": "SiblingKindHomogeneity",
+      "type": "object"
+    },
+    "SpecialistWarning": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "trigger_cues": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Trigger Cues",
+          "type": "array"
+        },
+        "warning_id": {
+          "pattern": "^[a-z][a-z0-9_]{1,40}$",
+          "title": "Warning Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "warning_id",
+        "trigger_cues",
+        "message"
+      ],
+      "title": "SpecialistWarning",
+      "type": "object"
+    },
+    "TermEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "preferred": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Preferred",
+          "type": "string"
+        },
+        "synonyms": {
+          "default": [],
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Synonyms",
+          "type": "array"
+        },
+        "term": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Term",
+          "type": "string"
+        }
+      },
+      "required": [
+        "term",
+        "preferred"
+      ],
+      "title": "TermEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One versioned Domain Profile. Advisory only: it can never author or approve WBS.",
+  "properties": {
+    "applicable_archetypes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Archetype"
+      },
+      "title": "Applicable Archetypes",
+      "type": "array"
+    },
+    "composition": {
+      "$ref": "#/$defs/Composition",
+      "default": {
+        "compatible_with": [],
+        "conflicts_with": [],
+        "includes": []
+      }
+    },
+    "decomposition_kinds": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/KindDeclaration"
+      },
+      "title": "Decomposition Kinds",
+      "type": "array"
+    },
+    "decomposition_patterns": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DecompositionPattern"
+      },
+      "title": "Decomposition Patterns",
+      "type": "array"
+    },
+    "examples": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Example"
+      },
+      "title": "Examples",
+      "type": "array"
+    },
+    "expected_scope_categories": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ScopeCategory"
+      },
+      "title": "Expected Scope Categories",
+      "type": "array"
+    },
+    "namespace": {
+      "maxLength": 40,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Namespace",
+      "type": "string"
+    },
+    "profile_id": {
+      "pattern": "^[a-z][a-z0-9_]{1,40}$",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "prompt_guidance": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prompt Guidance"
+    },
+    "recommended_control_levels": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RecommendedControlLevel"
+      },
+      "title": "Recommended Control Levels",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "wbs-domain-profile/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "specialist_warnings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SpecialistWarning"
+      },
+      "title": "Specialist Warnings",
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "deprecated"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "terminology": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TermEntry"
+      },
+      "title": "Terminology",
+      "type": "array"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "validation_heuristics": {
+      "default": [],
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "control_level_nesting": "#/$defs/ControlLevelNesting",
+            "fanout_bounds": "#/$defs/FanoutBounds",
+            "forbidden_parent_child_kinds": "#/$defs/ForbiddenParentChildKinds",
+            "max_depth": "#/$defs/MaxDepth",
+            "required_dictionary_fields": "#/$defs/RequiredDictionaryFields",
+            "sibling_kind_homogeneity": "#/$defs/SiblingKindHomogeneity"
+          },
+          "propertyName": "predicate"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/MaxDepth"
+          },
+          {
+            "$ref": "#/$defs/FanoutBounds"
+          },
+          {
+            "$ref": "#/$defs/RequiredDictionaryFields"
+          },
+          {
+            "$ref": "#/$defs/SiblingKindHomogeneity"
+          },
+          {
+            "$ref": "#/$defs/ForbiddenParentChildKinds"
+          },
+          {
+            "$ref": "#/$defs/ControlLevelNesting"
+          }
+        ]
+      },
+      "title": "Validation Heuristics",
+      "type": "array"
+    },
+    "version": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "profile_id",
+    "version",
+    "namespace",
+    "title",
+    "status"
+  ],
+  "title": "WBSDomainProfileV1",
+  "type": "object"
+}

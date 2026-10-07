@@ -1,0 +1,68 @@
+# WBS Domain Profile -- Software / SaaS (v1, minimal). Advisory only.
+# Product -> Domain -> Capability -> Service/Component -> Deliverable -> Work package. Specification,
+# architecture, implementation and validation artefacts are NOT WBS nodes (SDD object != WBS node).
+schema_version: wbs-domain-profile/v1
+profile_id: software
+version: 1.0.0
+namespace: software
+title: Software / SaaS product delivery
+status: active
+applicable_archetypes:
+  - project_types: [other, engineering]
+    tags: [software, saas, platform, it]
+terminology:
+  - term: capability
+    preferred: Capability
+    synonyms: [Feature area, Epic]
+  - term: service
+    preferred: Service / component
+    synonyms: [Microservice, Module, Component]
+decomposition_kinds:
+  - {term: product, description: "The product or platform"}
+  - {term: domain, description: "A business or functional domain"}
+  - {term: capability, description: "A user-facing capability"}
+  - {term: service, description: "A service or component delivering capabilities"}
+decomposition_patterns:
+  - pattern_id: product_capability
+    description: Product, domain, capability, service / component, deliverable, work package.
+    levels:
+      - {kind: "software:product", label: "Product"}
+      - {kind: "software:domain", label: "Domain", control_level: control_account}
+      - {kind: "software:capability", label: "Capability"}
+      - {kind: "software:service", label: "Service / component"}
+      - {kind: "core:deliverable", label: "Deliverable", control_level: work_package}
+expected_scope_categories:
+  - {category_id: identity_access, label: "Identity and access (SSO)", expectation: conditional,
+     condition: "the contract requires authentication integration", evidence_cues: [SSO, SAML, OIDC, login]}
+  - {category_id: data_migration, label: "Data migration", expectation: conditional,
+     condition: "legacy data must be migrated", evidence_cues: [migration, legacy data, import]}
+  - {category_id: reporting, label: "Reporting", expectation: optional, evidence_cues: [report, dashboard]}
+  - {category_id: operations, label: "Operations and SLA", expectation: conditional,
+     condition: "the contract carries service levels", evidence_cues: [SLA, uptime, availability, support]}
+validation_heuristics:
+  - {rule_id: max_depth_six, predicate: max_depth, max: 6, severity: WARNING,
+     message: "Deeper than six levels is unusual for a product WBS."}
+  - {rule_id: wp_has_acceptance, predicate: required_dictionary_fields, control_level: work_package,
+     fields: [deliverables, acceptance_criteria], severity: WARNING,
+     message: "A work package should state its deliverables and acceptance criteria."}
+  - {rule_id: one_axis_per_level, predicate: sibling_kind_homogeneity, severity: WARNING,
+     message: "Siblings mixing lifecycle phases with product components suggest two decomposition axes at one level."}
+recommended_control_levels:
+  - {kind: "software:domain", control_level: control_account}
+specialist_warnings:
+  - warning_id: integration_ownership
+    trigger_cues: [integration, API, third-party system]
+    message: Integrations with customer systems need an explicit interface owner and acceptance test.
+examples:
+  - example_id: saas_platform
+    title: SaaS platform
+    nodes:
+      - {ref: product, name: "Customer platform", kind: "software:product"}
+      - {ref: billing, parent_ref: product, name: "Billing domain", kind: "software:domain", control_level: control_account}
+      - {ref: invoicing, parent_ref: billing, name: "Invoicing capability", kind: "software:capability"}
+      - {ref: invoice_svc, parent_ref: invoicing, name: "Invoice service", kind: "software:service"}
+      - {ref: invoice_api, parent_ref: invoice_svc, name: "Invoice API release", kind: "core:deliverable", control_level: work_package}
+prompt_guidance: >-
+  Decompose a software product by product, domain, capability and service or component. Specification,
+  architecture, implementation and validation artefacts belong to the delivery method, not to the WBS
+  hierarchy; do not create nodes for them. Never use engineering, procurement and construction as levels.

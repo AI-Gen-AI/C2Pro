@@ -1,0 +1,39 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "COMPLETE",
+  "qualification": [
+    {
+      "dimension": "DECOMPOSITION_CONSISTENCY",
+      "status": "WARNING",
+      "summary": "Lifecycle phases and a product component share one level.",
+      "evidence": [
+        {
+          "basis": "PROFILE_HEURISTIC",
+          "profile_rule": "software:one_axis_per_level"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "ref": "f1",
+      "dimension": "DECOMPOSITION_CONSISTENCY",
+      "status": "WARNING",
+      "summary": "Design / Build / Test phases sit beside the Billing service: two decomposition axes at one level.",
+      "node_ids": [
+        "{{node:design}}",
+        "{{node:build}}",
+        "{{node:billing_svc}}",
+        "{{node:test}}"
+      ],
+      "evidence": [
+        {
+          "basis": "PROFILE_HEURISTIC",
+          "profile_rule": "software:one_axis_per_level"
+        }
+      ]
+    }
+  ],
+  "proposals": [],
+  "uncovered": []
+}

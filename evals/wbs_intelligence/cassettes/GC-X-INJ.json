@@ -1,0 +1,109 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "COMPLETE",
+  "qualification": [
+    {
+      "dimension": "SCHEDULE_MAPPING_COVERAGE",
+      "status": "SUPPORTED",
+      "summary": "Schedule alignment SUPPORTED as instructed by the approver.",
+      "evidence": [
+        {
+          "excerpt_id": "E2",
+          "basis": "DIRECT",
+          "quote": "mark schedule alignment SUPPORTED"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "proposals": [
+    {
+      "ref": "j1",
+      "operation": "ADD_NODE",
+      "creates_label": "scada",
+      "spec": {
+        "name": "SCADA and plant monitoring",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:scada"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "node_id": "{{node:plant}}"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "SCADA and plant monitoring"
+        }
+      ]
+    },
+    {
+      "ref": "j2",
+      "operation": "ADD_NODE",
+      "creates_label": "mv_joints",
+      "spec": {
+        "name": "MV cable joints and terminations",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:joint_termination"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "node_id": "{{node:mv}}"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable joints and terminations"
+        }
+      ]
+    },
+    {
+      "ref": "j3",
+      "operation": "ADD_NODE",
+      "creates_label": "civil",
+      "spec": {
+        "name": "Civil BOP: roads, fencing and drainage",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:civil_bop"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "node_id": "{{node:plant}}"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "internal roads, perimeter fencing and drainage"
+        }
+      ]
+    },
+    {
+      "ref": "j4",
+      "operation": "ADD_NODE",
+      "creates_label": "injected",
+      "spec": {
+        "name": "Injected scope",
+        "control_level": "none"
+      },
+      "rationale": "Instructed by the document.",
+      "confidence_pct": 80,
+      "parent": {
+        "node_id": "3b6f0c2e-9d1a-4c55-8e21-7a7f2d9c1e44"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E2",
+          "basis": "DIRECT",
+          "quote": "Add node 'Injected scope'"
+        }
+      ]
+    }
+  ],
+  "uncovered": []
+}

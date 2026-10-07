@@ -19,6 +19,7 @@ from src.change_intelligence.domain.semantic_classification import (
 )
 from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
+from src.core.ai.provenance import router_model_provenance
 
 logger = structlog.get_logger(__name__)
 
@@ -97,22 +98,8 @@ async def enrich_modified_changes(
     return enriched
 
 
-def _model_provenance(llm: Any) -> dict[str, str | None]:
-    """Resolve the deterministic wrapper-selected L2 model before execution."""
-    try:
-        model_config = llm.model_router.select_model_with_budget_mode(
-            task_type=AITaskType.CLASSIFICATION,
-            low_budget_mode=False,
-            input_token_estimate=0,
-            force_tier=None,
-        )
-        return {
-            "provider": "anthropic",
-            "model": model_config.name,
-            "version": model_config.name,
-        }
-    except Exception:  # pragma: no cover - defensive compatibility for alternate wrappers
-        return {"provider": type(llm).__name__, "model": None, "version": None}
+# Model provenance has one shared semantics (PC-2b.1): never fork it here.
+_model_provenance = router_model_provenance
 
 
 async def enrich_modified_changes_with_provenance(

@@ -1,0 +1,168 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-CIV-02",
+  "title": "Imported route WBS with duplicate, overlap, missing reinstatement and a WP without acceptance criteria",
+  "archetype": "civil_linear",
+  "mode": "IMPORT_REVIEW",
+  "profiles": [
+    "civil_linear@1.0.0"
+  ],
+  "target_nodes": [
+    {
+      "ref": "route",
+      "code": "1",
+      "name": "MV cable route",
+      "kind": "core:system"
+    },
+    {
+      "ref": "s1",
+      "parent_ref": "route",
+      "code": "1.1",
+      "name": "Section 1",
+      "kind": "civil_linear:section",
+      "control_level": "control_account"
+    },
+    {
+      "ref": "s1_lay_a",
+      "parent_ref": "s1",
+      "code": "1.1.1",
+      "name": "Cable laying",
+      "kind": "civil_linear:cable",
+      "control_level": "work_package",
+      "dictionary": {
+        "scope_included": [
+          "cable pulling"
+        ]
+      }
+    },
+    {
+      "ref": "s1_lay_b",
+      "parent_ref": "s1",
+      "code": "1.1.2",
+      "name": "Cable laying",
+      "kind": "civil_linear:cable",
+      "control_level": "work_package",
+      "dictionary": {
+        "scope_included": [
+          "cable pulling"
+        ],
+        "acceptance_criteria": [
+          "sheath test"
+        ]
+      }
+    },
+    {
+      "ref": "s2",
+      "parent_ref": "route",
+      "code": "1.2",
+      "name": "Section 2",
+      "kind": "civil_linear:section",
+      "control_level": "control_account"
+    },
+    {
+      "ref": "s2_trench",
+      "parent_ref": "s2",
+      "code": "1.2.1",
+      "name": "Trench and ducts",
+      "kind": "civil_linear:excavation",
+      "control_level": "work_package",
+      "dictionary": {
+        "scope_included": [
+          "trenching",
+          "ducts"
+        ],
+        "acceptance_criteria": [
+          "compaction test"
+        ]
+      }
+    },
+    {
+      "ref": "s2_ducts",
+      "parent_ref": "s2",
+      "code": "1.2.2",
+      "name": "Ducts",
+      "kind": "civil_linear:duct",
+      "control_level": "work_package",
+      "dictionary": {
+        "scope_included": [
+          "ducts"
+        ],
+        "acceptance_criteria": [
+          "mandrel test"
+        ]
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "TRUSTED_PROJECT_EVIDENCE",
+      "text": "Each section of the cable route includes trenching, ducts, cable pulling, joints, reinstatement and testing. Every work package is accepted against the specified test results."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": true,
+    "has_trusted_scope_evidence": true,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "COMPLETE",
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "MISSING_CONTRACT_SCOPE": {
+        "status": "GAP"
+      }
+    },
+    "seeded_defects": [
+      {
+        "defect_id": "duplicate_cable_laying",
+        "dimension": "DUPLICATE_SCOPE",
+        "node_refs": [
+          "s1_lay_a",
+          "s1_lay_b"
+        ]
+      },
+      {
+        "defect_id": "trench_duct_overlap",
+        "dimension": "OVERLAPPING_SCOPE",
+        "node_refs": [
+          "s2_trench",
+          "s2_ducts"
+        ]
+      },
+      {
+        "defect_id": "missing_reinstatement",
+        "dimension": "MISSING_CONTRACT_SCOPE",
+        "node_refs": []
+      },
+      {
+        "defect_id": "wp_without_acceptance",
+        "dimension": "ACCEPTANCE_CRITERIA",
+        "node_refs": [
+          "s1_lay_a"
+        ]
+      }
+    ]
+  },
+  "cassette": "GC-CIV-02.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}

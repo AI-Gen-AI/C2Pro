@@ -43,10 +43,11 @@ This directory is the authoritative human catalogue of durable architecture deci
 - [ADR-027 Processing Authority & Checkpoint-Lineage Fencing](./ADR-027-processing-authority-checkpoint-lineage.md)
 - [ADR-028 Production Qualification & Composite Runtime Identity](./ADR-028-production-qualification-composite-runtime.md)
 - [ADR-029 WBS Governance — Implicit Root, Stable Identity, Governed Baselines](./ADR-029-wbs-governance-identity-baseline.md) *(partially supersedes ADR-025)*
+- [ADR-030 WBS Intelligence — Immutable Proposals, Dimension-Level Qualification, Domain Profiles](./ADR-030-wbs-intelligence-proposals-qualification-profiles.md) *(conforms to ADR-029)*
 
 ## Current critical architecture path
 
-`ADR-013 → ADR-014 → ADR-015 → ADR-016 → ADR-018/024 → ADR-025 → ADR-029`
+`ADR-013 → ADR-014 → ADR-015 → ADR-016 → ADR-018/024 → ADR-025 → ADR-029 → ADR-030`
 
 Trust and operational correctness cross-cut that path:
 

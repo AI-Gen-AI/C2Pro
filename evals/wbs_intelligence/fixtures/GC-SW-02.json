@@ -1,0 +1,97 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-SW-02",
+  "title": "Baseline mixing lifecycle phases and product components at one level",
+  "archetype": "software_saas",
+  "mode": "REVIEW_OPTIMIZE",
+  "profiles": [
+    "software@1.0.0"
+  ],
+  "target_nodes": [
+    {
+      "ref": "platform",
+      "code": "1",
+      "name": "Platform",
+      "kind": "software:product"
+    },
+    {
+      "ref": "design",
+      "parent_ref": "platform",
+      "code": "1.1",
+      "name": "Design",
+      "kind": "core:phase"
+    },
+    {
+      "ref": "build",
+      "parent_ref": "platform",
+      "code": "1.2",
+      "name": "Build",
+      "kind": "core:phase"
+    },
+    {
+      "ref": "billing_svc",
+      "parent_ref": "platform",
+      "code": "1.3",
+      "name": "Billing service",
+      "kind": "software:service"
+    },
+    {
+      "ref": "test",
+      "parent_ref": "platform",
+      "code": "1.4",
+      "name": "Test",
+      "kind": "core:phase"
+    }
+  ],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "TRUSTED_PROJECT_EVIDENCE",
+      "text": "The platform delivers billing, invoicing and reporting capabilities to the customer."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": true,
+    "has_trusted_scope_evidence": true,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "COMPLETE",
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      }
+    },
+    "seeded_defects": [
+      {
+        "defect_id": "mixed_axes",
+        "dimension": "DECOMPOSITION_CONSISTENCY",
+        "node_refs": [
+          "design",
+          "build",
+          "billing_svc",
+          "test"
+        ]
+      }
+    ]
+  },
+  "cassette": "GC-SW-02.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}

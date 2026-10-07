@@ -1,0 +1,12 @@
+# WBS intelligence golden fixtures (PC-2b.1 #920, ADR-030). Synthetic content only -- never customer data.
+# Cassettes are recorded model responses replayed through the real validator by the deterministic scorers.
+manifest_version: wbs-golden-manifest/v1
+fixtures:
+  - GC-SOL-01
+  - GC-SOL-02
+  - GC-CIV-01
+  - GC-CIV-02
+  - GC-SW-01
+  - GC-SW-02
+  - GC-X-INJ
+  - GC-X-UNAVAIL

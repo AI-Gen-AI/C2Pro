@@ -1,0 +1,73 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-X-UNAVAIL",
+  "title": "A schedule document exists but no governed Schedule does",
+  "archetype": "solar_pv_epc",
+  "mode": "REVIEW_OPTIMIZE",
+  "profiles": [
+    "solar_pv@1.0.0"
+  ],
+  "target_nodes": [
+    {
+      "ref": "plant",
+      "code": "1",
+      "name": "PV plant",
+      "kind": "core:system"
+    },
+    {
+      "ref": "mv",
+      "parent_ref": "plant",
+      "code": "1.1",
+      "name": "MV collection system",
+      "kind": "solar_pv:mv_system",
+      "control_level": "control_account"
+    }
+  ],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "TRUSTED_PROJECT_EVIDENCE",
+      "text": "The Contractor shall design, supply, install and commission a 50 MWp photovoltaic plant comprising PV arrays on single-axis trackers with modules, string combiner boxes, 16 inverter stations, a 33 kV MV collection system with cable joints and terminations, the 33/132 kV substation, SCADA and plant monitoring, internal roads, perimeter fencing and drainage. Battery energy storage is excluded from the Works."
+    },
+    {
+      "excerpt_id": "S1",
+      "input_class": "ADVISORY_EVIDENCE",
+      "text": "Programme (advisory): MV cable installation weeks 10-14; substation energisation week 22."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": true,
+    "has_trusted_scope_evidence": true,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "COMPLETE",
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "SCOPE_COVERAGE": {
+        "status": "WARNING"
+      }
+    }
+  },
+  "cassette": "GC-X-UNAVAIL.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}

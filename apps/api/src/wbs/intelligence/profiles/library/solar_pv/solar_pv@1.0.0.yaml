@@ -1,0 +1,94 @@
+# WBS Domain Profile -- Solar PV / EPC (v1, minimal: proves the architecture, not an industry standard).
+# Advisory only. Decomposition follows the plant (area/block -> system -> component); commissioning is a
+# deliverable, never a top-level phase. EPC phases are NOT a hierarchy here.
+schema_version: wbs-domain-profile/v1
+profile_id: solar_pv
+version: 1.0.0
+namespace: solar_pv
+title: Solar PV plant (EPC)
+status: active
+applicable_archetypes:
+  - project_types: [epc, construction, infrastructure]
+    tags: [solar, pv, photovoltaic, renewables]
+terminology:
+  - term: block
+    preferred: Power block
+    synonyms: [PV block, Array block, Sub-field]
+  - term: inverter_station
+    preferred: Inverter station
+    synonyms: [Power station, Conversion unit]
+  - term: mv_system
+    preferred: MV collection system
+    synonyms: [Medium-voltage system, MV collector]
+decomposition_kinds:
+  - {term: area, description: "Plant area or sub-field (spatial)"}
+  - {term: block, description: "Power block grouping arrays behind one inverter station"}
+  - {term: electrical_system, description: "Electrical system of the plant (DC, MV, HV)"}
+  - {term: mv_system, description: "Medium-voltage collection system"}
+  - {term: cable, description: "Cable runs of a system"}
+  - {term: joint_termination, description: "Joints and terminations of cable runs"}
+  - {term: inverter_station, description: "Inverter / transformer station"}
+  - {term: substation, description: "Collector or grid substation"}
+  - {term: scada, description: "SCADA, monitoring and plant control"}
+  - {term: civil_bop, description: "Civil balance of plant (roads, fencing, drainage)"}
+decomposition_patterns:
+  - pattern_id: area_first
+    description: Spatial first -- area / block, then the systems and components inside it.
+    levels:
+      - {kind: "solar_pv:area", label: "Area"}
+      - {kind: "solar_pv:block", label: "Power block", control_level: control_account}
+      - {kind: "core:component", label: "Component", control_level: work_package}
+  - pattern_id: system_first
+    description: Plant systems first -- electrical system, MV system, cables, joints and terminations.
+    levels:
+      - {kind: "solar_pv:electrical_system", label: "Electrical system"}
+      - {kind: "solar_pv:mv_system", label: "MV system", control_level: control_account}
+      - {kind: "solar_pv:cable", label: "Cables", control_level: work_package}
+      - {kind: "solar_pv:joint_termination", label: "Joints / terminations", control_level: work_package}
+expected_scope_categories:
+  - {category_id: pv_arrays, label: "PV arrays (piling, mounting structures, modules)", expectation: expected,
+     evidence_cues: [module, tracker, mounting structure, piling]}
+  - {category_id: dc_system, label: "DC system (strings, combiner boxes)", expectation: expected,
+     evidence_cues: [string, combiner box, DC cable]}
+  - {category_id: inverter_stations, label: "Inverter stations", expectation: expected, evidence_cues: [inverter]}
+  - {category_id: mv_collection, label: "MV collection system", expectation: expected,
+     evidence_cues: [MV cable, medium voltage, ring main unit]}
+  - {category_id: substation, label: "Substation", expectation: conditional,
+     condition: "the contract includes the collector or grid substation", evidence_cues: [substation, transformer]}
+  - {category_id: scada, label: "SCADA and monitoring", expectation: expected, evidence_cues: [SCADA, monitoring]}
+  - {category_id: civil_bop, label: "Civil balance of plant", expectation: expected,
+     evidence_cues: [road, fence, drainage, earthworks]}
+  - {category_id: bess, label: "Battery energy storage", expectation: conditional,
+     condition: "storage is in the contracted scope", evidence_cues: [BESS, battery]}
+validation_heuristics:
+  - {rule_id: max_depth_six, predicate: max_depth, max: 6, severity: WARNING,
+     message: "Deeper than six levels is unusual for a PV plant WBS; check granularity."}
+  - {rule_id: wp_has_acceptance, predicate: required_dictionary_fields, control_level: work_package,
+     fields: [deliverables, acceptance_criteria], severity: WARNING,
+     message: "A work package should state its deliverables and acceptance criteria."}
+  - {rule_id: no_ca_under_ca, predicate: control_level_nesting, ancestor: control_account,
+     descendant: control_account, allowed: false, severity: WARNING,
+     message: "A control account nested under another control account is unusual for PV EPC."}
+recommended_control_levels:
+  - {kind: "solar_pv:block", control_level: control_account}
+  - {kind: "solar_pv:mv_system", control_level: control_account}
+specialist_warnings:
+  - warning_id: grid_connection_interface
+    trigger_cues: [grid connection, point of interconnection, TSO, DSO]
+    message: Grid connection works are often split with the network operator; make the interface explicit.
+examples:
+  - example_id: small_plant
+    title: Small plant, area-first
+    nodes:
+      - {ref: plant, name: "PV plant", kind: "core:system"}
+      - {ref: north, parent_ref: plant, name: "North area", kind: "solar_pv:area"}
+      - {ref: block_1, parent_ref: north, name: "Power block 1", kind: "solar_pv:block", control_level: control_account}
+      - {ref: inv_1, parent_ref: block_1, name: "Inverter station 1", kind: "solar_pv:inverter_station", control_level: work_package}
+      - {ref: mv, parent_ref: plant, name: "MV collection system", kind: "solar_pv:mv_system", control_level: control_account}
+      - {ref: mv_cables, parent_ref: mv, name: "MV cables", kind: "solar_pv:cable", control_level: work_package}
+      - {ref: mv_joints, parent_ref: mv, name: "MV joints and terminations", kind: "solar_pv:joint_termination", control_level: work_package}
+      - {ref: commissioning, parent_ref: plant, name: "Plant commissioning and testing", kind: "core:deliverable", control_level: work_package}
+prompt_guidance: >-
+  Decompose a PV plant along physical areas, blocks and plant systems. Commissioning and testing are
+  deliverables of the systems they prove, not a top-level phase. Keep battery storage, grid connection and
+  substation scope only when the trusted evidence includes them.

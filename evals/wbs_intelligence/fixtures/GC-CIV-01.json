@@ -1,0 +1,117 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-CIV-01",
+  "title": "12 km MV cable route, three sections and an HDD crossing",
+  "archetype": "civil_linear",
+  "mode": "GENERATE",
+  "profiles": [
+    "civil_linear@1.0.0"
+  ],
+  "target_nodes": [],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "TRUSTED_PROJECT_EVIDENCE",
+      "text": "The Works comprise a 12 km 33 kV underground cable route in three sections: trenching and excavation, duct installation, cable pulling, cable joints, terminations at both ends, reinstatement of the road surface and testing of each section. The river crossing at km 7 shall be installed by horizontal directional drilling (HDD). Substation works are by others."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": true,
+    "has_trusted_scope_evidence": true,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "COMPLETE",
+    "gold_scope": [
+      {
+        "element_id": "excavation",
+        "aliases": [
+          "trench",
+          "excavation"
+        ]
+      },
+      {
+        "element_id": "ducts",
+        "aliases": [
+          "duct"
+        ]
+      },
+      {
+        "element_id": "cable",
+        "aliases": [
+          "cable pulling"
+        ]
+      },
+      {
+        "element_id": "joints",
+        "aliases": [
+          "joint"
+        ]
+      },
+      {
+        "element_id": "terminations",
+        "aliases": [
+          "termination"
+        ]
+      },
+      {
+        "element_id": "reinstatement",
+        "aliases": [
+          "reinstatement"
+        ]
+      },
+      {
+        "element_id": "testing",
+        "aliases": [
+          "testing"
+        ]
+      },
+      {
+        "element_id": "hdd",
+        "aliases": [
+          "HDD",
+          "directional drilling"
+        ]
+      }
+    ],
+    "decoys": [
+      {
+        "element_id": "substation_by_others",
+        "aliases": [
+          "substation"
+        ]
+      },
+      {
+        "element_id": "epc_phases",
+        "aliases": [
+          "procurement phase",
+          "construction phase"
+        ]
+      }
+    ],
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      }
+    }
+  },
+  "cassette": "GC-CIV-01.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}

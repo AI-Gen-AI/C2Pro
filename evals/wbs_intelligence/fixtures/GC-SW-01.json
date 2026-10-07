@@ -1,0 +1,108 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-SW-01",
+  "title": "SaaS platform SOW -- product / domain / capability decomposition",
+  "archetype": "software_saas",
+  "mode": "GENERATE",
+  "profiles": [
+    "software@1.0.0"
+  ],
+  "target_nodes": [],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "TRUSTED_PROJECT_EVIDENCE",
+      "text": "The Supplier shall deliver a SaaS customer platform with single sign-on (SSO) integration, subscription billing and invoicing, an operational reporting dashboard, migration of legacy customer data, and 99.9% availability under the service level agreement (SLA). On-premise deployment is out of scope."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": true,
+    "has_trusted_scope_evidence": true,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "COMPLETE",
+    "gold_scope": [
+      {
+        "element_id": "sso",
+        "aliases": [
+          "SSO",
+          "single sign-on"
+        ]
+      },
+      {
+        "element_id": "billing",
+        "aliases": [
+          "billing"
+        ]
+      },
+      {
+        "element_id": "invoicing",
+        "aliases": [
+          "invoicing"
+        ]
+      },
+      {
+        "element_id": "reporting",
+        "aliases": [
+          "reporting"
+        ]
+      },
+      {
+        "element_id": "migration",
+        "aliases": [
+          "migration"
+        ]
+      },
+      {
+        "element_id": "sla",
+        "aliases": [
+          "SLA",
+          "availability"
+        ]
+      }
+    ],
+    "decoys": [
+      {
+        "element_id": "on_prem",
+        "aliases": [
+          "on-premise",
+          "on premise"
+        ]
+      },
+      {
+        "element_id": "epc_phases",
+        "aliases": [
+          "engineering",
+          "procurement",
+          "construction",
+          "commissioning"
+        ]
+      }
+    ],
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      }
+    }
+  },
+  "cassette": "GC-SW-01.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}

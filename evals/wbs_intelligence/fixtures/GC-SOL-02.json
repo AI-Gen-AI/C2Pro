@@ -1,0 +1,58 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-SOL-02",
+  "title": "Letter of intent only -- the generator must abstain",
+  "archetype": "solar_pv_epc",
+  "mode": "GENERATE",
+  "profiles": [
+    "solar_pv@1.0.0"
+  ],
+  "target_nodes": [],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "PROPOSED_EVIDENCE",
+      "text": "Letter of intent: the parties intend to negotiate a contract for a solar plant at a site to be confirmed."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": false,
+    "has_trusted_scope_evidence": false,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "INSUFFICIENT_EVIDENCE",
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "SCOPE_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "NO_TRUSTED_SCOPE_EVIDENCE"
+      },
+      "MISSING_CONTRACT_SCOPE": {
+        "status": "NOT_EVALUATED",
+        "reason": "NO_TRUSTED_CONTRACT"
+      }
+    }
+  },
+  "cassette": "GC-SOL-02.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}
