@@ -269,8 +269,9 @@ def test_the_idempotency_key_is_deterministic_and_input_sensitive() -> None:
 def test_the_key_never_crosses_tenants() -> None:
     target = RunTarget(kind=TargetKind.BASELINE, target_id=uuid4(), digest=DIGEST)
     project = uuid4()
-    assert _key(scope=RunScope(tenant_id=uuid4(), project_id=project), target=target) != _key(
-        scope=RunScope(tenant_id=uuid4(), project_id=project), target=target)
+    tenant_a_key = _key(scope=RunScope(tenant_id=uuid4(), project_id=project), target=target)
+    tenant_b_key = _key(scope=RunScope(tenant_id=uuid4(), project_id=project), target=target)
+    assert tenant_a_key != tenant_b_key
 
 
 def test_the_key_has_no_volatile_inputs_and_requires_the_scope() -> None:
