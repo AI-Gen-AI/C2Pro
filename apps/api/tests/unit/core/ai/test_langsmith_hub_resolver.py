@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.core.ai.langsmith_hub import LangSmithEnvProfile, PromptHubResolver
+from src.core.ai.experimental.langsmith_hub import LangSmithEnvProfile, PromptHubResolver
 
 
 def test_env_profile_uses_environment_scoped_variables(monkeypatch):
@@ -22,7 +22,7 @@ def test_prompt_hub_resolver_uses_cached_prompt_on_hub_failure(monkeypatch, tmp_
     cache_file.write_text('{"c2pro/core-extraction:latest": "cached prompt"}', encoding="utf-8")
 
     resolver = PromptHubResolver(cache_file=cache_file)
-    monkeypatch.setattr("src.core.ai.langsmith_hub.hub.pull", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("src.core.ai.experimental.langsmith_hub.hub.pull", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
 
     prompt, source = resolver.pull_prompt(
         prompt_repo="c2pro/core-extraction",
@@ -36,7 +36,7 @@ def test_prompt_hub_resolver_uses_cached_prompt_on_hub_failure(monkeypatch, tmp_
 
 def test_prompt_hub_resolver_returns_local_fallback_when_cache_misses(monkeypatch, tmp_path: Path):
     resolver = PromptHubResolver(cache_file=tmp_path / "missing.json")
-    monkeypatch.setattr("src.core.ai.langsmith_hub.hub.pull", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("src.core.ai.experimental.langsmith_hub.hub.pull", lambda _: (_ for _ in ()).throw(RuntimeError("boom")))
 
     prompt, source = resolver.pull_prompt(
         prompt_repo="c2pro/core-extraction",
