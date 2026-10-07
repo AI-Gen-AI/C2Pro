@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.core.database import get_session
 from src.core.json_types import JsonDict
+from src.core.processing_authority import ProcessingAuthorityLost
 from src.core.repositories import get_project_repository
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.documents.adapters.extraction.documents_entity_extraction_service import (
@@ -996,6 +997,11 @@ async def reprocess_document_endpoint(
     pending_review_lookup: PendingReviewLookup = Depends(
         get_pending_review_document_ids
     ),
+    expected_revision_id: UUID | None = Query(default=None),
+    expected_generation: int | None = Query(default=None, ge=1),
+    expected_stage: str | None = Query(default=None),
+    expected_phase: str | None = Query(default=None),
+    expected_outcome: str | None = Query(default=None),
 ) -> DocumentQueuedResponse:
     """
     Re-dispatch a Celery processing task for a document stuck in queued, uploaded,
@@ -1007,6 +1013,21 @@ async def reprocess_document_endpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or access denied.",
+        )
+
+    expected_authority = (
+        expected_revision_id,
+        expected_generation,
+        expected_stage,
+        expected_phase,
+        expected_outcome,
+    )
+    if any(value is not None for value in expected_authority) and any(
+        value is None for value in expected_authority
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Expected processing authority must be supplied as a complete tuple.",
         )
 
     review_count = 0
@@ -1044,7 +1065,21 @@ async def reprocess_document_endpoint(
     await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
     # #711: an explicit reprocess starts a new processing generation in the
     # same transaction, superseding any earlier (possibly still running) worker.
-    generation = await repo.begin_processing_generation(tenant_id, document_id)
+    try:
+        generation = await repo.begin_processing_generation(
+            tenant_id,
+            document_id,
+            expected_revision_id=expected_revision_id,
+            expected_generation=expected_generation,
+            expected_stage=expected_stage,
+            expected_phase=expected_phase,
+            expected_outcome=expected_outcome,
+        )
+    except ProcessingAuthorityLost as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Processing authority changed before retry; refresh and retry.",
+        ) from exc
     await repo.commit()
     await repo.refresh(document)
 
