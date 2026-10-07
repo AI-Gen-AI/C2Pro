@@ -57,6 +57,12 @@ def test_recovery_preflight_is_read_only_and_exactly_two_revisions() -> None:
     spec = SPEC.read_text(encoding="utf-8")
     assert 'name: /^Retry processing /' in spec
     assert "await expect(retry).toBeVisible" in spec
+    assert "PROD_P0C_TARGET_GENERATION" in source
+    assert 'expected_revision_id", targetRevisionId' in spec
+    assert 'expected_generation", targetGeneration' in spec
+    assert 'expected_stage", "INGESTION"' in spec
+    assert 'expected_phase", "PENDING"' in spec
+    assert 'expected_outcome", "ingestion_failed"' in spec
     assert "CAST(:document AS text)" not in source
     assert "CAST(:source AS text)" not in source
     assert "CAST(:target AS text)" not in source
