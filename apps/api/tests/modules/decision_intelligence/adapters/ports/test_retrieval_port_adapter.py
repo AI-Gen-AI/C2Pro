@@ -135,8 +135,9 @@ async def test_retrieve_without_a_scope_fails_closed_without_querying(missing: s
     embed = AsyncMock(return_value=[[0.1] * 8])
     adapter = RetrievalPortAdapter(session_provider=_provider, embed_fn=embed)
     scope = {"tenant_id": uuid4(), "project_id": uuid4(), missing: None}
-    result = await adapter.retrieve("query", **scope)
+    # Codex P2: an unscoped call is a caller error -- it raises, never yields publishable evidence.
+    with pytest.raises(ValueError, match="tenant_id and project_id"):
+        await adapter.retrieve("query", **scope)
 
     session.execute.assert_not_awaited()
     embed.assert_not_awaited()
-    assert "Foreign evidence" not in [item["text"] for item in result]

@@ -28,7 +28,7 @@ class RetrievalPort(Protocol):
     """Evidence retrieval, always scoped to ONE tenant and ONE project.
 
     The application role bypasses RLS, so an implementation must bind both in its query and
-    return no evidence (never a cross-scope read) when either is missing.
+    raise (never read across scopes, never return placeholder evidence) when either is missing.
     """
 
     async def retrieve(

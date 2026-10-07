@@ -6,8 +6,8 @@ AND project, ordered by cosine distance, returning the top-k results as
 ``[{"text", "score"}]``.
 
 SECURITY (P0): the application connects with a role that bypasses RLS, so
-the tenant and project are bound in the SQL itself. Without both, no query
-runs (fail closed): never a cross-tenant or cross-project read.
+the tenant and project are bound in the SQL itself. Without both, the call
+raises before any query runs: never a cross-tenant or cross-project read.
 
 When embeddings or the database are unavailable, the adapter falls
 back to a deterministic evidence stub so the decision flow can still
@@ -59,10 +59,11 @@ class RetrievalPortAdapter:
     async def retrieve(
         self, query: str, *, tenant_id: UUID | None, project_id: UUID | None
     ) -> list[dict[str, Any]]:
-        if not query:
-            return self._fallback_evidence()
+        # An unscoped call is a caller error: refuse loudly, before any embedding or query, and
+        # never answer it with placeholder evidence that could be published.
         if tenant_id is None or project_id is None:
-            logger.warning("di_retrieval_unscoped_refused")
+            raise ValueError("decision-intelligence retrieval requires tenant_id and project_id")
+        if not query:
             return self._fallback_evidence()
 
         try:
