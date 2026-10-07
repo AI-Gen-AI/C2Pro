@@ -68,6 +68,7 @@ import type {
   GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   HTTPValidationError,
   ListDocumentsForProjectApiV1ProjectsProjectIdDocumentsGetParams,
+  ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams,
   RagAnswerResponse,
   RagQuestionRequest,
 } from "../models";
@@ -2043,10 +2044,16 @@ export const useParseDocumentEndpointApiV1DocumentsDocumentIdParsePost = <
  * @summary Re-trigger async processing for a stuck or errored document
  */
 export const reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost =
-  (projectId: string, documentId: string, signal?: AbortSignal) => {
+  (
+    projectId: string,
+    documentId: string,
+    params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams,
+    signal?: AbortSignal,
+  ) => {
     return orvalApiClient<DocumentQueuedResponse>({
       url: `/api/v1/projects/${projectId}/documents/${documentId}/reprocess`,
       method: "POST",
+      params,
       signal,
     });
   };
@@ -2060,7 +2067,11 @@ export const getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
         >
       >,
       TError,
-      { projectId: string; documentId: string },
+      {
+        projectId: string;
+        documentId: string;
+        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+      },
       TContext
     >;
   }): UseMutationOptions<
@@ -2070,7 +2081,11 @@ export const getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
       >
     >,
     TError,
-    { projectId: string; documentId: string },
+    {
+        projectId: string;
+        documentId: string;
+        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+      },
     TContext
   > => {
     const mutationKey = [
@@ -2092,11 +2107,12 @@ export const getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
       >,
       { projectId: string; documentId: string }
     > = (props) => {
-      const { projectId, documentId } = props ?? {};
+      const { projectId, documentId, params } = props ?? {};
 
       return reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost(
         projectId,
         documentId,
+        params,
       );
     };
 
@@ -2128,7 +2144,11 @@ export const useReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
           >
         >,
         TError,
-        { projectId: string; documentId: string },
+        {
+        projectId: string;
+        documentId: string;
+        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+      },
         TContext
       >;
     },
@@ -2140,7 +2160,11 @@ export const useReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
       >
     >,
     TError,
-    { projectId: string; documentId: string },
+    {
+        projectId: string;
+        documentId: string;
+        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+      },
     TContext
   > => {
     return useMutation(
