@@ -177,6 +177,12 @@ class IDocumentRepository(ABC):
         tenant_id: TenantId,
         document_id: UUID,
         revision_id: UUID | None = None,
+        *,
+        expected_revision_id: UUID | None = None,
+        expected_generation: int | None = None,
+        expected_stage: str | None = None,
+        expected_phase: str | None = None,
+        expected_outcome: str | None = None,
     ) -> int | None:
         """#711: start a new processing generation in the current transaction.
 
@@ -184,7 +190,16 @@ class IDocumentRepository(ABC):
         earlier processing attempt. Adapters without a processing-authority
         store keep the default (no generation).
         """
-        _ = (tenant_id, document_id, revision_id)
+        _ = (
+            tenant_id,
+            document_id,
+            revision_id,
+            expected_revision_id,
+            expected_generation,
+            expected_stage,
+            expected_phase,
+            expected_outcome,
+        )
         return None
 
     @abstractmethod
