@@ -6,7 +6,7 @@ P3.2: Validates prompt version A/B testing functionality.
 
 import pytest
 
-from src.core.ai.ab_experiment import (
+from src.core.ai.experimental.ab_experiment import (
     ABExperiment,
     ABExperimentService,
     ExperimentStatus,
@@ -430,7 +430,7 @@ class TestSingleton:
     def test_get_ab_experiment_service_singleton(self):
         """get_ab_experiment_service returns same instance."""
         # Reset singleton for test
-        import src.core.ai.ab_experiment as module
+        import src.core.ai.experimental.ab_experiment as module
         module._ab_service = None
 
         service1 = get_ab_experiment_service()

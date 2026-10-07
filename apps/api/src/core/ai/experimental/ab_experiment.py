@@ -1,10 +1,12 @@
-"""
-C2Pro - A/B Experiment Service for Prompt Versioning
+"""EXPERIMENTAL / NON-AUTHORITATIVE A/B prompt experiment service.
 
-Tracks prompt version performance for A/B testing and comparison.
-Enables data-driven prompt optimization decisions.
+This capability is preserved for future evaluation but is not wired into the
+production runtime or dependency-injection graph. Do not import it from
+canonical runtime code without an explicit promotion decision and production
+contracts.
 
-Version: 1.0.0
+Important: request bucketing currently uses Python's process-local hash(), so
+it is not suitable for persistent or distributed experiment assignment.
 """
 
 from __future__ import annotations

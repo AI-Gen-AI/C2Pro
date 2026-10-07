@@ -1,12 +1,10 @@
-"""
-C2Pro - Extraction Application Ports
+"""C2Pro - Extraction Application Ports.
 
-Defines abstract interfaces (ports) for external dependencies.
-Following Hexagonal Architecture, these interfaces are implemented by adapters.
+LEGACY / NON-AUTHORITATIVE APPLICATION SERVICE.
 
-Increment I3: Clause Extraction + Normalization
-- LLMAdapter: Abstract interface for LLM-based structured data extraction
-- ClauseExtractionService: Application service for clause extraction orchestration
+The I3 ClauseExtractionService is retained for historical/module-test
+continuity and is not wired into the canonical production DI/runtime path.
+Its Prompt Hub dependency is experimental.
 """
 
 from abc import ABC, abstractmethod
@@ -16,7 +14,7 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 
 import structlog
 
-from src.core.ai.langsmith_hub import PromptHubResolver
+from src.core.ai.experimental.langsmith_hub import PromptHubResolver
 from src.modules.extraction.domain.entities import ExtractedClause
 
 # Re-using IngestionChunk from I1

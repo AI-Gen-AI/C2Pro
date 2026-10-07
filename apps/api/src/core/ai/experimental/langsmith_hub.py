@@ -1,4 +1,9 @@
-"""LangSmith Hub prompt resolution with environment isolation and fallback cache."""
+"""EXPERIMENTAL / NON-AUTHORITATIVE LangSmith Hub prompt resolution.
+
+This resolver is preserved for the legacy I3 extraction experiment. It is not
+part of the canonical production runtime authority. Production promotion must
+add explicit DI wiring, operational ownership, and runtime contracts first.
+"""
 
 from __future__ import annotations
 
