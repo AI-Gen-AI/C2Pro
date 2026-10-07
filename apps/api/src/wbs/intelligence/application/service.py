@@ -28,7 +28,7 @@ Every query is explicitly scoped to tenant AND project: RLS is a second wall, no
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -63,6 +63,7 @@ from src.wbs.adapters.persistence.intelligence_models import (
 from src.wbs.application.governed_change_service import WBSGovernedChangeService
 from src.wbs.domain.digest import canonical_json
 from src.wbs.domain.governance import ActorKind, ChangeSetStatus, can_author
+from src.wbs.domain.governed_change import normalize_evidence_refs
 from src.wbs.intelligence.application.commands import (
     UnresolvedLabelError,
     command_json,
@@ -70,7 +71,6 @@ from src.wbs.intelligence.application.commands import (
     minted_labels,
     to_command,
 )
-from src.wbs.intelligence.contracts.evidence import EvidenceManifest
 from src.wbs.intelligence.contracts.proposal import (
     PROPOSAL_CONTRACT_VERSION,
     ModelProposalItem,
@@ -291,6 +291,19 @@ def _now() -> datetime:
 
 def _digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(value)).hexdigest()
+
+
+WBS_EVIDENCE_REFS_DIGEST_VERSION: Final = "wbs-evidence-refs/v1"
+
+
+def wbs_evidence_set_digest(evidence_refs: Iterable[str]) -> str:
+    """Identity of the exact normalized WBS evidence-reference set supplied to a run.
+
+    Input identity only, never evidence verification: the references stay opaque strings
+    (``normalize_evidence_refs``: whitespace trimmed, order and duplicates irrelevant).
+    """
+    return _digest({"version": WBS_EVIDENCE_REFS_DIGEST_VERSION,
+                    "evidence_refs": normalize_evidence_refs(evidence_refs)})
 
 
 def _candidate_snapshot(project_id: UUID, nodes: Sequence[WBSChangeSetNodeORM]) -> TargetSnapshot:
@@ -595,7 +608,8 @@ class WBSIntelligenceService:
         else:
             raise WBSIntelligenceInvalidError("deterministic qualification needs a DRAFT candidate or the current baseline")
         profiles = _resolve_profiles(pins)
-        evidence_set_digest = EvidenceManifest(tenant_id=tenant_id, project_id=project_id, items=()).evidence_set_digest
+        evidence_refs = normalize_evidence_refs(evidence_refs)
+        evidence_set_digest = wbs_evidence_set_digest(evidence_refs)
         nonce = uuid4().hex if rerun else None
         key = idempotency_key(scope=scope, mode=IntelligenceMode.REVIEW_OPTIMIZE, target=target,
                               evidence_set_digest=evidence_set_digest,
@@ -957,4 +971,5 @@ __all__ = [
     "WBSIntelligenceSelectionRefusedError",
     "WBSIntelligenceService",
     "WBSIntelligenceStateError",
+    "wbs_evidence_set_digest",
 ]
