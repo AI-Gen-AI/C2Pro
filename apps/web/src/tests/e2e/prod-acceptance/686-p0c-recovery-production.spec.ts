@@ -47,6 +47,7 @@ test.describe("Issue #686 P0c production recovery", () => {
     const documentId = requiredEnv("PROD_P0C_DOCUMENT_ID");
     const sourceRevisionId = requiredEnv("PROD_P0C_SOURCE_REVISION_ID");
     const targetRevisionId = requiredEnv("PROD_P0C_TARGET_REVISION_ID");
+    const targetGeneration = requiredEnv("PROD_P0C_TARGET_GENERATION");
     const noChangePdf = requiredEnv("PROD_P0C_NO_CHANGE_PDF");
     const expectedNoChangeSha256 = requiredEnv("PROD_P0C_NO_CHANGE_EXPECTED_SHA256");
     const noChangeFixtureSha256 = createHash("sha256")
@@ -73,7 +74,22 @@ test.describe("Issue #686 P0c production recovery", () => {
         await expect(row).toBeVisible({ timeout: 30_000 });
         const retry = row.getByRole("button", { name: /^Retry processing / });
         await expect(retry).toBeVisible({ timeout: 30_000 });
-        await retry.click();
+
+        const routePattern = `**/projects/${projectId}/documents/${documentId}/reprocess*`;
+        await page.route(routePattern, async (route) => {
+          const url = new URL(route.request().url());
+          url.searchParams.set("expected_revision_id", targetRevisionId);
+          url.searchParams.set("expected_generation", targetGeneration);
+          url.searchParams.set("expected_stage", "INGESTION");
+          url.searchParams.set("expected_phase", "PENDING");
+          url.searchParams.set("expected_outcome", "ingestion_failed");
+          await route.continue({ url: url.toString() });
+        });
+        try {
+          await retry.click();
+        } finally {
+          await page.unroute(routePattern);
+        }
       });
 
       const processing = await recorder.step(
