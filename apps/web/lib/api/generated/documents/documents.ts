@@ -2082,10 +2082,10 @@ export const getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
     >,
     TError,
     {
-        projectId: string;
-        documentId: string;
-        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
-      },
+      projectId: string;
+      documentId: string;
+      params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+    },
     TContext
   > => {
     const mutationKey = [
@@ -2105,7 +2105,11 @@ export const getReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
           typeof reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPost
         >
       >,
-      { projectId: string; documentId: string }
+      {
+        projectId: string;
+        documentId: string;
+        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+      }
     > = (props) => {
       const { projectId, documentId, params } = props ?? {};
 
@@ -2145,10 +2149,10 @@ export const useReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
         >,
         TError,
         {
-        projectId: string;
-        documentId: string;
-        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
-      },
+          projectId: string;
+          documentId: string;
+          params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+        },
         TContext
       >;
     },
@@ -2161,10 +2165,10 @@ export const useReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocument
     >,
     TError,
     {
-        projectId: string;
-        documentId: string;
-        params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
-      },
+      projectId: string;
+      documentId: string;
+      params?: ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams;
+    },
     TContext
   > => {
     return useMutation(
