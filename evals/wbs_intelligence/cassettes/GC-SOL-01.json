@@ -1,0 +1,261 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "COMPLETE",
+  "qualification": [
+    {
+      "dimension": "SCOPE_COVERAGE",
+      "status": "SUPPORTED",
+      "summary": "Every contracted plant system has a proposed node.",
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "50 MWp photovoltaic plant"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "proposals": [
+    {
+      "ref": "p01",
+      "operation": "ADD_NODE",
+      "creates_label": "plant",
+      "spec": {
+        "name": "PV plant 50 MWp",
+        "control_level": "none",
+        "decomposition_kind": "core:system"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "50 MWp photovoltaic plant"
+        }
+      ]
+    },
+    {
+      "ref": "p02",
+      "operation": "ADD_NODE",
+      "creates_label": "arrays",
+      "spec": {
+        "name": "PV arrays (trackers and modules)",
+        "control_level": "control_account",
+        "decomposition_kind": "solar_pv:area"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "PV arrays on single-axis trackers with modules"
+        }
+      ]
+    },
+    {
+      "ref": "p03",
+      "operation": "ADD_NODE",
+      "creates_label": "dc",
+      "spec": {
+        "name": "DC system (strings and combiner boxes)",
+        "control_level": "none",
+        "decomposition_kind": "solar_pv:electrical_system"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "string combiner boxes"
+        }
+      ]
+    },
+    {
+      "ref": "p04",
+      "operation": "ADD_NODE",
+      "creates_label": "inverters",
+      "spec": {
+        "name": "Inverter stations (16)",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:inverter_station"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "16 inverter stations"
+        }
+      ]
+    },
+    {
+      "ref": "p05",
+      "operation": "ADD_NODE",
+      "creates_label": "mv",
+      "spec": {
+        "name": "MV collection system 33 kV",
+        "control_level": "control_account",
+        "decomposition_kind": "solar_pv:mv_system"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "33 kV MV collection system"
+        }
+      ]
+    },
+    {
+      "ref": "p06",
+      "operation": "ADD_NODE",
+      "creates_label": "mv_cables",
+      "spec": {
+        "name": "MV cables",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:cable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "mv"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "33 kV MV collection system"
+        }
+      ]
+    },
+    {
+      "ref": "p07",
+      "operation": "ADD_NODE",
+      "creates_label": "mv_joints",
+      "spec": {
+        "name": "MV cable joints and terminations",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:joint_termination"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "mv"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable joints and terminations"
+        }
+      ]
+    },
+    {
+      "ref": "p08",
+      "operation": "ADD_NODE",
+      "creates_label": "substation",
+      "spec": {
+        "name": "Substation 33/132 kV",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:substation"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "the 33/132 kV substation"
+        }
+      ]
+    },
+    {
+      "ref": "p09",
+      "operation": "ADD_NODE",
+      "creates_label": "scada",
+      "spec": {
+        "name": "SCADA and plant monitoring",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:scada"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "SCADA and plant monitoring"
+        }
+      ]
+    },
+    {
+      "ref": "p10",
+      "operation": "ADD_NODE",
+      "creates_label": "civil",
+      "spec": {
+        "name": "Civil BOP: roads, fencing and drainage",
+        "control_level": "work_package",
+        "decomposition_kind": "solar_pv:civil_bop"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "internal roads, perimeter fencing and drainage"
+        }
+      ]
+    },
+    {
+      "ref": "p11",
+      "operation": "ADD_NODE",
+      "creates_label": "commissioning",
+      "spec": {
+        "name": "Plant commissioning and testing",
+        "control_level": "work_package",
+        "decomposition_kind": "core:deliverable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "plant"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "install and commission"
+        }
+      ]
+    }
+  ],
+  "uncovered": []
+}

@@ -1,0 +1,76 @@
+# WBS Domain Profile -- Civil linear infrastructure (v1, minimal). Advisory only.
+# Decomposition follows the route (section -> sequence of works); testing and reinstatement are work
+# packages of each section, not project phases.
+schema_version: wbs-domain-profile/v1
+profile_id: civil_linear
+version: 1.0.0
+namespace: civil_linear
+title: Civil linear infrastructure (cable / pipe routes)
+status: active
+applicable_archetypes:
+  - project_types: [infrastructure, construction, engineering]
+    tags: [cable_route, pipeline, trench, linear]
+terminology:
+  - term: section
+    preferred: Route section
+    synonyms: [Chainage section, Lot, Segment]
+  - term: reinstatement
+    preferred: Reinstatement
+    synonyms: [Surface restoration, Backfill and resurfacing]
+decomposition_kinds:
+  - {term: section, description: "A section of the route (by chainage or area)"}
+  - {term: excavation, description: "Trench and excavation works"}
+  - {term: duct, description: "Duct or pipe installation"}
+  - {term: cable, description: "Cable pulling or laying"}
+  - {term: joint, description: "Cable joints along the route"}
+  - {term: termination, description: "Cable terminations at the ends"}
+  - {term: reinstatement, description: "Backfill and surface reinstatement"}
+  - {term: testing, description: "Testing of the installed section"}
+  - {term: crossing, description: "Special crossings (HDD, road, rail, river)"}
+decomposition_patterns:
+  - pattern_id: section_first
+    description: Route section first, then the sequence of works inside each section.
+    levels:
+      - {kind: "civil_linear:section", label: "Section", control_level: control_account}
+      - {kind: "civil_linear:excavation", label: "Trench / excavation", control_level: work_package}
+expected_scope_categories:
+  - {category_id: excavation, label: "Trench and excavation", expectation: expected, evidence_cues: [trench, excavation]}
+  - {category_id: ducts, label: "Ducts or pipes", expectation: expected, evidence_cues: [duct, pipe, conduit]}
+  - {category_id: cable_installation, label: "Cable installation", expectation: expected, evidence_cues: [cable pulling, cable laying]}
+  - {category_id: joints_terminations, label: "Joints and terminations", expectation: expected,
+     evidence_cues: [joint, termination]}
+  - {category_id: reinstatement, label: "Reinstatement", expectation: expected,
+     evidence_cues: [reinstatement, backfill, resurfacing]}
+  - {category_id: testing, label: "Testing", expectation: expected, evidence_cues: [test, sheath test, VLF]}
+  - {category_id: crossings, label: "Special crossings", expectation: conditional,
+     condition: "the route crosses roads, rail or water", evidence_cues: [HDD, crossing, directional drilling]}
+validation_heuristics:
+  - {rule_id: max_depth_five, predicate: max_depth, max: 5, severity: WARNING,
+     message: "Deeper than five levels is unusual for a linear route WBS."}
+  - {rule_id: wp_has_acceptance, predicate: required_dictionary_fields, control_level: work_package,
+     fields: [acceptance_criteria], severity: WARNING,
+     message: "A work package should state its acceptance criteria (e.g. test or reinstatement standard)."}
+  - {rule_id: sections_homogeneous, predicate: sibling_kind_homogeneity, severity: INFO,
+     message: "Siblings mixing route sections with work types suggest two decomposition axes at one level."}
+recommended_control_levels:
+  - {kind: "civil_linear:section", control_level: control_account}
+specialist_warnings:
+  - warning_id: third_party_utilities
+    trigger_cues: [utility, existing services, third-party]
+    message: Utility diversions and third-party crossings are often separately consented; record them as interfaces.
+examples:
+  - example_id: two_sections
+    title: Two route sections
+    nodes:
+      - {ref: route, name: "MV cable route", kind: "core:system"}
+      - {ref: s1, parent_ref: route, name: "Section 1 (km 0-4)", kind: "civil_linear:section", control_level: control_account}
+      - {ref: s1_trench, parent_ref: s1, name: "Trench and excavation", kind: "civil_linear:excavation", control_level: work_package}
+      - {ref: s1_duct, parent_ref: s1, name: "Duct installation", kind: "civil_linear:duct", control_level: work_package}
+      - {ref: s1_cable, parent_ref: s1, name: "Cable pulling", kind: "civil_linear:cable", control_level: work_package}
+      - {ref: s1_joint, parent_ref: s1, name: "Joints", kind: "civil_linear:joint", control_level: work_package}
+      - {ref: s1_reinst, parent_ref: s1, name: "Reinstatement", kind: "civil_linear:reinstatement", control_level: work_package}
+      - {ref: s1_test, parent_ref: s1, name: "Section testing", kind: "civil_linear:testing", control_level: work_package}
+prompt_guidance: >-
+  Decompose a linear route by sections, then by the sequence of works within each section. Do not use
+  engineering, procurement and construction phases as levels. Treat special crossings as their own items
+  when the trusted evidence names them.

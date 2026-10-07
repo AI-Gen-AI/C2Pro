@@ -1,0 +1,115 @@
+{
+  "fixture_version": "wbs-golden-fixture/v1",
+  "fixture_id": "GC-SOL-01",
+  "title": "50 MWp PV plant EPC -- generate from contract scope",
+  "archetype": "solar_pv_epc",
+  "mode": "GENERATE",
+  "profiles": [
+    "solar_pv@1.0.0"
+  ],
+  "target_nodes": [],
+  "evidence": [
+    {
+      "excerpt_id": "E1",
+      "input_class": "TRUSTED_PROJECT_EVIDENCE",
+      "text": "The Contractor shall design, supply, install and commission a 50 MWp photovoltaic plant comprising PV arrays on single-axis trackers with modules, string combiner boxes, 16 inverter stations, a 33 kV MV collection system with cable joints and terminations, the 33/132 kV substation, SCADA and plant monitoring, internal roads, perimeter fencing and drainage. Battery energy storage is excluded from the Works."
+    }
+  ],
+  "availability": {
+    "has_trusted_contract": true,
+    "has_trusted_scope_evidence": true,
+    "ai_qualification_run": true
+  },
+  "expectations": {
+    "outcome": "COMPLETE",
+    "gold_scope": [
+      {
+        "element_id": "pv_arrays",
+        "aliases": [
+          "PV array",
+          "tracker",
+          "module"
+        ]
+      },
+      {
+        "element_id": "dc_system",
+        "aliases": [
+          "combiner",
+          "string"
+        ]
+      },
+      {
+        "element_id": "inverters",
+        "aliases": [
+          "inverter station"
+        ]
+      },
+      {
+        "element_id": "mv",
+        "aliases": [
+          "MV collection"
+        ]
+      },
+      {
+        "element_id": "joints",
+        "aliases": [
+          "joints",
+          "terminations"
+        ]
+      },
+      {
+        "element_id": "substation",
+        "aliases": [
+          "substation"
+        ]
+      },
+      {
+        "element_id": "scada",
+        "aliases": [
+          "SCADA"
+        ]
+      },
+      {
+        "element_id": "civil",
+        "aliases": [
+          "roads",
+          "fencing",
+          "drainage"
+        ]
+      }
+    ],
+    "decoys": [
+      {
+        "element_id": "bess",
+        "aliases": [
+          "BESS",
+          "battery"
+        ]
+      }
+    ],
+    "dimensions": {
+      "SCHEDULE_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_SCHEDULE_UNAVAILABLE"
+      },
+      "BUDGET_COST_MAPPING_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_COST_MODEL_UNAVAILABLE"
+      },
+      "PROCUREMENT_BOM_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "GOVERNED_PROCUREMENT_MAPPING_UNAVAILABLE"
+      },
+      "RESPONSIBILITY_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      },
+      "CONTRACT_OBLIGATION_COVERAGE": {
+        "status": "NOT_EVALUATED",
+        "reason": "ALIGNMENT_ENGINE_UNAVAILABLE"
+      }
+    }
+  },
+  "cassette": "GC-SOL-01.json",
+  "provenance": "synthetic: written for the C2Pro evaluation harness; no customer or production data"
+}

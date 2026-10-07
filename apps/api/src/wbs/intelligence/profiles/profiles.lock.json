@@ -1,0 +1,23 @@
+{
+  "lock_version": "wbs-profiles-lock/v1",
+  "profiles": [
+    {
+      "profile_id": "civil_linear",
+      "version": "1.0.0",
+      "namespace": "civil_linear",
+      "digest": "sha256:7ee766b2a0e0a0aeec6786b056f041000eddd1c13817bba0c6d55be99d0dbff4"
+    },
+    {
+      "profile_id": "software",
+      "version": "1.0.0",
+      "namespace": "software",
+      "digest": "sha256:0e1a2d82110d9a443416fa8ae583d5cd5042e3f8d89152c8c8ceb670e9afd037"
+    },
+    {
+      "profile_id": "solar_pv",
+      "version": "1.0.0",
+      "namespace": "solar_pv",
+      "digest": "sha256:30c9c178d68beb61d402fa17cc169036dfd32f52c577fd47e422143940786889"
+    }
+  ]
+}

@@ -101,6 +101,7 @@ from src.wbs.domain.governed_change import (
     normalize_evidence_refs,
     validate_governed_submission,
 )
+from src.wbs.intelligence.profiles.catalog import ProfileCompositionError, default_catalog
 
 logger = structlog.get_logger(__name__)
 
@@ -819,7 +820,16 @@ class WBSGovernedChangeService:
         legacy_ids = (
             await self._legacy_ids(change_set.project_id, change_set.tenant_id) if base_ids is None else frozenset()
         )
-        violations = validate_governed_submission(
+        # PC-2b.1 (ADR-029 section 9): pins resolve against the locked profile catalog; a
+        # non-core decomposition_kind must belong to a pinned profile that declares the term.
+        profile_terms: dict[str, frozenset[str]] = {}
+        pin_violations: list[str] = []
+        if change_set.profile_refs:
+            try:
+                profile_terms = default_catalog().resolve(change_set.profile_refs).terms_by_namespace()
+            except ProfileCompositionError as exc:
+                pin_violations.append(f"invalid profile pin: {exc}")
+        violations = pin_violations + validate_governed_submission(
             [_candidate(node) for node in detail.nodes],
             [LineageEdge(edge.kind, edge.source_node_id, edge.target_node_id) for edge in detail.lineage],
             [Retirement(r.node_id, r.disposition, r.source) for r in detail.retirements],
@@ -827,6 +837,7 @@ class WBSGovernedChangeService:
             legacy_node_ids=legacy_ids,
             legacy_complete=legacy_complete,
             profile_refs=list(change_set.profile_refs or []),
+            profile_terms=profile_terms,
         )
         try:
             normalize_evidence_refs(change_set.evidence_refs or [])

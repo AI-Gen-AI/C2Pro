@@ -1,0 +1,547 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "COMPLETE",
+  "qualification": [
+    {
+      "dimension": "SCOPE_COVERAGE",
+      "status": "SUPPORTED",
+      "summary": "Every route work type and the HDD crossing has a node.",
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "in three sections"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "proposals": [
+    {
+      "ref": "c00",
+      "operation": "ADD_NODE",
+      "creates_label": "route",
+      "spec": {
+        "name": "MV cable route 12 km",
+        "control_level": "none",
+        "decomposition_kind": "core:system"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "12 km 33 kV underground cable route"
+        }
+      ]
+    },
+    {
+      "ref": "c10",
+      "operation": "ADD_NODE",
+      "creates_label": "s1",
+      "spec": {
+        "name": "Section 1 (km 0-4)",
+        "control_level": "control_account",
+        "decomposition_kind": "civil_linear:section"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "route"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "in three sections"
+        }
+      ]
+    },
+    {
+      "ref": "c11",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_trench",
+      "spec": {
+        "name": "Trenching and excavation -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:excavation"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s1"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "trenching and excavation"
+        }
+      ]
+    },
+    {
+      "ref": "c12",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_duct",
+      "spec": {
+        "name": "Duct installation -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:duct"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s1"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "duct installation"
+        }
+      ]
+    },
+    {
+      "ref": "c13",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_cable",
+      "spec": {
+        "name": "Cable pulling -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:cable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s1"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable pulling"
+        }
+      ]
+    },
+    {
+      "ref": "c14",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_joint",
+      "spec": {
+        "name": "Cable joints -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:joint"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s1"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable joints"
+        }
+      ]
+    },
+    {
+      "ref": "c15",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_reinst",
+      "spec": {
+        "name": "Reinstatement of the road surface -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:reinstatement"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s1"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "reinstatement of the road surface"
+        }
+      ]
+    },
+    {
+      "ref": "c16",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_test",
+      "spec": {
+        "name": "Section testing -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:testing"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s1"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "testing of each section"
+        }
+      ]
+    },
+    {
+      "ref": "c20",
+      "operation": "ADD_NODE",
+      "creates_label": "s2",
+      "spec": {
+        "name": "Section 2 (km 4-8)",
+        "control_level": "control_account",
+        "decomposition_kind": "civil_linear:section"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "route"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "in three sections"
+        }
+      ]
+    },
+    {
+      "ref": "c21",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_trench",
+      "spec": {
+        "name": "Trenching and excavation -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:excavation"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "trenching and excavation"
+        }
+      ]
+    },
+    {
+      "ref": "c22",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_duct",
+      "spec": {
+        "name": "Duct installation -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:duct"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "duct installation"
+        }
+      ]
+    },
+    {
+      "ref": "c23",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_cable",
+      "spec": {
+        "name": "Cable pulling -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:cable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable pulling"
+        }
+      ]
+    },
+    {
+      "ref": "c24",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_joint",
+      "spec": {
+        "name": "Cable joints -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:joint"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable joints"
+        }
+      ]
+    },
+    {
+      "ref": "c25",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_reinst",
+      "spec": {
+        "name": "Reinstatement of the road surface -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:reinstatement"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "reinstatement of the road surface"
+        }
+      ]
+    },
+    {
+      "ref": "c26",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_test",
+      "spec": {
+        "name": "Section testing -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:testing"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "testing of each section"
+        }
+      ]
+    },
+    {
+      "ref": "c30",
+      "operation": "ADD_NODE",
+      "creates_label": "s3",
+      "spec": {
+        "name": "Section 3 (km 8-12)",
+        "control_level": "control_account",
+        "decomposition_kind": "civil_linear:section"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "route"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "in three sections"
+        }
+      ]
+    },
+    {
+      "ref": "c31",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_trench",
+      "spec": {
+        "name": "Trenching and excavation -- section 3",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:excavation"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "trenching and excavation"
+        }
+      ]
+    },
+    {
+      "ref": "c32",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_duct",
+      "spec": {
+        "name": "Duct installation -- section 3",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:duct"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "duct installation"
+        }
+      ]
+    },
+    {
+      "ref": "c33",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_cable",
+      "spec": {
+        "name": "Cable pulling -- section 3",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:cable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable pulling"
+        }
+      ]
+    },
+    {
+      "ref": "c34",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_joint",
+      "spec": {
+        "name": "Cable joints -- section 3",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:joint"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "cable joints"
+        }
+      ]
+    },
+    {
+      "ref": "c35",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_reinst",
+      "spec": {
+        "name": "Reinstatement of the road surface -- section 3",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:reinstatement"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "reinstatement of the road surface"
+        }
+      ]
+    },
+    {
+      "ref": "c36",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_test",
+      "spec": {
+        "name": "Section testing -- section 3",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:testing"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "testing of each section"
+        }
+      ]
+    },
+    {
+      "ref": "c27",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_hdd",
+      "spec": {
+        "name": "River crossing by HDD (km 7)",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:crossing"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s2"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "horizontal directional drilling (HDD)"
+        }
+      ]
+    },
+    {
+      "ref": "c37",
+      "operation": "ADD_NODE",
+      "creates_label": "s3_term",
+      "spec": {
+        "name": "Terminations at both ends",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:termination"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "s3"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "terminations at both ends"
+        }
+      ]
+    }
+  ],
+  "uncovered": []
+}

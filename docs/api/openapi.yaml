@@ -2180,6 +2180,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/wbs/profiles:
+    get:
+      tags:
+      - WBS domain profiles
+      summary: List Wbs Domain Profiles
+      description: The locked Domain Profile catalog (advisory profiles and their
+        exact pins).
+      operationId: list_wbs_domain_profiles_api_v1_wbs_profiles_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSDomainProfileCatalogResponse'
+      security:
+      - HTTPBearer: []
   /api/v1/alerts/workspace-settings:
     get:
       tags:
@@ -11804,6 +11821,85 @@ components:
       - expected_revision
       - expected_digest
       title: WBSDecisionRequest
+    WBSDomainProfileCatalogResponse:
+      properties:
+        schema_version:
+          type: string
+          title: Schema Version
+        profiles:
+          items:
+            $ref: '#/components/schemas/WBSDomainProfileSummary'
+          type: array
+          title: Profiles
+      type: object
+      required:
+      - schema_version
+      - profiles
+      title: WBSDomainProfileCatalogResponse
+    WBSDomainProfileSummary:
+      properties:
+        profile_id:
+          type: string
+          title: Profile Id
+        profile_version:
+          type: string
+          title: Profile Version
+        namespace:
+          type: string
+          title: Namespace
+        profile_digest:
+          type: string
+          title: Profile Digest
+        title:
+          type: string
+          title: Title
+        status:
+          type: string
+          title: Status
+        advisory:
+          type: boolean
+          title: Advisory
+          default: true
+        applicable_project_types:
+          items:
+            type: string
+          type: array
+          title: Applicable Project Types
+        decomposition_kinds:
+          items:
+            type: string
+          type: array
+          title: Decomposition Kinds
+        decomposition_patterns:
+          items:
+            type: string
+          type: array
+          title: Decomposition Patterns
+        includes:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Includes
+        pin:
+          additionalProperties:
+            type: string
+          type: object
+          title: Pin
+      type: object
+      required:
+      - profile_id
+      - profile_version
+      - namespace
+      - profile_digest
+      - title
+      - status
+      - applicable_project_types
+      - decomposition_kinds
+      - decomposition_patterns
+      - includes
+      - pin
+      title: WBSDomainProfileSummary
     WBSExpectedRevisionRequest:
       properties:
         expected_revision:

@@ -1,0 +1,10 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "INSUFFICIENT_EVIDENCE",
+  "qualification": [],
+  "findings": [],
+  "proposals": [],
+  "uncovered": [
+    "No trusted contract or scope definition is available."
+  ]
+}

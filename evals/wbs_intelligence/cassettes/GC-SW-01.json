@@ -1,0 +1,261 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "COMPLETE",
+  "qualification": [
+    {
+      "dimension": "SCOPE_COVERAGE",
+      "status": "SUPPORTED",
+      "summary": "Every SOW capability has a node; on-premise deployment is excluded.",
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "SaaS customer platform"
+        }
+      ]
+    }
+  ],
+  "findings": [],
+  "proposals": [
+    {
+      "ref": "w01",
+      "operation": "ADD_NODE",
+      "creates_label": "product",
+      "spec": {
+        "name": "Customer platform (SaaS)",
+        "control_level": "none",
+        "decomposition_kind": "software:product"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "SaaS customer platform"
+        }
+      ]
+    },
+    {
+      "ref": "w02",
+      "operation": "ADD_NODE",
+      "creates_label": "identity",
+      "spec": {
+        "name": "Identity domain",
+        "control_level": "control_account",
+        "decomposition_kind": "software:domain"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "product"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "single sign-on (SSO) integration"
+        }
+      ]
+    },
+    {
+      "ref": "w03",
+      "operation": "ADD_NODE",
+      "creates_label": "sso",
+      "spec": {
+        "name": "Single sign-on capability",
+        "control_level": "none",
+        "decomposition_kind": "software:capability"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "identity"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "single sign-on (SSO) integration"
+        }
+      ]
+    },
+    {
+      "ref": "w04",
+      "operation": "ADD_NODE",
+      "creates_label": "sso_rel",
+      "spec": {
+        "name": "SSO integration release",
+        "control_level": "work_package",
+        "decomposition_kind": "core:deliverable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "sso"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "single sign-on (SSO) integration"
+        }
+      ]
+    },
+    {
+      "ref": "w05",
+      "operation": "ADD_NODE",
+      "creates_label": "billing",
+      "spec": {
+        "name": "Billing domain",
+        "control_level": "control_account",
+        "decomposition_kind": "software:domain"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "product"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "subscription billing and invoicing"
+        }
+      ]
+    },
+    {
+      "ref": "w06",
+      "operation": "ADD_NODE",
+      "creates_label": "subs",
+      "spec": {
+        "name": "Subscription billing capability",
+        "control_level": "none",
+        "decomposition_kind": "software:capability"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "billing"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "subscription billing"
+        }
+      ]
+    },
+    {
+      "ref": "w07",
+      "operation": "ADD_NODE",
+      "creates_label": "invoicing",
+      "spec": {
+        "name": "Invoicing service",
+        "control_level": "none",
+        "decomposition_kind": "software:service"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "billing"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "invoicing"
+        }
+      ]
+    },
+    {
+      "ref": "w08",
+      "operation": "ADD_NODE",
+      "creates_label": "reporting",
+      "spec": {
+        "name": "Reporting domain",
+        "control_level": "control_account",
+        "decomposition_kind": "software:domain"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "product"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "operational reporting dashboard"
+        }
+      ]
+    },
+    {
+      "ref": "w09",
+      "operation": "ADD_NODE",
+      "creates_label": "dashboard",
+      "spec": {
+        "name": "Operational reporting dashboard",
+        "control_level": "work_package",
+        "decomposition_kind": "core:deliverable"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "reporting"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "operational reporting dashboard"
+        }
+      ]
+    },
+    {
+      "ref": "w10",
+      "operation": "ADD_NODE",
+      "creates_label": "data",
+      "spec": {
+        "name": "Data migration",
+        "control_level": "control_account",
+        "decomposition_kind": "software:domain"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "product"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "migration of legacy customer data"
+        }
+      ]
+    },
+    {
+      "ref": "w11",
+      "operation": "ADD_NODE",
+      "creates_label": "ops",
+      "spec": {
+        "name": "Operations and SLA (99.9% availability)",
+        "control_level": "control_account",
+        "decomposition_kind": "software:domain"
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "label": "product"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "99.9% availability"
+        }
+      ]
+    }
+  ],
+  "uncovered": []
+}

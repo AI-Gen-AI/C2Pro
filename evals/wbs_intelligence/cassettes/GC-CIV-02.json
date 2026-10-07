@@ -1,0 +1,158 @@
+{
+  "contract_version": "wbs-proposal/v1",
+  "outcome": "COMPLETE",
+  "qualification": [
+    {
+      "dimension": "MISSING_CONTRACT_SCOPE",
+      "status": "GAP",
+      "summary": "No section carries reinstatement although the contract requires it.",
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "joints, reinstatement and testing"
+        }
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "ref": "f1",
+      "dimension": "DUPLICATE_SCOPE",
+      "status": "WARNING",
+      "summary": "Two identical 'Cable laying' packages in section 1.",
+      "node_ids": [
+        "{{node:s1_lay_a}}",
+        "{{node:s1_lay_b}}"
+      ],
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "INFERRED",
+          "quote": "cable pulling"
+        }
+      ]
+    },
+    {
+      "ref": "f2",
+      "dimension": "OVERLAPPING_SCOPE",
+      "status": "WARNING",
+      "summary": "Ducts appear in both 'Trench and ducts' and 'Ducts'.",
+      "node_ids": [
+        "{{node:s2_trench}}",
+        "{{node:s2_ducts}}"
+      ],
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "INFERRED",
+          "quote": "trenching, ducts"
+        }
+      ]
+    },
+    {
+      "ref": "f3",
+      "dimension": "ACCEPTANCE_CRITERIA",
+      "status": "GAP",
+      "summary": "Work package 1.1.1 has no acceptance criteria.",
+      "node_ids": [
+        "{{node:s1_lay_a}}"
+      ],
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "accepted against the specified test results"
+        }
+      ]
+    }
+  ],
+  "proposals": [
+    {
+      "ref": "r1",
+      "operation": "ADD_NODE",
+      "creates_label": "s1_reinst",
+      "spec": {
+        "name": "Reinstatement -- section 1",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:reinstatement",
+        "code": "1.1.3",
+        "dictionary": {
+          "acceptance_criteria": [
+            "surface reinstated to highway standard"
+          ]
+        }
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "node_id": "{{node:s1}}"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "reinstatement"
+        }
+      ]
+    },
+    {
+      "ref": "r2",
+      "operation": "ADD_NODE",
+      "creates_label": "s2_reinst",
+      "spec": {
+        "name": "Reinstatement -- section 2",
+        "control_level": "work_package",
+        "decomposition_kind": "civil_linear:reinstatement",
+        "code": "1.2.3",
+        "dictionary": {
+          "acceptance_criteria": [
+            "surface reinstated to highway standard"
+          ]
+        }
+      },
+      "rationale": "Contracted scope stated in the trusted evidence.",
+      "confidence_pct": 80,
+      "parent": {
+        "node_id": "{{node:s2}}"
+      },
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "reinstatement"
+        }
+      ]
+    },
+    {
+      "ref": "u1",
+      "operation": "UPDATE_NODE",
+      "node": {
+        "node_id": "{{node:s1_lay_a}}"
+      },
+      "changes": {
+        "dictionary": {
+          "scope_included": [
+            "cable pulling"
+          ],
+          "acceptance_criteria": [
+            "sheath test"
+          ]
+        }
+      },
+      "rationale": "The contract accepts every work package against test results.",
+      "confidence_pct": 70,
+      "evidence": [
+        {
+          "excerpt_id": "E1",
+          "basis": "DIRECT",
+          "quote": "accepted against the specified test results"
+        }
+      ],
+      "addresses_findings": [
+        "f3"
+      ]
+    }
+  ],
+  "uncovered": []
+}

@@ -91,12 +91,15 @@ def validate_governed_submission(
     legacy_node_ids: frozenset[UUID] = frozenset(),
     legacy_complete: bool = False,
     profile_refs: Sequence[Mapping[str, object]] = (),
+    profile_terms: Mapping[str, frozenset[str]] | None = None,
 ) -> list[str]:
     """Every reason a candidate cannot be submitted or applied (empty list = valid).
 
     ``base_node_ids`` is the base baseline (``None`` for a first baseline, which may adopt and
     retire ``legacy_node_ids`` instead). ``legacy_complete`` requires every legacy live row to
     be adopted or retired -- true once submit has recorded the RETIRED_ON_BASELINE set.
+    ``profile_terms`` maps each namespace of a pinned, resolved Domain Profile to the terms its
+    exact pinned version declares (ADR-029: a non-core ``decomposition_kind`` must come from one).
     """
     violations = validate_for_submit(nodes, lineage)
     violations += dense_order_violations(nodes)
@@ -168,6 +171,16 @@ def validate_governed_submission(
             normalize_profile_ref(ref)
         except (TypeError, ValueError) as exc:
             violations.append(f"invalid profile pin: {exc}")
+    terms = profile_terms or {}
+    for node in nodes:
+        if node.decomposition_kind is None or node.decomposition_kind.startswith("core:"):
+            continue
+        namespace, _, term = node.decomposition_kind.partition(":")
+        if namespace not in terms:
+            violations.append(f"{node.node_id}: {node.decomposition_kind!r} needs a pinned profile owning "
+                              f"the {namespace!r} namespace")
+        elif term not in terms[namespace]:
+            violations.append(f"{node.node_id}: the pinned {namespace} profile does not declare {term!r}")
     return violations
 
 

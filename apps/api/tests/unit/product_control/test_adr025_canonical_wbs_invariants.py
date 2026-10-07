@@ -163,8 +163,11 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     # approve command applies an approved baseline to the ONE canonical store through the
     # canonical repository (apply_governed_tree) -- it is not a second WBS store either.
     governed = "src.wbs.adapters.http.governed_change_router"
+    # PC-2b.1: the Domain Profile catalog serves reviewed, advisory profile content -- no WBS rows at
+    # all, no store -- and is read-only.
+    profiles = "src.wbs.adapters.http.profile_catalog_router"
     allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance,
-                        governed}
+                        governed, profiles}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -172,7 +175,8 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
             wbs_routes[(tuple(sorted(context.methods or ())), context.path_format)] = route.endpoint.__module__
     assert wbs_routes, "the canonical WBS must be served"
     assert set(wbs_routes.values()) <= allowed_handlers
-    assert all(methods == ("GET",) for (methods, _), module in wbs_routes.items() if module == governance)
+    assert all(methods == ("GET",) for (methods, _), module in wbs_routes.items() if module in {governance, profiles})
+    assert {path for (_, path), module in wbs_routes.items() if module == profiles} == {"/api/v1/wbs/profiles"}
     governed_routes = {path for (methods, path), module in wbs_routes.items() if module == governed}
     assert all(methods == ("POST",) for (methods, _), module in wbs_routes.items() if module == governed)
     assert governed_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-governance/change-sets")
