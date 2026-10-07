@@ -113,11 +113,10 @@ omit = [
     "*/__pycache__/*",
     "src/core/ai/experimental/*",
     "src/core/ai/example_*.py",
-    "src/core/ai/prompts/i18n.py",
-    "src/core/ai/prompts/registry.py",
-    "src/core/ai/prompts/validator.py",
-    "src/core/ai/prompts/v1/*",
-    "src/core/ai/prompts/v1_1/*",
+    "src/core/ai/prompts/legacy/*",
+    "src/core/ai/prompts/legacy/v1/*",
+    "src/core/ai/prompts/legacy/v1_1/*",
+    "src/core/ai/prompts/tooling/*",
     "src/core/ai/test_*.py",
 ]
 
