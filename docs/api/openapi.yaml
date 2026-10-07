@@ -2197,6 +2197,255 @@ paths:
                 $ref: '#/components/schemas/WBSDomainProfileCatalogResponse'
       security:
       - HTTPBearer: []
+  /api/v1/projects/{project_id}/wbs-intelligence/runs:
+    post:
+      tags:
+      - WBS intelligence
+      summary: Request Wbs Intelligence Run
+      description: Request a deterministic qualification run; the same request reuses
+        the tenant's completed run (200).
+      operationId: request_wbs_intelligence_run_api_v1_projects__project_id__wbs_intelligence_runs_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestWBSIntelligenceRunRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSIntelligenceRunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-intelligence/runs/{run_id}:
+    get:
+      tags:
+      - WBS intelligence
+      summary: Get Wbs Intelligence Run
+      description: The run with its qualification report and its DERIVED freshness
+        (STALE is never stored).
+      operationId: get_wbs_intelligence_run_api_v1_projects__project_id__wbs_intelligence_runs__run_id__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSIntelligenceRunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-intelligence/runs/{run_id}/cancel:
+    post:
+      tags:
+      - WBS intelligence
+      summary: Cancel Wbs Intelligence Run
+      description: Cancel a REQUESTED or RUNNING run (terminal runs are immutable).
+      operationId: cancel_wbs_intelligence_run_api_v1_projects__project_id__wbs_intelligence_runs__run_id__cancel_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSIntelligenceRunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-intelligence/runs/{run_id}/items:
+    get:
+      tags:
+      - WBS intelligence
+      summary: List Wbs Intelligence Items
+      description: The run's immutable findings and proposals with their decisions
+        (decided items stay readable).
+      operationId: list_wbs_intelligence_items_api_v1_projects__project_id__wbs_intelligence_runs__run_id__items_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WBSIntelligenceItemResponse'
+                title: Response List Wbs Intelligence Items Api V1 Projects  Project
+                  Id  Wbs Intelligence Runs  Run Id  Items Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-intelligence/runs/{run_id}/preview:
+    post:
+      tags:
+      - WBS intelligence
+      summary: Preview Wbs Intelligence Selection
+      description: 'Simulate applying the selection to the DRAFT. Pure read: no write,
+        no decision, no approval.'
+      operationId: preview_wbs_intelligence_selection_api_v1_projects__project_id__wbs_intelligence_runs__run_id__preview_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Run Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewWBSIntelligenceRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WBSIntelligencePreviewResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/wbs-intelligence/runs/{run_id}/decisions:
+    post:
+      tags:
+      - WBS intelligence
+      summary: Decide Wbs Intelligence Items
+      description: 'Record the human''s decisions; applied items edit the EXISTING
+        DRAFT via the governed commands.
+
+
+        All or nothing: one invalid item and nothing is applied, decided or emitted.
+        A decision never
+
+        approves a baseline -- the DRAFT still goes through submit and human admin
+        approve = apply.'
+      operationId: decide_wbs_intelligence_items_api_v1_projects__project_id__wbs_intelligence_runs__run_id__decisions_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Run Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideWBSIntelligenceRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecideWBSIntelligenceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts/workspace-settings:
     get:
       tags:
@@ -6599,6 +6848,62 @@ components:
       description: "Consolidated view of project coherence for the dashboard.\n\n\
         ECOA v2 (ADR-009 \xA77.2 step 1): the optional `categories_v2` field carries\n\
         the locked v2 contract. Defaults to None so v1 clients are unaffected."
+    DecideWBSIntelligenceRequest:
+      properties:
+        change_set_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Change Set Id
+        expected_revision:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Expected Revision
+        decisions:
+          items:
+            $ref: '#/components/schemas/WBSIntelligenceDecisionRequest'
+          type: array
+          minItems: 1
+          title: Decisions
+      additionalProperties: false
+      type: object
+      required:
+      - decisions
+      title: DecideWBSIntelligenceRequest
+      description: One all-or-nothing batch. Applying needs an EXISTING DRAFT and
+        its expected revision.
+    DecideWBSIntelligenceResponse:
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+          title: Batch Id
+        decisions:
+          items:
+            $ref: '#/components/schemas/WBSIntelligenceDecidedItem'
+          type: array
+          title: Decisions
+        change_set_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Change Set Id
+        change_set_revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Change Set Revision
+      type: object
+      required:
+      - batch_id
+      - decisions
+      - change_set_id
+      - change_set_revision
+      title: DecideWBSIntelligenceResponse
     DetectionEvidenceResponse:
       properties:
         source_clause_id:
@@ -8843,6 +9148,25 @@ components:
       - high
       title: PowerLevel
       description: Level of power of the stakeholder.
+    PreviewWBSIntelligenceRequest:
+      properties:
+        change_set_id:
+          type: string
+          format: uuid
+          title: Change Set Id
+          description: the existing DRAFT the selection would be applied to
+        selections:
+          items:
+            $ref: '#/components/schemas/WBSIntelligenceSelection'
+          type: array
+          minItems: 1
+          title: Selections
+      additionalProperties: false
+      type: object
+      required:
+      - change_set_id
+      - selections
+      title: PreviewWBSIntelligenceRequest
     ProjectCreateRequest:
       properties:
         name:
@@ -9777,6 +10101,40 @@ components:
       - unavailable
       title: ReportEvidenceTier
       description: How well a section's facts trace back to source evidence.
+    RequestWBSIntelligenceRunRequest:
+      properties:
+        target_kind:
+          type: string
+          enum:
+          - CANDIDATE
+          - BASELINE
+          title: Target Kind
+        change_set_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Change Set Id
+          description: the DRAFT change set (CANDIDATE)
+        baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Baseline Id
+          description: the current baseline (BASELINE)
+        rerun:
+          type: boolean
+          title: Rerun
+          description: always start a NEW run (the previous runs stay readable)
+          default: false
+      additionalProperties: false
+      type: object
+      required:
+      - target_kind
+      title: RequestWBSIntelligenceRunRequest
+      description: A deterministic qualification of a DRAFT candidate or of the current
+        baseline (no LLM).
     ResolveAlertRequest:
       properties:
         resolution:
@@ -11911,6 +12269,560 @@ components:
       required:
       - expected_revision
       title: WBSExpectedRevisionRequest
+    WBSIntelligenceDecidedItem:
+      properties:
+        decision_id:
+          type: string
+          format: uuid
+          title: Decision Id
+        item_id:
+          type: string
+          format: uuid
+          title: Item Id
+        decision:
+          type: string
+          title: Decision
+        change_set_revision_after:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Change Set Revision After
+        label_node_ids:
+          additionalProperties:
+            type: string
+          type: object
+          title: Label Node Ids
+      type: object
+      required:
+      - decision_id
+      - item_id
+      - decision
+      - change_set_revision_after
+      - label_node_ids
+      title: WBSIntelligenceDecidedItem
+    WBSIntelligenceDecisionRequest:
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          title: Item Id
+        decision:
+          type: string
+          enum:
+          - APPLY_AS_PROPOSED
+          - APPLY_WITH_HUMAN_EDIT
+          - REJECT
+          - ACKNOWLEDGE
+          - DISMISS
+          - NO_CHANGE
+          title: Decision
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 4000
+            minLength: 1
+          - type: 'null'
+          title: Reason
+        edit:
+          anyOf:
+          - $ref: '#/components/schemas/WBSIntelligenceHumanEdit'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - item_id
+      - decision
+      title: WBSIntelligenceDecisionRequest
+    WBSIntelligenceDecisionResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        decision:
+          type: string
+          title: Decision
+        batch_id:
+          type: string
+          format: uuid
+          title: Batch Id
+        decided_by:
+          type: string
+          format: uuid
+          title: Decided By
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        change_set_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Change Set Id
+        change_set_revision_before:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Change Set Revision Before
+        change_set_revision_after:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Change Set Revision After
+        proposal_body_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proposal Body Digest
+        applied_commands:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Applied Commands
+        applied_commands_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Applied Commands Digest
+        label_node_ids:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Label Node Ids
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - decision
+      - batch_id
+      - decided_by
+      - reason
+      - change_set_id
+      - change_set_revision_before
+      - change_set_revision_after
+      - proposal_body_digest
+      - applied_commands
+      - applied_commands_digest
+      - label_node_ids
+      - created_at
+      title: WBSIntelligenceDecisionResponse
+    WBSIntelligenceFreshness:
+      properties:
+        state:
+          type: string
+          enum:
+          - FRESH
+          - STALE
+          title: State
+        reasons:
+          items:
+            type: string
+          type: array
+          title: Reasons
+      type: object
+      required:
+      - state
+      - reasons
+      title: WBSIntelligenceFreshness
+    WBSIntelligenceHumanEdit:
+      properties:
+        node:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Node
+        sources:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Sources
+        parent:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Parent
+        position:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Position
+        creates_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Creates Label
+        spec:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Spec
+        changes:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Changes
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        split_targets:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Split Targets
+        child_targets:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Child Targets
+      additionalProperties: false
+      type: object
+      title: WBSIntelligenceHumanEdit
+      description: The human's command fields for the item's operation (the stored
+        proposal is never edited).
+    WBSIntelligenceItemResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        run_id:
+          type: string
+          format: uuid
+          title: Run Id
+        kind:
+          type: string
+          title: Kind
+        ref:
+          type: string
+          title: Ref
+        ordinal:
+          type: integer
+          title: Ordinal
+        contract_version:
+          type: string
+          title: Contract Version
+        operation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operation
+        body:
+          additionalProperties: true
+          type: object
+          title: Body
+        body_digest:
+          type: string
+          title: Body Digest
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/WBSIntelligenceDecisionResponse'
+          - type: 'null'
+      type: object
+      required:
+      - id
+      - run_id
+      - kind
+      - ref
+      - ordinal
+      - contract_version
+      - operation
+      - body
+      - body_digest
+      - created_at
+      - decision
+      title: WBSIntelligenceItemResponse
+    WBSIntelligencePreviewItem:
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          title: Item Id
+        applicability:
+          type: string
+          enum:
+          - APPLICABLE
+          - CONFLICT
+          - MISSING_PREREQUISITE
+          - BLOCKED_BY_REJECTED
+          - DECIDED
+          title: Applicability
+        reasons:
+          items:
+            type: string
+          type: array
+          title: Reasons
+      type: object
+      required:
+      - item_id
+      - applicability
+      - reasons
+      title: WBSIntelligencePreviewItem
+    WBSIntelligencePreviewNode:
+      properties:
+        key:
+          type: string
+          title: Key
+          description: a candidate node id, or label:<local label> for a node the
+            selection would create
+        parent:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent
+        sort_order:
+          type: integer
+          title: Sort Order
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+        name:
+          type: string
+          title: Name
+        decomposition_kind:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Decomposition Kind
+        control_level:
+          type: string
+          title: Control Level
+      type: object
+      required:
+      - key
+      - parent
+      - sort_order
+      - code
+      - name
+      - decomposition_kind
+      - control_level
+      title: WBSIntelligencePreviewNode
+    WBSIntelligencePreviewResponse:
+      properties:
+        freshness:
+          $ref: '#/components/schemas/WBSIntelligenceFreshness'
+        applicable:
+          type: boolean
+          title: Applicable
+        reasons:
+          items:
+            type: string
+          type: array
+          title: Reasons
+        items:
+          items:
+            $ref: '#/components/schemas/WBSIntelligencePreviewItem'
+          type: array
+          title: Items
+        ordered_item_ids:
+          items:
+            type: string
+            format: uuid
+          type: array
+          title: Ordered Item Ids
+        resulting_nodes:
+          items:
+            $ref: '#/components/schemas/WBSIntelligencePreviewNode'
+          type: array
+          title: Resulting Nodes
+      type: object
+      required:
+      - freshness
+      - applicable
+      - reasons
+      - items
+      - ordered_item_ids
+      - resulting_nodes
+      title: WBSIntelligencePreviewResponse
+      description: 'A simulated read model: nothing was written, decided or approved.'
+    WBSIntelligenceRunResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        project_id:
+          type: string
+          format: uuid
+          title: Project Id
+        mode:
+          type: string
+          title: Mode
+        execution_type:
+          type: string
+          title: Execution Type
+        target_kind:
+          type: string
+          title: Target Kind
+        target_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Target Id
+        target_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target Digest
+        target_change_set_revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Target Change Set Revision
+        target_base_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Target Base Baseline Id
+        evidence_set_digest:
+          type: string
+          title: Evidence Set Digest
+        profile_refs:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Profile Refs
+        proposal_contract_version:
+          type: string
+          title: Proposal Contract Version
+        qualification_vocab_version:
+          type: string
+          title: Qualification Vocab Version
+        orchestration_version:
+          type: string
+          title: Orchestration Version
+        idempotency_key:
+          type: string
+          title: Idempotency Key
+        model_provenance:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Model Provenance
+        status:
+          type: string
+          title: Status
+        outcome:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Outcome
+        qualification:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Qualification
+        qualification_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualification Digest
+        failure_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Reason
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        completed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Completed At
+        freshness:
+          $ref: '#/components/schemas/WBSIntelligenceFreshness'
+        reused:
+          type: boolean
+          title: Reused
+          default: false
+      type: object
+      required:
+      - id
+      - project_id
+      - mode
+      - execution_type
+      - target_kind
+      - target_id
+      - target_digest
+      - target_change_set_revision
+      - target_base_baseline_id
+      - evidence_set_digest
+      - profile_refs
+      - proposal_contract_version
+      - qualification_vocab_version
+      - orchestration_version
+      - idempotency_key
+      - model_provenance
+      - status
+      - outcome
+      - qualification
+      - qualification_digest
+      - failure_reason
+      - created_at
+      - started_at
+      - completed_at
+      - freshness
+      title: WBSIntelligenceRunResponse
+    WBSIntelligenceSelection:
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          title: Item Id
+        decision:
+          type: string
+          enum:
+          - APPLY_AS_PROPOSED
+          - APPLY_WITH_HUMAN_EDIT
+          title: Decision
+        edit:
+          anyOf:
+          - $ref: '#/components/schemas/WBSIntelligenceHumanEdit'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - item_id
+      - decision
+      title: WBSIntelligenceSelection
     WBSLineageEdgeResponse:
       properties:
         kind:

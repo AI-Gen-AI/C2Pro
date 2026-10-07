@@ -3,6 +3,8 @@
 A human applies explicitly selected items. A selection is accepted only when:
 
 * every selected item exists in the run and none was rejected by the human;
+* a prerequisite already applied by a human (``satisfied``) counts as present: it is never
+  re-applied, and its local labels are resolved to the ids it minted before planning;
 * its whole prerequisite closure is EXPLICITLY selected -- hidden prerequisites are never
   auto-accepted: a refusal names the required closure so it can be shown before confirmation;
 * no prerequisite (direct or transitive) was rejected -- that makes the dependant non-applicable;
@@ -32,6 +34,7 @@ from src.wbs.intelligence.validation.simulation import (
 class SelectionPlan:
     ordered_item_ids: tuple[UUID, ...]
     created_labels: tuple[str, ...]
+    tree: SimulatedTree | None = field(default=None, compare=False)  # the simulated result (a read model)
 
 
 @dataclass(frozen=True)
@@ -91,24 +94,28 @@ def plan_selection(
     rejected: Collection[UUID],
     current: TargetSnapshot | None,
     kind_terms: Mapping[str, frozenset[str]],
+    satisfied: Collection[UUID] = (),
 ) -> SelectionPlan | SelectionRefusal:
     by_id = {item.item_id: item for item in items}
     chosen = set(selected)
+    done = set(satisfied)
     unknown = chosen - set(by_id)
     if unknown:
         return SelectionRefusal(reasons=(f"unknown proposal item(s) {sorted(map(str, unknown))}",))
     reasons: list[str] = []
     rejected_set = set(rejected)
+    if chosen & done:
+        reasons.append("an item already applied cannot be applied again")
     if chosen & rejected_set:
         reasons.append("a rejected item cannot be applied")
-    closure = dependency_closure(by_id, chosen)
+    closure = dependency_closure({k: v for k, v in by_id.items() if k not in done}, chosen) - done
     blocked = frozenset(dep for dep in closure | chosen if dep in rejected_set)
     if blocked:
         reasons.append("a prerequisite was rejected: its dependants are not applicable")
     missing = frozenset(closure - chosen - rejected_set)
     if missing:
         reasons.append("select the required prerequisites explicitly (they are never auto-accepted)")
-    walk = _order(by_id, chosen | closure)
+    walk = _order({k: v for k, v in by_id.items() if k not in done}, (chosen | closure) - done)
     if walk.cycle is not None:
         reasons.append("the proposal items form a dependency cycle")
     conflicts = frozenset(
@@ -133,7 +140,7 @@ def plan_selection(
     except SimulationError as exc:
         return SelectionRefusal(reasons=(f"the selection does not apply cleanly: {exc}",))
     labels = tuple(label for item_id in ordered for label in by_id[item_id].creates_labels)
-    return SelectionPlan(ordered_item_ids=tuple(ordered), created_labels=labels)
+    return SelectionPlan(ordered_item_ids=tuple(ordered), created_labels=labels, tree=tree)
 
 
 __all__ = ["SelectionPlan", "SelectionRefusal", "dependency_closure", "plan_selection"]

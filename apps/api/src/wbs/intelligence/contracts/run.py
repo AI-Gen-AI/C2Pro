@@ -4,7 +4,11 @@ Every boundary is tenant- and project-explicit (``RunScope`` has no defaults). A
 exact target identity (kind, id, digest, candidate revision, base baseline). The idempotency key
 binds everything that determines a result and nothing volatile: the same request may reuse a
 completed run of the same tenant; any different evidence, profile, model, template or target is a
-new run; a human "re-run" adds a nonce because model output is not deterministic.
+new run; a human "re-run" adds a nonce because model output is not deterministic. A DETERMINISTIC
+run has no model and no prompt template: its key binds ``model: null`` and the engine version
+(``orchestration_version``) instead -- model provenance is never fabricated.
+
+Run STATUS (persistence lifecycle) and run OUTCOME (the result vocabulary) are kept separate.
 """
 
 from __future__ import annotations
@@ -39,6 +43,22 @@ class TargetKind(StrEnum):
     IMPORT = "IMPORT"
     CANDIDATE = "CANDIDATE"
     BASELINE = "BASELINE"
+
+
+class ExecutionType(StrEnum):
+    DETERMINISTIC = "DETERMINISTIC"  # no model call, no model provenance
+    AI = "AI"  # a validated model response; model provenance is mandatory
+
+
+class RunStatus(StrEnum):
+    REQUESTED = "REQUESTED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+TERMINAL_STATUSES = frozenset({RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED})
 
 
 class RunOutcome(StrEnum):
@@ -98,8 +118,8 @@ def idempotency_key(
     target: RunTarget,
     evidence_set_digest: str,
     profile_digests: Sequence[str],
-    prompt_templates: Sequence[PromptTemplateRef | Mapping[str, str]],
-    model: ModelFingerprint,
+    prompt_templates: Sequence[PromptTemplateRef | Mapping[str, str]] = (),
+    model: ModelFingerprint | None,
     orchestration_version: str,
     proposal_contract_version: str = PROPOSAL_CONTRACT_VERSION,
     qualification_vocab_version: str = QUALIFICATION_VOCAB_VERSION,
@@ -121,7 +141,7 @@ def idempotency_key(
         "proposal_contract_version": proposal_contract_version,
         "qualification_vocab_version": qualification_vocab_version,
         "prompt_templates": templates,
-        "model": model.model_dump(mode="json"),
+        "model": None if model is None else model.model_dump(mode="json"),
         "orchestration_version": orchestration_version,
         "rerun_nonce": rerun_nonce,
     }
@@ -130,11 +150,14 @@ def idempotency_key(
 
 __all__ = [
     "REUSABLE_OUTCOMES",
+    "TERMINAL_STATUSES",
+    "ExecutionType",
     "IntelligenceMode",
     "ModelFingerprint",
     "PromptTemplateRef",
     "RunOutcome",
     "RunScope",
+    "RunStatus",
     "RunTarget",
     "TargetKind",
     "idempotency_key",
