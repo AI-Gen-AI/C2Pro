@@ -33,6 +33,10 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "wbs.change.submitted",
         "wbs.change.rejected",
         "wbs.baseline.applied",
+        # PC-2b.2 (#921, ADR-030): WBS intelligence audit facts -- never WBS authority. A run reached
+        # a terminal state; a human decided one item (an applied item names the DRAFT it went into).
+        "wbs.intelligence.run_completed",
+        "wbs.intelligence.item_decided",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

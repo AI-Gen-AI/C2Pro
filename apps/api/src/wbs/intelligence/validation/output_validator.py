@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID, uuid4
@@ -115,6 +115,7 @@ class ValidatedOutput:
     proposals: tuple[ProposalItem, ...]
     uncovered: tuple[str, ...]
     report: ValidationReport
+    finding_refs: Mapping[UUID, str] = field(default_factory=dict)  # finding id -> the model's ref
 
 
 # ============================================================================ evidence
@@ -282,7 +283,8 @@ def _created(item: ModelProposalItem) -> list[str]:
     return labels + [target.label for target in item.split_targets]
 
 
-def _check_shape(item: ModelProposalItem, ctx: ValidationContext) -> None:
+def check_proposal_shape(item: ModelProposalItem) -> None:
+    """Refuse an item that does not carry exactly its operation's fields (``ItemRejected``)."""
     present = {name for name in _OPERATION_FIELDS if getattr(item, name) not in (None, (), {})}
     required, optional = _SHAPE[item.operation]
     missing, extra = required - present, present - required - optional
@@ -290,6 +292,48 @@ def _check_shape(item: ModelProposalItem, ctx: ValidationContext) -> None:
         raise ItemRejected(f"{item.operation.value} needs {sorted(required)}"
                            + (f"; missing {sorted(missing)}" if missing else "")
                            + (f"; not allowed {sorted(extra)}" if extra else ""))
+
+
+def proposal_payload(item: ModelProposalItem) -> dict[str, Any]:
+    """The normalised command payload of an item (snapshot ids or local labels only)."""
+    payload: dict[str, Any] = item.model_dump(
+        mode="json", include=_OPERATION_FIELDS, exclude_none=True, exclude_defaults=True)
+    if item.operation is ProposalOperation.MERGE_NODES and "parent" in item.model_fields_set and item.parent is None:
+        payload["parent"] = None  # an explicit top-level placement (absent = where the first source was)
+    return payload
+
+
+def created_labels(item: ModelProposalItem) -> list[str]:
+    return _created(item)
+
+
+def used_labels(item: ModelProposalItem) -> list[str]:
+    labels = [ref.label for ref in _refs(item) if ref.label is not None]
+    return labels + [key.removeprefix("label:") for key in item.child_targets if key.startswith("label:")]
+
+
+def item_guards(item: ModelProposalItem, tree: SimulatedTree, target: TargetSnapshot | None
+                ) -> tuple[tuple[UUID, ...], dict[str, str]]:
+    """The snapshot nodes an item touches and their stale-protection fingerprints.
+
+    ``tree`` is the simulated state the item applies to (it shows which children a MERGE takes
+    over); ``target`` is the snapshot the fingerprints are taken from. A SPLIT / MERGE source also
+    gets its child-set fingerprint, so a child added under it later is a CONFLICT.
+    """
+    affected = tuple(dict.fromkeys(
+        [r.node_id for r in _refs(item) if r.node_id is not None]
+        + [UUID(k) for k in item.child_targets if not k.startswith("label:")]
+        + list(_reparented_children(item, tree))))
+    fingerprints = target.fingerprints() if target else {}
+    guarded = {str(node_id): fingerprints[node_id] for node_id in affected if node_id in fingerprints}
+    if target is not None:
+        guarded |= {f"{CHILDREN_KEY_PREFIX}{node_id}": target.children_fingerprint(node_id)
+                    for node_id in _restructured_sources(item)}
+    return affected, guarded
+
+
+def _check_shape(item: ModelProposalItem, ctx: ValidationContext) -> None:
+    check_proposal_shape(item)
     snapshot_ids = [ref.node_id for ref in _refs(item) if ref.node_id is not None]
     for child in item.child_targets:
         try:
@@ -362,9 +406,8 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
     graph, rejected = _graph(items, report)
     order = _topological(graph, report, rejected)
     tree = SimulatedTree.of(ctx.target, ctx.profiles.terms_by_namespace())
-    fingerprints = ctx.target.fingerprints() if ctx.target else {}
     verified: dict[str, tuple[tuple[EvidenceItem, ...], tuple[ProfileRuleRef, ...], tuple[UUID, ...]]] = {}
-    reparented: dict[str, tuple[UUID, ...]] = {}
+    guards: dict[str, tuple[tuple[UUID, ...], dict[str, str]]] = {}
     item_ids = {ref: mint() for ref in by_ref}
     accepted: list[str] = []
     for ref in order:
@@ -383,7 +426,7 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
             unknown = [f for f in item.addresses_findings if f not in finding_ids]
             if unknown:
                 raise ItemRejected(f"addresses unknown finding(s) {unknown}")
-            implicit = _reparented_children(item, tree)
+            guard = item_guards(item, tree, ctx.target)
             candidate = tree.copy()
             candidate.apply(item)
         except (ItemRejected, SimulationError) as exc:
@@ -392,25 +435,17 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
             continue
         tree = candidate
         verified[ref] = (evidence, rules, tuple(finding_ids[f] for f in item.addresses_findings))
-        reparented[ref] = implicit
+        guards[ref] = guard
         accepted.append(ref)
 
     stored = []
     for ref in accepted:
         item = by_ref[ref]
         evidence, rules, addressed = verified[ref]
-        affected = tuple(dict.fromkeys(
-            [r.node_id for r in _refs(item) if r.node_id is not None]
-            + [UUID(k) for k in item.child_targets if not k.startswith("label:")]
-            + list(reparented[ref])))
-        guarded = {str(node_id): fingerprints[node_id] for node_id in affected}
-        if ctx.target is not None:
-            guarded |= {f"{CHILDREN_KEY_PREFIX}{node_id}": ctx.target.children_fingerprint(node_id)
-                        for node_id in _restructured_sources(item)}
-        payload: dict[str, Any] = item.model_dump(
-            mode="json", include=_OPERATION_FIELDS, exclude_none=True, exclude_defaults=True)
+        affected, guarded = guards[ref]
         stored.append(ProposalItem(
-            item_id=item_ids[ref], ref=ref, operation=item.operation, payload=payload, affected_node_ids=affected,
+            item_id=item_ids[ref], ref=ref, operation=item.operation, payload=proposal_payload(item),
+            affected_node_ids=affected,
             target_fingerprints=guarded,
             creates_labels=tuple(_created(item)),
             uses_labels=tuple(r.label for r in _refs(item) if r.label is not None),
@@ -475,12 +510,18 @@ def validate_model_output(raw: str, ctx: ValidationContext, *, mint: Callable[[]
         report.envelope_error = f"{refused} of {total} items refused (over {ctx.max_rejected_pct}%)"
         return _failed(report)
     return ValidatedOutput(outcome=RunOutcome(envelope.outcome), qualification=qualification,
+                           finding_refs={finding_id: ref for ref, finding_id in finding_ids.items()},
                            findings=tuple(findings), proposals=tuple(proposals),
                            uncovered=envelope.uncovered, report=report)
 
 
 __all__ = [
     "ItemRejected",
+    "check_proposal_shape",
+    "created_labels",
+    "item_guards",
+    "proposal_payload",
+    "used_labels",
     "ValidatedOutput",
     "ValidationContext",
     "ValidationReport",

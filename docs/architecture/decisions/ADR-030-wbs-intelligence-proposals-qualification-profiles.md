@@ -194,8 +194,28 @@ Hard gates from day one:
 - **AI becomes useful without becoming an authority.** Every structural change is still a human-authored, digest-signed, human-approved governed change.
 - **Qualification is honest.** Missing inputs and missing downstream authorities read as NOT_EVALUATED; they are never presented as fitness or as a defect.
 - **Profiles are cheap to review and reproducible.** Changing one means publishing a new version, so old proposals stay auditable.
-- **Persistence is still to come.** Persistence for runs, items and decisions (PC-2b.2) and for import sources (PC-2b.3) needs new tenant-scoped tables with RLS. PC-2b.1 adds none.
+- **Persistence.** Runs, items and decisions are persisted by PC-2b.2 (amendment below). Import sources (PC-2b.3) still need their own tenant-scoped tables with RLS.
 - **Cost of the design.** Applying proposals is explicit work for the user. This is deliberate: a rerun can never overwrite human edits.
+
+## Amendment 1 — PC-2b.2 store and human decision loop (#921)
+
+Conforms to §1–§4 and §9. It persists intelligence; it adds no authority.
+
+- **Store.** Three tenant- and project-scoped tables, linked by composite (tenant, project, …) foreign keys, with RLS ENABLED + FORCED and fail-closed policies:
+  - `wbs_intelligence_runs`: the exact input identity of a run and its complete `wbs-qualification/v1` report (one coherent result, never spread over findings);
+  - `wbs_intelligence_items`: FINDING or PROPOSAL, insert-only, recorded only while the run is RUNNING;
+  - `wbs_intelligence_decisions`: append-only, one per item.
+- **Run lifecycle.** Status (REQUESTED / RUNNING / COMPLETED / FAILED / CANCELLED) is separate from the outcome vocabulary. A terminal run is frozen. Execution is DETERMINISTIC (no model provenance, never fabricated) or AI (model provenance required). PC-2b.2 only executes deterministic runs.
+- **Idempotency.** A partial unique index on `(tenant_id, idempotency_key)` covers REQUESTED, RUNNING and COMPLETED runs only. A FAILED or CANCELLED run never blocks or answers a retry, and concurrent identical requests serialize on the index.
+- **Decisions are choices, not approvals.**
+  - Proposal decisions are `APPLY_AS_PROPOSED`, `APPLY_WITH_HUMAN_EDIT` or `REJECT`; finding decisions are `ACKNOWLEDGE`, `DISMISS` or `NO_CHANGE`.
+  - Only an active human `user` or `admin` decides (database-checked); never `api`, AI or a service.
+  - Applying needs an existing DRAFT (never created by the decision API) and runs through the PC-2a governed commands as the human, under the expected revision.
+  - A human edit is recorded on the decision (exact governed commands and their digest) beside the untouched original proposal digest.
+  - Baseline approval stays the unchanged ADR-029 submit + human admin approve = apply.
+- **Atomicity.** For one selected batch, freshness, fingerprints, dependency closure, the simulation of the final batch, the governed commands, the decision rows and their `wbs.intelligence.item_decided` events form one transaction. One invalid item and nothing is applied, decided or emitted.
+- **Freshness stays derived.** STALE is run-level: the baseline moved, or the candidate is no longer a DRAFT on the current base. CONFLICT is per item (fingerprints). Ordinary edits to a valid DRAFT never stale the run, so untouched items still apply.
+- **Provenance.** The candidate node `provenance` records `{intelligence_run_id, intelligence_item_id, decision_id, application_mode}`. It never enters a digest, and decisions never touch `evidence_refs`.
 
 ## Alternatives rejected
 

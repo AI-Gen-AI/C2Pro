@@ -582,7 +582,14 @@ class WBSGovernedChangeService:
         actor: Actor,
         expected_revision: int,
         command: EditCommand,
+        provenance: Mapping[str, Any] | None = None,
     ) -> CommandResult:
+        """One typed edit of a DRAFT, as a human author, under the expected revision.
+
+        ``provenance`` (PC-2b.2) is appended to the ``intelligence`` list of the candidate nodes the
+        command created or kept (never to their content): it records which intelligence item a
+        human applied. It authorizes nothing and is excluded from every digest.
+        """
         if not can_author(actor.kind, actor.role):
             raise WBSGovernanceForbiddenError("only a human user or admin can edit a WBS change set")
         await self._scoped(change_set_id, project_id, tenant_id)
@@ -601,7 +608,20 @@ class WBSGovernedChangeService:
             await self.session.flush()
         except (GovernanceRuleError, TypeError, ValueError) as exc:
             raise WBSChangeSetInvalidError(str(exc)) from exc
+        if provenance:
+            await self._record_provenance(change_set.id, node_ids, provenance)
         return CommandResult(revision=change_set.revision, node_ids=node_ids)
+
+    async def _record_provenance(self, change_set_id: UUID, node_ids: Sequence[UUID], entry: Mapping[str, Any]) -> None:
+        rows = await self.session.execute(
+            select(WBSChangeSetNodeORM).where(
+                WBSChangeSetNodeORM.change_set_id == change_set_id, WBSChangeSetNodeORM.node_id.in_(list(node_ids)))
+        )
+        for node in rows.scalars():
+            current = dict(node.provenance or {})
+            current["intelligence"] = [*current.get("intelligence", []), dict(entry)]
+            node.provenance = current
+        await self.session.flush()
 
     async def _dispatch(self, change_set: WBSChangeSetORM, command: EditCommand) -> list[UUID]:
         nodes = await self._nodes(change_set.id)
