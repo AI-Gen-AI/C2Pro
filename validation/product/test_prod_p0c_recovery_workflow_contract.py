@@ -46,8 +46,11 @@ def test_recovery_preflight_is_read_only_and_exactly_two_revisions() -> None:
     assert "expected exactly A+B revisions" in source
     assert "document must be error before recovery" in source
     assert "A→B revision.changed must not pre-exist" in source
-    assert "document_processing_operations" not in source
-    assert "processing authority is not the expected failed B state" not in source
+    assert "FROM document_processing_operations" in source
+    assert "processing authority is not pinned to the expected failed B state" in source
+    assert "owner_token" not in source
+    assert "fencing_token" not in source
+    assert "last_error" not in source
     assert "payload->>'document_id'=:document_text" in source
     assert "source_revision_id'=:source_text" in source
     assert "target_revision_id'=:target_text" in source
