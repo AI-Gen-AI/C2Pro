@@ -313,6 +313,7 @@ export * from "./registerResponse";
 export * from "./rejectRequest";
 export * from "./relationshipExplanationCitationResponse";
 export * from "./reportEvidenceTier";
+export * from "./reprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams";
 export * from "./requestWBSIntelligenceRunRequest";
 export * from "./requestWBSIntelligenceRunRequestTargetKind";
 export * from "./resolveAlertRequest";
