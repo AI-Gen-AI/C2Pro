@@ -46,14 +46,23 @@ def test_recovery_preflight_is_read_only_and_exactly_two_revisions() -> None:
     assert "expected exactly A+B revisions" in source
     assert "document must be error before recovery" in source
     assert "A→B revision.changed must not pre-exist" in source
-    assert "document_processing_operations" not in source
-    assert "processing authority is not the expected failed B state" not in source
+    assert "FROM document_processing_operations" in source
+    assert "processing authority is not pinned to the expected failed B state" in source
+    assert "owner_token" not in source
+    assert "fencing_token" not in source
+    assert "last_error" not in source
     assert "payload->>'document_id'=:document_text" in source
     assert "source_revision_id'=:source_text" in source
     assert "target_revision_id'=:target_text" in source
     spec = SPEC.read_text(encoding="utf-8")
     assert 'name: /^Retry processing /' in spec
     assert "await expect(retry).toBeVisible" in spec
+    assert "PROD_P0C_TARGET_GENERATION" in source
+    assert 'expected_revision_id", targetRevisionId' in spec
+    assert 'expected_generation", targetGeneration' in spec
+    assert 'expected_stage", "INGESTION"' in spec
+    assert 'expected_phase", "PENDING"' in spec
+    assert 'expected_outcome", "ingestion_failed"' in spec
     assert "CAST(:document AS text)" not in source
     assert "CAST(:source AS text)" not in source
     assert "CAST(:target AS text)" not in source

@@ -268,6 +268,26 @@ _BEGIN_GENERATION_SQL = text(
             last_error = NULL,
             updated_at = clock_timestamp() AT TIME ZONE 'UTC'
      WHERE document_processing_operations.tenant_id = EXCLUDED.tenant_id
+       AND (
+            CAST(:expected_revision_id AS uuid) IS NULL
+            OR document_processing_operations.revision_id = CAST(:expected_revision_id AS uuid)
+       )
+       AND (
+            CAST(:expected_generation AS bigint) IS NULL
+            OR document_processing_operations.generation = CAST(:expected_generation AS bigint)
+       )
+       AND (
+            CAST(:expected_stage AS text) IS NULL
+            OR document_processing_operations.stage = CAST(:expected_stage AS text)
+       )
+       AND (
+            CAST(:expected_phase AS text) IS NULL
+            OR document_processing_operations.phase = CAST(:expected_phase AS text)
+       )
+       AND (
+            CAST(:expected_outcome AS text) IS NULL
+            OR document_processing_operations.outcome = CAST(:expected_outcome AS text)
+       )
     RETURNING generation
     """
 )
@@ -329,7 +349,16 @@ async def _lock(session: Any, *, tenant_id: UUID, document_id: UUID) -> Any:
 
 
 async def begin_generation(
-    session: Any, *, tenant_id: UUID, document_id: UUID, revision_id: UUID | None
+    session: Any,
+    *,
+    tenant_id: UUID,
+    document_id: UUID,
+    revision_id: UUID | None,
+    expected_revision_id: UUID | None = None,
+    expected_generation: int | None = None,
+    expected_stage: str | None = None,
+    expected_phase: str | None = None,
+    expected_outcome: str | None = None,
 ) -> int:
     """Start a new processing generation (new revision or explicit reprocess).
 
@@ -359,12 +388,19 @@ async def begin_generation(
                 "document_id": str(document_id),
                 "tenant_id": str(tenant_id),
                 "revision_id": str(revision_id) if revision_id else None,
+                "expected_revision_id": (
+                    str(expected_revision_id) if expected_revision_id else None
+                ),
+                "expected_generation": expected_generation,
+                "expected_stage": expected_stage,
+                "expected_phase": expected_phase,
+                "expected_outcome": expected_outcome,
             },
         )
     ).first()
     if row is None:
         raise ProcessingAuthorityLost(
-            f"document {document_id} processing row belongs to another tenant"
+            f"document {document_id} processing authority changed before generation start"
         )
     generation = int(row.generation)
     superseded = await resume_lineage.stamp_superseded_reviews(
