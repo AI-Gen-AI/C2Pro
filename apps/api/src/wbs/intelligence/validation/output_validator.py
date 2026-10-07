@@ -64,6 +64,7 @@ from src.wbs.intelligence.contracts.qualification import (
 from src.wbs.intelligence.contracts.run import RunOutcome, RunScope
 from src.wbs.intelligence.profiles.catalog import ResolvedProfileSet
 from src.wbs.intelligence.validation.simulation import (
+    CHILDREN_KEY_PREFIX,
     SimulatedTree,
     SimulationError,
     TargetSnapshot,
@@ -363,6 +364,7 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
     tree = SimulatedTree.of(ctx.target, ctx.profiles.terms_by_namespace())
     fingerprints = ctx.target.fingerprints() if ctx.target else {}
     verified: dict[str, tuple[tuple[EvidenceItem, ...], tuple[ProfileRuleRef, ...], tuple[UUID, ...]]] = {}
+    reparented: dict[str, tuple[UUID, ...]] = {}
     item_ids = {ref: mint() for ref in by_ref}
     accepted: list[str] = []
     for ref in order:
@@ -381,6 +383,7 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
             unknown = [f for f in item.addresses_findings if f not in finding_ids]
             if unknown:
                 raise ItemRejected(f"addresses unknown finding(s) {unknown}")
+            implicit = _reparented_children(item, tree)
             candidate = tree.copy()
             candidate.apply(item)
         except (ItemRejected, SimulationError) as exc:
@@ -389,6 +392,7 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
             continue
         tree = candidate
         verified[ref] = (evidence, rules, tuple(finding_ids[f] for f in item.addresses_findings))
+        reparented[ref] = implicit
         accepted.append(ref)
 
     stored = []
@@ -397,12 +401,17 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
         evidence, rules, addressed = verified[ref]
         affected = tuple(dict.fromkeys(
             [r.node_id for r in _refs(item) if r.node_id is not None]
-            + [UUID(k) for k in item.child_targets if not k.startswith("label:")]))
+            + [UUID(k) for k in item.child_targets if not k.startswith("label:")]
+            + list(reparented[ref])))
+        guarded = {str(node_id): fingerprints[node_id] for node_id in affected}
+        if ctx.target is not None:
+            guarded |= {f"{CHILDREN_KEY_PREFIX}{node_id}": ctx.target.children_fingerprint(node_id)
+                        for node_id in _restructured_sources(item)}
         payload: dict[str, Any] = item.model_dump(
             mode="json", include=_OPERATION_FIELDS, exclude_none=True, exclude_defaults=True)
         stored.append(ProposalItem(
             item_id=item_ids[ref], ref=ref, operation=item.operation, payload=payload, affected_node_ids=affected,
-            target_fingerprints={str(node_id): fingerprints[node_id] for node_id in affected},
+            target_fingerprints=guarded,
             creates_labels=tuple(_created(item)),
             uses_labels=tuple(r.label for r in _refs(item) if r.label is not None),
             depends_on=tuple(item_ids[dep] for dep in sorted(graph[ref])), rationale=item.rationale,
@@ -411,6 +420,25 @@ def _proposals(items: Sequence[ModelProposalItem], ctx: ValidationContext, repor
             addresses_finding_ids=addressed, destructive=item.operation in DESTRUCTIVE_OPERATIONS,
         ))
     return stored
+
+
+def _restructured_sources(item: ModelProposalItem) -> list[UUID]:
+    """Snapshot nodes whose children a SPLIT or MERGE takes over."""
+    if item.operation is ProposalOperation.SPLIT_NODE:
+        refs: Sequence[TargetRef] = [item.node] if item.node is not None else []
+    elif item.operation is ProposalOperation.MERGE_NODES:
+        refs = item.sources
+    else:
+        return []
+    return [ref.node_id for ref in refs if ref.node_id is not None]
+
+
+def _reparented_children(item: ModelProposalItem, tree: SimulatedTree) -> tuple[UUID, ...]:
+    """Snapshot children a MERGE moves implicitly (a SPLIT names its children in ``child_targets``)."""
+    if item.operation is not ProposalOperation.MERGE_NODES:
+        return ()
+    return tuple(UUID(key) for node_id in _restructured_sources(item)
+                 for key in tree.children_keys(str(node_id)) if not key.startswith("label:"))
 
 
 def _failed(report: ValidationReport) -> ValidatedOutput:
@@ -442,7 +470,7 @@ def validate_model_output(raw: str, ctx: ValidationContext, *, mint: Callable[[]
     proposals = _proposals(proposals_in, ctx, report, finding_ids, mint)
 
     total = len(envelope.findings) + len(envelope.proposals)
-    refused = len(report.rejected) + len(report.dropped_dependants)
+    refused = len({ref for ref, _ in report.rejected} | {ref for ref, _ in report.dropped_dependants})
     if total and refused * 100 > ctx.max_rejected_pct * total:
         report.envelope_error = f"{refused} of {total} items refused (over {ctx.max_rejected_pct}%)"
         return _failed(report)

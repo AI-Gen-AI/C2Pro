@@ -24,7 +24,7 @@ from src.wbs.intelligence.contracts.evidence import (
     ManifestItem,
     ModelVisibleExcerpt,
 )
-from src.wbs.intelligence.contracts.proposal import ProposalItem
+from src.wbs.intelligence.contracts.proposal import ModelProposalItem, ProposalItem
 from src.wbs.intelligence.contracts.qualification import (
     AvailabilityContext,
     NotEvaluatedReason,
@@ -44,7 +44,12 @@ from src.wbs.intelligence.validation.output_validator import (
     ValidationContext,
     validate_model_output,
 )
-from src.wbs.intelligence.validation.simulation import SnapshotNode, TargetSnapshot
+from src.wbs.intelligence.validation.simulation import (
+    SimulatedTree,
+    SimulationError,
+    SnapshotNode,
+    TargetSnapshot,
+)
 
 TENANT, PROJECT = uuid4(), uuid4()
 ROOT, CHILD_A, CHILD_B = uuid4(), uuid4(), uuid4()
@@ -364,3 +369,140 @@ def test_unknown_or_rejected_selected_items_are_refused() -> None:
     [item] = _items(_add("p1", "mv", "MV"))
     assert isinstance(_plan([item], [uuid4()]), SelectionRefusal)
     assert isinstance(_plan([item], [item.item_id], rejected=[item.item_id]), SelectionRefusal)
+
+
+# --------------------------------------------------------------------------- split / merge parity with PC-2a
+GRANDCHILD = uuid4()
+
+
+def _with_grandchild() -> TargetSnapshot:
+    return TargetSnapshot(project_id=PROJECT, nodes=_snapshot().nodes + (
+        SnapshotNode(node_id=GRANDCHILD, parent_id=CHILD_A, sort_order=1, code="1.1.1", name="Inverter station"),))
+
+
+def _merge(*sources: dict[str, str], ref: str = "m1", **extra: Any) -> dict[str, Any]:
+    return {"ref": ref, "operation": "MERGE_NODES", "sources": list(sources), "creates_label": "merged",
+            "spec": {"name": "Merged scope"}, "rationale": "r", "confidence_pct": 50, **extra}
+
+
+def _split(node: dict[str, str], **extra: Any) -> dict[str, Any]:
+    return {"ref": "s1", "operation": "SPLIT_NODE", "node": node,
+            "split_targets": [{"label": "part-a", "spec": {"name": "Part A"}},
+                              {"label": "part-b", "spec": {"name": "Part B"}}],
+            "rationale": "r", "confidence_pct": 50, **extra}
+
+
+def test_merge_sources_that_contain_one_another_are_rejected() -> None:
+    out = _validate(_raw([_merge({"node_id": str(ROOT)}, {"node_id": str(CHILD_A)})]))
+    assert not out.proposals
+    assert "contain one another" in _rejected(out)["m1"]
+
+
+def test_a_node_created_in_the_run_cannot_be_split() -> None:
+    out = _validate(_raw([_add("p1", "mv", "MV", parent={"node_id": str(ROOT)}), _split({"label": "mv"})]),
+                    _ctx(max_rejected_pct=100))
+    assert [p.ref for p in out.proposals] == ["p1"]
+    assert "minted node" in _rejected(out)["s1"]
+
+
+def test_a_node_created_in_the_run_cannot_be_merged() -> None:
+    out = _validate(_raw([_add("p1", "mv", "MV", parent={"node_id": str(ROOT)}),
+                          _merge({"label": "mv"}, {"node_id": str(CHILD_B)})]), _ctx(max_rejected_pct=100))
+    assert [p.ref for p in out.proposals] == ["p1"]
+    assert "minted node" in _rejected(out)["m1"]
+
+
+def test_a_minted_candidate_node_cannot_be_split_or_merged() -> None:
+    nodes = list(_snapshot().nodes)
+    nodes[2] = SnapshotNode(**{**nodes[2].__dict__, "minted": True})
+    target = TargetSnapshot(project_id=PROJECT, nodes=tuple(nodes))
+    out = _validate(_raw([_split({"node_id": str(CHILD_B)})]), _ctx(target=target))
+    assert "minted node" in _rejected(out)["s1"]
+    out = _validate(_raw([_merge({"node_id": str(CHILD_A)}, {"node_id": str(CHILD_B)})]), _ctx(target=target))
+    assert "minted node" in _rejected(out)["m1"]
+
+
+def _four_siblings() -> tuple[TargetSnapshot, list[UUID]]:
+    ids = [uuid4() for _ in range(4)]
+    nodes = (SnapshotNode(node_id=ROOT, parent_id=None, sort_order=1, code="1", name="Root"),) + tuple(
+        SnapshotNode(node_id=node_id, parent_id=ROOT, sort_order=i, code=f"1.{i}", name=f"N{i}")
+        for i, node_id in enumerate(ids, start=1))
+    return TargetSnapshot(project_id=PROJECT, nodes=nodes), ids
+
+
+def _simulate(snapshot: TargetSnapshot, item: dict[str, Any]) -> SimulatedTree:
+    tree = SimulatedTree.of(snapshot, {})
+    tree.apply(ModelProposalItem.model_validate(item))
+    return tree
+
+
+def _order_under_root(tree: SimulatedTree) -> list[str]:
+    under = sorted((n for n in tree.nodes.values() if n.parent == str(ROOT)), key=lambda n: n.sort_order)
+    return [n.key for n in under]
+
+
+def test_a_default_merge_takes_the_first_source_position_like_the_governed_command() -> None:
+    snapshot, (n1, n2, n3, n4) = _four_siblings()
+    tree = _simulate(snapshot, _merge({"node_id": str(n1)}, {"node_id": str(n3)}))
+    assert _order_under_root(tree) == ["label:merged", str(n2), str(n4)]
+
+
+def test_an_explicit_merge_position_counts_siblings_without_the_sources() -> None:
+    snapshot, (n1, n2, n3, n4) = _four_siblings()
+    tree = _simulate(snapshot, _merge({"node_id": str(n1)}, {"node_id": str(n3)}, position=2))
+    assert _order_under_root(tree) == [str(n2), "label:merged", str(n4)]
+
+
+def test_a_split_keeps_the_source_position() -> None:
+    snapshot, (n1, n2, n3, n4) = _four_siblings()
+    tree = _simulate(snapshot, _split({"node_id": str(n2)}))
+    assert _order_under_root(tree) == [str(n1), "label:part-a", "label:part-b", str(n3), str(n4)]
+
+
+def test_split_targets_cannot_reuse_a_label() -> None:
+    snapshot, (_, n2, _, _) = _four_siblings()
+    with pytest.raises(SimulationError, match="created twice"):
+        _simulate(snapshot, _split({"node_id": str(n2)}, split_targets=[
+            {"label": "same", "spec": {"name": "A"}}, {"label": "same", "spec": {"name": "B"}}]))
+
+
+def test_a_merge_fingerprints_the_children_it_reparents() -> None:
+    [merge] = _items_on(_with_grandchild(), _merge({"node_id": str(CHILD_A)}, {"node_id": str(CHILD_B)}))
+    assert GRANDCHILD in merge.affected_node_ids
+    assert {str(CHILD_A), str(CHILD_B), str(GRANDCHILD), f"children:{CHILD_A}", f"children:{CHILD_B}"} <= set(
+        merge.target_fingerprints)
+    assert isinstance(_plan([merge], [merge.item_id], current=_with_grandchild()), SelectionPlan)
+
+
+def test_a_child_edited_under_a_merge_source_is_a_conflict() -> None:
+    [merge] = _items_on(_with_grandchild(), _merge({"node_id": str(CHILD_A)}, {"node_id": str(CHILD_B)}))
+    edited = TargetSnapshot(project_id=PROJECT, nodes=tuple(
+        SnapshotNode(**{**n.__dict__, "name": "Inverter station (edited)"}) if n.node_id == GRANDCHILD else n
+        for n in _with_grandchild().nodes))
+    refusal = _plan([merge], [merge.item_id], current=edited)
+    assert isinstance(refusal, SelectionRefusal)
+    assert refusal.conflicts == {merge.item_id}
+
+
+def test_a_child_added_under_a_merge_source_is_a_conflict() -> None:
+    [merge] = _items_on(_with_grandchild(), _merge({"node_id": str(CHILD_A)}, {"node_id": str(CHILD_B)}))
+    grown = TargetSnapshot(project_id=PROJECT, nodes=_with_grandchild().nodes + (
+        SnapshotNode(node_id=uuid4(), parent_id=CHILD_B, sort_order=1, code="1.2.1", name="Transformer"),))
+    refusal = _plan([merge], [merge.item_id], current=grown)
+    assert isinstance(refusal, SelectionRefusal)
+    assert refusal.conflicts == {merge.item_id}
+
+
+def _items_on(target: TargetSnapshot, *proposals: dict[str, Any]) -> list[ProposalItem]:
+    out = _validate(_raw(list(proposals)), _ctx(target=target))
+    assert out.outcome is not RunOutcome.FAILED, out.report
+    return list(out.proposals)
+
+
+def test_the_rejection_ratio_counts_items_not_messages() -> None:
+    # one item earns two rejection messages (unknown dependency + uncreated label); one item is valid
+    bad = _add("p1", "x", "X", parent={"label": "nowhere"}, depends_on=["ghost"])
+    out = _validate(_raw([bad, _add("p2", "fine", "Fine")]))
+    assert len(out.report.rejected) == 2
+    assert out.outcome is RunOutcome.COMPLETE
+    assert [p.ref for p in out.proposals] == ["p2"]

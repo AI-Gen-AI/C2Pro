@@ -66,7 +66,9 @@ AI produces immutable proposal and finding items: model B of the PC-2b architect
 - **Reruns.** A rerun is a new run; the candidate changes only by explicit human application.
 - **Freshness.** Freshness is derived, never stored:
   - a baseline that moved, or a change set that is not a DRAFT, makes a run STALE;
-  - an item whose target node fingerprints changed is in CONFLICT.
+  - an item whose target node fingerprints changed is in CONFLICT. A SPLIT or MERGE also
+    fingerprints the children it takes over and each source's child set, so a child edited or added
+    under a source after the run is a CONFLICT too. Like PC-2a, a minted node is never split or merged.
 - **Comparison.** The "AI proposed tree" view is a simulated read model; no second candidate tree is persisted.
 
 ### 4. Qualification is dimension-level; no composite score (deferred)

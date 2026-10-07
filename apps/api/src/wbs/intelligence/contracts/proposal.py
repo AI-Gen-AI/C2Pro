@@ -160,7 +160,9 @@ class ProposalItem(_Strict):
     operation: ProposalOperation
     payload: dict[str, Any]  # the normalised command (snapshot ids or local labels only)
     affected_node_ids: tuple[UUID, ...]
-    target_fingerprints: dict[str, str]  # node_id -> node digest at run time (stale protection)
+    # stale protection at run time: node_id -> node digest, plus children:<node_id> -> child-set digest
+    # for the sources of a SPLIT / MERGE
+    target_fingerprints: dict[str, str]
     creates_labels: tuple[str, ...]
     uses_labels: tuple[str, ...]
     depends_on: tuple[UUID, ...]  # prerequisite item ids (explicit and through labels)

@@ -7,7 +7,8 @@ A human applies explicitly selected items. A selection is accepted only when:
   auto-accepted: a refusal names the required closure so it can be shown before confirmation;
 * no prerequisite (direct or transitive) was rejected -- that makes the dependant non-applicable;
 * the prerequisite graph is acyclic;
-* every item still matches the current candidate (per-node fingerprints) -- otherwise CONFLICT;
+* every item still matches the current candidate (per-node fingerprints, plus the child sets a
+  SPLIT or MERGE takes over) -- otherwise CONFLICT;
 * the whole selection simulates cleanly on the current candidate, in dependency order.
 
 Anything else refuses the WHOLE selection: application is all-or-nothing.
@@ -110,10 +111,10 @@ def plan_selection(
     walk = _order(by_id, chosen | closure)
     if walk.cycle is not None:
         reasons.append("the proposal items form a dependency cycle")
-    fingerprints = current.fingerprints() if current else {}
     conflicts = frozenset(
         item_id for item_id in chosen
-        if any(fingerprints.get(UUID(node_id)) != digest for node_id, digest in by_id[item_id].target_fingerprints.items())
+        if any((current.fingerprint_of(key) if current else None) != digest
+               for key, digest in by_id[item_id].target_fingerprints.items())
     )
     if conflicts:
         reasons.append("the candidate changed under these items since the run (CONFLICT): re-run or edit by hand")

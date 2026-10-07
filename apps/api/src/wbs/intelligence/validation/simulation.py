@@ -5,7 +5,8 @@ SPLIT / MERGE) without touching any database: the validator uses it to reject it
 application would be structurally invalid, and the selection planner uses it to prove a whole
 human selection applies atomically. Snapshot nodes are keyed by their canonical id; nodes a
 proposal creates are keyed by ``label:<local label>`` -- the server mints real ids only when a
-human applies the item through the governed commands.
+human applies the item through the governed commands. Like PC-2a, a minted node (created in
+this run, or minted earlier in the target candidate) has no approved identity to split or merge.
 """
 
 from __future__ import annotations
@@ -32,6 +33,8 @@ from src.wbs.intelligence.contracts.proposal import (
 )
 
 NODE_FINGERPRINT_VERSION = "wbs-node-fingerprint/v1"
+CHILDREN_FINGERPRINT_VERSION = "wbs-children-fingerprint/v1"
+CHILDREN_KEY_PREFIX = "children:"
 _MAX_CODE, _MAX_NAME = 50, 255
 _CONTROL_LEVELS = frozenset(level.value for level in ControlLevel)
 
@@ -50,6 +53,7 @@ class SnapshotNode:
     decomposition_kind: str | None = None
     control_level: str = "none"
     dictionary: Mapping[str, Any] | None = None
+    minted: bool = False  # a candidate node with no approved identity (PC-2a origin_kind MINTED)
 
     def digest_node(self) -> DigestNode:
         return DigestNode(node_id=self.node_id, parent_id=self.parent_id, sort_order=self.sort_order, code=self.code,
@@ -83,6 +87,21 @@ class TargetSnapshot:
     def fingerprints(self) -> dict[UUID, str]:
         return {node.node_id: node_fingerprint(node) for node in self.nodes}
 
+    def children_fingerprint(self, parent_id: UUID) -> str:
+        """Which nodes sit directly under ``parent_id``, in order (catches children added later)."""
+        children = sorted((n for n in self.nodes if n.parent_id == parent_id), key=lambda n: (n.sort_order, str(n.node_id)))
+        body = {"version": CHILDREN_FINGERPRINT_VERSION, "parent_id": str(parent_id),
+                "children": [str(n.node_id) for n in children]}
+        return "sha256:" + hashlib.sha256(canonical_json(body)).hexdigest()
+
+    def fingerprint_of(self, key: str) -> str | None:
+        """The current value of a stored stale-protection key (a node id or ``children:<node id>``)."""
+        if key.startswith(CHILDREN_KEY_PREFIX):
+            parent_id = UUID(key.removeprefix(CHILDREN_KEY_PREFIX))
+            return self.children_fingerprint(parent_id) if parent_id in self.ids() else None
+        node_id = UUID(key)
+        return next((node_fingerprint(n) for n in self.nodes if n.node_id == node_id), None)
+
 
 @dataclass
 class _SimNode:
@@ -94,6 +113,7 @@ class _SimNode:
     kind: str | None
     control_level: str
     dictionary: dict[str, Any] | None
+    minted: bool = False
 
 
 def label_key(label: str) -> str:
@@ -113,7 +133,7 @@ class SimulatedTree:
                 key=str(node.node_id), parent=None if node.parent_id is None else str(node.parent_id),
                 sort_order=node.sort_order, code=node.code, name=node.name, kind=node.decomposition_kind,
                 control_level=node.control_level,
-                dictionary=None if node.dictionary is None else dict(node.dictionary))
+                dictionary=None if node.dictionary is None else dict(node.dictionary), minted=node.minted)
         return tree
 
     def copy(self) -> SimulatedTree:
@@ -143,11 +163,15 @@ class SimulatedTree:
         return found
 
     def _place(self, key: str, parent: str | None, position: int | None) -> None:
-        siblings = [n for n in self._children(parent) if n.key != key]
-        index = len(siblings) if position is None else min(max(position, 1), len(siblings) + 1) - 1
-        siblings.insert(index, self.nodes[key])
-        self.nodes[key].parent = parent
-        for order, node in enumerate(siblings, start=1):
+        self._place_all([key], parent, position)
+
+    def _place_all(self, keys: Sequence[str], parent: str | None, position: int | None) -> None:
+        """Insert ``keys`` (in order) at 1-based ``position`` under ``parent`` and renumber 1..n."""
+        siblings = [n for n in self._children(parent) if n.key not in keys]
+        index = len(siblings) if position is None else min(max(position, 1) - 1, len(siblings))
+        ordered = siblings[:index] + [self.nodes[key] for key in keys] + siblings[index:]
+        for order, node in enumerate(ordered, start=1):
+            node.parent = parent
             node.sort_order = order
 
     def _renumber(self, parent: str | None) -> None:
@@ -202,16 +226,30 @@ class SimulatedTree:
             raise SimulationError(f"invalid wbs-dictionary/v1: {exc}") from exc
 
     def _new(self, label: str | None, spec: ModelNodeSpec | None, parent: str | None, position: int | None) -> str:
+        key = self._mint(label, spec, parent)
+        self._place(key, parent, position)
+        return key
+
+    def _mint(self, label: str | None, spec: ModelNodeSpec | None, parent: str | None) -> str:
+        """Create a node after its siblings, unplaced (the caller places it)."""
         if label is None or spec is None:
             raise SimulationError("a created node needs a local label and a spec")
         key = label_key(label)
         if key in self.nodes:
             raise SimulationError(f"label {label!r} is created twice")
         self.nodes[key] = _SimNode(
-            key=key, parent=parent, sort_order=0, code=self.check_code(spec.code), name=self.check_name(spec.name),
-            kind=self.check_kind(spec.decomposition_kind), control_level=self.check_control_level(spec.control_level),
-            dictionary=self.check_dictionary(spec.dictionary))
-        self._place(key, parent, position)
+            key=key, parent=parent, sort_order=len(self.nodes) + 1, code=self.check_code(spec.code),
+            name=self.check_name(spec.name), kind=self.check_kind(spec.decomposition_kind),
+            control_level=self.check_control_level(spec.control_level),
+            dictionary=self.check_dictionary(spec.dictionary), minted=True)
+        return key
+
+    def _approved(self, ref: TargetRef, operation: str) -> str:
+        key = self.resolve(ref)
+        if key is None:  # pragma: no cover - a TargetRef always names a node
+            raise SimulationError(f"{operation} names no node")
+        if self.nodes[key].minted:
+            raise SimulationError(f"a minted node has no approved identity to {operation}: edit it instead")
         return key
 
     def _check_codes(self) -> None:
@@ -279,9 +317,10 @@ class SimulatedTree:
         self._check_codes()
 
     def _split(self, item: ModelProposalItem) -> None:
-        source = self.resolve(item.node)
-        if source is None or len(item.split_targets) < 2:
+        """Mirror ``WBSGovernedChangeService._split``: the targets take the source's place, in order."""
+        if item.node is None or len(item.split_targets) < 2:
             raise SimulationError("SPLIT_NODE names a source and at least two targets")
+        source = self._approved(item.node, "split")
         children = self._children(source)
         assigned = dict(item.child_targets)
         if {c.key for c in children} != set(assigned):
@@ -289,29 +328,41 @@ class SimulatedTree:
         if any(not 0 <= index < len(item.split_targets) for index in assigned.values()):
             raise SimulationError("a child is assigned to a target that does not exist")
         parent, position = self.nodes[source].parent, self.nodes[source].sort_order
-        targets = [self._new(t.label, t.spec, parent, position + i) for i, t in enumerate(item.split_targets)]
+        targets = [self._mint(t.label, t.spec, parent) for t in item.split_targets]
         for child in children:
             self._place(child.key, targets[assigned[child.key]], None)
         del self.nodes[source]
-        self._renumber(parent)
+        self._place_all(targets, parent, position)
 
     def _merge(self, item: ModelProposalItem) -> None:
-        sources = [self.resolve(ref) for ref in item.sources]
-        if len(sources) < 2 or len(set(sources)) != len(sources):
+        """Mirror ``WBSGovernedChangeService._merge`` (source checks, default position, placement order)."""
+        if len(item.sources) < 2:
             raise SimulationError("MERGE_NODES names at least two distinct sources")
-        keys = [key for key in sources if key is not None]
-        parent = self.resolve(item.parent) if item.parent is not None else self.nodes[keys[0]].parent
-        if parent is not None and any(parent in self._subtree(key) for key in keys):
+        keys = [self._approved(ref, "merge") for ref in item.sources]
+        if len(set(keys)) != len(keys):
+            raise SimulationError("MERGE_NODES names at least two distinct sources")
+        subtrees = {key: self._subtree(key) for key in keys}
+        if any(key in subtrees[other] for key in keys for other in keys if other != key):
+            raise SimulationError("merge sources cannot contain one another")
+        first = self.nodes[keys[0]]
+        parent = self.resolve(item.parent) if item.parent is not None else first.parent
+        if parent is not None and any(parent in subtree for subtree in subtrees.values()):
             raise SimulationError("a merge target cannot sit under one of its sources")
-        target = self._new(item.creates_label, item.spec, parent, item.position)
+        position = item.position if item.position is not None else (
+            first.sort_order if parent == first.parent else None)
+        target = self._mint(item.creates_label, item.spec, parent)
         for key in keys:
             for child in self._children(key):
                 self._place(child.key, target, None)
         old_parents = {self.nodes[key].parent for key in keys}
         for key in keys:
             del self.nodes[key]
-        for old in old_parents:
+        self._place(target, parent, position)
+        for old in old_parents - {parent}:
             self._renumber(old)
+
+    def children_keys(self, key: str) -> list[str]:
+        return [child.key for child in self._children(key)]
 
     def structural_violations(self) -> list[str]:
         problems = []
@@ -345,6 +396,7 @@ def apply_all(tree: SimulatedTree, items: Sequence[ModelProposalItem]) -> Simula
 
 
 __all__ = [
+    "CHILDREN_KEY_PREFIX",
     "SimulatedTree",
     "SimulationError",
     "SnapshotNode",
