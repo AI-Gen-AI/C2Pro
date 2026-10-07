@@ -168,7 +168,10 @@ export default defineConfig({
       // accepted synthetic P0b project and mutates only by uploading revision B
       // of the same logical document.
       name: "prod-p0c-acceptance",
-      testMatch: [/(^|[\\/])prod-acceptance[\\/]686-p0c-production\.spec\.ts$/],
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]686-p0c-production\.spec\.ts$/,
+        /(^|[\\/])prod-acceptance[\\/]686-p0c-recovery-production\.spec\.ts$/,
+      ],
       use: {
         ...devices["Desktop Chrome"],
         trace: "off",
