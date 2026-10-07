@@ -1,8 +1,8 @@
 """TS-UT-CORE-AI-COHERENCE-001: Legacy coherence prompt registration coverage."""
 
 from src.core.ai.prompts import PROMPT_REGISTRY
-from src.core.ai.prompts.registry import PromptRegistry
-from src.core.ai.prompts.v1.coherence_analysis import register_coherence_prompts
+from src.core.ai.prompts.legacy.registry import LegacyPromptRegistry
+from src.core.ai.prompts.legacy.v1.coherence_analysis import register_coherence_prompts
 
 
 def test_register_coherence_prompts_uses_current_template_contract() -> None:
@@ -18,7 +18,7 @@ def test_register_coherence_prompts_uses_current_template_contract() -> None:
     previous_templates = {name: PROMPT_REGISTRY.get(name) for name in prompt_names}
 
     try:
-        register_coherence_prompts(PromptRegistry())
+        register_coherence_prompts(LegacyPromptRegistry())
 
         assert prompt_names <= PROMPT_REGISTRY.keys()
     finally:

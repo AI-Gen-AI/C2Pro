@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.core.ai.prompts.i18n import (
+from src.core.ai.prompts.legacy.i18n import (
     SUPPORTED_LANGUAGES,
     LocalizedPromptManager,
     get_localized_prompt_manager,

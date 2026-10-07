@@ -2,7 +2,7 @@
 
 
 from src.core.ai.prompts import PromptTemplate
-from src.core.ai.prompts.validator import (
+from src.core.ai.prompts.tooling.validator import (
     ValidationResult,
     format_results,
     get_template_variables,
