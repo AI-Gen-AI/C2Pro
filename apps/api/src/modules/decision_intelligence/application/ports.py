@@ -25,7 +25,15 @@ class ExtractionPort(Protocol):
 
 @runtime_checkable
 class RetrievalPort(Protocol):
-    async def retrieve(self, query: str) -> list[dict[str, Any]]: ...
+    """Evidence retrieval, always scoped to ONE tenant and ONE project.
+
+    The application role bypasses RLS, so an implementation must bind both in its query and
+    return no evidence (never a cross-scope read) when either is missing.
+    """
+
+    async def retrieve(
+        self, query: str, *, tenant_id: UUID | None, project_id: UUID | None
+    ) -> list[dict[str, Any]]: ...
 
 
 @runtime_checkable
@@ -125,7 +133,9 @@ class DecisionOrchestrationService:
                 }
             ]
 
-        evidence_raw = await self.retrieval_service.retrieve("decision-intelligence")
+        evidence_raw = await self.retrieval_service.retrieve(
+            "decision-intelligence", tenant_id=tenant_id, project_id=project_id
+        )
         evidence: list[dict[str, Any]]
         if isinstance(evidence_raw, list):
             evidence = [item for item in evidence_raw if isinstance(item, dict)]

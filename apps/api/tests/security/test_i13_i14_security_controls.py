@@ -30,7 +30,7 @@ class _StubExtraction:
 
 
 class _StubRetrieval:
-    async def retrieve(self, query: str) -> list[dict[str, Any]]:
+    async def retrieve(self, query: str, *, tenant_id: Any, project_id: Any) -> list[dict[str, Any]]:
         return [{"text": "evidence", "score": 0.88}]
 
 

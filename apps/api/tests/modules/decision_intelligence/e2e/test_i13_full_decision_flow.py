@@ -33,7 +33,7 @@ class MockExtractionService:
 
 
 class MockRetrievalService:
-    async def retrieve(self, query: str) -> list[dict[str, Any]]:
+    async def retrieve(self, query: str, *, tenant_id: Any, project_id: Any) -> list[dict[str, Any]]:
         return [{"text": "evidence link 1", "score": 0.9}]
 
 

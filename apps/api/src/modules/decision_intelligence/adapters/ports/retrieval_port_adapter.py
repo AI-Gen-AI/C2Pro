@@ -1,10 +1,13 @@
 """Decision Intelligence retrieval port adapter.
 
 Performs semantic retrieval against the shared ``document_chunks``
-pgvector table using OpenAI embeddings. The decision orchestration
-service only passes a query string, so this adapter queries across all
-accessible chunks ordered by cosine distance and returns the top-k
-results as ``[{"text", "score"}]``.
+pgvector table using OpenAI embeddings, restricted to the caller's tenant
+AND project, ordered by cosine distance, returning the top-k results as
+``[{"text", "score"}]``.
+
+SECURITY (P0): the application connects with a role that bypasses RLS, so
+the tenant and project are bound in the SQL itself. Without both, no query
+runs (fail closed): never a cross-tenant or cross-project read.
 
 When embeddings or the database are unavailable, the adapter falls
 back to a deterministic evidence stub so the decision flow can still
@@ -18,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from typing import Any
+from uuid import UUID
 
 import structlog
 from sqlalchemy import text
@@ -52,8 +56,13 @@ class RetrievalPortAdapter:
         self._embed_fn = embed_fn
         self._top_k = top_k
 
-    async def retrieve(self, query: str) -> list[dict[str, Any]]:
+    async def retrieve(
+        self, query: str, *, tenant_id: UUID | None, project_id: UUID | None
+    ) -> list[dict[str, Any]]:
         if not query:
+            return self._fallback_evidence()
+        if tenant_id is None or project_id is None:
+            logger.warning("di_retrieval_unscoped_refused")
             return self._fallback_evidence()
 
         try:
@@ -68,7 +77,7 @@ class RetrievalPortAdapter:
         vector_literal = _format_vector(embeddings[0])
         try:
             async with self._session_provider() as session:
-                rows = await self._fetch_chunks(session, vector_literal)
+                rows = await self._fetch_chunks(session, vector_literal, tenant_id, project_id)
         except Exception as exc:
             logger.warning("di_retrieval_db_failed", error=str(exc))
             return self._fallback_evidence()
@@ -90,21 +99,31 @@ class RetrievalPortAdapter:
         self,
         session: AsyncSession,
         vector_literal: str,
+        tenant_id: UUID,
+        project_id: UUID,
     ) -> list[Any]:
         # Lane C / C3a: only each document's trusted-current revision is evidence.
+        # P0: tenant AND project bound here -- RLS is bypassed by the application role.
         stmt = text(
             f"""
             SELECT dc.content, dc.embedding <-> CAST(:embedding AS vector) AS distance
             FROM document_chunks dc
             {current_chunk_join("dc")}
-            WHERE {chunk_in_current_scope("dc", "cur")}
+            WHERE dc.tenant_id = CAST(:tenant_id AS uuid)
+              AND dc.project_id = CAST(:project_id AS uuid)
+              AND {chunk_in_current_scope("dc", "cur")}
             ORDER BY distance ASC
             LIMIT :top_k
             """
         )
         result = await session.execute(
             stmt,
-            {"embedding": vector_literal, "top_k": self._top_k},
+            {
+                "embedding": vector_literal,
+                "top_k": self._top_k,
+                "tenant_id": str(tenant_id),
+                "project_id": str(project_id),
+            },
         )
         return list(result.fetchall())
 
