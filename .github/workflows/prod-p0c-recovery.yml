@@ -315,6 +315,7 @@ jobs:
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
           PROD_P0C_TARGET_REVISION_ID: ${{ steps.parse.outputs.target_revision_id }}
+          PROD_P0C_TARGET_GENERATION: "2"
           PROD_P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
         working-directory: apps/web
         shell: bash
