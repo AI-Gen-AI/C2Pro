@@ -7,7 +7,7 @@ reasoning for better consistency and explainability.
 Version: 1.1.0
 """
 
-from src.core.ai.prompts.v1_1.coherence_analysis_cot import (
+from src.core.ai.prompts.legacy.v1_1.coherence_analysis_cot import (
     CLAUSE_ANALYSIS_COT_TEMPLATE,
     CLAUSE_ANALYSIS_COT_V1_1,
     COHERENCE_ANALYST_COT_SYSTEM,

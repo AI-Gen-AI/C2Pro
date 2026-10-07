@@ -32,11 +32,19 @@ def test_prompt_manager_authority_is_measured_without_promoting_legacy_submodule
     omitted = set(pyproject["tool"]["coverage"]["run"]["omit"])
 
     assert "src/core/ai/prompts/*" not in omitted
-    assert "src/core/ai/prompts/i18n.py" in omitted
-    assert "src/core/ai/prompts/registry.py" in omitted
-    assert "src/core/ai/prompts/validator.py" in omitted
-    assert "src/core/ai/prompts/v1/*" in omitted
-    assert "src/core/ai/prompts/v1_1/*" in omitted
+    assert "src/core/ai/prompts/legacy/*" in omitted
+    assert "src/core/ai/prompts/legacy/v1/*" in omitted
+    assert "src/core/ai/prompts/legacy/v1_1/*" in omitted
+    assert "src/core/ai/prompts/tooling/*" in omitted
+
+    for stale_path in (
+        "src/core/ai/prompts/i18n.py",
+        "src/core/ai/prompts/registry.py",
+        "src/core/ai/prompts/validator.py",
+        "src/core/ai/prompts/v1/*",
+        "src/core/ai/prompts/v1_1/*",
+    ):
+        assert stale_path not in omitted
 
 
 def test_builtin_prompt_registry_contains_runtime_manager_templates() -> None:
