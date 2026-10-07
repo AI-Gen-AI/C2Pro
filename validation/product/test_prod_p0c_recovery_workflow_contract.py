@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "prod-p0c-recovery.yml"
 SPEC = ROOT / "apps" / "web" / "src" / "tests" / "e2e" / "prod-acceptance" / "686-p0c-recovery-production.spec.ts"
 PREFLIGHT = ROOT / "apps" / "api" / "scripts" / "verify_p0c_prod_recovery.py"
+PLAYWRIGHT_CONFIG = ROOT / "apps" / "web" / "playwright.config.ts"
 
 
 def test_recovery_workflow_is_owner_only_and_bounded() -> None:
@@ -57,3 +58,10 @@ def test_recovery_preflight_is_read_only_and_exactly_two_revisions() -> None:
     assert "CAST(:document AS text)" not in source
     assert "CAST(:source AS text)" not in source
     assert "CAST(:target AS text)" not in source
+
+
+def test_prod_p0c_project_discovers_recovery_spec() -> None:
+    source = PLAYWRIGHT_CONFIG.read_text(encoding="utf-8")
+    project = source.split('name: "prod-p0c-acceptance"', 1)[1].split("metadata:", 1)[0]
+    assert "686-p0c-production\\.spec\\.ts$" in project
+    assert "686-p0c-recovery-production\\.spec\\.ts$" in project
