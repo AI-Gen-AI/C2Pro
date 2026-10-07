@@ -38,10 +38,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams = {
-  expected_revision_id?: string | null;
-  expected_generation?: number | null;
-  expected_stage?: string | null;
-  expected_phase?: string | null;
-  expected_outcome?: string | null;
-};
+export type ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams =
+  {
+    expected_revision_id?: string | null;
+    expected_generation?: number | null;
+    expected_stage?: string | null;
+    expected_phase?: string | null;
+    expected_outcome?: string | null;
+  };
