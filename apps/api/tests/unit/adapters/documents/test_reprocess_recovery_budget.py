@@ -190,3 +190,155 @@ async def test_reprocess_rejects_every_non_retryable_lifecycle_without_mutation(
     repo.update_status.assert_not_awaited()
     repo.update_metadata.assert_not_awaited()
     repo.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_binds_complete_expected_authority_tuple(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    document_id = uuid4()
+    revision_id = uuid4()
+    document = Document(
+        id=document_id,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_type=DocumentType.CONTRACT,
+        filename="contract.pdf",
+        upload_status=DocumentStatus.ERROR,
+        document_metadata={},
+    )
+    repo = Mock()
+    repo.get_by_id = AsyncMock(return_value=document)
+
+    async def _update_status(_tenant_id, _document_id, new_status, **_kwargs):
+        document.upload_status = new_status
+
+    repo.update_status = AsyncMock(side_effect=_update_status)
+    repo.update_metadata = AsyncMock()
+    repo.commit = AsyncMock()
+    repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock(return_value=3)
+    monkeypatch.setattr(
+        router,
+        "_enqueue_document_processing",
+        lambda _document_id, generation=None: "retry-bound",
+    )
+
+    response = await router.reprocess_document_endpoint(
+        project_id=project_id,
+        document_id=document_id,
+        user_id=uuid4(),
+        tenant_id=tenant_id,
+        repo=repo,
+        pending_review_lookup=lambda _tenant_id, _document_ids: {},
+        expected_revision_id=revision_id,
+        expected_generation=2,
+        expected_stage="INGESTION",
+        expected_phase="PENDING",
+        expected_outcome="ingestion_failed",
+    )
+
+    assert response.task_id == "retry-bound"
+    repo.begin_processing_generation.assert_awaited_once_with(
+        tenant_id,
+        document_id,
+        expected_revision_id=revision_id,
+        expected_generation=2,
+        expected_stage="INGESTION",
+        expected_phase="PENDING",
+        expected_outcome="ingestion_failed",
+    )
+    repo.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_authority_mismatch_fails_before_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    document_id = uuid4()
+    revision_id = uuid4()
+    document = Document(
+        id=document_id,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_type=DocumentType.CONTRACT,
+        filename="contract.pdf",
+        upload_status=DocumentStatus.ERROR,
+        document_metadata={},
+    )
+    repo = Mock()
+    repo.get_by_id = AsyncMock(return_value=document)
+    repo.update_status = AsyncMock()
+    repo.update_metadata = AsyncMock()
+    repo.commit = AsyncMock()
+    repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock(
+        side_effect=router.ProcessingAuthorityLost("authority changed")
+    )
+    monkeypatch.setattr(
+        router,
+        "_enqueue_document_processing",
+        lambda *_args, **_kwargs: pytest.fail("must not enqueue on authority mismatch"),
+    )
+
+    with pytest.raises(router.HTTPException) as exc_info:
+        await router.reprocess_document_endpoint(
+            project_id=project_id,
+            document_id=document_id,
+            user_id=uuid4(),
+            tenant_id=tenant_id,
+            repo=repo,
+            pending_review_lookup=lambda _tenant_id, _document_ids: {},
+            expected_revision_id=revision_id,
+            expected_generation=2,
+            expected_stage="INGESTION",
+            expected_phase="PENDING",
+            expected_outcome="ingestion_failed",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "authority changed" in str(exc_info.value.detail).lower()
+    repo.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_rejects_partial_expected_authority_without_mutation() -> None:
+    tenant_id = uuid4()
+    project_id = uuid4()
+    document_id = uuid4()
+    document = Document(
+        id=document_id,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_type=DocumentType.CONTRACT,
+        filename="contract.pdf",
+        upload_status=DocumentStatus.ERROR,
+        document_metadata={},
+    )
+    repo = Mock()
+    repo.get_by_id = AsyncMock(return_value=document)
+    repo.update_status = AsyncMock()
+    repo.update_metadata = AsyncMock()
+    repo.commit = AsyncMock()
+    repo.refresh = AsyncMock()
+    repo.begin_processing_generation = AsyncMock()
+
+    with pytest.raises(router.HTTPException) as exc_info:
+        await router.reprocess_document_endpoint(
+            project_id=project_id,
+            document_id=document_id,
+            user_id=uuid4(),
+            tenant_id=tenant_id,
+            repo=repo,
+            pending_review_lookup=lambda _tenant_id, _document_ids: {},
+            expected_revision_id=uuid4(),
+        )
+
+    assert exc_info.value.status_code == 422
+    repo.update_status.assert_not_awaited()
+    repo.begin_processing_generation.assert_not_awaited()
+    repo.commit.assert_not_awaited()
