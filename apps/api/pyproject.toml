@@ -111,9 +111,8 @@ branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
-    "src/core/ai/ab_experiment.py",
+    "src/core/ai/experimental/*",
     "src/core/ai/example_*.py",
-    "src/core/ai/langsmith_hub.py",
     "src/core/ai/prompts/i18n.py",
     "src/core/ai/prompts/registry.py",
     "src/core/ai/prompts/validator.py",
