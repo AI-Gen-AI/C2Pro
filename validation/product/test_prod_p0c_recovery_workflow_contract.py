@@ -45,11 +45,15 @@ def test_recovery_preflight_is_read_only_and_exactly_two_revisions() -> None:
     assert "SET TRANSACTION READ ONLY" in source
     assert "expected exactly A+B revisions" in source
     assert "document must be error before recovery" in source
-    assert "ingestion_failed" in source
     assert "A→B revision.changed must not pre-exist" in source
+    assert "document_processing_operations" not in source
+    assert "processing authority is not the expected failed B state" not in source
     assert "payload->>'document_id'=:document_text" in source
     assert "source_revision_id'=:source_text" in source
     assert "target_revision_id'=:target_text" in source
+    spec = SPEC.read_text(encoding="utf-8")
+    assert 'name: /^Retry processing /' in spec
+    assert "await expect(retry).toBeVisible" in spec
     assert "CAST(:document AS text)" not in source
     assert "CAST(:source AS text)" not in source
     assert "CAST(:target AS text)" not in source
