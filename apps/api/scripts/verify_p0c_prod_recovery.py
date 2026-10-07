@@ -72,6 +72,16 @@ async def main_async(args: argparse.Namespace) -> None:
                         p,
                     )
                 ).mappings().one_or_none()
+                authority = (
+                    await conn.execute(
+                        text("""
+                        SELECT revision_id, generation, stage, phase, outcome
+                          FROM document_processing_operations
+                         WHERE tenant_id=:tenant AND document_id=:document
+                        """),
+                        p,
+                    )
+                ).mappings().one_or_none()
                 event_count = int(
                     (
                         await conn.execute(
@@ -105,6 +115,18 @@ async def main_async(args: argparse.Namespace) -> None:
                         failures.append("revision B identity/parent/current-state mismatch")
                 if not doc or str(doc["upload_status"]) != "error":
                     failures.append(f"document must be error before recovery, got {doc}")
+                if (
+                    not authority
+                    or authority["revision_id"] != p["target"]
+                    or int(authority["generation"]) != 2
+                    or str(authority["stage"]) != "INGESTION"
+                    or str(authority["phase"]) != "PENDING"
+                    or str(authority["outcome"]) != "ingestion_failed"
+                ):
+                    failures.append(
+                        "processing authority is not pinned to the expected failed B state: "
+                        f"{authority}"
+                    )
                 if event_count != 0:
                     failures.append(f"A→B revision.changed must not pre-exist, got {event_count}")
 
