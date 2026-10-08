@@ -611,6 +611,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
 
     Delegates domain routing to HumanInTheLoopService; interrupt stays here.
     """
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        StaleCritiqueReviewEvidence,
+    )
     from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 
     tenant_id = state.get("tenant_id")
@@ -707,7 +710,12 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         AIMessage(content="HITL auto-approved; continuing analysis.")
                     )
                     return state
-        # HITL routing must fail open to LangGraph interrupt instead of approving.
+        # A stale evidence/review mismatch is a HARD STOP: falling back to
+        # interrupt would let a human approve a reused review with obsolete
+        # sources. Require explicit reconciliation before retry/resume.
+        except StaleCritiqueReviewEvidence:
+            raise
+        # Other HITL infrastructure failures fall back to a pending interrupt.
         except Exception as exc:  # noqa: BLE001
             import structlog
 
