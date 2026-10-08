@@ -241,3 +241,67 @@ describe('ReviewItemCard #714 decision readiness', () => {
     expect(screen.getByTestId('reject-doc-456')).toBeEnabled();
   });
 });
+
+describe('ReviewItemCard - typed source-witnessed HITL critique', () => {
+  it('shows the unverified concern, located source and revision before human decision', () => {
+    render(
+      <ReviewItemCard
+        item={{
+          ...graphGatedItem,
+          item_data: {
+            ...graphGatedItem.item_data,
+            critique_observations: [{
+              claim: 'Rectification duty was omitted in extraction',
+              source_quote: 'Contractor shall rectify any defect within fourteen days.',
+              witness_status: 'LOCATED',
+              claim_verified: false,
+              source_basis: 'document_text',
+              document_revision_id: 'rev-123',
+              char_start: 100,
+              char_end: 155,
+            }],
+          },
+        }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('region', { name: /source-witnessed critique observations/i }))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Rectification duty was omitted/i)).toBeInTheDocument();
+    expect(screen.getByText(/Contractor shall rectify any defect within fourteen days/i))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Source text located — claim not verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/document_text · Revision rev-123/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot be approved individually/i)).toBeInTheDocument();
+    expect(screen.getByText(/Approve full analysis/i)).toBeInTheDocument();
+  });
+
+  it('marks an unmatched quotation as unresolved rather than evidence', () => {
+    render(
+      <ReviewItemCard
+        item={{
+          ...graphGatedItem,
+          item_data: {
+            ...graphGatedItem.item_data,
+            critique_observations: [{
+              claim: 'Potential source mismatch',
+              source_quote: '',
+              witness_status: 'SOURCE_UNAVAILABLE',
+              claim_verified: false,
+            }],
+          },
+        }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Source witness: SOURCE_UNAVAILABLE — claim not verified/i))
+      .toBeInTheDocument();
+    expect(screen.getByText(/No source quotation supplied/i)).toBeInTheDocument();
+  });
+});
