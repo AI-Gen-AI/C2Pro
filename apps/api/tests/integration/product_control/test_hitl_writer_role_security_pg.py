@@ -196,6 +196,17 @@ async def test_real_dedicated_login_role_and_elevated_attributes() -> None:
             assert await writer.fetchval(predicate, tenant_id) is False
             await owner.execute(f'REVOKE "{member_role}" FROM "{writer_role}"')
             assert await writer.fetchval(predicate, tenant_id) is True
+
+            # PG15: parameter-level SET is a separate privilege. Without this
+            # guard, a non-BYPASS role could disable normal row/FK triggers.
+            await owner.execute(
+                f'GRANT SET ON PARAMETER session_replication_role TO "{writer_role}"'
+            )
+            assert await writer.fetchval(predicate, tenant_id) is False
+            await owner.execute(
+                f'REVOKE SET ON PARAMETER session_replication_role FROM "{writer_role}"'
+            )
+            assert await writer.fetchval(predicate, tenant_id) is True
     finally:
         if writer is not None:
             await writer.close()
@@ -204,6 +215,9 @@ async def test_real_dedicated_login_role_and_elevated_attributes() -> None:
                 if aux_created:
                     await owner.execute(f'REVOKE "{member_role}" FROM "{writer_role}"')
                     await owner.execute(f'DROP ROLE "{member_role}"')
+                await owner.execute(
+                    f'REVOKE ALL ON PARAMETER session_replication_role FROM "{writer_role}"'
+                )
                 await owner.execute(
                     f'REVOKE SELECT, INSERT ON public.hitl_finding_decisions FROM "{writer_role}"'
                 )
