@@ -17,7 +17,6 @@ the Health Engine (ADR-018 / TASK-V3-013-07).
 
 from __future__ import annotations
 
-import json
 from enum import StrEnum
 from typing import Generic, TypeVar
 
@@ -113,21 +112,11 @@ def merge_node_results(
 
 
 def _node_result_signature(result: NodeResult[object]) -> tuple[object, ...]:
-    # N12 may retry with the same node/status but a new set of source
-    # observations. Re-emitting the previous result is idempotent, whereas
-    # a changed critique payload must remain a distinct reviewable attempt.
-    # Other ADR-013 node signatures retain their existing stable semantics.
-    critique_payload = (
-        json.dumps(result.data, sort_keys=True, default=str)
-        if result.node == "critique" and result.data is not None
-        else None
-    )
     return (
         result.node,
         result.status,
         result.degradation_reason,
         result.error.message if result.error is not None else None,
-        critique_payload,
     )
 
 
