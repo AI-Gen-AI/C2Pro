@@ -1,31 +1,34 @@
 schema: c2pro-work-envelope-v1
 schema_version: 1
 work_id: C2PRO-DEV-15
-campaign_id: REPO-HYGIENE-CORE-AI-20261005
+campaign_id: CORE-AI-ASSURANCE-W311-INVENTORY-20261008
 role: implementation_lead
-base_sha: 852429c35852ff09048d7a6ca7f8c1b0a61f8c38
-branch: chore/c2pro-dev-15-repository-hygiene-wave1
+base_sha: 39a7c313766eef181353f594205ee3b88e5955ac
+branch: docs/dev15-wave311-tracing-inventory-20261008
 risk_class: normal
 scope:
-  - reconcile repository-hygiene debt against current main and active product lanes
-  - fix internally inconsistent root package metadata without publishing a package
-  - remove only debris proven unreferenced by current repository paths
-  - eliminate confirmed UTF-8 mojibake from touched live source
-  - progressively bring high-value src/core/ai modules under meaningful coverage in later waves
-  - preserve active P0c Temporal WBS Alerts Coherence Risk and Procurement work without overlap
+  - execute bounded next Wave 3.11 source-only LangSmith and LangGraph exporter inventory under open issue 958
+  - record all direct SDK paths including runtime decorator feedback dataset upload/delete/update baseline and prompt hub publisher
+  - inspect .env.example README Makefile evaluation CI and manual scripts for implicit exports
+  - prepare testable synthetic RED privacy-canary matrix with exact real caller fields and no remote network
+  - identify scoped work envelopes needed for subsequent security implementation PRs
+  - preserve local PromptManager and AI-Gen MW-06/MR authority and zero unapproved cloud export
 out_of_scope:
+  - production source runtime or environment changes under this inventory-only envelope
+  - sending any real customer document prompt response PII or secret to external telemetry
+  - remote LangSmith data writes pushes deletes sync metrics or live pilot execution
+  - marking Wave 3.11 implementation PROD_VALIDATED based on documentation
+  - altering current.yaml active_work active_campaign or baseline
   - product lifecycle promotion or Product Control mutation
-  - P0c or P0d production qualification
-  - Temporal WBS Alerts Coherence Risk or Procurement functional changes
-  - broad architectural refactor or bounded-context consolidation
-  - mass deletion without reference evidence
-  - aggregate coverage threshold jumps unsupported by meaningful tests
+  - Temporal WBS Alerts Coherence Procurement and other product functional changes
+  - modifying routing or prompt promotion authority or enabling AMF
 allowed_tools:
   - github_repository_read
-  - scoped_repository_write
   - github_ci_read
-  - focused_python_tests
-  - repository_reference_search
+  - code_reference_search
+  - focused_local_tests_with_synthetic_data
+  - scoped_repository_write_for_audit_evidence_and_tests_only
+  - independent_code_review
 forbidden_paths:
   - validation/product/**
   - docs/product/**
@@ -35,30 +38,33 @@ forbidden_paths:
   - apps/api/src/wbs/**
   - apps/api/src/coherence/**
   - apps/api/src/alerts/**
+  - apps/api/src/analysis/**
+  - apps/api/src/documents/**
+  - apps/api/src/procurement/**
 acceptance_criteria:
-  - root manifest no longer advertises nonexistent index.js or ISC licensing
-  - root JavaScript test command invokes the real frontend full-test surface
-  - README proprietary badge no longer links to a nonexistent LICENSE file
-  - confirmed mojibake is absent from touched live backend entrypoint
-  - apps/api/test.py is removed only after repository-wide reference search proves no active consumer
-  - referenced dev.py and requirements-sprint1.txt are preserved
-  - CI remains green and no active product PR is modified
-  - later Core AI coverage work removes exclusions only with failure-path and contract tests
+  - reference issue 958 as current open DEV15 authority while issue 849 remains closed historical
+  - all LangSmith SDK and LangChain direct export/publisher code paths inventoried
+  - scope independent from product runtime ownership and AI-Gen control plane
+  - synthetic no-network canary RED matrix is reproducible and honest about current exposures
+  - no production or external exporter used or enabled
+  - next implementation packages separated by actual observed risk and classified data path
+  - required targeted tests and CI green on exact head independent review with no unresolved findings
 required_tests:
-  - C2PRO-DEV-15 Wave1 repository hygiene contract tests
-  - backend unit suite for touched CI-guard tests
-  - backend lint
+  - pytest apps/api/tests/unit/core/ai/test_langsmith_client.py -q
+  - pytest apps/api/tests/unit/core/observability/test_langsmith_decorator.py -q
+  - python scripts/development/validate_c2pro_control.py
   - canonical GitHub CI required gates
 evidence_required:
-  - exact_base_sha
-  - issue_849_scope
-  - repository_reference_search_results
+  - historical_issue_849_closed
+  - open_issue_958
+  - exact_source_path_inventory
+  - no_network_canary_evidence
+  - independently_reviewed_scoped_pr
   - exact_head_ci
-  - independent_review
 review_policy: independent_principal
 worker_selection:
   preferred: null
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
   selected: null
-timeout_resource_policy: bounded_repository_hygiene_no_production_mutation
+timeout_resource_policy: bounded_inventory_and_synthetic_tests_only_no_remote_export_or_prod_mutation
