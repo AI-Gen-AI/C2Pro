@@ -7089,6 +7089,274 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/wbs-imports": {
+      "post": {
+        "tags": ["WBS import"],
+        "summary": "Create Wbs Import",
+        "description": "Deterministically parse one revision of a ``wbs`` document (200 when the identical import exists).",
+        "operationId": "create_wbs_import_api_v1_projects__project_id__wbs_imports_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWBSImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-imports/{import_id}": {
+      "get": {
+        "tags": ["WBS import"],
+        "summary": "Get Wbs Import",
+        "operationId": "get_wbs_import_api_v1_projects__project_id__wbs_imports__import_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSImportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-imports/{import_id}/candidates": {
+      "post": {
+        "tags": ["WBS import"],
+        "summary": "Create Wbs Import Candidate",
+        "description": "Explicit human action: a NEW IMPORT_REVIEW DRAFT populated from the import (first baseline only).",
+        "operationId": "create_wbs_import_candidate_api_v1_projects__project_id__wbs_imports__import_id__candidates_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWBSImportCandidateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSImportCandidateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs-imports/{import_id}/comparison": {
+      "get": {
+        "tags": ["WBS import"],
+        "summary": "Compare Wbs Import",
+        "description": "IMPORTED vs CANDIDATE (vs a derived PROPOSED preview): a pure read, zero writes.",
+        "operationId": "compare_wbs_import_api_v1_projects__project_id__wbs_imports__import_id__comparison_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Import Id"
+            }
+          },
+          {
+            "name": "change_set_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "the IMPORT_REVIEW change set created from this import",
+              "title": "Change Set Id"
+            },
+            "description": "the IMPORT_REVIEW change set created from this import"
+          },
+          {
+            "name": "intelligence_run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "derive PROPOSED from this run's proposals",
+              "title": "Intelligence Run Id"
+            },
+            "description": "derive PROPOSED from this run's proposals"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WBSImportComparisonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10820,7 +11088,8 @@
           "drawing",
           "specification",
           "technical_spec",
-          "other"
+          "other",
+          "wbs"
         ],
         "title": "DocumentType",
         "description": "Supported document types."
@@ -19288,6 +19557,470 @@
         "type": "object",
         "required": ["item_id", "decision"],
         "title": "WBSIntelligenceSelection"
+      },
+      "CreateWBSImportCandidateRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["title"],
+        "title": "CreateWBSImportCandidateRequest"
+      },
+      "CreateWBSImportRequest": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id",
+            "description": "an existing document of type 'wbs'"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id",
+            "description": "the immutable revision to parse (default: current)"
+          },
+          "parse_config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parse Config",
+            "description": "xlsx: {sheet}; csv: {delimiter}; json: {} -- unknown keys are rejected"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["document_id"],
+        "title": "CreateWBSImportRequest"
+      },
+      "WBSImportCandidateResponse": {
+        "properties": {
+          "change_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Set Id"
+          },
+          "source_import_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Import Id"
+          },
+          "entry_mode": {
+            "type": "string",
+            "title": "Entry Mode"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "node_count": {
+            "type": "integer",
+            "title": "Node Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_set_id",
+          "source_import_id",
+          "entry_mode",
+          "origin",
+          "status",
+          "revision",
+          "node_count"
+        ],
+        "title": "WBSImportCandidateResponse"
+      },
+      "WBSImportComparisonResponse": {
+        "properties": {
+          "import_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Import Id"
+          },
+          "change_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Set Id"
+          },
+          "change_set_revision": {
+            "type": "integer",
+            "title": "Change Set Revision"
+          },
+          "snapshot_digest": {
+            "type": "string",
+            "title": "Snapshot Digest"
+          },
+          "compared_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Compared Fields"
+          },
+          "imported": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Imported"
+          },
+          "candidate": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Candidate"
+          },
+          "proposed": {
+            "$ref": "#/components/schemas/WBSImportProposed"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/WBSImportComparisonRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "added_node_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Added Node Ids"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "import_id",
+          "change_set_id",
+          "change_set_revision",
+          "snapshot_digest",
+          "imported",
+          "candidate",
+          "proposed",
+          "rows",
+          "added_node_ids"
+        ],
+        "title": "WBSImportComparisonResponse"
+      },
+      "WBSImportComparisonRow": {
+        "properties": {
+          "source_ref": {
+            "type": "string",
+            "title": "Source Ref"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "UNCHANGED | CHANGED | REMOVED | NOT_COMPARABLE (see limitations)"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changes",
+            "description": "Subset of compared_fields that differ"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations",
+            "description": "Why the row could not be compared reliably (never UNCHANGED)"
+          },
+          "imported_sibling_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Sibling Position",
+            "description": "1-based, among the imported siblings"
+          },
+          "candidate_sibling_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Sibling Position",
+            "description": "1-based, under the candidate parent"
+          }
+        },
+        "type": "object",
+        "required": ["source_ref", "status"],
+        "title": "WBSImportComparisonRow"
+      },
+      "WBSImportDiagnostic": {
+        "properties": {
+          "severity": {
+            "type": "string",
+            "title": "Severity",
+            "description": "WARNING | BLOCKING_ERROR"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          }
+        },
+        "type": "object",
+        "required": ["severity", "code", "message"],
+        "title": "WBSImportDiagnostic"
+      },
+      "WBSImportProposed": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "NOT_AVAILABLE | DERIVED (a preview simulation, never stored)"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "nodes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Nodes"
+          }
+        },
+        "type": "object",
+        "required": ["status"],
+        "title": "WBSImportProposed"
+      },
+      "WBSImportResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revision Id"
+          },
+          "blob_hash": {
+            "type": "string",
+            "title": "Blob Hash"
+          },
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "parser_id": {
+            "type": "string",
+            "title": "Parser Id"
+          },
+          "parser_version": {
+            "type": "string",
+            "title": "Parser Version"
+          },
+          "parse_config": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parse Config"
+          },
+          "parse_config_digest": {
+            "type": "string",
+            "title": "Parse Config Digest"
+          },
+          "import_key": {
+            "type": "string",
+            "title": "Import Key"
+          },
+          "snapshot_schema_version": {
+            "type": "string",
+            "title": "Snapshot Schema Version"
+          },
+          "snapshot_digest": {
+            "type": "string",
+            "title": "Snapshot Digest"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Snapshot"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "READY | READY_WITH_WARNINGS | INVALID (the parse only; no authority)"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "warning_count": {
+            "type": "integer",
+            "title": "Warning Count"
+          },
+          "blocking_count": {
+            "type": "integer",
+            "title": "Blocking Count"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/WBSImportDiagnostic"
+            },
+            "type": "array",
+            "title": "Diagnostics"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "reused": {
+            "type": "boolean",
+            "title": "Reused",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "document_id",
+          "revision_id",
+          "blob_hash",
+          "format",
+          "parser_id",
+          "parser_version",
+          "parse_config",
+          "parse_config_digest",
+          "import_key",
+          "snapshot_schema_version",
+          "snapshot_digest",
+          "snapshot",
+          "status",
+          "row_count",
+          "warning_count",
+          "blocking_count",
+          "diagnostics",
+          "created_by",
+          "created_at"
+        ],
+        "title": "WBSImportResponse"
       }
     },
     "securitySchemes": {

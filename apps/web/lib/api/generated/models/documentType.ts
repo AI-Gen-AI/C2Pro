@@ -51,4 +51,5 @@ export const DocumentType = {
   specification: "specification",
   technical_spec: "technical_spec",
   other: "other",
+  wbs: "wbs",
 } as const;

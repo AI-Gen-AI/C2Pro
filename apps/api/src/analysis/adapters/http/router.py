@@ -213,6 +213,7 @@ async def get_document_text_from_rag(
               AND d.id = CAST(:document_id AS uuid)
               AND p.tenant_id = CAST(:tenant_id AS uuid)
               AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
+              AND d.document_type::text <> 'wbs'
             ORDER BY d.created_at DESC
         """)
         doc_params = {
@@ -230,6 +231,7 @@ async def get_document_text_from_rag(
               AND d.project_id = CAST(:project_id AS uuid)
               AND p.tenant_id = CAST(:tenant_id AS uuid)
               AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
+              AND d.document_type::text <> 'wbs'
             ORDER BY d.created_at DESC
         """)
         doc_params = {

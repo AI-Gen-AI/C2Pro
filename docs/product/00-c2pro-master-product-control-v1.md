@@ -414,7 +414,7 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 
 ## 13. Owner-approved Product Quality + HITL workstream — PQ-HITL-2026-01 (2026-10-08)
 
-**Approval:** owner APPROVED the improvement priorities and work decomposition. **Lifecycle:** all work stays PLANNED (task 10 DEFERRED). This section is the human-readable projection of `product_quality_hitl_2026_10_08` in the YAML machine source of truth, not an authorization to merge, change production, decide HITL, or promote P0c/P0d.
+**Approval:** owner APPROVED the improvement priorities and governed task-by-task implementation. **Implementation as of 2026-10-08:** ACTIVE / PARTIAL; some bounded slices are MERGED with verified green CI, but **none of the 01-09 tasks is fully product-accepted or PROD_VALIDATED**. Task 10 stays DEFERRED. This section reflects `product_quality_hitl_2026_10_08` in the YAML machine source of truth; it grants no HITL production decision, deployment, forced reprocess or P0c/P0d promotion.
 
 **Epic:** [#936](https://github.com/AI-Gen-AI/C2Pro/issues/936). **Problem evidence:** 2026-10-08 read-only synthetic B review; exactly seven per-risk `clause_ref/confidence` null values while `confidence_score=0.9` is artifact-level; a false contract-corruption/ambiguity assertion on §5.2; persisted revision-bound A=9 and B=7 clauses incorrectly presented as "0 extracted" under unresolved trusted-current; all-or-nothing review card; graph shows "moderate" and "Model-backed" without corresponding current trustworthy evidence.
 
@@ -455,5 +455,47 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 8. Implementation states advance independently through `PLANNED → PR/CI → MERGED → DEPLOYED → PROD_VALIDATED` (only when separately evidenced), not by owner approval of a roadmap.
 
 **Design question to freeze before coding #940:** if quality defects are found, individual corrections compose a new **immutable version**. The existing per-document HITL pause must not be auto-transformed into per-item acceptance or bypassed. Approval behavior, legacy review compatibility, lock ordering and exact fence consistency require a dedicated reviewed decision record/ADR.
+
+### 13.3 Verified execution checkpoint — 2026-10-08
+
+**State of the code, not the production lifecycle:** repository `main` after #949: `9144777ff8dc4a76a1b203a9707da84a7d0c2020`. Merged PR evidence: [#947](https://github.com/AI-Gen-AI/C2Pro/pull/947) (MASTER), [#948](https://github.com/AI-Gen-AI/C2Pro/pull/948) (honest empty-state copy), [#950](https://github.com/AI-Gen-AI/C2Pro/pull/950) (bounded source to critic), [#954](https://github.com/AI-Gen-AI/C2Pro/pull/954) (collapsible *unverified* critique observations), [#949](https://github.com/AI-Gen-AI/C2Pro/pull/949) (honest graph priority and deterministic provenance label). Each was merged only after its own full PR CI concluded green with an exact-head safeguard. **MERGED is not DEPLOYED or PROD_VALIDATED.**
+
+| Task | Current delivery state | What is demonstrably missing |
+|---|---|---|
+| **01** #937 | **PARTIAL**, #950 merged | Typed, auditable critique claim → exact source-span validation, justified positive/negative corruption fixtures |
+| **02** #938 | **ACTIVE / HOLD**, [#953](https://github.com/AI-Gen-AI/C2Pro/pull/953) CI green, **unmerged** | Calibrated confidence provenance; multi-clause citation mapping; confidence-routing policy and reviewer capacity; integration compatibility |
+| **03** #939 | **PARTIAL**, #948 merged | Real read-only selector/projection distinguishing A=9/B=7 and trusted-current, RLS/API/UX parity |
+| **04** #940 | **ACTIVE DESIGN**, [review contract](https://github.com/AI-Gen-AI/C2Pro/issues/940#issuecomment-6050088142) | Tenant-scoped append-only per-finding decisions, correction candidate versioning, exact atomic final settlement |
+| **05** #941 | **PARTIAL**, #954 merged | Evidence-linked executive summary, individual review actions and E2E; expandable prose is not granular HITL |
+| **06** #942 | **PLANNED** | Verified source→clause/revision/page/span deep-links, honest unresolved fallback |
+| **07** #943 | **PARTIAL**, #949 merged | Full extracted entities / contractual risk / active alert taxonomy and integrated trusted/proposed scoping |
+| **08** #944 | **PLANNED** | Exact lifecycle timeline and What Changed API↔UI semantics including pending/needs_review |
+| **09** #945 | **PLANNED** | Independent golden tests, security/concurrency regressions, product-quality acceptance |
+| **10** #946 | **DEFERRED** | 2D/3D advanced evidence graph; not part of P0 exit |
+
+**Critical HOLD for #953:** RiskExtractionCandidate lacks actual per-risk confidence values; replacing invented 0.9 with `null` forces the N12 human-review path for unassessed contract risks. This is the truthful fail-closed option, but without a measured-confidence producer and capacity/routing design it may pause virtually every contract. [#938 technical finding](https://github.com/AI-Gen-AI/C2Pro/issues/938#issuecomment-6050160395). No merge on green CI alone until independent operational review, exact-case tests and policy decision. No fabricated score or silent bypass is an acceptable workaround.
+
+### 13.4 GOAL — observable finished product, not a count of PRs
+
+A reviewer opens a revision-specific contract analysis and can:
+
+1. **See an accurate executive overview**: number of risks, critique observations, evidence quality and pending decisions, each distinctly labeled `PROPOSED`, `TRUSTED`, `HISTORICAL`, `UNKNOWN` or `NOT_EXTRACTED` as supported. A=9/B=7 stored clauses must never be confused with zero trusted-current clauses.
+2. **Inspect each observation independently**: factual claim, AI interpretation, verified original contract quote with exact clause/revision locator or an honest unresolved indicator, impact/category and why it matters. Ordinary `LD`, `However`, `Conversely`, the valid title and §5.2 fourteen-day obligation must not be called corrupt without verified contradiction.
+3. **Record each human decision separately**: confirm, dismiss, request info or propose a correction, with reviewer identity, evidence, reason and immutable audit/CAS, without promoting individual observations into trusted state.
+4. **Settle the exact final candidate**: compose any corrections into an immutable new version/hash, explicitly approve or reject the whole candidate only after blocking findings are addressed, then resume under the original tenant/row/thread/checkpoint/generation/fence trust controls. Stale/replayed approvals fail closed.
+5. **Navigate useful evidence and timeline**: extracted entities/clauses, AI risks, approved active alerts, linked relationships, changes and historical snapshots are semantically distinct. Missing evidence never invents a risk, score, change or moderate priority. Review and UI are usable on mobile.
+6. **Pass independent quality and production qualification**: adversarial golden fixtures + backend/FE/security/RLS/concurrency/E2E all green; accepted synthetic end-user demonstration; separate `#686 P0c` five-evidence assertions and, only then, `#687 P0d` Current State assertions on exact deployed identity, with explicit Product Control review. A green PR never substitutes for these gates.
+
+**Implementation sequence (dependency-bound; no invented target date):**
+
+- **G1 — Code truth:** #949 merged; #948/#950/#954 preserved. Rebase remaining work against current main only after verifying diff and regression.
+- **G2 — Confidence/source policy:** #938/#953 measured-vs-unmeasured risk policy and workload gate; #937 typed source-validation and #945 RED+GREEN adversarial fixtures. Preserve accepted ADR-020/026 controls.
+- **G3 — Evidence truth:** #939 real tenant-scoped historical/proposed/trusted viewer; #942 exact/multi-clause source addresses and no fabricated PDF highlights.
+- **G4 — Granular review authority:** #940 design/ADR freeze, append-only finding decision ledger, tenant-scoped RLS, CAS/idempotency, versioned corrections, explicit whole-candidate settlement through existing N13 trust boundary.
+- **G5 — Operator experience:** #941 summary/evidence-linked per-item UI; #943 complete graph taxonomy and honest priority; #944 lifecycle timeline and What Changed parity.
+- **G6 — Quality/acceptance:** #945 golden/negative/positive + independent review, followed by a separately authorized, bounded production qualification of #686 (no B reprocess/forced approval) and then #687. Product Control alone can authorize any lifecycle promotion. #946 is deferred.
+
+**GOAL current status: IN PROGRESS / NOT COMPLETE / NOT PROD_VALIDATED.** The real synthetic revision B remains paused awaiting appropriate human review; no retroactive edit, blind acceptance, synthetic evidence promotion or 3D-first diversion is authorized.
+
 
 **Related operational issue:** [#686 P0c](https://github.com/AI-Gen-AI/C2Pro/issues/686) remains on HITL review hold for existing synthetic revision B; no automatic retry or approval is within this campaign.

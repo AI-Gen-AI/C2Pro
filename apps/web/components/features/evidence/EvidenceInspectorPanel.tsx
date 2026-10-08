@@ -527,11 +527,11 @@ function RelationshipExplanationPanel({
             AI Relationship Explanation
           </h3>
           <p className="text-xs text-muted-foreground">
-            Backend-generated explanation grounded in evidence graph citations
+            Rule-based summary of currently visible evidence graph links
           </p>
         </div>
         <Badge variant="outline" className="rounded-full bg-background/90 px-3 py-1 shadow-sm">
-          Model-backed
+          Rule-based
         </Badge>
       </div>
 

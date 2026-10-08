@@ -16,6 +16,7 @@ from src.documents.adapters.rag.rag_service import (
     RagService,
 )
 from src.documents.domain.models import Document
+from src.documents.domain.upload_policy import is_analysis_excluded
 from src.documents.ports.rag_ingestion_service import (
     IRagIngestionService,
     RagIngestionOutcome,
@@ -39,6 +40,9 @@ class SqlAlchemyRagIngestionService(IRagIngestionService):
         tenant_id: UUID,
         revision_id: UUID | None = None,
     ) -> RagIngestionResult:
+        if is_analysis_excluded(document.document_type):
+            # PC-2b.3: a WBS source never produces document_chunks.
+            return RagIngestionResult(outcome=RagIngestionOutcome.NOT_REQUIRED)
         text_content = _extract_rag_text(parsed_payload).strip()
         if not text_content:
             # Nothing to embed is a complete outcome for structured documents,

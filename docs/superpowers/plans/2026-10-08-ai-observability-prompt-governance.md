@@ -85,12 +85,12 @@
 - Modify: `infrastructure/scripts/langsmith_dataset_manager.py`
 - Test: add targeted infrastructure dataset-manager tests with fake SDK (NO network / NO credentials).
 
-**Interfaces:** A LangSmith API key by itself never authorizes dataset reads/writes/deletes or direct client setup for unsafe data. `upload_dataset` requires a non-editable, classified synthetic-only dataset manifest (`dataset_id`, content SHA-256, source, classification, authorized scope, owner approval), dry-run preflight and explicit per-operation authorization. Unknown/custom files are denied; versioned datasets cannot silently overwrite/delete existing remote examples.
+**Interfaces:** A LangSmith API key by itself never authorizes dataset reads/writes/deletes/**updates** or direct client setup for unsafe data. Both `upload_dataset` **and `sync_baseline_metrics` (`update_example`)** require a non-editable, classified synthetic-only dataset manifest (`dataset_id`, content SHA-256, source, classification, authorized scope, owner approval), dry-run preflight and explicit per-operation authorization. Unknown/custom files are denied; versioned datasets cannot silently overwrite/delete existing remote examples.
 
 - [ ] Step 1: RED no-network tests for key-only instantiation/upload attempt, custom local JSON with `CANARY_CONTRACT_SECRET` in `clause_text`, `document_text`, expected outputs, rationales and nested metadata; fake remote SDK receives zero writes/deletes.
-- [ ] Step 2: RED test that existing remote dataset cannot be deleted/replaced on version-name collision without a separate immutable approved change. Deny unknown/missing manifest, mutable source, absent classification, missing owner/HITL or invalid hash.
-- [ ] Step 3: Implement default-deny guard **before** native client creation/upload and before listing/deleting any remote examples; dry-run prints only safe counts/hashes, never payloads or credentials. Preserve read-only operations only when scoped and authorized; do not invoke real SDK.
-- [ ] Step 4: GREEN the targeted tests, run relevant eval/observability suites and independent security review. Do NOT infer data provenance or permission from `LANGSMITH_TRACING` flags.
+- [ ] Step 2: RED test that existing remote dataset cannot be deleted/replaced on version-name collision **and that `sync_baseline_metrics` cannot call `update_example` on the existing `_version_info` record** without a separate immutable approved operation-specific change. Deny unknown/missing manifest, mutable source, absent classification, missing owner/HITL or invalid hash.
+- [ ] Step 3: Implement default-deny guard **before** native client creation/upload and before listing/deleting/updating any remote examples, including the `sync-metrics` CLI path and `sync_baseline_metrics`; dry-run prints only safe counts/hashes, never payloads or credentials. Preserve read-only operations only when scoped and authorized; do not invoke real SDK.
+- [ ] Step 4: GREEN the targeted tests including `sync-metrics`/`update_example` denied by default and authorized synthetic-only fixture; run relevant eval/observability suites and independent security review. Do NOT infer data provenance or permission from `LANGSMITH_TRACING` flags.
 
 ### Task 3B: LangGraph automatic tracing privacy boundary
 

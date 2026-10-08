@@ -330,6 +330,7 @@ class WBSGovernanceRepository:
         description: str | None = None,
         profile_refs: Sequence[Mapping[str, str]] = (),
         evidence_refs: Sequence[str] = (),
+        source_import_id: UUID | None = None,
     ) -> WBSChangeSetORM:
         """A new DRAFT against the CURRENT baseline (or none: a first-baseline proposal).
 
@@ -359,6 +360,7 @@ class WBSGovernanceRepository:
             evidence_refs=list(evidence_refs),
             created_by=actor.user_id,
             created_by_kind=actor.kind.value,
+            source_import_id=source_import_id,
         )
         self.session.add(change_set)
         await self.session.flush()

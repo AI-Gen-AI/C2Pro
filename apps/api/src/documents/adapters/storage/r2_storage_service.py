@@ -47,6 +47,8 @@ class R2StorageService(IStorageService):
     Refers to Suite ID: TS-UAD-PER-R2-001.
     """
 
+    download_object_is_temporary = True  # every download is a NamedTemporaryFile(delete=False)
+
     def __init__(self, client: _R2Client) -> None:
         self._client = client
         self._bucket = settings.r2_bucket_name
