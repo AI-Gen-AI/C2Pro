@@ -880,6 +880,7 @@ product_quality_hitl_2026_10_08:
     completion_definition: "ACCEPTED only with contract/negative tests + independent principal review + exact-head merged CI + evidence + owner product gate; PROD_VALIDATED remains separate."
     sizing_rule: "S <= 1 day, M <= 4 days; split before starting if evidence-based estimate exceeds 4 days or multiple authority boundaries emerge."
     precedence: "First identify WHAT acceptance means; freeze SDD/ADR if material; then failing tests; minimal implementation; independent review; master reconciliation."
+    preexisting_drafts: "PR #960 and #985 predate this decomposition. Their draft code does NOT waive dependency/RED gates or count as product-accepted evidence; qualify it against frozen goldens before merge."
     defect_policy:
       classify: [P0_SECURITY_OR_TRUST, P1_BLOCKS_ACCEPTANCE, P2_LOCAL_NONBLOCKING, ENVIRONMENT_OR_CI, NEW_SCOPE_REQUEST]
       require: [reproducer, observed_vs_expected, impact, parent_work_id, owning_role, severity, smallest_fix_scope, regression_test, disposition]
@@ -927,7 +928,7 @@ product_quality_hitl_2026_10_08:
         size: M
         status: PLANNED
         depends_on: []
-        acceptance: "Synthetic §5.2, LD, However, valid title, 183d, 5% of EUR 132500 and A9/B7 with exact expected findings and UNKNOWN semantics; deterministic RED before changes."
+        acceptance: "Synthetic §5.2, LD, However, valid title, 183d, 5% of EUR 132500 and A9/B7 with exact expected findings and UNKNOWN semantics; deterministic RED before future changes; older draft fixes remain unqualified."
         note: "test-first baseline; no PROD B changes"
       - id: PQ-HITL-01.1
         parent_issue: 937
@@ -1016,7 +1017,7 @@ product_quality_hitl_2026_10_08:
         role: orchestrator
         size: M
         status: BLOCKED
-        depends_on: [PQ-HITL-01.1, PQ-HITL-02.1]
+        depends_on: [PQ-HITL-09.1]
         acceptance: "Freeze per-risk and critique types, CONFIRMED/CORRECTION_PROPOSED/DISMISSED/NEEDS_INFO, immutable versions, atomic final approval authority, migration/backward compatibility and threat model; independent principal design review."
         note: "requires no-self-approval architecture sign-off"
       - id: PQ-HITL-04.2
@@ -1176,7 +1177,7 @@ product_quality_hitl_2026_10_08:
         role: qa
         size: M
         status: BLOCKED
-        depends_on: [PQ-HITL-05.3, PQ-HITL-08.2, PQ-HITL-07.2, PQ-HITL-09.2]
+        depends_on: [PQ-HITL-05.3, PQ-HITL-08.2, PQ-HITL-07.2, PQ-HITL-09.2, PQ-HITL-02.2]
         acceptance: "Realistic contract journey upload->extract->review each finding->correct->separate final approval->Current State and Coherence, verify persistent relogin, unknowns and #686/#687 sequencing."
         note: "must exercise actual backend+frontend, not mock UI"
       - id: PQ-HITL-09.4
