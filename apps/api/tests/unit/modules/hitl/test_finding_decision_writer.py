@@ -369,3 +369,15 @@ async def test_untyped_critique_observation_cannot_be_written_as_bound_risk():
             draft=critique,
         )
     assert session.calls == []
+
+
+
+def test_role_preflight_rejects_inherited_destructive_grants_and_owner_membership():
+    """A role with TRUNCATE can erase an audit ledger despite row-level RLS."""
+    from src.modules.hitl.adapters.persistence.finding_decision_writer import _SAFE_DB_ROLE
+
+    sql = str(_SAFE_DB_ROLE)
+    for privilege in ("UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"):
+        assert f"'public.hitl_finding_decisions', '{privilege}'" in sql
+    assert "NOT pg_has_role(" in sql
+    assert "'MEMBER'" in sql
