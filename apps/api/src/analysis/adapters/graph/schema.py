@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, NotRequired, TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -28,6 +28,9 @@ class ProjectState(TypedDict):
     extracted_wbs: list[Task]
     confidence_score: float
     critique_notes: str
+    # N12 source-witnessed observations persist in the existing checkpoint
+    # as JSON; they do not imply verified legal claims or TRUSTED evidence.
+    critique_observations: NotRequired[list[JsonDict]]
     human_feedback: str
     retry_count: int
     tenant_id: str | None
