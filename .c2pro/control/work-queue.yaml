@@ -59,12 +59,12 @@ items:
 
   # DEV-15 follow-on Core AI Reliability/Observability/Assurance — OPEN issue #958.
   # Historical repository hygiene #849 is CLOSED and must not be treated as open work.
-  # Queue item is READY only; hot current.yaml remains reconciled_idle, no active work.
-  # Parallel quality lane; product-domain implementation and MW-06/MR authority untouched.
+  # Queue item stays READY/idle. Next W311-A1 security package depends on inventory PR #963 merge.
+  # No live tracing, production authority or product-domain work allowed.
   - work_id: C2PRO-DEV-15
     status: ready
     role: implementation_lead
     work_ref: .c2pro/work/C2PRO-DEV-15.yaml
     priority: P1
     depends_on: []
-    review_policy: independent_principal
+    review_policy: principal_and_challenger

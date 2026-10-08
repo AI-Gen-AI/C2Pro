@@ -1,34 +1,39 @@
 schema: c2pro-work-envelope-v1
 schema_version: 1
 work_id: C2PRO-DEV-15
-campaign_id: CORE-AI-ASSURANCE-W311-INVENTORY-20261008
+campaign_id: CORE-AI-DEV15-W311-A1-SECURITY-20261008
 role: implementation_lead
-base_sha: 39a7c313766eef181353f594205ee3b88e5955ac
-branch: docs/dev15-wave311-tracing-inventory-20261008
-risk_class: normal
+base_sha: f3e82fa76f4fc3a6db61e7fe12cd87e83b78fe3d
+branch: fix/dev15-w311-a1-langsmith-default-off
+risk_class: security
 scope:
-  - execute bounded next Wave 3.11 source-only LangSmith and LangGraph exporter inventory under open issue 958
-  - record all direct SDK paths including runtime decorator feedback dataset upload/delete/update baseline and prompt hub publisher
-  - inspect .env.example README Makefile evaluation CI and manual scripts for implicit exports
-  - prepare testable synthetic RED privacy-canary matrix with exact real caller fields and no remote network
-  - identify scoped work envelopes needed for subsequent security implementation PRs
-  - preserve local PromptManager and AI-Gen MW-06/MR authority and zero unapproved cloud export
+  - implement open security issue 964 as the first bounded Wave 3.11 source-code remediation
+  - set LANGSMITH_TRACING and LANGCHAIN_TRACING_V2 false in tracked root .env.example
+  - clear sample LANGSMITH_API_KEY and LANGCHAIN_API_KEY placeholders in .env.example
+  - change LangSmithConfig.from_env default to tracing disabled when LANGSMITH_TRACING is absent empty or false
+  - verify standard README cp and Makefile setup-env and compose env_file copy path cannot silently activate tracing
+  - prove key-only configuration and any truthy placeholder cannot instantiate LangSmith native SDK or export by default
+  - keep explicitly enabled LangSmith SDK in supported optional fake-client regression tests
+  - preserve local usage metrics and application execution in disabled tracing mode
 out_of_scope:
-  - production source runtime or environment changes under this inventory-only envelope
-  - sending any real customer document prompt response PII or secret to external telemetry
-  - remote LangSmith data writes pushes deletes sync metrics or live pilot execution
-  - marking Wave 3.11 implementation PROD_VALIDATED based on documentation
-  - altering current.yaml active_work active_campaign or baseline
-  - product lifecycle promotion or Product Control mutation
-  - Temporal WBS Alerts Coherence Procurement and other product functional changes
-  - modifying routing or prompt promotion authority or enabling AMF
+  - direct production runtime rollout or credentials access or mutation
+  - remote LangSmith or Langfuse or Phoenix export and real network calls during tests
+  - creating live cloud resources or changing production tracing flags
+  - LangGraph callback auto-export globally or product-domain tracer changes
+  - feedback tenant authorization and feedback comment redaction beyond this W311-A1 slice
+  - LangSmith datasets RunTree uploads evaluation CI prompt hub promotion or sync paths
+  - altering product business functionality model routing or the AI-Gen MW-06 or AMF authority
+  - modifying .c2pro/control/current.yaml active work hot status or baseline
+  - changing other work queue entries or reopening historical issue 849
 allowed_tools:
   - github_repository_read
+  - scoped_repository_write
   - github_ci_read
-  - code_reference_search
-  - focused_local_tests_with_synthetic_data
-  - scoped_repository_write_for_audit_evidence_and_tests_only
-  - independent_code_review
+  - focused_python_tests
+  - repository_reference_search
+  - synthetic_test_data_only
+  - independent_principal_review
+  - independent_security_challenger
 forbidden_paths:
   - validation/product/**
   - docs/product/**
@@ -42,29 +47,37 @@ forbidden_paths:
   - apps/api/src/documents/**
   - apps/api/src/procurement/**
 acceptance_criteria:
-  - reference issue 958 as current open DEV15 authority while issue 849 remains closed historical
-  - all LangSmith SDK and LangChain direct export/publisher code paths inventoried
-  - scope independent from product runtime ownership and AI-Gen control plane
-  - synthetic no-network canary RED matrix is reproducible and honest about current exposures
-  - no production or external exporter used or enabled
-  - next implementation packages separated by actual observed risk and classified data path
-  - required targeted tests and CI green on exact head independent review with no unresolved findings
+  - inventory PR 963 merged and issue 964 remains open source of this bounded work
+  - root .env.example has both tracing flags false and empty API key placeholders
+  - key presence alone cannot enable native LangSmith SDK construction or cloud tracing
+  - explicit opt-in remains supported only with a nonempty key and mocked no-network tests
+  - tests cover absent empty false zero and true values and preserve disabled-mode usage semantics
+  - README Makefile and deployment bootstrap are verified without touching live .env or Docker runtime
+  - no change to LangGraph business graphs feedback datasets or CI exporter jobs in this bounded PR
+  - failed baseline privacy assertions are recorded as RED then passing final tests as GREEN
+  - CI exact head green independent principal plus security challenger reviewed and no P1 or P2 open
+  - no product or current machine hot state changes and branch remains behind zero before merge
 required_tests:
   - pytest apps/api/tests/unit/core/ai/test_langsmith_client.py -q
-  - pytest apps/api/tests/unit/core/observability/test_langsmith_decorator.py -q
+  - pytest apps/api/tests/unit/core/ai/test_langsmith_client_lifecycle.py -q
+  - targeted synthetic bootstrap tracing regression test
   - python scripts/development/validate_c2pro_control.py
+  - applicable backend lint typecheck and security checks
   - canonical GitHub CI required gates
 evidence_required:
-  - historical_issue_849_closed
-  - open_issue_958
-  - exact_source_path_inventory
-  - no_network_canary_evidence
-  - independently_reviewed_scoped_pr
+  - issue_964_open
+  - inventory_pr_963_merged
+  - exact_base_sha
+  - RED_to_GREEN_synthetic_test_evidence
+  - no_remote_network_proof
+  - no_product_or_current_yaml_changes
+  - independent_principal_review
+  - independent_security_challenger_review
   - exact_head_ci
-review_policy: independent_principal
+review_policy: principal_and_challenger
 worker_selection:
   preferred: null
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
   selected: null
-timeout_resource_policy: bounded_inventory_and_synthetic_tests_only_no_remote_export_or_prod_mutation
+timeout_resource_policy: bounded_w311_a1_code_only_no_remote_or_prod_execution
