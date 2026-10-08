@@ -891,7 +891,7 @@ product_quality_hitl_2026_10_08:
     cadence:
       wip_limit: "1 active material integration slice per bounded execution workspace, up to 2 independent QA/spec slices in parallel"
       report_format: "work_id | acceptance delta | evidence | defect IDs | blocker | next eligible task; PR # only supporting"
-      ready_rule: "All dependencies accepted OR explicitly justified scoped parallel discovery; owner-authorized work envelope and test-first acceptance available."
+      ready_rule: "Dependencies accepted OR scoped discovery authorized; exact owner-approved Product issue/PR scope and test-first acceptance suffice in interim. Use validated .c2pro WORK envelope when Product schema supports it, but C2PRO-DEV-14 remains NON_BLOCKING and no fake hot-state activation."
       review_rule: "Reviewer worker differs from implementer; quota exhaustion means HOLD or approved alternate principal, not silent approval."
       release_rule: "No prod validation, synthetic B replay/approval, production DB role grants, deploy or TRUTH promotion from development-only authorization."
     active_defects:
