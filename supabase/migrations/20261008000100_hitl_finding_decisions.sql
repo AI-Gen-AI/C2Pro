@@ -18,12 +18,15 @@ CREATE TABLE public.hitl_finding_decisions (
     thread_id varchar(512) NOT NULL,
     checkpoint_id varchar(255) NOT NULL,
     finding_id varchar(64) NOT NULL,
+    source_item_id text NOT NULL,
+    source_ordinal integer NOT NULL,
     finding_kind varchar(16) NOT NULL,
     action varchar(32) NOT NULL,
     reviewer_id varchar(256) NOT NULL,
     created_by varchar(256) NOT NULL,
     reason text,
     proposed_text text,
+    evidence_refs jsonb NOT NULL DEFAULT '[]'::jsonb,
     expected_ledger_revision bigint NOT NULL,
     ledger_revision bigint NOT NULL,
     idempotency_key varchar(128) NOT NULL,
@@ -42,6 +45,7 @@ CREATE TABLE public.hitl_finding_decisions (
         AND fencing_token >= 0 AND artifact_hash ~ '^[0-9a-f]{64}$'
         AND finding_id ~ '^[0-9a-f]{64}$' AND length(btrim(thread_id)) > 0
         AND length(btrim(checkpoint_id)) > 0 AND length(btrim(idempotency_key)) >= 8),
+    CONSTRAINT ck_hitl_finding_source CHECK (length(btrim(source_item_id)) > 0 AND source_ordinal >= 0 AND jsonb_typeof(evidence_refs) = 'array'),
     CONSTRAINT ck_hitl_finding_kind CHECK (finding_kind IN ('RISK', 'CRITIQUE')),
     CONSTRAINT ck_hitl_finding_action CHECK (action IN ('CONFIRMED', 'CORRECTION_PROPOSED', 'DISMISSED', 'NEEDS_INFO')),
     CONSTRAINT ck_hitl_finding_human CHECK (length(btrim(reviewer_id)) > 0
