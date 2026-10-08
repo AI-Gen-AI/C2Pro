@@ -398,3 +398,35 @@ async def test_false_quotation_downgrades_llm_ok_to_retry() -> None:
     assert result.retry_count == 1
     assert "unverified source" in result.critique_notes.lower()
     assert result.observations[0].witness.char_start is None
+
+
+@pytest.mark.asyncio
+async def test_critique_quote_offsets_keep_original_source_leading_whitespace() -> None:
+    """Evidence spans must refer to the unchanged input, not stripped prompt text."""
+    from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus
+
+    quote = "Contractor's cost within fourteen (14) days"
+    source = (
+        "\n \tClause 5.2: Defective work shall be rectified at the "
+        + quote + " of written notice."
+    )
+    ai = _FakeAI(payload={
+        "status": "RETRY",
+        "notes": "Verify this duty",
+        "observations": [{"claim": "Cost borne by contractor", "source_quote": quote}],
+    })
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{"title": "Rectification", "confidence": 0.85}],
+            extracted_wbs=[],
+            doc_type="contract",
+            retry_count=0,
+            source_text=source,
+        )
+    )
+    witness = result.observations[0].witness
+    assert witness.status is QuoteWitnessStatus.LOCATED
+    assert witness.char_start == source.index(quote)
+    assert witness.char_end == witness.char_start + len(quote)
+    assert source[witness.char_start:witness.char_end] == quote
+    assert witness.claim_verified is False
