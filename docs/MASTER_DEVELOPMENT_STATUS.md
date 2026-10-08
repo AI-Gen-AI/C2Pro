@@ -7,7 +7,7 @@ This file is a compatibility pointer only. It must not become a second programme
 
 ## Compatibility reconciliation note — 2026-10-05
 
-Repository-quality execution is tracked under **C2PRO-DEV-15 / issue #849 — Repository Hygiene & Core AI Assurance** in the canonical `.c2pro` development control plane.
+Repository-quality execution history was completed under **C2PRO-DEV-15 / issue #849 (CLOSED)**. The **current open continuation is [issue #958](https://github.com/AI-Gen-AI/C2Pro/issues/958)**, linked to the canonical `.c2pro/control/work-queue.yaml` and its current work envelope. This file is a compatibility pointer, not an execution authority.
 
 This is a non-product quality lane: it does not alter Product Control lifecycle state or the active P0c qualification. Wave 1 covers reference-proven repository hygiene; later Core AI assurance removes coverage exclusions only alongside meaningful contract and failure-path tests.
 
