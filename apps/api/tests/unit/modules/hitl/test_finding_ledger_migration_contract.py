@@ -54,7 +54,7 @@ def test_database_binds_review_row_and_exact_revision_and_artifact() -> None:
     assert "lineage_generation" in ddl
     assert "lineage_fencing_token" in ddl
     assert "document_processing_operations" in ddl
-    assert "trust_state = 'proposed'" in ddl
+    assert "v_artifact.trust_state <> 'proposed'" in ddl
     assert "artifact_hash" in ddl
     assert "FOR UPDATE" in ddl  # serial review-row lock in insert guard
 
