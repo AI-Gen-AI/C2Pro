@@ -111,3 +111,20 @@ def test_merge_keeps_distinct_status_for_same_node():
         [_nr("a", NodeStatus.FAILED, err=err)],
     )
     assert {r.status for r in merged} == {NodeStatus.OK, NodeStatus.FAILED}
+
+
+
+def test_critique_retry_preserves_new_witness_result_and_dedups_replay() -> None:
+    """#937: ADR-013 reducer must not discard later N12 witnesses on a retry."""
+    first = NodeResult(
+        node="critique", status=NodeStatus.OK,
+        data={"retry_count": 1, "observations": [{"claim": "First unverified"}]},
+    )
+    second = NodeResult(
+        node="critique", status=NodeStatus.OK,
+        data={"retry_count": 2, "observations": [{"claim": "Second, revised"}]},
+    )
+    merged = merge_node_results([first], [first, second])
+    assert len(merged) == 2
+    assert merged[-1].data == second.data
+    assert merge_node_results(merged, list(merged)) == merged
