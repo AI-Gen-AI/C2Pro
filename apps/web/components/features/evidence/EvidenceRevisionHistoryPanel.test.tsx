@@ -67,7 +67,7 @@ describe("EvidenceRevisionHistoryPanel — read-only revision truth", () => {
     );
     expect(screen.getByText(/7 stored clauses in this selected revision/i)).toBeInTheDocument();
     expect(screen.getByText("Clause 1: obligation")).toBeInTheDocument();
-    expect(screen.getByText(/Read-only historical/proposed preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/Read-only historical\/proposed preview/i)).toBeInTheDocument();
   });
 
   it("never reports zero extraction when no trusted-current projection is resolvable", () => {
