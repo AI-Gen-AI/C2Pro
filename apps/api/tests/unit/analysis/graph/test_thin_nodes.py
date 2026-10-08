@@ -1400,3 +1400,47 @@ class TestExtractorAIToolDelegation:
         )
         result = await nodes.budget_parser_node(_make_state(document_text="budget"))
         assert len(result["bom_items"]) == 1
+
+
+
+@pytest.mark.asyncio
+async def test_n13_stale_active_source_review_mismatch_hard_stops_before_interrupt(
+    monkeypatch,
+) -> None:
+    """#937: never resume or ask approval against mismatched source witnesses."""
+    from src.analysis.adapters.graph import nodes
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        StaleCritiqueReviewEvidence,
+    )
+
+    class _StaleService:
+        async def route_for_review(self, **kwargs):
+            raise StaleCritiqueReviewEvidence("source evidence changed")
+
+    monkeypatch.setattr(
+        nodes,
+        "get_session_with_tenant",
+        lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        nodes,
+        "get_hitl_service_for_graph",
+        lambda *, session, tenant_id: _StaleService(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        nodes,
+        "interrupt",
+        lambda payload: (_ for _ in ()).throw(
+            AssertionError("stale review reached user interrupt")
+        ),
+    )
+    with pytest.raises(StaleCritiqueReviewEvidence, match="source evidence"):
+        await nodes.human_interrupt_node(
+            _make_state(
+                doc_type="contract",
+                human_approval_required=True,
+                critique_observations=[{"claim": "new", "claim_verified": False}],
+            )
+        )
