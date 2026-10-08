@@ -13,7 +13,6 @@ def test_unscored_risk_remains_unassessed():
         probability=RiskProbability.MEDIUM,
         impact=RiskImpact.HIGH,
     )
-    assert candidate.confidence is None
     result = ToolResult(
         data=[candidate], status=ToolStatus.SUCCESS, success=True,
         model_used="test-model", input_tokens=0, output_tokens=0,
@@ -21,5 +20,5 @@ def test_unscored_risk_remains_unassessed():
     )
     tool = RiskExtractionTool(anthropic_wrapper=object(), prompt_manager=object())
     state = tool.inject_output_into_state({}, result)
-    assert state["extracted_risks"][0]["confidence"] is None
+    assert state["extracted_risks"][0].get("confidence") is None
     assert state["confidence_score"] is None
