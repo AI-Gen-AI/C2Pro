@@ -108,14 +108,14 @@
 
 ### Task 3C: LangSmith Prompt Hub optional mirror / governance contract (no live sync)
 
-**Files:** Inspect `apps/api/src/core/ai/prompt_registry.py` and `apps/api/src/core/ai/sync_prompts.py`; draft adapter/eval test plan as a separate follow-up, not part of privacy hardening.
+**Files:** Inspect `apps/api/src/core/ai/prompt_registry.py`, `apps/api/src/core/ai/sync_prompts.py` **AND the independent executable `apps/api/scripts/migrate_prompts_to_langsmith_hub.py` (`migrate`, CLI `--dry-run`, `hub.push`)**; draft adapter/eval tests in a separate follow-up.
 
 **Interfaces:** LangSmith Prompt Hub may be a **versioned draft/mirror transport** after a dedicated review, while locally approved `PromptManager` manifest and owner/HITL promotion remain the authoritative production inputs. No live remote push/pull here.
 
-- [ ] Step 1: Record actual sync protocol methods and absent concrete CLI client; avoid marking remote integration implemented.
-- [ ] Step 2: Plan isolated, synthetic-template dry-run adapter conformance test, remote unavailability behavior, hash reconciliation and non-bypass for mutable aliases.
-- [ ] Step 3: Specify audit/eval/owner promotion gate before future remote publish and rollback. Never grant LangSmith authority to auto-promote prompts.
-- [ ] Step 4: Independent architecture/security review; schedule any concrete remote connector in a separate optional adapter PR only after policy gate.
+- [ ] Step 1: Record actual sync protocol methods and absent concrete CLI client; **also explicitly prove that the separate LangChain Hub publisher already exists and can push live by default**. Do not overclaim PromptRegistry-based remote integration.
+- [ ] Step 2: RED test on the **existing migration script** that invoking without explicit approved manifest/authorization never calls `hub.push` (not just dry-run mode); add checks for unreviewed extraction/router/critique prompt constants and mutable aliases. Plan synthetic-template dry-run adapter conformance, remote unavailability, hash reconciliation and provenance.
+- [ ] Step 3: Make that existing script **dry-run by default**, with separately gated explicit publish flag, immutable manifest containing prompt ID/version/hash, provenance, eval evidence and owner/HITL authorization; ensure all `hub.push` paths fail closed without it. Specify audit/eval/owner promotion gate before any future remote publish and rollback. Never grant LangSmith authority to auto-promote prompts.
+- [ ] Step 4: GREEN tests verify zero remote `hub.push` under default/no approval; independent architecture/security review; schedule any concrete remote connector in a separate optional adapter PR only after policy gate.
 
 ### Task 4: Immutable prompt version contract — design first
 
@@ -143,4 +143,4 @@
 
 ## Exit
 
-Short stage DONE only after Task 1–3 **plus Task 3A scheduled CI/manual script, Task 3B LangGraph auto-export, Task 3D native dataset-manager guard, and BOTH environment-template flags default-off** evidence, Task 3C optional Prompt Hub design and separate owner acceptance of Task 4's governance contract. Medium pilot and long AMF/runtime integration remain additional independently qualified steps, not automatically authorized or completed by creating this plan.
+Short stage DONE only after Task 1–3 **plus Task 3A scheduled CI/manual script, Task 3B LangGraph auto-export, Task 3D native dataset-manager guard, and BOTH environment-template flags default-off** evidence, **Task 3C existing `hub.push` publisher default-deny implementation** and separate owner acceptance of Task 4's governance contract. Medium pilot and long AMF/runtime integration remain additional independently qualified steps, not automatically authorized or completed by creating this plan.
