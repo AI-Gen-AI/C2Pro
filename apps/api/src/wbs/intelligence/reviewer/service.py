@@ -38,7 +38,7 @@ from typing import Any, Final
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.tenants.types import require_tenant_id
@@ -104,7 +104,7 @@ from src.wbs.intelligence.reviewer.pipeline import (
     UsageSummary,
     run_review_pipeline,
 )
-from src.wbs.intelligence.reviewer.privacy import transform_label
+from src.wbs.intelligence.reviewer.privacy import require_live_privacy, transform_label
 from src.wbs.intelligence.reviewer.prompts import template_refs
 from src.wbs.intelligence.validation.output_validator import ValidationReport
 from src.wbs.intelligence.validation.simulation import TargetSnapshot
@@ -166,12 +166,12 @@ def _visible_availability(inventory: EvidenceInventory, manifest: EvidenceManife
                                 has_trusted_scope_evidence=bool(seen & SCOPE_DOCUMENT_TYPES))
 
 
-def _unexpected_failure() -> PipelineResult:
+def _unexpected_failure(reason: str = "the review pipeline raised an unexpected error") -> PipelineResult:
     return PipelineResult(
         status=PipelineStatus.FAILED, outcome=RunOutcome.FAILED, qualification=None, findings=(), proposals=(),
         finding_refs={}, uncovered=(), report=ValidationReport(), calls=(),
         usage=UsageSummary(calls=0, retries=0, input_tokens=0, output_tokens=0, cost_micro_usd=0, elapsed_ms=0),
-        stop_reason=None, failure_reason="the review pipeline raised an unexpected error",
+        stop_reason=None, failure_reason=reason,
         availability=AvailabilityContext(has_trusted_contract=False, has_trusted_scope_evidence=False,
                                          ai_qualification_run=True, target_is_empty=False))
 
@@ -192,6 +192,8 @@ class WBSReviewerService:
         self.session = session
         self.model = model
         self.anonymize = anonymize or default_anonymizer
+        if not is_synthetic_adapter(model):  # live gate: never reached while live execution is blocked
+            require_live_privacy(self.anonymize)
         self.limits = limits or ReviewLimits()
         self.clock = clock
         self.store = WBSIntelligenceService(session)
@@ -306,12 +308,14 @@ class WBSReviewerService:
             return ReviewResult(run=opened.run, reused=True, manifest=manifest, pipeline=None)
         run_id = opened.run.id
         # The RUNNING run is committed BEFORE any model call: another session can see and cancel it, and
-        # no change-set lock or open transaction is held while the model works.
+        # no change-set lock or open transaction is held while the model works. Every new transaction
+        # binds the tenant again (the RLS second wall), because a commit discards SET LOCAL.
         await self.session.commit()
 
         async def is_cancelled() -> bool:
             if cancelled is not None and cancelled():
                 return True
+            await self._bind_tenant(tenant_id)
             status = await self.session.scalar(select(WBSIntelligenceRunORM.status).where(
                 WBSIntelligenceRunORM.id == run_id, WBSIntelligenceRunORM.tenant_id == tenant_id,
                 WBSIntelligenceRunORM.project_id == project_id).execution_options(populate_existing=True))
@@ -327,7 +331,27 @@ class WBSReviewerService:
         except Exception:  # noqa: BLE001 - persisted as FAILED with a static reason; its text is never logged
             logger.warning("wbs_review_pipeline_error", run_id=str(run_id))
             result = _unexpected_failure()
-        run = await self.store.run(run_id, project_id, tenant_id, lock=True)
+        try:
+            run = await self._finalize(scope, run_id, result, actor, actor_ref)
+        except Exception:  # noqa: BLE001 - a run that cannot be finalized is failed, never left RUNNING
+            logger.warning("wbs_review_finalize_error", run_id=str(run_id))
+            result = _unexpected_failure("the review could not be finalized")
+            run = await self._finalize(scope, run_id, result, actor, actor_ref)
+        logger.info("wbs_review_finished", run_id=str(run.id), status=run.status, outcome=run.outcome,
+                    calls=result.usage.calls, synthetic=synthetic)
+        return ReviewResult(run=run, reused=False, manifest=manifest, pipeline=result)
+
+    async def _bind_tenant(self, tenant_id: UUID) -> None:
+        await self.session.execute(text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                                   {"tenant": str(tenant_id)})
+
+    async def _finalize(self, scope: RunScope, run_id: UUID, result: PipelineResult, actor: Actor,
+                        actor_ref: str) -> WBSIntelligenceRunORM:
+        """Terminal state in a fresh transaction (any aborted one is rolled back first), keeping a state
+        another session already set (CANCELLED, or FAILED by an expired lease), plus the usage event."""
+        await self.session.rollback()
+        await self._bind_tenant(scope.tenant_id)
+        run = await self.store.run(run_id, scope.project_id, scope.tenant_id, lock=True)
         if run.status == RunStatus.RUNNING.value:
             if result.status is PipelineStatus.COMPLETED:
                 assert result.outcome is not None and result.qualification is not None
@@ -338,14 +362,11 @@ class WBSReviewerService:
                 run = await self.store.fail_run(run, reason=result.failure_reason or "the review failed",
                                                 actor=actor_ref)
             else:
-                run = await self.store.cancel_run(project_id=project_id, run_id=run_id, tenant_id=tenant_id,
-                                                  actor=actor)
-        # else: the run already ended elsewhere (cancelled by a human, or failed by an expired lease): kept
+                run = await self.store.cancel_run(project_id=scope.project_id, run_id=run_id,
+                                                  tenant_id=scope.tenant_id, actor=actor)
         await self._usage_event(run, result, actor_ref)
         await self.session.commit()
-        logger.info("wbs_review_finished", run_id=str(run.id), status=run.status, outcome=run.outcome,
-                    calls=result.usage.calls, synthetic=synthetic)
-        return ReviewResult(run=run, reused=False, manifest=manifest, pipeline=result)
+        return run
 
     async def _open(self, *, scope: RunScope, captured: _Target, manifest: EvidenceManifest, profiles: Any,
                     key: str, actor: Actor, actor_ref: str, nonce: str | None,
@@ -364,6 +385,7 @@ class WBSReviewerService:
             if stale.status == RunStatus.RUNNING.value and self._expired(stale):
                 await self.store.fail_run(stale, reason="the review's worker was lost (lease expired)", actor=actor_ref)
                 await self.session.commit()
+                await self._bind_tenant(scope.tenant_id)
         return opened
 
     def _expired(self, run: WBSIntelligenceRunORM) -> bool:

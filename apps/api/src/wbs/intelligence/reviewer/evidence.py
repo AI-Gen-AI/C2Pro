@@ -19,6 +19,7 @@ RLS; RLS is the second wall) and only selects the exact current revisions admitt
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
@@ -51,6 +52,8 @@ SCOPE_DOCUMENT_TYPES: Final = frozenset({"contract", "specification", "technical
 ADVISORY_DOCUMENT_TYPES: Final = frozenset({"schedule", "budget"})
 _CLASS_PRIORITY: Final = {InputClass.TRUSTED_PROJECT_EVIDENCE: 0, InputClass.ADVISORY_EVIDENCE: 1,
                           InputClass.PROPOSED_EVIDENCE: 2}
+# within a class, the contract first, then the other scope documents: they decide scope availability
+_TYPE_PRIORITY: Final = {"contract": 0, "specification": 1, "technical_spec": 1}
 _MAX_INT_DIGITS: Final = 18  # always within PostgreSQL bigint and Python's int-from-str limit
 
 
@@ -139,9 +142,14 @@ async def inventory_evidence(session: AsyncSession, *, scope: RunScope, request:
                              has_trusted_scope_evidence=bool(trusted_types & SCOPE_DOCUMENT_TYPES))
 
 
+def _priority(source: EvidenceSource) -> tuple[int, int]:
+    return _CLASS_PRIORITY[source.input_class], _TYPE_PRIORITY.get(source.document_type, 2)
+
+
 def prioritised(sources: Iterable[EvidenceSource]) -> list[EvidenceSource]:
-    """Deterministic retrieval priority: trusted, then advisory, then proposed evidence."""
-    return sorted(sources, key=lambda s: (_CLASS_PRIORITY[s.input_class], str(s.document_id)))
+    """Deterministic retrieval priority: trusted, then advisory, then proposed evidence; within a class the
+    contract, then other scope documents, then the rest."""
+    return sorted(sources, key=lambda s: (*_priority(s), str(s.document_id)))
 
 
 # ============================================================================ retrieval
@@ -284,9 +292,17 @@ def build_manifest(
     user_context: str | None = None,
 ) -> EvidenceManifest:
     by_pair = {(s.document_id, s.revision_id): s for s in inventory.sources}
-    ordered = sorted((c for c in chunks if (c.document_id, c.revision_id) in by_pair),
-                     key=lambda c: (_CLASS_PRIORITY[by_pair[(c.document_id, c.revision_id)].input_class],
-                                    str(c.document_id)))
+    admitted = [c for c in chunks if (c.document_id, c.revision_id) in by_pair]
+    turn: dict[UUID, int] = defaultdict(int)
+    ranks = []
+    for chunk in admitted:  # each document's n-th chunk shares rank n: documents take turns, none crowds out
+        ranks.append(turn[chunk.document_id])
+        turn[chunk.document_id] += 1
+    ordered = [chunk for _, chunk in sorted(
+        zip(ranks, admitted, strict=True),
+        key=lambda pair: (_CLASS_PRIORITY[by_pair[(pair[1].document_id, pair[1].revision_id)].input_class],
+                          pair[0], _priority(by_pair[(pair[1].document_id, pair[1].revision_id)])[1],
+                          str(pair[1].document_id)))]
     transform = transform_label(anonymize)
     tail: list[ManifestItem] = []  # the imported structure and the user context: always carried
     if import_structure is not None:

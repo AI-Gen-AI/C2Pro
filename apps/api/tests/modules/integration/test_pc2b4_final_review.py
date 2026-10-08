@@ -181,3 +181,38 @@ async def test_cr_f6_only_non_scope_trusted_excerpts_abstain_with_zero_calls(db:
                                               target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
     await db.commit()
     assert fake.calls == [] and result.run.outcome == RunOutcome.INSUFFICIENT_EVIDENCE.value
+
+
+# =========================================================================== re-verification of 16382f1d
+async def test_sec_n3_the_tenant_setting_is_restored_after_each_commit(
+        db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    s, change_set_id, ids = await _world(db)
+    seen: list[str | None] = []
+    original = WBSIntelligenceService.run
+
+    async def observing(self: WBSIntelligenceService, run_id: UUID, project_id: UUID, tenant_id: UUID, *,
+                        lock: bool = False) -> Any:
+        if lock:  # the finalization read, after the RUNNING run was committed
+            seen.append(await self.session.scalar(text("SELECT current_setting('app.current_tenant', true)")))
+        return await original(self, run_id, project_id, tenant_id, lock=lock)
+
+    monkeypatch.setattr(WBSIntelligenceService, "run", observing)
+    result = await _reviewer(db, _model(ids)).review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
+                                                     target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
+    assert result.run.status == "COMPLETED"
+    assert seen and all(value == str(s.tenant) for value in seen)  # the RLS second wall stays bound
+
+
+async def test_sec_n4_an_aborted_transaction_never_strands_the_run(
+        db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    s, change_set_id, ids = await _world(db)
+    reviewer = _reviewer(db, _model(ids))
+
+    async def aborting(*args: Any, **kwargs: Any) -> Any:
+        await reviewer.session.execute(text("SELECT 1 / 0"))  # the session is now in a failed transaction
+
+    monkeypatch.setattr(reviewer_service, "run_review_pipeline", aborting)
+    result = await reviewer.review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
+                                   target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
+    assert (result.run.status, result.run.outcome) == ("FAILED", "FAILED")
+    assert await _usage_events(db, result.run.id) == 1

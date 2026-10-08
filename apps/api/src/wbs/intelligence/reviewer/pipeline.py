@@ -277,7 +277,10 @@ class _Review:
         self.pre_rejected: set[str] = set()  # refs refused before validation (they count toward the ratio)
         self.map_items_total = 0
         self.shown = self._select_evidence()  # the excerpts every call carries (bounded per call)
-        trusted = [i for i in inputs.manifest.items if i.input_class is InputClass.TRUSTED_PROJECT_EVIDENCE]
+        # citations, availability and the deterministic evidence count use ONLY what the model was shown
+        self.visible = EvidenceManifest(tenant_id=inputs.manifest.tenant_id, project_id=inputs.manifest.project_id,
+                                        items=tuple(self.shown))
+        trusted = [i for i in self.shown if i.input_class is InputClass.TRUSTED_PROJECT_EVIDENCE]
         has_scope = inputs.has_trusted_scope_evidence and bool(trusted)
         self.ctx = AvailabilityContext(has_trusted_contract=inputs.has_trusted_contract and has_scope,
                                        has_trusted_scope_evidence=has_scope, ai_qualification_run=True,
@@ -344,7 +347,7 @@ class _Review:
     def _private(self, value: str | None, cap: int) -> str | None:
         return None if value is None else self.inputs.anonymize(value)[:cap]
 
-    def _outline(self, node_ids: Sequence[UUID]) -> str:
+    def _outline(self, node_ids: Sequence[UUID]) -> tuple[str, int]:
         """The target as the model sees it (a copy): ids verbatim, free text anonymised and capped, the
         whole outline bounded by the per-call outline budget (omitted nodes are counted, never hidden)."""
         by_id = {n.node_id: n for n in self.inputs.target.nodes}
@@ -360,11 +363,12 @@ class _Review:
                 break
             used += len(line) + 1
             lines.append(line)
-        if len(lines) < len(node_ids):
-            lines.append(json.dumps({"omitted_nodes": len(node_ids) - len(lines)}))
-        return "\n".join(lines)
+        omitted = len(node_ids) - len(lines)
+        if omitted:
+            lines.append(json.dumps({"omitted_nodes": omitted}))
+        return "\n".join(lines), omitted
 
-    def _summaries(self, merged: Sequence[Mapping[str, Any]]) -> str:
+    def _summaries(self, merged: Sequence[Mapping[str, Any]]) -> tuple[str, int]:
         budget, used, summary = self._chars(_SUMMARY_SHARE), 2, []
         for f in merged:
             entry = {"ref": f["ref"], "dimension": f["dimension"], "status": f["status"],
@@ -374,20 +378,22 @@ class _Review:
                 break
             used += size
             summary.append(entry)
-        if len(summary) < len(merged):
-            summary.append({"omitted_findings": len(merged) - len(summary)})
-        return json.dumps(summary, ensure_ascii=False)
+        omitted = len(merged) - len(summary)
+        if omitted:
+            summary.append({"omitted_findings": omitted})
+        return json.dumps(summary, ensure_ascii=False), omitted
 
     def _prompt(self, task: ReviewTask, cluster: Cluster | None, merged: Sequence[Mapping[str, Any]]
                 ) -> tuple[str, str]:
         blocks = self._evidence_blocks()
         if cluster is not None:
             blocks.append(UntrustedBlock(block_id=f"target_{cluster.cluster_id}", kind="wbs_target",
-                                         text=self._outline(cluster.node_ids)))
+                                         text=self._outline(cluster.node_ids)[0]))
         else:
             blocks.append(UntrustedBlock(block_id="target_all", kind="wbs_target",
-                                         text=self._outline([n.node_id for n in self.inputs.target.nodes])))
-            blocks.append(UntrustedBlock(block_id="map_results", kind="map_results", text=self._summaries(merged)))
+                                         text=self._outline([n.node_id for n in self.inputs.target.nodes])[0]))
+            blocks.append(UntrustedBlock(block_id="map_results", kind="map_results",
+                                         text=self._summaries(merged)[0]))
         isolated = self.isolation.isolate(blocks)
         return f"{template_text(task)}\n\n{isolated.system_preamble}", isolated.user_content
 
@@ -423,6 +429,10 @@ class _Review:
                                                   timeout=max(self.budget.remaining_ms, 1) / 1000)
             except TimeoutError:
                 self.budget.charge_failed(estimate)
+                if self.budget.remaining_ms > 0:  # the adapter's own timeout, not the run's: transient
+                    status = "TRANSIENT_ERROR"
+                    self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, status))
+                    continue
                 self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, "TIMEOUT"))
                 return None, StopReason.TIME_CAP, "TIMEOUT"
             except ModelTransientError:
@@ -573,17 +583,29 @@ class _Review:
             covered += 1
             findings += parsed[0]
             proposals += parsed[1]
+            if self._outline(cluster.node_ids)[1]:  # the model saw part of this cluster: never COMPLETE
+                uncovered.append(cluster.cluster_id)
         if covered == 0 and failed:
             return self._failed("no MAP call produced a valid response")
         findings, proposals = self._dedupe(findings, proposals)
 
         if await self._is_cancelled():
             return self._cancelled_result()
+        if len(self.shown) < len(self.inputs.manifest.items):
+            uncovered.append("evidence")  # some excerpts were never shown: no tree-level pass by absence
         claims: list[dict[str, Any]] | None = None
-        raw, stop, status = await self._call(ReviewTask.REDUCE, None, reserve=0, merged=findings)
+        omitted_nodes = self._outline([n.node_id for n in self.inputs.target.nodes])[1]
+        if omitted_nodes:  # a tree-level qualification over part of the tree would be a pass by absence
+            self.report.coerced.append(("reduce", f"{omitted_nodes} node(s) beyond one call's outline budget: "
+                                                  "tree-level qualification not run"))
+            raw, stop, status = None, None, "OUTLINE_TOO_LARGE"
+        else:
+            if self._summaries(findings)[1]:
+                uncovered.append("map_results")
+            raw, stop, status = await self._call(ReviewTask.REDUCE, None, reserve=0, merged=findings)
         if stop is StopReason.CANCELLED:
             return self._cancelled_result()
-        if stop is not None or status == "INPUT_TOO_LARGE":
+        if stop is not None or status in {"INPUT_TOO_LARGE", "OUTLINE_TOO_LARGE"}:
             self.stop = self.stop or stop
             uncovered.append("reduce")  # the tree-level cross-check did not run: partial, never failed
         elif raw is None:
@@ -600,7 +622,7 @@ class _Review:
         envelope = {"contract_version": PROPOSAL_CONTRACT_VERSION,
                     "outcome": "PARTIAL_PROPOSAL" if uncovered else "COMPLETE",
                     "qualification": claims, "findings": findings, "proposals": proposals, "uncovered": uncovered}
-        context = ValidationContext(scope=self.inputs.scope, target=self.inputs.target, manifest=self.inputs.manifest,
+        context = ValidationContext(scope=self.inputs.scope, target=self.inputs.target, manifest=self.visible,
                                     profiles=self.inputs.profiles, availability=self.ctx)
         validated = validate_model_output(json.dumps(envelope), context, mint=self.mint)
         self.report.rejected += validated.report.rejected

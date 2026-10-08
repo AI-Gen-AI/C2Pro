@@ -75,14 +75,17 @@ def _big_manifest(scope: RunScope, count: int = 40, chars: int = 2000) -> Any:
 
 # ============================================================================ CR-F1 / SEC-P2-4
 @pytest.mark.parametrize("nodes", [100, 300, 600])
-async def test_f1_default_limits_review_a_large_tree_and_reduce_always_runs(nodes: int) -> None:
+async def test_f1_default_limits_review_a_large_tree_and_never_fail_on_size(nodes: int) -> None:
     base = _inputs()
     target = _wide_target(base.scope.project_id, branches=nodes // 2, per_branch=1)
     fake = FakeReviewerModelAdapter(responder=_echo)
     result = await run_review_pipeline(_inputs(target=target, manifest=_big_manifest(base.scope)), fake)
     assert result.status is PipelineStatus.COMPLETED, (result.failure_reason, [r.status for r in result.calls])
-    assert ReviewTask.REDUCE in [c.task for c in fake.calls]  # the tree-level qualification ran
     assert all(r.status != "INPUT_TOO_LARGE" for r in result.calls)
+    if nodes <= 100:  # the whole tree fits one REDUCE outline: the tree-level qualification runs
+        assert ReviewTask.REDUCE in [c.task for c in fake.calls]
+    else:  # it does not: the run is PARTIAL and the tree-level qualification is honestly not run (SEC-N1)
+        assert ReviewTask.REDUCE not in [c.task for c in fake.calls] and "reduce" in result.uncovered
     limit = ReviewLimits().max_input_tokens_per_call
     assert all(estimate_tokens(c.system, c.content) <= limit for c in fake.calls)
 
@@ -296,3 +299,88 @@ async def test_sec_p3_a_free_text_decomposition_kind_passes_the_privacy_boundary
     fake = FakeReviewerModelAdapter(responder=_echo)
     await run_review_pipeline(_inputs(target=TargetSnapshot(project_id=base.scope.project_id, nodes=(node,))), fake)
     assert fake.calls and all("jane.doe@example.com" not in c.content for c in fake.calls)
+
+
+# ============================================================================ re-verification of 16382f1d
+# SEC-N1: a cut outline, summary list or evidence set never yields COMPLETE or tree-level PASS by absence.
+def _supporting_reduce(request: ModelCallRequest) -> str:
+    if request.task is ReviewTask.MAP:
+        return _env()
+    excerpt = request.excerpt_ids[0]
+    return _env(qualification=[{"dimension": "SCOPE_COVERAGE", "status": "SUPPORTED", "summary": "Covered",
+                                "evidence": [{"excerpt_id": excerpt, "basis": "DIRECT",
+                                              "quote": "trenching, ducts, cable pulling"}]}])
+
+
+async def test_sec_n1_a_tree_too_large_for_one_reduce_outline_is_partial_not_a_pass() -> None:
+    base = _inputs()
+    target = _wide_target(base.scope.project_id, branches=300, per_branch=1)
+    fake = FakeReviewerModelAdapter(responder=_supporting_reduce)
+    result = await run_review_pipeline(_inputs(target=target, manifest=_big_manifest(base.scope, count=4)), fake)
+    assert result.status is PipelineStatus.COMPLETED, result.failure_reason
+    assert result.outcome is not None and result.outcome.value == "PARTIAL_PROPOSAL"
+    assert "reduce" in result.uncovered
+    assert _dims(result)[_scope_coverage()].status is not QualificationStatus.SUPPORTED
+
+
+async def test_sec_n1_a_map_cluster_whose_outline_is_cut_is_reported_uncovered() -> None:
+    base = _inputs()
+    nodes = tuple(SnapshotNode(node_id=uuid4(), parent_id=None, sort_order=i + 1, code=f"{i + 1:03d}" + "x" * 80,
+                               name="Long work package name " * 12, decomposition_kind="core:package",
+                               control_level="work_package", dictionary=None) for i in range(60))
+    target = TargetSnapshot(project_id=base.scope.project_id, nodes=nodes)
+    fake = FakeReviewerModelAdapter(responder=_echo)
+    result = await run_review_pipeline(_inputs(target=target, manifest=_big_manifest(base.scope, count=4)), fake)
+    assert result.status is PipelineStatus.COMPLETED, result.failure_reason
+    assert result.outcome is not None and result.outcome.value == "PARTIAL_PROPOSAL"
+    assert "c01" in result.uncovered
+
+
+# SEC-N2: the Reviewer's floor redacts common formats and leaves dates, codes and amounts alone.
+@pytest.mark.parametrize("text, secret", [
+    ("Llame al 612345678.", "612345678"),
+    ("Tel: +34 612 345 678.", "612 345 678"),
+    ("Office +44 20 7946 0958.", "7946 0958"),
+    ("DNI 12.345.678-Z", "345.678"),
+    ("iban es91 2100 0418 4502 0005 1332", "0005 1332"),
+    ("IBAN ES91-2100-0418-4502-0005-1332", "0005-1332"),
+])
+async def test_sec_n2_the_privacy_floor_redacts_common_formats(text: str, secret: str) -> None:
+    assert secret not in default_anonymizer(text)
+
+
+@pytest.mark.parametrize("text", ["fecha 20240115 y plazo", "WP01 0001 0002 0003", "Section 4.2.1, 2026-10-08"])
+async def test_sec_n2_the_privacy_floor_keeps_dates_codes_and_references(text: str) -> None:
+    from src.wbs.intelligence.reviewer.privacy import _floor
+
+    assert _floor(text) == text
+
+
+# SEC P1-2 live gate: a live adapter needs the NER tier and the default boundary.
+async def test_sec_p1_2_live_execution_requires_the_full_privacy_tier(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.wbs.intelligence.reviewer import privacy
+
+    with pytest.raises(privacy.LivePrivacyTierMissing):
+        privacy.require_live_privacy(lambda s: s)
+    monkeypatch.setattr(privacy, "ner_tier_loaded", lambda: False)
+    with pytest.raises(privacy.LivePrivacyTierMissing):
+        privacy.require_live_privacy(privacy.default_anonymizer)
+    monkeypatch.setattr(privacy, "ner_tier_loaded", lambda: True)
+    privacy.require_live_privacy(privacy.default_anonymizer)
+
+
+# CR-N2: the evidence budget never lets other trusted documents crowd out the contract.
+async def test_cr_n2_the_contract_is_never_crowded_out_by_document_order() -> None:
+    specs = [EvidenceSource(document_id=UUID(int=i), revision_id=uuid4(), blob_hash="a" * 64,
+                            document_type="technical_spec", input_class=InputClass.TRUSTED_PROJECT_EVIDENCE)
+             for i in (1, 2, 3)]
+    contract = EvidenceSource(document_id=UUID(int=9), revision_id=uuid4(), blob_hash="b" * 64,
+                              document_type="contract", input_class=InputClass.TRUSTED_PROJECT_EVIDENCE)
+    text = (PARAGRAPH * 30)[:2000]
+    chunks = [ScopedChunk(chunk_id=uuid4(), document_id=s.document_id, revision_id=s.revision_id, content=text,
+                          page=None, char_start=None, char_end=None) for s in (*specs, contract) for _ in range(8)]
+    inventory = EvidenceInventory(sources=(*specs, contract), has_trusted_contract=True, has_trusted_scope_evidence=True)
+    manifest = build_manifest(scope=RunScope(tenant_id=uuid4(), project_id=uuid4()), inventory=inventory,
+                              chunks=chunks, anonymize=lambda s: s, limits=ReviewLimits())
+    sources = {i.canonical_source.document_id for i in manifest.items if i.canonical_source is not None}
+    assert contract.document_id in sources and len(sources) == 4  # every trusted document is represented
