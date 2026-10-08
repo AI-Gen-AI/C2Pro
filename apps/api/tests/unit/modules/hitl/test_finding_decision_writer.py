@@ -2,11 +2,9 @@
 
 from uuid import uuid4
 
-from src.analysis.domain.trust import artifact_digest
-from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
-
 import pytest
 
+from src.analysis.domain.trust import artifact_digest
 from src.modules.hitl.adapters.persistence.finding_decision_writer import (
     FindingDecisionIdempotencyConflict,
     FindingDecisionIdentityError,
@@ -20,6 +18,7 @@ from src.modules.hitl.domain.finding_decision import (
     FindingDecisionKind,
     stable_finding_id,
 )
+from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
 
 
 _RISK = {
