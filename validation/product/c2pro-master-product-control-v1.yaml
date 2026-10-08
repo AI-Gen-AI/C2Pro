@@ -973,7 +973,7 @@ product_quality_hitl_2026_10_08:
         parent_issue: 938
         title_key: CONFIDENCE_PROVENANCE_AND_CAPACITY
         priority: P0
-        role: specialist
+        role: orchestrator
         size: M
         status: BLOCKED
         depends_on: [PQ-HITL-09.1]
@@ -1023,7 +1023,7 @@ product_quality_hitl_2026_10_08:
         parent_issue: 940
         title_key: NONBYPASS_LEDGER_DB_PRINCIPAL
         priority: P0
-        role: security
+        role: implementation_lead
         size: M
         status: IN_REVIEW_UNMERGED
         depends_on: [PQ-HITL-04.1]
