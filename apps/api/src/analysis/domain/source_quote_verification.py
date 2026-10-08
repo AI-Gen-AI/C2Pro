@@ -22,6 +22,7 @@ class QuoteCheck:
     end_offset: int | None = None
     page: int | None = None
     absence_proven: bool = False
+    source_complete: bool = False
 
 
 def verify_source_quote(
@@ -38,18 +39,31 @@ def verify_source_quote(
     UNVERIFIED and never CONTRADICTED. Repeated quotes require source locator.
     """
     if source_text is None:
-        return QuoteCheck(status="SOURCE_UNAVAILABLE", revision_id=source_revision_id)
+        return QuoteCheck(
+            status="SOURCE_UNAVAILABLE", revision_id=source_revision_id,
+            source_complete=False,
+        )
     quote = quoted_text.strip()
     if not quote:
-        return QuoteCheck(status="UNVERIFIED", revision_id=source_revision_id)
+        return QuoteCheck(
+            status="UNVERIFIED", revision_id=source_revision_id,
+            source_complete=source_complete,
+        )
     start = source_text.find(quote)
     if start < 0:
-        return QuoteCheck(status="UNVERIFIED", revision_id=source_revision_id)
+        return QuoteCheck(
+            status="UNVERIFIED", revision_id=source_revision_id,
+            source_complete=source_complete,
+        )
     if source_text.find(quote, start + 1) >= 0:
-        return QuoteCheck(status="AMBIGUOUS", revision_id=source_revision_id)
+        return QuoteCheck(
+            status="AMBIGUOUS", revision_id=source_revision_id,
+            source_complete=source_complete,
+        )
     return QuoteCheck(
         status="VERIFIED_EXACT",
         revision_id=source_revision_id,
         start_offset=start,
         end_offset=start + len(quote),
+        source_complete=source_complete,
     )
