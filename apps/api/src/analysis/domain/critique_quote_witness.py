@@ -13,6 +13,7 @@ from enum import StrEnum
 
 class QuoteWitnessStatus(StrEnum):
     LOCATED = "LOCATED"
+    AMBIGUOUS = "AMBIGUOUS"
     UNRESOLVED = "UNRESOLVED"
     SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
     SOURCE_PARTIAL_UNRESOLVED = "SOURCE_PARTIAL_UNRESOLVED"
@@ -59,7 +60,8 @@ def verify_source_quote(
     # Allow PDF line wrapping while preserving every literal source character.
     # All content tokens remain literal; user-controlled quote is NEVER regex.
     pattern = r"\s+".join(re.escape(token) for token in tokens)
-    match = re.search(pattern, source_text)
+    occurrences = re.finditer(pattern, source_text)
+    match = next(occurrences, None)
     if match is None:
         return QuoteWitness(
             status=(
@@ -68,6 +70,10 @@ def verify_source_quote(
                 else QuoteWitnessStatus.SOURCE_PARTIAL_UNRESOLVED
             )
         )
+    if next(occurrences, None) is not None:
+        # Without a trusted clause/page selector, identical source snippets
+        # have no unique provenance. Never invent one by taking first.
+        return QuoteWitness(status=QuoteWitnessStatus.AMBIGUOUS)
     return QuoteWitness(
         status=QuoteWitnessStatus.LOCATED,
         char_start=match.start(),
