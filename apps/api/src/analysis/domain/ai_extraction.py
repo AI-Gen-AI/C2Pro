@@ -17,6 +17,7 @@ from typing import Any, Protocol
 
 from src.analysis.domain.critique_quote_witness import (
     CritiqueObservation,
+    QuoteWitness,
     QuoteWitnessStatus,
     verify_source_quote,
 )
@@ -135,19 +136,32 @@ class CritiqueExtractionService:
                             source_quote = raw.get("source_quote")
                             if not isinstance(claim, str) or not claim.strip():
                                 continue
-                            if not isinstance(source_quote, str) or not source_quote.strip():
-                                continue
+                            # Never silently discard a structured claim
+                            # merely because the model omitted a usable quote.
+                            # It remains an explicit, unresolved observation.
+                            source_quote = (
+                                source_quote.strip()
+                                if isinstance(source_quote, str)
+                                else ""
+                            )
                             claim = claim.strip()[:1000]
-                            source_quote = source_quote.strip()[:1000]
+                            # Verifying only a truncated prefix could falsely
+                            # certify an invented remainder. Oversize citations
+                            # remain visible but are always unverified.
+                            witness = (
+                                QuoteWitness(status=QuoteWitnessStatus.UNRESOLVED)
+                                if len(source_quote) > 1000
+                                else verify_source_quote(
+                                    source[:_CRITIQUE_MAX_SOURCE_CHARS] if source.strip() else None,
+                                    source_quote,
+                                    source_complete=bool(source.strip()) and not clipped,
+                                )
+                            )
                             observations.append(
                                 CritiqueObservation(
                                     claim=claim,
                                     source_quote=source_quote,
-                                    witness=verify_source_quote(
-                                        source[:_CRITIQUE_MAX_SOURCE_CHARS] if source.strip() else None,
-                                        source_quote,
-                                        source_complete=bool(source.strip()) and not clipped,
-                                    ),
+                                    witness=witness,
                                 )
                             )
                     if any(
