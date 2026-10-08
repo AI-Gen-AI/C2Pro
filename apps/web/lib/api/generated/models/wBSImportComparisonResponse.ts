@@ -47,9 +47,11 @@ export interface WBSImportComparisonResponse {
   change_set_id: string;
   change_set_revision: number;
   snapshot_digest: string;
+  compared_fields?: string[];
   imported: WBSImportComparisonResponseImportedItem[];
   candidate: WBSImportComparisonResponseCandidateItem[];
   proposed: WBSImportProposed;
   rows: WBSImportComparisonRow[];
   added_node_ids: string[];
+  limitations?: string[];
 }

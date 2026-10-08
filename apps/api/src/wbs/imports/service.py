@@ -13,8 +13,10 @@ candidate -> (deterministic qualification, human review/edit) -> submit -> human
   governed ADD_NODE commands (server-minted ids, provenance outside every digest), all or nothing.
   v1: an import establishes Baseline #1 -- with an approved baseline it is refused.
 * ``comparison`` is a pure read: IMPORTED (the frozen snapshot) vs CANDIDATE (the current human-edited
-  DRAFT); PROPOSED is NOT_AVAILABLE unless an intelligence run with proposals is named, in which case
-  it is DERIVED through the PC-2b.2 preview (never persisted).
+  DRAFT), matched by import ``source_ref`` and compared on every governed field (``COMPARED_FIELDS``),
+  with sibling-relative order and explicit NOT_COMPARABLE limitations; PROPOSED is NOT_AVAILABLE
+  unless an intelligence run with proposals is named, in which case it is DERIVED through the PC-2b.2
+  preview (never persisted).
 
 No AI, no retrieval, no model call.
 """
@@ -44,7 +46,7 @@ from src.wbs.adapters.persistence.governance_models import WBSChangeSetNodeORM, 
 from src.wbs.adapters.persistence.governance_repository import Actor, WBSGovernanceRepository
 from src.wbs.adapters.persistence.import_models import WBSImportSourceORM
 from src.wbs.application.governed_change_service import AddNode, NodeSpec, WBSGovernedChangeService
-from src.wbs.domain.digest import canonical_json
+from src.wbs.domain.digest import canonical_json, normalize_dictionary
 from src.wbs.domain.governance import AuthorityState, ChangeSetOrigin, EntryMode, can_author
 from src.wbs.imports.config import ImportConfigError
 from src.wbs.imports.contracts import (
@@ -56,6 +58,7 @@ from src.wbs.imports.contracts import (
 from src.wbs.imports.parser import parse_source
 
 IMPORT_PROVENANCE_ORIGIN = "import"
+COMPARED_FIELDS = ("name", "code", "control_level", "decomposition_kind", "dictionary", "parent", "sibling_order")
 
 
 # ============================================================================ errors
@@ -150,7 +153,11 @@ class WBSImportService:
 
     async def _read_revision_bytes(self, revision: DocumentRevisionORM) -> bytes:
         path: Path = await self.storage.download_object(revision.blob_key)
-        data = path.read_bytes()
+        try:
+            data = path.read_bytes()
+        finally:
+            if getattr(self.storage, "download_object_is_temporary", False):  # never the stored object
+                path.unlink(missing_ok=True)
         if hashlib.sha256(data).hexdigest() != revision.blob_hash:
             raise WBSImportIntegrityError("the stored bytes do not match the immutable revision",
                                           code="WBS_IMPORT_BLOB_MISMATCH", revision_id=str(revision.revision_id))
@@ -319,42 +326,39 @@ class WBSImportService:
         nodes = (await self.session.execute(select(WBSChangeSetNodeORM).where(
             WBSChangeSetNodeORM.change_set_id == change_set.id))).scalars().all()
         imported_rows = list(source.snapshot.get("rows", []))
-        by_ref: dict[str, WBSChangeSetNodeORM] = {}
-        for node in nodes:
+        known_refs = {row["source_ref"] for row in imported_rows}
+        claims: dict[str, list[WBSChangeSetNodeORM]] = {}
+        for node in nodes:  # a claim on a ref the snapshot does not have stays visible as ADDED
             origin = (node.provenance or {}).get("import") or {}
-            if origin.get("import_source_id") == str(source.id) and origin.get("source_ref"):
-                by_ref[origin["source_ref"]] = node
-        rows: list[dict[str, Any]] = []
-        for row in imported_rows:
-            matched = by_ref.get(row["source_ref"])
-            if matched is None:
-                rows.append({"source_ref": row["source_ref"], "status": "REMOVED", "node_id": None, "changes": []})
-                continue
-            parent_ref = row.get("parent_source_ref")
-            expected_parent = None if parent_ref is None else getattr(by_ref.get(parent_ref), "node_id", "missing")
-            changes = [name for name, differs in (
-                ("name", matched.name != row["name"]), ("code", matched.code != row.get("normalized_code")),
-                ("parent", matched.parent_id != expected_parent)) if differs]
-            rows.append({"source_ref": row["source_ref"], "status": "CHANGED" if changes else "UNCHANGED",
-                         "node_id": str(matched.node_id), "changes": changes})
-        imported_node_ids = {node.node_id for node in by_ref.values()}
+            if origin.get("import_source_id") == str(source.id) and origin.get("source_ref") in known_refs:
+                claims.setdefault(origin["source_ref"], []).append(node)
+        rows = _compare_rows(imported_rows, claims)
+        imported_node_ids = {node.node_id for claimed in claims.values() for node in claimed}
         candidate = [
             {"node_id": str(n.node_id), "parent_id": None if n.parent_id is None else str(n.parent_id),
-             "sort_order": n.sort_order, "code": n.code, "name": n.name,
+             "sort_order": n.sort_order, "code": n.code, "name": n.name, "control_level": n.control_level,
+             "decomposition_kind": n.decomposition_kind, "dictionary": _dictionary_view(n.dictionary),
+             "origin": "IMPORTED" if n.node_id in imported_node_ids else "ADDED",
              "source_ref": ((n.provenance or {}).get("import") or {}).get("source_ref")
              if n.node_id in imported_node_ids else None}
             for n in sorted(nodes, key=lambda n: (str(n.parent_id or ""), n.sort_order, str(n.node_id)))
         ]
+        positions = _imported_sibling_positions(imported_rows)
         return {
             "import_id": str(source.id), "change_set_id": str(change_set.id),
             "change_set_revision": change_set.revision, "snapshot_digest": source.snapshot_digest,
+            "compared_fields": list(COMPARED_FIELDS),
             "imported": [{"source_ref": r["source_ref"], "parent_source_ref": r.get("parent_source_ref"),
-                          "code": r.get("normalized_code"), "raw_code": r.get("raw_code"), "name": r["name"]}
+                          "code": r.get("normalized_code"), "raw_code": r.get("raw_code"), "name": r["name"],
+                          "control_level": _imported_control_level(r), "decomposition_kind": r.get("decomposition_kind"),
+                          "dictionary": _dictionary_view(r.get("dictionary")),
+                          "sibling_position": positions[r["source_ref"]]}
                          for r in imported_rows],
             "candidate": candidate,
             "proposed": await self._proposed(project_id, tenant_id, change_set.id, intelligence_run_id),
             "rows": rows,
             "added_node_ids": sorted(str(n.node_id) for n in nodes if n.node_id not in imported_node_ids),
+            "limitations": sorted({limitation for row in rows for limitation in row["limitations"]}),
         }
 
     async def _proposed(self, project_id: UUID, tenant_id: UUID, change_set_id: UUID,
@@ -384,6 +388,107 @@ class WBSImportService:
         return {"status": "DERIVED", "reason": None, "nodes": [
             {"key": n.key, "parent": n.parent, "sort_order": n.sort_order, "code": n.code, "name": n.name}
             for n in preview.resulting_nodes]}
+
+
+# ---------------------------------------------------------------------------- IMPORTED vs CANDIDATE
+def _imported_control_level(row: Mapping[str, Any]) -> str:
+    return row.get("control_level") or "none"  # what create_candidate materialises
+
+
+def _canonical_dictionary(value: Mapping[str, Any] | None) -> bytes | None:
+    """The tree digest's dictionary semantics (``wbs-dictionary/v1``, null lists == []); None if unreadable."""
+    try:
+        return canonical_json(normalize_dictionary(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _dictionary_view(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    try:
+        return normalize_dictionary(value)
+    except (TypeError, ValueError):
+        return None if value is None else dict(value)
+
+
+def _siblings(rows: Sequence[Mapping[str, Any]]) -> dict[str | None, list[str]]:
+    """Imported children per imported parent, in source order."""
+    groups: dict[str | None, list[str]] = {}
+    for row in sorted(rows, key=lambda r: int(r["source_ordinal"])):
+        groups.setdefault(row.get("parent_source_ref"), []).append(row["source_ref"])
+    return groups
+
+
+def _imported_sibling_positions(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    return {ref: position for refs in _siblings(rows).values() for position, ref in enumerate(refs, start=1)}
+
+
+def _compare_rows(imported_rows: Sequence[Mapping[str, Any]],
+                  claims: Mapping[str, Sequence[WBSChangeSetNodeORM]]) -> list[dict[str, Any]]:
+    """Classify every imported row against the candidate node that carries its ``source_ref``.
+
+    Correspondence is the import ``source_ref`` recorded in the node's import provenance -- never the
+    code or the name. Every governed field is compared (name, code, control_level,
+    decomposition_kind, the canonical dictionary, parent) plus SIBLING-RELATIVE order: the order of
+    the imported siblings that are still under the same parent, so an inserted, removed or moved
+    sibling never fakes a reorder. A row whose correspondence or values cannot be read reliably is
+    NOT_COMPARABLE with an explicit limitation -- never UNCHANGED.
+    """
+    by_ref = {ref: claimed[0] for ref, claimed in claims.items() if len(claimed) == 1}
+    ambiguous = {ref for ref, claimed in claims.items() if len(claimed) > 1}
+    positions = _imported_sibling_positions(imported_rows)
+    results: dict[str, dict[str, Any]] = {}
+    same_parent: set[str] = set()
+    for row in imported_rows:
+        ref = row["source_ref"]
+        result: dict[str, Any] = {"source_ref": ref, "node_id": None, "changes": [], "limitations": [],
+                                  "imported_sibling_position": positions[ref], "candidate_sibling_position": None}
+        results[ref] = result
+        if ref in ambiguous:
+            result.update(status="NOT_COMPARABLE", limitations=["DUPLICATE_SOURCE_REF"])
+            continue
+        matched = by_ref.get(ref)
+        if matched is None:
+            result["status"] = "REMOVED"
+            continue
+        result.update(node_id=str(matched.node_id), candidate_sibling_position=matched.sort_order)
+        changes: list[str] = []
+        limitations: list[str] = []
+        if matched.name != row["name"]:
+            changes.append("name")
+        if matched.code != row.get("normalized_code"):
+            changes.append("code")
+        if matched.control_level != _imported_control_level(row):
+            changes.append("control_level")
+        if matched.decomposition_kind != row.get("decomposition_kind"):
+            changes.append("decomposition_kind")
+        imported_dictionary, candidate_dictionary = (_canonical_dictionary(row.get("dictionary")),
+                                                     _canonical_dictionary(matched.dictionary))
+        if imported_dictionary is None or candidate_dictionary is None:
+            limitations.append("DICTIONARY_NOT_COMPARABLE")
+        elif imported_dictionary != candidate_dictionary:
+            changes.append("dictionary")
+        parent_ref = row.get("parent_source_ref")
+        if parent_ref in ambiguous:
+            limitations.append("PARENT_NOT_COMPARABLE")
+        else:
+            expected_parent = None if parent_ref is None else getattr(by_ref.get(parent_ref), "node_id", "missing")
+            if matched.parent_id != expected_parent:
+                changes.append("parent")
+            else:
+                same_parent.add(ref)
+        result.update(changes=changes, limitations=limitations)
+    for refs in _siblings(imported_rows).values():
+        comparable = [ref for ref in refs if ref in same_parent]
+        candidate_order = sorted(comparable, key=lambda ref: (by_ref[ref].sort_order, str(by_ref[ref].node_id)))
+        for imported_ref, candidate_ref in zip(comparable, candidate_order, strict=True):
+            if imported_ref != candidate_ref:
+                results[imported_ref]["changes"].append("sibling_order")
+    for result in results.values():
+        if "status" in result:
+            continue
+        result["status"] = ("NOT_COMPARABLE" if result["limitations"]
+                            else "CHANGED" if result["changes"] else "UNCHANGED")
+    return [results[row["source_ref"]] for row in imported_rows]
 
 
 def _topological(rows: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:

@@ -12579,6 +12579,11 @@ components:
         snapshot_digest:
           type: string
           title: Snapshot Digest
+        compared_fields:
+          items:
+            type: string
+          type: array
+          title: Compared Fields
         imported:
           items:
             additionalProperties: true
@@ -12604,6 +12609,11 @@ components:
             format: uuid
           type: array
           title: Added Node Ids
+        limitations:
+          items:
+            type: string
+          type: array
+          title: Limitations
       type: object
       required:
       - import_id
@@ -12624,7 +12634,7 @@ components:
         status:
           type: string
           title: Status
-          description: UNCHANGED | CHANGED | REMOVED
+          description: UNCHANGED | CHANGED | REMOVED | NOT_COMPARABLE (see limitations)
         node_id:
           anyOf:
           - type: string
@@ -12636,6 +12646,25 @@ components:
             type: string
           type: array
           title: Changes
+          description: Subset of compared_fields that differ
+        limitations:
+          items:
+            type: string
+          type: array
+          title: Limitations
+          description: Why the row could not be compared reliably (never UNCHANGED)
+        imported_sibling_position:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Imported Sibling Position
+          description: 1-based, among the imported siblings
+        candidate_sibling_position:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Candidate Sibling Position
+          description: 1-based, under the candidate parent
       type: object
       required:
       - source_ref

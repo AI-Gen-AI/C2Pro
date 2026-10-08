@@ -103,9 +103,13 @@ class WBSImportProposed(BaseModel):
 
 class WBSImportComparisonRow(BaseModel):
     source_ref: str
-    status: str = Field(description="UNCHANGED | CHANGED | REMOVED")
+    status: str = Field(description="UNCHANGED | CHANGED | REMOVED | NOT_COMPARABLE (see limitations)")
     node_id: UUID | None = None
-    changes: list[str] = Field(default_factory=list)
+    changes: list[str] = Field(default_factory=list, description="Subset of compared_fields that differ")
+    limitations: list[str] = Field(default_factory=list,
+                                   description="Why the row could not be compared reliably (never UNCHANGED)")
+    imported_sibling_position: int | None = Field(None, description="1-based, among the imported siblings")
+    candidate_sibling_position: int | None = Field(None, description="1-based, under the candidate parent")
 
 
 class WBSImportComparisonResponse(BaseModel):
@@ -113,11 +117,13 @@ class WBSImportComparisonResponse(BaseModel):
     change_set_id: UUID
     change_set_revision: int
     snapshot_digest: str
+    compared_fields: list[str] = Field(default_factory=list)
     imported: list[dict[str, Any]]
     candidate: list[dict[str, Any]]
     proposed: WBSImportProposed
     rows: list[WBSImportComparisonRow]
     added_node_ids: list[UUID]
+    limitations: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------- plumbing

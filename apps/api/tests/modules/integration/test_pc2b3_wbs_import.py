@@ -237,6 +237,57 @@ async def test_11_blob_revision_mismatch_is_rejected(db: AsyncSession) -> None:
     await db.rollback()
 
 
+class _TemporaryCopyStore(_Store):
+    """Like R2: every download is a fresh temporary copy that the caller owns."""
+
+    download_object_is_temporary = True
+
+    def __init__(self, blobs: dict[str, bytes]) -> None:
+        super().__init__()
+        self.blobs = blobs
+        self.handed_out: list[Path] = []
+
+    async def download_object(self, key: str) -> Path:
+        path = self.root / f"{uuid4().hex}.tmp"
+        path.write_bytes(self.blobs[key])
+        self.handed_out.append(path)
+        return path
+
+
+async def test_11b_temporary_downloads_are_removed_and_persisted_sources_never_are(db: AsyncSession) -> None:
+    from src.documents.adapters.storage.local_file_storage_service import LocalFileStorageService
+    from src.documents.adapters.storage.r2_storage_service import R2StorageService
+    from src.documents.ports.storage_service import IStorageService
+
+    assert R2StorageService.download_object_is_temporary is True  # a NamedTemporaryFile per download
+    assert LocalFileStorageService.download_object_is_temporary is False  # the stored object itself
+    assert IStorageService.download_object_is_temporary is False  # unknown adapters: never delete
+    s = await _scope(db)
+    document_id, revision_id = await _wbs_document(db, s, PLANT_CSV)
+    copies = _TemporaryCopyStore(dict(STORE.blobs))
+    await WBSImportService(db, storage=copies).create_import(  # type: ignore[arg-type]
+        project_id=s.project, tenant_id=s.tenant, actor=s.author, document_id=document_id)
+    await WBSImportService(db, storage=copies).create_import(  # type: ignore[arg-type]
+        project_id=s.project, tenant_id=s.tenant, actor=s.author, document_id=document_id)  # idempotent reparse
+    await db.commit()
+    blob_key = await db.scalar(select(DocumentRevisionORM.blob_key).where(DocumentRevisionORM.revision_id == revision_id))
+    assert blob_key is not None
+    copies.blobs[blob_key] = PLANT_CSV + b"9,Tampered,1\n"
+    with pytest.raises(WBSImportIntegrityError):  # a failed verification cleans up too
+        await WBSImportService(db, storage=copies).create_import(  # type: ignore[arg-type]
+            project_id=s.project, tenant_id=s.tenant, actor=s.author, document_id=document_id)
+    await db.rollback()
+    assert len(copies.handed_out) == 3 and not any(path.exists() for path in copies.handed_out)
+    # the real local adapter hands out the stored object itself: it must survive the import untouched
+    local = LocalFileStorageService(base_dir=Path(tempfile.mkdtemp(prefix="pc2b3-local-")))
+    await local.upload_bytes(PLANT_CSV, blob_key)
+    stored = await local.download_object(blob_key)
+    await WBSImportService(db, storage=local).create_import(
+        project_id=s.project, tenant_id=s.tenant, actor=s.author, document_id=document_id)
+    await db.commit()
+    assert stored.exists() and stored.read_bytes() == PLANT_CSV
+
+
 async def test_12_13_import_rows_are_insert_only(db: AsyncSession) -> None:
     _, _, source = await _plant(db)
     with pytest.raises(DBAPIError, match="immutable"):

@@ -9,6 +9,10 @@ from uuid import UUID
 
 
 class IStorageService(ABC):
+    #: True when ``download_object`` returns a fresh temporary copy that the caller owns and
+    #: must delete; False when it returns the stored object itself (which must never be deleted).
+    download_object_is_temporary: bool = False
+
     @abstractmethod
     async def upload_file(self, file_content: BinaryIO, file_id: UUID, file_extension: str) -> str:
         """

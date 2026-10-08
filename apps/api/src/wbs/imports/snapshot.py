@@ -63,8 +63,12 @@ def _level(value: Any) -> int | None | str:
     if isinstance(value, int):
         return value if 1 <= value <= MAX_LEVEL else "invalid"
     text = str(value).strip()
-    if re.fullmatch(r"[0-9]+(\.0+)?", text):
-        number = int(float(text))
+    whole = re.fullmatch(r"([0-9]+)(\.0+)?", text)
+    if whole:  # exact integer arithmetic on bounded digits: never float, never an overflow
+        digits = whole.group(1).lstrip("0") or "0"
+        if len(digits) > len(str(MAX_LEVEL)):
+            return "invalid"
+        number = int(digits)
         return number if 1 <= number <= MAX_LEVEL else "invalid"
     return "invalid"
 

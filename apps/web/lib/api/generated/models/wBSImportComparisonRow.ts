@@ -40,8 +40,15 @@
 
 export interface WBSImportComparisonRow {
   source_ref: string;
-  /** UNCHANGED | CHANGED | REMOVED */
+  /** UNCHANGED | CHANGED | REMOVED | NOT_COMPARABLE (see limitations) */
   status: string;
   node_id?: string | null;
+  /** Subset of compared_fields that differ */
   changes?: string[];
+  /** Why the row could not be compared reliably (never UNCHANGED) */
+  limitations?: string[];
+  /** 1-based, among the imported siblings */
+  imported_sibling_position?: number | null;
+  /** 1-based, under the candidate parent */
+  candidate_sibling_position?: number | null;
 }

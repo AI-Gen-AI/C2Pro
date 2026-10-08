@@ -145,6 +145,16 @@ def test_27_level_jump_is_blocking() -> None:
     assert "LEVEL_INVALID" in _blocking(parse_source(F.CSV, b"code,name,level\n1,A,one\n"))
 
 
+@pytest.mark.parametrize("level", ["9" * 400, "1" * 309 + ".0", "0" * 400 + "1"])
+def test_27b_an_oversized_numeric_level_is_a_diagnostic_never_a_crash(level: str) -> None:
+    """Untrusted digits within the cell bound must never overflow into an unhandled exception."""
+    result = parse_source(F.CSV, f"code,name,level\n1,A,{level}\n".encode())
+    if level.lstrip("0") == "1":
+        assert result.rows[0].outline_level == 1  # leading zeros are still a valid level
+    else:
+        assert "LEVEL_INVALID" in _blocking(result)
+
+
 def test_28_duplicate_code_is_a_warning_when_hierarchy_is_unambiguous() -> None:
     result = parse_source(F.CSV, b"code,name,level\n1,Root,1\n1.1,A,2\n1.1,B,2\n")
     assert result.status is ImportStatus.READY_WITH_WARNINGS and _codes(result) == {"CODE_DUPLICATE"}

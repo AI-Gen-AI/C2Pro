@@ -79,6 +79,10 @@ async def test_a_human_parses_reads_creates_a_candidate_and_compares(db: AsyncSe
     assert comparison.status_code == 200, comparison.text
     assert comparison.json()["proposed"]["status"] == "NOT_AVAILABLE"
     assert {r["status"] for r in comparison.json()["rows"]} == {"UNCHANGED"}
+    assert comparison.json()["limitations"] == [] and all(r["limitations"] == [] for r in comparison.json()["rows"])
+    assert {"control_level", "decomposition_kind", "dictionary", "sibling_order"} <= set(
+        comparison.json()["compared_fields"])
+    assert {c["origin"] for c in comparison.json()["candidate"]} == {"IMPORTED"}
 
 
 async def test_the_api_principal_and_unknown_fields_are_refused(db: AsyncSession) -> None:
