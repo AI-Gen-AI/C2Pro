@@ -761,12 +761,9 @@ async def list_document_revision_statuses_endpoint(
     ),
     db: AsyncSession = Depends(get_session),
 ) -> list[RevisionStatus]:
-    """Read-only revision history; historical/proposed does NOT become current.
-
-    Verify document ownership BEFORE lineage or artifact status queries. Both
-    the lineage reader and the status reader additionally scope every query by
-    exact tenant/document/project. A missing status is UNKNOWN, never TRUSTED.
-    """
+    # Verify the document's tenant ownership before consulting lineage.
+    # Read-side status is scoped to its exact tenant/project/document and a
+    # missing status stays UNKNOWN rather than being promoted to TRUSTED.
     document = await get_document.execute(document_id, _user_id, tenant_id)
     lineage = await revision_repository.list_lineage(document_id, tenant_id)
     reader = SqlAlchemyRevisionStatusReader(db)
