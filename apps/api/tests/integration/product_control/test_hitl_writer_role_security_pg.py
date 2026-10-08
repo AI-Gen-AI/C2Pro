@@ -16,9 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.analysis.domain.trust import artifact_digest
 from src.modules.hitl.adapters.persistence.finding_decision_writer import (
+    _SAFE_DB_ROLE,
     FindingDecisionIdentityError,
     FindingDecisionLedgerWriter,
-    _SAFE_DB_ROLE,
 )
 from src.modules.hitl.domain.finding_decision import (
     CandidateReviewIdentity,
