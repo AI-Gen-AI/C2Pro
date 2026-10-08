@@ -871,3 +871,337 @@ product_quality_hitl_2026_10_08:
       - "G7 #945 comprehensive QA and independent Product Control review; #686 post-HITL bounded production qualification, #687 only after P0c; no forced B approval/reprocess."
     production_authority: "UNCHANGED_NO_B_REPROCESS_NO_APPROVAL_NO_P0C_P0D_PROMOTION"
   references: ["#686", "#687", "#713", "#714", "#831", "#836"]
+  delivery_specification:
+    schema: pq-hitl-work-breakdown-v1
+    spec_ref: docs/product/pq-hitl-2026-01-delivery-spec-v1.md
+    tracking_authority: "Product Control YAML owns deliverable/task state; .c2pro work envelope owns execution; PRs carry evidence, not task completion authority."
+    work_package_count: 28
+    status_vocabulary: [PLANNED, IN_REVIEW_UNMERGED, BLOCKED, DEFERRED, IN_PROGRESS, MERGED_UNACCEPTED, ACCEPTED]
+    completion_definition: "ACCEPTED only with contract/negative tests + independent principal review + exact-head merged CI + evidence + owner product gate; PROD_VALIDATED remains separate."
+    sizing_rule: "S <= 1 day, M <= 4 days; split before starting if evidence-based estimate exceeds 4 days or multiple authority boundaries emerge."
+    precedence: "First identify WHAT acceptance means; freeze SDD/ADR if material; then failing tests; minimal implementation; independent review; master reconciliation."
+    defect_policy:
+      classify: [P0_SECURITY_OR_TRUST, P1_BLOCKS_ACCEPTANCE, P2_LOCAL_NONBLOCKING, ENVIRONMENT_OR_CI, NEW_SCOPE_REQUEST]
+      require: [reproducer, observed_vs_expected, impact, parent_work_id, owning_role, severity, smallest_fix_scope, regression_test, disposition]
+      rule: "P0 stops affected critical path; P1 is fixed in parent slice or bounded defect subtask; P2 parks outside critical path; CI infra flake is not feature scope."
+      timebox: "Two bounded diagnosis attempts; if still unclear, capture traces and return BLOCKED to orchestrator; do not chain unbounded speculative patches."
+      scope_change: "Any fix outside work envelope, persistent authority change, production action or new backend module requires explicit approved replan."
+      pr_relation: "PRs are delivery receipts linked to work IDs, NEVER substitute task IDs; no closure just because a PR merged."
+    cadence:
+      wip_limit: "1 active material integration slice per bounded execution workspace, up to 2 independent QA/spec slices in parallel"
+      report_format: "work_id | acceptance delta | evidence | defect IDs | blocker | next eligible task; PR # only supporting"
+      ready_rule: "All dependencies accepted OR explicitly justified scoped parallel discovery; owner-authorized work envelope and test-first acceptance available."
+      review_rule: "Reviewer worker differs from implementer; quota exhaustion means HOLD or approved alternate principal, not silent approval."
+      release_rule: "No prod validation, synthetic B replay/approval, production DB role grants, deploy or TRUTH promotion from development-only authorization."
+    active_defects:
+      - id: DEF-PQ-001
+        parent_work: PQ-HITL-01.1
+        severity: P0_SECURITY_OR_TRUST
+        status: REMEDIATION_UNVERIFIED
+        observation: "N12 OK plus source-located quality claim previously bypassed review; #960 draft fix not merged/accepted."
+        acceptance: "Contradictory OK never settles TRUSTED, retry receives bounded concern and N13 exposes source to reviewer."
+      - id: DEF-PQ-002
+        parent_work: PQ-HITL-04.2
+        severity: P0_SECURITY_OR_TRUST
+        status: REMEDIATION_UNVERIFIED
+        observation: "Privileged original DB session and replication-parameter grants can defeat writer preflight; #985 draft is not runtime credential qualification."
+        acceptance: "Authenticated separate least-privileged LOGIN + pool proof, replication privilege denial and actual replay/tenant/CAS tests."
+      - id: DEF-PQ-003
+        parent_work: PQ-HITL-02.2
+        severity: P1_BLOCKS_ACCEPTANCE
+        status: OPEN_ARCHITECTURE_HOLD
+        observation: "Per-risk confidence producer unproven; #953 might route almost all risks to HITL."
+        acceptance: "Measured provenance and bounded operational reviewer-load policy approved; UNKNOWN remains UNKNOWN."
+      - id: DEF-PQ-004
+        parent_work: PQ-HITL-03.1
+        severity: P1_BLOCKS_ACCEPTANCE
+        status: OPEN_VERIFICATION
+        observation: "A=9/B=7 revision-bound stored clauses not yet operator-validated against trusted-current empty state."
+        acceptance: "Scoped read-only API/UI evidence shows 9/7 without implying TRUSTED or 0 extracted."
+    work_packages:
+      - id: PQ-HITL-09.1
+        parent_issue: 945
+        title_key: QA_GOLDEN_FIXTURE_BASELINE
+        priority: P0
+        role: qa
+        size: M
+        status: PLANNED
+        depends_on: []
+        acceptance: "Synthetic §5.2, LD, However, valid title, 183d, 5% of EUR 132500 and A9/B7 with exact expected findings and UNKNOWN semantics; deterministic RED before changes."
+        note: "test-first baseline; no PROD B changes"
+      - id: PQ-HITL-01.1
+        parent_issue: 937
+        title_key: CRITIQUE_OK_OBSERVATION_FAIL_CLOSED
+        priority: P0
+        role: implementation_lead
+        size: S
+        status: IN_REVIEW_UNMERGED
+        depends_on: [PQ-HITL-09.1]
+        acceptance: "N12 OK + nonempty source-located but UNVERIFIED quality claim cannot auto-trust; typed quote reaches N13 and bounded retry feedback; UI clearly unverified; unit+FE+exact-head CI."
+        note: "PR #960; scope includes #941 reviewer visibility only"
+      - id: PQ-HITL-01.2
+        parent_issue: 937
+        title_key: CRITIQUE_SEMANTIC_CLAIM_GROUNDING
+        priority: P0
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-09.1, PQ-HITL-01.1]
+        acceptance: "Claim truth distinct from quote location; §5.2 cost/time interpreted correctly; genuine source corruption vs normal English discriminated; contradictory/unknown routed, never VERIFIED from literal match."
+        note: "requires semantic evidence schema and focused adversarial SDD"
+      - id: PQ-HITL-01.3
+        parent_issue: 937
+        title_key: RETRY_AND_FALSE_POSITIVE_QUALIFICATION
+        priority: P0
+        role: qa
+        size: S
+        status: PLANNED
+        depends_on: [PQ-HITL-01.2]
+        acceptance: "Measure grounded concern recall/false corruption labels, retry convergence, bounded feedback; record unsupported findings and no silent passing after exhausted retry."
+        note: "independent fixture evaluation"
+      - id: PQ-HITL-02.1
+        parent_issue: 938
+        title_key: RISK_CLAUSE_EVIDENCE_LINKS
+        priority: P0
+        role: implementation_lead
+        size: M
+        status: PLANNED
+        depends_on: [PQ-HITL-09.1]
+        acceptance: "Each risk has exact revision-bound clause/quote/source binding or explicit unresolved; no made-up clause_ref; persist and query tenant-scoped."
+        note: "source membership and source IDs; #713 not duplicated"
+      - id: PQ-HITL-02.2
+        parent_issue: 938
+        title_key: CONFIDENCE_PROVENANCE_AND_CAPACITY
+        priority: P0
+        role: specialist
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-09.1]
+        acceptance: "Decide calibrated per-risk confidence producer OR explicit UNKNOWN with bounded human workload and safe routing; quantify review load on fixtures; keep #953 HOLD until governance sign-off."
+        note: "product/architectural policy choice before code"
+      - id: PQ-HITL-02.3
+        parent_issue: 938
+        title_key: MULTICLAUSE_RISK_TRACEABILITY
+        priority: P0
+        role: implementation_lead
+        size: M
+        status: PLANNED
+        depends_on: [PQ-HITL-02.1]
+        acceptance: "One risk can point to 6.1+6.3+6.4 independently without fabricating geometry, surviving version switch and candidate hash replay."
+        note: "no synthetic 0.9 risk confidence"
+      - id: PQ-HITL-03.1
+        parent_issue: 939
+        title_key: REVISION_SCOPED_READ_PROOF
+        priority: P0
+        role: qa
+        size: S
+        status: PLANNED
+        depends_on: [PQ-HITL-09.1]
+        acceptance: "Read-only tenant-scoped A=9 B=7 parsed clauses appear as historical/proposed; 0 trusted-current must not show '0 extracted'; API/UI count parity and no cross-tenant leak."
+        note: "existing #956 only partial; production reads only if authorized"
+      - id: PQ-HITL-03.2
+        parent_issue: 939
+        title_key: TRUSTED_PROPOSED_EMPTY_STATES
+        priority: P0
+        role: implementation_lead
+        size: S
+        status: PLANNED
+        depends_on: [PQ-HITL-03.1]
+        acceptance: "TRUSTED_CURRENT/PROPOSED/HISTORICAL/UNRESOLVED/NOT_EXTRACTED/LOAD_ERROR distinct; relogin and bad-network states tested without promoting proposed Health/Coherence."
+        note: "repair incorrect projection labels"
+      - id: PQ-HITL-04.1
+        parent_issue: 940
+        title_key: DECISION_STATE_MACHINE_SDD_AND_ADR
+        priority: P0
+        role: orchestrator
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-01.1, PQ-HITL-02.1]
+        acceptance: "Freeze per-risk and critique types, CONFIRMED/CORRECTION_PROPOSED/DISMISSED/NEEDS_INFO, immutable versions, atomic final approval authority, migration/backward compatibility and threat model; independent principal design review."
+        note: "requires no-self-approval architecture sign-off"
+      - id: PQ-HITL-04.2
+        parent_issue: 940
+        title_key: NONBYPASS_LEDGER_DB_PRINCIPAL
+        priority: P0
+        role: security
+        size: M
+        status: IN_REVIEW_UNMERGED
+        depends_on: [PQ-HITL-04.1]
+        acceptance: "Separately authenticated dedicated LOGIN+pool, NO BYPASSRLS/createrole/replication/parameter trigger bypass; real PostgreSQL positive/negative, tenant GUC boundary, existing-event replay; no prod grants without owner authorization."
+        note: "PR #985 hardening; runtime credential provisioning separately gated"
+      - id: PQ-HITL-04.3
+        parent_issue: 940
+        title_key: LEDGER_CONCURRENT_CAS_REPLAY
+        priority: P0
+        role: qa
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.2]
+        acceptance: "Real DB concurrent same/different idempotency keys, stale row/digest/gen/fence/checkpoint, cross-tenant denial, actual seeded replay and conflict semantics; no trust promotion."
+        note: "requires restricted test role and preserved fixture"
+      - id: PQ-HITL-04.4
+        parent_issue: 940
+        title_key: FINDING_DECISION_HTTP_PROJECT_ACL
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.1, PQ-HITL-04.3]
+        acceptance: "Endpoint uses authenticated reviewer+tenant+project ACL from server, typed request, exact candidate membership, 403/409/422 tests and audit receipt; keep disabled until safe principal."
+        note: "#980 is gated; no public write route today"
+      - id: PQ-HITL-04.5
+        parent_issue: 940
+        title_key: IMMUTABLE_CORRECTION_COMPOSER
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.4, PQ-HITL-02.3]
+        acceptance: "Append individual actions, derive new proposed candidate/version/digest without modifying prior artifact; source lineage preserved, dismissed/needs-info can't silently count approved."
+        note: "write-once and deterministic composition contract"
+      - id: PQ-HITL-04.6
+        parent_issue: 940
+        title_key: FINAL_EXACT_CANDIDATE_SETTLEMENT
+        priority: P0
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.5]
+        acceptance: "Separate explicit human whole-candidate sign-off #714/#758 with exact row/hash/version/thread/checkpoint/gen/fence and CAS; atomic commit or no TRUSTED, replay/reject/fault fail closed."
+        note: "critical transaction/authority ADR review"
+      - id: PQ-HITL-05.1
+        parent_issue: 941
+        title_key: REVIEW_CARD_SOURCE_WITNESS_UX
+        priority: P1
+        role: implementation_lead
+        size: S
+        status: IN_REVIEW_UNMERGED
+        depends_on: [PQ-HITL-01.1]
+        acceptance: "Show typed claim/quote/location/revision/unverified in review card by default, no JSON requirement and no false per-item action; FE tests for located and unavailable."
+        note: "co-implemented in #960; NOT item-level decision UI"
+      - id: PQ-HITL-05.2
+        parent_issue: 941
+        title_key: INDIVIDUAL_REVIEW_ACTION_UI
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.4, PQ-HITL-06.2]
+        acceptance: "Per-item evidence left/actions right with confirmed/corrected/dismissed/needs-info, reason mandatory where needed, keyboard/focus/permissions/offline, no bulk auto-approval."
+        note: "requires actual server action, not UI-only mock"
+      - id: PQ-HITL-05.3
+        parent_issue: 941
+        title_key: EXEC_SUMMARY_AND_FINAL_SIGNOFF_UX
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.6, PQ-HITL-05.2]
+        acceptance: "Show pending/accepted/unknown/source quality and corrected candidate diff, separate final approve/reject only when every blocking decision resolved; E2E walkthrough."
+        note: "operator-friendly and accessible"
+      - id: PQ-HITL-06.1
+        parent_issue: 942
+        title_key: SOURCE_LOCATOR_CONTRACT
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: PLANNED
+        depends_on: [PQ-HITL-02.1]
+        acceptance: "Freeze revision/clause/span/page/bbox hierarchy with exact->raw span->document fallback->unresolved; forged refs denied with tenant ACL; no made-up page."
+        note: "spec before deep-link UI"
+      - id: PQ-HITL-06.2
+        parent_issue: 942
+        title_key: SOURCE_DOCUMENT_DEEP_LINKS
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-06.1, PQ-HITL-02.3]
+        acceptance: "Click citation resolves to same revision and verified span or labeled fallback; multi-clause URLs work across A/B; 404 and permission states tested."
+        note: "evidence viewer integration"
+      - id: PQ-HITL-07.1
+        parent_issue: 943
+        title_key: ENTITIES_RISKS_ALERTS_TAXONOMY
+        priority: P1
+        role: implementation_lead
+        size: S
+        status: PLANNED
+        depends_on: [PQ-HITL-03.2, PQ-HITL-02.1]
+        acceptance: "Extracted clause/entity vs interpreted risk vs active alert separated, unknown priority not moderate due zero links, deterministic provenance honestly labeled."
+        note: "partial prior #949; whole surface outstanding"
+      - id: PQ-HITL-07.2
+        parent_issue: 943
+        title_key: GRAPH_RELATIONSHIP_TRUST_SCOPE
+        priority: P1
+        role: qa
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-07.1, PQ-HITL-06.2]
+        acceptance: "No ghost graph edge/node, 0 alerts != 0 risks, trusted graph excludes proposed, proposed preview explicitly untrusted; API/UI snapshots and tests."
+        note: "no 3D until evidence semantics stable"
+      - id: PQ-HITL-08.1
+        parent_issue: 944
+        title_key: REVISION_EVENT_TIMELINE_PARITY
+        priority: P1
+        role: implementation_lead
+        size: M
+        status: PLANNED
+        depends_on: [PQ-HITL-03.2]
+        acceptance: "Uploaded/parsed/extracted/proposed/review pending/rejected/trusted states shown per source revision; no historical '0 clauses' lie, relogin stable."
+        note: "does not reinterpret canonical events"
+      - id: PQ-HITL-08.2
+        parent_issue: 944
+        title_key: WHAT_CHANGED_TO_CURRENT_STATE_CONSISTENCY
+        priority: P1
+        role: qa
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-08.1, PQ-HITL-06.2, PQ-HITL-04.6]
+        acceptance: "What Changed and Current State agree on source/revision/proposed-vs-trusted; P0c #686 qualified separately before P0d #687, no B replay as test shortcut."
+        note: "dependent production qualification independent"
+      - id: PQ-HITL-09.2
+        parent_issue: 945
+        title_key: SECURITY_AND_ADVERSARIAL_REGRESSION
+        priority: P0
+        role: security
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-04.3, PQ-HITL-01.3, PQ-HITL-03.2]
+        acceptance: "Run tenant/RLS, prompt injection, stale checkpoint, duplicate decision, candidate hash, forged refs, false confidence/graph, no partial TRUSTED tests with exact result evidence."
+        note: "independent QA and security principal"
+      - id: PQ-HITL-09.3
+        parent_issue: 945
+        title_key: GOLDEN_OPERATOR_END_TO_END
+        priority: P0
+        role: qa
+        size: M
+        status: BLOCKED
+        depends_on: [PQ-HITL-05.3, PQ-HITL-08.2, PQ-HITL-07.2, PQ-HITL-09.2]
+        acceptance: "Realistic contract journey upload->extract->review each finding->correct->separate final approval->Current State and Coherence, verify persistent relogin, unknowns and #686/#687 sequencing."
+        note: "must exercise actual backend+frontend, not mock UI"
+      - id: PQ-HITL-09.4
+        parent_issue: 945
+        title_key: PRODUCT_ACCEPTANCE_AND_RELEASE_PACKET
+        priority: P0
+        role: orchestrator
+        size: S
+        status: BLOCKED
+        depends_on: [PQ-HITL-09.3]
+        acceptance: "Release evidence binds implementation task IDs, exact merged SHA, CI, independent principal, E2E, deployment SHA, open defects and owner UAT decision; no self-PROD_VALIDATED."
+        note: "requires owner acceptance and separate production authority"
+      - id: PQ-HITL-10.1
+        parent_issue: 946
+        title_key: ADVANCED_GRAPH_OPTIONAL_SPIKE
+        priority: P2
+        role: specialist
+        size: S
+        status: DEFERRED
+        depends_on: [PQ-HITL-09.4]
+        acceptance: "Only after measured user benefit of 2D+ accessible graph; 3D requires separate owner choice and no phantom links."
+        note: "out of first product acceptance"
+    downstream_after_hitl:
+      - {plane: PWBS-PROJECT-CONTROLS, objective: "one authoritative WBS, baseline/change, budget, schedule and stakeholders", status: DEPENDENCY_GATED}
+      - {plane: PWBS-COHERENCE-XDOC, objective: "source-grounded cross-document reconciliation and calibrated Coherence, separate from Health", status: DEPENDENCY_GATED}
+      - {plane: PWBS-PROCUREMENT, objective: "WBS-linked procurement plan/BoQ/RFQ/bids/award/obligations, governed external actions", status: STRATEGIC}
+      - {plane: PWBS-EXEC-REPORTING, objective: "evidence-grounded Current State and PMO portfolio reporting, no fabricated signal", status: DEPENDENCY_GATED}
+
