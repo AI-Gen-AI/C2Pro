@@ -61,3 +61,43 @@ FROM public.hitl_finding_decisions
 WHERE tenant_id = cast(:tenant_id as uuid)
 AND review_row_id = cast(:review_row_id as uuid)
 """)
+
+_APPEND = text("""
+INSERT INTO public.hitl_finding_decisions (
+  event_id, tenant_id, project_id, review_row_id, document_id, document_revision_id,
+  artifact_id, artifact_version, artifact_hash, generation, fencing_token,
+  thread_id, checkpoint_id, finding_id, source_item_id, source_ordinal,
+  finding_kind, action, reviewer_id, created_by, reason, proposed_text,
+  expected_ledger_revision, ledger_revision, idempotency_key
+) VALUES (
+  :event_id, :tenant_id, :project_id, :review_row_id, :document_id, :document_revision_id,
+  :artifact_id, :artifact_version, :artifact_hash, :generation, :fencing_token,
+  :thread_id, :checkpoint_id, :finding_id, :source_item_id, :source_ordinal,
+  :finding_kind, :action, :reviewer_id, :created_by, :reason, :proposed_text,
+  :expected_ledger_revision, :ledger_revision, :idempotency_key
+) RETURNING event_id, ledger_revision
+""")
+
+
+def _binding(draft: FindingDecisionDraft) -> dict[str, object]:
+    c = draft.candidate
+    return {
+        "tenant_id": c.tenant_id,
+        "review_row_id": c.review_row_id,
+        "document_id": c.document_id,
+        "document_revision_id": c.document_revision_id,
+        "artifact_id": c.artifact_id,
+        "artifact_version": c.artifact_version,
+        "artifact_hash": c.artifact_hash,
+        "generation": c.generation,
+        "fencing_token": c.fencing_token,
+        "thread_id": c.thread_id,
+        "checkpoint_id": c.checkpoint_id,
+        "finding_id": draft.finding_id,
+        "finding_kind": draft.finding_kind.value,
+        "action": draft.action.value,
+        "reviewer_id": draft.reviewer_id,
+        "reason": draft.reason,
+        "proposed_text": draft.proposed_text,
+        "expected_ledger_revision": draft.expected_ledger_revision,
+    }
