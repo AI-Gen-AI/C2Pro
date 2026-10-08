@@ -65,3 +65,17 @@ def test_quote_outside_bounded_excerpt_does_not_get_fabricated_witness() -> None
         source_complete=False,
     )
     assert result.status is QuoteWitnessStatus.SOURCE_PARTIAL_UNRESOLVED
+
+def test_duplicate_quote_is_ambiguous_not_arbitrarily_located() -> None:
+    text = (
+        "Clause 1: The Contractor shall notify the Employer. "
+        "Clause 9: The Contractor shall notify the Employer."
+    )
+    result = verify_source_quote(
+        source_text=text,
+        quote="The Contractor shall notify the Employer",
+    )
+    assert result.status is QuoteWitnessStatus.AMBIGUOUS
+    assert result.char_start is None
+    assert result.char_end is None
+    assert result.claim_verified is False
