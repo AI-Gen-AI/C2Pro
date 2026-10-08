@@ -31,7 +31,7 @@
 ### Task 1: Exact-head trace inventory / negative exposure proof
 
 **Files:**
-- Review: root `.env.example`, `README.md` documented copy path, `Makefile` `setup-env`, `.github/workflows/evaluation-regression.yml` (workflow explicit `LANGCHAIN_TRACING_V2=true` + GitHub Secrets), `apps/api/scripts/generate_langsmith_traces.py` (manual `RunTree.post()`), relevant deployment/env aliases, `apps/api/src/core/ai/langsmith_client.py`, `apps/api/src/core/observability/langsmith_decorator.py`, `apps/api/src/modules/observability/application/services/langsmith_adapter.py`, `apps/api/src/core/ai/llm_client.py`, **registered** `apps/api/src/main.py`, `apps/api/src/ai_feedback/router.py`, `apps/api/src/ai_feedback/service.py`, and the **unregistered** alternative `apps/api/src/core/ai/feedback_router.py` (compare, do not assume it protects the route).
+- Review: root `.env.example`, `README.md` documented copy path, `Makefile` `setup-env`, `.github/workflows/evaluation-regression.yml` (workflow explicit `LANGCHAIN_TRACING_V2=true` + GitHub Secrets), `apps/api/scripts/generate_langsmith_traces.py` (manual `RunTree.post()`), `infrastructure/scripts/langsmith_dataset_manager.py` (direct SDK client/upload/DELETE), `apps/api/src/core/observability/coherence_tracing.py` (get_client + metadata/error), relevant deployment/env aliases, `apps/api/src/core/ai/langsmith_client.py`, `apps/api/src/core/observability/langsmith_decorator.py`, `apps/api/src/modules/observability/application/services/langsmith_adapter.py`, `apps/api/src/core/ai/llm_client.py`, **registered** `apps/api/src/main.py`, `apps/api/src/ai_feedback/router.py`, `apps/api/src/ai_feedback/service.py`, and the **unregistered** alternative `apps/api/src/core/ai/feedback_router.py` (compare, do not assume it protects the route).
 - Test: `apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py`
 
 **Interfaces:** consumes current LLMRequest and mock trace client; produces deterministic mock captured SDK inputs without a real network client.
@@ -39,7 +39,7 @@
 - [ ] Step 1: Construct fake SDK span client; instantiate the actual `LLMRequest(model=..., messages=[...], system="CANARY_CONTRACT_SECRET")` and an `LLMResponse(content="CANARY_COMPLETION_SECRET", ...)` using its real required fields. **Do not invent `LLMRequest.prompt`**: it does not exist.
 - [ ] Step 2: Run `pytest apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py -q` at baseline; show RED assertions for `LLMRequest.system` canary in `start_span(inputs["prompt"])`, successful `LLMResponse.content` canary in `end_span(outputs["output"])`, and an exception canary in `end_span` error outputs. Preserve baseline red evidence; a dataclass-constructor error or a passing assertion that never reads the request **does not count**.
 - [ ] Step 3: Extend test to nested tool arguments, kwargs aliases, sync and async instrumentation, tenant ID, trace URL, no API key, and `LANGSMITH_API_KEY` set with absent/false/empty `LANGSMITH_TRACING`; expected remote client construction and exporter use **both false** until explicit opt-in. Add a separate regression asserting tracked `.env.example` has `LANGSMITH_TRACING=false` and `LANGCHAIN_TRACING_V2=false` and that documented README/Makefile bootstrap does not rewrite these to `true`.
-- [ ] Step 4: Inventory every `LangSmithClient` caller, **scheduled/PR evaluation workflow exporter**, **manual `RunTree.post()` script** and LangGraph automatic exporter under `LANGCHAIN_TRACING_V2` (`apps/api/src/analysis/adapters/graph/workflow.py`, `app.ainvoke`, raw `initial_state.document_text`). Inspect registered `/ai/feedback` route/service in `src/main.py` and add RED test that a caller without authenticated tenant/trace ownership **cannot** send feedback to LangSmith; add separate cross-tenant test and reject raw exception response. Do not mistake the unregistered guarded `core/ai/feedback_router.py` for coverage.
+- [ ] Step 4: Inventory every `LangSmithClient` caller, **scheduled/PR evaluation workflow exporter**, **manual `RunTree.post()` script**, **native LangSmith dataset uploader** (including custom `local_path`, `create_example`, `delete_example`, metadata/expected output) and coherence-node tracer, and LangGraph automatic exporter under `LANGCHAIN_TRACING_V2` (`apps/api/src/analysis/adapters/graph/workflow.py`, `app.ainvoke`, raw `initial_state.document_text`). Inspect registered `/ai/feedback` route/service in `src/main.py` and add RED test that a caller without authenticated tenant/trace ownership **cannot** send feedback to LangSmith; add separate cross-tenant test and reject raw exception response. Do not mistake the unregistered guarded `core/ai/feedback_router.py` for coverage.
 - [ ] Step 5: Commit only the scoped tests/evidence.
 
 ### Task 2: Minimal content-deny telemetry builder
@@ -78,6 +78,19 @@
 - [ ] Step 2: Change evaluation jobs to local metric reporting with tracing OFF, preserving same test matrix and outputs; any future synthetic-only external comparison needs a separate reviewed workflow_dispatch permission/label/fixture gate.
 - [ ] Step 3: Inspect direct `RunTree.post()` manual script; add testable explicit synthetic-only, non-production opt-in guard without executing remote network or leaking tokens. No shell CI bypass, no credential changes.
 - [ ] Step 4: Run workflow syntax/static contract tests, existing evaluation regression suite as applicable, security checks and independent review.
+
+### Task 3D: Direct LangSmith dataset uploader egress and mutation gate
+
+**Files:**
+- Modify: `infrastructure/scripts/langsmith_dataset_manager.py`
+- Test: add targeted infrastructure dataset-manager tests with fake SDK (NO network / NO credentials).
+
+**Interfaces:** A LangSmith API key by itself never authorizes dataset reads/writes/deletes or direct client setup for unsafe data. `upload_dataset` requires a non-editable, classified synthetic-only dataset manifest (`dataset_id`, content SHA-256, source, classification, authorized scope, owner approval), dry-run preflight and explicit per-operation authorization. Unknown/custom files are denied; versioned datasets cannot silently overwrite/delete existing remote examples.
+
+- [ ] Step 1: RED no-network tests for key-only instantiation/upload attempt, custom local JSON with `CANARY_CONTRACT_SECRET` in `clause_text`, `document_text`, expected outputs, rationales and nested metadata; fake remote SDK receives zero writes/deletes.
+- [ ] Step 2: RED test that existing remote dataset cannot be deleted/replaced on version-name collision without a separate immutable approved change. Deny unknown/missing manifest, mutable source, absent classification, missing owner/HITL or invalid hash.
+- [ ] Step 3: Implement default-deny guard **before** native client creation/upload and before listing/deleting any remote examples; dry-run prints only safe counts/hashes, never payloads or credentials. Preserve read-only operations only when scoped and authorized; do not invoke real SDK.
+- [ ] Step 4: GREEN the targeted tests, run relevant eval/observability suites and independent security review. Do NOT infer data provenance or permission from `LANGSMITH_TRACING` flags.
 
 ### Task 3B: LangGraph automatic tracing privacy boundary
 
@@ -130,4 +143,4 @@
 
 ## Exit
 
-Short stage DONE only after Task 1–3 **plus Task 3B LangGraph auto-export and BOTH environment-template flags default-off** evidence, Task 3C optional Prompt Hub design and separate owner acceptance of Task 4's governance contract. Medium pilot and long AMF/runtime integration remain additional independently qualified steps, not automatically authorized or completed by creating this plan.
+Short stage DONE only after Task 1–3 **plus Task 3A scheduled CI/manual script, Task 3B LangGraph auto-export, Task 3D native dataset-manager guard, and BOTH environment-template flags default-off** evidence, Task 3C optional Prompt Hub design and separate owner acceptance of Task 4's governance contract. Medium pilot and long AMF/runtime integration remain additional independently qualified steps, not automatically authorized or completed by creating this plan.
