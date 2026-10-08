@@ -83,7 +83,7 @@ async def test_execute_builds_grounded_relationship_explanation_from_document_an
     ).execute(uuid4(), document.id)
 
     assert response.document_id == document.id
-    assert "1 extracted clauses" in response.summary
+    assert "1 currently visible clauses" in response.summary
     assert "delay penalty" in response.strongest_cluster.lower()
     assert response.citations[0].clause_id == document.clauses[0].id
     repository.list_alert_signals_for_document.assert_awaited_once()
@@ -114,4 +114,4 @@ async def test_execute_filters_alerts_for_missing_clause_links() -> None:
         explanation_service=EvidenceRelationshipExplanationService(),
     ).execute(uuid4(), document.id)
 
-    assert "0 active alerts" in response.summary
+    assert "0 linked alerts" in response.summary

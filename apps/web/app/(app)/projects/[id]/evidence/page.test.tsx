@@ -910,7 +910,7 @@ describe("EvidencePage highlight mapping", () => {
     expect(
       screen.getByText(/most recent signal: notice gap/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/backend-generated explanation grounded in evidence graph citations/i)).toBeInTheDocument();
+    expect(screen.getByText(/rule-based summary of currently visible evidence graph links/i)).toBeInTheDocument();
     expect(screen.getByText(/cl-001 · delay penalty/i)).toBeInTheDocument();
     expect(screen.getByText(/page 3 · linked to active alert/i)).toBeInTheDocument();
   });
