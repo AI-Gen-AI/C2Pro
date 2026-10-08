@@ -62,12 +62,23 @@ SELECT (
     )
     AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'SELECT')
     AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'INSERT')
+    -- RLS and the row trigger DO NOT protect TRUNCATE; inherited write and
+    -- maintenance capabilities also violate the append-only contract.
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'UPDATE')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'DELETE')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'TRUNCATE')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'REFERENCES')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'TRIGGER')
     AND EXISTS (
         SELECT 1 FROM pg_class c
          WHERE c.oid = 'public.hitl_finding_decisions'::regclass
            AND c.relrowsecurity
            AND c.relforcerowsecurity
-           AND c.relowner <> (SELECT r.oid FROM pg_roles r WHERE r.rolname = current_user)
+           AND NOT pg_has_role(
+               (SELECT r.oid FROM pg_roles r WHERE r.rolname = current_user),
+               c.relowner,
+               'MEMBER'
+           )
     )
 ) AS safe_hitl_writer_role
 """)
