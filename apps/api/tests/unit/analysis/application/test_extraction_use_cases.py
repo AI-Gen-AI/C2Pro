@@ -298,12 +298,12 @@ async def test_critique_absent_or_truncated_source_is_explicitly_unverified() ->
     """An excerpt is never evidence that a missing clause does not exist."""
     ai = _FakeAI(payload={"status": "RETRY", "notes": "source incomplete"})
     uc = CritiqueExtractionUseCase(ai=ai)
-    common = dict(
-        extracted_risks=[{"title": "Example", "confidence": 0.9}],
-        extracted_wbs=[],
-        doc_type="contract",
-        retry_count=0,
-    )
+    common = {
+        "extracted_risks": [{"title": "Example", "confidence": 0.9}],
+        "extracted_wbs": [],
+        "doc_type": "contract",
+        "retry_count": 0,
+    }
 
     await uc.execute(CritiqueExtractionCommand(**common))
     assert "UNAVAILABLE" in ai.calls[0][1]
