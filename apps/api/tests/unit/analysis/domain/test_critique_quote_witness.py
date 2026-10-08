@@ -79,3 +79,13 @@ def test_duplicate_quote_is_ambiguous_not_arbitrarily_located() -> None:
     assert result.char_start is None
     assert result.char_end is None
     assert result.claim_verified is False
+
+
+
+def test_overlapping_quote_occurrences_are_ambiguous() -> None:
+    """Non-overlapping regex iteration must not hide repeated valid offsets."""
+    source = "the the the"
+    result = verify_source_quote(source, "the the")
+    assert result.status is QuoteWitnessStatus.AMBIGUOUS
+    assert result.char_start is None
+    assert result.char_end is None
