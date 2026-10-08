@@ -74,7 +74,8 @@ async def test_f1_the_execution_configuration_digest_is_canonical_versioned_and_
 async def test_f1_the_execution_configuration_binds_the_run_key() -> None:
     first = execution_config_digest(ReviewLimits())
     second = execution_config_digest(ReviewLimits(max_calls=12))
-    assert _key(execution_config_digest=first) == _key(execution_config_digest=first)
+    equal = execution_config_digest(ReviewLimits(max_calls=24))  # equal limits, built independently
+    assert _key(execution_config_digest=first) == _key(execution_config_digest=equal)
     assert _key(execution_config_digest=first) != _key(execution_config_digest=second)
     assert _key(execution_config_digest=first) != _key()
 
