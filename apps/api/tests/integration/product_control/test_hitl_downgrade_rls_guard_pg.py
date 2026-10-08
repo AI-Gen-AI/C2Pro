@@ -91,11 +91,21 @@ async def test_downgrade_guard_cannot_miss_other_tenant_audit_rows() -> None:
                 assert exc.value.sqlstate == "42501"
                 assert "row-level security" in str(exc.value).lower()
 
-            # Even when the current tenant can see the entry, the guard
-            # must reject the downgrade because immutable history exists.
+            # With FORCE RLS and row_security=off, a non-BYPASSRLS
+            # owner receives 42501 regardless of whether its own tenant
+            # rows would match. No population check can silently pass.
             await conn.execute(
                 "SELECT set_config('app.current_tenant', $1, true)", tenant_b
             )
+            with pytest.raises(asyncpg.PostgresError) as exc:
+                async with conn.transaction():
+                    await conn.execute(guard)
+            assert exc.value.sqlstate == "42501"
+            assert "row-level security" in str(exc.value).lower()
+
+            # A privileged maintenance role does bypass RLS and must
+            # receive the explicit immutable-history restriction.
+            await conn.execute("RESET ROLE")
             with pytest.raises(asyncpg.PostgresError) as exc:
                 async with conn.transaction():
                     await conn.execute(guard)
