@@ -1,31 +1,35 @@
 schema: c2pro-work-envelope-v1
 schema_version: 1
 work_id: C2PRO-DEV-15
-campaign_id: REPO-HYGIENE-CORE-AI-20261005
+campaign_id: CORE-AI-RELIABILITY-GOVERNANCE-20261008
 role: implementation_lead
-base_sha: 852429c35852ff09048d7a6ca7f8c1b0a61f8c38
-branch: chore/c2pro-dev-15-repository-hygiene-wave1
-risk_class: normal
+base_sha: 39a7c313766eef181353f594205ee3b88e5955ac
+branch: docs/dev15-control-goal-reconcile-20261008
+risk_class: material
 scope:
-  - reconcile repository-hygiene debt against current main and active product lanes
-  - fix internally inconsistent root package metadata without publishing a package
-  - remove only debris proven unreferenced by current repository paths
-  - eliminate confirmed UTF-8 mojibake from touched live source
-  - progressively bring high-value src/core/ai modules under meaningful coverage in later waves
-  - preserve active P0c Temporal WBS Alerts Coherence Risk and Procurement work without overlap
+  - reconcile DEV-15 ready queue with OPEN follow-on issue 958 and historical CLOSED issue 849
+  - keep current.yaml reconciled_idle with active_campaign null and active_work empty
+  - document consolidated DEV-15 short medium long Goal and split remaining waves into separately reviewable work
+  - register LangSmith as a maintained optional observability adapter not a production default or prompt authority
+  - record short Wave 3.11 safety work and medium Wave 3.12 Core AI reliability as separately gated implementation packages
+  - preserve current product and MW-06/MR decision-only routing authority
 out_of_scope:
+  - executing security or Core AI implementation code within this reconciliation branch
+  - production or external telemetry enablement or credentials access
+  - reopening completed historical hygiene issue 849
+  - changing current.yaml authority status baseline or active work
+  - altering unrelated open work queue items or global priority
+  - creating duplicate prompt/model routing authority or overriding MW-06-ACT-01
   - product lifecycle promotion or Product Control mutation
-  - P0c or P0d production qualification
-  - Temporal WBS Alerts Coherence Risk or Procurement functional changes
-  - broad architectural refactor or bounded-context consolidation
-  - mass deletion without reference evidence
-  - aggregate coverage threshold jumps unsupported by meaningful tests
+  - P0c P0d Temporal WBS Alerts Coherence Procurement product functionality
+  - bulk cleanup or unsupported coverage ratchet jump
 allowed_tools:
   - github_repository_read
   - scoped_repository_write
   - github_ci_read
-  - focused_python_tests
-  - repository_reference_search
+  - yaml_schema_validation
+  - focused_control_plane_tests
+  - independent_code_review
 forbidden_paths:
   - validation/product/**
   - docs/product/**
@@ -35,30 +39,34 @@ forbidden_paths:
   - apps/api/src/wbs/**
   - apps/api/src/coherence/**
   - apps/api/src/alerts/**
+  - apps/api/src/analysis/**
+  - apps/api/src/documents/**
+  - apps/api/src/procurement/**
 acceptance_criteria:
-  - root manifest no longer advertises nonexistent index.js or ISC licensing
-  - root JavaScript test command invokes the real frontend full-test surface
-  - README proprietary badge no longer links to a nonexistent LICENSE file
-  - confirmed mojibake is absent from touched live backend entrypoint
-  - apps/api/test.py is removed only after repository-wide reference search proves no active consumer
-  - referenced dev.py and requirements-sprint1.txt are preserved
-  - CI remains green and no active product PR is modified
-  - later Core AI coverage work removes exclusions only with failure-path and contract tests
+  - active DEV-15 queue entry refers to open follow-on issue 958 not closed historical 849
+  - original 849 closed completion stays historical and not re-opened
+  - current.yaml is byte-identical to pre-work main and contains zero active_work
+  - new GOAL includes residual Core AI reliability and observability and prompt governance without equating documentation to implementation
+  - Wave 3.11 and Wave 3.12 have separate PR/security and negative-test gates
+  - no non-DEV15 queue entry modified
+  - exact-head CI green independent principal review and behind main zero
 required_tests:
-  - C2PRO-DEV-15 Wave1 repository hygiene contract tests
-  - backend unit suite for touched CI-guard tests
-  - backend lint
+  - python scripts/development/validate_c2pro_control.py
+  - pytest tests/development/test_c2pro_control_plane.py -q
+  - repository document and YAML structural parity review
   - canonical GitHub CI required gates
 evidence_required:
   - exact_base_sha
-  - issue_849_scope
-  - repository_reference_search_results
+  - historical_issue_849_closed
+  - new_issue_958_open
+  - old_new_queue_work_ref_diff
+  - current_yaml_unchanged
   - exact_head_ci
-  - independent_review
+  - independent_principal_review
 review_policy: independent_principal
 worker_selection:
   preferred: null
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
   selected: null
-timeout_resource_policy: bounded_repository_hygiene_no_production_mutation
+timeout_resource_policy: bounded_dev15_control_plane_reconciliation_only_no_runtime_or_prod_mutation
