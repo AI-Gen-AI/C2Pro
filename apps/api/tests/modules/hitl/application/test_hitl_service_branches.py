@@ -213,3 +213,92 @@ class TestExistingCritiqueEvidenceAuthority:
         assert status is ReviewStatus.PENDING_REVIEW_REQUIRED
         mock_repo.add_review_item.assert_not_called()
         mock_repo.update_review_item.assert_not_called()
+
+
+
+@pytest.mark.asyncio
+async def test_late_candidate_binding_does_not_block_same_evidence_review() -> None:
+    """#714: N13 can first create the review before artifact binding is durable."""
+    from unittest.mock import AsyncMock
+
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        HumanInTheLoopService,
+    )
+
+    document = uuid4()
+    evidence = [{"claim": "Read the original", "claim_verified": False}]
+    existing = ReviewItem(
+        item_id=document,
+        item_type="contract",
+        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        confidence=0.7,
+        impact_level=ImpactLevel.HIGH,
+        created_at=datetime.now(),
+        sla_due_date=datetime.now() + timedelta(days=1),
+        item_data={"critique_observations": evidence},
+        metadata={
+            "review_type": "analysis_critique",
+            "candidate_binding": {"artifact_id": "bound-after-initial-review"},
+        },
+    )
+    repo = AsyncMock(spec=IReviewQueueRepository)
+    repo.find_active_review.return_value = existing
+    service = HumanInTheLoopService(
+        review_queue_repo=repo,
+        notification_service=AsyncMock(spec=INotificationService),
+        confidence_router=ConfidenceRouter(),
+    )
+    status = await service.route_for_review(
+        item_id=document,
+        item_type="contract",
+        confidence=0.7,
+        impact_level=ImpactLevel.HIGH,
+        item_data={"critique_observations": evidence},
+        metadata={"document_id": str(document), "review_type": "analysis_critique"},
+    )
+    assert status is ReviewStatus.PENDING_REVIEW_REQUIRED
+    repo.update_review_item.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_two_conflicting_explicit_candidate_bindings_fail_closed() -> None:
+    """A genuine candidate rebind may not silently inherit the prior review."""
+    from unittest.mock import AsyncMock
+
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        HumanInTheLoopService,
+        StaleCritiqueReviewEvidence,
+    )
+
+    document = uuid4()
+    evidence = [{"claim": "Same text", "claim_verified": False}]
+    existing = ReviewItem(
+        item_id=document, item_type="contract",
+        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        confidence=0.7, impact_level=ImpactLevel.HIGH,
+        created_at=datetime.now(), sla_due_date=datetime.now() + timedelta(days=1),
+        item_data={"critique_observations": evidence},
+        metadata={
+            "review_type": "analysis_critique",
+            "candidate_binding": {"artifact_hash": "a" * 64},
+        },
+    )
+    repo = AsyncMock(spec=IReviewQueueRepository)
+    repo.find_active_review.return_value = existing
+    service = HumanInTheLoopService(
+        review_queue_repo=repo,
+        notification_service=AsyncMock(spec=INotificationService),
+        confidence_router=ConfidenceRouter(),
+    )
+    with pytest.raises(StaleCritiqueReviewEvidence):
+        await service.route_for_review(
+            item_id=document, item_type="contract", confidence=0.7,
+            impact_level=ImpactLevel.HIGH,
+            item_data={"critique_observations": evidence},
+            metadata={
+                "document_id": str(document),
+                "review_type": "analysis_critique",
+                "candidate_binding": {"artifact_hash": "b" * 64},
+            },
+        )
+    repo.update_review_item.assert_not_called()
