@@ -167,6 +167,56 @@ class TestRouterNodeThinDelegation:
 
 class TestCritiqueNodeThinDelegation:
     @pytest.mark.asyncio
+    async def test_structured_observations_survive_graph_checkpoint_as_unverified_claims(
+        self, monkeypatch
+    ) -> None:
+        """#937: reviewer must retain quote, witness, revision and honest source basis."""
+        from src.analysis.adapters.graph import nodes
+
+        source = "\n  Clause 5.2: The Contractor shall rectify defects within fourteen days."
+        quote = "The Contractor shall rectify defects"
+        ai = _FakeAI(payload={
+            "status": "OK",
+            "notes": "Check contractual obligation.",
+            "observations": [
+                {"claim": "Rectification is contractor duty", "source_quote": quote},
+                {"claim": "Wrong deadline", "source_quote": "thirty days"},
+            ],
+        })
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
+        state = _make_state(
+            document_text=source,
+            extracted_risks=[{"confidence": 0.9}],
+            document_revision_id="00000000-0000-0000-0000-000000000004",
+        )
+        result = await nodes.critique_node(state)
+        observations = result["critique_observations"]
+        assert len(observations) == 2
+        assert observations[0]["witness_status"] == "LOCATED"
+        assert observations[0]["char_start"] == source.index(quote)
+        assert observations[0]["char_end"] == source.index(quote) + len(quote)
+        assert observations[0]["claim_verified"] is False
+        assert observations[0]["source_basis"] == "document_text"
+        assert observations[0]["document_revision_id"] == state["document_revision_id"]
+        assert observations[1]["witness_status"] == "UNRESOLVED"
+        assert observations[1]["char_start"] is None
+        assert result["node_results"][-1].data["observations"] == observations
+        assert result["retry_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_critique_mock_clears_preexisting_observations(self, monkeypatch) -> None:
+        """Mocked critique never promotes old quoted witnesses into a new checkpoint."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        result = await nodes.critique_node(
+            _make_state(critique_observations=[{"claim": "stale"}])
+        )
+        assert result["critique_observations"] == []
+        assert result["node_results"][-1].data["observations"] == []
+
+    @pytest.mark.asyncio
     async def test_ok_path(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
