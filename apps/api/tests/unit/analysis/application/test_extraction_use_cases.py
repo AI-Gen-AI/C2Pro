@@ -317,3 +317,57 @@ async def test_critique_absent_or_truncated_source_is_explicitly_unverified() ->
     )
     assert "PARTIAL EXCERPT" in ai.calls[1][1]
     assert "END_SENTINEL" not in ai.calls[1][1]
+
+
+@pytest.mark.asyncio
+async def test_structured_critique_observations_verify_quotes_not_interpretations() -> None:
+    from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus
+
+    clause = (
+        "Clause 5.2: Defective work shall be rectified at the Contractor's "
+        "cost within fourteen (14) days of written notice."
+    )
+    ai = _FakeAI(payload={
+        "status": "RETRY",
+        "notes": "Source contradicts one risk assertion.",
+        "observations": [
+            {
+                "claim": "Risk incorrectly says the Contractor cost allocation is absent",
+                "source_quote": "Contractor's cost within fourteen (14) days",
+            },
+            {
+                "claim": "Penalty clause definitely missing",
+                "source_quote": "The parties waive all delay penalties",
+            },
+        ],
+    })
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{"title": "Defect rectification", "confidence": 0.85}],
+            extracted_wbs=[],
+            doc_type="contract",
+            retry_count=0,
+            source_text=clause,
+        )
+    )
+    assert len(result.observations) == 2
+    assert result.observations[0].witness.status is QuoteWitnessStatus.LOCATED
+    assert result.observations[0].witness.claim_verified is False
+    assert result.observations[1].witness.status is QuoteWitnessStatus.UNRESOLVED
+    assert result.observations[1].witness.char_start is None
+
+
+@pytest.mark.asyncio
+async def test_legacy_unstructured_notes_remain_unverified_no_invented_observations() -> None:
+    ai = _FakeAI(payload={"status": "OK", "notes": "Clause 5.2 may be corrupt."})
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{"confidence": 0.9}],
+            extracted_wbs=[],
+            doc_type="contract",
+            retry_count=0,
+            source_text="Clause 5.2: within fourteen (14) days.",
+        )
+    )
+    assert result.observations == ()
+    assert "corrupt" in result.notes_raw
