@@ -42,12 +42,16 @@ class _Rows:
 
 
 class _Session:
-    def __init__(self, *responses):
+    def __init__(self, *responses, safe_db_role=True):
         self.rows = iter(responses)
         self.calls = []
+        self.safe_db_role = safe_db_role
 
     async def execute(self, statement, bindings):
-        self.calls.append((str(statement), bindings))
+        sql = str(statement)
+        self.calls.append((sql, bindings))
+        if "AS safe_hitl_writer_role" in sql:
+            return _Rows({"safe_hitl_writer_role": self.safe_db_role})
         return _Rows(next(self.rows))
 
 
@@ -123,6 +127,26 @@ async def test_refuses_wrong_authenticated_tenant_reviewer_or_source_without_db_
 
 
 @pytest.mark.asyncio
+async def test_non_bypass_database_principal_is_required_before_first_lock():
+    """#940: even a human reviewer cannot write via privileged postgres/service_role."""
+    draft = _draft()
+    session = _Session(safe_db_role=False)
+    with pytest.raises(FindingDecisionIdentityError, match="database principal"):
+        await FindingDecisionLedgerWriter(session).record(
+            tenant_id=draft.candidate.tenant_id,
+            authenticated_reviewer_id=draft.reviewer_id,
+            source_item_id=_SOURCE_ID,
+            ordinal=0,
+            idempotency_key="request-12345",
+            draft=draft,
+        )
+    assert len(session.calls) == 1
+    assert "safe_hitl_writer_role" in session.calls[0][0]
+    assert session.calls[0][1]["tenant_id"] == str(draft.candidate.tenant_id)
+    assert all("FOR UPDATE" not in sql and "INSERT INTO" not in sql for sql, _ in session.calls)
+
+
+@pytest.mark.asyncio
 async def test_new_decision_checks_row_lock_then_appends_one_provisional_event():
     draft = _draft()
     event_id = uuid4()
@@ -144,8 +168,8 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     assert receipt.event_id == event_id
     assert receipt.ledger_revision == 1
     assert receipt.replayed is False
-    assert len(session.calls) == 5
-    assert "FOR UPDATE" in session.calls[0][0]
+    assert len(session.calls) == 6
+    assert "FOR UPDATE" in session.calls[1][0]
     assert "INSERT INTO public.hitl_finding_decisions" in session.calls[-1][0]
     assert "approve" not in session.calls[-1][0].lower()
     assert "trusted" not in session.calls[-1][0].lower()
@@ -169,7 +193,7 @@ async def test_stale_ledger_revision_fails_before_any_insert():
             idempotency_key="request-12345",
             draft=draft,
         )
-    assert len(session.calls) == 4
+    assert len(session.calls) == 5
     assert all("INSERT INTO" not in sql for sql, _ in session.calls)
 
 
@@ -212,7 +236,7 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
     receipt = await FindingDecisionLedgerWriter(session).record(**params)
     assert receipt.replayed is True
     assert receipt.event_id == existing["event_id"]
-    assert len(session.calls) == 3
+    assert len(session.calls) == 4
 
     session = _Session(
         _locked(draft),
@@ -221,7 +245,7 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
     )
     with pytest.raises(FindingDecisionIdempotencyConflict):
         await FindingDecisionLedgerWriter(session).record(**params)
-    assert len(session.calls) == 3
+    assert len(session.calls) == 4
 
 
 @pytest.mark.asyncio
@@ -237,7 +261,7 @@ async def test_missing_review_row_does_not_write():
             idempotency_key="request-12345",
             draft=draft,
         )
-    assert len(session.calls) == 1
+    assert len(session.calls) == 3
 
 
 @pytest.mark.asyncio
@@ -255,7 +279,7 @@ async def test_stale_candidate_rebind_fails_closed_even_for_identical_replay():
             idempotency_key="request-12345",
             draft=draft,
         )
-    assert len(session.calls) == 1
+    assert len(session.calls) == 3
 
 @pytest.mark.asyncio
 async def test_stale_fence_or_unbound_candidate_does_not_record_a_review_event():
@@ -278,7 +302,7 @@ async def test_stale_fence_or_unbound_candidate_does_not_record_a_review_event()
                 idempotency_key="request-12345",
                 draft=draft,
             )
-        assert len(session.calls) == 1
+        assert len(session.calls) == 3
 
 
 @pytest.mark.asyncio
@@ -294,7 +318,7 @@ async def test_candidate_source_query_is_revision_fence_hash_and_proposed_scoped
         idempotency_key="request-12345",
         draft=draft,
     )
-    source_query, params = session.calls[1]
+    source_query, params = session.calls[2]
     assert "public.document_artifacts" in source_query
     assert "document_processing_operations" in source_query
     assert "proposed" in source_query
@@ -321,7 +345,7 @@ async def test_stale_or_missing_candidate_cannot_pass_membership_gate():
                 idempotency_key="request-12345",
                 draft=draft,
             )
-        assert len(session.calls) == 2
+        assert len(session.calls) == 3
 
 
 @pytest.mark.asyncio
