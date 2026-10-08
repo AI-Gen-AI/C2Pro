@@ -47,6 +47,11 @@ class FindingDecisionWriteReceipt:
 # Refuse runtime writes through postgres/service_role or a table owner,
 # even with FORCE RLS: BYPASSRLS and superuser sessions can skip policies.
 # Preflight in the SAME transaction before the review lock or any replay.
+# This is necessary but NOT sufficient to authenticate the ORIGINAL DB
+# connection: a superuser can SET SESSION AUTHORIZATION to spoof a safe
+# session_user. Production enablement therefore separately requires a
+# dedicated login credential, exclusive nonprivileged pool, and an audited
+# no-session-authorization policy. Until provisioned, writer remains denied.
 # This intentionally denies operation until a dedicated, unprivileged LOGIN
 # principal has been provisioned with only the required tenant-scoped grants.
 _SAFE_DB_ROLE = text("""
@@ -59,6 +64,15 @@ SELECT (
            AND r.rolcanlogin
            AND NOT r.rolsuper
            AND NOT r.rolbypassrls
+           AND NOT r.rolcreaterole
+           AND NOT r.rolcreatedb
+           AND NOT r.rolreplication
+           -- A dedicated ledger LOGIN must have no role memberships,
+           -- including NOINHERIT/SET ROLE paths to the table owner or
+           -- destructive privileges. Give it direct, scoped GRANTs only.
+           AND NOT EXISTS (
+               SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid
+           )
     )
     AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'SELECT')
     AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'INSERT')
