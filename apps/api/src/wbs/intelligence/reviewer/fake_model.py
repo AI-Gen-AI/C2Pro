@@ -9,7 +9,7 @@ It opens no connection and imports no provider SDK. Provenance written for a run
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Final
 
 from src.wbs.intelligence.contracts.run import ModelFingerprint
@@ -46,6 +46,7 @@ class FakeReviewerModelAdapter:
         *,
         responder: Callable[[ModelCallRequest], Step] | None = None,
         usage: Callable[[ModelCallRequest, str], ModelUsage] = _synthetic_usage,
+        latency: Callable[[ModelCallRequest], Awaitable[None]] | None = None,  # a test seam: a slow model
     ) -> None:
         if (script is None) == (responder is None):
             raise ValueError("a fake model is driven by exactly one of a script or a responder")
@@ -53,6 +54,7 @@ class FakeReviewerModelAdapter:
         self._cursor: dict[ReviewTask, int] = {}
         self._responder = responder
         self._usage = usage
+        self._latency = latency
         self.calls: list[ModelCallRequest] = []
 
     def _next(self, request: ModelCallRequest) -> Step:
@@ -69,6 +71,8 @@ class FakeReviewerModelAdapter:
 
     async def complete(self, request: ModelCallRequest) -> ModelCallResponse:
         self.calls.append(request)
+        if self._latency is not None:
+            await self._latency(request)
         step = self._next(request)
         if isinstance(step, BaseException):
             raise step

@@ -87,9 +87,20 @@ class WBSReviewerModelPort(Protocol):
     async def complete(self, request: ModelCallRequest) -> ModelCallResponse: ...
 
 
+def is_synthetic_adapter(model: object) -> bool:
+    """True only for the in-memory synthetic adapter itself -- never for a self-declared one.
+
+    An adapter's own ``is_synthetic`` claim is not trusted: the class must be exactly
+    ``FakeReviewerModelAdapter`` and its ``complete`` must not be replaced on the instance.
+    """
+    from src.wbs.intelligence.reviewer.fake_model import FakeReviewerModelAdapter
+
+    return type(model) is FakeReviewerModelAdapter and "complete" not in vars(model)
+
+
 def require_offline_adapter(model: WBSReviewerModelPort) -> None:
-    """Refuse a live adapter while ``LIVE_MODEL_EXECUTION_AUTHORIZED`` is False (before any call)."""
-    if model.is_synthetic is not True and not LIVE_MODEL_EXECUTION_AUTHORIZED:
+    """Refuse anything but the synthetic adapter while ``LIVE_MODEL_EXECUTION_AUTHORIZED`` is False."""
+    if not is_synthetic_adapter(model) and not LIVE_MODEL_EXECUTION_AUTHORIZED:
         raise LiveModelExecutionBlocked(
             "live WBS Reviewer model execution is not authorized (PC2B4_OFFLINE_ONLY): use the synthetic adapter")
 
@@ -104,5 +115,6 @@ __all__ = [
     "ModelUsage",
     "ReviewTask",
     "WBSReviewerModelPort",
+    "is_synthetic_adapter",
     "require_offline_adapter",
 ]

@@ -2,9 +2,11 @@
 
 Every model call is admitted by the budget BEFORE it starts: the call count, the per-call input
 estimate, the total token budget, the cost budget (estimated with the declared maximum output) and
-the elapsed time. A retry is a call. A response whose reported usage exceeds the declared per-call
-limits is discarded (OVER_LIMIT) and still charged. Once a cap is reached, or the run is cancelled,
-no further call begins.
+the elapsed time. The calls the run still owes (the REDUCE) keep their worst-case token and cost
+budget reserved while MAP calls are admitted. A retry is a call. A call that fails is charged its
+admitted estimate (a provider may bill a failed call). A response whose reported usage exceeds the
+declared per-call limits is discarded (OVER_LIMIT) and still charged. Once a cap is reached, or the
+run is cancelled, no further call begins. Every cap has a hard ceiling.
 
 The execution configuration (every field below: each one changes which evidence is read, which
 calls may start or which responses are kept) has a canonical, versioned digest. It binds the run's
@@ -25,6 +27,12 @@ from src.wbs.intelligence.reviewer.model_port import ModelUsage
 
 MAX_CALLS_CEILING: Final = 24
 MAX_RETRIES_CEILING: Final = 2
+MAX_TOTAL_TOKENS_CEILING: Final = 1_000_000
+MAX_COST_MICRO_USD_CEILING: Final = 5_000_000
+MAX_ELAPSED_MS_CEILING: Final = 1_800_000
+CHARS_PER_TOKEN: Final = 4  # the admission estimate (characters per token)
+EVIDENCE_SHARE: Final = 0.45  # of a call's input budget: the evidence every call carries
+EXCERPT_OVERHEAD_CHARS: Final = 120  # isolation markers around one excerpt
 EXECUTION_CONFIG_VERSION: Final = "wbs-reviewer-execution-config/v1"
 
 
@@ -44,8 +52,8 @@ class ReviewLimits:
     max_retries: int = MAX_RETRIES_CEILING
     max_input_tokens_per_call: int = 24_000
     max_output_tokens_per_call: int = 4_000
-    max_total_tokens: int = 200_000
-    max_cost_micro_usd: int = 2_000_000
+    max_total_tokens: int = 600_000  # coherent with 24 calls of bounded input and maximum output
+    max_cost_micro_usd: int = 3_000_000
     # synthetic estimation rates (micro-USD per 1k tokens) used for admission only
     input_micro_usd_per_1k: int = 3_000
     output_micro_usd_per_1k: int = 15_000
@@ -67,8 +75,18 @@ class ReviewLimits:
         for name in positive:
             if getattr(self, name) < 1:
                 raise ValueError(f"{name} must be positive")
-        if self.input_micro_usd_per_1k < 0 or self.output_micro_usd_per_1k < 0:
-            raise ValueError("estimation rates are not negative")
+        ceilings = {"max_total_tokens": MAX_TOTAL_TOKENS_CEILING, "max_cost_micro_usd": MAX_COST_MICRO_USD_CEILING,
+                    "max_elapsed_ms": MAX_ELAPSED_MS_CEILING}
+        for name, ceiling in ceilings.items():
+            if getattr(self, name) > ceiling:
+                raise ValueError(f"{name} is at most {ceiling}")
+        if self.input_micro_usd_per_1k < 1 or self.output_micro_usd_per_1k < 1:
+            raise ValueError("estimation rates are positive (a zero rate would disable the cost cap)")
+
+    @property
+    def evidence_chars(self) -> int:
+        """Characters of evidence (with markers) one call may carry: the manifest never exceeds it."""
+        return int(self.max_input_tokens_per_call * CHARS_PER_TOKEN * EVIDENCE_SHARE)
 
     def estimated_cost(self, input_tokens: int, output_tokens: int) -> int:
         return math.ceil(input_tokens * self.input_micro_usd_per_1k / 1000) + math.ceil(
@@ -82,7 +100,7 @@ def execution_config_digest(limits: ReviewLimits) -> str:
 
 
 def estimate_tokens(*texts: str) -> int:
-    return math.ceil(sum(len(t) for t in texts) / 4)
+    return math.ceil(sum(len(t) for t in texts) / CHARS_PER_TOKEN)
 
 
 @dataclass
@@ -103,20 +121,37 @@ class CallBudget:
     def elapsed_ms(self) -> int:
         return max(0, int((self.clock() - self.started) * 1000))
 
+    @property
+    def remaining_ms(self) -> int:
+        return max(0, self.limits.max_elapsed_ms - self.elapsed_ms)
+
     def admit(self, estimated_input_tokens: int, *, reserve_calls: int = 0) -> StopReason | None:
-        """Why a call estimated at ``estimated_input_tokens`` may NOT start now (None = admitted)."""
+        """Why a call estimated at ``estimated_input_tokens`` may NOT start now (None = admitted).
+
+        ``reserve_calls`` later calls keep their worst case (maximum input and output) reserved.
+        """
         limits = self.limits
         if self.calls + 1 + reserve_calls > limits.max_calls:
             return StopReason.CALL_CAP
+        reserved_tokens = reserve_calls * (limits.max_input_tokens_per_call + limits.max_output_tokens_per_call)
         if (self.input_tokens + self.output_tokens + estimated_input_tokens + limits.max_output_tokens_per_call
-                > limits.max_total_tokens):
+                + reserved_tokens > limits.max_total_tokens):
             return StopReason.TOKEN_CAP
+        reserved_cost = reserve_calls * limits.estimated_cost(limits.max_input_tokens_per_call,
+                                                              limits.max_output_tokens_per_call)
         if (self.cost_micro_usd + limits.estimated_cost(estimated_input_tokens, limits.max_output_tokens_per_call)
-                > limits.max_cost_micro_usd):
+                + reserved_cost > limits.max_cost_micro_usd):
             return StopReason.COST_CAP
-        if self.elapsed_ms > limits.max_elapsed_ms:
+        if self.elapsed_ms >= limits.max_elapsed_ms:
             return StopReason.TIME_CAP
         return None
+
+    def charge_failed(self, estimated_input_tokens: int) -> None:
+        """Charge a call that started but returned no usable usage: its admitted worst case."""
+        limits = self.limits
+        self.input_tokens += estimated_input_tokens
+        self.output_tokens += limits.max_output_tokens_per_call
+        self.cost_micro_usd += limits.estimated_cost(estimated_input_tokens, limits.max_output_tokens_per_call)
 
     def charge(self, usage: ModelUsage) -> bool:
         """Account a response; False when it broke the declared per-call limits (discard it)."""
@@ -128,9 +163,15 @@ class CallBudget:
 
 
 __all__ = [
+    "CHARS_PER_TOKEN",
+    "EVIDENCE_SHARE",
+    "EXCERPT_OVERHEAD_CHARS",
     "EXECUTION_CONFIG_VERSION",
     "MAX_CALLS_CEILING",
+    "MAX_COST_MICRO_USD_CEILING",
+    "MAX_ELAPSED_MS_CEILING",
     "MAX_RETRIES_CEILING",
+    "MAX_TOTAL_TOKENS_CEILING",
     "CallBudget",
     "ReviewLimits",
     "StopReason",

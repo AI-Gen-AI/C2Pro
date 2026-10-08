@@ -12,9 +12,17 @@ failed or cancelled ONLY through the existing PC-2b.2 intelligence store (no sec
 runs frozen, items immutable). It never creates or edits a change set, never submits, approves or
 applies anything and never creates a baseline: proposals wait for the human decision loop.
 
-Live model execution is BLOCKED: the service refuses any non-synthetic adapter before anything else.
-Provenance of a run made with the synthetic adapter says so (``synthetic: true``,
-``production_invocation: false``); usage is attributed to tenant, project and run in an append-only
+Transactions: the review commits. The RUNNING run is committed BEFORE any model call, so another
+session can see and cancel it, and no change-set lock or open transaction is held while the model
+works; the run is finalized in a fresh transaction that re-reads it under lock and keeps a state
+another session already set (CANCELLED, or FAILED by an expired lease). A RUNNING run whose worker was
+lost is reused only within its lease (the time cap plus a grace); afterwards it is failed and an
+equivalent review opens a new run. An unexpected pipeline error is persisted as FAILED with a static
+reason. Contract and scope availability come from the TRUSTED excerpts the model actually sees.
+
+Live model execution is BLOCKED: the service refuses anything but the synthetic adapter itself (an
+adapter's own ``is_synthetic`` claim is not trusted). Provenance and usage derive ``synthetic`` from
+the adapter, never from a constant; usage is attributed to tenant, project and run in an append-only
 ``wbs.intelligence.run_usage`` project event that carries counts only -- never evidence, prompts or
 model output, which are not logged either.
 """
@@ -24,6 +32,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Final
 from uuid import UUID, uuid4
@@ -39,6 +48,7 @@ from src.wbs.adapters.persistence.import_models import WBSImportSourceORM
 from src.wbs.adapters.persistence.intelligence_models import WBSIntelligenceRunORM
 from src.wbs.domain.governance import ChangeSetStatus, EntryMode, can_author
 from src.wbs.intelligence.application.service import (
+    RunRequestResult,
     WBSIntelligenceForbiddenError,
     WBSIntelligenceInvalidError,
     WBSIntelligenceNotFoundError,
@@ -48,12 +58,16 @@ from src.wbs.intelligence.application.service import (
     _candidate_snapshot,
     _resolve_profiles,
 )
-from src.wbs.intelligence.contracts.evidence import EvidenceManifest
+from src.wbs.intelligence.contracts.evidence import EvidenceManifest, InputClass
 from src.wbs.intelligence.contracts.proposal import PROPOSAL_CONTRACT_VERSION
-from src.wbs.intelligence.contracts.qualification import QUALIFICATION_VOCAB_VERSION
+from src.wbs.intelligence.contracts.qualification import (
+    QUALIFICATION_VOCAB_VERSION,
+    AvailabilityContext,
+)
 from src.wbs.intelligence.contracts.run import (
     ExecutionType,
     IntelligenceMode,
+    RunOutcome,
     RunScope,
     RunStatus,
     RunTarget,
@@ -61,7 +75,9 @@ from src.wbs.intelligence.contracts.run import (
     idempotency_key,
 )
 from src.wbs.intelligence.reviewer.evidence import (
+    SCOPE_DOCUMENT_TYPES,
     Anonymizer,
+    EvidenceInventory,
     EvidenceRequest,
     ImportStructure,
     ManifestScopedChunkReader,
@@ -75,15 +91,22 @@ from src.wbs.intelligence.reviewer.limits import (
     ReviewLimits,
     execution_config_digest,
 )
-from src.wbs.intelligence.reviewer.model_port import WBSReviewerModelPort, require_offline_adapter
+from src.wbs.intelligence.reviewer.model_port import (
+    WBSReviewerModelPort,
+    is_synthetic_adapter,
+    require_offline_adapter,
+)
 from src.wbs.intelligence.reviewer.pipeline import (
     ORCHESTRATION_VERSION,
     PipelineResult,
     PipelineStatus,
     ReviewInputs,
+    UsageSummary,
     run_review_pipeline,
 )
+from src.wbs.intelligence.reviewer.privacy import transform_label
 from src.wbs.intelligence.reviewer.prompts import template_refs
+from src.wbs.intelligence.validation.output_validator import ValidationReport
 from src.wbs.intelligence.validation.simulation import TargetSnapshot
 
 logger = structlog.get_logger()
@@ -120,8 +143,41 @@ def _import_outline(snapshot: dict[str, Any]) -> str:
                                                 str(r.get("name") or "")) if part) for r in rows)
 
 
+_LEASE_GRACE: Final = timedelta(seconds=60)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+@dataclass(frozen=True)
+class _VisibleAvailability:
+    has_trusted_contract: bool
+    has_trusted_scope_evidence: bool
+
+
+def _visible_availability(inventory: EvidenceInventory, manifest: EvidenceManifest) -> _VisibleAvailability:
+    """Contract / scope availability from the TRUSTED excerpts the model actually sees."""
+    types = {(s.document_id, s.revision_id): s.document_type for s in inventory.sources}
+    seen = {types.get((item.canonical_source.document_id, item.canonical_source.revision_id))
+            for item in manifest.items
+            if item.input_class is InputClass.TRUSTED_PROJECT_EVIDENCE and item.canonical_source is not None}
+    return _VisibleAvailability(has_trusted_contract="contract" in seen,
+                                has_trusted_scope_evidence=bool(seen & SCOPE_DOCUMENT_TYPES))
+
+
+def _unexpected_failure() -> PipelineResult:
+    return PipelineResult(
+        status=PipelineStatus.FAILED, outcome=RunOutcome.FAILED, qualification=None, findings=(), proposals=(),
+        finding_refs={}, uncovered=(), report=ValidationReport(), calls=(),
+        usage=UsageSummary(calls=0, retries=0, input_tokens=0, output_tokens=0, cost_micro_usd=0, elapsed_ms=0),
+        stop_reason=None, failure_reason="the review pipeline raised an unexpected error",
+        availability=AvailabilityContext(has_trusted_contract=False, has_trusted_scope_evidence=False,
+                                         ai_qualification_run=True, target_is_empty=False))
+
+
 class WBSReviewerService:
-    """The offline Reviewer over one transactional session (the caller commits)."""
+    """The offline Reviewer over one session; ``review`` commits its own work (see the module docstring)."""
 
     def __init__(
         self,
@@ -221,6 +277,7 @@ class WBSReviewerService:
                                   limits=self.limits,
                                   import_structure=await self._import_structure(scope, captured.import_source_id),
                                   user_context=request.user_context)
+        visible = _visible_availability(inventory, manifest)  # from what the model sees, not the inventory
         fingerprint = self.model.fingerprint
         templates = template_refs()
         nonce = uuid4().hex if rerun else None
@@ -231,60 +288,98 @@ class WBSReviewerService:
                               prompt_templates=templates, model=fingerprint,
                               orchestration_version=ORCHESTRATION_VERSION, rerun_nonce=nonce,
                               execution_config_digest=config_digest)
+        synthetic = is_synthetic_adapter(self.model)  # derived from the adapter itself, never self-declared
         provenance = {
-            "synthetic": True, "production_invocation": False, "adapter": type(self.model).__name__,
+            "synthetic": synthetic, "production_invocation": not synthetic, "adapter": type(self.model).__name__,
             "provider": fingerprint.provider, "model": fingerprint.model, "routing_tier": fingerprint.routing_tier,
             "temperature_milli": fingerprint.temperature_milli, "max_tokens": fingerprint.max_tokens,
             "prompt_templates": [t.model_dump() for t in templates], "orchestration_version": ORCHESTRATION_VERSION,
             "proposal_contract_version": PROPOSAL_CONTRACT_VERSION,
             "qualification_vocab_version": QUALIFICATION_VOCAB_VERSION, "limits": asdict(self.limits),
             "execution_config_version": EXECUTION_CONFIG_VERSION, "execution_config_digest": config_digest,
+            "privacy_transform": transform_label(self.anonymize),
         }
-        opened = await self.store.open_run(
-            scope=scope, mode=captured.mode, execution_type=ExecutionType.AI, target=captured.run_target,
-            evidence_set_digest=manifest.evidence_set_digest, profile_refs=profiles.pins(),
-            orchestration_version=ORCHESTRATION_VERSION, key=key, requested_by=actor.user_id, rerun_nonce=nonce,
-            model_provenance=provenance)
+        actor_ref = f"user:{actor.user_id}"
+        opened = await self._open(scope=scope, captured=captured, manifest=manifest, profiles=profiles, key=key,
+                                  actor=actor, actor_ref=actor_ref, nonce=nonce, provenance=provenance)
         if opened.reused:
             return ReviewResult(run=opened.run, reused=True, manifest=manifest, pipeline=None)
-        run = opened.run
+        run_id = opened.run.id
+        # The RUNNING run is committed BEFORE any model call: another session can see and cancel it, and
+        # no change-set lock or open transaction is held while the model works.
+        await self.session.commit()
 
         async def is_cancelled() -> bool:
             if cancelled is not None and cancelled():
                 return True
             status = await self.session.scalar(select(WBSIntelligenceRunORM.status).where(
-                WBSIntelligenceRunORM.id == run.id, WBSIntelligenceRunORM.tenant_id == tenant_id,
+                WBSIntelligenceRunORM.id == run_id, WBSIntelligenceRunORM.tenant_id == tenant_id,
                 WBSIntelligenceRunORM.project_id == project_id).execution_options(populate_existing=True))
-            return status == RunStatus.CANCELLED.value
+            await self.session.commit()  # end the read: nothing stays open across the next model call
+            return status != RunStatus.RUNNING.value  # cancelled elsewhere, or failed by an expired lease
 
         inputs = ReviewInputs(scope=scope, mode=captured.mode, target=captured.snapshot, manifest=manifest,
-                              profiles=profiles, has_trusted_contract=inventory.has_trusted_contract,
-                              has_trusted_scope_evidence=inventory.has_trusted_scope_evidence, run_id=run.id,
+                              profiles=profiles, has_trusted_contract=visible.has_trusted_contract,
+                              has_trusted_scope_evidence=visible.has_trusted_scope_evidence, run_id=run_id,
                               limits=self.limits, anonymize=self.anonymize)
-        result = await run_review_pipeline(inputs, self.model, cancelled=is_cancelled, clock=self.clock)
-        actor_ref = f"user:{actor.user_id}"
-        if result.status is PipelineStatus.COMPLETED:
-            assert result.outcome is not None and result.qualification is not None
-            run = await self.store.complete_run(run, outcome=result.outcome, qualification=result.qualification,
-                                                findings=result.findings, proposals=result.proposals,
-                                                finding_refs=result.finding_refs, actor=actor_ref)
-        elif result.status is PipelineStatus.FAILED:
-            run = await self.store.fail_run(run, reason=result.failure_reason or "the review failed", actor=actor_ref)
-        else:
-            run = await self.store.cancel_run(project_id=project_id, run_id=run.id, tenant_id=tenant_id, actor=actor)
+        try:
+            result = await run_review_pipeline(inputs, self.model, cancelled=is_cancelled, clock=self.clock)
+        except Exception:  # noqa: BLE001 - persisted as FAILED with a static reason; its text is never logged
+            logger.warning("wbs_review_pipeline_error", run_id=str(run_id))
+            result = _unexpected_failure()
+        run = await self.store.run(run_id, project_id, tenant_id, lock=True)
+        if run.status == RunStatus.RUNNING.value:
+            if result.status is PipelineStatus.COMPLETED:
+                assert result.outcome is not None and result.qualification is not None
+                run = await self.store.complete_run(run, outcome=result.outcome, qualification=result.qualification,
+                                                    findings=result.findings, proposals=result.proposals,
+                                                    finding_refs=result.finding_refs, actor=actor_ref)
+            elif result.status is PipelineStatus.FAILED:
+                run = await self.store.fail_run(run, reason=result.failure_reason or "the review failed",
+                                                actor=actor_ref)
+            else:
+                run = await self.store.cancel_run(project_id=project_id, run_id=run_id, tenant_id=tenant_id,
+                                                  actor=actor)
+        # else: the run already ended elsewhere (cancelled by a human, or failed by an expired lease): kept
         await self._usage_event(run, result, actor_ref)
+        await self.session.commit()
         logger.info("wbs_review_finished", run_id=str(run.id), status=run.status, outcome=run.outcome,
-                    calls=result.usage.calls, synthetic=True)
+                    calls=result.usage.calls, synthetic=synthetic)
         return ReviewResult(run=run, reused=False, manifest=manifest, pipeline=result)
+
+    async def _open(self, *, scope: RunScope, captured: _Target, manifest: EvidenceManifest, profiles: Any,
+                    key: str, actor: Actor, actor_ref: str, nonce: str | None,
+                    provenance: dict[str, Any]) -> RunRequestResult:
+        """Open the run, or reuse an equivalent one; a RUNNING run whose lease expired (its worker was lost)
+        is failed first, so it never blocks equivalent reviews forever."""
+        for _ in range(2):
+            opened = await self.store.open_run(
+                scope=scope, mode=captured.mode, execution_type=ExecutionType.AI, target=captured.run_target,
+                evidence_set_digest=manifest.evidence_set_digest, profile_refs=profiles.pins(),
+                orchestration_version=ORCHESTRATION_VERSION, key=key, requested_by=actor.user_id, rerun_nonce=nonce,
+                model_provenance=provenance)
+            if not (opened.reused and opened.run.status == RunStatus.RUNNING.value and self._expired(opened.run)):
+                return opened
+            stale = await self.store.run(opened.run.id, scope.project_id, scope.tenant_id, lock=True)
+            if stale.status == RunStatus.RUNNING.value and self._expired(stale):
+                await self.store.fail_run(stale, reason="the review's worker was lost (lease expired)", actor=actor_ref)
+                await self.session.commit()
+        return opened
+
+    def _expired(self, run: WBSIntelligenceRunORM) -> bool:
+        lease = timedelta(milliseconds=self.limits.max_elapsed_ms) + _LEASE_GRACE
+        return run.started_at is not None and _utcnow() - run.started_at > lease
 
     async def _usage_event(self, run: WBSIntelligenceRunORM, result: PipelineResult, actor: str) -> None:
         """Usage attributed to tenant, project and run -- counts only, never content."""
-        usage = result.usage
+        usage, synthetic = result.usage, is_synthetic_adapter(self.model)
         await self.store._event(
             project_id=run.project_id, tenant_id=run.tenant_id, event_type=EVENT_RUN_USAGE, actor=actor,
             payload={
                 "tenant_id": str(run.tenant_id), "project_id": str(run.project_id), "run_id": str(run.id),
-                "synthetic": True, "external_calls": 0, "provider": self.model.fingerprint.provider,
+                "synthetic": synthetic,
+                "external_calls": 0 if synthetic else sum(1 for c in result.calls if c.call_index > 0),
+                "provider": self.model.fingerprint.provider,
                 "status": run.status, "outcome": run.outcome, "calls": usage.calls, "retries": usage.retries,
                 "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
                 "cost_micro_usd": usage.cost_micro_usd, "elapsed_ms": usage.elapsed_ms,

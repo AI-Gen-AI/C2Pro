@@ -436,14 +436,12 @@ async def test_a_completed_review_is_persisted_with_visibly_synthetic_provenance
 async def test_a_cancelled_review_stores_nothing_but_its_state(db: AsyncSession) -> None:
     s, change_set_id, ids = await _world(db)
     flag = {"cancel": False}
+
+    async def cancelling(request: ModelCallRequest) -> None:
+        flag["cancel"] = True  # the human cancels while the first call is in flight
+
     fake = _model(ids)
-    original = fake.complete
-
-    async def cancelling(request: ModelCallRequest) -> Any:
-        flag["cancel"] = True
-        return await original(request)
-
-    fake.complete = cancelling  # type: ignore[method-assign]
+    fake._latency = cancelling  # the test seam of the synthetic adapter (its complete() is never replaced)
     result = await _review_draft(db, s, change_set_id, fake, cancelled=lambda: flag["cancel"])
     assert (result.run.status, result.run.outcome) == ("CANCELLED", "CANCELLED")
     assert await _count(db, WBSIntelligenceItemORM, run_id=result.run.id) == 0
@@ -460,28 +458,29 @@ async def test_a_failed_reduce_fails_the_run_and_stores_no_items(db: AsyncSessio
 
 # =========================================================================== 26-27 execution
 async def test_26_concurrent_equivalent_reviews_create_one_run_and_one_set_of_calls(db: AsyncSession) -> None:
+    """Two equal requests race: one opens the run (committed before any model call), the other reuses
+    it -- RUNNING or already COMPLETED -- with no model call of its own."""
     s, change_set_id, ids = await _world(db)
     engine = create_async_engine(os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://"))
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     first_model, second_model = _model(ids), _model(ids)
 
     async def request(session: AsyncSession, model: FakeReviewerModelAdapter) -> ReviewResult:
-        return await _reviewer(session, model).review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
-                                                      target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
+        result = await _reviewer(session, model).review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
+                                                        target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
+        await session.commit()
+        return result
 
     try:
         async with sessions() as first_session, sessions() as second_session:
-            first = await request(first_session, first_model)
-            racing = asyncio.create_task(request(second_session, second_model))
-            await asyncio.sleep(0.5)
-            assert not racing.done()  # serialized on the reusable idempotency key
-            await first_session.commit()
-            second = await asyncio.wait_for(racing, timeout=20)
-            await second_session.commit()
+            results = await asyncio.wait_for(asyncio.gather(request(first_session, first_model),
+                                                            request(second_session, second_model)), timeout=30)
     finally:
         await engine.dispose()
-    assert not first.reused and second.reused and second.run.id == first.run.id
-    assert len(first_model.calls) == 2 and second_model.calls == []
+    opened = [r for r in results if not r.reused]
+    reused = [r for r in results if r.reused]
+    assert len(opened) == 1 and len(reused) == 1 and reused[0].run.id == opened[0].run.id
+    assert sorted([len(first_model.calls), len(second_model.calls)]) == [0, 2]  # one set of calls
     assert await _count(db, WBSIntelligenceRunORM, project_id=s.project) == 1
 
 

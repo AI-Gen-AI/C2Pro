@@ -39,11 +39,12 @@ from src.wbs.intelligence.contracts.evidence import (
     ModelVisibleExcerpt,
 )
 from src.wbs.intelligence.contracts.run import RunScope
-from src.wbs.intelligence.reviewer.limits import ReviewLimits
+from src.wbs.intelligence.reviewer.limits import EXCERPT_OVERHEAD_CHARS, ReviewLimits
 from src.wbs.intelligence.reviewer.privacy import (
     ANONYMIZER_TRANSFORM,
     Anonymizer,
     default_anonymizer,
+    transform_label,
 )
 
 SCOPE_DOCUMENT_TYPES: Final = frozenset({"contract", "specification", "technical_spec"})
@@ -233,22 +234,33 @@ class ManifestScopedChunkReader:
 
 
 # ============================================================================ excerpts / manifest
-def _canonical(source: EvidenceSource, chunk: ScopedChunk, original: str) -> CanonicalSourceRef:
-    """The original-text locator; offsets only when the chunk carries exact original coordinates."""
-    exact = (chunk.char_start is not None and chunk.char_end is not None
+_ANONYMISE_WINDOW: Final = 8  # anonymise at most 8x the excerpt limit (far beyond any shrink of a cut)
+
+
+def _canonical(source: EvidenceSource, chunk: ScopedChunk, *, whole: bool) -> CanonicalSourceRef:
+    """The original-text locator: offsets only when the chunk carries exact original coordinates and
+    the model-visible excerpt is the whole chunk (a cut excerpt has no exact original range)."""
+    exact = (whole and chunk.char_start is not None and chunk.char_end is not None
              and chunk.char_end - chunk.char_start == len(chunk.content))
-    start = chunk.char_start if exact else None
-    end = (chunk.char_start + len(original)) if exact and chunk.char_start is not None else None
     quality = (LocatorQuality.EXACT if exact and chunk.page is not None
                else LocatorQuality.APPROXIMATE if chunk.page is not None else LocatorQuality.MISSING)
     return CanonicalSourceRef(document_id=source.document_id, revision_id=source.revision_id,
-                              blob_hash=source.blob_hash, page=chunk.page, char_start=start, char_end=end,
-                              locator_quality=quality)
+                              blob_hash=source.blob_hash, page=chunk.page,
+                              char_start=chunk.char_start if exact else None,
+                              char_end=chunk.char_end if exact else None, locator_quality=quality)
 
 
-def _visible(original: str, anonymize: Anonymizer) -> ModelVisibleExcerpt | None:
-    sanitised = anonymize(original)[:MAX_EXCERPT_CHARS].strip()
-    return ModelVisibleExcerpt.of(sanitised, transform=ANONYMIZER_TRANSFORM) if sanitised else None
+def _visible(text: str, anonymize: Anonymizer, *, limit: int, transform: str) -> tuple[ModelVisibleExcerpt | None, bool]:
+    """Anonymise THEN cut: an identifier straddling the cut is replaced before it could become a fragment.
+
+    Returns the excerpt (None when nothing is left) and whether it is a cut of the source text.
+    """
+    limit = min(limit, MAX_EXCERPT_CHARS)
+    window = text[:limit * _ANONYMISE_WINDOW]
+    sanitised = anonymize(window)
+    cut = len(window) < len(text) or len(sanitised) > limit
+    sanitised = sanitised[:limit].strip()
+    return (ModelVisibleExcerpt.of(sanitised, transform=transform) if sanitised else None), cut
 
 
 @dataclass(frozen=True)
@@ -275,30 +287,36 @@ def build_manifest(
     ordered = sorted((c for c in chunks if (c.document_id, c.revision_id) in by_pair),
                      key=lambda c: (_CLASS_PRIORITY[by_pair[(c.document_id, c.revision_id)].input_class],
                                     str(c.document_id)))
-    items: list[ManifestItem] = []
-    for chunk in ordered[:limits.max_excerpts]:
-        source = by_pair[(chunk.document_id, chunk.revision_id)]
-        original = chunk.content[:limits.max_excerpt_chars]
-        canonical = _canonical(source, chunk, original)  # captured BEFORE anonymisation
-        visible = _visible(original, anonymize)
-        if visible is None:
-            continue
-        items.append(ManifestItem(excerpt_id=f"E{len(items) + 1:03d}", input_class=source.input_class,
-                                  canonical_source=canonical, model_visible=visible))
+    transform = transform_label(anonymize)
+    tail: list[ManifestItem] = []  # the imported structure and the user context: always carried
     if import_structure is not None:
-        visible = _visible(import_structure.outline[:limits.max_excerpt_chars], anonymize)
+        visible, _ = _visible(import_structure.outline, anonymize, limit=limits.max_excerpt_chars, transform=transform)
         if visible is not None:
-            items.append(ManifestItem(
+            tail.append(ManifestItem(
                 excerpt_id="IMP001", input_class=InputClass.HUMAN_PROVIDED_IMPORT, model_visible=visible,
                 canonical_source=CanonicalSourceRef(document_id=import_structure.document_id,
                                                     revision_id=import_structure.revision_id,
                                                     blob_hash=import_structure.blob_hash, section="imported WBS rows",
                                                     locator_quality=LocatorQuality.APPROXIMATE)))
     if user_context and user_context.strip():
-        visible = _visible(user_context.strip()[:limits.max_user_context_chars], anonymize)
+        visible, _ = _visible(user_context.strip(), anonymize, limit=limits.max_user_context_chars,
+                              transform=transform)
         if visible is not None:
-            items.append(ManifestItem(excerpt_id="U001", input_class=InputClass.USER_CONTEXT, canonical_source=None,
-                                      model_visible=visible))
+            tail.append(ManifestItem(excerpt_id="U001", input_class=InputClass.USER_CONTEXT, canonical_source=None,
+                                     model_visible=visible))
+    # the manifest is exactly what every call carries: excerpts in class-priority order while they fit
+    budget = limits.evidence_chars - sum(len(i.model_visible.text) + EXCERPT_OVERHEAD_CHARS for i in tail)
+    items: list[ManifestItem] = []
+    for chunk in ordered[:limits.max_excerpts]:
+        source = by_pair[(chunk.document_id, chunk.revision_id)]
+        visible, cut = _visible(chunk.content, anonymize, limit=limits.max_excerpt_chars, transform=transform)
+        if visible is None or len(visible.text) + EXCERPT_OVERHEAD_CHARS > budget:
+            continue
+        budget -= len(visible.text) + EXCERPT_OVERHEAD_CHARS
+        canonical = _canonical(source, chunk, whole=not cut)  # from the ORIGINAL chunk, never the visible text
+        items.append(ManifestItem(excerpt_id=f"E{len(items) + 1:03d}", input_class=source.input_class,
+                                  canonical_source=canonical, model_visible=visible))
+    items += tail
     return EvidenceManifest(tenant_id=scope.tenant_id, project_id=scope.project_id, items=tuple(items))
 
 

@@ -28,6 +28,7 @@ PC-2b.2 store.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 import re
@@ -65,6 +66,8 @@ from src.wbs.intelligence.profiles.catalog import ResolvedProfileSet
 from src.wbs.intelligence.qualification.deterministic import QualifierNode, qualify
 from src.wbs.intelligence.reviewer.clusters import Cluster, partition
 from src.wbs.intelligence.reviewer.limits import (
+    CHARS_PER_TOKEN,
+    EXCERPT_OVERHEAD_CHARS,
     CallBudget,
     ReviewLimits,
     StopReason,
@@ -101,6 +104,21 @@ _BLOCK_KIND: Final = {
 }
 
 Cancelled = Callable[[], bool | Awaitable[bool]]
+
+# Per-call input budget (characters): every MAP and the REDUCE fit by construction. Evidence takes
+# ``EVIDENCE_SHARE`` (limits.py), the target outline 25%, REDUCE's MAP summaries 15%; the rest is the
+# template, the isolation preamble and markers.
+_OUTLINE_SHARE: Final = 0.25
+_SUMMARY_SHARE: Final = 0.15
+_NAME_CHARS: Final = 200
+_CODE_CHARS: Final = 64
+_SUMMARY_CHARS: Final = 300
+_SAFE_FAILURE = re.compile(r"^(\d+ of \d+ items refused \(over \d+%\)|a dimension or item ref appears twice)$")
+
+
+def _safe_failure(message: str | None) -> str:
+    """A persisted failure reason never carries model text: only known, content-free messages pass."""
+    return message if message and _SAFE_FAILURE.match(message) else "the assembled review failed validation"
 
 
 class PipelineStatus(StrEnum):
@@ -256,6 +274,9 @@ class _Review:
         self.records: list[CallRecord] = []
         self.report = ValidationReport()
         self.stop: StopReason | None = None
+        self.pre_rejected: set[str] = set()  # refs refused before validation (they count toward the ratio)
+        self.map_items_total = 0
+        self.shown = self._select_evidence()  # the excerpts every call carries (bounded per call)
         trusted = [i for i in inputs.manifest.items if i.input_class is InputClass.TRUSTED_PROJECT_EVIDENCE]
         has_scope = inputs.has_trusted_scope_evidence and bool(trusted)
         self.ctx = AvailabilityContext(has_trusted_contract=inputs.has_trusted_contract and has_scope,
@@ -298,22 +319,64 @@ class _Review:
             value = await value
         return bool(value)
 
-    # ------------------------------------------------------------------ prompts
+    # ------------------------------------------------------------------ prompts (bounded per call)
+    def _chars(self, share: float) -> int:
+        return int(self.limits.max_input_tokens_per_call * CHARS_PER_TOKEN * share)
+
+    def _select_evidence(self) -> list[Any]:
+        """Excerpts in manifest (class-priority) order while they fit the per-call evidence budget."""
+        budget, used, shown = self.limits.evidence_chars, 0, []
+        for item in self.inputs.manifest.items:
+            size = len(item.model_visible.text) + EXCERPT_OVERHEAD_CHARS
+            if used + size > budget:
+                continue
+            used += size
+            shown.append(item)
+        omitted = len(self.inputs.manifest.items) - len(shown)
+        if omitted:
+            self.report.coerced.append(("evidence", f"{omitted} excerpt(s) beyond the per-call evidence budget"))
+        return shown
+
     def _evidence_blocks(self) -> list[UntrustedBlock]:
         return [UntrustedBlock(block_id=item.excerpt_id, kind=_BLOCK_KIND[item.input_class],
-                               text=item.model_visible.text) for item in self.inputs.manifest.items]
+                               text=item.model_visible.text) for item in self.shown]
 
-    def _private(self, value: str | None) -> str | None:
-        return None if value is None else self.inputs.anonymize(value)
+    def _private(self, value: str | None, cap: int) -> str | None:
+        return None if value is None else self.inputs.anonymize(value)[:cap]
 
     def _outline(self, node_ids: Sequence[UUID]) -> str:
-        """The target as the model sees it: ids and vocabulary verbatim, free text anonymised (a copy)."""
+        """The target as the model sees it (a copy): ids verbatim, free text anonymised and capped, the
+        whole outline bounded by the per-call outline budget (omitted nodes are counted, never hidden)."""
         by_id = {n.node_id: n for n in self.inputs.target.nodes}
-        return "\n".join(json.dumps({
-            "node_id": str(by_id[i].node_id), "parent_id": None if by_id[i].parent_id is None else str(by_id[i].parent_id),
-            "code": self._private(by_id[i].code), "name": self._private(by_id[i].name),
-            "decomposition_kind": by_id[i].decomposition_kind, "control_level": by_id[i].control_level},
-            ensure_ascii=False) for i in node_ids)
+        budget, used, lines = self._chars(_OUTLINE_SHARE), 0, []
+        for node_id in node_ids:
+            node = by_id[node_id]
+            line = json.dumps({
+                "node_id": str(node.node_id), "parent_id": None if node.parent_id is None else str(node.parent_id),
+                "code": self._private(node.code, _CODE_CHARS), "name": self._private(node.name, _NAME_CHARS),
+                "decomposition_kind": self._private(node.decomposition_kind, _CODE_CHARS),
+                "control_level": node.control_level}, ensure_ascii=False)
+            if used + len(line) + 1 > budget:
+                break
+            used += len(line) + 1
+            lines.append(line)
+        if len(lines) < len(node_ids):
+            lines.append(json.dumps({"omitted_nodes": len(node_ids) - len(lines)}))
+        return "\n".join(lines)
+
+    def _summaries(self, merged: Sequence[Mapping[str, Any]]) -> str:
+        budget, used, summary = self._chars(_SUMMARY_SHARE), 2, []
+        for f in merged:
+            entry = {"ref": f["ref"], "dimension": f["dimension"], "status": f["status"],
+                     "summary": self._private(f["summary"], _SUMMARY_CHARS), "node_ids": f.get("node_ids", [])}
+            size = len(json.dumps(entry, ensure_ascii=False)) + 1
+            if used + size > budget:
+                break
+            used += size
+            summary.append(entry)
+        if len(summary) < len(merged):
+            summary.append({"omitted_findings": len(merged) - len(summary)})
+        return json.dumps(summary, ensure_ascii=False)
 
     def _prompt(self, task: ReviewTask, cluster: Cluster | None, merged: Sequence[Mapping[str, Any]]
                 ) -> tuple[str, str]:
@@ -324,28 +387,27 @@ class _Review:
         else:
             blocks.append(UntrustedBlock(block_id="target_all", kind="wbs_target",
                                          text=self._outline([n.node_id for n in self.inputs.target.nodes])))
-            summary = [{"ref": f["ref"], "dimension": f["dimension"], "status": f["status"],
-                        "summary": self._private(f["summary"]), "node_ids": f.get("node_ids", [])} for f in merged]
-            blocks.append(UntrustedBlock(block_id="map_results", kind="map_results",
-                                         text=json.dumps(summary, ensure_ascii=False)))
+            blocks.append(UntrustedBlock(block_id="map_results", kind="map_results", text=self._summaries(merged)))
         isolated = self.isolation.isolate(blocks)
         return f"{template_text(task)}\n\n{isolated.system_preamble}", isolated.user_content
 
     # ------------------------------------------------------------------ one bounded call (with retries)
     async def _call(self, task: ReviewTask, cluster: Cluster | None, *, reserve: int,
-                    merged: Sequence[Mapping[str, Any]] = ()) -> tuple[str | None, StopReason | None]:
+                    merged: Sequence[Mapping[str, Any]] = ()) -> tuple[str | None, StopReason | None, str]:
+        """(raw response or None, stop reason or None, status of the last attempt)."""
         system, content = self._prompt(task, cluster, merged)
         estimate = estimate_tokens(system, content)
         cluster_id = None if cluster is None else cluster.cluster_id
         if estimate > self.limits.max_input_tokens_per_call:
-            self.records.append(CallRecord(len(self.records) + 1, task, cluster_id, 0, "INPUT_TOO_LARGE"))
-            return None, None
+            self.records.append(CallRecord(0, task, cluster_id, 0, "INPUT_TOO_LARGE"))  # 0: never sent
+            return None, None, "INPUT_TOO_LARGE"
+        status = "NOT_STARTED"
         for attempt in range(self.limits.max_retries + 1):
             if await self._is_cancelled():
-                return None, StopReason.CANCELLED
+                return None, StopReason.CANCELLED, status
             stop = self.budget.admit(estimate, reserve_calls=reserve)
             if stop is not None:
-                return None, stop
+                return None, stop, status
             self.budget.calls += 1
             if attempt:
                 self.budget.retries += 1
@@ -353,64 +415,89 @@ class _Review:
                 task=task, tenant_id=self.inputs.scope.tenant_id, project_id=self.inputs.scope.project_id,
                 run_id=self.inputs.run_id, call_index=self.budget.calls, attempt=attempt, cluster_id=cluster_id,
                 template=template_ref(task), model=self.model.fingerprint, system=system, content=content,
-                excerpt_ids=tuple(item.excerpt_id for item in self.inputs.manifest.items),
+                excerpt_ids=tuple(item.excerpt_id for item in self.shown),
                 max_input_tokens=self.limits.max_input_tokens_per_call,
                 max_output_tokens=self.limits.max_output_tokens_per_call)
-            try:
-                response = await self.model.complete(request)
+            try:  # a hung call is bounded by the remaining time budget
+                response = await asyncio.wait_for(self.model.complete(request),
+                                                  timeout=max(self.budget.remaining_ms, 1) / 1000)
+            except TimeoutError:
+                self.budget.charge_failed(estimate)
+                self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, "TIMEOUT"))
+                return None, StopReason.TIME_CAP, "TIMEOUT"
             except ModelTransientError:
-                self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, "TRANSIENT_ERROR"))
+                self.budget.charge_failed(estimate)
+                status = "TRANSIENT_ERROR"
+                self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, status))
                 continue
             except Exception:  # noqa: BLE001 - any other model failure is permanent; its text is never logged
+                self.budget.charge_failed(estimate)
                 self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, "PERMANENT_ERROR"))
-                return None, None
+                return None, None, "PERMANENT_ERROR"
             usage = response.usage
             within = self.budget.charge(usage)
+            within = within and estimate_tokens(response.raw) <= self.limits.max_output_tokens_per_call
             status = "OK" if within else "OVER_LIMIT"
             self.records.append(CallRecord(self.budget.calls, task, cluster_id, attempt, status, usage.input_tokens,
                                            usage.output_tokens, usage.cost_micro_usd))
-            return (response.raw if within else None), None
-        return None, None
+            return (response.raw if within else None), None, status
+        return None, None, status
 
     # ------------------------------------------------------------------ MAP / REDUCE parsing
-    def _map_items(self, raw: str, cluster: Cluster) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+    def _parse(self, raw: str) -> ModelResponseEnvelope | None:
         try:
-            envelope = parse_llm_json(raw, ModelResponseEnvelope)
-        except LLMSchemaError:
+            return parse_llm_json(raw, ModelResponseEnvelope)
+        except (LLMSchemaError, ValueError, RecursionError):  # malformed output never escapes the run
+            return None
+
+    def _refuse(self, ref: str, reason: str) -> None:
+        self.report.rejected.append((ref, reason))
+        self.pre_rejected.add(ref)
+
+    def _map_items(self, raw: str, cluster: Cluster) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+        envelope = self._parse(raw)
+        if envelope is None:
             return None
         cid, members = cluster.cluster_id, {str(n) for n in cluster.node_ids}
         if envelope.qualification:
             self.report.coerced.append((cid, "a MAP response carries no tree-level qualification: ignored"))
+        self.map_items_total += len(envelope.findings) + len(envelope.proposals)
+        seen: set[str] = set()
         findings, proposals = [], []
         for finding in envelope.findings:
             body = finding.model_dump(mode="json", exclude_unset=True)
             try:
+                if finding.ref in seen:
+                    raise _OutOfBounds("the ref appears twice in this MAP response")
+                seen.add(finding.ref)
                 if not {str(n) for n in finding.node_ids} <= members:
                     raise _OutOfBounds("a MAP finding names nodes outside its cluster")
                 body["ref"] = _prefixed(cid, finding.ref)
             except _OutOfBounds as exc:
-                self.report.rejected.append((f"{cid}-{finding.ref}", str(exc)))
+                self._refuse(f"{cid}-{finding.ref}", str(exc))
                 continue
             findings.append(body)
         items = envelope.proposals
         if envelope.outcome == "INSUFFICIENT_EVIDENCE" and items:
-            self.report.rejected += [(f"{cid}-{p.ref}", "an INSUFFICIENT_EVIDENCE MAP carries no proposals")
-                                     for p in items]
+            for p in items:
+                self._refuse(f"{cid}-{p.ref}", "an INSUFFICIENT_EVIDENCE MAP carries no proposals")
             items = ()
         for proposal in items:
             body = proposal.model_dump(mode="json", exclude_unset=True)
             try:
+                if proposal.ref in seen:
+                    raise _OutOfBounds("the ref appears twice in this MAP response")
+                seen.add(proposal.ref)
                 if not set(_node_refs(body)) <= members:
                     raise _OutOfBounds("a MAP proposal names nodes outside its cluster")
                 proposals.append(_namespace_proposal(body, cid))
             except _OutOfBounds as exc:
-                self.report.rejected.append((f"{cid}-{proposal.ref}", str(exc)))
+                self._refuse(f"{cid}-{proposal.ref}", str(exc))
         return findings, proposals
 
     def _reduce_claims(self, raw: str) -> list[dict[str, Any]] | None:
-        try:
-            envelope = parse_llm_json(raw, ModelResponseEnvelope)
-        except LLMSchemaError:
+        envelope = self._parse(raw)
+        if envelope is None:
             return None
         if envelope.findings or envelope.proposals:
             self.report.coerced.append(("reduce", "findings and proposals come from MAP calls only: ignored"))
@@ -442,6 +529,21 @@ class _Review:
 
     # ------------------------------------------------------------------ the workflow
     async def execute(self) -> PipelineResult:
+        try:
+            return await self._execute()
+        except Exception:  # noqa: BLE001 - never escape the run: fail it, keep its usage, log no content
+            return self._failed("the review pipeline raised an unexpected error")
+
+    def _ratio_failure(self, validated_report: ValidationReport, max_pct: int) -> str | None:
+        """The rejection-ratio gate over EVERY item the MAP calls returned, including pre-validation refusals."""
+        refused = (self.pre_rejected | {ref for ref, _ in validated_report.rejected}
+                   | {ref for ref, _ in validated_report.dropped_dependants})
+        total = self.map_items_total
+        if total and len(refused) * 100 > max_pct * total:
+            return f"{len(refused)} of {total} items refused (over {max_pct}%)"
+        return None
+
+    async def _execute(self) -> PipelineResult:
         if not self.ctx.has_trusted_scope_evidence or self.ctx.target_is_empty:
             # sufficiency gate: abstain with zero model calls (no PASS by absence, no fabricated evidence)
             qualification = reconcile_qualification(self.deterministic.report, _abstention_report(self.ctx), self.ctx)
@@ -456,7 +558,7 @@ class _Review:
             if self.stop is not None:
                 uncovered.append(cluster.cluster_id)
                 continue
-            raw, stop = await self._call(ReviewTask.MAP, cluster, reserve=1)
+            raw, stop, _ = await self._call(ReviewTask.MAP, cluster, reserve=1)
             if stop is StopReason.CANCELLED:
                 return self._cancelled_result()
             if stop is not None:
@@ -478,12 +580,12 @@ class _Review:
         if await self._is_cancelled():
             return self._cancelled_result()
         claims: list[dict[str, Any]] | None = None
-        raw, stop = await self._call(ReviewTask.REDUCE, None, reserve=0, merged=findings)
+        raw, stop, status = await self._call(ReviewTask.REDUCE, None, reserve=0, merged=findings)
         if stop is StopReason.CANCELLED:
             return self._cancelled_result()
-        if stop is not None:
+        if stop is not None or status == "INPUT_TOO_LARGE":
             self.stop = self.stop or stop
-            uncovered.append("reduce")
+            uncovered.append("reduce")  # the tree-level cross-check did not run: partial, never failed
         elif raw is None:
             return self._failed("the REDUCE call failed")
         else:
@@ -506,7 +608,11 @@ class _Review:
         self.report.coerced += validated.report.coerced
         if validated.outcome is RunOutcome.FAILED:
             self.report.envelope_error = validated.report.envelope_error
-            return self._failed(validated.report.envelope_error or "the assembled review failed validation")
+            return self._failed(_safe_failure(validated.report.envelope_error))
+        ratio = self._ratio_failure(validated.report, context.max_rejected_pct)
+        if ratio is not None:
+            self.report.envelope_error = ratio
+            return self._failed(ratio)
         qualification = reconcile_qualification(self.deterministic.report, validated.qualification, self.ctx)
         return self._result(PipelineStatus.COMPLETED, outcome=validated.outcome, qualification=qualification,
                             findings=(*self.deterministic.findings, *validated.findings),

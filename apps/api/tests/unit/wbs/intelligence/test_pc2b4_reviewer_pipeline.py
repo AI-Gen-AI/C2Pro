@@ -372,7 +372,8 @@ async def test_21_the_token_cap_is_enforced_against_adversarial_usage() -> None:
     base = _inputs()
     target = _wide_target(base.scope.project_id, branches=6)
     fake = FakeReviewerModelAdapter(responder=greedy)
-    result = await run_review_pipeline(_inputs(target=target, limits=ReviewLimits(max_cluster_nodes=2)), fake)
+    limits = ReviewLimits(max_cluster_nodes=2, max_total_tokens=200_000)
+    result = await run_review_pipeline(_inputs(target=target, limits=limits), fake)
     assert len(fake.calls) == 1  # the first response blew the per-call and total budget: nothing after it
     assert result.calls[0].status == "OVER_LIMIT"
     assert result.stop_reason is StopReason.TOKEN_CAP
