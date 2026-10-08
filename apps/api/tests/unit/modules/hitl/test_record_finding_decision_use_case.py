@@ -11,11 +11,9 @@ from src.modules.hitl.application.finding_review_authorization import (
     FindingDecisionSubmission,
     FindingReviewerNotAuthorized,
 )
+from src.modules.hitl.adapters.persistence.finding_decision_writer import FindingDecisionIdentityError
 from src.modules.hitl.application.record_finding_decision_use_case import (
     RecordFindingDecisionUseCase,
-)
-from src.modules.hitl.adapters.persistence.finding_decision_writer import (
-    FindingDecisionIdentityError,
 )
 from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
 
@@ -96,8 +94,6 @@ async def test_nonhuman_or_mismatched_tenant_denied_before_database_use():
 async def test_stale_candidate_digest_and_lineage_are_denied_before_append():
     tenant, user, review, payload, row = _case()
     for changed in ("artifact_hash", "lineage_fencing_token", "trust_candidate_required"):
-        original = _case()[4]
-        # Always mutate the actual scoped row, not a second randomly generated fixture.
         original = {**row, "review_metadata": {
             **row["review_metadata"],
             "candidate_binding": {**row["review_metadata"]["candidate_binding"]},
