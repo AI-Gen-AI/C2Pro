@@ -28,6 +28,16 @@ class QuoteWitness:
     claim_verified: bool = False
 
 
+
+@dataclass(frozen=True)
+class CritiqueObservation:
+    """Claim remains unverified; only the exact supplied quote may be located."""
+
+    claim: str
+    source_quote: str
+    witness: QuoteWitness
+
+
 def verify_source_quote(
     source_text: str | None,
     quote: str,
