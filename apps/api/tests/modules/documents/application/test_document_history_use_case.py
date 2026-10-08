@@ -71,7 +71,7 @@ async def test_execute_builds_sorted_document_and_alert_history() -> None:
         "Alert created",
         "Alert Reviewed",
     ]
-    assert response.items[1].detail == "2 clauses extracted"
+    assert response.items[1].detail == "2 clauses available in the current evidence view"
 
 
 @pytest.mark.asyncio
@@ -101,3 +101,26 @@ async def test_execute_uses_alert_created_at_when_history_omits_created_event() 
     assert len(created_events) == 1
     assert created_events[0].title == "Alert created"
     assert created_events[0].detail == "Unpriced change order"
+
+
+@pytest.mark.asyncio
+async def test_history_zero_current_clauses_is_not_misreported_as_zero_extracted() -> None:
+    """Zero trusted-current visibility does not prove no extraction in other revisions."""
+    document = _build_document()
+    repository = MagicMock()
+    repository.get_history_snapshot = AsyncMock(
+        return_value=DocumentHistorySnapshot(
+            document=document, clause_count=0, alerts=[]
+        )
+    )
+
+    response = await GetDocumentHistoryUseCase(
+        document_repository=repository
+    ).execute(document.tenant_id, document.id)
+
+    parsed = next(item for item in response.items if item.title == "Document parsed")
+    assert parsed.detail == (
+        "No clauses currently available in this view; "
+        "historical or pending-review extractions may exist"
+    )
+    assert "0 clauses extracted" not in parsed.detail
