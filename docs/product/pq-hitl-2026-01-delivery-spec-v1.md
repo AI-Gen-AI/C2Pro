@@ -37,7 +37,9 @@ Se ha comprobado que el repositorio tiene instrucciones históricas en roles/rol
 | independent_reviewer | Revisor real distinto del trabajador implementador; diffs+tests+evidencia y no narrativa | No editar mientras revisa, no autocertificación |
 | specialist | Análisis de contrato, calibración/confidence, rendimiento, UX y alternativas puntuales | No autorizar merge ni sustituir revisor principal |
 
-El rol es funcional y no equivale a un modelo. La selección de worker se hará en un WORK válido. El estado actual .c2pro/control/current.yaml es reconciled_idle; work-queue desarrolla C2PRO-DEV. La deuda C2PRO-DEV-14 trata soporte de envelopes de tareas PRODUCT: este plan NO activará un WORK PQ-HITL ficticio ni reescribirá el control-plane idle. Hasta habilitar dicho adaptador, el MASTER de producto + issues/PR/CI constituyen planificación y evidencia, NO una falsa asignación operativa.
+El rol es funcional y no equivale a un modelo. La selección de worker se hará en un WORK válido. Los borradores #960 y #985 son anteriores a esta descomposición: no constituyen RED previo ni aceptan dependencias retroactivamente. Se volverán a cualificar contra fixtures congelados antes de cualquier merge.
+
+El estado actual .c2pro/control/current.yaml es reconciled_idle; work-queue desarrolla C2PRO-DEV. La deuda C2PRO-DEV-14 trata soporte de envelopes de tareas PRODUCT: este plan NO activará un WORK PQ-HITL ficticio ni reescribirá el control-plane idle. Hasta habilitar dicho adaptador, el MASTER de producto + issues/PR/CI constituyen planificación y evidencia, NO una falsa asignación operativa.
 
 ## 3. Ciclo obligatorio: primero QUÉ, luego CÓMO
 
@@ -104,7 +106,7 @@ El rol es funcional y no equivale a un modelo. La selección de worker se hará 
 - **08.2** What Changed y Current State sólo aceptan hechos según su autoridad; needs_review es observación provisional. P0c #686 y después P0d #687 necesitan cualificación PRODUCT independiente y aprobación humana.
 
 ### 09 · PQ-HITL-09 / #945 — Golden, regresión y aceptación
-- **09.1** Congelar BEFORE fixes fixtures §5.2, However/Conversely/LD, título, 183 días, 5% de 132500 EUR, confidence null, A9/B7 sin trusted, fuente falsificada y otras negativas. RED primero y expectativas reproducibles.
+- **09.1** Congelar antes de los próximos cambios fixtures §5.2, However/Conversely/LD, título, 183 días, 5% de 132500 EUR, confidence null, A9/B7 sin trusted, fuente falsificada y otras negativas. RED primero y expectativas reproducibles.
 - **09.2** Negativas PostgreSQL real: rol privilegiado, SET SESSION AUTHORIZATION, permiso especial de replicación, ledger real existente replay, RLS, CAS concurrente, stale checkpoint, injection y promoción parcial.
 - **09.3** E2E con navegador/API/DB + relogin: contrato→riesgo→cita→decisión individual→corrección→candidato nuevo→firma final→timeline/Health/Coherence; también rechazo/cancelación/retry.
 - **09.4** Paquete de salida: ID por tarea, SHA exacto, gates, revisión principal independiente, evidencias producto, defectos residuales, despliegues realmente observados si aplica y UAT explícita del propietario. No auto-PROD_VALIDATED.
