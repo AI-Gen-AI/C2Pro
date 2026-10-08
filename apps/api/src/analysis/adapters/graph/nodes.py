@@ -465,6 +465,13 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 extracted_wbs=state["extracted_wbs"],
                 doc_type=state.get("doc_type"),
                 retry_count=state["retry_count"],
+                # Reuse the same document already held by this graph; prefer
+                # its PII-protected form. No additional document or tenant read.
+                source_text=(
+                    state.get("anonymized_text")
+                    or state.get("document_text")
+                    or None
+                ),
             )
         )
     # N12 isolates critique service failures and routes to HITL for review.

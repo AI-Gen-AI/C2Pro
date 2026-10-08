@@ -264,3 +264,56 @@ class TestParseBudgetUseCase:
         res = await uc.execute(ParseBudgetCommand(text="budget"))
         assert res.bom_items == []
         assert res.confidence_score == 0.0
+
+@pytest.mark.asyncio
+async def test_critique_receives_original_clause_source_before_asserting_corruption() -> None:
+    """PQ-HITL-01: source is not equivalent to extracted risk assertions."""
+    ai = _FakeAI(payload={"status": "OK", "notes": ""})
+    command = CritiqueExtractionCommand(
+        extracted_risks=[{
+            "title": "Defect rectification",
+            "description": "The timeframe and cost allocation are ambiguous.",
+            "confidence": 0.85,
+        }],
+        extracted_wbs=[],
+        doc_type="contract",
+        retry_count=0,
+        source_text=(
+            "Clause 5.2: Defective work shall be rectified at the "
+            "Contractor's cost within fourteen (14) days of written notice."
+        ),
+    )
+
+    await CritiqueExtractionUseCase(ai=ai).execute(command)
+
+    prompt, content = ai.calls[0]
+    assert "do not claim source text is corrupted" in prompt.lower()
+    assert "Contractor's cost within fourteen (14) days" in content
+    assert "COMPLETE INPUT TEXT" in content
+    assert "Extraction results" in content
+
+
+@pytest.mark.asyncio
+async def test_critique_absent_or_truncated_source_is_explicitly_unverified() -> None:
+    """An excerpt is never evidence that a missing clause does not exist."""
+    ai = _FakeAI(payload={"status": "RETRY", "notes": "source incomplete"})
+    uc = CritiqueExtractionUseCase(ai=ai)
+    common = {
+        "extracted_risks": [{"title": "Example", "confidence": 0.9}],
+        "extracted_wbs": [],
+        "doc_type": "contract",
+        "retry_count": 0,
+    }
+
+    await uc.execute(CritiqueExtractionCommand(**common))
+    assert "UNAVAILABLE" in ai.calls[0][1]
+    assert "Do not assert corruption" in ai.calls[0][1]
+
+    await uc.execute(
+        CritiqueExtractionCommand(
+            **common,
+            source_text=("Clause 1.1 ordinary contract text. " * 600) + "END_SENTINEL",
+        )
+    )
+    assert "PARTIAL EXCERPT" in ai.calls[1][1]
+    assert "END_SENTINEL" not in ai.calls[1][1]
