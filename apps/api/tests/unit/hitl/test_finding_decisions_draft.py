@@ -132,6 +132,25 @@ def test_correction_is_provisional_and_requires_a_new_candidate() -> None:
         apply_finding_decision(draft, _command(scope, action=DecisionAction.CORRECT))
 
 
+
+def test_correction_cannot_be_erased_by_a_later_confirm_on_same_candidate() -> None:
+    scope = _scope()
+    draft = FindingDecisionDraft(scope=scope, required_finding_ids=frozenset({"risk-1"}))
+    corrected = apply_finding_decision(
+        draft,
+        _command(scope, action=DecisionAction.CORRECT, proposed_correction={"time_days": 14}),
+    )
+    followup = apply_finding_decision(
+        corrected,
+        replace(
+            _command(scope),
+            expected_revision=1,
+            idempotency_key="key-2",
+        ),
+    )
+    assert followup.requires_new_candidate is True
+    assert followup.ready_for_final_authority_check is False
+
 def test_missing_reason_and_unknown_finding_are_refused() -> None:
     scope = _scope()
     draft = FindingDecisionDraft(scope=scope, required_finding_ids=frozenset({"risk-1"}))
