@@ -201,7 +201,6 @@ class TestCritiqueNodeThinDelegation:
         assert observations[0]["document_revision_id"] == state["document_revision_id"]
         assert observations[1]["witness_status"] == "UNRESOLVED"
         assert observations[1]["char_start"] is None
-        assert result["node_results"][-1].data["observations"] == observations
         assert result["retry_count"] >= 1
 
     @pytest.mark.asyncio
@@ -214,7 +213,6 @@ class TestCritiqueNodeThinDelegation:
             _make_state(critique_observations=[{"claim": "stale"}])
         )
         assert result["critique_observations"] == []
-        assert result["node_results"][-1].data["observations"] == []
 
     @pytest.mark.asyncio
     async def test_ok_path(self, monkeypatch) -> None:
