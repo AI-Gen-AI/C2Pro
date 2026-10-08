@@ -72,3 +72,18 @@ def test_wbs_tool_payload_serializes_schedule_dates_for_n5_contract() -> None:
 
     assert payload["start_date"] == "2026-04-01"
     assert payload["end_date"] == "2026-08-01"
+
+
+def test_unassessed_wbs_confidence_cannot_default_to_ninety_percent() -> None:
+    item = WBSItemOutput(code="SCH-003", name="Steel", item_type="activity")
+    assert item.confidence is None
+
+    tool = WBSExtractionTool(anthropic_wrapper=object(), prompt_manager=object())
+    result = ToolResult(
+        data=[item], status=ToolStatus.SUCCESS, success=True,
+        model_used="test-model", input_tokens=0, output_tokens=0,
+        cost_usd=0.0, latency_ms=0.0,
+    )
+    state = tool.inject_output_into_state({}, result)
+    assert state["extracted_wbs"][0]["confidence"] is None
+    assert state["confidence_score"] is None
