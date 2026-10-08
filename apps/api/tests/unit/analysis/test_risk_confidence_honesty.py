@@ -1,6 +1,10 @@
 """Unmeasured risk extraction confidence must stay unknown."""
 
-from src.analysis.adapters.ai.agents.risk_extractor import RiskExtractionCandidate, RiskImpact, RiskProbability
+from src.analysis.adapters.ai.agents.risk_extractor import (
+    RiskExtractionCandidate,
+    RiskImpact,
+    RiskProbability,
+)
 from src.analysis.adapters.ai.tools.risk_extraction_tool import RiskExtractionTool
 from src.analysis.domain.risk_categories import RiskCategory
 from src.core.ai.tools import ToolResult, ToolStatus
