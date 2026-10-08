@@ -430,3 +430,56 @@ async def test_critique_quote_offsets_keep_original_source_leading_whitespace() 
     assert witness.char_end == witness.char_start + len(quote)
     assert source[witness.char_start:witness.char_end] == quote
     assert witness.claim_verified is False
+
+
+@pytest.mark.asyncio
+async def test_structured_claim_without_valid_quote_fails_closed() -> None:
+    """Structured unsupported claims must not vanish from the critique gate."""
+    from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus
+
+    for supplied_quote in (None, "", "  ", 123):
+        ai = _FakeAI(payload={
+            "status": "OK",
+            "notes": "All good.",
+            "observations": [{"claim": "Unsubstantiated deadline is thirty days", "source_quote": supplied_quote}],
+        })
+        result = await CritiqueExtractionUseCase(ai=ai).execute(
+            CritiqueExtractionCommand(
+                extracted_risks=[{"confidence": 0.9}],
+                extracted_wbs=[],
+                doc_type="contract",
+                retry_count=0,
+                source_text="The Contractor shall rectify within fourteen days.",
+            )
+        )
+        assert result.status == "RETRY"
+        assert result.human_approval_required or result.retry_count > 0
+        assert len(result.observations) == 1
+        assert result.observations[0].witness.status is QuoteWitnessStatus.UNRESOLVED
+        assert result.observations[0].witness.char_start is None
+
+
+@pytest.mark.asyncio
+async def test_oversize_quote_with_invented_tail_never_locates_prefix() -> None:
+    """The first 1000 chars matching cannot certify a different quoted tail."""
+    from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus
+
+    source = ("A" * 1000) + "REAL_END"
+    invented_quote = ("A" * 1000) + "INVENTED_END"
+    ai = _FakeAI(payload={
+        "status": "OK",
+        "notes": "Quotation located.",
+        "observations": [{"claim": "False full quote", "source_quote": invented_quote}],
+    })
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{"confidence": 0.9}],
+            extracted_wbs=[],
+            doc_type="contract",
+            retry_count=0,
+            source_text=source,
+        )
+    )
+    assert result.status == "RETRY"
+    assert result.observations[0].witness.status is not QuoteWitnessStatus.LOCATED
+    assert result.observations[0].witness.char_start is None
