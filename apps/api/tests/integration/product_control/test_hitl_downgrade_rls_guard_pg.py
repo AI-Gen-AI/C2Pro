@@ -102,13 +102,22 @@ async def test_downgrade_guard_cannot_miss_other_tenant_audit_rows() -> None:
             assert exc.value.sqlstate == "23001"
             assert "cannot downgrade populated" in str(exc.value)
 
-            # An actually empty ledger may pass the presence guard.
+            # Even an empty ledger is allowed to fail CLOSED for an
+            # RLS-bound owner: PostgreSQL checks policy applicability,
+            # not the count of rows. Only privileged maintenance can
+            # intentionally pass the empty-table guard.
             await conn.execute("RESET ROLE")
             await conn.execute(f"DELETE FROM {name}")
             await conn.execute(f"SET LOCAL ROLE {role}")
             await conn.execute(
                 "SELECT set_config('app.current_tenant', $1, true)", tenant_a
             )
+            with pytest.raises(asyncpg.PostgresError) as exc:
+                async with conn.transaction():
+                    await conn.execute(guard)
+            assert exc.value.sqlstate == "42501"
+
+            await conn.execute("RESET ROLE")
             await conn.execute(guard)
     finally:
         await conn.close()
