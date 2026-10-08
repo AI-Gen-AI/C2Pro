@@ -1286,10 +1286,11 @@ paths:
           content:
             application/json:
               schema:
+                type: array
                 items:
                   $ref: '#/components/schemas/RevisionStatus'
-                type: array
-                title: Response List Document Revision Statuses Endpoint Api V1 Documents  Document Id  Revisions Get
+                title: Response List Document Revision Statuses Endpoint Api V1 Documents  Document
+                  Id  Revisions Get
         '401':
           description: Unauthorized
         '403':
