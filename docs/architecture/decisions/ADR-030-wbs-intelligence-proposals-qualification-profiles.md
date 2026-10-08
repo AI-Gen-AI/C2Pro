@@ -235,6 +235,46 @@ Conforms to §1, §3, §5 and §9 and to ADR-029's IMPORT_REVIEW entry mode. **I
 - **Comparison.** IMPORTED vs CANDIDATE is a pure read. Rows correspond by the import `source_ref` recorded in node provenance, never by code or name. Every governed field is compared: name, code, `control_level`, `decomposition_kind`, the WBS Dictionary in its canonical `wbs-dictionary/v1` form (the tree digest's semantics), parent, and sibling-relative order among the imported siblings still under the same parent. A row that cannot be compared reliably is `NOT_COMPARABLE` with an explicit limitation, never `UNCHANGED`. Nodes added in the candidate are reported as `ADDED`. PROPOSED is `NOT_AVAILABLE` unless a run with proposals is named, in which case it is DERIVED through the PC-2b.2 preview and never persisted.
 - **Qualification.** The imported DRAFT is qualified only by an explicit deterministic run (PC-2b.2); an import never starts a run. No model call exists in this slice.
 
+## Amendment 3 — PC-2b.4 AI Reviewer / Optimizer, offline (#923)
+
+Conforms to §1, §5, §7, §8 and §9. **Live model execution is BLOCKED.** This amendment covers the offline implementation only (`PC2B4_OFFLINE_ONLY`).
+
+- **Model boundary.** `WBSReviewerModelPort` is the Reviewer's only way to a model.
+  - **A request carries only:** the validated task identity (tenant, project, run, call, attempt, cluster); versioned prompt references (task, version, SHA-256 of the exact template text); the declared model fingerprint; explicit per-call input/output limits; and already-isolated, PII-anonymised text.
+  - **It never carries:** a database session, a credential, a retrieval interface, a WBS mutation service, an approval action or tools.
+  - **Blocked until authorized:** `LIVE_MODEL_EXECUTION_AUTHORIZED = False`, and any non-synthetic adapter is refused before anything else runs. Only `FakeReviewerModelAdapter` (in memory, scripted) exists. A production adapter needs a separate integration authorization, and only after these gates pass: Wave 3.11 default-off tracing and privacy-safe export; #925 cache read/write bypass and tenant isolation; no extraction-cache use on the WBS path; usage attribution; and PII/provider-boundary tests.
+- **Targets.**
+  - `IMPORT_REVIEW` is a human-created candidate from an immutable import.
+  - `DRAFT` is any governed DRAFT.
+  - `REVIEW_OPTIMIZE` is the current Baseline #N.
+
+  A review binds tenant, project, target kind and id, the exact tree digest, the candidate revision and its base, the profile pins and the evidence-manifest digest. It never creates or edits a change set, never submits, approves or applies anything, and never creates a baseline.
+- **Evidence.** Each document's current revision is classified by the C3a trusted-current rule over #714 `document_artifacts`:
+  - A TRUSTED revision is `TRUSTED_PROJECT_EVIDENCE`; a schedule or budget is only ever `ADVISORY_EVIDENCE`.
+  - An untrusted revision enters only when the human includes it, as `PROPOSED_EVIDENCE`.
+  - A WBS source is never evidence; the import under an `IMPORT_REVIEW` is `HUMAN_PROVIDED_IMPORT` (the structure under review, not proof of itself).
+  - A requested document or revision outside this set is refused before any call.
+
+  Retrieval reads only `document_chunks` stamped with an admitted (document, revision) pair, with `tenant_id AND project_id` in the SQL. It uses no embedding, no generic retrieval port and no wider fallback, and it fails closed without scope. RLS is the second wall, proven under a NOBYPASSRLS role.
+- **Excerpts.** The canonical locator is captured from the original chunk BEFORE anonymisation. Offsets are kept only when the chunk carries exact original coordinates. The model sees only anonymised text, whose length never becomes an offset. A citation names a manifest excerpt id and is verified deterministically.
+- **Sufficiency gate.** Without trusted scope evidence (a trusted contract or specification) or with an empty target, the run completes `INSUFFICIENT_EVIDENCE` with ZERO model calls and honest NOT_EVALUATED reasons. Without a trusted contract, `MISSING_CONTRACT_SCOPE` stays `NOT_EVALUATED(NO_TRUSTED_CONTRACT)`.
+- **Bounded pipeline (§9).** The steps are:
+  1. deterministic qualification;
+  2. clusters (top-level branches packed or windowed by `max_cluster_nodes`);
+  3. one MAP call per cluster, for findings and proposals of that cluster only;
+  4. a deterministic merge and de-duplicate;
+  5. one REDUCE call for the 19-dimension qualification;
+  6. the PC-2b.1 validator on the assembled envelope, with nothing repaired.
+
+  Reconciliation never lets AI soften a deterministic result or move an unavailable dimension off NOT_EVALUATED; AI may only add severity backed by validated evidence.
+  - **Limits (v1):** at most 24 calls (retries included), at most 2 transient retries per call, per-call input/output caps, a total token cap, a cost cap and an elapsed-time cap.
+  - **Admission:** each call is admitted by the budget and the cancellation check BEFORE it starts, and an over-limit response is discarded.
+  - **Partial runs:** a run cut short is `PARTIAL_PROPOSAL` with the uncovered clusters listed. If no MAP call produces a valid response, or the REDUCE fails, the run is FAILED.
+- **Persistence.** Runs reuse the PC-2b.2 store (`execution_type = AI`, terminal runs frozen, items immutable); there is no second store and no schema change.
+  - **Provenance:** `model_provenance` is immutable and marks offline runs `synthetic: true` and `production_invocation: false`.
+  - **Usage:** it is attributed to tenant, project and run in an append-only `wbs.intelligence.run_usage` project event, holding counts only (calls, retries, tokens, cost, elapsed time, stop reason, per-call status). Evidence, prompts and model output are never logged or exported.
+  - **Exposure:** no API route exposes the Reviewer, and the production Reviewer stays disabled.
+
 ## Alternatives rejected
 
 - **AI writes the DRAFT candidate directly (model A).** Rejected because it:
