@@ -59,7 +59,6 @@ import type {
   DocumentDetailResponse,
   DocumentEntityResponse,
   DocumentHistoryResponse,
-  RevisionStatus,
   DocumentListResponse,
   DocumentQueuedResponse,
   DocumentRelationshipExplanationResponse,
@@ -72,6 +71,7 @@ import type {
   RagAnswerResponse,
   RagQuestionRequest,
   ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams,
+  RevisionStatus,
 } from "../models";
 
 import { orvalApiClient } from "../../client";
@@ -941,16 +941,14 @@ export const useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete = <
 /**
  * @summary Inspect a document's immutable revision trust states
  */
-export const listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet = (
-  documentId: string,
-  signal?: AbortSignal,
-) => {
-  return orvalApiClient<RevisionStatus[]>({
-    url: `/api/v1/documents/${documentId}/revisions`,
-    method: "GET",
-    signal,
-  });
-};
+export const listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet =
+  (documentId: string, signal?: AbortSignal) => {
+    return orvalApiClient<RevisionStatus[]>({
+      url: `/api/v1/documents/${documentId}/revisions`,
+      method: "GET",
+      signal,
+    });
+  };
 
 export const getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryKey =
   (documentId: string) => {
