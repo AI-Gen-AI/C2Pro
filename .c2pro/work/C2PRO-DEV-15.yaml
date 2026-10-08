@@ -1,34 +1,33 @@
 schema: c2pro-work-envelope-v1
 schema_version: 1
 work_id: C2PRO-DEV-15
-campaign_id: CORE-AI-RELIABILITY-GOVERNANCE-20261008
+campaign_id: CORE-AI-ASSURANCE-W311-INVENTORY-20261008
 role: implementation_lead
 base_sha: 39a7c313766eef181353f594205ee3b88e5955ac
-branch: docs/dev15-control-goal-reconcile-20261008
-risk_class: material
+branch: docs/dev15-wave311-tracing-inventory-20261008
+risk_class: normal
 scope:
-  - reconcile DEV-15 ready queue with OPEN follow-on issue 958 and historical CLOSED issue 849
-  - keep current.yaml reconciled_idle with active_campaign null and active_work empty
-  - document consolidated DEV-15 short medium long Goal and split remaining waves into separately reviewable work
-  - register LangSmith as a maintained optional observability adapter not a production default or prompt authority
-  - record short Wave 3.11 safety work and medium Wave 3.12 Core AI reliability as separately gated implementation packages
-  - preserve current product and MW-06/MR decision-only routing authority
+  - execute bounded next Wave 3.11 source-only LangSmith and LangGraph exporter inventory under open issue 958
+  - record all direct SDK paths including runtime decorator feedback dataset upload/delete/update baseline and prompt hub publisher
+  - inspect .env.example README Makefile evaluation CI and manual scripts for implicit exports
+  - prepare testable synthetic RED privacy-canary matrix with exact real caller fields and no remote network
+  - identify scoped work envelopes needed for subsequent security implementation PRs
+  - preserve local PromptManager and AI-Gen MW-06/MR authority and zero unapproved cloud export
 out_of_scope:
-  - executing security or Core AI implementation code within this reconciliation branch
-  - production or external telemetry enablement or credentials access
-  - reopening completed historical hygiene issue 849
-  - changing current.yaml authority status baseline or active work
-  - altering unrelated open work queue items or global priority
-  - creating duplicate prompt/model routing authority or overriding MW-06-ACT-01
+  - production source runtime or environment changes under this inventory-only envelope
+  - sending any real customer document prompt response PII or secret to external telemetry
+  - remote LangSmith data writes pushes deletes sync metrics or live pilot execution
+  - marking Wave 3.11 implementation PROD_VALIDATED based on documentation
+  - altering current.yaml active_work active_campaign or baseline
   - product lifecycle promotion or Product Control mutation
-  - P0c P0d Temporal WBS Alerts Coherence Procurement product functionality
-  - bulk cleanup or unsupported coverage ratchet jump
+  - Temporal WBS Alerts Coherence Procurement and other product functional changes
+  - modifying routing or prompt promotion authority or enabling AMF
 allowed_tools:
   - github_repository_read
-  - scoped_repository_write
   - github_ci_read
-  - yaml_schema_validation
-  - focused_control_plane_tests
+  - code_reference_search
+  - focused_local_tests_with_synthetic_data
+  - scoped_repository_write_for_audit_evidence_and_tests_only
   - independent_code_review
 forbidden_paths:
   - validation/product/**
@@ -43,30 +42,29 @@ forbidden_paths:
   - apps/api/src/documents/**
   - apps/api/src/procurement/**
 acceptance_criteria:
-  - active DEV-15 queue entry refers to open follow-on issue 958 not closed historical 849
-  - original 849 closed completion stays historical and not re-opened
-  - current.yaml is byte-identical to pre-work main and contains zero active_work
-  - new GOAL includes residual Core AI reliability and observability and prompt governance without equating documentation to implementation
-  - Wave 3.11 and Wave 3.12 have separate PR/security and negative-test gates
-  - no non-DEV15 queue entry modified
-  - exact-head CI green independent principal review and behind main zero
+  - reference issue 958 as current open DEV15 authority while issue 849 remains closed historical
+  - all LangSmith SDK and LangChain direct export/publisher code paths inventoried
+  - scope independent from product runtime ownership and AI-Gen control plane
+  - synthetic no-network canary RED matrix is reproducible and honest about current exposures
+  - no production or external exporter used or enabled
+  - next implementation packages separated by actual observed risk and classified data path
+  - required targeted tests and CI green on exact head independent review with no unresolved findings
 required_tests:
+  - pytest apps/api/tests/unit/core/ai/test_langsmith_client.py -q
+  - pytest apps/api/tests/unit/core/observability/test_langsmith_decorator.py -q
   - python scripts/development/validate_c2pro_control.py
-  - pytest tests/development/test_c2pro_control_plane.py -q
-  - repository document and YAML structural parity review
   - canonical GitHub CI required gates
 evidence_required:
-  - exact_base_sha
   - historical_issue_849_closed
-  - new_issue_958_open
-  - old_new_queue_work_ref_diff
-  - current_yaml_unchanged
+  - open_issue_958
+  - exact_source_path_inventory
+  - no_network_canary_evidence
+  - independently_reviewed_scoped_pr
   - exact_head_ci
-  - independent_principal_review
 review_policy: independent_principal
 worker_selection:
   preferred: null
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
   selected: null
-timeout_resource_policy: bounded_dev15_control_plane_reconciliation_only_no_runtime_or_prod_mutation
+timeout_resource_policy: bounded_inventory_and_synthetic_tests_only_no_remote_export_or_prod_mutation
