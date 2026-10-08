@@ -61,3 +61,20 @@ def test_derivation_tracks_budget_risk_without_private_service_access() -> None:
     assert result.has_budget_risks is True
     assert result.risk_count == 1
     assert result.wbs_count == 1
+
+
+def test_unknown_extraction_confidence_is_not_reported_as_numeric_or_green() -> None:
+    service = CoherenceScoringDerivationService()
+    result = service.derive(
+        CoherenceDerivationInput(
+            extracted_risks=[{"category": "SCOPE", "impact": "LOW"}],
+            extracted_wbs=[],
+            bom_items=[],
+            confidence_score=None,
+            document_text="Long contract source. " * 10,
+        )
+    )
+    assert result.poor_extraction_quality is True
+    assert result.scope_defined is False
+    assert "not assessed" in result.quality_note
+    assert "0.00" not in result.quality_note
