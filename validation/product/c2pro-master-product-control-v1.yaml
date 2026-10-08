@@ -707,7 +707,7 @@ product_quality_hitl_2026_10_08:
       meaning: "Next governed implementation and evidence gates; not a promised calendar date."
       goal: "A truthful, revision-pinned contract analysis with evidence-grounded risks, no fake confidence, and auditable provisional human review without altering TRUSTED state."
       milestones:
-        - "Harden and qualify the merged immutable ledger (#966), non-routed provisional writer (#970), source membership (#971/#974), and authenticated reviewer boundary (#975); #977 remains draft CI-green, pending independent review and merge."
+        - "Harden and qualify the merged immutable ledger (#966), non-routed provisional writer (#970), source membership (#971/#974), and authenticated reviewer boundary (#975); #977 is now MERGED after independently reviewed exact candidate binding; #980 project ACL/HTTP route remains gated."
         - "Finish #940 independent real-PostgreSQL non-BYPASSRLS role grants, tenant isolation, concurrent CAS/idempotency, candidate source membership and stale generation/fence checks before exposing any HTTP write."
         - "Finish #937 typed claim-to-contract quote/section verification and §5.2 adversarial tests; accept only source-verified conclusions, not mere literal match."
         - "Resolve #938/#953 missing per-risk confidence with measured provenance and operational HITL capacity policy; CI green alone does not lift HOLD."
@@ -851,14 +851,14 @@ product_quality_hitl_2026_10_08:
       - {pr: 971, scope: EXACT_PERSISTED_RISK_SOURCE_MEMBERSHIP, main_commit: "231d38ba77e81db4c5ec5050c1dc552780c95670"}
       - {pr: 974, scope: LIVE_PROPOSED_ARTIFACT_AND_RISK_SOURCE_WRITER_GATE, main_commit: "6fcfdd7fc07aa67a4b951c9abe69d0e9fd9040be"}
       - {pr: 975, scope: AUTHENTICATED_HUMAN_REVIEWER_BOUNDARY, main_commit: "8b3aa9d304f76ddd27820e2a0e368961ec907cd1"}
+      - {pr: 977, scope: EXACT_CANDIDATE_REVIEW_APPLICATION_BOUNDARY, main_commit: "fadb59a34d830cce9ecc4858025d9c86ed7710f4"}
     verified_ci_green_but_unmerged:
       - {pr: 953, issue: 938, result: GREEN, disposition: HOLD_ARCHITECTURAL_WORKLOAD_GATE}
-      - {pr: 977, issue: 940, result: GREEN, disposition: DRAFT_REVIEW_AND_REAL_POSTGRES_ROLE_GATE_NOT_MERGED}
     remaining_material_gaps:
       - "01 typed claim-to-source verification: #950 source-in-context does not prove grounding."
       - "02 clause_ref/multiclause evidence addressability; per-item confidence requires calibrated provenance and tenant policy. #953 may trigger human review for virtually every contract; no merge pending workload review."
       - "03 #956 read-only revision-scoped viewer merged; real A=9/B=7 operator evidence and trusted-current/proposed parity acceptance still pending."
-      - "04 immutable ledger #966, non-routed writer #970, risk membership #971/#974, and authenticated reviewer boundary #975 merged; HTTP/runtime role/RLS concurrency, immutable corrected candidate, explicit atomic final settlement and UI still pending."
+      - "04 immutable ledger #966, non-routed writer #970, risk membership #971/#974, and authenticated reviewer #975 and exact candidate application #977 merged; #980 project ACL/HTTP/runtime role/RLS concurrency, immutable corrected candidate, explicit atomic final settlement and UI still pending."
       - "05 summary/evidence cards, per-item actions and real end-to-end HITL remain beyond #954 cosmetic grouping."
       - "06 trustworthy deep links; 07 taxonomy beyond priority/label; 08 timeline lifecycle parity; 09 golden/regression and independent user QA."
     next_order:
