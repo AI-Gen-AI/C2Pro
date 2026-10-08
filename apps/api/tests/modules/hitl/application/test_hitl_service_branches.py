@@ -14,6 +14,7 @@ import pytest
 
 from src.modules.hitl.application.human_in_the_loop_service import (
     HumanInTheLoopService,
+    StaleCritiqueReviewEvidence,
 )
 from src.modules.hitl.domain.entities import (
     ImpactLevel,
@@ -149,3 +150,66 @@ class TestReleaseItemBranches:
 
         with pytest.raises(ValueError, match="requires human approval"):
             await hitl_service.release_item(item_id=item.item_id)
+
+
+
+@pytest.mark.asyncio
+class TestExistingCritiqueEvidenceAuthority:
+    async def test_active_review_rejects_changed_observations_without_rebinding(
+        self, hitl_service: HumanInTheLoopService, mock_repo: AsyncMock,
+    ) -> None:
+        document = uuid4()
+        existing = ReviewItem(
+            item_id=document,
+            item_type="contract",
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            created_at=datetime.now(),
+            sla_due_date=datetime.now() + timedelta(days=1),
+            item_data={"critique_observations": [{"claim": "old", "claim_verified": False}]},
+            metadata={"review_type": "analysis_critique"},
+        )
+        mock_repo.find_active_review.return_value = existing
+        with pytest.raises(StaleCritiqueReviewEvidence):
+            await hitl_service.route_for_review(
+                item_id=document,
+                item_type="contract",
+                confidence=0.8,
+                impact_level=ImpactLevel.HIGH,
+                item_data={
+                    "critique_observations": [{"claim": "new", "claim_verified": False}]
+                },
+                metadata={"document_id": str(document), "review_type": "analysis_critique"},
+            )
+        mock_repo.add_review_item.assert_not_called()
+        mock_repo.update_review_item.assert_not_called()
+
+    async def test_identical_active_critique_evidence_reuses_review_without_update(
+        self, hitl_service: HumanInTheLoopService, mock_repo: AsyncMock,
+    ) -> None:
+        document = uuid4()
+        observations = [{"claim": "same", "claim_verified": False}]
+        existing = ReviewItem(
+            item_id=document,
+            item_type="contract",
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            created_at=datetime.now(),
+            sla_due_date=datetime.now() + timedelta(days=1),
+            item_data={"critique_observations": observations},
+            metadata={"review_type": "analysis_critique"},
+        )
+        mock_repo.find_active_review.return_value = existing
+        status = await hitl_service.route_for_review(
+            item_id=document,
+            item_type="contract",
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            item_data={"critique_observations": observations},
+            metadata={"document_id": str(document), "review_type": "analysis_critique"},
+        )
+        assert status is ReviewStatus.PENDING_REVIEW_REQUIRED
+        mock_repo.add_review_item.assert_not_called()
+        mock_repo.update_review_item.assert_not_called()
