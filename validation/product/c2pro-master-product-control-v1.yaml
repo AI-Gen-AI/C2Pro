@@ -926,10 +926,10 @@ product_quality_hitl_2026_10_08:
         priority: P0
         role: qa
         size: M
-        status: PLANNED
+        status: IN_REVIEW_UNMERGED
         depends_on: []
         acceptance: "Synthetic §5.2, LD, However, valid title, 183d, 5% of EUR 132500 and A9/B7 with exact expected findings and UNKNOWN semantics; deterministic RED before future changes; older draft fixes remain unqualified."
-        note: "test-first baseline; no PROD B changes"
+        note: "Task-specific golden fixture + focused SDD + explicit RED xfail probes are in draft PR #987, exact-head CI/review still required; no PROD B changes"
       - id: PQ-HITL-01.1
         parent_issue: 937
         title_key: CRITIQUE_OK_OBSERVATION_FAIL_CLOSED
