@@ -4,18 +4,18 @@ from uuid import uuid4
 
 import pytest
 
+from src.modules.hitl.adapters.persistence.finding_decision_writer import (
+    FindingDecisionIdempotencyConflict,
+    FindingDecisionIdentityError,
+    FindingDecisionLedgerWriter,
+    FindingDecisionRevisionConflict,
+)
 from src.modules.hitl.domain.finding_decision import (
     CandidateReviewIdentity,
     FindingDecisionAction,
     FindingDecisionDraft,
     FindingDecisionKind,
     stable_finding_id,
-)
-from src.modules.hitl.adapters.persistence.finding_decision_writer import (
-    FindingDecisionLedgerWriter,
-    FindingDecisionRevisionConflict,
-    FindingDecisionIdentityError,
-    FindingDecisionIdempotencyConflict,
 )
 
 
@@ -240,3 +240,26 @@ async def test_stale_candidate_rebind_fails_closed_even_for_identical_replay():
             draft=draft,
         )
     assert len(session.calls) == 1
+
+@pytest.mark.asyncio
+async def test_stale_fence_or_unbound_candidate_does_not_record_a_review_event():
+    draft = _draft()
+    for changed in ("fence", "binding", "checkpoint"):
+        row = _locked(draft)
+        if changed == "fence":
+            row["lineage_fencing_token"] += 1
+        elif changed == "binding":
+            row["review_metadata"]["candidate_binding"] = None
+        else:
+            row["checkpoint_id"] = "rebound-checkpoint"
+        session = _Session(row)
+        with pytest.raises(FindingDecisionIdentityError):
+            await FindingDecisionLedgerWriter(session).record(
+                tenant_id=draft.candidate.tenant_id,
+                authenticated_reviewer_id=draft.reviewer_id,
+                source_item_id="risk-2",
+                ordinal=0,
+                idempotency_key="request-12345",
+                draft=draft,
+            )
+        assert len(session.calls) == 1
