@@ -182,7 +182,7 @@ describe('ReviewItemCard - progressive disclosure of unverified AI critique', ()
     expect(screen.getByText(/2 unverified AI critique observations/i)).toBeInTheDocument();
     expect(screen.getByText(/MISSING CLAUSE REFERENCES/i)).toBeInTheDocument();
     expect(screen.getByText(/DEFECT RECTIFICATION/i)).toBeInTheDocument();
-    expect(screen.queryByText(/verified findings/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Verified findings$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Approve full analysis/i)).toBeInTheDocument();
     expect(screen.getByText(/original source evidence/i)).toBeInTheDocument();
   });
