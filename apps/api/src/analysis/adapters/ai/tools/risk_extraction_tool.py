@@ -21,6 +21,7 @@ from src.analysis.adapters.ai.agents.risk_extractor import (
     RiskImpact,
     RiskProbability,
 )
+from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 from src.analysis.domain.risk_categories import RiskCategory, normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
@@ -303,17 +304,13 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             state["confidence_score"] = 0.0
             return state
 
-        # Update confidence score based on result quality
-        if result.confidence_score:
-            state["confidence_score"] = result.confidence_score
-        else:
-            # Calculate average confidence if individual risks have confidence
-            confidences = [
-                r.get("confidence", 0.9) for r in state["extracted_risks"]
-            ]
-            state["confidence_score"] = (
-                sum(confidences) / len(confidences) if confidences else 0.9
-            )
+        # Report only assessed per-risk confidence. The tool-wide confidence
+        # metadata and absent fields are not measurements of individual risks.
+        # Existing RiskExtractionCandidate has no per-item confidence, so
+        # this intentionally remains None until the extraction contract evolves.
+        state["confidence_score"] = CritiqueEvaluationService().calculate_confidence(
+            state["extracted_risks"]
+        )
 
         return state
 
