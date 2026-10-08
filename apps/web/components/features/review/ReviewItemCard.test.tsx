@@ -139,6 +139,24 @@ describe('ReviewItemCard - graph-gated HITL review', () => {
     expect(screen.getAllByText(/Confidence: not evaluated/i).length).toBeGreaterThan(0);
   });
 
+  it('distinguishes an explicitly assessed zero from unknown confidence', () => {
+    render(
+      <ReviewItemCard
+        item={{
+          ...graphGatedItem,
+          item_data: { ...graphGatedItem.item_data, confidence_assessed: true },
+        }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Confidence 0%')).toBeInTheDocument();
+    expect(screen.queryByText('Confidence: not evaluated')).not.toBeInTheDocument();
+  });
+
   it('hides row_id and other identifiers behind Technical details', async () => {
     render(
       <ReviewItemCard
