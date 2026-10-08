@@ -88,8 +88,8 @@ def test_build_returns_explanation_grounded_in_alerts_and_clause_citations() -> 
         alerts=alerts,
     )
 
-    assert "2 extracted clauses" in explanation.summary
-    assert "2 active alerts" in explanation.summary
+    assert "2 currently visible clauses" in explanation.summary
+    assert "2 linked alerts" in explanation.summary
     assert "delay penalty" in explanation.strongest_cluster.lower()
     assert "critical" in explanation.review_priority.lower()
     assert "notice gap" in explanation.latest_signal.lower()
@@ -107,6 +107,34 @@ def test_build_without_alerts_still_returns_clause_grounded_citations() -> None:
         alerts=[],
     )
 
-    assert "0 active alerts" in explanation.summary
+    assert "0 linked alerts" in explanation.summary
     assert "no active alerts" in explanation.latest_signal.lower()
     assert len(explanation.citations) == 2
+
+
+def test_empty_graph_does_not_mistake_unknown_risk_for_moderate() -> None:
+    document = _build_document()
+    document.clauses = []
+
+    explanation = EvidenceRelationshipExplanationService().build(
+        document=document,
+        alerts=[],
+    )
+
+    assert "0 currently visible clauses" in explanation.summary
+    assert "Other document revisions" in explanation.summary
+    assert "not assessed" in explanation.review_priority.lower()
+    assert "priority is moderate" not in explanation.review_priority.lower()
+    assert explanation.citations == []
+
+
+def test_no_linked_alerts_does_not_certify_review_priority() -> None:
+    document = _build_document()
+
+    explanation = EvidenceRelationshipExplanationService().build(
+        document=document,
+        alerts=[],
+    )
+
+    assert "not assessed" in explanation.review_priority.lower()
+    assert "not evidence" in explanation.review_priority.lower()
