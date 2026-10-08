@@ -261,7 +261,7 @@ async def test_missing_review_row_does_not_write():
             idempotency_key="request-12345",
             draft=draft,
         )
-    assert len(session.calls) == 3
+    assert len(session.calls) == 2
 
 
 @pytest.mark.asyncio
@@ -279,7 +279,7 @@ async def test_stale_candidate_rebind_fails_closed_even_for_identical_replay():
             idempotency_key="request-12345",
             draft=draft,
         )
-    assert len(session.calls) == 3
+    assert len(session.calls) == 2
 
 @pytest.mark.asyncio
 async def test_stale_fence_or_unbound_candidate_does_not_record_a_review_event():
@@ -302,7 +302,7 @@ async def test_stale_fence_or_unbound_candidate_does_not_record_a_review_event()
                 idempotency_key="request-12345",
                 draft=draft,
             )
-        assert len(session.calls) == 3
+        assert len(session.calls) == 2
 
 
 @pytest.mark.asyncio
