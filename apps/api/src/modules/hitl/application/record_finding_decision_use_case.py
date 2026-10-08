@@ -29,7 +29,6 @@ from src.modules.hitl.domain.finding_decision import (
     stable_finding_id,
 )
 
-
 _READ_PENDING = text("""
 SELECT id, project_id, document_id, thread_id, checkpoint_id,
        lineage_generation, lineage_fencing_token, review_metadata
