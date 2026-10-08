@@ -66,6 +66,28 @@ def _draft():
     )
 
 
+def _locked(draft):
+    c = draft.candidate
+    return {
+        "id": c.review_row_id,
+        "project_id": uuid4(),
+        "document_id": c.document_id,
+        "thread_id": c.thread_id,
+        "checkpoint_id": c.checkpoint_id,
+        "lineage_generation": c.generation,
+        "lineage_fencing_token": c.fencing_token,
+        "review_metadata": {
+            "trust_candidate_required": True,
+            "candidate_binding": {
+                "artifact_id": str(c.artifact_id),
+                "document_id": str(c.document_id),
+                "artifact_version": c.artifact_version,
+                "artifact_hash": c.artifact_hash,
+            },
+        },
+    }
+
+
 @pytest.mark.asyncio
 async def test_refuses_wrong_authenticated_tenant_reviewer_or_source_without_db_access():
     draft = _draft()
@@ -94,7 +116,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     draft = _draft()
     event_id = uuid4()
     session = _Session(
-        {"id": draft.candidate.review_row_id, "project_id": uuid4()},
+        _locked(draft),
         None,  # existing idempotency key
         {"ledger_revision": 0},
         {"event_id": event_id, "ledger_revision": 1},
@@ -121,7 +143,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
 async def test_stale_ledger_revision_fails_before_any_insert():
     draft = _draft()
     session = _Session(
-        {"id": draft.candidate.review_row_id, "project_id": uuid4()},
+        _locked(draft),
         None,
         {"ledger_revision": 4},
     )
@@ -171,14 +193,14 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
         "idempotency_key": "request-12345",
         "draft": draft,
     }
-    session = _Session({"id": draft.candidate.review_row_id, "project_id": uuid4()}, existing)
+    session = _Session(_locked(draft), existing)
     receipt = await FindingDecisionLedgerWriter(session).record(**params)
     assert receipt.replayed is True
     assert receipt.event_id == existing["event_id"]
     assert len(session.calls) == 2
 
     session = _Session(
-        {"id": draft.candidate.review_row_id, "project_id": uuid4()},
+        _locked(draft),
         {**existing, "action": "DISMISSED"},
     )
     with pytest.raises(FindingDecisionIdempotencyConflict):
@@ -190,6 +212,24 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
 async def test_missing_review_row_does_not_write():
     draft = _draft()
     session = _Session(None)
+    with pytest.raises(FindingDecisionIdentityError):
+        await FindingDecisionLedgerWriter(session).record(
+            tenant_id=draft.candidate.tenant_id,
+            authenticated_reviewer_id=draft.reviewer_id,
+            source_item_id="risk-2",
+            ordinal=0,
+            idempotency_key="request-12345",
+            draft=draft,
+        )
+    assert len(session.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_candidate_rebind_fails_closed_even_for_identical_replay():
+    draft = _draft()
+    row = _locked(draft)
+    row["review_metadata"]["candidate_binding"]["artifact_hash"] = "f" * 64
+    session = _Session(row)
     with pytest.raises(FindingDecisionIdentityError):
         await FindingDecisionLedgerWriter(session).record(
             tenant_id=draft.candidate.tenant_id,
