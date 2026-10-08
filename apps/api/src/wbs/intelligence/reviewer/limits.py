@@ -5,20 +5,27 @@ estimate, the total token budget, the cost budget (estimated with the declared m
 the elapsed time. A retry is a call. A response whose reported usage exceeds the declared per-call
 limits is discarded (OVER_LIMIT) and still charged. Once a cap is reached, or the run is cancelled,
 no further call begins.
+
+The execution configuration (every field below: each one changes which evidence is read, which
+calls may start or which responses are kept) has a canonical, versioned digest. It binds the run's
+idempotency identity, so a review under different limits is a new run, never a reused one.
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Final
 
+from src.wbs.domain.digest import canonical_json
 from src.wbs.intelligence.reviewer.model_port import ModelUsage
 
 MAX_CALLS_CEILING: Final = 24
 MAX_RETRIES_CEILING: Final = 2
+EXECUTION_CONFIG_VERSION: Final = "wbs-reviewer-execution-config/v1"
 
 
 class StopReason(StrEnum):
@@ -68,6 +75,12 @@ class ReviewLimits:
             output_tokens * self.output_micro_usd_per_1k / 1000)
 
 
+def execution_config_digest(limits: ReviewLimits) -> str:
+    """The canonical digest of every result-affecting Reviewer limit (integers only, versioned)."""
+    body = {"version": EXECUTION_CONFIG_VERSION, "limits": asdict(limits)}
+    return "sha256:" + hashlib.sha256(canonical_json(body)).hexdigest()
+
+
 def estimate_tokens(*texts: str) -> int:
     return math.ceil(sum(len(t) for t in texts) / 4)
 
@@ -114,4 +127,13 @@ class CallBudget:
                 and usage.output_tokens <= self.limits.max_output_tokens_per_call)
 
 
-__all__ = ["MAX_CALLS_CEILING", "MAX_RETRIES_CEILING", "CallBudget", "ReviewLimits", "StopReason", "estimate_tokens"]
+__all__ = [
+    "EXECUTION_CONFIG_VERSION",
+    "MAX_CALLS_CEILING",
+    "MAX_RETRIES_CEILING",
+    "CallBudget",
+    "ReviewLimits",
+    "StopReason",
+    "estimate_tokens",
+    "execution_config_digest",
+]

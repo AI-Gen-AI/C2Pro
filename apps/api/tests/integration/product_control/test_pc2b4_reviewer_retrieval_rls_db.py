@@ -5,6 +5,8 @@ run inside a transaction under a NOBYPASSRLS role:
 
 * with tenant A's context it returns only tenant A's authorized chunks -- a forged allow-list
   naming tenant B's document / revision returns nothing of tenant B (two walls: SQL + RLS);
+* a forged pair (own document, foreign revision) matches nothing: pairs bind exactly in SQL, and the
+  bounded read never returns more than its limits;
 * without a tenant context it returns nothing (fail closed);
 * asked for tenant B's scope while the context is tenant A, it returns nothing.
 
@@ -88,8 +90,9 @@ async def test_the_reader_isolates_tenants_for_a_nobypassrls_role() -> None:
                 async with AsyncSession(engine) as session, session.begin():
                     await session.execute(text(f"SET LOCAL ROLE {_ROLE}"))
                     await session.execute(text("SELECT set_config('app.current_tenant', :t, true)"), {"t": context})
+                    cross = (own[0], foreign[1])  # a forged pair: own document, foreign revision
                     chunks = await ManifestScopedChunkReader(session).read(
-                        tenant_id=tenant, project_id=project, allowed=[own, foreign])
+                        tenant_id=tenant, project_id=project, allowed=[own, foreign, cross], per_document=1, total=2)
                     return [c.content for c in chunks]
 
             assert await read(str(tenant_a), tenant_a, project_a) == ["SECRET-A"]

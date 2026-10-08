@@ -19,7 +19,11 @@ the pinned profiles and the evidence summary, it:
 
 Every call is admitted by the ``CallBudget`` (calls incl. retries, tokens, cost, time) and the
 cancellation check BEFORE it starts. Untrusted text travels only inside per-call isolation
-boundaries; the model has no tools. The result is persisted by the caller through the PC-2b.2 store.
+boundaries; the model has no tools. Isolation is not anonymisation: the target's free text (node
+names and codes) and the MAP summaries forwarded into REDUCE pass the same privacy boundary as the
+evidence excerpts before any model-port call, while canonical node ids stay intact for deterministic
+validation and the target itself is never mutated. The result is persisted by the caller through the
+PC-2b.2 store.
 """
 
 from __future__ import annotations
@@ -73,6 +77,7 @@ from src.wbs.intelligence.reviewer.model_port import (
     WBSReviewerModelPort,
     require_offline_adapter,
 )
+from src.wbs.intelligence.reviewer.privacy import Anonymizer, default_anonymizer
 from src.wbs.intelligence.reviewer.prompts import template_ref, template_text
 from src.wbs.intelligence.validation.output_validator import (
     ValidationContext,
@@ -115,6 +120,7 @@ class ReviewInputs:
     has_trusted_scope_evidence: bool
     run_id: UUID
     limits: ReviewLimits = field(default_factory=ReviewLimits)
+    anonymize: Anonymizer = default_anonymizer  # the privacy boundary of every model-visible text
 
 
 @dataclass(frozen=True)
@@ -297,12 +303,17 @@ class _Review:
         return [UntrustedBlock(block_id=item.excerpt_id, kind=_BLOCK_KIND[item.input_class],
                                text=item.model_visible.text) for item in self.inputs.manifest.items]
 
+    def _private(self, value: str | None) -> str | None:
+        return None if value is None else self.inputs.anonymize(value)
+
     def _outline(self, node_ids: Sequence[UUID]) -> str:
+        """The target as the model sees it: ids and vocabulary verbatim, free text anonymised (a copy)."""
         by_id = {n.node_id: n for n in self.inputs.target.nodes}
         return "\n".join(json.dumps({
             "node_id": str(by_id[i].node_id), "parent_id": None if by_id[i].parent_id is None else str(by_id[i].parent_id),
-            "code": by_id[i].code, "name": by_id[i].name, "decomposition_kind": by_id[i].decomposition_kind,
-            "control_level": by_id[i].control_level}, ensure_ascii=False) for i in node_ids)
+            "code": self._private(by_id[i].code), "name": self._private(by_id[i].name),
+            "decomposition_kind": by_id[i].decomposition_kind, "control_level": by_id[i].control_level},
+            ensure_ascii=False) for i in node_ids)
 
     def _prompt(self, task: ReviewTask, cluster: Cluster | None, merged: Sequence[Mapping[str, Any]]
                 ) -> tuple[str, str]:
@@ -313,8 +324,8 @@ class _Review:
         else:
             blocks.append(UntrustedBlock(block_id="target_all", kind="wbs_target",
                                          text=self._outline([n.node_id for n in self.inputs.target.nodes])))
-            summary = [{"ref": f["ref"], "dimension": f["dimension"], "status": f["status"], "summary": f["summary"],
-                        "node_ids": f.get("node_ids", [])} for f in merged]
+            summary = [{"ref": f["ref"], "dimension": f["dimension"], "status": f["status"],
+                        "summary": self._private(f["summary"]), "node_ids": f.get("node_ids", [])} for f in merged]
             blocks.append(UntrustedBlock(block_id="map_results", kind="map_results",
                                          text=json.dumps(summary, ensure_ascii=False)))
         isolated = self.isolation.isolate(blocks)

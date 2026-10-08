@@ -9,8 +9,9 @@ RLS; RLS is the second wall) and only selects the exact current revisions admitt
   human explicitly includes it, as ``PROPOSED_EVIDENCE``; a WBS source is never evidence. A requested
   document or revision outside this set is refused before any model call;
 * retrieval -- ``ManifestScopedChunkReader`` reads ``document_chunks`` stamped with an admitted
-  (document, revision) pair only. No embedding, no similarity search, no generic retrieval port and
-  no fallback to any wider collection; a missing scope fails closed;
+  (document, revision) pair only, matched as exact pairs and bounded (per document and in total, in
+  a deterministic order) inside the SQL itself. No embedding, no similarity search, no generic
+  retrieval port and no fallback to any wider collection; a missing scope fails closed;
 * excerpts -- the canonical locator (document, revision, blob hash and, only when the chunk carries
   exact original coordinates, page / offsets) is captured from the ORIGINAL chunk BEFORE
   anonymisation. The model sees only the anonymised text; its length never becomes an offset.
@@ -18,8 +19,7 @@ RLS; RLS is the second wall) and only selects the exact current revisions admitt
 
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 from uuid import UUID
@@ -40,14 +40,17 @@ from src.wbs.intelligence.contracts.evidence import (
 )
 from src.wbs.intelligence.contracts.run import RunScope
 from src.wbs.intelligence.reviewer.limits import ReviewLimits
+from src.wbs.intelligence.reviewer.privacy import (
+    ANONYMIZER_TRANSFORM,
+    Anonymizer,
+    default_anonymizer,
+)
 
-ANONYMIZER_TRANSFORM: Final = "pii-anonymizer/v1"
 SCOPE_DOCUMENT_TYPES: Final = frozenset({"contract", "specification", "technical_spec"})
 ADVISORY_DOCUMENT_TYPES: Final = frozenset({"schedule", "budget"})
 _CLASS_PRIORITY: Final = {InputClass.TRUSTED_PROJECT_EVIDENCE: 0, InputClass.ADVISORY_EVIDENCE: 1,
                           InputClass.PROPOSED_EVIDENCE: 2}
-
-Anonymizer = Callable[[str], str]
+_MAX_INT_DIGITS: Final = 18  # always within PostgreSQL bigint and Python's int-from-str limit
 
 
 class ReviewerScopeError(C2ProException):
@@ -55,12 +58,6 @@ class ReviewerScopeError(C2ProException):
 
     def __init__(self, message: str, **details: Any) -> None:
         super().__init__(message=message, code="WBS_REVIEWER_SCOPE_DENIED", status_code=403, details=details)
-
-
-def default_anonymizer(value: str) -> str:
-    from src.core.privacy.anonymizer import anonymize_text_simple
-
-    return anonymize_text_simple(value)
 
 
 @dataclass(frozen=True)
@@ -141,6 +138,11 @@ async def inventory_evidence(session: AsyncSession, *, scope: RunScope, request:
                              has_trusted_scope_evidence=bool(trusted_types & SCOPE_DOCUMENT_TYPES))
 
 
+def prioritised(sources: Iterable[EvidenceSource]) -> list[EvidenceSource]:
+    """Deterministic retrieval priority: trusted, then advisory, then proposed evidence."""
+    return sorted(sources, key=lambda s: (_CLASS_PRIORITY[s.input_class], str(s.document_id)))
+
+
 # ============================================================================ retrieval
 @dataclass(frozen=True)
 class ScopedChunk:
@@ -154,13 +156,43 @@ class ScopedChunk:
 
 
 def _int(value: Any) -> int | None:
+    """A non-negative, bounded integer from chunk metadata; anything else is unusable (None)."""
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value
-    if isinstance(value, str) and value.isdigit():
+        return value if 0 <= value < 10 ** _MAX_INT_DIGITS else None
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= _MAX_INT_DIGITS:
         return int(value)
     return None
+
+
+# Exact (document, revision) pairs, bounded per document and in total inside the database. The
+# order is deterministic: chunk_index (only a well-formed, bigint-safe index; NULLS LAST), creation
+# time, id within a document; documents take turns in the caller's priority order.
+_CHUNKS_SQL: Final = f"""
+    WITH allowed AS (
+        SELECT a.document_id, a.revision_id, a.position
+          FROM unnest(CAST(:documents AS uuid[]), CAST(:revisions AS text[])) WITH ORDINALITY
+               AS a(document_id, revision_id, position)
+    ), ranked AS (
+        SELECT c.id, c.document_id, c.content, c.metadata, a.position,
+               row_number() OVER (
+                   PARTITION BY c.document_id
+                   ORDER BY CASE WHEN (c.metadata ->> 'chunk_index') ~ '^[0-9]{{1,{_MAX_INT_DIGITS}}}$'
+                                 THEN CAST(c.metadata ->> 'chunk_index' AS bigint) END NULLS LAST,
+                            c.created_at, c.id) AS rank
+          FROM public.document_chunks c
+          JOIN allowed a ON a.document_id = c.document_id
+                        AND a.revision_id = (c.metadata ->> 'revision_id')
+         WHERE c.tenant_id = CAST(:tenant AS uuid)
+           AND c.project_id = CAST(:project AS uuid)
+    )
+    SELECT id, document_id, content, metadata
+      FROM ranked
+     WHERE rank <= :per_document
+     ORDER BY rank, position
+     LIMIT :total
+"""
 
 
 class ManifestScopedChunkReader:
@@ -171,32 +203,24 @@ class ManifestScopedChunkReader:
 
     async def read(self, *, tenant_id: UUID, project_id: UUID, allowed: Sequence[tuple[UUID, UUID]],
                    per_document: int = 8, total: int = 40) -> list[ScopedChunk]:
+        """At most ``per_document`` chunks per document and ``total`` overall, in ``allowed`` priority."""
         if tenant_id is None or project_id is None:
             raise ValueError("chunk retrieval requires tenant_id and project_id (no global collection)")
-        pairs = {(str(document_id), str(revision_id)) for document_id, revision_id in allowed}
+        if per_document < 1 or total < 1:
+            raise ValueError("chunk retrieval is bounded: per_document and total are positive")
+        pairs = list(dict.fromkeys((str(document_id), str(revision_id)) for document_id, revision_id in allowed))
         if not pairs:
             return []
-        rows = (await self.session.execute(text("""
-            SELECT c.id, c.document_id, c.content, c.metadata
-              FROM public.document_chunks c
-             WHERE c.tenant_id = CAST(:tenant AS uuid)
-               AND c.project_id = CAST(:project AS uuid)
-               AND c.document_id = ANY(CAST(:documents AS uuid[]))
-               AND (c.metadata ->> 'revision_id') = ANY(CAST(:revisions AS text[]))
-             ORDER BY c.document_id,
-                      CASE WHEN (c.metadata ->> 'chunk_index') ~ '^[0-9]+$'
-                           THEN (c.metadata ->> 'chunk_index')::int END NULLS LAST,
-                      c.created_at, c.id
-        """), {"tenant": str(tenant_id), "project": str(project_id),
-               "documents": sorted({d for d, _ in pairs}), "revisions": sorted({r for _, r in pairs})})).all()
+        rows = (await self.session.execute(text(_CHUNKS_SQL), {
+            "tenant": str(tenant_id), "project": str(project_id), "documents": [d for d, _ in pairs],
+            "revisions": [r for _, r in pairs], "per_document": per_document, "total": total})).all()
+        admitted = set(pairs)
         chunks: list[ScopedChunk] = []
-        taken: dict[str, int] = defaultdict(int)
         for chunk_id, document_id, content, metadata in rows:
             meta = metadata if isinstance(metadata, Mapping) else {}
             pair = (str(document_id), str(meta.get("revision_id")))
-            if pair not in pairs or taken[pair[0]] >= per_document or len(chunks) >= total:
-                continue  # the exact pair binds: a document's other revisions never ride along
-            taken[pair[0]] += 1
+            if pair not in admitted:  # pragma: no cover - the SQL already matched the exact pair
+                continue
             start, end = _int(meta.get("char_start")), _int(meta.get("char_end"))
             if start is None or end is None or end < start:
                 start = end = None
@@ -289,7 +313,9 @@ __all__ = [
     "ManifestScopedChunkReader",
     "ReviewerScopeError",
     "ScopedChunk",
+    "Anonymizer",
     "build_manifest",
     "default_anonymizer",
     "inventory_evidence",
+    "prioritised",
 ]

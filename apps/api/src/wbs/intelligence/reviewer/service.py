@@ -68,8 +68,13 @@ from src.wbs.intelligence.reviewer.evidence import (
     build_manifest,
     default_anonymizer,
     inventory_evidence,
+    prioritised,
 )
-from src.wbs.intelligence.reviewer.limits import ReviewLimits
+from src.wbs.intelligence.reviewer.limits import (
+    EXECUTION_CONFIG_VERSION,
+    ReviewLimits,
+    execution_config_digest,
+)
 from src.wbs.intelligence.reviewer.model_port import WBSReviewerModelPort, require_offline_adapter
 from src.wbs.intelligence.reviewer.pipeline import (
     ORCHESTRATION_VERSION,
@@ -210,7 +215,7 @@ class WBSReviewerService:
         inventory = await inventory_evidence(self.session, scope=scope, request=request)
         chunks = await ManifestScopedChunkReader(self.session).read(
             tenant_id=tenant_id, project_id=project_id,
-            allowed=[(s.document_id, s.revision_id) for s in inventory.sources],
+            allowed=[(s.document_id, s.revision_id) for s in prioritised(inventory.sources)],
             per_document=self.limits.max_excerpts_per_document, total=self.limits.max_excerpts)
         manifest = build_manifest(scope=scope, inventory=inventory, chunks=chunks, anonymize=self.anonymize,
                                   limits=self.limits,
@@ -219,11 +224,13 @@ class WBSReviewerService:
         fingerprint = self.model.fingerprint
         templates = template_refs()
         nonce = uuid4().hex if rerun else None
+        config_digest = execution_config_digest(self.limits)  # different limits = a different run
         key = idempotency_key(scope=scope, mode=captured.mode, target=captured.run_target,
                               evidence_set_digest=manifest.evidence_set_digest,
                               profile_digests=[pin["profile_digest"] for pin in profiles.pins()],
                               prompt_templates=templates, model=fingerprint,
-                              orchestration_version=ORCHESTRATION_VERSION, rerun_nonce=nonce)
+                              orchestration_version=ORCHESTRATION_VERSION, rerun_nonce=nonce,
+                              execution_config_digest=config_digest)
         provenance = {
             "synthetic": True, "production_invocation": False, "adapter": type(self.model).__name__,
             "provider": fingerprint.provider, "model": fingerprint.model, "routing_tier": fingerprint.routing_tier,
@@ -231,6 +238,7 @@ class WBSReviewerService:
             "prompt_templates": [t.model_dump() for t in templates], "orchestration_version": ORCHESTRATION_VERSION,
             "proposal_contract_version": PROPOSAL_CONTRACT_VERSION,
             "qualification_vocab_version": QUALIFICATION_VOCAB_VERSION, "limits": asdict(self.limits),
+            "execution_config_version": EXECUTION_CONFIG_VERSION, "execution_config_digest": config_digest,
         }
         opened = await self.store.open_run(
             scope=scope, mode=captured.mode, execution_type=ExecutionType.AI, target=captured.run_target,
@@ -252,7 +260,7 @@ class WBSReviewerService:
         inputs = ReviewInputs(scope=scope, mode=captured.mode, target=captured.snapshot, manifest=manifest,
                               profiles=profiles, has_trusted_contract=inventory.has_trusted_contract,
                               has_trusted_scope_evidence=inventory.has_trusted_scope_evidence, run_id=run.id,
-                              limits=self.limits)
+                              limits=self.limits, anonymize=self.anonymize)
         result = await run_review_pipeline(inputs, self.model, cancelled=is_cancelled, clock=self.clock)
         actor_ref = f"user:{actor.user_id}"
         if result.status is PipelineStatus.COMPLETED:
