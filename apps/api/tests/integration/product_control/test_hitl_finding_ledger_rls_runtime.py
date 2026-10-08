@@ -121,6 +121,18 @@ async def test_finding_ledger_forced_rls_tenant_partition_unique_cas_and_audit_r
             assert await conn.fetchval(
                 "SELECT count(*) FROM public.hitl_finding_decisions"
             ) == 2
+            # A non-bypass migrator must fail, not interpret its filtered
+            # view as proof that the global audit ledger is empty.
+            with pytest.raises(asyncpg.PostgresError):
+                async with conn.transaction():
+                    await conn.execute(f"SET LOCAL ROLE {_ROLE}")
+                    await conn.execute(
+                        "SELECT set_config('row_security', 'off', true)"
+                    )
+                    await conn.fetchval(
+                        "SELECT EXISTS (SELECT 1 FROM public.hitl_finding_decisions)"
+                    )
+
             # A populated append-only ledger cannot be downgraded to erase audit.
             with pytest.raises(AssertionError, match="cannot downgrade populated"):
                 _alembic("downgrade", "20261007_0003")
