@@ -371,3 +371,30 @@ async def test_legacy_unstructured_notes_remain_unverified_no_invented_observati
     )
     assert result.observations == ()
     assert "corrupt" in result.notes_raw
+
+
+@pytest.mark.asyncio
+async def test_false_quotation_downgrades_llm_ok_to_retry() -> None:
+    ai = _FakeAI(payload={
+        "status": "OK",
+        "notes": "All findings verified.",
+        "observations": [
+            {
+                "claim": "A thirty-day deadline appears in the original",
+                "source_quote": "Contractor shall rectify within thirty days",
+            },
+        ],
+    })
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{"confidence": 0.9}],
+            extracted_wbs=[],
+            doc_type="contract",
+            retry_count=0,
+            source_text="Contractor shall rectify within fourteen (14) days.",
+        )
+    )
+    assert result.status == "RETRY"
+    assert result.retry_count == 1
+    assert "unverified source" in result.critique_notes.lower()
+    assert result.observations[0].witness.char_start is None
