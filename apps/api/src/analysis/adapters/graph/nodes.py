@@ -681,6 +681,10 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
+                        # Untrusted N12 source-witnessed claims: preserve review
+                        # visibility but NEVER promote quotation match to
+                        # contract truth or to an authorized HITL decision.
+                        "critique_observations": list(state.get("critique_observations", [])),
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}
