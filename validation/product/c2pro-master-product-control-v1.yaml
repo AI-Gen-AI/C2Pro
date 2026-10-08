@@ -702,6 +702,40 @@ product_quality_hitl_2026_10_08:
   depends_on_for_prod: ["#686 P0c hold/proof", "#714 trusted-state exact-candidate authority"]
   acceptance_policy: "Every slice requires scoped tests, independent review and PR; production proof separate from code merge"
   canonical_wbs_plane_count: 8
+  goal_horizons:
+    short:
+      meaning: "Next governed implementation and evidence gates; not a promised calendar date."
+      goal: "A truthful, revision-pinned contract analysis with evidence-grounded risks, no fake confidence, and auditable provisional human review without altering TRUSTED state."
+      milestones:
+        - "Harden and qualify the merged immutable ledger (#966), non-routed provisional writer (#970), source membership (#971/#974), and authenticated reviewer boundary (#975); #977 remains draft CI-green, pending independent review and merge."
+        - "Finish #940 independent real-PostgreSQL non-BYPASSRLS role grants, tenant isolation, concurrent CAS/idempotency, candidate source membership and stale generation/fence checks before exposing any HTTP write."
+        - "Finish #937 typed claim-to-contract quote/section verification and §5.2 adversarial tests; accept only source-verified conclusions, not mere literal match."
+        - "Resolve #938/#953 missing per-risk confidence with measured provenance and operational HITL capacity policy; CI green alone does not lift HOLD."
+        - "Demonstrate #939 historical/proposed/trusted A=9 / B=7 revision explorer and #945 minimal golden RED/GREEN fixtures."
+      exit_gate: "End-to-end backend RED/GREEN for truthful risk/source and safe provisional per-item review; exact-HEAD CI, independent security review, no partial TRUSTED promotion."
+      state: IN_PROGRESS_NOT_PROD_VALIDATED
+    medium:
+      meaning: "Product-wide integrated qualification following short-horizon security/evidence dependencies."
+      goal: "A usable reviewer journey and independently qualified contract-to-project Current State, What Changed and canonical Project Controls, with explicit human final approval."
+      milestones:
+        - "#940 immutable corrected candidate and separate explicit whole-candidate N13/#714/#758 settlement; #941 summary-first per-finding UI and permissions/E2E."
+        - "#942 verified revision/clause/span deep links with honest fallbacks, #943 correct risk/entity/alert graph semantics, #944 revision life-cycle and timeline truth."
+        - "#945 independent adversarial QA of tenant/RLS/CAS, stale checkpoint, duplicate retry, source hallucination, accessibility and real multi-revision user journey."
+        - "Qualify #686 P0c on the explicitly reviewed deployed runtime and only then #687 P0d; production B stays pending unless a separate authorized human decision occurs."
+        - "Complete P1 Project Controls one canonical WBS root, governed baseline/change, linked budget/schedule/stakeholders and evidence-aware cross-document Coherence."
+      exit_gate: "Accepted independent QA and approved production evidence for bounded P0c then P0d; no lifecycle promotion without Product Control."
+      state: PLANNED_DEPENDENCY_GATED
+    long:
+      meaning: "Product and business expansion after trusted contract and Project Controls foundations are demonstrated."
+      goal: "Scalable C2Pro procurement-to-project execution SaaS with verifiable decisions, compliant tenant governance and actionable executive/PMO intelligence."
+      milestones:
+        - "P2 procurement packages tied to the single canonical WBS: Procurement Plan, BoQ, RFQ, bid comparison, award and contract follow-up; no parallel WBS."
+        - "Governed stakeholder actions, approvals, responsibilities, supplier communications and human-in-the-loop consequential actions."
+        - "P3 auditable executive/PMO portfolio intelligence across Health, Coherence, Risks, Changes, Projects and Procurement."
+        - "Validate reliability, multi-tenancy, security, observability, operational cost and real-document pilots before commercial scale."
+        - "Evaluate optional advanced cross-evidence 2D/3D graph #946 only once the source/resolver semantics and operator value are demonstrated."
+      exit_gate: "Real-user pilots and operating/product controls verify measurable procurement and project value, not merely prototype coverage or PR count."
+      state: STRATEGIC_NOT_YET_ACCEPTED
   tasks:
     - id: PQ-HITL-01
       issue: 937
@@ -809,13 +843,22 @@ product_quality_hitl_2026_10_08:
       - {pr: 950, scope: BOUNDED_SOURCE_FOR_LLM_CRITIQUE, main_commit: "f39ca2f963635cc27f31767992618ec99f5d7129"}
       - {pr: 954, scope: COLLAPSIBLE_UNVERIFIED_CRITIQUE_UX, main_commit: "258cf294f3c792a0fefa1f8331c3e8dbce8d2f00"}
       - {pr: 949, scope: HONEST_GRAPH_PRIORITY_AND_PROVENANCE, main_commit: "9144777ff8dc4a76a1b203a9707da84a7d0c2020"}
+      - {pr: 956, scope: READONLY_REVISION_EVIDENCE_INSPECTOR, main_commit: "3213f41081b30e9eff07f061b2a28107deebcef2"}
+      - {pr: 961, scope: PROVISIONAL_FINDING_DECISION_DOMAIN_CONTRACT, main_commit: "ef55b913535bfd5ac13113e347e5096fb5f9a325"}
+      - {pr: 962, scope: REVISION_PINNED_LITERAL_SOURCE_QUOTE_VERIFIER, main_commit: "f3e82fa76f4fc3a6db61e7fe12cd87e83b78fe3d"}
+      - {pr: 966, scope: IMMUTABLE_TENANT_RLS_FINDING_LEDGER_SCHEMA, main_commit: "2db3342660baa923871876dd5648b5772fa93410"}
+      - {pr: 970, scope: NONROUTED_PROVISIONAL_FINDING_LEDGER_WRITER, main_commit: "8f9d56532e98346a26f8dc88ef0a7278c747a7f5"}
+      - {pr: 971, scope: EXACT_PERSISTED_RISK_SOURCE_MEMBERSHIP, main_commit: "231d38ba77e81db4c5ec5050c1dc552780c95670"}
+      - {pr: 974, scope: LIVE_PROPOSED_ARTIFACT_AND_RISK_SOURCE_WRITER_GATE, main_commit: "6fcfdd7fc07aa67a4b951c9abe69d0e9fd9040be"}
+      - {pr: 975, scope: AUTHENTICATED_HUMAN_REVIEWER_BOUNDARY, main_commit: "8b3aa9d304f76ddd27820e2a0e368961ec907cd1"}
     verified_ci_green_but_unmerged:
       - {pr: 953, issue: 938, result: GREEN, disposition: HOLD_ARCHITECTURAL_WORKLOAD_GATE}
+      - {pr: 977, issue: 940, result: GREEN, disposition: DRAFT_REVIEW_AND_REAL_POSTGRES_ROLE_GATE_NOT_MERGED}
     remaining_material_gaps:
       - "01 typed claim-to-source verification: #950 source-in-context does not prove grounding."
       - "02 clause_ref/multiclause evidence addressability; per-item confidence requires calibrated provenance and tenant policy. #953 may trigger human review for virtually every contract; no merge pending workload review."
-      - "03 read-only revision-scoped viewer and exact A=9/B=7 still absent beyond truthful copy #948."
-      - "04 per-finding append-only decisions, immutable correction candidate and exact atomic final settlement not yet implemented."
+      - "03 #956 read-only revision-scoped viewer merged; real A=9/B=7 operator evidence and trusted-current/proposed parity acceptance still pending."
+      - "04 immutable ledger #966, non-routed writer #970, risk membership #971/#974, and authenticated reviewer boundary #975 merged; HTTP/runtime role/RLS concurrency, immutable corrected candidate, explicit atomic final settlement and UI still pending."
       - "05 summary/evidence cards, per-item actions and real end-to-end HITL remain beyond #954 cosmetic grouping."
       - "06 trustworthy deep links; 07 taxonomy beyond priority/label; 08 timeline lifecycle parity; 09 golden/regression and independent user QA."
     next_order:
