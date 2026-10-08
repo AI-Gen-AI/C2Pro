@@ -515,3 +515,31 @@ async def test_structured_critique_observation_overflow_cannot_hide_unverified_t
     assert "limit" in result.notes_raw.lower() or "overflow" in result.notes_raw.lower()
     assert len(result.observations) <= 32
     assert all(obs.witness.status is QuoteWitnessStatus.LOCATED for obs in result.observations)
+
+
+
+@pytest.mark.asyncio
+async def test_malformed_structured_observation_cannot_turn_unverified_claim_into_ok() -> None:
+    """Invalid structured evidence must be a typed routing failure, not silently dropped."""
+    for malformed in (
+        {"claim": "Unsupported deadline", "source_quote": "thirty days"},
+        [{"claim": None, "source_quote": "thirty days"}],
+        [{"claim": "", "source_quote": "thirty days"}],
+        [None],
+    ):
+        ai = _FakeAI(payload={
+            "status": "OK",
+            "notes": "Verified",
+            "observations": malformed,
+        })
+        result = await CritiqueExtractionUseCase(ai=ai).execute(
+            CritiqueExtractionCommand(
+                extracted_risks=[{"confidence": 0.9}],
+                extracted_wbs=[],
+                doc_type="contract",
+                retry_count=0,
+                source_text="Payment shall be made in fourteen days.",
+            )
+        )
+        assert result.status == "RETRY"
+        assert "malformed" in result.notes_raw.lower()
