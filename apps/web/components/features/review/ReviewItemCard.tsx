@@ -131,6 +131,23 @@ function actionsBlockedReason(state: {
   return undefined;
 }
 
+// Presentation-only segmentation of numbered reviewer prose. It does NOT
+// convert model claims into verified evidence or per-finding decisions.
+function parseCritiqueObservations(notes: string): { number: number; title: string; body: string }[] | null {
+  const headers = Array.from(notes.matchAll(/^(\d{1,2})\.\s+([^\n:]{5,120}):[ \t]*/gm));
+  if (headers.length < 2) return null;
+
+  return headers.map((match, index) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = headers[index + 1]?.index ?? notes.length;
+    return {
+      number: Number(match[1]),
+      title: match[2].trim(),
+      body: notes.slice(start, end).trim(),
+    };
+  });
+}
+
 export function ReviewItemCard({
   item,
   projectId,
@@ -165,6 +182,7 @@ export function ReviewItemCard({
   const category = getString(item.item_data, 'category');
   const reason = getString(item.item_data, 'reason');
   const modelConclusion = getString(item.item_data, 'critique_notes');
+  const critiqueObservations = modelConclusion ? parseCritiqueObservations(modelConclusion) : null;
   const approveMeaning =
     getString(item.item_data, 'approve_meaning') ??
     (item.resumable ? null : DEFAULT_APPROVE_MEANING);
@@ -232,9 +250,38 @@ export function ReviewItemCard({
           ) : null}
 
           {modelConclusion ? (
-            <div className="mt-2 rounded-md bg-muted/50 p-2 text-sm">
-              <span className="font-medium text-muted-foreground">Model conclusion: </span>
-              {modelConclusion}
+            <div className="mt-2 rounded-md bg-muted/50 p-3 text-sm">
+              {critiqueObservations ? (
+                <div className="space-y-2">
+                  <p className="font-medium">
+                    {critiqueObservations.length} unverified AI critique observations
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Preliminary model comments, not verified findings. Check the original source
+                    evidence before approving or rejecting the whole analysis.
+                  </p>
+                  {critiqueObservations.map((observation) => (
+                    <details
+                      key={observation.number}
+                      className="rounded-md border border-border/70 bg-background/80 p-2"
+                    >
+                      <summary className="cursor-pointer font-medium">
+                        {observation.number}. {observation.title}
+                      </summary>
+                      <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
+                        {observation.body}
+                      </p>
+                    </details>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <span className="font-medium text-muted-foreground">
+                    Unverified model critique:{' '}
+                  </span>
+                  <span className="whitespace-pre-wrap">{modelConclusion}</span>
+                </>
+              )}
             </div>
           ) : null}
 
@@ -282,7 +329,7 @@ export function ReviewItemCard({
                 onClick={() => onApprove(item)}
                 data-testid={`approve-${item.item_id}`}
               >
-                Approve
+                {modelConclusion && item.resumable ? 'Approve full analysis' : 'Approve'}
               </Button>
               <Button
                 size="sm"
