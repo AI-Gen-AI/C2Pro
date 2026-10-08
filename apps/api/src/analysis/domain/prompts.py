@@ -47,7 +47,14 @@ Check for:
   obligations, timeframe and cost allocation. When they conflict, quote the
   relevant source passage and identify the contradiction for human review.
 
-Return ONLY a JSON object: {"status": "OK"|"RETRY", "notes": "..."}
+Return ONLY a JSON object: {"status": "OK"|"RETRY", "notes": "...",
+"observations": [{"claim": "one specific quality concern", "source_quote": "exact verbatim
+passage from supplied contract text"}]}.
+Observations are OPTIONAL, and their claims remain UNVERIFIED by the model.
+If the exact source passage is missing, never invent a quote or location; leave
+observations empty and explain uncertainty in notes. A quote's presence is
+NOT proof that a legal interpretation or omission claim is correct.
+If a quoted source is outside the partial excerpt, do not certify its absence.
 - "OK": Extraction meets quality standards.
 - "RETRY": Extraction needs improvement. Explain what is missing or incorrect in "notes".
 """.strip()
