@@ -6,6 +6,7 @@ existing exact-candidate #714/#758 HITL settlement.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any
@@ -62,13 +63,51 @@ class ProposedFindingDecision:
 
 
 @dataclass(frozen=True)
+class StoredFindingDecision:
+    """Immutable draft audit record; never holds mutable caller-owned data."""
+
+    scope: ReviewCandidateScope
+    finding_id: str
+    action: DecisionAction
+    reason: str
+    reviewer_id: UUID
+    expected_revision: int
+    idempotency_key: str
+    correction_json: str | None
+
+    @classmethod
+    def from_command(cls, command: ProposedFindingDecision) -> StoredFindingDecision:
+        correction_json = None
+        if command.proposed_correction is not None:
+            try:
+                correction_json = json.dumps(
+                    command.proposed_correction,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Correction must be finite canonical JSON") from exc
+        return cls(
+            scope=command.scope,
+            finding_id=command.finding_id,
+            action=command.action,
+            reason=command.reason,
+            reviewer_id=command.reviewer_id,
+            expected_revision=command.expected_revision,
+            idempotency_key=command.idempotency_key,
+            correction_json=correction_json,
+        )
+
+
+@dataclass(frozen=True)
 class FindingDecisionDraft:
     """Append-only, immutable in-memory projection, not a settlement result."""
 
     scope: ReviewCandidateScope
     required_finding_ids: frozenset[str]
     revision: int = 0
-    entries: tuple[ProposedFindingDecision, ...] = ()
+    entries: tuple[StoredFindingDecision, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.required_finding_ids or any(
@@ -109,9 +148,10 @@ def apply_finding_decision(
         raise DecisionConflict("Review scope or candidate binding changed")
     if not command.idempotency_key.strip():
         raise ValueError("Idempotency key is required")
+    stored = StoredFindingDecision.from_command(command)
     for recorded in draft.entries:
         if recorded.idempotency_key == command.idempotency_key:
-            if recorded == command:
+            if recorded == stored:
                 return draft
             raise DecisionConflict("Idempotency key already used for a different decision")
     if command.expected_revision != draft.revision:
@@ -128,5 +168,5 @@ def apply_finding_decision(
     return replace(
         draft,
         revision=draft.revision + 1,
-        entries=(*draft.entries, command),
+        entries=(*draft.entries, stored),
     )
