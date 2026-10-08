@@ -1,9 +1,6 @@
 """PQ-HITL-01: quoted source snippets must be independently addressable."""
 
-from src.analysis.domain.critique_quote_witness import (
-    QuoteWitnessStatus,
-    verify_source_quote,
-)
+from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus, verify_source_quote
 
 
 SOURCE = (
