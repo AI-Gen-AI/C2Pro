@@ -144,3 +144,70 @@ async def test_real_sqlalchemy_writer_rejects_privileged_insert_and_replay() -> 
                     assert count_after == count_before
     finally:
         await engine.dispose()
+
+
+async def test_real_dedicated_login_role_and_elevated_attributes() -> None:
+    """Only an AUTHENTICATED, directly granted, no-membership role may pass.
+
+    Temporary LOGINs and grants exist ONLY in a migrated *_test PostgreSQL DB.
+    No decision row is inserted; no credentials or roles survive cleanup.
+    """
+    assert _DSN is not None
+    assert urlparse(_DSN).path.rsplit("/", 1)[-1].endswith("_test")
+    writer_role = f"hitl_writer_ci_{uuid4().hex[:14]}"
+    member_role = f"hitl_aux_ci_{uuid4().hex[:14]}"
+    password = uuid4().hex
+    owner = await asyncpg.connect(_DSN)
+    writer = None
+    aux_created = False
+    role_created = False
+    try:
+        owner_is_superuser = await owner.fetchval(
+            "SELECT rolsuper FROM pg_roles WHERE rolname = current_user"
+        )
+        assert owner_is_superuser is True
+        await owner.execute(f'CREATE ROLE "{writer_role}" LOGIN PASSWORD \'{password}\'')
+        role_created = True
+        await owner.execute(f'GRANT USAGE ON SCHEMA public TO "{writer_role}"')
+        await owner.execute(
+            f'GRANT SELECT, INSERT ON public.hitl_finding_decisions TO "{writer_role}"'
+        )
+        writer = await asyncpg.connect(dsn=_DSN, user=writer_role, password=password)
+        tenant_id = str(uuid4())
+        async with writer.transaction():
+            await writer.execute(
+                "SELECT set_config('app.current_tenant', $1, true)", tenant_id
+            )
+            predicate = str(_SAFE_DB_ROLE).replace(":tenant_id", "$1")
+            assert await writer.fetchval(predicate, tenant_id) is True
+
+            # A role that can modify roles must be denied even when its
+            # immediate table grants still look restricted.
+            await owner.execute(f'ALTER ROLE "{writer_role}" CREATEROLE')
+            assert await writer.fetchval(predicate, tenant_id) is False
+            await owner.execute(f'ALTER ROLE "{writer_role}" NOCREATEROLE')
+            assert await writer.fetchval(predicate, tenant_id) is True
+
+            # Membership is unsafe even for NOINHERIT, because SET ROLE
+            # can still switch to another principal with broader grants.
+            await owner.execute(f'CREATE ROLE "{member_role}" NOLOGIN')
+            aux_created = True
+            await owner.execute(f'GRANT "{member_role}" TO "{writer_role}"')
+            assert await writer.fetchval(predicate, tenant_id) is False
+            await owner.execute(f'REVOKE "{member_role}" FROM "{writer_role}"')
+            assert await writer.fetchval(predicate, tenant_id) is True
+    finally:
+        if writer is not None:
+            await writer.close()
+        try:
+            if role_created:
+                if aux_created:
+                    await owner.execute(f'REVOKE "{member_role}" FROM "{writer_role}"')
+                    await owner.execute(f'DROP ROLE "{member_role}"')
+                await owner.execute(
+                    f'REVOKE SELECT, INSERT ON public.hitl_finding_decisions FROM "{writer_role}"'
+                )
+                await owner.execute(f'REVOKE USAGE ON SCHEMA public FROM "{writer_role}"')
+                await owner.execute(f'DROP ROLE "{writer_role}"')
+        finally:
+            await owner.close()
