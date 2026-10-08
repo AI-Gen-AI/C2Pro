@@ -94,7 +94,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     draft = _draft()
     event_id = uuid4()
     session = _Session(
-        {"id": draft.candidate.review_row_id},
+        {"id": draft.candidate.review_row_id, "project_id": uuid4()},
         None,  # existing idempotency key
         {"ledger_revision": 0},
         {"event_id": event_id, "ledger_revision": 1},
@@ -121,7 +121,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
 async def test_stale_ledger_revision_fails_before_any_insert():
     draft = _draft()
     session = _Session(
-        {"id": draft.candidate.review_row_id},
+        {"id": draft.candidate.review_row_id, "project_id": uuid4()},
         None,
         {"ledger_revision": 4},
     )
@@ -171,14 +171,14 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
         "idempotency_key": "request-12345",
         "draft": draft,
     }
-    session = _Session({"id": draft.candidate.review_row_id}, existing)
+    session = _Session({"id": draft.candidate.review_row_id, "project_id": uuid4()}, existing)
     receipt = await FindingDecisionLedgerWriter(session).record(**params)
     assert receipt.replayed is True
     assert receipt.event_id == existing["event_id"]
     assert len(session.calls) == 2
 
     session = _Session(
-        {"id": draft.candidate.review_row_id},
+        {"id": draft.candidate.review_row_id, "project_id": uuid4()},
         {**existing, "action": "DISMISSED"},
     )
     with pytest.raises(FindingDecisionIdempotencyConflict):
