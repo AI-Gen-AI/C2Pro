@@ -27,12 +27,12 @@ class TestCalculateConfidence:
         assert abs(self.service.calculate_confidence(items) - 0.8) < 0.01
 
     def test_empty_list_returns_zero(self):
-        assert self.service.calculate_confidence([]) == pytest.approx(0.0)
+        assert self.service.calculate_confidence([]) is None
 
     def test_items_without_confidence_field(self):
         items = [{"title": "Risk A"}, {"title": "Risk B"}]
-        # Items exist but no confidence → default 0.9
-        assert self.service.calculate_confidence(items) == pytest.approx(0.9)
+        # No measured value must not become a fabricated 90% confidence.
+        assert self.service.calculate_confidence(items) is None
 
     def test_mixed_valid_and_missing_confidence(self):
         items = [
@@ -40,17 +40,15 @@ class TestCalculateConfidence:
             {"title": "no confidence"},
             {"confidence": 0.8},
         ]
-        # Only uses valid confidence values: (0.6 + 0.8) / 2 = 0.7
-        result = self.service.calculate_confidence(items)
-        assert abs(result - 0.7) < 0.01
+        # A partial average is not evidence of full extraction coverage.
+        assert self.service.calculate_confidence(items) is None
 
     def test_non_numeric_confidence_ignored(self):
         items = [
             {"confidence": "high"},
             {"confidence": 0.5},
         ]
-        result = self.service.calculate_confidence(items)
-        assert result == pytest.approx(0.5)
+        assert self.service.calculate_confidence(items) is None
 
 
 class TestEvaluateCritique:
@@ -225,3 +223,33 @@ class TestDetermineNextStep:
         )
 
         assert result == expected
+
+
+class TestHonestUnknownConfidence:
+    def setup_method(self):
+        self.service = CritiqueEvaluationService()
+
+    @pytest.mark.parametrize("items", [
+        [{"confidence": None}],
+        [{"confidence": 0.9}, {"confidence": None}],
+        [{"confidence": True}],
+        [{"confidence": float("nan")}],
+        [{"confidence": 1.3}],
+    ])
+    def test_incomplete_or_invalid_confidence_is_unknown(self, items):
+        assert self.service.calculate_confidence(items) is None
+
+    def test_unknown_confidence_always_requires_human_approval(self):
+        result = self.service.evaluate_critique(
+            critique_status="OK",
+            critique_notes="",
+            confidence=None,
+            retry_count=0,
+        )
+        assert result.confidence is None
+        assert result.human_approval_required is True
+
+    def test_complete_valid_confidence_does_not_change_previous_routing(self):
+        assert self.service.calculate_confidence([
+            {"confidence": 0.9}, {"confidence": 0.7},
+        ]) == pytest.approx(0.8)
