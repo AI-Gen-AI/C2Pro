@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- No production or external telemetry activation; no secrets, contract text or raw prompt/completion in trace exports by default.
+- No production or external telemetry activation; no secrets, `LLMRequest.system`, `LLMResponse.content`, contract text or raw completion in trace exports. An API key alone must not enable tracing; explicit opt-in is required.
 - Maintain `src.core.ai.prompts.PromptManager` local runtime authority and `src.core.ai.prompt_registry.PromptRegistry` sync protocol; do not pull mutable remote prompts into runtime.
 - No product-domain edits (Temporal/WBS/Coherence/Alerts/Procurement), migration, or Product Control state change.
 - Tenant isolation and trace ownership remain enforced by C2Pro, never delegated to the trace provider.
@@ -22,8 +22,8 @@
 
 1. A prompt contains an embedded API key or client's confidential paragraph: external span never sees it, regardless of key names.
 2. A tool emits a nested map/list with user data under innocuous keys: drop entire unknown payloads, do not export recursively until accepted.
-3. LangSmith exporter is disabled or fails: normal successful model execution and local non-sensitive metrics are preserved, no retry amplification.
-4. A tenant submits another tenant's trace ID: local authorization rejects feedback and trace lookup; the vendor link is not an access-control proof.
+3. LangSmith exporter is disabled or fails (including API key present but tracing flag absent): normal model execution and local non-sensitive metrics are preserved, no remote client creation or retry amplification.
+4. A caller submits arbitrary/another tenant's trace ID through the **registered** `/ai/feedback` route: auth + local ownership check rejects it before SDK forwarding. A separate guarded router does not prove protection.
 5. A remote Prompt Hub label changes or cannot be reached: approved local prompt hash/version remains pinned, no hot substitution.
 
 ---
@@ -31,15 +31,15 @@
 ### Task 1: Exact-head trace inventory / negative exposure proof
 
 **Files:**
-- Review: `apps/api/src/core/ai/langsmith_client.py`, `apps/api/src/core/observability/langsmith_decorator.py`, `apps/api/src/modules/observability/application/services/langsmith_adapter.py`, `apps/api/src/core/ai/llm_client.py`
+- Review: `apps/api/src/core/ai/langsmith_client.py`, `apps/api/src/core/observability/langsmith_decorator.py`, `apps/api/src/modules/observability/application/services/langsmith_adapter.py`, `apps/api/src/core/ai/llm_client.py`, **registered** `apps/api/src/main.py`, `apps/api/src/ai_feedback/router.py`, `apps/api/src/ai_feedback/service.py`, and the **unregistered** alternative `apps/api/src/core/ai/feedback_router.py` (compare, do not assume it protects the route).
 - Test: `apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py`
 
 **Interfaces:** consumes current LLMRequest and mock trace client; produces deterministic mock captured SDK inputs without a real network client.
 
-- [ ] Step 1: Construct fake tracing client; synthetic `LLMRequest.prompt` contains a distinctive `CANARY_CONTRACT_SECRET`.
-- [ ] Step 2: Run `pytest apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py -q` at baseline; record whether raw canary reaches `start_span(inputs=...)`. A failing privacy assertion is expected on baseline and must be retained in the PR evidence.
-- [ ] Step 3: Extend test to nested tool arguments, exceptions containing canary, sync and async instrumentation, tenant ID, trace URL, no API key.
-- [ ] Step 4: Inventory every `LangSmithClient` caller and alternate exporter; evidence the set before changing an adapter.
+- [ ] Step 1: Construct fake SDK span client; instantiate the actual `LLMRequest(model=..., messages=[...], system="CANARY_CONTRACT_SECRET")` and an `LLMResponse(content="CANARY_COMPLETION_SECRET", ...)` using its real required fields. **Do not invent `LLMRequest.prompt`**: it does not exist.
+- [ ] Step 2: Run `pytest apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py -q` at baseline; show RED assertions for `LLMRequest.system` canary in `start_span(inputs["prompt"])`, successful `LLMResponse.content` canary in `end_span(outputs["output"])`, and an exception canary in `end_span` error outputs. Preserve baseline red evidence; a dataclass-constructor error or a passing assertion that never reads the request **does not count**.
+- [ ] Step 3: Extend test to nested tool arguments, kwargs aliases, sync and async instrumentation, tenant ID, trace URL, no API key, and `LANGSMITH_API_KEY` set with absent/false/empty `LANGSMITH_TRACING`; expected remote client construction and exporter use **both false** until explicit opt-in.
+- [ ] Step 4: Inventory every `LangSmithClient` caller and alternate exporter. Inspect registered `/ai/feedback` route/service in `src/main.py` and add RED test that a caller without authenticated tenant/trace ownership **cannot** send feedback to LangSmith; add separate cross-tenant test and reject raw exception response. Do not mistake the unregistered guarded `core/ai/feedback_router.py` for coverage.
 - [ ] Step 5: Commit only the scoped tests/evidence.
 
 ### Task 2: Minimal content-deny telemetry builder
@@ -60,14 +60,14 @@
 
 **Files:**
 - Modify: `apps/api/src/core/observability/langsmith_decorator.py`
-- Modify (only as evidenced necessary): `apps/api/src/core/ai/langsmith_client.py`; `apps/api/src/modules/observability/application/services/langsmith_adapter.py`
+- Modify (as evidenced necessary): `apps/api/src/core/ai/langsmith_client.py` (explicit opt-in); `apps/api/src/modules/observability/application/services/langsmith_adapter.py`; and the **registered** `apps/api/src/ai_feedback/router.py` / `service.py` (tenant authorization before feedback forwarding).
 - Test: `apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py`; existing `test_langsmith_*.py`.
 
-**Interfaces:** each SDK export receives only the Task-2 builder's safe structure, never direct `request.prompt`, unfiltered `str(exc)`, arbitrary `outputs` or `metadata`.
+**Interfaces:** each SDK export receives only the Task-2 builder's safe structure, never raw `request.system`, `request.messages`, `LLMResponse.content`, free-form `str(exc)`, arbitrary `outputs` or `metadata`. Registered feedback forwarding must pass a tenant-ownership check and safe payload filter before provider API calls; missing tenant fails closed.
 
-- [ ] Step 1: RED regression for all active sync/async client paths, including end-span errors and feedback updates.
-- [ ] Step 2: Implement minimal interception just before exporter call; preserve trace span identity, usage/cost/latency bookkeeping and application exception semantics.
-- [ ] Step 3: GREEN targeted tests, then run full `pytest apps/api/tests/unit/core/observability apps/api/tests/unit/core/ai -q`; run Ruff and mypy as in CI.
+- [ ] Step 1: RED regression for all active sync/async SDK paths, including successful `LLMResponse.content` output, error messages, SDK client construction on key-only configuration and registered feedback route's anonymous/foreign-tenant trace ID.
+- [ ] Step 2: Implement minimal safe builder interception before every exporter call; enforce `LANGSMITH_TRACING` **OFF by default** even with a configured API key. Require authenticated tenant context and `usage_logger.tenant_owns_trace` (or equivalent authoritative local check) in the **registered** feedback router before any LangSmith API call; reject anonymous and cross-tenant requests without revealing trace existence, keep feedback comment subject to data classification, and avoid returning raw exception detail. Preserve usage/cost/latency and application exception semantics.
+- [ ] Step 3: GREEN targeted tests for the registered feedback router (including `TestClient` auth handling), telemetry builder, SDK configuration, success/error spans, then full impacted backend observability/AI/feedback suites. Run Ruff, mypy and secret scan as in CI; verify presence of a configured key alone does not instantiate exporter.
 - [ ] Step 4: Independently review any remaining direct SDK callsites; commit with explicit blast-radius report.
 
 ### Task 4: Immutable prompt version contract — design first
