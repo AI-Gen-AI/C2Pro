@@ -33,7 +33,7 @@ UPGRADE_STATEMENTS: tuple[str, ...] = (
     "DO $do$\nDECLARE v_role text;\nBEGIN\n    FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP\n        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = v_role) THEN\n            EXECUTE 'REVOKE ALL ON TABLE public.hitl_finding_decisions FROM ' || quote_ident(v_role);\n            EXECUTE 'REVOKE ALL ON FUNCTION public.hitl_finding_decisions_guard() FROM ' || quote_ident(v_role);\n        END IF;\n    END LOOP;\nEND\n$do$",
 )
 DOWNGRADE_STATEMENTS: tuple[str, ...] = (
-    "DO $do$\nBEGIN\n    IF EXISTS (SELECT 1 FROM public.hitl_finding_decisions LIMIT 1) THEN\n        RAISE EXCEPTION USING ERRCODE = 'restrict_violation',\n            MESSAGE = 'cannot downgrade populated immutable HITL finding decision ledger';\n    END IF;\nEND\n$do$",
+    "DO $do$\nBEGIN\n    -- A tenant-filtered SELECT could wrongly report an empty global ledger.\n    -- row_security=off DOES NOT bypass RLS for NOBYPASSRLS roles: it fails\n    -- closed when any policy would filter, rather than silently hiding rows.\n    PERFORM set_config('row_security', 'off', true);\n    IF EXISTS (SELECT 1 FROM public.hitl_finding_decisions LIMIT 1) THEN\n        RAISE EXCEPTION USING ERRCODE = 'restrict_violation',\n            MESSAGE = 'cannot downgrade populated immutable HITL finding decision ledger';\n    END IF;\nEND\n$do$",
     "DROP TABLE public.hitl_finding_decisions",
     "DROP FUNCTION public.hitl_finding_decisions_guard()",
     "ALTER TABLE public.review_items DROP CONSTRAINT uq_review_items_id_tenant_hitl",
