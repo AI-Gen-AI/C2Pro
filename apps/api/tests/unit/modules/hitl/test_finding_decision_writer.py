@@ -2,6 +2,9 @@
 
 from uuid import uuid4
 
+from src.analysis.domain.trust import artifact_digest
+from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
+
 import pytest
 
 from src.modules.hitl.adapters.persistence.finding_decision_writer import (
@@ -17,6 +20,16 @@ from src.modules.hitl.domain.finding_decision import (
     FindingDecisionKind,
     stable_finding_id,
 )
+
+
+_RISK = {
+    "title": "14 day rectification",
+    "description": "Contractor cost of rectification within 14 days",
+    "category": "QUALITY",
+    "severity": "MEDIUM",
+}
+_PAYLOAD = {"extracted_risks": [_RISK]}
+_SOURCE_ID = risk_source_item_id(_RISK)
 
 
 class _Rows:
@@ -48,7 +61,7 @@ def _draft():
         document_revision_id=uuid4(),
         artifact_id=uuid4(),
         artifact_version=2,
-        artifact_hash="b" * 64,
+        artifact_hash=artifact_digest(_PAYLOAD),
         generation=3,
         fencing_token=10,
         thread_id="document:example:g3:f10:analysis",
@@ -57,7 +70,7 @@ def _draft():
     return FindingDecisionDraft(
         candidate=identity,
         finding_id=stable_finding_id(
-            identity, FindingDecisionKind.RISK, source_item_id="risk-2", ordinal=0
+            identity, FindingDecisionKind.RISK, source_item_id=_SOURCE_ID, ordinal=0
         ),
         finding_kind=FindingDecisionKind.RISK,
         action=FindingDecisionAction.CONFIRMED,
@@ -100,7 +113,7 @@ async def test_refuses_wrong_authenticated_tenant_reviewer_or_source_without_db_
         args = {
             "tenant_id": draft.candidate.tenant_id,
             "authenticated_reviewer_id": draft.reviewer_id,
-            "source_item_id": "risk-2",
+            "source_item_id": _SOURCE_ID,
             "ordinal": 0,
             "idempotency_key": "request-12345",
             "draft": draft,
@@ -117,6 +130,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     event_id = uuid4()
     session = _Session(
         _locked(draft),
+        {"payload": _PAYLOAD},
         None,  # existing idempotency key
         {"ledger_revision": 0},
         {"event_id": event_id, "ledger_revision": 1},
@@ -124,7 +138,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     receipt = await FindingDecisionLedgerWriter(session).record(
         tenant_id=draft.candidate.tenant_id,
         authenticated_reviewer_id=draft.reviewer_id,
-        source_item_id="risk-2",
+        source_item_id=_SOURCE_ID,
         ordinal=0,
         idempotency_key="request-12345",
         draft=draft,
@@ -132,7 +146,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     assert receipt.event_id == event_id
     assert receipt.ledger_revision == 1
     assert receipt.replayed is False
-    assert len(session.calls) == 4
+    assert len(session.calls) == 5
     assert "FOR UPDATE" in session.calls[0][0]
     assert "INSERT INTO public.hitl_finding_decisions" in session.calls[-1][0]
     assert "approve" not in session.calls[-1][0].lower()
@@ -144,6 +158,7 @@ async def test_stale_ledger_revision_fails_before_any_insert():
     draft = _draft()
     session = _Session(
         _locked(draft),
+        {"payload": _PAYLOAD},
         None,
         {"ledger_revision": 4},
     )
@@ -151,12 +166,12 @@ async def test_stale_ledger_revision_fails_before_any_insert():
         await FindingDecisionLedgerWriter(session).record(
             tenant_id=draft.candidate.tenant_id,
             authenticated_reviewer_id=draft.reviewer_id,
-            source_item_id="risk-2",
+            source_item_id=_SOURCE_ID,
             ordinal=0,
             idempotency_key="request-12345",
             draft=draft,
         )
-    assert len(session.calls) == 3
+    assert len(session.calls) == 4
     assert all("INSERT INTO" not in sql for sql, _ in session.calls)
 
 
@@ -178,6 +193,8 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
         "thread_id": draft.candidate.thread_id,
         "checkpoint_id": draft.candidate.checkpoint_id,
         "finding_id": draft.finding_id,
+        "source_item_id": _SOURCE_ID,
+        "source_ordinal": 0,
         "finding_kind": draft.finding_kind.value,
         "action": draft.action.value,
         "reviewer_id": draft.reviewer_id,
@@ -188,24 +205,25 @@ async def test_same_idempotency_key_replays_only_exact_same_event():
     params = {
         "tenant_id": draft.candidate.tenant_id,
         "authenticated_reviewer_id": draft.reviewer_id,
-        "source_item_id": "risk-2",
+        "source_item_id": _SOURCE_ID,
         "ordinal": 0,
         "idempotency_key": "request-12345",
         "draft": draft,
     }
-    session = _Session(_locked(draft), existing)
+    session = _Session(_locked(draft), {"payload": _PAYLOAD}, existing)
     receipt = await FindingDecisionLedgerWriter(session).record(**params)
     assert receipt.replayed is True
     assert receipt.event_id == existing["event_id"]
-    assert len(session.calls) == 2
+    assert len(session.calls) == 3
 
     session = _Session(
         _locked(draft),
+        {"payload": _PAYLOAD},
         {**existing, "action": "DISMISSED"},
     )
     with pytest.raises(FindingDecisionIdempotencyConflict):
         await FindingDecisionLedgerWriter(session).record(**params)
-    assert len(session.calls) == 2
+    assert len(session.calls) == 3
 
 
 @pytest.mark.asyncio
@@ -216,7 +234,7 @@ async def test_missing_review_row_does_not_write():
         await FindingDecisionLedgerWriter(session).record(
             tenant_id=draft.candidate.tenant_id,
             authenticated_reviewer_id=draft.reviewer_id,
-            source_item_id="risk-2",
+            source_item_id=_SOURCE_ID,
             ordinal=0,
             idempotency_key="request-12345",
             draft=draft,
@@ -234,7 +252,7 @@ async def test_stale_candidate_rebind_fails_closed_even_for_identical_replay():
         await FindingDecisionLedgerWriter(session).record(
             tenant_id=draft.candidate.tenant_id,
             authenticated_reviewer_id=draft.reviewer_id,
-            source_item_id="risk-2",
+            source_item_id=_SOURCE_ID,
             ordinal=0,
             idempotency_key="request-12345",
             draft=draft,
@@ -257,9 +275,75 @@ async def test_stale_fence_or_unbound_candidate_does_not_record_a_review_event()
             await FindingDecisionLedgerWriter(session).record(
                 tenant_id=draft.candidate.tenant_id,
                 authenticated_reviewer_id=draft.reviewer_id,
-                source_item_id="risk-2",
+                source_item_id=_SOURCE_ID,
                 ordinal=0,
                 idempotency_key="request-12345",
                 draft=draft,
             )
         assert len(session.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_candidate_source_query_is_revision_fence_hash_and_proposed_scoped():
+    draft = _draft()
+    session = _Session(_locked(draft), {"payload": _PAYLOAD}, None,
+                       {"ledger_revision": 0}, {"event_id": uuid4(), "ledger_revision": 1})
+    await FindingDecisionLedgerWriter(session).record(
+        tenant_id=draft.candidate.tenant_id,
+        authenticated_reviewer_id=draft.reviewer_id,
+        source_item_id=_SOURCE_ID,
+        ordinal=0,
+        idempotency_key="request-12345",
+        draft=draft,
+    )
+    source_query, params = session.calls[1]
+    assert "public.document_artifacts" in source_query
+    assert "document_processing_operations" in source_query
+    assert "proposed" in source_query
+    assert params["revision_id"] == draft.candidate.document_revision_id
+    assert params["artifact_hash"] == draft.candidate.artifact_hash
+    assert params["fencing_token"] == draft.candidate.fencing_token
+
+
+@pytest.mark.asyncio
+async def test_stale_or_missing_candidate_cannot_pass_membership_gate():
+    draft = _draft()
+    for candidate in (
+        None,
+        {"payload": {"extracted_risks": []}},
+        {"payload": {"extracted_risks": [{**_RISK, "severity": "LOW"}]}},
+    ):
+        session = _Session(_locked(draft), candidate)
+        with pytest.raises(FindingDecisionIdentityError):
+            await FindingDecisionLedgerWriter(session).record(
+                tenant_id=draft.candidate.tenant_id,
+                authenticated_reviewer_id=draft.reviewer_id,
+                source_item_id=_SOURCE_ID,
+                ordinal=0,
+                idempotency_key="request-12345",
+                draft=draft,
+            )
+        assert len(session.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_untyped_critique_observation_cannot_be_written_as_bound_risk():
+    draft = _draft()
+    critique = draft.model_copy(update={
+        "finding_kind": FindingDecisionKind.CRITIQUE,
+        "finding_id": stable_finding_id(
+            draft.candidate, FindingDecisionKind.CRITIQUE,
+            source_item_id=_SOURCE_ID, ordinal=0,
+        ),
+    })
+    session = _Session()
+    with pytest.raises(FindingDecisionIdentityError):
+        await FindingDecisionLedgerWriter(session).record(
+            tenant_id=critique.candidate.tenant_id,
+            authenticated_reviewer_id=critique.reviewer_id,
+            source_item_id=_SOURCE_ID,
+            ordinal=0,
+            idempotency_key="request-12345",
+            draft=critique,
+        )
+    assert session.calls == []
