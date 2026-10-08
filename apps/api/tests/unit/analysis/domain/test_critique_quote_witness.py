@@ -2,7 +2,6 @@
 
 from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus, verify_source_quote
 
-
 SOURCE = (
     "Clause 5.2: Defective work shall be rectified at the Contractor's "
     "cost within fourteen (14) days of written notice."
