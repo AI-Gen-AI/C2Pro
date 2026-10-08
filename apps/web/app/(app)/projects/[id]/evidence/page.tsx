@@ -8,6 +8,7 @@ import { type ExtractedEntity } from "@/components/evidence";
 import { EvidenceActionDialog } from "@/components/features/evidence/EvidenceActionDialog";
 import { EvidenceDocumentsCard } from "@/components/features/evidence/EvidenceDocumentsCard";
 import { EvidenceHeader } from "@/components/features/evidence/EvidenceHeader";
+import { EvidenceRevisionHistoryPanel } from "@/components/features/evidence/EvidenceRevisionHistoryPanel";
 import { EvidenceTemplateDialog } from "@/components/features/evidence/EvidenceTemplateDialog";
 import { EvidenceWorkspace } from "@/components/features/evidence/EvidenceWorkspace";
 import { type PdfHighlight } from "@/components/features/evidence/PdfEvidenceViewer";
@@ -844,6 +845,8 @@ export default function EvidencePage() {
           </AlertDescription>
         </Alert>
       ) : null}
+
+      <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} />
 
       <EvidenceWorkspace
         splitView={splitView}
