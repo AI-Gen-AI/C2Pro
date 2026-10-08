@@ -1016,10 +1016,10 @@ product_quality_hitl_2026_10_08:
         priority: P0
         role: orchestrator
         size: M
-        status: BLOCKED
+        status: IN_REVIEW_UNMERGED
         depends_on: [PQ-HITL-09.1]
         acceptance: "Freeze per-risk and critique types, CONFIRMED/CORRECTION_PROPOSED/DISMISSED/NEEDS_INFO, immutable versions, atomic final approval authority, migration/backward compatibility and threat model; independent principal design review."
-        note: "requires no-self-approval architecture sign-off"
+        note: "Design-only SDD PR #988 exact-head CI green; independent principal + decisions D1-D6 and golden prerequisite required before acceptance or implementation"
       - id: PQ-HITL-04.2
         parent_issue: 940
         title_key: NONBYPASS_LEDGER_DB_PRINCIPAL
