@@ -124,6 +124,9 @@ class TestCritiqueExtractionService:
         assert result.observations[0].witness.status.value == "LOCATED"
         assert result.observations[0].witness.claim_verified is False
         assert "human verification" in result.notes
+        assert "Rectification obligation not extracted" in result.notes
+        assert "fourteen-day rectification obligation" in result.notes
+        assert "do not assume" in result.notes
 
     @pytest.mark.asyncio
     async def test_empty_ok_observations_remain_ok(self) -> None:
