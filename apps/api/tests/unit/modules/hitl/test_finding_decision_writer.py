@@ -20,7 +20,6 @@ from src.modules.hitl.domain.finding_decision import (
 )
 from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
 
-
 _RISK = {
     "title": "14 day rectification",
     "description": "Contractor cost of rectification within 14 days",
