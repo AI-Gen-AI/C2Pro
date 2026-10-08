@@ -61,6 +61,7 @@ from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
+from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
 from src.stakeholders.adapters.persistence.sqlalchemy_stakeholder_repository import (
     SqlAlchemyStakeholderRepository,
@@ -969,6 +970,10 @@ async def _run_document_analysis(
         document = await repo.get_by_id(tenant_id, document_id)
         if not document:
             raise ValueError("document not found or access denied")
+        if is_analysis_excluded(document.document_type):
+            # PC-2b.3: a WBS source never enters N1-N17 (no status, no retry, no DLQ write).
+            return {"status": "not_analysable", "document_id": str(document_id),
+                    "reason": WBS_ANALYSIS_EXCLUDED_DETAIL}
         # Redelivery after the durable terminal seam must not replay graph
         # side effects.
         if document.upload_status is DocumentStatus.ANALYZED:
@@ -1341,6 +1346,11 @@ async def _process(
         if not document:
             logger.error("Document with ID '%s' not found. Cannot process.", document_id)
             return {"status": "error", "message": "Document not found"}
+        if is_analysis_excluded(document.document_type):
+            # PC-2b.3: a WBS source is never parsed here, chunked, extracted or analysed (no write).
+            logger.warning("document_not_ingestible: document_id=%s", document_id)
+            return {"status": "not_ingestible", "document_id": str(document_id),
+                    "reason": WBS_ANALYSIS_EXCLUDED_DETAIL}
 
         def stakeholder_factory() -> Any:
             stk_repo = _StagedStakeholderRepository(session=session)

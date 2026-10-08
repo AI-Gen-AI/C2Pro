@@ -29,7 +29,7 @@ Nothing here touches Schedule, Budget, BOM, RACI or procurement: alignment is fu
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Final
@@ -526,8 +526,13 @@ class WBSGovernedChangeService:
         origin: ChangeSetOrigin = ChangeSetOrigin.MANUAL,
         evidence_refs: Sequence[str] = (),
         profile_refs: Sequence[Mapping[str, str]] = (),
+        source_import_id: UUID | None = None,
     ) -> WBSChangeSetORM:
-        """A new DRAFT against the current baseline; a CHANGE_BASELINE draft starts as that baseline."""
+        """A new DRAFT against the current baseline; a CHANGE_BASELINE draft starts as that baseline.
+
+        ``source_import_id`` (PC-2b.3) is set only by the WBS import service for an IMPORT_REVIEW
+        draft: provenance of the draft, never content and never authority.
+        """
         if not can_author(actor.kind, actor.role):
             raise WBSGovernanceForbiddenError("only a human user or admin can open a governed WBS change set")
         # The project lock orders this against an approval: the base is read after it commits, or the
@@ -539,6 +544,7 @@ class WBSGovernedChangeService:
             change_set = await self.repo.create_change_set(
                 project_id=project_id, tenant_id=tenant_id, actor=actor, title=title, origin=origin,
                 entry_mode=entry_mode, description=description, profile_refs=pins, evidence_refs=refs,
+                source_import_id=source_import_id,
             )
         except (GovernanceRuleError, TypeError, ValueError) as exc:
             raise WBSChangeSetInvalidError(str(exc)) from exc
@@ -612,6 +618,49 @@ class WBSGovernedChangeService:
             await self._record_provenance(change_set.id, node_ids, provenance)
         return CommandResult(revision=change_set.revision, node_ids=node_ids)
 
+    async def execute_add_sequence(
+        self,
+        *,
+        project_id: UUID,
+        change_set_id: UUID,
+        tenant_id: UUID,
+        actor: Actor,
+        expected_revision: int,
+        steps: Sequence[Callable[[Sequence[UUID]], tuple[AddNode, Mapping[str, Any]]]],
+    ) -> CommandResult:
+        """An ordered sequence of governed ADD_NODE commands as ONE revision of a DRAFT (all or nothing).
+
+        PC-2b.3 materializes an import through the same command dispatch as a single ADD_NODE: each
+        ``step`` receives the ids minted so far (in step order) and returns its ``AddNode`` and the
+        provenance entry recorded on the minted node under ``provenance["import"]`` (never content,
+        excluded from every digest). Any invalid step raises and the caller's transaction rolls back.
+        """
+        if not can_author(actor.kind, actor.role):
+            raise WBSGovernanceForbiddenError("only a human user or admin can edit a WBS change set")
+        await self._scoped(change_set_id, project_id, tenant_id)
+        try:
+            change_set = await self.repo.bump_revision(change_set_id, tenant_id, expected_revision)
+        except RevisionConflictError as exc:
+            current = await self._scoped(change_set_id, project_id, tenant_id)
+            raise ChangeSetRevisionConflictError(str(exc), current.revision) from exc
+        except GovernanceRuleError as exc:
+            current = await self._scoped(change_set_id, project_id, tenant_id)
+            raise ChangeSetStateError(str(exc), current.status) from exc
+        nodes = await self._nodes(change_set.id)
+        minted: list[UUID] = []
+        try:
+            for step in steps:
+                command, provenance = step(tuple(minted))
+                if not isinstance(command, AddNode):
+                    raise GovernanceRuleError("an add sequence contains ADD_NODE commands only")
+                [node_id] = await self._dispatch(change_set, command, preloaded=nodes)
+                nodes[node_id].provenance = {**nodes[node_id].provenance, "import": dict(provenance)}
+                minted.append(node_id)
+            await self.session.flush()
+        except (GovernanceRuleError, TypeError, ValueError) as exc:
+            raise WBSChangeSetInvalidError(str(exc)) from exc
+        return CommandResult(revision=change_set.revision, node_ids=minted)
+
     async def _record_provenance(self, change_set_id: UUID, node_ids: Sequence[UUID], entry: Mapping[str, Any]) -> None:
         rows = await self.session.execute(
             select(WBSChangeSetNodeORM).where(
@@ -623,8 +672,9 @@ class WBSGovernedChangeService:
             node.provenance = current
         await self.session.flush()
 
-    async def _dispatch(self, change_set: WBSChangeSetORM, command: EditCommand) -> list[UUID]:
-        nodes = await self._nodes(change_set.id)
+    async def _dispatch(self, change_set: WBSChangeSetORM, command: EditCommand, *,
+                        preloaded: dict[UUID, WBSChangeSetNodeORM] | None = None) -> list[UUID]:
+        nodes = preloaded if preloaded is not None else await self._nodes(change_set.id)
 
         def node(node_id: UUID) -> WBSChangeSetNodeORM:
             found = nodes.get(node_id)

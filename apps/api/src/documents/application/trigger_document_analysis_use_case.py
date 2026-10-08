@@ -14,6 +14,7 @@ from src.analysis.ports.orchestrator import AnalysisOrchestrator
 from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document
+from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.document_repository import IDocumentRepository
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,9 @@ class TriggerDocumentAnalysisUseCase:
         document = await self._load_document(tenant_id=tenant_id, document_id=document_id)
         if not document:
             raise ValueError("document not found or access denied")
+        if is_analysis_excluded(getattr(document, "document_type", None)):
+            # PC-2b.3: a WBS source never enters N1-N17 (it is parsed by the WBS importer only).
+            raise ValueError(WBS_ANALYSIS_EXCLUDED_DETAIL)
 
         effective_tenant_id = tenant_id or getattr(document, "tenant_id", None)
         if effective_tenant_id is None:
