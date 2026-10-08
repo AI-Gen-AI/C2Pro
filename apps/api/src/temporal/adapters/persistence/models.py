@@ -65,6 +65,10 @@ class DocumentRevisionORM(Base):
         UniqueConstraint(
             "revision_id", "document_id", "tenant_id", name="uq_document_revisions_identity"
         ),
+        # PC-2b.3 (#922): a WBS import binds a revision of the same document, tenant AND project.
+        UniqueConstraint(
+            "revision_id", "document_id", "project_id", "tenant_id", name="uq_document_revisions_scope"
+        ),
         {"info": {"rls_policy": "tenant_isolation"}},
     )
 

@@ -37,19 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { WBSImportProposedNodesItem } from "./wBSImportProposedNodesItem";
 
-/**
- * Supported document types.
- */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export interface WBSImportProposed {
+  /** NOT_AVAILABLE | DERIVED (a preview simulation, never stored) */
+  status: string;
+  reason?: string | null;
+  reasons?: string[];
+  nodes?: WBSImportProposedNodesItem[];
+}

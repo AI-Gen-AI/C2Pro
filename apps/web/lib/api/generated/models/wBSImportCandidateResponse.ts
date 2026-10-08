@@ -38,18 +38,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * Supported document types.
- */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export interface WBSImportCandidateResponse {
+  change_set_id: string;
+  source_import_id: string;
+  entry_mode: string;
+  origin: string;
+  status: string;
+  revision: number;
+  node_count: number;
+}

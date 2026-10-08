@@ -19,6 +19,11 @@ from src.core.tasks.snapshot_tasks import enqueue_project_snapshot
 from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.documents.domain.storage_keys import revision_object_key
+from src.documents.domain.upload_policy import (
+    UploadFormatError,
+    is_analysis_excluded,
+    require_upload_extension,
+)
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.projects.ports.project_repository import ProjectRepository
@@ -93,7 +98,13 @@ class UploadDocumentUseCase:
             )
 
         file_extension = os.path.splitext(filename)[1].lower()
-        if file_extension not in settings.allowed_document_types:
+        if is_analysis_excluded(document_type):
+            # PC-2b.3: a WBS source accepts its own formats only (never granted to other types).
+            try:
+                require_upload_extension(document_type, file_extension)
+            except UploadFormatError as exc:
+                raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
+        elif file_extension not in settings.allowed_document_types:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail=f"File type {file_extension} is not allowed. "

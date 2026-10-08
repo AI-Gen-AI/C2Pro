@@ -39,17 +39,6 @@
  */
 
 /**
- * Supported document types.
+ * xlsx: {sheet}; csv: {delimiter}; json: {} -- unknown keys are rejected
  */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export type CreateWBSImportRequestParseConfig = { [key: string]: unknown };

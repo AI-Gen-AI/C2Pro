@@ -37,19 +37,13 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateWBSImportRequestParseConfig } from "./createWBSImportRequestParseConfig";
 
-/**
- * Supported document types.
- */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export interface CreateWBSImportRequest {
+  /** an existing document of type 'wbs' */
+  document_id: string;
+  /** the immutable revision to parse (default: current) */
+  revision_id?: string | null;
+  /** xlsx: {sheet}; csv: {delimiter}; json: {} -- unknown keys are rejected */
+  parse_config?: CreateWBSImportRequestParseConfig;
+}

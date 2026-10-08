@@ -87,6 +87,13 @@ from src.documents.application.services.relationship_explanation_service import 
 )
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import DocumentStatus, DocumentType
+from src.documents.domain.upload_policy import (
+    UPLOAD_EXTENSIONS,
+    WBS_ANALYSIS_EXCLUDED_DETAIL,
+    UploadFormatError,
+    is_analysis_excluded,
+    require_upload_extension,
+)
 from src.documents.ports.storage_service import IStorageService
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ReviewStatus
@@ -117,7 +124,9 @@ router = APIRouter(
     },
 )
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".bc3"}
+# PC-2b.3: the union of every type's formats; each type is then checked against its OWN set
+# (``.csv`` / ``.json`` belong to a ``wbs`` source only and can never reach the contract pipeline).
+ALLOWED_EXTENSIONS = set(UPLOAD_EXTENSIONS)
 STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
 STRUCTURED_DOCX_ERROR = "budget/schedule require .xlsx/.bc3"
 
@@ -184,6 +193,11 @@ def _validate_upload_extension(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File type '{file_extension}' is not allowed.",
         )
+    if document_type is not None:
+        try:
+            require_upload_extension(document_type, file_extension)
+        except UploadFormatError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if (
         file_extension == ".docx"
         and document_type is not None
@@ -333,6 +347,15 @@ def _document_status_detail(
     if lifecycle == DocumentLifecycleStatus.NEEDS_CHANGES:
         return "A reviewer requested changes. Upload a corrected version to continue."
     return _document_status_detail_for_polling(status)
+
+
+def _wbs_source_status_detail(status: DocumentStatus) -> str:
+    """PC-2b.3: a WBS source's truthful state -- it is never queued for, or waiting on, analysis."""
+    if status == DocumentStatus.PARSED:
+        return "WBS source parsed by the deterministic WBS importer. It is never analysed."
+    if status == DocumentStatus.ERROR:
+        return "The WBS import has blocking diagnostics. Fix the source and upload a new revision."
+    return f"WBS source stored. {WBS_ANALYSIS_EXCLUDED_DETAIL}"
 
 
 # --- Dependency wiring ---
@@ -562,6 +585,12 @@ async def upload_document_for_processing(
         tenant_id=tenant_id,
     )
     response_data = DocumentResponse.model_validate(document).model_dump()
+    if is_analysis_excluded(document_type):
+        # PC-2b.3: a WBS source is never ingested or analysed -- nothing is enqueued.
+        response_data["task_id"] = None
+        response_data["processing_status"] = DocumentPollingStatus.QUEUED
+        response_data["status_detail"] = _wbs_source_status_detail(DocumentStatus.UPLOADED)
+        return DocumentQueuedResponse(**response_data)
     created_revision_id = getattr(upload_use_case, "created_revision_id", None)
     response_data["task_id"] = _enqueue_document_processing(
         document.id, created_revision_id if isinstance(created_revision_id, UUID) else None
@@ -638,7 +667,7 @@ async def reupload_document_file(
             user_id=user_id,
         )
     except ValueError as e:
-        if str(e) == STRUCTURED_DOCX_ERROR:
+        if isinstance(e, UploadFormatError) or str(e) == STRUCTURED_DOCX_ERROR:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
@@ -926,19 +955,20 @@ async def list_documents_for_project(
             has_pending_review=has_pending_review,
             analysis_attempt_failed=analysis_attempt_failed,
         )
+        wbs_source = is_analysis_excluded(doc.document_type)
         items.append(
             DocumentListItem(
                 id=doc.id,
                 filename=doc.filename,
                 document_type=doc.document_type.value if doc.document_type is not None else None,
                 status=_normalize_document_status_for_polling(doc.upload_status),
-                status_detail=_document_status_detail(
+                status_detail=_wbs_source_status_detail(doc.upload_status) if wbs_source else _document_status_detail(
                     doc.upload_status,
                     lifecycle,
                     review_count if has_pending_review else None,
                 ),
                 lifecycle_status=lifecycle,
-                retryable=document_is_retryable(lifecycle),
+                retryable=not wbs_source and document_is_retryable(lifecycle),
                 review_count=review_count if has_pending_review else None,
                 review_item_id=review_item_id if has_pending_review else None,
                 error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,
@@ -1014,6 +1044,8 @@ async def reprocess_document_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or access denied.",
         )
+    if is_analysis_excluded(document.document_type):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=WBS_ANALYSIS_EXCLUDED_DETAIL)
 
     expected_authority = (
         expected_revision_id,

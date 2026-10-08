@@ -37,19 +37,32 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { WBSImportDiagnostic } from "./wBSImportDiagnostic";
+import type { WBSImportResponseParseConfig } from "./wBSImportResponseParseConfig";
+import type { WBSImportResponseSnapshot } from "./wBSImportResponseSnapshot";
 
-/**
- * Supported document types.
- */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export interface WBSImportResponse {
+  id: string;
+  project_id: string;
+  document_id: string;
+  revision_id: string;
+  blob_hash: string;
+  format: string;
+  parser_id: string;
+  parser_version: string;
+  parse_config: WBSImportResponseParseConfig;
+  parse_config_digest: string;
+  import_key: string;
+  snapshot_schema_version: string;
+  snapshot_digest: string;
+  snapshot: WBSImportResponseSnapshot;
+  /** READY | READY_WITH_WARNINGS | INVALID (the parse only; no authority) */
+  status: string;
+  row_count: number;
+  warning_count: number;
+  blocking_count: number;
+  diagnostics: WBSImportDiagnostic[];
+  created_by: string;
+  created_at: string;
+  reused?: boolean;
+}

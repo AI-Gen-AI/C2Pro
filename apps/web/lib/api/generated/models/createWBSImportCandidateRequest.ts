@@ -38,18 +38,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * Supported document types.
- */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export interface CreateWBSImportCandidateRequest {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title: string;
+  description?: string | null;
+}

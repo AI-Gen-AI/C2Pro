@@ -37,19 +37,19 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { WBSImportComparisonResponseCandidateItem } from "./wBSImportComparisonResponseCandidateItem";
+import type { WBSImportComparisonResponseImportedItem } from "./wBSImportComparisonResponseImportedItem";
+import type { WBSImportComparisonRow } from "./wBSImportComparisonRow";
+import type { WBSImportProposed } from "./wBSImportProposed";
 
-/**
- * Supported document types.
- */
-export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];
-
-export const DocumentType = {
-  contract: "contract",
-  schedule: "schedule",
-  budget: "budget",
-  drawing: "drawing",
-  specification: "specification",
-  technical_spec: "technical_spec",
-  other: "other",
-  wbs: "wbs",
-} as const;
+export interface WBSImportComparisonResponse {
+  import_id: string;
+  change_set_id: string;
+  change_set_revision: number;
+  snapshot_digest: string;
+  imported: WBSImportComparisonResponseImportedItem[];
+  candidate: WBSImportComparisonResponseCandidateItem[];
+  proposed: WBSImportProposed;
+  rows: WBSImportComparisonRow[];
+  added_node_ids: string[];
+}

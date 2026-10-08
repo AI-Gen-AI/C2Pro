@@ -48,6 +48,13 @@ from src.wbs.adapters.persistence.governed_apply_ddl import (
     RETIREMENTS_GUARD_FUNCTION_SQL,
     RETIREMENTS_TRIGGER_SQL,
 )
+from src.wbs.adapters.persistence.import_ddl import (
+    CHANGE_SET_SOURCE_IMPORT_GUARD_FUNCTION_SQL,
+    CHANGE_SET_SOURCE_IMPORT_TRIGGER_SQL,
+    IMPORT_REVIEW_FIRST_BASELINE_CHECK,
+    SOURCE_IMPORT_CHECK,
+)
+from src.wbs.adapters.persistence.import_models import WBSImportSourceORM  # noqa: F401 - FK target
 
 # sqlalchemy.DDL is untyped; same pattern as src/wbs/adapters/persistence/models.py.
 _DDL: Any = DDL
@@ -96,6 +103,8 @@ class WBSChangeSetORM(Base):
     closed_at: Mapped[datetime | None] = mapped_column(_TS, nullable=True)
     created_at: Mapped[datetime] = mapped_column(_TS, nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(_TS, nullable=False, server_default=func.now())
+    # PC-2b.3 (#922): provenance link of an IMPORT_REVIEW draft; outside every digest, immutable.
+    source_import_id: Mapped[UUID | None] = mapped_column(_UUID, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "project_id", "id", name="uq_wbs_change_sets_tenant_project_id"),
@@ -166,6 +175,16 @@ class WBSChangeSetORM(Base):
             postgresql_where=text("status = 'APPLIED'"), postgresql_nulls_not_distinct=True,
         ),
         Index("ix_wbs_change_sets_project_status", "tenant_id", "project_id", "status"),
+        # PC-2b.3 (#922, revision 20261007_0003): an IMPORT_REVIEW draft names its exact import source.
+        ForeignKeyConstraint(
+            ["tenant_id", "project_id", "source_import_id"],
+            ["wbs_import_sources.tenant_id", "wbs_import_sources.project_id", "wbs_import_sources.id"],
+            name="fk_wbs_change_sets_source_import", ondelete="NO ACTION",
+        ),
+        CheckConstraint(SOURCE_IMPORT_CHECK, name="ck_wbs_change_sets_source_import"),
+        CheckConstraint(IMPORT_REVIEW_FIRST_BASELINE_CHECK, name="ck_wbs_change_sets_import_review_first_baseline"),
+        Index("ix_wbs_change_sets_source_import", "source_import_id",
+              postgresql_where=text("source_import_id IS NOT NULL")),
     )
 
 
@@ -399,6 +418,8 @@ def _install(table: Any, statements: tuple[str, ...]) -> None:
 # Functions are late-bound plpgsql, so they can be created with the first governance table;
 # each trigger is created once its own table exists.
 _install(WBSChangeSetORM.__table__, FUNCTION_STATEMENTS)
+# PC-2b.3 (revision 20261007_0003): the import-source link guard on wbs_change_sets.
+_install(WBSChangeSetORM.__table__, (CHANGE_SET_SOURCE_IMPORT_GUARD_FUNCTION_SQL, CHANGE_SET_SOURCE_IMPORT_TRIGGER_SQL))
 for _model in (WBSChangeSetORM, WBSChangeSetNodeORM, WBSChangeSetLineageORM, WBSBaselineORM, WBSBaselineNodeORM):
     _install(
         _model.__table__,

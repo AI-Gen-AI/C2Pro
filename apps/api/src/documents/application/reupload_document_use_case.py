@@ -23,6 +23,7 @@ from src.core.tenants.types import require_tenant_id
 from src.documents.application.dtos import DocumentDTO
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.domain.storage_keys import legacy_document_object_key, revision_object_key
+from src.documents.domain.upload_policy import is_analysis_excluded, require_upload_extension
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.domain.document_revision import DocumentRevision
@@ -120,6 +121,8 @@ class ReuploadDocumentUseCase:
         if not document:
             raise ValueError(f"Document {document_id} not found or access denied")
         file_extension = os.path.splitext(filename or document.filename)[1].lower()
+        # PC-2b.3: every type accepts only its own formats (a contract can never become a .csv).
+        require_upload_extension(document.document_type, file_extension)
         if file_extension == ".docx" and document.document_type in STRUCTURED_DOCUMENT_TYPES:
             raise ValueError(STRUCTURED_DOCX_ERROR)
 
@@ -210,7 +213,9 @@ class ReuploadDocumentUseCase:
 
         # A revision is not useful temporal evidence until the worker parses it. The durable
         # write has already committed, so a broker outage cannot roll back the lineage.
-        _enqueue_document_processing(document_id, new_revision.revision_id, generation)
+        # PC-2b.3: a WBS source revision is never ingested; a human parses it as a WBS import.
+        if not is_analysis_excluded(document.document_type):
+            _enqueue_document_processing(document_id, new_revision.revision_id, generation)
 
         # Best-effort: the snapshot enqueue hits the Celery broker synchronously.
         # A broker outage must NOT fail the reupload — revision, event, and the

@@ -64,6 +64,7 @@ from src.reporting.adapters.http.router import router as project_reports_router
 from src.temporal.adapters.http.router import router as temporal_router
 from src.wbs.adapters.http.governance_router import router as wbs_governance_router
 from src.wbs.adapters.http.governed_change_router import router as wbs_governed_change_router
+from src.wbs.adapters.http.import_router import router as wbs_import_router
 from src.wbs.adapters.http.intelligence_router import router as wbs_intelligence_router
 from src.wbs.adapters.http.profile_catalog_router import router as wbs_profile_catalog_router
 
@@ -312,6 +313,7 @@ def create_application() -> FastAPI:
     app.include_router(wbs_governed_change_router, prefix=api_v1_prefix)  # PC-2a.2 governed commands
     app.include_router(wbs_profile_catalog_router, prefix=api_v1_prefix)  # PC-2b.1 read-only profile catalog
     app.include_router(wbs_intelligence_router, prefix=api_v1_prefix)  # PC-2b.2 intelligence store + human decisions
+    app.include_router(wbs_import_router, prefix=api_v1_prefix)  # PC-2b.3 WBS import + explicit human candidate
     app.include_router(alerts_router, prefix=api_v1_prefix)
     app.include_router(project_alerts_router, prefix=api_v1_prefix)
     # COMPATIBILITY: Register project alerts without v1 prefix for legacy frontend calls
