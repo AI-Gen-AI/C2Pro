@@ -86,7 +86,7 @@ class FindingDecisionDraft:
     def requires_new_candidate(self) -> bool:
         # Proposed corrections cannot be approved in place: a new artifact
         # version + digest requires an explicitly re-bound human review.
-        return DecisionAction.CORRECT in self._latest_actions.values()
+        return any(entry.action == DecisionAction.CORRECT for entry in self.entries)
 
     @property
     def ready_for_final_authority_check(self) -> bool:
