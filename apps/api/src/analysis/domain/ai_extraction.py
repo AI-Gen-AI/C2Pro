@@ -129,13 +129,16 @@ class CritiqueExtractionService:
                     observations: list[CritiqueObservation] = []
                     raw_observations = payload.get("observations")
                     overflow = isinstance(raw_observations, list) and len(raw_observations) > 32
+                    malformed = raw_observations is not None and not isinstance(raw_observations, list)
                     if isinstance(raw_observations, list):
                         for raw in raw_observations[:32]:
                             if not isinstance(raw, dict):
+                                malformed = True
                                 continue
                             claim = raw.get("claim")
                             source_quote = raw.get("source_quote")
                             if not isinstance(claim, str) or not claim.strip():
+                                malformed = True
                                 continue
                             # Never silently discard a structured claim
                             # merely because the model omitted a usable quote.
@@ -165,7 +168,7 @@ class CritiqueExtractionService:
                                     witness=witness,
                                 )
                             )
-                    if overflow or any(
+                    if overflow or malformed or any(
                         item.witness.status is not QuoteWitnessStatus.LOCATED
                         for item in observations
                     ):
@@ -174,9 +177,9 @@ class CritiqueExtractionService:
                         # router decides what happens next; never auto-certify.
                         status = "RETRY"
                         notes = (
-                            f"{notes}\nUnverified source quotation(s) or "
-                            "observation limit overflow need human "
-                            "verification before any quality claim."
+                            f"{notes}\nUnverified source quotation(s), malformed "
+                            "structured evidence, or observation limit overflow "
+                            "need human verification before any quality claim."
                         ).strip()
                     return CritiqueResult(
                         status=status,
