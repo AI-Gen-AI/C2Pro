@@ -74,6 +74,12 @@ SELECT (
                SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid
            )
     )
+    -- PG15 allows parameter-specific GRANT SET without SUPERUSER. Such a
+    -- role could disable normal row/foreign-key guard triggers by switching
+    -- replication mode, despite all table/RLS checks being satisfied.
+    AND current_setting('session_replication_role') = 'origin'
+    AND NOT has_parameter_privilege(current_user, 'session_replication_role', 'SET')
+    AND NOT has_parameter_privilege(current_user, 'session_replication_role', 'ALTER SYSTEM')
     AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'SELECT')
     AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'INSERT')
     -- RLS and the row trigger DO NOT protect TRUNCATE; inherited write and
