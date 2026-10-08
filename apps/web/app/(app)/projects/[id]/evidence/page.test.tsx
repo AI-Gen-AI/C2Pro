@@ -58,6 +58,12 @@ vi.mock("@/lib/api/generated/documents/documents", () => ({
     useDocumentDetailMock(...args),
 }));
 
+// The revision inspector has independent hook/authority tests; keep this
+// existing canonical-graph test focused on its trusted-current projection.
+vi.mock("@/components/features/evidence/EvidenceRevisionHistoryPanel", () => ({
+  EvidenceRevisionHistoryPanel: () => null,
+}));
+
 vi.mock("@/lib/api/generated/approvals/approvals", () => ({
   useReviewResourceApiV1ApprovalsResourceTypeResourceIdPatch: () => ({
     mutateAsync: (...args: unknown[]) => reviewApprovalMutateAsyncMock(...args),
