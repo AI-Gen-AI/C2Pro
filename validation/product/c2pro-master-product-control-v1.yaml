@@ -684,11 +684,15 @@ next_authorized_action:
 
 # Owner-approved cross-cutting product-quality execution programme.
 # This is not a ninth canonical Product WBS; each slice maps to existing 8-plane WBS.
-# PLANNED means no implementation, merge, deployment, or production qualification.
+# Task status tracks bounded code slices, not deployment or product acceptance.
+# A PARTIAL task may have merged code but still fail its own exit criteria.
 product_quality_hitl_2026_10_08:
   id: PQ-HITL-2026-01
   approved_on: "2026-10-08"
-  programme_status: PLANNED
+  status_reviewed_on: "2026-10-08"
+  programme_status: ACTIVE
+  implementation_status: PARTIAL_MERGED_NOT_PROD_VALIDATED
+  main_sha_observed_after_merge_949: "9144777ff8dc4a76a1b203a9707da84a7d0c2020"
   canonical_issue: 936
   authority: GOVERNED_DEVELOPMENT_ONLY
   owner_approval_scope: "Plan work + governed isolated development and PR review; no direct main, HITL production decision, data repair, deployment or lifecycle promotion"
@@ -704,7 +708,7 @@ product_quality_hitl_2026_10_08:
       title_key: CRITIQUE_GROUNDING
       priority: P0
       mapped_product_wbs: PWBS-ACT-HEALTH
-      status: PLANNED
+      status: PARTIAL
       depends_on: []
       prod_validated: false
     - id: PQ-HITL-02
@@ -712,7 +716,7 @@ product_quality_hitl_2026_10_08:
       title_key: TRACEABILITY_CONFIDENCE
       priority: P0
       mapped_product_wbs: PWBS-ACT-HEALTH
-      status: PLANNED
+      status: ACTIVE
       depends_on: [PQ-HITL-01]
       prod_validated: false
     - id: PQ-HITL-03
@@ -720,7 +724,7 @@ product_quality_hitl_2026_10_08:
       title_key: EVIDENCE_REVISION_TRUTH
       priority: P0
       mapped_product_wbs: PWBS-OPS-TRUST
-      status: PLANNED
+      status: PARTIAL
       depends_on: []
       prod_validated: false
     - id: PQ-HITL-04
@@ -728,7 +732,7 @@ product_quality_hitl_2026_10_08:
       title_key: GRANULAR_REVIEW_AUTHORITY
       priority: P1
       mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
-      status: PLANNED
+      status: ACTIVE
       depends_on: [PQ-HITL-01, PQ-HITL-02]
       prod_validated: false
     - id: PQ-HITL-05
@@ -736,7 +740,7 @@ product_quality_hitl_2026_10_08:
       title_key: SUMMARY_FIRST_HITL_UX
       priority: P1
       mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
-      status: PLANNED
+      status: PARTIAL
       depends_on: [PQ-HITL-03, PQ-HITL-04, PQ-HITL-06]
       prod_validated: false
     - id: PQ-HITL-06
@@ -752,7 +756,7 @@ product_quality_hitl_2026_10_08:
       title_key: GRAPH_AND_ALERT_SEMANTICS
       priority: P1
       mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
-      status: PLANNED
+      status: PARTIAL
       depends_on: [PQ-HITL-02, PQ-HITL-03]
       prod_validated: false
     - id: PQ-HITL-08
@@ -792,4 +796,35 @@ product_quality_hitl_2026_10_08:
     state: WAITING_FOR_HUMAN_REVIEW
     reprocess: FORBIDDEN
     forced_approval: FORBIDDEN
+  goal:
+    user_outcome: "Review contract AI observations one at a time, see original evidenced clause and rationale, correct or dismiss findings, then explicitly settle one exact immutable analysis candidate."
+    product_truth: "Risk, critique, clause, entity, graph alert and confidence are distinguished; unknown remains unknown; proposed is not trusted."
+    qualification_scope: "Code-level acceptance plus separately justified P0c #686 and dependent P0d #687 production journeys; never inferred from CI or merges."
+    complete_when: "All mandatory 01-09 acceptance criteria demonstrated by negative/positive golden, integration, E2E, independent review and Product Control; 10 remains deferred unless separately promoted."
+  execution_checkpoint:
+    as_of: "2026-10-08"
+    verified_merged:
+      - {pr: 947, scope: MASTER_DECOMPOSITION, main_commit: "96098480152c2f121f482a117a228972fcc4659b"}
+      - {pr: 948, scope: TRUTHFUL_EVIDENCE_EMPTY_COPY, main_commit: "d7eaf6975e890ef95fca92e2b96b283fb0eda031"}
+      - {pr: 950, scope: BOUNDED_SOURCE_FOR_LLM_CRITIQUE, main_commit: "f39ca2f963635cc27f31767992618ec99f5d7129"}
+      - {pr: 954, scope: COLLAPSIBLE_UNVERIFIED_CRITIQUE_UX, main_commit: "258cf294f3c792a0fefa1f8331c3e8dbce8d2f00"}
+      - {pr: 949, scope: HONEST_GRAPH_PRIORITY_AND_PROVENANCE, main_commit: "9144777ff8dc4a76a1b203a9707da84a7d0c2020"}
+    verified_ci_green_but_unmerged:
+      - {pr: 953, issue: 938, result: GREEN, disposition: HOLD_ARCHITECTURAL_WORKLOAD_GATE}
+    remaining_material_gaps:
+      - "01 typed claim-to-source verification: #950 source-in-context does not prove grounding."
+      - "02 clause_ref/multiclause evidence addressability; per-item confidence requires calibrated provenance and tenant policy. #953 may trigger human review for virtually every contract; no merge pending workload review."
+      - "03 read-only revision-scoped viewer and exact A=9/B=7 still absent beyond truthful copy #948."
+      - "04 per-finding append-only decisions, immutable correction candidate and exact atomic final settlement not yet implemented."
+      - "05 summary/evidence cards, per-item actions and real end-to-end HITL remain beyond #954 cosmetic grouping."
+      - "06 trustworthy deep links; 07 taxonomy beyond priority/label; 08 timeline lifecycle parity; 09 golden/regression and independent user QA."
+    next_order:
+      - "G1 #949 already merged after complete green CI; reconfirm no deployment claim."
+      - "G2 #938/#953: reconcile actual confidence producer, calibrated measurements, workload/fail-closed policy and #950 compatibility; do not merge until tests and independent contract review."
+      - "G3 #937/#945: typed critic claim evidence, verified spans, positive/negative §5.2 fixtures; measure hallucination and traceability."
+      - "G4 #939/#942: historical-proposed-trusted revision viewer and source deep links without contaminating trusted Coherence/Health."
+      - "G5 #940 domain freeze then per-finding append-only decisions, versioned correction, exact final settlement and security/RLS/idempotency tests."
+      - "G6 #941/#943/#944: full decision UX, entity-risk-alert taxonomy, revision-aware timeline parity; CI and E2E."
+      - "G7 #945 comprehensive QA and independent Product Control review; #686 post-HITL bounded production qualification, #687 only after P0c; no forced B approval/reprocess."
+    production_authority: "UNCHANGED_NO_B_REPROCESS_NO_APPROVAL_NO_P0C_P0D_PROMOTION"
   references: ["#686", "#687", "#713", "#714", "#831", "#836"]
