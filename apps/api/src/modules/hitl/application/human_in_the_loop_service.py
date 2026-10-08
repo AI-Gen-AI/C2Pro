@@ -75,11 +75,22 @@ class HumanInTheLoopService:
                     # already-presented human-review payload silently.
                     old_data = existing.item_data if isinstance(existing.item_data, dict) else {}
                     old_meta = existing.metadata if isinstance(existing.metadata, dict) else {}
+                    # #714 binds the immutable candidate AFTER N13 has
+                    # created the review. A one-sided missing binding is
+                    # therefore inconclusive, not proof of a different source.
+                    # The existing #714/#758 DB authority still validates
+                    # a completed binding before any approval/resume.
+                    old_binding = old_meta.get("candidate_binding")
+                    new_binding = metadata.get("candidate_binding")
+                    conflicting_pin = (
+                        old_binding is not None
+                        and new_binding is not None
+                        and old_binding != new_binding
+                    )
                     if (
                         old_data.get("critique_observations", [])
                         != item_data.get("critique_observations", [])
-                        or old_meta.get("candidate_binding")
-                        != metadata.get("candidate_binding")
+                        or conflicting_pin
                     ):
                         raise StaleCritiqueReviewEvidence(
                             "active critique review has different source evidence; "
