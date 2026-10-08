@@ -59,6 +59,7 @@ import type {
   DocumentDetailResponse,
   DocumentEntityResponse,
   DocumentHistoryResponse,
+  RevisionStatus,
   DocumentListResponse,
   DocumentQueuedResponse,
   DocumentRelationshipExplanationResponse,
@@ -937,6 +938,250 @@ export const useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete = <
     queryClient,
   );
 };
+/**
+ * @summary Inspect a document's immutable revision trust states
+ */
+export const listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet = (
+  documentId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<RevisionStatus[]>({
+    url: `/api/v1/documents/${documentId}/revisions`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryKey =
+  (documentId: string) => {
+    return [`/api/v1/documents/${documentId}/revisions`] as const;
+  };
+
+export const getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryKey(
+        documentId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+        >
+      >
+    > = ({ signal }) =>
+      listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet(
+        documentId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: documentId !== null && documentId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type ListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+      >
+    >
+  >;
+export type ListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryError =
+  void | HTTPValidationError;
+
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Inspect a document's immutable revision trust states
+ */
+
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryOptions(
+      documentId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
 /**
  * @summary Get persisted evidence history for a document
  */
