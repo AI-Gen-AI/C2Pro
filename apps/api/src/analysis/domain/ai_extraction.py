@@ -168,18 +168,22 @@ class CritiqueExtractionService:
                                     witness=witness,
                                 )
                             )
-                    if overflow or malformed or any(
+                    if overflow or malformed or (
+                        status == "OK" and observations
+                    ) or any(
                         item.witness.status is not QuoteWitnessStatus.LOCATED
                         for item in observations
                     ):
-                        # A critic cannot return OK while offering demonstrably
-                        # unverifiable source quotations. Retry / existing HITL
-                        # router decides what happens next; never auto-certify.
+                        # A quote's existence proves only source location, NOT
+                        # the model's criticism. OK with any quality concern is
+                        # contradictory and must never bypass N13 review.
+                        # Preserve all observations for RETRY / HITL routing.
                         status = "RETRY"
                         notes = (
-                            f"{notes}\nUnverified source quotation(s), malformed "
-                            "structured evidence, or observation limit overflow "
-                            "need human verification before any quality claim."
+                            f"{notes}\nCritique observations or unverified source "
+                            "quotation(s), malformed structured evidence, or "
+                            "observation limit overflow need human verification "
+                            "before any quality claim."
                         ).strip()
                     return CritiqueResult(
                         status=status,
