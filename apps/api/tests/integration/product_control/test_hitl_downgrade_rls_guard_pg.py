@@ -11,8 +11,8 @@ from __future__ import annotations
 import os
 from importlib import util
 from pathlib import Path
-from uuid import uuid4
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import pytest
 
