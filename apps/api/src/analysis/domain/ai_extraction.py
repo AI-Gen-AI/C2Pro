@@ -17,6 +17,7 @@ from typing import Any, Protocol
 
 from src.analysis.domain.critique_quote_witness import (
     CritiqueObservation,
+    QuoteWitnessStatus,
     verify_source_quote,
 )
 
@@ -148,6 +149,18 @@ class CritiqueExtractionService:
                                     ),
                                 )
                             )
+                    if any(
+                        item.witness.status is not QuoteWitnessStatus.LOCATED
+                        for item in observations
+                    ):
+                        # A critic cannot return OK while offering demonstrably
+                        # unverifiable source quotations. Retry / existing HITL
+                        # router decides what happens next; never auto-certify.
+                        status = "RETRY"
+                        notes = (
+                            f"{notes}\nUnverified source quotation(s) need human "
+                            "verification before any quality claim."
+                        ).strip()
                     return CritiqueResult(
                         status=status,
                         notes=notes,
