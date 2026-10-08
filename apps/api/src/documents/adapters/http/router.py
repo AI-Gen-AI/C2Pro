@@ -110,6 +110,8 @@ from src.temporal.adapters.persistence.document_revision_repository import (
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
+from src.temporal.adapters.persistence.revision_status_reader import SqlAlchemyRevisionStatusReader
+from src.temporal.application.revision_status import RevisionStatus
 
 logger = structlog.get_logger()
 
@@ -742,6 +744,56 @@ async def get_document_endpoint(
         for clause in document.clauses
     ]
     return DocumentDetailResponse.model_validate(response_data)
+
+
+@router.get(
+    "/documents/{document_id}/revisions",
+    response_model=list[RevisionStatus],
+    summary="Inspect a document's immutable revision trust states",
+)
+async def list_document_revision_statuses_endpoint(
+    document_id: UUID,
+    _user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    get_document: GetDocumentUseCase = Depends(get_get_document_use_case),
+    revision_repository: SqlAlchemyDocumentRevisionRepository = Depends(
+        get_document_revision_repository
+    ),
+    db: AsyncSession = Depends(get_session),
+) -> list[RevisionStatus]:
+    """Read-only revision history; historical/proposed does NOT become current.
+
+    Verify document ownership BEFORE lineage or artifact status queries. Both
+    the lineage reader and the status reader additionally scope every query by
+    exact tenant/document/project. A missing status is UNKNOWN, never TRUSTED.
+    """
+    document = await get_document.execute(document_id, _user_id, tenant_id)
+    lineage = await revision_repository.list_lineage(document_id, tenant_id)
+    reader = SqlAlchemyRevisionStatusReader(db)
+    states: list[RevisionStatus] = []
+    for revision in lineage:
+        if (
+            revision.document_id != document_id
+            or revision.tenant_id != tenant_id
+            or revision.project_id != document.project_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Revision not found."
+            )
+        state = await reader.read(
+            tenant_id=tenant_id,
+            project_id=document.project_id,
+            document_id=document_id,
+            revision_id=revision.revision_id,
+        )
+        states.append(
+            state
+            if state is not None
+            else RevisionStatus.unavailable(
+                revision.revision_id, "revision_status_not_available"
+            )
+        )
+    return states
 
 
 @router.get(
