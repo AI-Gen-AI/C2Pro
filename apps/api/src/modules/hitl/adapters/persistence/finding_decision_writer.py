@@ -6,15 +6,22 @@ Transaction lifetime belongs to caller; no endpoint or workflow resume.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analysis.domain.trust import artifact_digest
 from src.modules.hitl.domain.finding_decision import (
     FindingDecisionDraft,
+    FindingDecisionKind,
     stable_finding_id,
+)
+from src.modules.hitl.domain.finding_source_membership import (
+    FindingSourceNotBound,
+    verify_risk_source_membership,
 )
 
 
@@ -46,11 +53,29 @@ AND current_status::text IN ('PENDING_REVIEW_REQUIRED','PENDING_REVIEW_CONDITION
 FOR UPDATE
 """)
 
+_CANDIDATE_SOURCE = text("""
+SELECT a.payload FROM public.document_artifacts a
+JOIN public.document_processing_operations o
+  ON o.document_id = a.document_id AND o.tenant_id = a.tenant_id
+WHERE a.artifact_id = cast(:artifact_id as uuid)
+  AND a.tenant_id = cast(:tenant_id as uuid)
+  AND a.project_id = cast(:project_id as uuid)
+  AND a.document_id = cast(:document_id as uuid)
+  AND a.document_revision_id = cast(:revision_id as uuid)
+  AND a.artifact_version = :artifact_version
+  AND a.artifact_hash = :artifact_hash
+  AND a.trust_state = 'proposed'
+  AND o.revision_id = a.document_revision_id
+  AND o.generation = :generation
+  AND o.fencing_token = :fencing_token
+  AND o.stage = 'ANALYSIS'
+""")
+
 _REPLAY = text("""
 SELECT event_id, ledger_revision, tenant_id, review_row_id, document_id,
 document_revision_id, artifact_id, artifact_version, artifact_hash,
-generation, fencing_token, thread_id, checkpoint_id, finding_id, finding_kind,
-action, reviewer_id, reason, proposed_text, expected_ledger_revision
+generation, fencing_token, thread_id, checkpoint_id, finding_id,
+source_item_id, source_ordinal, finding_kind, action, reviewer_id, reason, proposed_text, expected_ledger_revision
 FROM public.hitl_finding_decisions
 WHERE tenant_id = cast(:tenant_id as uuid)
 AND review_row_id = cast(:review_row_id as uuid)
@@ -140,6 +165,10 @@ class FindingDecisionLedgerWriter:
         )
         if draft.finding_id != actual_fingerprint:
             raise FindingDecisionIdentityError("finding fingerprint mismatch")
+        if draft.finding_kind is not FindingDecisionKind.RISK:
+            raise FindingDecisionIdentityError(
+                "critique observations require their own typed persisted evidence envelope"
+            )
 
         keys = {
             "tenant_id": tenant_id,
@@ -165,7 +194,44 @@ class FindingDecisionLedgerWriter:
         ):
             raise FindingDecisionIdentityError("pending review was rebound or superseded")
 
-        binding = _binding(draft)
+        # Validate actual membership in the exact proposed payload under the
+        # SAME RLS-protected transaction. Joining the authority enforces a live
+        # generation/fence without locking it after the review row (#758).
+        candidate_row = (
+            await self._session.execute(
+                _CANDIDATE_SOURCE,
+                {
+                    "artifact_id": c.artifact_id,
+                    "tenant_id": tenant_id,
+                    "project_id": locked["project_id"],
+                    "document_id": c.document_id,
+                    "revision_id": c.document_revision_id,
+                    "artifact_version": c.artifact_version,
+                    "artifact_hash": c.artifact_hash,
+                    "generation": c.generation,
+                    "fencing_token": c.fencing_token,
+                },
+            )
+        ).mappings().first()
+        payload = candidate_row.get("payload") if candidate_row is not None else None
+        if not isinstance(payload, Mapping) or artifact_digest(payload) != c.artifact_hash:
+            raise FindingDecisionIdentityError(
+                "exact current proposed candidate payload is missing or changed"
+            )
+        try:
+            verify_risk_source_membership(
+                payload, source_item_id=source_item_id, ordinal=ordinal
+            )
+        except FindingSourceNotBound as exc:
+            raise FindingDecisionIdentityError(
+                "requested finding is not a member of the exact candidate"
+            ) from exc
+
+        binding = {
+            **_binding(draft),
+            "source_item_id": source_item_id,
+            "source_ordinal": ordinal,
+        }
         existing = (await self._session.execute(_REPLAY, keys)).mappings().first()
         if existing is not None:
             if any(existing.get(name) != value for name, value in binding.items()):
