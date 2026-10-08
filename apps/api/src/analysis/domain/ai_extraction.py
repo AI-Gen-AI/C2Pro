@@ -97,9 +97,11 @@ class CritiqueExtractionService:
         # model can invent "corruption" and omitted clauses while sounding certain.
         # Keep the same tenant-scoped AI port as extraction; never fetch another
         # revision or expand access. The bounded excerpt is explicitly non-exhaustive.
-        source = (source_text or "").strip()
-        if source:
-            clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
+        # Preserve byte-for-byte character offsets in the original source.
+        # Stripping leading whitespace would shift every returned quotation span.
+        source = source_text or ""
+        clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
+        if source.strip():
             excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
             coverage = (
                 "PARTIAL EXCERPT: source longer than context; do not claim absence."
@@ -142,9 +144,9 @@ class CritiqueExtractionService:
                                     claim=claim,
                                     source_quote=source_quote,
                                     witness=verify_source_quote(
-                                        source[:_CRITIQUE_MAX_SOURCE_CHARS] if source else None,
+                                        source[:_CRITIQUE_MAX_SOURCE_CHARS] if source.strip() else None,
                                         source_quote,
-                                        source_complete=bool(source) and not clipped,
+                                        source_complete=bool(source.strip()) and not clipped,
                                     ),
                                 )
                             )
