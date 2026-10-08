@@ -20,7 +20,6 @@ from src.analysis.domain.critique_quote_witness import (
     QuoteWitnessStatus,
     verify_source_quote,
 )
-
 from src.analysis.domain.prompts import (
     BUDGET_EXTRACTION_PROMPT,
     CRITIQUE_SYSTEM_PROMPT,
