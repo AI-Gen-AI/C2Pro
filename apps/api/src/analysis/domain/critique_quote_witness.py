@@ -60,7 +60,9 @@ def verify_source_quote(
     # Allow PDF line wrapping while preserving every literal source character.
     # All content tokens remain literal; user-controlled quote is NEVER regex.
     pattern = r"\s+".join(re.escape(token) for token in tokens)
-    occurrences = re.finditer(pattern, source_text)
+    # Zero-width lookahead catches *overlapping* occurrences as well.
+    # Ordinary finditer skips valid repeated starts in e.g. "the the the".
+    occurrences = re.finditer(rf"(?=({pattern}))", source_text)
     match = next(occurrences, None)
     if match is None:
         return QuoteWitness(
@@ -71,12 +73,12 @@ def verify_source_quote(
             )
         )
     if next(occurrences, None) is not None:
-        # Without a trusted clause/page selector, identical source snippets
-        # have no unique provenance. Never invent one by taking first.
+        # A repeated, even overlapping, span cannot be uniquely cited.
         return QuoteWitness(status=QuoteWitnessStatus.AMBIGUOUS)
+    start, end = match.span(1)
     return QuoteWitness(
         status=QuoteWitnessStatus.LOCATED,
-        char_start=match.start(),
-        char_end=match.end(),
-        located_text=match.group(0),
+        char_start=start,
+        char_end=end,
+        located_text=match.group(1),
     )
