@@ -101,3 +101,86 @@ def _binding(draft: FindingDecisionDraft) -> dict[str, object]:
         "proposed_text": draft.proposed_text,
         "expected_ledger_revision": draft.expected_ledger_revision,
     }
+
+
+class FindingDecisionLedgerWriter:
+    """Append provisional reviewer intent inside caller-owned transaction.
+
+    DB RLS and the INSERT guard revalidate the exact pending candidate; no
+    APPROVED/TRUSTED state transitions happen in this adapter.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def record(
+        self,
+        *,
+        tenant_id: UUID,
+        authenticated_reviewer_id: str,
+        source_item_id: str,
+        ordinal: int,
+        idempotency_key: str,
+        draft: FindingDecisionDraft,
+    ) -> FindingDecisionWriteReceipt:
+        c = draft.candidate
+        if (
+            tenant_id != c.tenant_id
+            or authenticated_reviewer_id != draft.reviewer_id
+            or not authenticated_reviewer_id.strip()
+            or not source_item_id.strip()
+            or ordinal < 0
+            or len(idempotency_key.strip()) < 8
+        ):
+            raise FindingDecisionIdentityError("tenant, reviewer or source identity mismatch")
+        actual_fingerprint = stable_finding_id(
+            c, draft.finding_kind, source_item_id=source_item_id, ordinal=ordinal
+        )
+        if draft.finding_id != actual_fingerprint:
+            raise FindingDecisionIdentityError("finding fingerprint mismatch")
+
+        keys = {
+            "tenant_id": tenant_id,
+            "review_row_id": c.review_row_id,
+            "idempotency_key": idempotency_key,
+        }
+        locked = (await self._session.execute(_LOCK, keys)).mappings().first()
+        if locked is None or locked.get("project_id") is None:
+            raise FindingDecisionIdentityError("missing active tenant-scoped review row")
+
+        binding = _binding(draft)
+        existing = (await self._session.execute(_REPLAY, keys)).mappings().first()
+        if existing is not None:
+            if any(existing.get(name) != value for name, value in binding.items()):
+                raise FindingDecisionIdempotencyConflict("replay key has different contents")
+            return FindingDecisionWriteReceipt(
+                event_id=existing["event_id"],
+                ledger_revision=int(existing["ledger_revision"]),
+                replayed=True,
+            )
+
+        current = (await self._session.execute(_CURRENT, keys)).mappings().first()
+        last_revision = int(current["ledger_revision"]) if current else 0
+        if last_revision != draft.expected_ledger_revision:
+            raise FindingDecisionRevisionConflict("stale ledger revision")
+
+        from uuid import uuid4
+
+        record = {
+            **binding,
+            **keys,
+            "project_id": locked["project_id"],
+            "source_item_id": source_item_id,
+            "source_ordinal": ordinal,
+            "created_by": authenticated_reviewer_id,
+            "event_id": uuid4(),
+            "ledger_revision": last_revision + 1,
+        }
+        result = (await self._session.execute(_APPEND, record)).mappings().first()
+        if result is None:
+            raise FindingDecisionRevisionConflict("ledger event not returned")
+        return FindingDecisionWriteReceipt(
+            event_id=result["event_id"],
+            ledger_revision=int(result["ledger_revision"]),
+            replayed=False,
+        )
