@@ -39,7 +39,7 @@ Se ha comprobado que el repositorio tiene instrucciones históricas en roles/rol
 
 El rol es funcional y no equivale a un modelo. La selección de worker se hará en un WORK válido. Los borradores #960 y #985 son anteriores a esta descomposición: no constituyen RED previo ni aceptan dependencias retroactivamente. Se volverán a cualificar contra fixtures congelados antes de cualquier merge.
 
-El estado actual .c2pro/control/current.yaml es reconciled_idle; work-queue desarrolla C2PRO-DEV. La deuda C2PRO-DEV-14 trata soporte de envelopes de tareas PRODUCT: este plan NO activará un WORK PQ-HITL ficticio ni reescribirá el control-plane idle. Hasta habilitar dicho adaptador, el MASTER de producto + issues/PR/CI constituyen planificación y evidencia, NO una falsa asignación operativa.
+El estado actual .c2pro/control/current.yaml es reconciled_idle; work-queue desarrolla C2PRO-DEV. La deuda C2PRO-DEV-14 trata soporte de envelopes PRODUCT, pero es **NON_BLOCKING** según la cola vigente: no detiene el trabajo de producto autorizado. Hasta que exista un envelope PRODUCT validable, cada ejecución concreta se delimita mediante TASK/issue de Product Control + scope explícito de rama/PR, TDD y review/CI independientes; nunca se inventa un WORK .c2pro ni se reescribe el hot state idle.
 
 ## 3. Ciclo obligatorio: primero QUÉ, luego CÓMO
 
@@ -47,7 +47,7 @@ El estado actual .c2pro/control/current.yaml es reconciled_idle; work-queue desa
 
 **D1 — especificar.** Redactar Given/When/Then: expectativa, caso negativo, fuente/revisión, tenant, datos, criterio de salida y coste/capacidad. Si modifica confianza, propiedad de datos, persistencia, seguridad o autoridad, evaluar ADR-020/022/026/027/028 y congelar SDD/ADR independiente ANTES de código. Una incógnita se registra como BLOCKED, no se inventa una decisión.
 
-**D2 — descomponer.** Cada paquete <=4 días focalizados; si se ve mayor, subdividir antes de implementar. Dependencias a subtask IDs y ownership funcional explícitos. Para arrancar se necesitan aceptación y WORK envelope vigente/legítimo, scope y rutas, principal implementador distinto del reviewer.
+**D2 — descomponer.** Cada paquete <=4 días focalizados; si se ve mayor, subdividir antes de implementar. Dependencias a subtask IDs y ownership funcional explícitos. Para arrancar se necesitan criterios de aceptación, scope/rutas explícitas y autoridad de Product Control vigente; se usa WORK envelope si existe soporte validado, o issue/PR acotados mientras DEV-14 sea NON_BLOCKING; principal implementador distinto del reviewer.
 
 **D3 — RED/GREEN/REFACTOR.** Fijar prueba adversarial que falla; aplicar menor corrección posible; verificar suite dirigida, CI SHA exacto, contrato API↔UI↔BD y seguridad. Sin atajos de CI, sin mutar PROD ni candidatos TRUSTED. QA/reviewer comprueban la tarea completa, no solo la descripción de PR.
 
@@ -62,7 +62,7 @@ El estado actual .c2pro/control/current.yaml es reconciled_idle; work-queue desa
 - **NEW_SCOPE_REQUEST:** regresar D0/D1. Sin añadir módulos, rutas, migraciones o dependencias por sorpresa.
 - **Dos rondas diagnósticas acotadas:** si sigue desconocido, registrar trazas, marcar BLOCKED y cambiar de rol para revisión. No entrar en bucle de parches.
 
-**WIP:** una tarea material de integración por workspace y hasta dos pruebas/especificaciones independientes. Un defecto no suspende automáticamente todo el proyecto, solo su ruta dependiente; el orquestador elige la siguiente tarea elegible en otra ruta. Tras cuotas agotadas de Codex, falta revisor principal válido: HOLD, no un simple cambio cosmético de etiqueta a Gemini.
+**WIP:** una tarea material de integración por workspace y hasta dos pruebas/especificaciones independientes. DEV-14 es mejora paralela no bloqueo para producto; sin falsa mutación de .c2pro. Un defecto no suspende automáticamente todo el proyecto, solo su ruta dependiente; el orquestador elige la siguiente tarea elegible en otra ruta. Tras cuotas agotadas de Codex, falta revisor principal válido: HOLD, no un simple cambio cosmético de etiqueta a Gemini.
 
 ## 4. Criterios técnicos detallados por iniciativa
 
