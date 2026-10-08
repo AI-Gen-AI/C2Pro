@@ -38,7 +38,9 @@ class FindingDecisionWriteReceipt:
 
 
 _LOCK = text("""
-SELECT id, project_id FROM public.review_items
+SELECT id, project_id, document_id, thread_id, checkpoint_id,
+       lineage_generation, lineage_fencing_token, review_metadata
+FROM public.review_items
 WHERE id = cast(:review_row_id as uuid) AND tenant_id = cast(:tenant_id as uuid)
 AND current_status::text IN ('PENDING_REVIEW_REQUIRED','PENDING_REVIEW_CONDITIONAL','ESCALATED')
 FOR UPDATE
@@ -147,6 +149,21 @@ class FindingDecisionLedgerWriter:
         locked = (await self._session.execute(_LOCK, keys)).mappings().first()
         if locked is None or locked.get("project_id") is None:
             raise FindingDecisionIdentityError("missing active tenant-scoped review row")
+        metadata = locked.get("review_metadata") or {}
+        bound = metadata.get("candidate_binding") or {}
+        if (
+            metadata.get("trust_candidate_required") is not True
+            or locked.get("document_id") != c.document_id
+            or locked.get("thread_id") != c.thread_id
+            or locked.get("checkpoint_id") != c.checkpoint_id
+            or locked.get("lineage_generation") != c.generation
+            or locked.get("lineage_fencing_token") != c.fencing_token
+            or bound.get("artifact_id") != str(c.artifact_id)
+            or bound.get("document_id") != str(c.document_id)
+            or str(bound.get("artifact_version")) != str(c.artifact_version)
+            or bound.get("artifact_hash") != c.artifact_hash
+        ):
+            raise FindingDecisionIdentityError("pending review was rebound or superseded")
 
         binding = _binding(draft)
         existing = (await self._session.execute(_REPLAY, keys)).mappings().first()
