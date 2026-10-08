@@ -77,8 +77,12 @@ jobs:
             migrations:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
-              # Role-identity security tests must execute against migrated PostgreSQL.
+              # HITL schema and runtime authorization tests MUST run
+              # against migrated PostgreSQL, even when only writer code changes.
+              - "apps/api/tests/integration/product_control/test_hitl_downgrade_rls_guard_pg.py"
               - "apps/api/tests/integration/product_control/test_hitl_writer_role_security_pg.py"
+              - "apps/api/src/modules/hitl/adapters/persistence/finding_decision_writer.py"
+              - "apps/api/src/modules/hitl/application/record_finding_decision_use_case.py"
             backend_docker:
               - "apps/api/**"
               - ".github/workflows/ci.yml"
