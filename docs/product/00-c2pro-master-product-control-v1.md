@@ -410,3 +410,50 @@ The largest planning defect in the old snapshot was no longer missing code; it w
 8. **Fail closed throughout:** do not weaken auth/RLS/HITL/trust, fabricate evidence, coerce Unknown to zero, or infer deployment/PROD_VALIDATED from merge/CI.
 
 **No direct `main` or production mutation is authorized by this reconciliation. Human-reviewed merge remains mandatory.**
+
+
+## 13. Owner-approved Product Quality + HITL workstream — PQ-HITL-2026-01 (2026-10-08)
+
+**Approval:** owner APPROVED the improvement priorities and work decomposition. **Lifecycle:** all work stays PLANNED (task 10 DEFERRED). This section is the human-readable projection of `product_quality_hitl_2026_10_08` in the YAML machine source of truth, not an authorization to merge, change production, decide HITL, or promote P0c/P0d.
+
+**Epic:** [#936](https://github.com/AI-Gen-AI/C2Pro/issues/936). **Problem evidence:** 2026-10-08 read-only synthetic B review; exactly seven per-risk `clause_ref/confidence` null values while `confidence_score=0.9` is artifact-level; a false contract-corruption/ambiguity assertion on §5.2; persisted revision-bound A=9 and B=7 clauses incorrectly presented as "0 extracted" under unresolved trusted-current; all-or-nothing review card; graph shows "moderate" and "Model-backed" without corresponding current trustworthy evidence.
+
+**Mapping policy:** The product MASTER has **exactly eight** canonical Product WBS planes. This cross-cutting campaign creates **no ninth WBS**; every task maps to an existing plane. Review foundations are governed by ADR-020/026, evidence truth by ADR-022/013/015/016, source linking by #713, P0c by #686 and Risk Register scope by #836. Existing P2 rich Actions/HITL priority is **not** silently globally promoted by the urgent P0 integrity defects.
+
+| Task / GitHub issue | Priority / existing PWBS | Planned scope | Exit test / acceptance |
+|---|---|---|---|
+| [PQ-HITL-01 / #937](https://github.com/AI-Gen-AI/C2Pro/issues/937) | P0 / `PWBS-ACT-HEALTH` | Ground critique against contractual source; distinguish genuine corruption from ordinary terms and valid titles. | Adversarial fixtures for LD/However/Conversely, §5.2, correct/missing legal source references. |
+| [PQ-HITL-02 / #938](https://github.com/AI-Gen-AI/C2Pro/issues/938) | P0 / `PWBS-ACT-HEALTH` | Evidence citation bindings, per-risk optional clause_ref and honest per-risk confidence. | Risk-confidence is distinct from document confidence and Coherence; unknown stays null. |
+| [PQ-HITL-03 / #939](https://github.com/AI-Gen-AI/C2Pro/issues/939) | P0 / `PWBS-OPS-TRUST` | Explain trusted-current unresolved vs persisted historical/proposed revision evidence. | A=9 clauses, B=7 clauses shown in scoped read-only panels; no proposed-to-trusted leakage; history never says 0 extracted misleadingly. |
+| [PQ-HITL-04 / #940](https://github.com/AI-Gen-AI/C2Pro/issues/940) | P1 / `PWBS-ALERTS-ACTIONS-HITL` | Per-finding decision/audit/corrections plus guarded final exact-candidate settlement. | Fail-closed on stale digest/row/thread/fence; no partial TRUSTED; independent ADR/design review. |
+| [PQ-HITL-05 / #941](https://github.com/AI-Gen-AI/C2Pro/issues/941) | P1 / `PWBS-ALERTS-ACTIONS-HITL` | Readable executive summary, segmented findings and evidence-first reviewing UX. | Review one issue at a time, source next to explanation, accessible states, final sign-off distinct. |
+| [PQ-HITL-06 / #942](https://github.com/AI-Gen-AI/C2Pro/issues/942) | P1 / `PWBS-OPS-TRUST` | Verified source deep-links and multi-clause provenance. | Clause/quote/revision exact highlight or explicit fallback; coordinate with #713. |
+| [PQ-HITL-07 / #943](https://github.com/AI-Gen-AI/C2Pro/issues/943) | P1 / `PWBS-ALERTS-ACTIONS-HITL` | Separately display extracted data, AI risk findings, alerts and graph links; truthful confidence/priority. | No 'moderate' from zero alerts; deterministic copy not 'Model-backed'; no fake data. |
+| [PQ-HITL-08 / #944](https://github.com/AI-Gen-AI/C2Pro/issues/944) | P1 / `PWBS-TEMPORAL-CHANGE` | Revision-aware evidence history and What Changed timeline semantics. | Uploaded/parsed/extracted/proposed/review-needed/trusted distinct; #686 acceptance independent. |
+| [PQ-HITL-09 / #945](https://github.com/AI-Gen-AI/C2Pro/issues/945) | P0 / `PWBS-OPS-TRUST` | Golden negative+positive cases and independent quality acceptance gates. | Regression QA includes §5.2 hallucination, 9+7 unresolved scope, null confidence, stale checkpoints and no fake P0c PASS. |
+| [PQ-HITL-10 / #946](https://github.com/AI-Gen-AI/C2Pro/issues/946) | P2 / `PWBS-ALERTS-ACTIONS-HITL` | Advanced cross-evidence 2D/3D graph and exploration (deferred). | Only after trusted-source/evidence graph semantics proven; 3D optional. |
+
+### 13.1 Dependency graph and execution waves
+
+- **W0 correctness + RED regression baseline:** #937 (grounded critique), #938 (clause/evidence/confidence), #939 (truthful current/proposed/historical viewport), #945 (golden adversarial tests).
+- **W1 governed contracts:** #940 (granular item-level HITL and atomic final settlement) depends on #937/#938; #942 (source addressability) depends on #938.
+- **W2 UX / projection:** #941 (summary-first review) depends on #939/#940/#942; #943 (graph/alerts semantics) depends on #938/#939; #944 (history/evolution parity) depends on #939/#942.
+- **W3 product assurance:** #945 cross-checks the implemented surfaces in focused backend/frontend/integration/E2E and independent review. CI green is necessary but never a production validation claim.
+- **W4 optional/deferred:** #946 advanced 2D/3D graph depends on #938/#939/#942/#943/#944/#945; no 3D-first distraction while user-visible semantics are wrong.
+
+**First bounded implementation candidate:** #939. Its scope is read-only honest evidence-state presentation and version-scoped retrieval; it does **not** require changing the HITL resume machine. Issue #937 may run as an independent backend-quality lane once exact module/fixtures are frozen.
+
+### 13.2 Acceptance and safety invariants
+
+1. An extraction with 9 stored A clauses + 7 stored B clauses cannot be falsely called "0 extracted" solely because current trusted projection is intentionally unresolved. Scope and state labels must distinguish `TRUSTED_CURRENT`, `PROPOSED`, `HISTORICAL`, `UNRESOLVED`, `NOT_EXTRACTED`, and `LOAD_ERROR`.
+2. Model critique must provide verifiable, revision-bound sources, avoid fabricated placeholder corruption, and permit `UNKNOWN` and reviewer correction. No model claim is promoted to a verified finding solely because the critic wrote it.
+3. `RiskItem.confidence`, whole-document `confidence_score`, evidence-confidence, severity/likelihood, Health, Coherence and Alerts are different concepts. No synthetic score or source reference.
+4. Per-finding `CONFIRMED/CORRECTED/DISMISSED/NEEDS_INFO` choices create an audit trail and possibly a new immutable candidate. They **never** cause partial `TRUSTED` state. Final human settlement is a separate approval over exact candidate hash/version, review row, thread/checkpoint and live generation/fence with idempotency.
+5. In a graph with no active linked alerts, priority is `UNKNOWN` absent independent evidence, not "moderate"; any deterministic generated explanation is labeled as such rather than "Model-backed".
+6. Every source citation must resolve to exact semantic evidence, verified source span or honest document fallback, otherwise explicit unresolved; support multi-clause risks and version-scoped access.
+7. Preserve P0b accepted evidence, no direct main writes or autonomous merges; no implicit privilege grants, secret access, production data repair, forced review approval or revision-B reprocessing. #686 keeps `P0C_QUALIFICATION=PENDING` until its own independent evidence validator and explicit Product Control reconciliation; #687 remains blocked.
+8. Implementation states advance independently through `PLANNED → PR/CI → MERGED → DEPLOYED → PROD_VALIDATED` (only when separately evidenced), not by owner approval of a roadmap.
+
+**Design question to freeze before coding #940:** if quality defects are found, individual corrections compose a new **immutable version**. The existing per-document HITL pause must not be auto-transformed into per-item acceptance or bypassed. Approval behavior, legacy review compatibility, lock ordering and exact fence consistency require a dedicated reviewed decision record/ADR.
+
+**Related operational issue:** [#686 P0c](https://github.com/AI-Gen-AI/C2Pro/issues/686) remains on HITL review hold for existing synthetic revision B; no automatic retry or approval is within this campaign.

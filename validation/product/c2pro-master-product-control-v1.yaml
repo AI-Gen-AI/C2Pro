@@ -681,3 +681,115 @@ next_authorized_action:
   - "Schedule remains a linked temporal domain and Procurement remains downstream of the canonical WBS; neither may instantiate a parallel WBS authority."
   - "#864 stakeholder provenance is a P1 correctness follow-up; #839 Risk Register direction is retained but must be reapplied on current Product Control rather than merged from stale history."
   - "Track the run #56 ai_usage_logs model_name schema drift and Railway log-rate saturation as OPS/observability residuals; they did not invalidate the product journey but must not be silently forgotten."
+
+# Owner-approved cross-cutting product-quality execution programme.
+# This is not a ninth canonical Product WBS; each slice maps to existing 8-plane WBS.
+# PLANNED means no implementation, merge, deployment, or production qualification.
+product_quality_hitl_2026_10_08:
+  id: PQ-HITL-2026-01
+  approved_on: "2026-10-08"
+  programme_status: PLANNED
+  canonical_issue: 936
+  authority: GOVERNED_DEVELOPMENT_ONLY
+  owner_approval_scope: "Plan work + governed isolated development and PR review; no direct main, HITL production decision, data repair, deployment or lifecycle promotion"
+  product_quality_invariant: "PROPOSED is not TRUSTED; per-finding review cannot partially promote a candidate; final explicit human decision binds exact row, candidate digest, generation, fence and checkpoint"
+  truthfulness_invariant: "Unresolved current evidence is not zero extracted; unknown confidence or linkage must remain unknown; no invented citations or human review"
+  graph_invariant: "No active alerts is not proof of moderate risk or no extracted clauses; deterministic explanation cannot claim model-backed analysis"
+  depends_on_for_prod: ["#686 P0c hold/proof", "#714 trusted-state exact-candidate authority"]
+  acceptance_policy: "Every slice requires scoped tests, independent review and PR; production proof separate from code merge"
+  canonical_wbs_plane_count: 8
+  tasks:
+    - id: PQ-HITL-01
+      issue: 937
+      title_key: CRITIQUE_GROUNDING
+      priority: P0
+      mapped_product_wbs: PWBS-ACT-HEALTH
+      status: PLANNED
+      depends_on: []
+      prod_validated: false
+    - id: PQ-HITL-02
+      issue: 938
+      title_key: TRACEABILITY_CONFIDENCE
+      priority: P0
+      mapped_product_wbs: PWBS-ACT-HEALTH
+      status: PLANNED
+      depends_on: [PQ-HITL-01]
+      prod_validated: false
+    - id: PQ-HITL-03
+      issue: 939
+      title_key: EVIDENCE_REVISION_TRUTH
+      priority: P0
+      mapped_product_wbs: PWBS-OPS-TRUST
+      status: PLANNED
+      depends_on: []
+      prod_validated: false
+    - id: PQ-HITL-04
+      issue: 940
+      title_key: GRANULAR_REVIEW_AUTHORITY
+      priority: P1
+      mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
+      status: PLANNED
+      depends_on: [PQ-HITL-01, PQ-HITL-02]
+      prod_validated: false
+    - id: PQ-HITL-05
+      issue: 941
+      title_key: SUMMARY_FIRST_HITL_UX
+      priority: P1
+      mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
+      status: PLANNED
+      depends_on: [PQ-HITL-03, PQ-HITL-04, PQ-HITL-06]
+      prod_validated: false
+    - id: PQ-HITL-06
+      issue: 942
+      title_key: EVIDENCE_ADDRESSABILITY
+      priority: P1
+      mapped_product_wbs: PWBS-OPS-TRUST
+      status: PLANNED
+      depends_on: [PQ-HITL-02]
+      prod_validated: false
+    - id: PQ-HITL-07
+      issue: 943
+      title_key: GRAPH_AND_ALERT_SEMANTICS
+      priority: P1
+      mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
+      status: PLANNED
+      depends_on: [PQ-HITL-02, PQ-HITL-03]
+      prod_validated: false
+    - id: PQ-HITL-08
+      issue: 944
+      title_key: HISTORY_EVOLUTION_TRUTH
+      priority: P1
+      mapped_product_wbs: PWBS-TEMPORAL-CHANGE
+      status: PLANNED
+      depends_on: [PQ-HITL-03, PQ-HITL-06]
+      prod_validated: false
+    - id: PQ-HITL-09
+      issue: 945
+      title_key: GOLDEN_EVAL_AND_QA
+      priority: P0
+      mapped_product_wbs: PWBS-OPS-TRUST
+      status: PLANNED
+      depends_on: []
+      prod_validated: false
+    - id: PQ-HITL-10
+      issue: 946
+      title_key: ADVANCED_GRAPH_EXPLORATION
+      priority: P2
+      mapped_product_wbs: PWBS-ALERTS-ACTIONS-HITL
+      status: DEFERRED
+      depends_on: [PQ-HITL-02, PQ-HITL-03, PQ-HITL-06, PQ-HITL-07, PQ-HITL-08, PQ-HITL-09]
+      prod_validated: false
+  execution_waves:
+    - {wave: W0, scope: [PQ-HITL-01, PQ-HITL-02, PQ-HITL-03, PQ-HITL-09], gate: honest_baseline_and_regression_tests}
+    - {wave: W1, scope: [PQ-HITL-04, PQ-HITL-06], gate: exact_candidate_fenced_backend_and_evidence}
+    - {wave: W2, scope: [PQ-HITL-05, PQ-HITL-07, PQ-HITL-08], gate: UX_and_API_parity}
+    - {wave: W3, scope: [PQ-HITL-09], gate: independent_QA_and_product_control}
+    - {wave: W4, scope: [PQ-HITL-10], gate: deferred_advanced_relationships}
+  first_bounded_code_slice: PQ-HITL-03
+  blocked_current_production_candidate:
+    issue: 686
+    revision_b: 9f6c557a-2253-4f70-9d2b-84a90c91c1da
+    state: WAITING_FOR_HUMAN_REVIEW
+    reprocess: FORBIDDEN
+    forced_approval: FORBIDDEN
+  references: ["#686", "#687", "#713", "#714", "#831", "#836"]

@@ -95,12 +95,14 @@ export function EntityValidationList({
     return (
       <Alert>
         <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>No entities found</AlertTitle>
+        <AlertTitle>No clauses available in the current evidence view</AlertTitle>
         <AlertDescription>
-          No extracted entities available for this document.
+          This view does not include every stored document revision.
           <br />
           <span className="text-xs text-muted-foreground">
-            Entities will be extracted automatically from the document content.
+            Analysis may be pending review, or no clauses may have been extracted.
+            Check the document status and revision history before concluding that
+            the document contains no extracted evidence.
           </span>
         </AlertDescription>
       </Alert>

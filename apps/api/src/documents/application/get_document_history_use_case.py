@@ -35,7 +35,20 @@ class GetDocumentHistoryUseCase:
     @staticmethod
     def _build_response(snapshot: DocumentHistorySnapshot) -> DocumentHistoryResponse:
         document = snapshot.document
-        clause_label = "clause" if snapshot.clause_count == 1 else "clauses"
+        # clause_count is the current-view projection, not all clauses ever
+        # extracted across revisions. On unresolved trusted-current lineage it
+        # may be zero even when revision-bound clause rows are persisted.
+        # Never report that as "0 clauses extracted" for a historical event.
+        current_clause_detail = (
+            f"{snapshot.clause_count} "
+            f"{'clause' if snapshot.clause_count == 1 else 'clauses'} "
+            "available in the current evidence view"
+            if snapshot.clause_count > 0
+            else (
+                "No clauses currently available in this view; "
+                "historical or pending-review extractions may exist"
+            )
+        )
 
         events: list[EvidenceHistoryEventResponse] = [
             EvidenceHistoryEventResponse(
@@ -53,7 +66,7 @@ class GetDocumentHistoryUseCase:
                 EvidenceHistoryEventResponse(
                     id=f"document-parsed-{document.id}",
                     title="Document parsed",
-                    detail=f"{snapshot.clause_count} {clause_label} extracted",
+                    detail=current_clause_detail,
                     occurred_at=document.parsed_at,
                     source_type="document",
                     source_id=str(document.id),
