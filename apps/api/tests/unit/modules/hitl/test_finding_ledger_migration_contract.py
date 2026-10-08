@@ -38,7 +38,7 @@ def test_ledger_is_append_only_rls_forced_and_no_data_api_writes() -> None:
     assert "FOR INSERT WITH CHECK" in ddl
     assert "FOR UPDATE USING" not in ddl
     assert "FOR DELETE USING" not in ddl
-    assert "BEFORE UPDATE OR DELETE" in ddl
+    assert "BEFORE INSERT OR UPDATE OR DELETE" in ddl
     assert "RAISE EXCEPTION" in ddl
     assert "REVOKE ALL ON TABLE public.hitl_finding_decisions" in ddl
     assert "anon" in ddl and "authenticated" in ddl
