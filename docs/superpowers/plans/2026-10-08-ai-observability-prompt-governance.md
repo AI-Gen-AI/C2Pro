@@ -39,7 +39,7 @@
 - [ ] Step 1: Construct fake SDK span client; instantiate the actual `LLMRequest(model=..., messages=[...], system="CANARY_CONTRACT_SECRET")` and an `LLMResponse(content="CANARY_COMPLETION_SECRET", ...)` using its real required fields. **Do not invent `LLMRequest.prompt`**: it does not exist.
 - [ ] Step 2: Run `pytest apps/api/tests/unit/core/observability/test_llm_telemetry_privacy_contract.py -q` at baseline; show RED assertions for `LLMRequest.system` canary in `start_span(inputs["prompt"])`, successful `LLMResponse.content` canary in `end_span(outputs["output"])`, and an exception canary in `end_span` error outputs. Preserve baseline red evidence; a dataclass-constructor error or a passing assertion that never reads the request **does not count**.
 - [ ] Step 3: Extend test to nested tool arguments, kwargs aliases, sync and async instrumentation, tenant ID, trace URL, no API key, and `LANGSMITH_API_KEY` set with absent/false/empty `LANGSMITH_TRACING`; expected remote client construction and exporter use **both false** until explicit opt-in.
-- [ ] Step 4: Inventory every `LangSmithClient` caller and alternate exporter. Inspect registered `/ai/feedback` route/service in `src/main.py` and add RED test that a caller without authenticated tenant/trace ownership **cannot** send feedback to LangSmith; add separate cross-tenant test and reject raw exception response. Do not mistake the unregistered guarded `core/ai/feedback_router.py` for coverage.
+- [ ] Step 4: Inventory every `LangSmithClient` caller **and LangGraph automatic exporter** under `LANGCHAIN_TRACING_V2` (`apps/api/src/analysis/adapters/graph/workflow.py`, `app.ainvoke`, raw `initial_state.document_text`). Inspect registered `/ai/feedback` route/service in `src/main.py` and add RED test that a caller without authenticated tenant/trace ownership **cannot** send feedback to LangSmith; add separate cross-tenant test and reject raw exception response. Do not mistake the unregistered guarded `core/ai/feedback_router.py` for coverage.
 - [ ] Step 5: Commit only the scoped tests/evidence.
 
 ### Task 2: Minimal content-deny telemetry builder
@@ -70,6 +70,20 @@
 - [ ] Step 3: GREEN targeted tests for the registered feedback router (including `TestClient` auth handling), telemetry builder, SDK configuration, success/error spans, then full impacted backend observability/AI/feedback suites. Run Ruff, mypy and secret scan as in CI; verify presence of a configured key alone does not instantiate exporter.
 - [ ] Step 4: Independently review any remaining direct SDK callsites; commit with explicit blast-radius report.
 
+### Task 3B: LangGraph automatic tracing privacy boundary
+
+**Files:**
+- Review/modify: `apps/api/src/analysis/adapters/graph/workflow.py`; its LangChain/LangGraph tracer and callback setup.
+- Review: `apps/api/src/analysis/application/analyze_document_use_case.py`; actual initial-state fields.
+- Test: `apps/api/tests/unit/analysis/graph/test_langgraph_trace_privacy.py` and scoped integration coverage.
+
+**Interfaces:** Graph may retain the full state locally for authorized analysis/checkpointing, but **no external exporter may receive raw `initial_state.document_text` or nested graph states/results** without a separately reviewed classified-data allowlist. Flag `LANGCHAIN_TRACING_V2` is independent from `LANGSMITH_TRACING`.
+
+- [ ] Step 1: RED: with `LANGCHAIN_TRACING_V2=true`, synthetic `document_text="CANARY_GRAPH_CONTRACT_SECRET"` reaches the actual graph `app.ainvoke` path. Capture tracer/export payload (not only the separate `LangSmithClient` mock); verify privacy assertion fails because of text export, not initialization.
+- [ ] Step 2: Enforce fail-closed external LangGraph tracing by default even if the ambient environment enables the exporter, until content-filtered callbacks/spans are explicitly qualified. Do not suppress analysis execution, safe local metrics or checkpointing.
+- [ ] Step 3: GREEN tests with `LANGCHAIN_TRACING_V2` ON/OFF independently of `LANGSMITH_TRACING` and in combination; search entire recorded parent/child span graph for both input and output canaries.
+- [ ] Step 4: Run relevant LangGraph unit and integration suites, exact-head CI and independent privacy review. Record the callback/env routes and final evidence before short-stage exit.
+
 ### Task 4: Immutable prompt version contract — design first
 
 **Files:**
@@ -96,4 +110,4 @@
 
 ## Exit
 
-Short stage DONE only after Task 1–3 evidence and separate owner acceptance of Task 4's governance design. Medium pilot and long AMF/runtime integration remain additional independently qualified steps, not automatically authorized or completed by creating this plan.
+Short stage DONE only after Task 1–3 **plus Task 3B LangGraph auto-export** evidence and separate owner acceptance of Task 4's governance design. Medium pilot and long AMF/runtime integration remain additional independently qualified steps, not automatically authorized or completed by creating this plan.

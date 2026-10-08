@@ -20,6 +20,8 @@
 | `apps/api/src/core/ai/prompts/__init__.py` | Local `PromptManager` and `PROMPT_REGISTRY` remain runtime local authority | Remote registry cannot auto-supersede rendered production prompt identity. |
 | `apps/api/src/core/ai/prompts/legacy/` and `tooling/` | Wave 3.10 quarantined non-authoritative assets and development tools | Quarantined code cannot be promoted through an observability or Prompt Hub convenience path. |
 
+| `apps/api/src/analysis/adapters/graph/workflow.py` + `apps/api/src/analysis/application/analyze_document_use_case.py` | Registered analysis graph calls `app.ainvoke(initial_state, config)`; graph workflow itself says that LangGraph auto-traces to LangSmith when `LANGCHAIN_TRACING_V2=true`. `initial_state` includes raw `document_text` and tenant/project identifiers | **Independent exporter surface** that bypasses the `LangSmithClient` wrapper, potentially exporting contract-bearing graph states/child traces. The flag `LANGCHAIN_TRACING_V2` is distinct from `LANGSMITH_TRACING`; live export is unverified. |
+
 The above is a repository-source audit, NOT a statement about live runtime, trace retention settings, external tenants or product qualification.
 
 ## 2. Target boundary — one authority per decision
@@ -48,11 +50,14 @@ C2Pro task / policy context
 
 **Defence-in-depth:** sanitize *before* calling any SDK, including events/spans/errors/feedback/evaluation uploads; use an allowlist instead of only regex/key-name redaction; record a rejected-field counter without the rejected value; limit sampling/retention; disable all remote exporters unless explicitly configured for a classified environment.
 
+**Independent LangGraph tracing gate:** The application must suppress LangGraph/LangChain automatic outbound traces for content-bearing graph state even when `LANGCHAIN_TRACING_V2=true`, until a reviewed safe callback/export boundary proves raw `initial_state.document_text` and all nested state/results are excluded. A sanitizer in `LangSmithClient` alone is insufficient. Keep local checkpointing and business analysis unaffected; qualify both tracing flags independently.
+
 **Fail cases to test:** `LLMRequest.system` canary, `LLMResponse.content` canary (success path), free-form exception canary, `LANGSMITH_API_KEY` present with no tracing flag, nested secrets in unknown keys, Unicode/long values, malicious tool output, exporter retries/timeouts, duplicate span submission, missing tenant, an **unauthenticated or foreign-tenant submission through the registered feedback route**, null prompt metadata, dynamic prompt alias and external provider outage.
 
 ## 4. Non-goals / authority exclusions
 
 - Change the **currently unsafe** `LangSmithConfig.from_env` default (`LANGSMITH_TRACING` currently defaults to `"true"`) to explicit **opt-in / default OFF**, with missing/empty/false-value regression tests. Merely having `LANGSMITH_API_KEY` must never create an exporter or remote run. No credential write or sending C2Pro contracts, completions or raw prompts externally.
+- No LangGraph auto-tracing or cloud export activation through `LANGCHAIN_TRACING_V2`, independently of LangSmith wrapper configuration.
 - No production Langfuse/Phoenix install. Both require isolated synthetic/redacted pilot gate, licensing and self-hosted telemetry opt-out check. Langfuse OSS core MIT (Enterprise modules separate); Phoenix ELv2 (review white-label/service restrictions).
 - No alteration to Coherence, Temporal, Procurement, Alerts, WBS, P0b/P0c/P0d qualification or Product Control.
 - No Prompt Hub remote push/pull, no silent alias-to-production promotion.
@@ -63,6 +68,7 @@ C2Pro task / policy context
 ### SHORT — Wave 3.11 audit + bounded contracts
 
 - Full path/caller inventory of `LangSmithClient`, `LangSmithAdapter`, `traced_llm_call`, `AIUsageLogger`, feedback and eval; **include the actually registered** `src/ai_feedback/router.py` and its service, not solely the unregistered `src/core/ai/feedback_router.py`. A negative-ownership/unauthenticated caller test must fail against current registered route and be fixed before short exit.
+- Inventory `LANGCHAIN_TRACING_V2` and callback-based automatic LangGraph exporters in `run_orchestration()`; RED→GREEN synthetic canary for `AnalyzeDocumentUseCase.execute(document_text=...)` must prove no contract content reaches outbound tracing under either tracing flag (independently and combined), before short exit.
 - RED canaries using the **real** `LLMRequest.system` and `LLMResponse.content` fields plus an exception containing a canary; prove current `start_span` input and `end_span` success/error leak, then patch all paths in a *separately reviewed implementation PR*. Also RED→GREEN test that `LANGSMITH_API_KEY` without explicit `LANGSMITH_TRACING=true` leaves exporter OFF; preserve non-sensitive usage/cost/latency and disabled mode.
 - Define immutable prompt-identity manifest and migration plan for currently rendered prompts; establish default-deny remote adapter contract.
 - Independent review; exact-head CI; evidence that no product behavior changed.
