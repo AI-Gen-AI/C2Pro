@@ -8,7 +8,7 @@ MIGRATION = (
     / "alembic/versions/20261008_0001_hitl_finding_decisions.py"
 )
 MIRROR = (
-    Path(__file__).resolve().parents[5]
+    Path(__file__).resolve().parents[6]
     / "supabase/migrations/20261008000100_hitl_finding_decisions.sql"
 )
 
