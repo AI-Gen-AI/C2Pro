@@ -151,6 +151,20 @@ def test_correction_cannot_be_erased_by_a_later_confirm_on_same_candidate() -> N
     assert followup.requires_new_candidate is True
     assert followup.ready_for_final_authority_check is False
 
+
+def test_mutable_input_correction_cannot_rewrite_a_recorded_draft() -> None:
+    scope = _scope()
+    correction = {"obligation": {"days": 14}}
+    draft = FindingDecisionDraft(scope=scope, required_finding_ids=frozenset({"risk-1"}))
+    logged = apply_finding_decision(
+        draft,
+        _command(scope, action=DecisionAction.CORRECT, proposed_correction=correction),
+    )
+
+    correction["obligation"]["days"] = 2
+    assert logged.entries[0].correction_json == '{"obligation":{"days":14}}'
+    assert logged.requires_new_candidate is True
+
 def test_missing_reason_and_unknown_finding_are_refused() -> None:
     scope = _scope()
     draft = FindingDecisionDraft(scope=scope, required_finding_ids=frozenset({"risk-1"}))
