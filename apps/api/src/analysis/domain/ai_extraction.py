@@ -15,6 +15,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from src.analysis.domain.critique_quote_witness import (
+    CritiqueObservation,
+    verify_source_quote,
+)
+
 from src.analysis.domain.prompts import (
     BUDGET_EXTRACTION_PROMPT,
     CRITIQUE_SYSTEM_PROMPT,
@@ -73,6 +78,7 @@ _CRITIQUE_MAX_SOURCE_CHARS = 16000
 class CritiqueResult:
     status: str  # "OK" | "RETRY"
     notes: str
+    observations: tuple[CritiqueObservation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -117,7 +123,36 @@ class CritiqueExtractionService:
                 status = str(payload.get("status", "")).upper()
                 notes = str(payload.get("notes", "")).strip()
                 if status in {"OK", "RETRY"}:
-                    return CritiqueResult(status=status, notes=notes)
+                    observations: list[CritiqueObservation] = []
+                    raw_observations = payload.get("observations")
+                    if isinstance(raw_observations, list):
+                        for raw in raw_observations[:32]:
+                            if not isinstance(raw, dict):
+                                continue
+                            claim = raw.get("claim")
+                            source_quote = raw.get("source_quote")
+                            if not isinstance(claim, str) or not claim.strip():
+                                continue
+                            if not isinstance(source_quote, str) or not source_quote.strip():
+                                continue
+                            claim = claim.strip()[:1000]
+                            source_quote = source_quote.strip()[:1000]
+                            observations.append(
+                                CritiqueObservation(
+                                    claim=claim,
+                                    source_quote=source_quote,
+                                    witness=verify_source_quote(
+                                        source[:_CRITIQUE_MAX_SOURCE_CHARS] if source else None,
+                                        source_quote,
+                                        source_complete=bool(source) and not clipped,
+                                    ),
+                                )
+                            )
+                    return CritiqueResult(
+                        status=status,
+                        notes=notes,
+                        observations=tuple(observations),
+                    )
         except Exception:
             pass
         return CritiqueResult(status="RETRY", notes="Automatic critique inconclusive.")
