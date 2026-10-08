@@ -7,16 +7,17 @@ import pytest
 
 from src.analysis.domain.trust import artifact_digest
 from src.core.auth.models import UserRole
+from src.modules.hitl.adapters.persistence.finding_decision_writer import (
+    FindingDecisionIdentityError,
+)
 from src.modules.hitl.application.finding_review_authorization import (
     FindingDecisionSubmission,
     FindingReviewerNotAuthorized,
 )
-from src.modules.hitl.adapters.persistence.finding_decision_writer import FindingDecisionIdentityError
 from src.modules.hitl.application.record_finding_decision_use_case import (
     RecordFindingDecisionUseCase,
 )
 from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
-
 
 _RISK = {"title": "Rectification", "description": "14 days at contractor cost"}
 _PAYLOAD = {"extracted_risks": [_RISK]}
