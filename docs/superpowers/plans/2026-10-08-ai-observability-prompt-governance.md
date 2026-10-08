@@ -95,16 +95,16 @@
 ### Task 3B: LangGraph automatic tracing privacy boundary
 
 **Files:**
-- Review/modify: `apps/api/src/analysis/adapters/graph/workflow.py`; its LangChain/LangGraph tracer and callback setup.
+- Review/modify: centralized LangChain/LangGraph tracer and callback policy. Inspect (no product algorithm modifications): `apps/api/src/analysis/adapters/graph/workflow.py`, `apps/api/src/coherence/graph/graph.py`, `apps/api/src/procurement/application/wbs_generator_service.py` and repository-wide runnable invocations.
 - Review: `apps/api/src/analysis/application/analyze_document_use_case.py`; actual initial-state fields.
 - Test: `apps/api/tests/unit/analysis/graph/test_langgraph_trace_privacy.py` and scoped integration coverage.
 
-**Interfaces:** Graph may retain the full state locally for authorized analysis/checkpointing, but **no external exporter may receive raw `initial_state.document_text` or nested graph states/results** without a separately reviewed classified-data allowlist. Flag `LANGCHAIN_TRACING_V2` is independent from `LANGSMITH_TRACING`.
+**Interfaces:** All LangChain/LangGraph paths may retain full state locally for authorized analysis/checkpointing, but **no external exporter may receive raw `initial_state.document_text`, Coherence clauses, WBS `contract_text`, or any nested child result** without a separately reviewed classified-data allowlist. Require one central default-deny export gate (or verified all-callsites equivalence). Flag `LANGCHAIN_TRACING_V2` is independent from `LANGSMITH_TRACING`.
 
-- [ ] Step 1: RED: with `LANGCHAIN_TRACING_V2=true`, synthetic `document_text="CANARY_GRAPH_CONTRACT_SECRET"` reaches the actual graph `app.ainvoke` path. Capture tracer/export payload (not only the separate `LangSmithClient` mock); verify privacy assertion fails because of text export, not initialization.
-- [ ] Step 2: Enforce fail-closed external LangGraph tracing by default even if the ambient environment enables the exporter, until content-filtered callbacks/spans are explicitly qualified. Do not suppress analysis execution, safe local metrics or checkpointing.
-- [ ] Step 3: GREEN tests with `LANGCHAIN_TRACING_V2` ON/OFF independently of `LANGSMITH_TRACING` and in combination; search entire recorded parent/child span graph for both input and output canaries.
-- [ ] Step 4: Run relevant LangGraph unit and integration suites, exact-head CI and independent privacy review. Record the callback/env routes and final evidence before short-stage exit.
+- [ ] Step 1: RED: with `LANGCHAIN_TRACING_V2=true`, synthetic `document_text="CANARY_GRAPH_CONTRACT_SECRET"` reaches analysis `app.ainvoke`, Coherence clause `CANARY_CLAUSE_SECRET` reaches `graph.ainvoke` and WBS `contract_text="CANARY_WBS_CONTRACT_SECRET"` reaches both `chain.invoke` and `workflow.invoke`; include child callbacks. Capture tracer/export payload (not only the separate `LangSmithClient` mock); verify privacy assertion fails because of text export, not initialization.
+- [ ] Step 2: Enforce fail-closed external LangChain/LangGraph tracing for all runnable callsites even if the ambient flag is true, via a shared policy at exporter/callback boundary or proof of complete per-caller suppression; never modify domain algorithms. Do not suppress analysis execution, safe local metrics or checkpointing.
+- [ ] Step 3: GREEN tests for flags ON/OFF individually and combined; inspect every parent and child export from analysis, Coherence and WBS for all three canaries in inputs/outputs/exceptions and fail on any runnable bypass.
+- [ ] Step 4: Run analysis, Coherence and WBS LangChain/LangGraph unit and integration suites (without changing functionality), exact-head CI and independent privacy review. Record the callback/env routes and final evidence before short-stage exit.
 
 ### Task 3C: LangSmith Prompt Hub optional mirror / governance contract (no live sync)
 
