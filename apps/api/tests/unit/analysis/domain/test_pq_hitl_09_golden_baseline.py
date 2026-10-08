@@ -112,6 +112,11 @@ def test_pj01_rectification_facts_are_in_source_not_a_critic_invention() -> None
     case = next(c for c in _load()["cases"] if c["family"] == "rectification_correct")
     facts = case["expected_facts"]
     source = case["source_text"]
+    pj01_source = (
+        Path(__file__).resolve().parents[6]
+        / "apps/web/src/tests/e2e/test-data/pj01/contract-a.source.txt"
+    ).read_text(encoding="utf-8")
+    assert source in pj01_source, "Synthetic golden §5.2 must match the repository PJ-01 source"
     assert source.startswith("5.2 ")
     assert "at the Contractor's cost" in source
     assert "within fourteen (14) days of written notice" in source
