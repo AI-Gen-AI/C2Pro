@@ -112,7 +112,7 @@ async def test_new_decision_checks_row_lock_then_appends_one_provisional_event()
     assert receipt.replayed is False
     assert len(session.calls) == 4
     assert "FOR UPDATE" in session.calls[0][0]
-    assert "INSERT INTO hitl_finding_decisions" in session.calls[-1][0]
+    assert "INSERT INTO public.hitl_finding_decisions" in session.calls[-1][0]
     assert "approve" not in session.calls[-1][0].lower()
     assert "trusted" not in session.calls[-1][0].lower()
 
