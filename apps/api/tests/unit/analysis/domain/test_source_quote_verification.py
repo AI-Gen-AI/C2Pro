@@ -79,3 +79,14 @@ def test_empty_claim_and_valid_ordinary_terms_are_not_corruption() -> None:
         source_complete=True,
     )
     assert outcome.status == "VERIFIED_EXACT"
+
+
+def test_partial_source_coverage_is_preserved_even_for_a_located_quote() -> None:
+    outcome = verify_source_quote(
+        source_revision_id=uuid4(),
+        source_text="Clause A",
+        quoted_text="Clause A",
+        source_complete=False,
+    )
+    assert outcome.status == "VERIFIED_EXACT"
+    assert outcome.source_complete is False
