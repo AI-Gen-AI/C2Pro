@@ -2,7 +2,7 @@
 
 **Status:** APPROVED FOR DESIGN / BOUNDED QUALIFICATION; IMPLEMENTATION NOT YET PROVEN; NO PRODUCTION AUTHORIZATION
 **Evidence baseline:** `AI-Gen-AI/C2Pro main@00d793940b0ae8664bf46384ef79defcc1d9801a` after #935
-**Programme owner:** C2PRO-DEV-15 quality lane; AI-Gen OPS/AF control remains in the two canonical Masters of `AI-Gen-AI/2SB` (PR #367 subject to independent checks)
+**Programme owner:** C2PRO-DEV-15 quality lane; AI-Gen OPS/AF control remains in the two canonical Masters of `AI-Gen-AI/2SB` (PR #367 MERGED at `AI-Gen-AI/2SB main@ca39299494805747d4e0e4bacb31935c132d3ba7`; canonical human/machine pair)
 **Document class:** Supporting focused specification, subordinate to `docs/DOCUMENTATION_AUTHORITY.md`, accepted ADRs and Product Control.
 
 ## 1. Problem statement — verified code facts vs assumptions
@@ -22,9 +22,19 @@
 
 | `apps/api/src/analysis/adapters/graph/workflow.py` + `apps/api/src/analysis/application/analyze_document_use_case.py` | Registered analysis graph calls `app.ainvoke(initial_state, config)`; graph workflow itself says that LangGraph auto-traces to LangSmith when `LANGCHAIN_TRACING_V2=true`. `initial_state` includes raw `document_text` and tenant/project identifiers | **Independent exporter surface** that bypasses the `LangSmithClient` wrapper, potentially exporting contract-bearing graph states/child traces. The flag `LANGCHAIN_TRACING_V2` is distinct from `LANGSMITH_TRACING`; live export is unverified. |
 
+| `.env.example`, `README.md`, `Makefile` | Standard bootstrap (`cp .env.example .env`, `make setup-env`) copies the tracked template into a local environment; the template currently contains `LANGSMITH_TRACING=true` and `LANGCHAIN_TRACING_V2=true`, as well as placeholder API keys | **P1 deployment/configuration bypass:** switching the wrapper's missing-variable default to `false` is insufficient while the copied template explicitly enables two exporters. The implementation PR must set BOTH template flags to false and prove the bootstrap path is opt-in. Existing `.env` or deployment overrides require separate classification; do not read or publish secret values. |
+
 The above is a repository-source audit, NOT a statement about live runtime, trace retention settings, external tenants or product qualification.
 
-## 2. Target boundary — one authority per decision
+## 2. LangSmith inclusion decision — approved and bounded
+
+**YES: LangSmith remains a supported, maintained optional observability backend for C2Pro/AI-Gen.** We will keep the current SDK wrapper, secure the actual registered tracing and feedback integrations, add compatibility/contract tests and qualify an opt-in synthetic-data mode. This is **not** a commitment to make LangSmith the mandatory vendor, to activate production tracing or to replace its integration with Langfuse. Langfuse and Phoenix are independent, optional evaluation candidates; final platform selection requires measured evidence, licensing/privacy analysis and an explicit decision. During qualification LangSmith is the existing-adapter reference/baseline; qualified events must have the same privacy semantics for all providers.
+
+**Prompt management is a separate decision:** current `PromptRegistry` defines a sync protocol but not a verified live LangSmith Prompt Hub connector. A future optional LangSmith Prompt Hub adapter may be qualified for draft templates, experimentation and governed publishing, with dry-run, immutable version/hash, approval evidence, ownership checks and rollback. It cannot fetch mutable aliases into an approved production runtime, override local `PromptManager` or auto-promote. A missing adapter must not be described as implemented. No provider is the SoR for prompt approval.
+
+**LangSmith operational choice:** SDK retained and testable by default; remote exporters DISABLED by default; remote observability activation only under classified-data policy, owner/HITL and deployment-exact qualification. Synthetic non-secret staging pilot may be proposed separately; no raw contract, tool output, prompt or completion is sent in this workstream.
+
+## 3. Target boundary — one authority per decision
 
 ```text
 C2Pro task / policy context
@@ -42,7 +52,7 @@ C2Pro task / policy context
 - A prompt is qualified by an immutable identifier, semver or monotonic version, content hash, scope, evaluator/dataset version, provenance, reviewer decision, activation proof and rollback pointer. External registries are mirrors/candidates, not sources of unreviewed runtime instructions.
 - Telemetry is **best-effort, fail-open for permitted business execution** while data export is **fail-closed for unsafe payloads**. A failing collector does not block a legal task, and an unclassifiable field is not exported.
 
-## 3. Privacy-first telemetry contract — design proposal, not live behavior
+## 4. Privacy-first telemetry contract — design proposal, not live behavior
 
 **Allowed-by-default minimal fields:** `trace_id`, `span_id`, `parent_span_id`, `request_id` as opaque scoped IDs; component/operation, normalized status/error_code (not free-form exception message), model_id, provider_route_id (non-secret), prompt_id, prompt_version, prompt_hash, token counts, cost_usd, latency_ms, retry_count, cache_hit, policy_decision_id and evidence_digest. Enforce values bounded in length and structured types.
 
@@ -54,29 +64,29 @@ C2Pro task / policy context
 
 **Fail cases to test:** `LLMRequest.system` canary, `LLMResponse.content` canary (success path), free-form exception canary, `LANGSMITH_API_KEY` present with no tracing flag, nested secrets in unknown keys, Unicode/long values, malicious tool output, exporter retries/timeouts, duplicate span submission, missing tenant, an **unauthenticated or foreign-tenant submission through the registered feedback route**, null prompt metadata, dynamic prompt alias and external provider outage.
 
-## 4. Non-goals / authority exclusions
+## 5. Non-goals / authority exclusions
 
-- Change the **currently unsafe** `LangSmithConfig.from_env` default (`LANGSMITH_TRACING` currently defaults to `"true"`) to explicit **opt-in / default OFF**, with missing/empty/false-value regression tests. Merely having `LANGSMITH_API_KEY` must never create an exporter or remote run. No credential write or sending C2Pro contracts, completions or raw prompts externally.
+- Change the **currently unsafe** `LangSmithConfig.from_env` default (`LANGSMITH_TRACING` currently defaults to `"true"`) to explicit **opt-in / default OFF**. Additionally change `.env.example` so `LANGSMITH_TRACING=false` **and** `LANGCHAIN_TRACING_V2=false` and validate `README.md`/`Makefile` copy path; key-only setup must not export. Include LangChain alias/environment interactions in tests, without using real secrets or live exporters. Existing deployments do not inherit template changes; runtime enablement remains a separate qualification. No credential write or sending C2Pro contracts, completions or raw prompts externally.
 - No LangGraph auto-tracing or cloud export activation through `LANGCHAIN_TRACING_V2`, independently of LangSmith wrapper configuration.
 - No production Langfuse/Phoenix install. Both require isolated synthetic/redacted pilot gate, licensing and self-hosted telemetry opt-out check. Langfuse OSS core MIT (Enterprise modules separate); Phoenix ELv2 (review white-label/service restrictions).
 - No alteration to Coherence, Temporal, Procurement, Alerts, WBS, P0b/P0c/P0d qualification or Product Control.
 - No Prompt Hub remote push/pull, no silent alias-to-production promotion.
 - Do not rename `src.core.ai.prompt_registry.PromptRegistry` or local `PromptManager` again as a side effect of this work.
 
-## 5. Short / medium / long acceptance gates
+## 6. Short / medium / long acceptance gates
 
 ### SHORT — Wave 3.11 audit + bounded contracts
 
-- Full path/caller inventory of `LangSmithClient`, `LangSmithAdapter`, `traced_llm_call`, `AIUsageLogger`, feedback and eval; **include the actually registered** `src/ai_feedback/router.py` and its service, not solely the unregistered `src/core/ai/feedback_router.py`. A negative-ownership/unauthenticated caller test must fail against current registered route and be fixed before short exit.
-- Inventory `LANGCHAIN_TRACING_V2` and callback-based automatic LangGraph exporters in `run_orchestration()`; RED→GREEN synthetic canary for `AnalyzeDocumentUseCase.execute(document_text=...)` must prove no contract content reaches outbound tracing under either tracing flag (independently and combined), before short exit.
+- Full path/caller inventory of `LangSmithClient`, `LangSmithAdapter`, `traced_llm_call`, `AIUsageLogger`, feedback and eval; **preserve LangSmith as a supported optional backend** while imposing default-off external exports; **include the actually registered** `src/ai_feedback/router.py` and its service, not solely the unregistered `src/core/ai/feedback_router.py`. A negative-ownership/unauthenticated caller test must fail against current registered route and be fixed before short exit.
+- Inventory both tracing environment flags, LangChain aliases and `.env.example` copied through documented setup; require explicit opt-in and an environment-template regression gate. Inventory `LANGCHAIN_TRACING_V2` and callback-based automatic LangGraph exporters in `run_orchestration()`; RED→GREEN synthetic canary for `AnalyzeDocumentUseCase.execute(document_text=...)` must prove no contract content reaches outbound tracing under either tracing flag (independently and combined), before short exit.
 - RED canaries using the **real** `LLMRequest.system` and `LLMResponse.content` fields plus an exception containing a canary; prove current `start_span` input and `end_span` success/error leak, then patch all paths in a *separately reviewed implementation PR*. Also RED→GREEN test that `LANGSMITH_API_KEY` without explicit `LANGSMITH_TRACING=true` leaves exporter OFF; preserve non-sensitive usage/cost/latency and disabled mode.
 - Define immutable prompt-identity manifest and migration plan for currently rendered prompts; establish default-deny remote adapter contract.
 - Independent review; exact-head CI; evidence that no product behavior changed.
 
 ### MEDIUM — disposable comparative pilot
 
-- Trace identical de-identified golden agent/LLM workflow to Langfuse and Phoenix adapters; retain existing LangSmith wrapper as optional comparator.
-- Measure end-to-end span completeness, parent/child linkage, errors, evaluation quality, prompt replay/version integrity, CPU/RAM/DB disk, licensing, latency/cost and failure behavior. Compare variance rather than mean alone.
+- Use the SAME synthetic/de-identified golden agent/LLM workflow and identical allowlisted event contract to compare **three explicit integrations**: existing LangSmith (maintained opt-in reference, no customer-data export), Langfuse (preferred self-hosted pilot candidate) and Phoenix (alternative self-hosted pilot candidate). Never invent availability or skip privacy/licensing gates to achieve a three-way score.
+- Measure end-to-end span completeness, parent/child linkage, errors, evaluation quality, prompt replay/version integrity, retention/deletion, data residency/DPA, remote access/tenant isolation, pricing, CPU/RAM/DB disk, licensing and exporter failure behavior. Distinguish managed LangSmith resource/cost metrics from self-hosted infrastructure metrics; compare variance rather than mean alone.
 - Validate opt-out of default self-host analytics, data deletion/retention behavior, backup/restore and isolated teardown before adoption decision.
 
 ### LONG — governed platform integration
@@ -84,6 +94,6 @@ C2Pro task / policy context
 - Bind accepted prompt identity and evidence to AMF route/model/access path identity with immutable trace/run ledger, reviewer approval, regression evaluation and rollback.
 - Runtime acceptance requires dedicated production authorization, deployment-exact observations, security review and Human-in-the-Loop promotion gates. **Any future AMF route selection must first map to AI-Gen MW-06/MR with gated MW-06-ACT-01 activation**; technology choice alone is not DONE.
 
-## 6. Evidence & review gates
+## 7. Evidence & review gates
 
 Required evidence per implementation PR: baseline/head SHA, affected caller matrix, failing+passing unit/integration tests, synthetic canary proof that no content leaks to span/event/feedback, CI/secret scan, reviewer findings resolved, exact-head merge, separate operational/production qualification. Known unsafe behavior is documented here as a **finding**, not silently accepted as production ready.

@@ -26,6 +26,7 @@ class CritiqueExtractionCommand:
     extracted_wbs: list[dict[str, Any]]
     doc_type: str | None
     retry_count: int
+    source_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class CritiqueExtractionUseCase:
             items=items,
             doc_type=cmd.doc_type or "unknown",
             ai=self.ai,
+            source_text=cmd.source_text,
         )
 
         evaluation = self.evaluation_service.evaluate_critique(
