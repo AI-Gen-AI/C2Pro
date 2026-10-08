@@ -483,3 +483,35 @@ async def test_oversize_quote_with_invented_tail_never_locates_prefix() -> None:
     assert result.status == "RETRY"
     assert result.observations[0].witness.status is not QuoteWitnessStatus.LOCATED
     assert result.observations[0].witness.char_start is None
+
+
+
+@pytest.mark.asyncio
+async def test_structured_critique_observation_overflow_cannot_hide_unverified_tail() -> None:
+    """32 source-witnessed observations cannot launder an unprocessed 33rd."""
+    from src.analysis.domain.critique_quote_witness import QuoteWitnessStatus
+
+    quote = "The Contractor shall rectify defects"
+    source = quote + " within fourteen days."
+    ai = _FakeAI(payload={
+        "status": "OK",
+        "notes": "All observations verified.",
+        "observations": [
+            {"claim": f"valid observation {n}", "source_quote": quote}
+            for n in range(32)
+        ] + [{"claim": "Thirty days is contractual", "source_quote": "thirty days"}],
+    })
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{"confidence": 0.9}],
+            extracted_wbs=[],
+            doc_type="contract",
+            retry_count=0,
+            source_text=source,
+        )
+    )
+    assert result.status == "RETRY"
+    assert result.retry_count > 0 or result.human_approval_required
+    assert "limit" in result.notes_raw.lower() or "overflow" in result.notes_raw.lower()
+    assert len(result.observations) <= 32
+    assert all(obs.witness.status is QuoteWitnessStatus.LOCATED for obs in result.observations)
