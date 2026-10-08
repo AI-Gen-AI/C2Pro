@@ -56,10 +56,12 @@ async def test_tenant_scoped_lineage_keeps_nine_historical_and_seven_proposed_cl
     doc_repo.get_by_id.assert_awaited_once_with(tenant, document_id)
     rev_repo.list_lineage.assert_awaited_once_with(document_id, tenant)
     assert doc_repo.list_clauses_bound_to_revision.await_count == 2
-    assert reader.read.await_args_list[0].kwargs == dict(
-        tenant_id=tenant, project_id=project_id, document_id=document_id,
-        revision_id=a_id,
-    )
+    assert reader.read.await_args_list[0].kwargs == {
+        "tenant_id": tenant,
+        "project_id": project_id,
+        "document_id": document_id,
+        "revision_id": a_id,
+    }
 
 
 @pytest.mark.asyncio
