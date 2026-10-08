@@ -77,6 +77,8 @@ jobs:
             migrations:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
+              # Role-identity security tests must execute against migrated PostgreSQL.
+              - "apps/api/tests/integration/product_control/test_hitl_writer_role_security_pg.py"
             backend_docker:
               - "apps/api/**"
               - ".github/workflows/ci.yml"
