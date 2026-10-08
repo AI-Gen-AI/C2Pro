@@ -159,6 +159,35 @@ describe('ReviewItemCard - graph-gated HITL review', () => {
   });
 });
 
+
+describe('ReviewItemCard - progressive disclosure of unverified AI critique', () => {
+  it('groups numbered critique notes without inventing proof or individual approval', async () => {
+    const notes = [
+      '1. MISSING CLAUSE REFERENCES: Clause 5.2 needs traceability.',
+      '2. DEFECT RECTIFICATION: The source states Contractor cost within fourteen (14) days.',
+    ].join('\n\n');
+    render(
+      <ReviewItemCard
+        item={{
+          ...graphGatedItem,
+          item_data: { ...graphGatedItem.item_data, critique_notes: notes },
+        }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/2 unverified AI critique observations/i)).toBeInTheDocument();
+    expect(screen.getByText(/MISSING CLAUSE REFERENCES/i)).toBeInTheDocument();
+    expect(screen.getByText(/DEFECT RECTIFICATION/i)).toBeInTheDocument();
+    expect(screen.queryByText(/verified findings/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Approve full analysis/i)).toBeInTheDocument();
+    expect(screen.getByText(/original source evidence/i)).toBeInTheDocument();
+  });
+});
+
 // C2PRO #714: decisions are offered only for the exact bound candidate, and an
 // ESCALATED review is still awaiting a (senior) human decision.
 describe('ReviewItemCard #714 decision readiness', () => {
