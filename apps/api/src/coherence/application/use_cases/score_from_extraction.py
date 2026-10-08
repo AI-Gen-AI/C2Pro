@@ -36,7 +36,7 @@ class ScoreFromExtractionCommand:
     extracted_risks: list[JsonDict]
     extracted_wbs: list[JsonDict]
     bom_items: list[JsonDict]
-    confidence_score: float
+    confidence_score: float | None
     document_text: str
 
 
