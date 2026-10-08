@@ -409,6 +409,52 @@ class TestWbsExtractorMockBranch:
 
 class TestHumanInterruptNode:
     @pytest.mark.asyncio
+    async def test_review_item_carries_unverified_critique_observations(
+        self, monkeypatch
+    ) -> None:
+        """#937: structured N12 evidence must reach the N13 review item, not only checkpoint."""
+        from src.analysis.adapters.graph import nodes
+
+        service = _FakeHitlService(ReviewStatus.APPROVED)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "get_hitl_service_for_graph",
+            lambda *, session, tenant_id: service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "interrupt",
+            lambda payload: (_ for _ in ()).throw(
+                AssertionError(f"unexpected interrupt: {payload}")
+            ),
+        )
+        observations = [{
+            "claim": "A thirty-day deadline was alleged",
+            "source_quote": "thirty days",
+            "witness_status": "UNRESOLVED",
+            "char_start": None,
+            "claim_verified": False,
+            "source_basis": "document_text",
+            "scope": "N12_SOURCE_EXCERPT_ONLY",
+        }]
+        await nodes.human_interrupt_node(
+            _make_state(
+                critique_observations=observations,
+                doc_type="contract",
+                confidence_score=0.9,
+                human_approval_required=True,
+            )
+        )
+        assert service.calls[0]["item_data"]["critique_observations"] == observations
+
+    @pytest.mark.asyncio
     async def test_auto_approved_hitl_status_continues_without_langgraph_interrupt(
         self, monkeypatch
     ) -> None:
