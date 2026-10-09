@@ -112,7 +112,7 @@ def load_registry(root: Path = ROOT, base_sha: str | None = None) -> dict[str, d
             raise TraceError("malformed Product Task")
         if name in registry:
             raise TraceError("duplicate Product Task")
-        registry[name] = {"issue": task["issue"], "source": PRODUCT_MASTER.as_posix(),
+        registry[name] = {"issue": task["issue"], "source": PRODUCT_MASTER.as_posix(), "sdd_path": DELIVERY_SPEC.as_posix(),
                           "acceptance_ids": set()}
     spec_path = data.get("delivery_specification", {}).get("spec_ref")
     if spec_path != DELIVERY_SPEC.as_posix():
@@ -137,7 +137,7 @@ def load_registry(root: Path = ROOT, base_sha: str | None = None) -> dict[str, d
                 raise TraceError("duplicate/mismatched atomic Task")
             registry[atomic_id] = {
                 "issue": registry[active_parent]["issue"],
-                "source": spec_path,
+                "source": spec_path, "sdd_path": spec_path,
                 "acceptance_ids": {atomic_id},
             }
     queue = safe_yaml(read_approved_source(root, DEV_QUEUE.as_posix(), base_sha))
@@ -149,7 +149,8 @@ def load_registry(root: Path = ROOT, base_sha: str | None = None) -> dict[str, d
             if not ids:
                 raise TraceError("DEV SDD missing stable TRACE acceptance IDs")
             registry[dev_id] = {"issue": DEV_ISSUES[dev_id],
-                                "source": DEV_QUEUE.as_posix(), "acceptance_ids": ids}
+                                "source": DEV_QUEUE.as_posix(), "sdd_path": DEV_SDD[dev_id],
+                                "acceptance_ids": ids}
     return registry
 
 
@@ -219,6 +220,8 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
         sdd = c.get("sdd_path")
         if not isinstance(sdd, str) or not (sdd.startswith("docs/") and sdd.endswith(".md")):
             raise TraceError("invalid sdd_path")
+        if sdd != canonical.get("sdd_path"):
+            raise TraceError("sdd_path is not canonical for Task")
         read_approved_source(root, sdd, base_sha)
         acceptance = c.get("acceptance_ids")
         if not isinstance(acceptance, list) or any(not isinstance(x, str) for x in acceptance):

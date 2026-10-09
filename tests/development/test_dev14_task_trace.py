@@ -208,3 +208,11 @@ def test_owner_supervised_dev14_guarded_ci_manifest_is_scoped_exactly():
     assert result["status"]=="TASK_MAPPED_PENDING_HUMAN_REVIEW"
     result=trace.audit_pr(body,[".github/ci-pip-install-baseline.json.unexpected"],ROOT)
     assert result["status"]=="REJECT"
+
+
+
+def test_task_cannot_substitute_a_different_existing_sdd():
+    c=claim("PQ-HITL-09.1",945,
+            "docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md")
+    with pytest.raises(trace.TraceError,match="sdd_path"):
+        trace.validate_claims(metadata(c),registry(),ROOT)
