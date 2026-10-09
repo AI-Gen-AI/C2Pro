@@ -264,23 +264,33 @@ class BudgetExtractionService:
         text: str,
         ai: AIExtractionPort,
         critique_feedback: str = "",
+        critique_observations: tuple[dict[str, Any], ...] = (),
     ) -> list[dict[str, Any]]:
-        # N12 feedback describes an *untrusted* model concern. It is data for
-        # the bounded retry, never an instruction or authoritative source.
-        notes = critique_feedback.strip()
-        # N12 appends typed concerns *after* free-form notes. Taking the
-        # first 1200 characters could drop every actionable quote while
-        # consuming a budget retry. Prioritize the structured (still
-        # untrusted) observations, then apply the strict total limit.
-        concern_marker = "Check the following AI-generated concerns"
-        # Free-form model notes may contain the same marker as untrusted data.
-        # The evaluator appends its structured block at the end, so choose
-        # that final marker rather than letting earlier text shadow it.
-        concern_start = notes.rfind(concern_marker)
+        # N12 concerns are separately typed but remain UNTRUSTED model data.
+        # Never infer a boundary within arbitrary model notes or quotation
+        # text (which can spoof any delimiter). Serialize a bounded subset
+        # explicitly and verify against the original document only.
+        typed: list[dict[str, str]] = []
+        for raw in critique_observations[:8]:
+            if not isinstance(raw, dict):
+                continue
+            claim = raw.get("claim")
+            quote = raw.get("source_quote")
+            witness = raw.get("witness_status")
+            if not isinstance(claim, str) or not claim.strip():
+                continue
+            entry = {
+                "claim_unverified": claim[:180],
+                "source_quote_untrusted": quote[:150] if isinstance(quote, str) else "",
+                "witness_status": witness[:30] if isinstance(witness, str) else "UNRESOLVED",
+            }
+            next_items = [*typed, entry]
+            if len(json.dumps({"source_observations_untrusted": next_items}, ensure_ascii=False)) > 1200:
+                break
+            typed.append(entry)
         feedback = (
-            notes[concern_start : concern_start + 1200]
-            if concern_start >= 0
-            else notes[:1200]
+            json.dumps({"source_observations_untrusted": typed}, ensure_ascii=False)
+            if typed else critique_feedback.strip()[:1200]
         )
         content = text
         if feedback:
