@@ -240,3 +240,25 @@ def test_p0c_workflow_does_not_interpolate_dispatch_inputs_inside_shell() -> Non
     for block in run_blocks:
         shell_body = block.split("\n      - name:", 1)[0]
         assert "${{ inputs." not in shell_body
+
+
+def test_p0c_recovery_mode_is_explicit_and_fail_closed() -> None:
+    workflow = _workflow()
+    spec = SPEC.read_text(encoding="utf-8")
+    verifier = VERIFIER.read_text(encoding="utf-8")
+
+    assert "recovery_revision_id=(?P<recovery_revision_id>" in workflow
+    assert "PROD_P0C_RECOVERY_REVISION_ID" in workflow
+    assert "--recovery-revision-id" in workflow
+    assert "value or ''" in workflow
+
+    assert 'process.env.PROD_P0C_RECOVERY_REVISION_ID || null' in spec
+    assert "Retry processing" in spec
+    assert "expect(whatChanged.targetRevisionId).toBe(recoveryRevisionId)" in spec
+
+    assert "recovery source revision is historical" in verifier
+    assert "recovery revision B is current child of source" in verifier
+    assert "recovery project has exactly A+B revisions" in verifier
+    assert "failed recovery revision has no persisted clauses" in verifier
+    assert "processing authority is pinned to failed revision B" in verifier
+    assert "recovery revision B has no qualified change event yet" in verifier
