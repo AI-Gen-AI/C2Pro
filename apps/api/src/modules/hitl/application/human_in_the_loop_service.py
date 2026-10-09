@@ -90,6 +90,10 @@ class HumanInTheLoopService:
                     if (
                         old_data.get("critique_observations", [])
                         != item_data.get("critique_observations", [])
+                        or old_data.get("critique_notes", "")
+                        != item_data.get("critique_notes", "")
+                        or old_data.get("document_revision_id")
+                        != item_data.get("document_revision_id")
                         or conflicting_pin
                     ):
                         raise StaleCritiqueReviewEvidence(
