@@ -370,6 +370,30 @@ class TestParseBudgetUseCase:
         assert isinstance(json.loads(block), str)
 
     @pytest.mark.asyncio
+    async def test_escaped_oversized_first_observation_keeps_typed_channel(self) -> None:
+        import json
+
+        ai = _FakeAI(payload={"items": []})
+        observations = ({
+            "claim": "Missing budget row " + chr(0) * 180,
+            "source_quote": "Original control quote " + chr(0) * 150,
+            "witness_status": "UNRESOLVED",
+        },)
+        await ParseBudgetUseCase(ai=ai).execute(
+            ParseBudgetCommand(
+                text="Original budget rows", critique_notes="generic free-form warning",
+                critique_observations=observations,
+            )
+        )
+        block = ai.calls[0][1].split("):", 1)[1].strip()
+        assert len(block) <= 1200
+        data = json.loads(block)
+        assert isinstance(data, dict)
+        assert data["source_observations_untrusted"]
+        assert data["source_observations_untrusted"][0]["claim_unverified"].startswith("Missing budget row")
+        assert data["source_observations_untrusted"][0]["source_quote_untrusted"].startswith("Original control quote")
+
+    @pytest.mark.asyncio
     async def test_first_budget_parse_without_feedback_uses_original_document(self) -> None:
         ai = _FakeAI(payload={"items": []})
         await ParseBudgetUseCase(ai=ai).execute(
