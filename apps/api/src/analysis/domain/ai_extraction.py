@@ -297,15 +297,15 @@ class BudgetExtractionService:
                 {"source_observations_untrusted": typed}, ensure_ascii=False
             )
         elif critique_feedback.strip():
-            raw = critique_feedback.strip()[:1200]
-            low, high = 0, len(raw)
+            raw_notes = critique_feedback.strip()[:1200]
+            low, high = 0, len(raw_notes)
             while low < high:
                 mid = (low + high + 1) // 2
-                if len(json.dumps(raw[:mid], ensure_ascii=False)) <= 1200:
+                if len(json.dumps(raw_notes[:mid], ensure_ascii=False)) <= 1200:
                     low = mid
                 else:
                     high = mid - 1
-            serialized = json.dumps(raw[:low], ensure_ascii=False)
+            serialized = json.dumps(raw_notes[:low], ensure_ascii=False)
         content = text
         if serialized:
             content = (
