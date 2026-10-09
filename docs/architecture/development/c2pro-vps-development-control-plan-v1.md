@@ -774,6 +774,22 @@ This item was previously carried in `.c2pro/control/work-queue.yaml` under the i
 
 **Exit gate:** product work envelopes have a collision-free identity contract, schema and validator coverage.
 
+
+### 2026-10-09 owner-approved DEV-14 task-first extension (SDD 14.1)
+
+**Task identity remains C2PRO-DEV-14**; do not mint another Product WBS or duplicate DEV ID. The owner approved Task-first planning with SDD/TDD and PR-level traceability. Supporting [SDD v1](c2pro-dev14-task-first-traceability-sdd-v1.md) freezes the contract and negative-test matrix; this approval is for bounded governance work, not a waiver of existing .c2pro authority.
+
+Break down the existing DEV-14 debt without expanding the current hot work queue into a historical task ledger:
+
+1. **DEV-14.1 — SDD/control mapping** (orchestrator): freeze Product Task ID ↔ parent issue ↔ acceptance ↔ SDD ↔ real WORK envelope ↔ PR evidence. Exit: independent design review and versioned SDD.
+2. **DEV-14.2 — Product WORK namespace/validator** (governed implementation): extend .c2pro closed schema/validator safely to support collision-free Product WORK IDs and prevent cross-campaign/project misuse. Exit: synthetic RED/GREEN validation tests and real authority/workspace mechanism.
+3. **DEV-14.3 — PR metadata validator** (governed implementation): validate primary task, optional related tasks, parent issue, SDD acceptance, actual assigned WORK, paths/branch/base, dependencies and no automatic Product acceptance. Exit: deterministic positive/negative tests and no bypass of existing gates.
+4. **DEV-14.4 — GitHub read-only rollout** (governed implementation): template, audited staged validation then protected required check only after WORK assignment works for genuine Product tasks. Exit: exact-head CI, independent review, branch-protection verification; zero secret/production access.
+
+**Current blocker:** .c2pro/control/current.yaml is reconciled_idle (active_work empty) and DEV-14 has no assigned work_ref. The owner-approved Product/Dev objective does not itself create an implementation assignment or authorize an invented workspace. Until the owning orchestrator assigns a valid envelope, worker selection and workspace/branch/base guard, only planning/discovery can advance; code implementation is EXECUTION_BLOCKED_WORK_ENVELOPE. Earlier “DEV-14 non-blocking” means it must not retroactively block valid work already assigned under other envelopes, *not* that a new Product implementation may bypass the .c2pro guard.
+
+PR cardinality: 1 Task to many PRs normally, 1 PR to many Tasks only with separate acceptance per Task. No PR without canonical primary Task. **MERGED != ACCEPTED != PROD_VALIDATED.** The first traceability PR itself must name DEV-14 as primary DEV Task and carry only documentation scope; it cannot falsely claim the validator is enforced.
+
 ---
 
 ## 13. Execution order
