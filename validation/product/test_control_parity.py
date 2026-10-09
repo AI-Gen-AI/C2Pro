@@ -32,6 +32,35 @@ def test_pristine_passes() -> None:
     assert c.run() == [], "pristine control files must have zero parity problems"
 
 
+def test_atomic_work_package_table_has_exact_state_and_assigned_role() -> None:
+    """All 28 Product task rows must mirror the canonical YAML authority."""
+    assert c.validate_work_package_mirror(c.load_yaml(), _MD_TEXT) == []
+
+
+def test_atomic_work_package_status_drift_fails() -> None:
+    row = next(
+        line for line in _MD_TEXT.splitlines()
+        if line.startswith("| PQ-HITL-03.1 /")
+    )
+    assert "| IN_PROGRESS |" in row
+    changed = _MD_TEXT.replace(row, row.replace("| IN_PROGRESS |", "| PLANNED |"))
+    problems = c.validate_work_package_mirror(c.load_yaml(), changed)
+    assert any("PQ-HITL-03.1" in p and "status" in p for p in problems), problems
+
+
+def test_atomic_work_package_role_drift_fails() -> None:
+    row = next(
+        line for line in _MD_TEXT.splitlines()
+        if line.startswith("| PQ-HITL-04.4 /")
+    )
+    assert "implementation_lead · M · P1" in row
+    changed = _MD_TEXT.replace(
+        row, row.replace("implementation_lead · M · P1", "qa · M · P1")
+    )
+    problems = c.validate_work_package_mirror(c.load_yaml(), changed)
+    assert any("PQ-HITL-04.4" in p and "role" in p for p in problems), problems
+
+
 def test_enums_valid_on_real_yaml() -> None:
     assert c.validate_enums(c.load_yaml()) == [], "every ADR/WBS status must be in its enum"
 
