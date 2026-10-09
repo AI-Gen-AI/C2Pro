@@ -23,7 +23,7 @@ Freeze a deterministic, synthetic set of contract inputs/expectations with versi
 | Q09 Injection within document | Located as untrusted text only | Never obey auto-approval instruction from source |
 | Q10 Exact literal without PDF | Verified text span, page/bbox remain null | Never fabricate page geometry |
 
-**Ancillary states:** An independent, explicitly **SYNTHETIC / NOT PJ-01** source sentence states EUR 132,500, 5% retention and 183 calendar days. The deterministic test parses those numeric values from that source before calculating EUR 6,625; none are attributed to the PJ-01 contract. 183 days is stated duration, not recalculated schedule. Confidence per finding null is NOT 0.9 just because artifact confidence is 0.9. A=9/B=7 are synthetic historical/proposed counts even when zero current TRUSTED; this corpus intentionally does not impersonate the live production rows or their IDs.
+**Ancillary states:** An independent, explicitly **SYNTHETIC / NOT PJ-01** source sentence states EUR 132,500, 5% retention **of the agreed total contract value**, and 183 calendar days. The deterministic test parses those numeric values from that source before calculating EUR 6,625; none are attributed to the PJ-01 contract. 183 days is stated duration, not recalculated schedule. Confidence per finding null is NOT 0.9 just because artifact confidence is 0.9. A=9/B=7 are synthetic historical/proposed counts even when zero current TRUSTED; this corpus intentionally does not impersonate the live production rows or their IDs.
 
 ## HOW — governed test-only implementation
 
