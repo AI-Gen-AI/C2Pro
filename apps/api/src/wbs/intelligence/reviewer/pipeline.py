@@ -78,9 +78,14 @@ from src.wbs.intelligence.reviewer.model_port import (
     ModelTransientError,
     ReviewTask,
     WBSReviewerModelPort,
+    is_synthetic_adapter,
     require_offline_adapter,
 )
-from src.wbs.intelligence.reviewer.privacy import Anonymizer, default_anonymizer
+from src.wbs.intelligence.reviewer.privacy import (
+    Anonymizer,
+    default_anonymizer,
+    require_live_privacy,
+)
 from src.wbs.intelligence.reviewer.prompts import template_ref, template_text
 from src.wbs.intelligence.validation.output_validator import (
     ValidationContext,
@@ -652,6 +657,8 @@ async def run_review_pipeline(
 ) -> PipelineResult:
     """Review one exact target offline. Refuses live adapters, GENERATE and cross-scope inputs."""
     require_offline_adapter(model)
+    if not is_synthetic_adapter(model):  # live gate: the privacy tier is checked on every run, not only once
+        require_live_privacy(inputs.anonymize)
     if inputs.mode not in REVIEW_MODES:
         raise ValueError(f"{inputs.mode.value} is not a review (generation is PC-2b.5)")
     if (inputs.manifest.tenant_id, inputs.manifest.project_id) != (inputs.scope.tenant_id, inputs.scope.project_id):

@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from dataclasses import replace
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -384,3 +385,24 @@ async def test_cr_n2_the_contract_is_never_crowded_out_by_document_order() -> No
                               chunks=chunks, anonymize=lambda s: s, limits=ReviewLimits())
     sources = {i.canonical_source.document_id for i in manifest.items if i.canonical_source is not None}
     assert contract.document_id in sources and len(sources) == 4  # every trusted document is represented
+
+
+# ============================================================================ final re-check of 9c836dcd
+# CR-P2: a valid DNI written with a space before its control letter is redacted (regression guard).
+@pytest.mark.parametrize("text", ["DNI 12345678 Z", "DNI 12.345.678 Z", "dni 12345678z"])
+async def test_cr_final_a_dni_with_a_spaced_control_letter_is_redacted(text: str) -> None:
+    from src.wbs.intelligence.reviewer.privacy import _floor
+
+    assert "345" not in _floor(text) and "<SPANISH_ID>" in _floor(text)
+
+
+# SEC-final-2: the live privacy gate also guards a direct pipeline call, not only the service constructor.
+async def test_sec_final_the_pipeline_enforces_the_live_privacy_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.wbs.intelligence.reviewer import model_port, pipeline, privacy
+
+    monkeypatch.setattr(model_port, "LIVE_MODEL_EXECUTION_AUTHORIZED", True)  # simulate a future live authorisation
+    impostor = _Impostor()
+    inputs = _inputs()
+    with pytest.raises(privacy.LivePrivacyTierMissing):
+        await pipeline.run_review_pipeline(replace(inputs, anonymize=lambda s: s), impostor)  # type: ignore[arg-type]
+    assert impostor.calls == []

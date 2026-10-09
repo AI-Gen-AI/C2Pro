@@ -166,11 +166,14 @@ def _visible_availability(inventory: EvidenceInventory, manifest: EvidenceManife
                                 has_trusted_scope_evidence=bool(seen & SCOPE_DOCUMENT_TYPES))
 
 
-def _unexpected_failure(reason: str = "the review pipeline raised an unexpected error") -> PipelineResult:
+def _unexpected_failure(reason: str = "the review pipeline raised an unexpected error", *,
+                        made: PipelineResult | None = None) -> PipelineResult:
+    """A static-reason FAILED result; the calls already made (``made``) stay attributed in usage."""
     return PipelineResult(
         status=PipelineStatus.FAILED, outcome=RunOutcome.FAILED, qualification=None, findings=(), proposals=(),
-        finding_refs={}, uncovered=(), report=ValidationReport(), calls=(),
-        usage=UsageSummary(calls=0, retries=0, input_tokens=0, output_tokens=0, cost_micro_usd=0, elapsed_ms=0),
+        finding_refs={}, uncovered=(), report=ValidationReport(), calls=() if made is None else made.calls,
+        usage=(UsageSummary(calls=0, retries=0, input_tokens=0, output_tokens=0, cost_micro_usd=0, elapsed_ms=0)
+               if made is None else made.usage),
         stop_reason=None, failure_reason=reason,
         availability=AvailabilityContext(has_trusted_contract=False, has_trusted_scope_evidence=False,
                                          ai_qualification_run=True, target_is_empty=False))
@@ -335,7 +338,7 @@ class WBSReviewerService:
             run = await self._finalize(scope, run_id, result, actor, actor_ref)
         except Exception:  # noqa: BLE001 - a run that cannot be finalized is failed, never left RUNNING
             logger.warning("wbs_review_finalize_error", run_id=str(run_id))
-            result = _unexpected_failure("the review could not be finalized")
+            result = _unexpected_failure("the review could not be finalized", made=result)  # usage kept
             run = await self._finalize(scope, run_id, result, actor, actor_ref)
         logger.info("wbs_review_finished", run_id=str(run.id), status=run.status, outcome=run.outcome,
                     calls=result.usage.calls, synthetic=synthetic)

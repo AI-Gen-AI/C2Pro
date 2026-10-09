@@ -30,7 +30,7 @@ _DNI_LETTERS: Final = "TRWAGMYFPDXBNJZSQVHLCKE"
 _CURRENCY: Final = r"(?!\s*(?:EUR|USD|GBP|euros?|€|\$))"
 _IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?:[ -]?[A-Z0-9]{4}){2,7}(?:[ -]?[A-Z0-9]{1,4})?\b", re.IGNORECASE)
 _NIE = re.compile(r"\b([XYZ])[- ]?(\d{7})[- ]?([A-Z])\b", re.IGNORECASE)
-_DNI = re.compile(r"\b(\d{2})\.?(\d{3})\.?(\d{3})-?([A-Z])\b", re.IGNORECASE)
+_DNI = re.compile(r"\b(\d{2})\.?(\d{3})\.?(\d{3})[- ]?([A-Z])\b", re.IGNORECASE)
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 # international (+ / 00 prefix) or Spanish numbers in their real groupings; a trailing full stop, comma
 # or hyphen ends a sentence, it does not continue the number; amounts followed by a currency are kept

@@ -216,3 +216,25 @@ async def test_sec_n4_an_aborted_transaction_never_strands_the_run(
                                    target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
     assert (result.run.status, result.run.outcome) == ("FAILED", "FAILED")
     assert await _usage_events(db, result.run.id) == 1
+
+
+# SEC-final-1: a finalization failure keeps the real usage of the calls that were made.
+async def test_sec_final_a_failed_finalization_keeps_the_real_usage(
+        db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    s, change_set_id, ids = await _world(db)
+    original = WBSIntelligenceService.complete_run
+    state = {"failed": False}
+
+    async def failing_once(self: WBSIntelligenceService, *args: Any, **kwargs: Any) -> Any:
+        if not state["failed"]:
+            state["failed"] = True
+            raise RuntimeError("simulated finalization failure")
+        return await original(self, *args, **kwargs)
+
+    monkeypatch.setattr(WBSIntelligenceService, "complete_run", failing_once)
+    result = await _reviewer(db, _model(ids)).review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
+                                                     target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
+    assert (result.run.status, result.run.outcome) == ("FAILED", "FAILED")
+    rows = (await db.execute(select(ProjectEventORM).where(ProjectEventORM.event_type == EVENT_RUN_USAGE))).scalars()
+    [payload] = [e.payload for e in rows if e.payload.get("run_id") == str(result.run.id)]
+    assert payload["calls"] == 2 and payload["input_tokens"] > 0  # the two model calls stay attributed
