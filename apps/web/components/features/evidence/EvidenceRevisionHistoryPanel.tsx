@@ -12,12 +12,24 @@ import type { RevisionStatus } from "@/lib/api/generated/models";
 
 type SelectedRevision = { documentId: string; revisionId: string };
 
+// A current revision is only authoritative when the trusted-current resolver
+// explicitly establishes its basis, not from a stale is_current flag alone.
+function isTrustedCurrent(revision: RevisionStatus): boolean {
+  return (
+    revision.status === "available" &&
+    revision.trust_state === "trusted" &&
+    revision.is_current &&
+    revision.current_basis === "trusted"
+  );
+}
+
 function revisionLabel(revision: RevisionStatus): string {
   if (revision.status !== "available") return "Status unavailable";
-  if (revision.is_current && revision.trust_state === "trusted") {
-    return "Trusted current";
-  }
+  if (isTrustedCurrent(revision)) return "Trusted current";
   if (revision.trust_state === "proposed") return "Proposed — not trusted";
+  if (revision.trust_state === "trusted" && revision.is_current) {
+    return "Trusted artifact — current authority unresolved";
+  }
   if (revision.trust_state === "trusted") {
     return "Trusted artifact — not current";
   }
@@ -60,12 +72,7 @@ export function EvidenceRevisionHistoryPanel({
   const clauses = (clausesQuery.data ?? []).filter(
     (entity) => entity.type === "clause",
   );
-  const hasTrustedCurrent = revisions.some(
-    (revision) =>
-      revision.status === "available" &&
-      revision.trust_state === "trusted" &&
-      revision.is_current,
-  );
+  const hasTrustedCurrent = revisions.some(isTrustedCurrent);
 
   if (!documentId) return null;
 
