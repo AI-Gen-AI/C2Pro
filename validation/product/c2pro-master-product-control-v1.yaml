@@ -919,6 +919,18 @@ product_quality_hitl_2026_10_08:
         status: OPEN_VERIFICATION
         observation: "A=9/B=7 revision-bound stored clauses not yet operator-validated against trusted-current empty state."
         acceptance: "Scoped read-only API/UI evidence shows 9/7 without implying TRUSTED or 0 extracted."
+      - id: DEF-PQ-005
+        parent_work: PQ-HITL-04.4
+        severity: P0_SECURITY_OR_TRUST
+        status: OPEN_SECURITY_HOLD
+        observation: "2026-10-09 Codex review #988 found direct POST /hitl/resume/{review_id} lacks explicit server-derived reviewer identity/project ACL and can reach existing finalizer; potential alternate review bypass."
+        acceptance: "All human finalize_v3 entry points require authenticated actor, project/Contract Manager role, reviewer/audit binding; legacy direct-resume removed or hardened; negative cross-role and cross-project E2E."
+      - id: DEF-PQ-006
+        parent_work: PQ-HITL-04.6
+        severity: P0_SECURITY_OR_TRUST
+        status: OPEN_CONCURRENCY_HOLD
+        observation: "2026-10-09 Codex review #988 found finalizer currently lacks expected_ledger_revision plus locked terminal per-finding projection, enabling possible late NEEDS_INFO/correction after readiness before trust commit."
+        acceptance: "Final human signature binds expected ledger revision; same locked review-row transaction rechecks all terminal decisions and candidate identity before atomic TRUSTED commit; real concurrent negative regression."
     work_packages:
       - id: PQ-HITL-09.1
         parent_issue: 945
@@ -1048,7 +1060,7 @@ product_quality_hitl_2026_10_08:
         size: M
         status: BLOCKED
         depends_on: [PQ-HITL-04.1, PQ-HITL-04.3]
-        acceptance: "Endpoint uses authenticated reviewer+tenant+project ACL from server, typed request, exact candidate membership, 403/409/422 tests and audit receipt; keep disabled until safe principal."
+        acceptance: "Every human finalize_v3 entry point (including legacy /hitl/resume and approve) requires server-derived reviewer identity, project/Contract Manager ACL, candidate membership, typed request and 403/409/422 negative tests; keep disabled until safe principal."
         note: "#980 is gated; no public write route today"
       - id: PQ-HITL-04.5
         parent_issue: 940
@@ -1058,7 +1070,7 @@ product_quality_hitl_2026_10_08:
         size: M
         status: BLOCKED
         depends_on: [PQ-HITL-04.4, PQ-HITL-02.3]
-        acceptance: "Append individual actions, derive new proposed candidate/version/digest without modifying prior artifact; source lineage preserved, dismissed/needs-info can't silently count approved."
+        acceptance: "Append individual actions, derive new proposed candidate/version/digest without modifying prior artifact; source lineage preserved; approved effective corrections create idempotent ADR-020 golden-corpus candidate handoff, never auto-promote models."
         note: "write-once and deterministic composition contract"
       - id: PQ-HITL-04.6
         parent_issue: 940
@@ -1068,7 +1080,7 @@ product_quality_hitl_2026_10_08:
         size: M
         status: BLOCKED
         depends_on: [PQ-HITL-04.5]
-        acceptance: "Separate explicit human whole-candidate sign-off #714/#758 with exact row/hash/version/thread/checkpoint/gen/fence and CAS; atomic commit or no TRUSTED, replay/reject/fault fail closed."
+        acceptance: "Separate authenticated human whole-candidate sign-off #714/#758 binds exact row/hash/version/thread/checkpoint/gen/fence and expected_ledger_revision; same locked transaction verifies all terminal finding decisions; atomic commit or no TRUSTED, replay/reject/fault fail closed."
         note: "critical transaction/authority ADR review"
       - id: PQ-HITL-05.1
         parent_issue: 941
