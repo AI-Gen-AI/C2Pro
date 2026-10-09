@@ -173,8 +173,9 @@
     "expected_retention_eur": 6625,
     "stated_duration_calendar_days": 183,
     "duration_basis": "EXPLICIT_STATED_DAYS_ONLY_NO_DATE_ARITHMETIC_INFERRED",
-    "source_text": "In this independent SYNTHETIC example the agreed contract value is EUR 132,500.00. The contractual retention is 5 percent of each invoice. The specified duration of the works is one hundred eighty-three (183) calendar days.",
-    "source_kind": "SEPARATE_SYNTHETIC_CONTRACT_NOT_PJ01"
+    "source_text": "In this independent SYNTHETIC example the agreed contract value is EUR 132,500.00. The contractual retention is 5 percent of the agreed total contract value. The specified duration of the works is one hundred eighty-three (183) calendar days.",
+    "source_kind": "SEPARATE_SYNTHETIC_CONTRACT_NOT_PJ01",
+    "retention_basis": "TOTAL_CONTRACT_VALUE_EXPRESSLY_STATED"
   },
   "revision_visibility_fixture": {
     "revision_a": {
