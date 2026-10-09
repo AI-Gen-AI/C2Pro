@@ -8,6 +8,7 @@ the behavior; an XFAIL is NOT a qualified feature PASS.
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -129,10 +130,21 @@ def test_pj01_rectification_facts_are_in_source_not_a_critic_invention() -> None
 def test_golden_arithmetic_is_explicit_without_date_or_confidence_inference() -> None:
     """TS-PQ-HITL-09-GOLDEN-001: 5% and 183 stated calendar days."""
     a = _load()["arithmetic_fixture"]
-    amount = Decimal(str(a["contract_value_eur"]))
-    percent = Decimal(str(a["retention_percent"]))
+    assert a["source_kind"] == "SEPARATE_SYNTHETIC_CONTRACT_NOT_PJ01"
+    source = a["source_text"]
+    value_match = re.search(r"EUR ([0-9,]+)\\.00", source)
+    retention_match = re.search(r"retention is ([0-9]+) percent", source)
+    duration_match = re.search(r"\\(([0-9]+)\\) calendar days", source)
+    assert value_match is not None
+    assert retention_match is not None
+    assert duration_match is not None
+    amount = Decimal(value_match.group(1).replace(",", ""))
+    percent = Decimal(retention_match.group(1))
+    days = int(duration_match.group(1))
+    assert amount == Decimal(str(a["contract_value_eur"]))
+    assert percent == Decimal(str(a["retention_percent"]))
     assert amount * percent / Decimal("100") == Decimal(str(a["expected_retention_eur"]))
-    assert a["stated_duration_calendar_days"] == 183
+    assert days == a["stated_duration_calendar_days"] == 183
     assert a["duration_basis"] == "EXPLICIT_STATED_DAYS_ONLY_NO_DATE_ARITHMETIC_INFERRED"
 
 
@@ -167,11 +179,10 @@ async def test_red_critique_concern_cannot_auto_approve_even_if_quote_exists() -
     result = await CritiqueExtractionUseCase(
         ai=_FakeAI({
             "status": "OK",
-            "notes": "All good.",
-            "observations": [{
-                "claim": "Obligation to rectify defects omitted from extracted risks",
-                "source_quote": case["quote"],
-            }],
+            "notes": (
+                "CRITICAL QUALITY CONCERN: extracted risks omit the defect "
+                "rectification duty. Source quote: " + case["quote"]
+            ),
         }),
     ).execute(CritiqueExtractionCommand(
         extracted_risks=[{"title": "Progress report", "confidence": 0.95}],
@@ -181,7 +192,7 @@ async def test_red_critique_concern_cannot_auto_approve_even_if_quote_exists() -
         source_text=case["source_text"],
     ))
     assert result.status == "RETRY"
-    assert result.critique_notes
+    assert "rectification" in result.critique_notes.lower()
     assert result.human_approval_required or result.retry_count > 0
 
 
