@@ -931,6 +931,12 @@ product_quality_hitl_2026_10_08:
         status: OPEN_CONCURRENCY_HOLD
         observation: "2026-10-09 Codex review #988 found finalizer currently lacks expected_ledger_revision plus locked terminal per-finding projection, enabling possible late NEEDS_INFO/correction after readiness before trust commit."
         acceptance: "Final human signature binds expected ledger revision; same locked review-row transaction rechecks all terminal decisions and candidate identity before atomic TRUSTED commit; real concurrent negative regression."
+      - id: DEF-PQ-007
+        parent_work: PQ-HITL-04.5
+        severity: P0_SECURITY_OR_TRUST
+        status: OPEN_CONCURRENCY_HOLD
+        observation: "2026-10-09 independent review #988: composer can read ledger R, then publish corrected candidate B after a new event R+1 without atomic source-row lock and expected revision CAS, silently losing accepted human intent."
+        acceptance: "Composer binds source expected_ledger_revision, checks it under locked review row and commits A supersession and B creation atomically; R+1 forces retry/recompose; concurrent PostgreSQL negative test."
     work_packages:
       - id: PQ-HITL-09.1
         parent_issue: 945
@@ -1070,7 +1076,7 @@ product_quality_hitl_2026_10_08:
         size: M
         status: BLOCKED
         depends_on: [PQ-HITL-04.4, PQ-HITL-02.3]
-        acceptance: "Append individual actions, derive new proposed candidate/version/digest without modifying prior artifact; source lineage preserved; approved effective corrections create idempotent ADR-020 golden-corpus candidate handoff, never auto-promote models."
+        acceptance: "Append actions, derive new immutable proposed candidate under source review-row lock and expected_ledger_revision CAS; reject/recompute if an event R+1 intervenes before A-to-B supersession; preserve lineage and idempotent ADR-020 approved-correction golden handoff, never auto-promote models."
         note: "write-once and deterministic composition contract"
       - id: PQ-HITL-04.6
         parent_issue: 940
