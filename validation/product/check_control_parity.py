@@ -751,7 +751,7 @@ def validate_work_package_mirror(doc: dict, md_text: str) -> list[str]:
     if start not in md_text or stop not in md_text.split(start, 1)[1]:
         return ["PQ-HITL work-package mirror §13.6 missing"]
     section = md_text.split(start, 1)[1].split(stop, 1)[0]
-    observed: dict[str, tuple[str, str, str, str, str]] = {}
+    observed: dict[str, tuple[str, str, str, str, str, str, str]] = {}
     for line in section.splitlines():
         if not line.startswith("| PQ-HITL-"):
             continue
@@ -768,25 +768,45 @@ def validate_work_package_mirror(doc: dict, md_text: str) -> list[str]:
         if task_id in observed:
             problems.append(f"PQ-HITL task {task_id}: duplicate §13.6 mirror row")
             continue
-        observed[task_id] = (parent.group(1), *role_cells, cells[3])
+        observed[task_id] = (parent.group(1), cells[1], *role_cells, cells[3], cells[4])
 
     spec = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]
     packages = spec["work_packages"]
     allowed_statuses = set(spec["status_vocabulary"])
-    expected_ids = {str(row["id"]) for row in packages}
+    machine_ids = [str(row["id"]) for row in packages]
+    expected_ids = set(machine_ids)
+    if len(packages) != spec["work_package_count"]:
+        problems.append(
+            f"PQ-HITL work_package_count drift: declared {spec['work_package_count']} but has {len(packages)} rows"
+        )
+    if len(expected_ids) != len(machine_ids):
+        problems.append("PQ-HITL duplicate machine work-package ID")
     for row in packages:
         task_id = str(row["id"])
         if _s(row.get("status")) not in allowed_statuses:
             problems.append(
                 f"PQ-HITL task {task_id}: status='{row.get('status')}' not in status_vocabulary"
             )
-        expected = tuple(_s(row[key]) for key in ("parent_issue", "role", "size", "priority", "status"))
+        expected = (
+            _s(row["parent_issue"]),
+            _s(row["title_key"]).replace("_", " "),
+            _s(row["role"]),
+            _s(row["size"]),
+            _s(row["priority"]),
+            _s(row["status"]),
+            _s(row["acceptance"]),
+        )
         actual = observed.get(task_id)
         if actual is None:
             problems.append(f"PQ-HITL task {task_id}: missing §13.6 mirror row")
             continue
-        for key, yv, mv in zip(("parent_issue", "role", "size", "priority", "status"), expected, actual):
-            if yv != mv:
+        for key, yv, mv in zip(
+            ("parent_issue", "title_key", "role", "size", "priority", "status", "acceptance"),
+            expected, actual,
+        ):
+            if (_norm(yv) if key in ("title_key", "acceptance") else yv) != (
+                _norm(mv) if key in ("title_key", "acceptance") else mv
+            ):
                 problems.append(f"PQ-HITL task {task_id}: {key} VALUE DRIFT YAML='{yv}' MD='{mv}'")
     for task_id in observed.keys() - expected_ids:
         problems.append(f"PQ-HITL task {task_id}: extra §13.6 row not in YAML")
