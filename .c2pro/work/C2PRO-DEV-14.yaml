@@ -1,0 +1,71 @@
+schema: c2pro-work-envelope-v1
+schema_version: 1
+work_id: C2PRO-DEV-14
+campaign_id: DEV14-TASK-FIRST-GOVERNANCE-20261009
+role: orchestrator
+base_sha: 540b23b4f79c55165a7d4106e67a7d32afb12afa
+branch: feat/dev14-task-first-governed-implementation-20261009
+risk_class: architecture
+scope:
+  - implement the pre-existing DEV-14 product WORK namespace extension as specified by issue 991 and the independently reviewed DEV-14.1 SDD
+  - preserve Product MASTER ownership and enforce valid Product Task to parent issue and SDD acceptance linkage without PR self-authorization
+  - build a deterministic PR trace validator with negative RED then GREEN tests for duplicate or unknown metadata and unauthorized execution
+  - verify canonical WORK queue, selected principal, approved baseline and registered workspace before any code execution
+  - stage a read-only pull_request CI trace guard in AUDIT mode before separately authorizing enforcement
+  - require independently reviewed exact-head tests with a principal other than the implementing principal and architecture challenger
+out_of_scope:
+  - implementation before this envelope becomes effective through the approved control-plane promotion path
+  - treating ready queue status or null worker selection as runtime execution authority
+  - creating Product Task execution authority from this DEV namespace
+  - modifying Product MASTER task acceptance or production qualification as a side effect of PR merge
+  - production runtime deployments, customer data, HITL trust promotion, credentials, secrets, remote model routing or database permissions
+  - changing main directly, force pushing, modifying the existing historical DEV-03 readiness work, or bypassing independent review
+allowed_tools:
+  - github_repository_read
+  - github_ci_read
+  - scoped_repository_write_after_effective_assignment
+  - scoped_local_python_tests_with_synthetic_data
+  - independent_code_review
+  - bounded_cli_execution_after_principal_qualification
+forbidden_paths:
+  - apps/api/**
+  - apps/web/**
+  - apps/storage/**
+  - supabase/**
+  - validation/product/**
+  - docs/product/**
+  - production_runtime/**
+  - secrets/**
+  - personal/**
+  - knowledge/**
+acceptance_criteria:
+  - DEV-14 Product WORK IDs coexist collision-free with canonical C2PRO-DEV work identities
+  - independent authorized baseline prevents any PR from validating its own authority changes
+  - a Product Task has grounded parent issue, versioned acceptance identifiers, valid SDD and assigned WORK before implementation
+  - one Task may link to multiple PRs and exceptional multi-Task PRs require independent criteria and evidence
+  - fail-closed negative tests reject forged tasks, stale branch/SHA, missing work, duplicate YAML keys and SPEC_ONLY implementation smuggling
+  - no automatic promotion to ACCEPTED, DEPLOYED, PROD_VALIDATED or TRUSTED
+  - existing control validator, Product Control Guard, security checks and exact-head CI remain green
+  - a separate principal and architecture challenger review this implementation with no blocking findings
+required_tests:
+  - python scripts/development/validate_c2pro_control.py
+  - focused DEV-14.2 schema and cross-plane authority negative tests
+  - focused DEV-14.3 PR metadata and path-effect negative tests
+  - Product MASTER parity and existing Product-Control Guard tests
+  - exact-head GitHub Actions CI and secret scan
+evidence_required:
+  - owner_authorization_2026_10_09
+  - issue_991_and_spec_pr_992
+  - actual_effective_work_assignment_and_workspace_receipt
+  - selected_and_qualified_principal_separate_from_role
+  - exact_approved_main_baseline_SHA
+  - RED_then_GREEN_test_receipts
+  - independently_reviewed_exact_head_PR
+  - architecture_challenger_review
+review_policy: principal_and_challenger
+worker_selection:
+  preferred: claude_code
+  eligible_principals: [claude_code, codex]
+  eligible_subordinates: []
+  selected: null
+timeout_resource_policy: bounded_local_development_only_no_production_or_network_data_exports
