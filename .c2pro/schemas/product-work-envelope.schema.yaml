@@ -1,0 +1,33 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-product-work-envelope-v1
+type: object
+additionalProperties: false
+required: [schema, schema_version, work_id, task_id, parent_issue, status,
+  base_sha, branch, sdd_path, acceptance_ids, scope, forbidden_paths,
+  assigned_to, workspace_receipt]
+properties:
+  schema: {const: c2pro-product-work-envelope-v1}
+  schema_version: {const: 1}
+  work_id: {type: string, pattern: '^PQ-HITL-[0-9]{2}(\.[0-9]+)?$'}
+  task_id: {type: string, pattern: '^PQ-HITL-[0-9]{2}(\.[0-9]+)?$'}
+  parent_issue: {type: integer, minimum: 1}
+  status: {enum: [prepared, assigned, closed]}
+  base_sha: {type: string, pattern: '^[0-9a-f]{40}$'}
+  branch: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._/-]{0,170}$'}
+  sdd_path: {type: string, minLength: 1}
+  acceptance_ids:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  scope:
+    type: array
+    minItems: 1
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  forbidden_paths:
+    type: array
+    uniqueItems: true
+    items: {type: string, minLength: 1}
+  assigned_to: {type: [string, 'null']}
+  workspace_receipt: {type: [string, 'null']}
