@@ -20,9 +20,9 @@
 4. Selecting Revision A shows `9 stored clauses in this selected revision` and no promotion to trusted.
 5. Selecting Revision B shows `7 stored clauses in this selected revision` and status `Proposed — not trusted`.
 6. UI shows `No trusted-current revision is available`.
-7. Evidence panel `revision-specific-preview` loads authentic source text bound to revision, without implicit promotion.
+7. Evidence panel `revision-specific-preview` loads revision-bound clause text. SOURCE_NAVIGATION_NOT_PROVEN: clause rows are plain text; no real PDF/blob navigation is asserted until authentic source routing exists.
 8. Re-login stability: sign out/in via UI flow, re-assert same states.
-9. Negative access: access to another tenant/project returns 403/404, no data leakage.
+9. Negative access: unknown project / wrong tenant project returns 403/404, no data leakage.
 
 ## Non-requirements
 - No HITL approval, no write operations, no mutation of trust state.
@@ -30,20 +30,21 @@
 - No `clearCookies()` shortcuts; use real sign-out flow.
 
 ## Data model consistency
-- `document_revisions` with `trust_state` and `current_basis`.
-- `document_entities` / `document_clauses` linked to `revision_id` and `document_artifact_id`.
-- `document_artifacts` with `trust_state` = trusted/proposed per revision.
+- Authority for trust is `DocumentArtifactORM` with `trust_state` and `lifecycle_status`; trust resolution performed by `current_revision_sql` resolver, not by columns on `DocumentRevisionORM`.
+- `DocumentRevisionORM` holds revision metadata only; no `trust_state`/`current_basis` columns.
+- `ClauseORM` is bound to `revision_id`, `tenant_id`, `project_id`, `document_id`; no `document_artifact_id` foreign key.
+- `DocumentArtifactORM` ties to `document_revision_id`; artifact version is unique per document via UNIQUE(`document_id`,`artifact_version`).
 - Tenant scoping enforced by RLS.
 
 ## Seed extension
-Extend `apps/api/tests/e2e_seed/seed_wedge.py` with idempotent fixture `seed_pq_hitl_03_1`:
-- Reuse existing tenant `00000000-0000-0000-0000-00000000a113`.
-- Create project `PJ-01-E2E-PQ-HITL-03.1`.
-- Create document with two revisions:
-  - revA: 9 clauses, `trust_state=trusted`, `current_basis=unresolved`.
-  - revB: 7 clauses, `trust_state=proposed`.
-- Link clauses to revisions via `document_entities`.
-- Ensure `current_trusted_revision_id IS NULL`.
+Separate idempotent fixture `apps/api/tests/e2e_seed/seed_pq_hitl_03_1.py`:
+- Reuse existing tenant `00000000-0000-0000-0000-00000000a113`, project `00000000-0000-0000-0000-00000000c303`, document `00000000-0000-0000-0000-00000000d401` from `seed_wedge`.
+- No new project creation.
+- Create two revisions for the document:
+  - REV_A_ID: 9 clauses, artifact `trust_state=trusted`, `lifecycle_status=superseded`, `artifact_version=1`.
+  - REV_B_ID: 7 clauses, artifact `trust_state=proposed`, `lifecycle_status=active`, `artifact_version=2`.
+- `ClauseORM` linked to `revision_id` only.
+- Trust resolution via artifact resolver yields UNRESOLVED, so `No trusted-current revision is available`.
 
 ## Test design
 Playwright spec `apps/web/src/tests/e2e/pq-hitl-03.1-revision-readonly.spec.ts`:
