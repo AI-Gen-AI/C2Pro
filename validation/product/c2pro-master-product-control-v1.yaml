@@ -877,6 +877,7 @@ product_quality_hitl_2026_10_08:
     task_traceability_governance:
       owner_approved: "2026-10-09"
       dev_parent_work_id: C2PRO-DEV-14
+      dev_tracking_issue: 991
       dev_subpackages: [DEV-14.1, DEV-14.2, DEV-14.3, DEV-14.4]
       design_ref: docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md
       design_state: PROPOSED_NOT_ENFORCED
