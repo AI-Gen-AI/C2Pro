@@ -1167,8 +1167,8 @@ product_quality_hitl_2026_10_08:
         role: security
         size: M
         status: BLOCKED
-        depends_on: [PQ-HITL-04.3, PQ-HITL-01.3, PQ-HITL-03.2]
-        acceptance: "Run tenant/RLS, prompt injection, stale checkpoint, duplicate decision, candidate hash, forged refs, false confidence/graph, no partial TRUSTED tests with exact result evidence."
+        depends_on: [PQ-HITL-01.3, PQ-HITL-02.2, PQ-HITL-03.2, PQ-HITL-04.6, PQ-HITL-06.2, PQ-HITL-07.2]
+        acceptance: "Run tenant/RLS, prompt injection, stale checkpoint, duplicate decision, candidate hash, forged refs, false confidence/graph, no partial TRUSTED tests with exact result evidence AFTER all producing features are implemented; rerun on their final integrated heads."
         note: "independent QA and security principal"
       - id: PQ-HITL-09.3
         parent_issue: 945
