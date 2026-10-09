@@ -682,6 +682,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
+                        # The selected revision must be immutable across
+                        # redelivery and cannot be inferred from quote text.
+                        "document_revision_id": state.get("document_revision_id"),
                         # Untrusted N12 source-witnessed claims: preserve review
                         # visibility but NEVER promote quotation match to
                         # contract truth or to an authorized HITL decision.
