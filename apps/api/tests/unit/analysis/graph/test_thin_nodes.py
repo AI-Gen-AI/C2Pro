@@ -442,15 +442,18 @@ class TestHumanInterruptNode:
             "source_basis": "document_text",
             "scope": "N12_SOURCE_EXCERPT_ONLY",
         }]
+        result_revision_id = "00000000-0000-0000-0000-000000000a01"
         await nodes.human_interrupt_node(
             _make_state(
                 critique_observations=observations,
+                document_revision_id=result_revision_id,
                 doc_type="contract",
                 confidence_score=0.9,
                 human_approval_required=True,
             )
         )
         assert service.calls[0]["item_data"]["critique_observations"] == observations
+        assert service.calls[0]["item_data"]["document_revision_id"] == result_revision_id
 
     @pytest.mark.asyncio
     async def test_auto_approved_hitl_status_continues_without_langgraph_interrupt(
