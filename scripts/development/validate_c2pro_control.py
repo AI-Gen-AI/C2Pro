@@ -48,6 +48,7 @@ REQUIRED_SCHEMAS = {
     "current.schema.yaml": "c2pro-current-v1",
     "work-queue.schema.yaml": "c2pro-work-queue-v1",
     "work-envelope.schema.yaml": "c2pro-work-envelope-v1",
+    "product-work-envelope.schema.yaml": "c2pro-product-work-envelope-v1",
     "handoff.schema.yaml": "c2pro-handoff-v1",
     "evidence-reference.schema.yaml": "c2pro-evidence-reference-v1",
     "role.schema.yaml": "c2pro-role-v1",
@@ -183,6 +184,40 @@ def validate_work_envelope(current: dict[str, Any], queue: dict[str, Any]) -> No
         require(bool(work.get("scope")), f"{ref}: scope must not be empty")
         require(bool(work.get("acceptance_criteria")), f"{ref}: acceptance criteria must not be empty")
         require(bool(work.get("required_tests")), f"{ref}: required tests must not be empty")
+
+
+def validate_product_envelopes() -> None:
+    """Validate optional Product WORK receipts without activating execution authority.
+
+    A DEV-queue entry never stands in for a Product task. Product assignments
+    must be explicit and grounded in the existing Product MASTER and delivery SDD.
+    """
+    import jsonschema
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location("c2pro_task_trace", ROOT / "scripts" / "development" / "validate_task_trace.py")
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    load_registry = module.load_registry
+
+    registry = load_registry(ROOT)
+    schema = load_yaml(SCHEMAS / "product-work-envelope.schema.yaml")
+    for path in sorted((ROOT / ".c2pro" / "product-work").glob("*.yaml")):
+        work = load_yaml(path)
+        try:
+            jsonschema.Draft202012Validator(schema).validate(work)
+        except jsonschema.ValidationError as exc:
+            raise ValueError(f"{path.name}: Product WORK schema invalid: {exc.message}") from exc
+        task = work["task_id"]
+        if task not in registry or not task.startswith("PQ-HITL-"):
+            raise ValueError(f"{path.name}: unknown Product Task")
+        if work["work_id"] != task or work["parent_issue"] != registry[task]["issue"]:
+            raise ValueError(f"{path.name}: wrong Product Task/issue")
+        if not set(work["acceptance_ids"]).issubset(registry[task]["acceptance_ids"]):
+            raise ValueError(f"{path.name}: acceptance not in canonical delivery specification")
+        if work["status"] == "assigned" and (not work["assigned_to"] or not work["workspace_receipt"]):
+            raise ValueError(f"{path.name}: assigned Product WORK lacks worker/workspace evidence")
 
 
 def validate_role_profiles() -> dict[str, dict[str, Any]]:
@@ -377,6 +412,7 @@ def validate() -> int:
     current = validate_current()
     queue = validate_queue(current)
     validate_work_envelope(current, queue)
+    validate_product_envelopes()
     profiles = validate_role_profiles()
     routing = validate_routing(profiles)
     validate_review_policy()
