@@ -11,7 +11,7 @@ No production mutation, tenant-scoped, deterministic IDs.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid5, NAMESPACE_OID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -51,7 +51,7 @@ async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int, trust_st
         )
     )
 
-async def _upsert_artifact(db: AsyncSession, artifact_id: UUID, rev_id: UUID, trust_state: str) -> None:
+async def _upsert_artifact(db: AsyncSession, artifact_id: UUID, rev_id: UUID, trust_state: str, lifecycle_status: str, artifact_version: int) -> None:
     existing = await db.get(DocumentArtifactORM, artifact_id)
     if existing:
         return
@@ -63,9 +63,9 @@ async def _upsert_artifact(db: AsyncSession, artifact_id: UUID, rev_id: UUID, tr
             project_id=PROJECT_ID,
             tenant_id=TENANT_ID,
             payload={"revision_id": str(rev_id), "trust_state": trust_state},
-            lifecycle_status="active",
+            lifecycle_status=lifecycle_status,
             trust_state=trust_state,
-            artifact_version=1,
+            artifact_version=artifact_version,
         )
     )
 
@@ -77,12 +77,15 @@ async def _upsert_clauses(db: AsyncSession, rev_id: UUID, count: int) -> None:
         ClauseORM.revision_id == rev_id,
     )
     result = await db.execute(stmt)
-    existing = result.scalars().all()
+    existing = list(result.scalars().all())
     if len(existing) >= count:
         return
-    # Insert missing clauses
+    # Insert missing clauses with deterministic UUID5
     for i in range(count):
-        clause_id = UUID(int=(abs(hash((str(rev_id), i))) % (1 << 128)))
+        clause_id = uuid5(NAMESPACE_OID, f"{rev_id}-{i}")
+        # Avoid duplicate insertion on partial run
+        if any(c.id == clause_id for c in existing):
+            continue
         db.add(
             ClauseORM(
                 id=clause_id,
@@ -98,8 +101,10 @@ async def _upsert_clauses(db: AsyncSession, rev_id: UUID, count: int) -> None:
 async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
     await _upsert_revision(db, REV_A_ID, rev_no=1, trust_state="trusted")
     await _upsert_revision(db, REV_B_ID, rev_no=2, trust_state="proposed")
-    await _upsert_artifact(db, ARTIFACT_A_ID, REV_A_ID, trust_state="trusted")
-    await _upsert_artifact(db, ARTIFACT_B_ID, REV_B_ID, trust_state="proposed")
+    # Rev A historical trusted artifact superseded -> not counted as trusted_bound
+    await _upsert_artifact(db, ARTIFACT_A_ID, REV_A_ID, trust_state="trusted", lifecycle_status="superseded", artifact_version=1)
+    # Rev B proposed active artifact
+    await _upsert_artifact(db, ARTIFACT_B_ID, REV_B_ID, trust_state="proposed", lifecycle_status="active", artifact_version=2)
     await _upsert_clauses(db, REV_A_ID, 9)
     await _upsert_clauses(db, REV_B_ID, 7)
     await db.commit()

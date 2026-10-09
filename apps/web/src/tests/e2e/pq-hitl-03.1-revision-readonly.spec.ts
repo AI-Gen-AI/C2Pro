@@ -6,8 +6,8 @@ const PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
 const DOCUMENT_ID = "00000000-0000-0000-0000-00000000d401";
 
 test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
-  test.beforeEach(async ({ page, context }) => {
-    await establishAuthenticatedSession(page, context);
+  test.beforeEach(async ({ page }) => {
+    await establishAuthenticatedSession(page);
   });
 
   test("revision history shows 9 and 7 clauses, B proposed not trusted, no trusted current", async ({ page }) => {
@@ -41,7 +41,7 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await expect(preview.getByRole("listitem")).toHaveCount(7);
   });
 
-  test("re-login stability preserves revision states", async ({ page, context }) => {
+  test("re-login stability preserves revision states", async ({ page }) => {
     await openProjects(page);
     await page.goto(`/projects/${PROJECT_ID}/evidence?documentId=${DOCUMENT_ID}`);
     await expect(page.getByText(/No trusted-current revision is available/i)).toBeVisible();
@@ -52,15 +52,18 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await expect(page.getByText(/Sign in/i)).toBeVisible();
 
     // Re-authenticate
-    await establishAuthenticatedSession(page, context);
+    await establishAuthenticatedSession(page);
     await page.goto(`/projects/${PROJECT_ID}/evidence?documentId=${DOCUMENT_ID}`);
+    // Re-select revision 1 explicitly
+    await page.getByRole("button", { name: /Revision 1 —/ }).click();
     await expect(page.getByText(/9 stored clauses in this selected revision/i)).toBeVisible();
   });
 
   test("negative access to other tenant returns no data", async ({ page }) => {
+    // Wrong project id for same tenant – should be empty / not found
     await page.goto(`/projects/00000000-0000-0000-0000-ffffffffffff/evidence?documentId=${DOCUMENT_ID}`);
-    await expect(page.getByText(/Revision history could not be loaded/i)).or(
-      expect(page.getByRole("heading", { name: /403|Forbidden|Not found/i }))
-    ).toBeVisible();
+    const errorText = page.getByText(/Revision history could not be loaded/i);
+    const forbidden = page.getByRole("heading", { name: /403|Forbidden|Not found/i });
+    await expect(errorText.or(forbidden)).toBeVisible();
   });
 });

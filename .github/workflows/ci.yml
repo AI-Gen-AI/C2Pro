@@ -987,6 +987,7 @@ jobs:
           from src.documents.adapters.persistence.models import DocumentORM
           from src.projects.adapters.persistence.models import ProjectORM
           from tests.e2e_seed.seed_wedge import PROJECT_ID, TENANT_ID, USER_ID, seed_wedge_e2e
+          from tests.e2e_seed.seed_pq_hitl_03_1 import seed_pq_hitl_03_1
 
 
           async def main() -> None:
@@ -1008,6 +1009,7 @@ jobs:
               try:
                   async with get_raw_session() as db:
                       await seed_wedge_e2e(db)
+                      await seed_pq_hitl_03_1(db)
                       user = await db.get(User, USER_ID)
                       if user is None:
                           raise RuntimeError("FRT-192 seed user was not created")

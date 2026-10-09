@@ -266,5 +266,17 @@ export default defineConfig({
         description: "Document Analysis Pipeline Journey",
       },
     },
+    {
+      name: "pq-hitl-03.1-revision-readonly",
+      testMatch: /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "PQ-HITL-03.1",
+        type: "e2e",
+        priority: "p0",
+        description: "Read-only revision evidence, A=9/B=7, unresolved trusted current",
+      },
+    },
   ],
 });
