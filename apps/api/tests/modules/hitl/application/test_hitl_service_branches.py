@@ -216,6 +216,58 @@ class TestExistingCritiqueEvidenceAuthority:
 
 
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("stored", "incoming"),
+        [
+            (
+                {"critique_observations": [], "critique_notes": "Old concern",
+                 "document_revision_id": "revision-A"},
+                {"critique_observations": [], "critique_notes": "New concern",
+                 "document_revision_id": "revision-A"},
+            ),
+            (
+                {"critique_observations": [], "critique_notes": "Same concern",
+                 "document_revision_id": "revision-A"},
+                {"critique_observations": [], "critique_notes": "Same concern",
+                 "document_revision_id": "revision-B"},
+            ),
+        ],
+    )
+    async def test_active_critique_reuse_rejects_changed_notes_or_revision(
+        self,
+        hitl_service: HumanInTheLoopService,
+        mock_repo: AsyncMock,
+        stored: dict,
+        incoming: dict,
+    ) -> None:
+        """#937: identical/empty quote lists cannot hide a changed candidate."""
+        document = uuid4()
+        mock_repo.find_active_review.return_value = ReviewItem(
+            item_id=document,
+            item_type="contract",
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            created_at=datetime.now(),
+            sla_due_date=datetime.now() + timedelta(days=1),
+            item_data=stored,
+            metadata={"review_type": "analysis_critique"},
+        )
+        with pytest.raises(StaleCritiqueReviewEvidence):
+            await hitl_service.route_for_review(
+                item_id=document,
+                item_type="contract",
+                confidence=0.8,
+                impact_level=ImpactLevel.HIGH,
+                item_data=incoming,
+                metadata={"document_id": str(document), "review_type": "analysis_critique"},
+            )
+        mock_repo.add_review_item.assert_not_called()
+        mock_repo.update_review_item.assert_not_called()
+
+
+
 @pytest.mark.asyncio
 async def test_late_candidate_binding_does_not_block_same_evidence_review() -> None:
     """#714: N13 can first create the review before artifact binding is durable."""
