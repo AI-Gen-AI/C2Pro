@@ -2,6 +2,7 @@
 
 **Date:** 2026-10-09
 **State:** owner-approved design objective; implementation/CI gate NOT YET ACTIVE.
+**Tracking issue:** #991 (DEV-14; created without a duplicate Product Task).
 **Canonical parent:** C2PRO-DEV-14, the existing Product work-envelope extension in .c2pro/control/work-queue.yaml and the VPS Development Control Plan, section 12. Product programme reference: PQ-HITL #936 and its 28 atomic subpackages, owned by validation/product/c2pro-master-product-control-v1.yaml. This SDD does not add a Product WBS or create a second source of task status.
 
 ## 1. Observable goal and authority
