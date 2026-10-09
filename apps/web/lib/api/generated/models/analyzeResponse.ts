@@ -50,7 +50,7 @@ export interface AnalyzeResponse {
   wbs: AnalyzeResponseWbsItem[];
   human_approval_required: boolean;
   doc_type: string;
-  confidence_score: number;
+  confidence_score: number | null;
   critique_notes: string;
   retry_count: number;
   messages: string[];

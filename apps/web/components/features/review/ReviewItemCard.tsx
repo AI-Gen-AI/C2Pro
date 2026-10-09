@@ -208,7 +208,12 @@ export function ReviewItemCard({
   // A literal, exact 0% is far more likely to mean "never evaluated for
   // this review type" than a genuine zero out of a continuous confidence
   // distribution -- showing it as a real score would misrepresent it.
-  const confidenceIsMeaningful = item.confidence > 0;
+  // Legacy reviews lack a measured flag, so preserve their conservative
+  // "not evaluated" presentation at zero. New exact-candidate reviews
+  // distinguish an assessed 0.0 from an unknown routing sentinel.
+  const confidenceIsMeaningful =
+    item.item_data?.['confidence_assessed'] === true ||
+    (item.item_data?.['confidence_assessed'] !== false && item.confidence > 0);
 
   const exactIdentityMissing = !item.row_id;
   const actionsDisabled =

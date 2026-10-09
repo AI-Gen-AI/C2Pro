@@ -15,6 +15,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
 from src.core.ai.tools import BaseTool, ToolResult, register_tool
@@ -39,8 +40,8 @@ class WBSItemOutput(BaseModel):
     item_type: str = Field(
         ..., description="Item type: deliverable, work_package, or activity"
     )
-    confidence: float = Field(
-        default=0.9, ge=0.0, le=1.0, description="Confidence score"
+    confidence: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Assessed confidence when available"
     )
     budget_allocated: float | None = Field(
         None, description="Allocated budget if mentioned"
@@ -141,15 +142,11 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
         # Convert WBSItemOutput to dicts for state storage
         state["extracted_wbs"] = [item.model_dump(mode="json") for item in result.data]
 
-        # Update confidence score
-        if result.confidence_score:
-            state["confidence_score"] = result.confidence_score
-        else:
-            # Calculate average confidence from items
-            confidences = [item.confidence for item in result.data]
-            state["confidence_score"] = (
-                sum(confidences) / len(confidences) if confidences else 0.9
-            )
+        # Tool-level quality metadata is not individual WBS confidence.
+        # A synthetic 0.9 default would falsely certify every unassessed item.
+        state["confidence_score"] = CritiqueEvaluationService().calculate_confidence(
+            state["extracted_wbs"]
+        )
 
         return state
 

@@ -501,10 +501,13 @@ async def critique_node(state: ProjectState) -> ProjectState:
             confidence=result.confidence,
         ),
     ]
+    confidence_label = (
+        "not assessed" if result.confidence is None else f"{result.confidence:.2f}"
+    )
     state["messages"].append(
         AIMessage(
             content=(
-                f"Critique status={result.status} confidence={result.confidence:.2f} "
+                f"Critique status={result.status} confidence={confidence_label} "
                 f"retry_count={result.retry_count}"
             )
         )
@@ -595,11 +598,13 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             # that requirement back into an automatic approval. This happens
             # legitimately when critique retries are exhausted even if the
             # extractor's aggregate confidence remains high (#792).
+            assessed_confidence = state.get("confidence_score")
             impact = (
                 ImpactLevel.HIGH
                 if (
                     bool(state.get("human_approval_required"))
-                    or state.get("confidence_score", 0) < 0.5
+                    or assessed_confidence is None
+                    or assessed_confidence < 0.5
                 )
                 else ImpactLevel.MEDIUM
             )
@@ -644,7 +649,12 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
                     item_type=doc_type,
-                    confidence=state.get("confidence_score", 0.0),
+                    # review_items.confidence is NOT NULL. Zero is a
+                    # conservative routing sentinel only when the score is
+                    # unknown; confidence_assessed below disambiguates it.
+                    confidence=(
+                        assessed_confidence if assessed_confidence is not None else 0.0
+                    ),
                     impact_level=impact,
                     item_data={
                         "project_id": state["project_id"],
@@ -652,6 +662,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "doc_type": doc_type,
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
+                        "confidence_assessed": assessed_confidence is not None,
                         "critique_notes": state.get("critique_notes", ""),
                         "thread_id": state.get("thread_id"),
                         **(

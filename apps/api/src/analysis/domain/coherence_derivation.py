@@ -20,7 +20,7 @@ class CoherenceDerivationInput:
     extracted_risks: list[JsonDict]
     extracted_wbs: list[JsonDict]
     bom_items: list[JsonDict]
-    confidence_score: float
+    confidence_score: float | None
     document_text: str
 
 
@@ -91,7 +91,7 @@ class CoherenceScoringDerivationService:
         risks = input_data.extracted_risks
         bom = input_data.bom_items
 
-        low_confidence = confidence < self.MIN_CONFIDENCE_THRESHOLD
+        low_confidence = confidence is None or confidence < self.MIN_CONFIDENCE_THRESHOLD
         short_document = len(doc_text.strip()) < self.MIN_DOCUMENT_LENGTH
 
         avg_wbs_conf = self._calculate_avg_wbs_confidence(wbs)
@@ -128,7 +128,11 @@ class CoherenceScoringDerivationService:
 
         quality_note = ""
         if poor_extraction_quality:
-            quality_note = f", LOW QUALITY (conf={confidence:.2f})"
+            quality_note = (
+                ", INSUFFICIENT QUALITY EVIDENCE (conf=not assessed)"
+                if confidence is None
+                else f", LOW QUALITY (conf={confidence:.2f})"
+            )
 
         return CoherenceDerivationResult(
             scope_defined=scope_defined,
