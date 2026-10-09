@@ -18,7 +18,7 @@ function isTrustedCurrent(revision: RevisionStatus): boolean {
   return (
     revision.status === "available" &&
     revision.trust_state === "trusted" &&
-    revision.is_current &&
+    revision.is_current === true &&
     revision.current_basis === "trusted"
   );
 }
