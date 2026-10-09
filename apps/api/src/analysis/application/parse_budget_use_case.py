@@ -24,6 +24,7 @@ logger = structlog.get_logger()
 class ParseBudgetCommand:
     text: str
     critique_notes: str = ""
+    critique_observations: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,10 @@ class ParseBudgetUseCase:
     async def execute(self, cmd: ParseBudgetCommand) -> ParseBudgetResult:
         try:
             bom_items = await self.service.extract_bom(
-                text=cmd.text, ai=self.ai, critique_feedback=cmd.critique_notes
+                text=cmd.text,
+                ai=self.ai,
+                critique_feedback=cmd.critique_notes,
+                critique_observations=cmd.critique_observations,
             )
         except Exception:
             logger.warning("parse_budget_use_case_failed", exc_info=True)
