@@ -337,6 +337,39 @@ class TestParseBudgetUseCase:
         assert "source_observations_untrusted" in content
 
     @pytest.mark.asyncio
+    async def test_budget_feedback_is_one_json_layer_with_final_size_bounded(self) -> None:
+        import json
+
+        ai = _FakeAI(payload={"items": []})
+        quote = ("Quoted \\"payload\\" with backslash \\\\ " * 40)
+        await ParseBudgetUseCase(ai=ai).execute(
+            ParseBudgetCommand(
+                text="Original document budget",
+                critique_notes="ignored" * 400,
+                critique_observations=(
+                    {"claim": "Verify line item", "source_quote": quote, "witness_status": "UNRESOLVED"},
+                ),
+            )
+        )
+        _, content = ai.calls[0]
+        block = content.split("):\\n", 1)[1]
+        assert len(block) <= 1200
+        parsed = json.loads(block)
+        assert isinstance(parsed, dict)
+        assert parsed["source_observations_untrusted"][0]["claim_unverified"] == "Verify line item"
+
+        ai.calls.clear()
+        await ParseBudgetUseCase(ai=ai).execute(
+            ParseBudgetCommand(
+                text="Original document budget",
+                critique_notes=('\\\\\\\\\\"' * 1200),
+            )
+        )
+        block = ai.calls[0][1].split("):\\n", 1)[1]
+        assert len(block) <= 1200
+        assert isinstance(json.loads(block), str)
+
+    @pytest.mark.asyncio
     async def test_first_budget_parse_without_feedback_uses_original_document(self) -> None:
         ai = _FakeAI(payload={"items": []})
         await ParseBudgetUseCase(ai=ai).execute(
