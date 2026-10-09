@@ -66,6 +66,6 @@ review_policy: principal_and_challenger
 worker_selection:
   preferred: claude_code
   eligible_principals: [claude_code, codex]
-  eligible_subordinates: [gemini_cli]
+  eligible_subordinates: []
   selected: null
 timeout_resource_policy: bounded_local_development_only_no_production_or_network_data_exports
