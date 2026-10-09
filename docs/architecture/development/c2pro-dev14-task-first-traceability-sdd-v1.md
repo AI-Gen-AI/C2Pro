@@ -23,25 +23,28 @@ Every new governed PR must declare a machine-readable metadata section, with exa
 c2pro_trace:
   schema: c2pro-pr-task-trace-v1
   primary_task: PQ-HITL-09.1
-  related_tasks: []
-  parent_issue: 945
-  sdd_path: docs/product/pq-hitl-09-1-golden-fixtures-sdd-v1.md
-  acceptance_ids:
-    - TS-PQ-HITL-09-GOLDEN-001
-  execution_work_id: "<REAL_ASSIGNED_WORK_ID>"
-  work_envelope_path: "<EXISTING_VALID_WORK_ENVELOPE>"
-  workspace_evidence_ref: "<VALIDATED_WORKSPACE_RECEIPT>"
+  task_claims:
+    - task_id: PQ-HITL-09.1
+      parent_issue: 945
+      sdd_path: docs/product/pq-hitl-09-1-golden-fixtures-sdd-v1.md
+      acceptance_ids:
+        - "<APPROVED_ACCEPTANCE_ID>"
+      execution_work_id: "<REAL_ASSIGNED_WORK_ID>"
+      work_envelope_path: "<EXISTING_VALID_WORK_ENVELOPE>"
+      workspace_evidence_ref: "<VALIDATED_WORKSPACE_RECEIPT>"
   defects: []
   effect_claim: IMPLEMENTATION_ONLY
 ~~~
 
+**Multi-Task mapping:** `primary_task` must occur exactly once in `task_claims[]`; each additional Task appears exactly once with its OWN parent issue, SDD path/revision, acceptance IDs and independently verified WORK/workspace evidence. Never reuse a scalar parent or SDD for unrelated Tasks. The validator must reject duplicate Task IDs, contradictory mappings, empty claims and any missing independent acceptance proof; DEV-only claims use a separately defined DEV namespace policy.
+
 This is an illustrative schema, NOT a valid authority receipt or evidence of a Product WORK envelope for 09.1. Do not copy placeholders as real values. Allowed effect claims: SPEC_ONLY, IMPLEMENTATION_ONLY, PRODUCT_ACCEPTANCE_PROPOSED. PROD_VALIDATED, TRUSTED and production actions are not permitted claims. Runtime implementation additionally requires the authentic .c2pro work envelope, appropriate principal/role, allowed scope, branch and base SHA, registered workspace guard and security authorization; issue/PR metadata alone is never enough.
 
-**Effect claims are never self-authorizing.** The read-only trace validator MUST derive changed paths from the immutable PR base/head diff and compare them to a trusted, versioned effect-class policy loaded from the approved base, never from authority fields added by the PR under review. SPEC_ONLY is default-deny and may touch only documentation paths explicitly allowed by that prior policy. Newly created SDD files may qualify **only if their exact destination and canonical DEV task are registered in independently approved pre-PR authority**; a PR cannot add that allowance for itself. Edits to Python/TypeScript, executable tests, GitHub workflows, schemas, Product MASTER YAML, machine-control state, permissions, runtime or secrets always fail SPEC_ONLY. Unknown, unapproved new/renamed paths and symlinks fail closed after safe normalization. Missing WORK receipts never permit implementation or execution claims. **DEV-14.1 bootstrap:** this design-only PR predates deployment of the proposed trace check, so it is assessed under existing checks and independent review, not falsely marked trace-PASS; it must contain only the proposed SDD plus already existing development-plan documentation. Any Product MASTER change requires its own independently authorized Product Control scope.
+**Effect claims are never self-authorizing.** The read-only trace validator MUST derive changed paths from the immutable PR base/head diff and compare them to a trusted, versioned effect-class policy loaded from the approved base, never from authority fields added by the PR under review. SPEC_ONLY is default-deny and may touch only documentation paths explicitly allowed by that prior policy. Newly created SDD files may qualify **only if their exact destination and either the canonical Product Task in Product MASTER or canonical DEV Task are registered in independently approved pre-PR authority**; a PR cannot add that allowance for itself. Edits to Python/TypeScript, executable tests, GitHub workflows, schemas, Product MASTER YAML, machine-control state, permissions, runtime or secrets always fail SPEC_ONLY. Unknown, unapproved new/renamed paths and symlinks fail closed after safe normalization. Missing WORK receipts never permit implementation or execution claims. **DEV-14.1 bootstrap:** this design-only PR predates deployment of the proposed trace check, so it is assessed under existing checks and independent review, not falsely marked trace-PASS; it must contain only the proposed SDD plus already existing development-plan documentation. Any Product MASTER change requires its own independently authorized Product Control scope.
 
 Human PR body must succinctly state WHAT user outcome changed, acceptance criterion, WHAT RED test failed then GREEN proof, affected paths, unresolved defects, exact-head CI and independent review, non-goals and next Task. Missing evidence is marked PENDING, never invented.
 
-**Acceptance-ID source of truth (prerequisite to DEV-14.3 ENFORCE):** Current Product MASTER acceptance descriptions are free-form text; a sample `TS-*` fixture name is not a canonical acceptance identifier. DEV-14.2 must specify a versioned, Product-Control-approved acceptance registry or immutable SDD acceptance mapping keyed by canonical Task ID, with exact source path, content hash/revision and criteria. The validator must resolve every claimed ID from that approved base and reject unknown/unversioned claims; never derive authority from an implementation fixture, arbitrary PR body string or SDD newly introduced by the same PR. Until an independently accepted registry exists, `acceptance_ids` is a proposal/diagnostic field only and mandatory-ID enforcement remains disabled. The example above is schematic and MUST NOT be treated as an enrolled Product acceptance ID.
+**Acceptance-ID source of truth (prerequisite to DEV-14.3 ENFORCE):** Current Product MASTER acceptance descriptions are free-form text; a sample test/fixture `TS-*` name is not a canonical acceptance identifier. DEV-14.2 must specify a versioned, Product-Control-approved acceptance registry or immutable SDD acceptance mapping keyed by canonical Task ID, with exact source path, content hash/revision and criteria. The validator must resolve every claimed ID from that approved base and reject unknown/unversioned claims; never derive authority from an implementation fixture, arbitrary PR body string or SDD newly introduced by the same PR. Until an independently accepted registry exists, `acceptance_ids` is a proposal/diagnostic field only and mandatory-ID enforcement remains disabled. The example above uses deliberately invalid placeholders and MUST NOT be treated as an enrolled Product acceptance ID.
 
 ## 3. Validator and GitHub CI architecture
 
@@ -49,7 +52,7 @@ Human PR body must succinctly state WHAT user outcome changed, acceptance criter
 
 **DEV-14.2 — extend work namespace:** integrate Product WORK identity into existing .c2pro schemas, queue validator, assignment and workspace authorization without reusing C2PRO-DEV IDs. Must have RED negative tests for unknown Product IDs, wrong parent/campaign, branch/base mismatch, no active WORK, role mismatch and forbidden paths. No fake hot-state activation.
 
-**DEV-14.3 — deterministic PR validator:** parse one bounded YAML metadata section without code execution; prohibit duplicate YAML keys/blocks, unknown keys, unrelated IDs, oversized bodies and injection; validate primary task in machine MASTER (or canonical development queue for development-only tasks), parent issue, SDD existence, acceptance IDs, status and dependencies. A BLOCKED task can support explicitly authorized discovery/spec ONLY, not implementation. For execution require actual assigned WORK and exact workspace/branch/base. Changed-file scope must fit envelope; a PR with two tasks must pass both mappings separately. A merged PR cannot directly set ACCEPTED and no CI job can set PROD_VALIDATED.
+**DEV-14.3 — deterministic PR validator:** parse one bounded YAML metadata section without code execution; prohibit duplicate YAML keys/blocks, unknown keys, unrelated IDs, oversized bodies and injection; validate primary task in machine MASTER (or canonical development queue for development-only tasks), parent issue, SDD existence, acceptance IDs, status and dependencies. A BLOCKED task can support explicitly authorized discovery/spec ONLY, not implementation. For execution require actual assigned WORK and exact workspace/branch/base PER task_claim, resolved against the independently approved base. Changed-file scope must fit every respective envelope; a PR with two tasks must pass both mappings separately, including distinct parent issues and SDDs. A merged PR cannot directly set ACCEPTED and no CI job can set PROD_VALIDATED.
 
 **DEV-14.4 — roll out:** pinned, read-only GitHub Action using pull_request event and contents/pull-requests read permission, independent negative tests, no pull_request_target with untrusted checkout, no shell interpolation of PR text, no credentials, and explicit phased AUDIT → ENFORCE policy. Audit existing PRs without blocking unrelated historical work. ENFORCE new PRs only AFTER a real Product WORK assignment route and migration path are verified; avoid adding an unconditionally required job before this capability exists. No weakening of existing CI, security, Product Control guards or human merge policy.
 
@@ -78,6 +81,8 @@ Human PR body must succinctly state WHAT user outcome changed, acceptance criter
 | TRACE-17 | SPEC_ONLY claim with a code, test, workflow, schema or non-allowlisted changed path | REJECT despite declared effect and absent work receipt |
 | TRACE-18 | PR modifies its own Task/SDD/WORK authority to satisfy its guard | REJECT against approved pre-PR authority; separate governance approval required |
 | TRACE-19 | Bootstrap exemption claimed to skip existing WORK, branch, CI or review guards | REJECT; only not-yet-existing trace check may be exempt |
+| TRACE-20 | Product Task authorized new SDD path from independently approved Product MASTER | Permit documented SPEC_ONLY review without minting duplicate DEV Task |
+| TRACE-21 | One PR, two Product Tasks with distinct parent issues and SDDs | Independently validate each task_claim and its WORK/acceptance; reject scalar cross-task ambiguity |
 
 **Test-first:** failing negative tests before new CI code; focused Python pytest with pinned PyYAML, existing .c2pro control validator and Product-Control Guard remain green, then independent principal review. Separate high-blast-radius/security review if the trace changes authority or bypass semantics.
 
