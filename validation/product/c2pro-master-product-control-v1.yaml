@@ -944,10 +944,10 @@ product_quality_hitl_2026_10_08:
         priority: P0
         role: qa
         size: M
-        status: IN_REVIEW_UNMERGED
+        status: MERGED_UNACCEPTED
         depends_on: []
         acceptance: "Synthetic §5.2, LD, However, valid title, 183d, 5% of EUR 132500 and A9/B7 with exact expected findings and UNKNOWN semantics; deterministic RED before future changes; older draft fixes remain unqualified."
-        note: "Task-specific golden fixture + focused SDD + explicit RED xfail probes are in draft PR #987, exact-head CI/review still required; no PROD B changes"
+        note: "PR #987 merged 2026-10-09 as commit 540b23b4f79c55165a7d4106e67a7d32afb12afa; exact source head d89ec4c0e7ac0a63650007c0ff68eff06efe4c00 had CI/CodeQL/Secret Scan/Install Drift green and completed Codex review with no live threads. Product-Control Guard was NOT a check on that test-only PR; this status reconciliation PR #989 separately requires exact-head Product-Control Guard GREEN plus CI/Secret/Drift before merge, verifiable in GitHub checks (never a prior SHA). Two explicit XFAIL remain 01.1/02.2 deficits; owner/QA Product acceptance, E2E and PROD qualification not inferred; no PROD B changes."
       - id: PQ-HITL-01.1
         parent_issue: 937
         title_key: CRITIQUE_OK_OBSERVATION_FAIL_CLOSED
