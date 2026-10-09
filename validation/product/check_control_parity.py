@@ -23,6 +23,7 @@ Only dependency beyond stdlib is PyYAML (already a declared project dep).
 from __future__ import annotations
 
 import hashlib
+import re
 import sys
 from pathlib import Path
 
@@ -737,12 +738,63 @@ def compare(yaml_canon: dict[str, str], md_canon: dict[str, str]) -> list[str]:
     return problems
 
 
+def validate_work_package_mirror(doc: dict, md_text: str) -> list[str]:
+    """Fail if a Product task's §13.6 table status/owner differs from the YAML.
+
+    The generated canonical block covers global product states; task-level
+    assignments live in the human table. Verify that table directly rather than
+    treating a passing 78-value canonical block as proof of package parity.
+    """
+    problems: list[str] = []
+    start = "### 13.6 Plan de entrega por subtareas"
+    stop = "**Orden de gates y bifurcaciones:**"
+    if start not in md_text or stop not in md_text.split(start, 1)[1]:
+        return ["PQ-HITL work-package mirror §13.6 missing"]
+    section = md_text.split(start, 1)[1].split(stop, 1)[0]
+    observed: dict[str, tuple[str, str, str, str, str]] = {}
+    for line in section.splitlines():
+        if not line.startswith("| PQ-HITL-"):
+            continue
+        cells = [value.strip() for value in line.split("|")[1:-1]]
+        if len(cells) < 5:
+            problems.append("PQ-HITL §13.6 malformed task row")
+            continue
+        task_id = cells[0].split(" / ", 1)[0].strip()
+        parent = re.search(r"/ \[#(\d+)\]", cells[0])
+        role_cells = [value.strip() for value in cells[2].split("·")]
+        if parent is None or len(role_cells) != 3:
+            problems.append(f"PQ-HITL task {task_id}: invalid issue/role/size/priority projection")
+            continue
+        if task_id in observed:
+            problems.append(f"PQ-HITL task {task_id}: duplicate §13.6 mirror row")
+            continue
+        observed[task_id] = (parent.group(1), *role_cells, cells[3])
+
+    packages = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]["work_packages"]
+    expected_ids = {str(row["id"]) for row in packages}
+    for row in packages:
+        task_id = str(row["id"])
+        expected = tuple(_s(row[key]) for key in ("parent_issue", "role", "size", "priority", "status"))
+        actual = observed.get(task_id)
+        if actual is None:
+            problems.append(f"PQ-HITL task {task_id}: missing §13.6 mirror row")
+            continue
+        for key, yv, mv in zip(("parent_issue", "role", "size", "priority", "status"), expected, actual):
+            if yv != mv:
+                problems.append(f"PQ-HITL task {task_id}: {key} VALUE DRIFT YAML='{yv}' MD='{mv}'")
+    for task_id in observed.keys() - expected_ids:
+        problems.append(f"PQ-HITL task {task_id}: extra §13.6 row not in YAML")
+    return problems
+
+
 # ── orchestration ─────────────────────────────────────────────────────────────
 def run(yaml_path: Path = _YAML, md_path: Path = _MD) -> list[str]:
     doc = load_yaml(yaml_path)
     problems = validate_enums(doc)
     problems += validate_qualification_control(doc, root=yaml_path.resolve().parents[2])
-    problems += compare(extract_canonical(doc), parse_md_block(md_path.read_text(encoding="utf-8")))
+    md_text = md_path.read_text(encoding="utf-8")
+    problems += compare(extract_canonical(doc), parse_md_block(md_text))
+    problems += validate_work_package_mirror(doc, md_text)
     return problems
 
 
