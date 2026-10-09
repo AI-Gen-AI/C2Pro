@@ -273,7 +273,8 @@ class TestParseBudgetUseCase:
         await ParseBudgetUseCase(ai=ai).execute(
             ParseBudgetCommand(text="Budget source rows", critique_notes=notes)
         )
-        _, sent = ai.calls[0]
+        prompt, sent = ai.calls[0]
+        assert "the ONLY source of budget line-item facts" in prompt
         assert "Budget source rows" in sent
         assert "Missing a confirmed budget line." in sent
         assert "UNTRUSTED_CRITIQUE_FEEDBACK" in sent
