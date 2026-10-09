@@ -41,7 +41,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install minimal validation dependencies
-        run: pip install "pyyaml==6.0.3" "pytest>=9.0.3"
+        run: pip install "pyyaml==6.0.3" "pytest==9.1.1" "jsonschema==4.25.1"
 
       - name: Validate control and context budget
         run: python scripts/development/validate_c2pro_control.py
@@ -53,4 +53,5 @@ jobs:
         run: |
           python -m pytest -q --confcutdir=tests/development \
             tests/development/test_c2pro_control_plane.py \
+            tests/development/test_dev14_task_trace.py \
             tests/development/test_github_actions_concurrency_policy.py
