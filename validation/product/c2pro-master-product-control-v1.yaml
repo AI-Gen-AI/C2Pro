@@ -923,14 +923,14 @@ product_quality_hitl_2026_10_08:
         parent_work: PQ-HITL-04.4
         severity: P0_SECURITY_OR_TRUST
         status: OPEN_SECURITY_HOLD
-        observation: "2026-10-09 Codex review #988 found direct POST /hitl/resume/{review_id} lacks explicit server-derived reviewer identity/project ACL and can reach existing finalizer; potential alternate review bypass."
-        acceptance: "All human finalize_v3 entry points require authenticated actor, project/Contract Manager role, reviewer/audit binding; legacy direct-resume removed or hardened; negative cross-role and cross-project E2E."
+        observation: "Codex #988 confirmed human APPROVE and REJECT routes (generic /hitl/resume plus queue approve/reject) lack consistent per-project Contract Manager authorization; tenant actor alone can bypass project-level finalization decisions."
+        acceptance: "ALL approve/reject finalizer entry points: /hitl/resume both decisions, /queue/{id}/approve, /queue/{id}/reject, and internal callers, enforce authenticated actor+tenant+project role and audited binding; negative cross-project and cross-role tests, never tenant-only."
       - id: DEF-PQ-006
         parent_work: PQ-HITL-04.6
         severity: P0_SECURITY_OR_TRUST
         status: OPEN_CONCURRENCY_HOLD
-        observation: "2026-10-09 Codex review #988 found finalizer currently lacks expected_ledger_revision plus locked terminal per-finding projection, enabling possible late NEEDS_INFO/correction after readiness before trust commit."
-        acceptance: "Final human signature binds expected ledger revision; same locked review-row transaction rechecks all terminal decisions and candidate identity before atomic TRUSTED commit; real concurrent negative regression."
+        observation: "N17 commit_trust_in_transaction makes first TRUSTED write BEFORE finalize_v3, so checking ledger only in finalize_v3 is too late to stop late NEEDS_INFO or missing findings. This is a trust commit seam requiring architectural choice, not only SDD wording."
+        acceptance: "At FIRST trust promotion inside N17 or redesigned consolidated finalizer, validate expected_ledger_revision plus exhaustive server-derived typed candidate findings under same serialization boundary; no earlier TRUSTED visible, concurrency/partial-decision negative regression with real Postgres."
       - id: DEF-PQ-007
         parent_work: PQ-HITL-04.5
         severity: P0_SECURITY_OR_TRUST
@@ -1034,10 +1034,10 @@ product_quality_hitl_2026_10_08:
         priority: P0
         role: orchestrator
         size: M
-        status: IN_REVIEW_UNMERGED
+        status: BLOCKED
         depends_on: [PQ-HITL-09.1]
         acceptance: "Freeze per-risk and critique types, CONFIRMED/CORRECTION_PROPOSED/DISMISSED/NEEDS_INFO, immutable versions, atomic final approval authority, migration/backward compatibility and threat model; independent principal design review."
-        note: "Design-only SDD PR #988 exact-head CI green; independent principal + decisions D1-D6 and golden prerequisite required before acceptance or implementation"
+        note: "SDD #988 independent review confirmed fundamental N17 first-trust seam, two human REJECT/APPROVE ACL bypasses, and composer CAS. Stop endless SDD patching; principal owner/architect must approve transaction design and authorize valid .c2pro WORK before implementation. CI GREEN does not qualify."
       - id: PQ-HITL-04.2
         parent_issue: 940
         title_key: NONBYPASS_LEDGER_DB_PRINCIPAL
