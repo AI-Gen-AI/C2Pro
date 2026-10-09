@@ -275,7 +275,7 @@ def audit_pr(body: str, changed_paths: list[str], root: Path = ROOT,
         if meta.get("execution_mode") == "OWNER_SUPERVISED":
             if meta["primary_task"] == "C2PRO-DEV-14":
                 for path in changed_paths:
-                    if not path.startswith(DEV14_CHANGED_PATHS):
+                    if not (path.startswith(DEV14_CHANGED_PATHS) or path == ".github/ci-pip-install-baseline.json"):
                         raise TraceError(f"owner-supervised DEV-14 scope violation: {path}")
     except (TraceError, OSError, ValueError) as exc:
         return {"status": "REJECT", "reason": str(exc)}

@@ -191,3 +191,20 @@ def test_owner_supervised_invalid_acceptance_still_fails():
     meta["execution_mode"]="OWNER_SUPERVISED"
     with pytest.raises(trace.TraceError,match="acceptance"):
         trace.validate_claims(meta,registry(),ROOT)
+
+
+
+def test_owner_supervised_dev14_guarded_ci_manifest_is_scoped_exactly():
+    c=claim("C2PRO-DEV-14",991,
+            "docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md")
+    c["acceptance_ids"]=["TRACE-17"]
+    meta=metadata(c,effect="IMPLEMENTATION_ONLY")
+    meta["execution_mode"]="OWNER_SUPERVISED"
+    import yaml
+    fence=chr(96)*3
+    body=fence+"yaml\n"+yaml.safe_dump({"c2pro_trace":meta},sort_keys=False)+fence
+    result=trace.audit_pr(body,["scripts/development/validate_task_trace.py",
+            ".github/ci-pip-install-baseline.json"],ROOT)
+    assert result["status"]=="TASK_MAPPED_PENDING_HUMAN_REVIEW"
+    result=trace.audit_pr(body,[".github/ci-pip-install-baseline.json.unexpected"],ROOT)
+    assert result["status"]=="REJECT"
