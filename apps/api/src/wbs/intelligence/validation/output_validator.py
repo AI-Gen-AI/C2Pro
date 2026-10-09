@@ -75,6 +75,7 @@ _DOCUMENT_CLASSES = frozenset({InputClass.TRUSTED_PROJECT_EVIDENCE, InputClass.P
                                InputClass.ADVISORY_EVIDENCE})
 _STRUCTURE_CLASSES = frozenset({InputClass.HUMAN_PROVIDED_IMPORT, InputClass.CURRENT_APPROVED_WBS})
 _SPACES = re.compile(r"\s+")
+MIN_VERIFIABLE_QUOTE_CHARS = 8  # a shorter quote proves nothing (e.g. "e", "an", "the")
 
 
 class ItemRejected(ValueError):
@@ -132,6 +133,14 @@ def _rule_ref(rule: str, profiles: ResolvedProfileSet) -> ProfileRuleRef:
     raise ItemRejected(f"profile rule {rule!r} is not a rule of a pinned profile")
 
 
+def _quote_located(quote: str, text: str) -> bool:
+    """A verifiable quote: long enough to mean something and located on word boundaries."""
+    needle, haystack = _normalise(quote), _normalise(text)
+    if len(needle) < MIN_VERIFIABLE_QUOTE_CHARS:
+        return False
+    return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack) is not None
+
+
 def verify_citation(citation: ModelEvidenceCitation, ctx: ValidationContext) -> EvidenceItem:
     basis = EvidenceBasis(citation.basis)
     if basis is EvidenceBasis.PROFILE_HEURISTIC:
@@ -151,9 +160,9 @@ def verify_citation(citation: ModelEvidenceCitation, ctx: ValidationContext) -> 
     )
     if item.input_class not in expected:
         raise ItemRejected(f"{basis.value} evidence cannot cite a {item.input_class.value} excerpt")
-    verified = citation.quote is not None and _normalise(citation.quote) in _normalise(item.model_visible.text)
+    verified = citation.quote is not None and _quote_located(citation.quote, item.model_visible.text)
     if citation.quote is not None and not verified:
-        raise ItemRejected(f"the quote is not in excerpt {citation.excerpt_id}")
+        raise ItemRejected(f"the quote is not located in excerpt {citation.excerpt_id} (or too short to verify)")
     if basis is EvidenceBasis.DIRECT and not verified:
         raise ItemRejected("DIRECT evidence needs a quote located in the cited excerpt")
     return EvidenceItem(
@@ -168,7 +177,9 @@ def _verify_all(citations: Iterable[ModelEvidenceCitation], ctx: ValidationConte
 
 
 def _trusted(evidence: Sequence[EvidenceItem]) -> bool:
-    return any(item.authority is EvidenceAuthority.TRUSTED for item in evidence)
+    """Trusted proof: a TRUSTED excerpt whose quote was VERIFIED (an uncertain citation proves nothing)."""
+    return any(item.authority is EvidenceAuthority.TRUSTED and item.verification is VerificationStatus.VERIFIED
+               for item in evidence)
 
 
 def _known_nodes(node_ids: Iterable[UUID], ctx: ValidationContext) -> tuple[UUID, ...]:

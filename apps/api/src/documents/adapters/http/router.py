@@ -768,6 +768,7 @@ async def list_document_revision_statuses_endpoint(
     lineage = await revision_repository.list_lineage(document_id, tenant_id)
     reader = SqlAlchemyRevisionStatusReader(db)
     states: list[RevisionStatus] = []
+    trusted_current_seen = False
     for revision in lineage:
         if (
             revision.document_id != document_id
@@ -783,13 +784,29 @@ async def list_document_revision_statuses_endpoint(
             document_id=document_id,
             revision_id=revision.revision_id,
         )
-        states.append(
+        resolved_state = (
             state
             if state is not None
             else RevisionStatus.unavailable(
                 revision.revision_id, "revision_status_not_available"
             )
         )
+        # This endpoint also feeds the Evidence Viewer. The inventory use case
+        # already rejects conflicting trusted-current statuses (#996); do not
+        # expose contradictory labels through this alternate read path.
+        if (
+            resolved_state.status == "available"
+            and resolved_state.trust_state == "trusted"
+            and resolved_state.is_current is True
+            and resolved_state.current_basis == "trusted"
+        ):
+            if trusted_current_seen:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Conflicting current trusted revisions.",
+                )
+            trusted_current_seen = True
+        states.append(resolved_state)
     return states
 
 

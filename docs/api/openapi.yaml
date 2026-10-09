@@ -5671,11 +5671,9 @@ components:
           title: Item Count
         total_budget:
           type: string
-          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Total Budget
         spent_amount:
           type: string
-          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Spent Amount
         spend_recorded:
           type: boolean
@@ -5685,7 +5683,6 @@ components:
         remaining_budget:
           anyOf:
           - type: string
-            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Remaining Budget
           description: Null when no spend has been recorded, because remaining would
@@ -5743,7 +5740,6 @@ components:
           title: Code
         amount:
           type: string
-          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Amount
       additionalProperties: false
       type: object
@@ -13856,7 +13852,6 @@ components:
         budget_allocated:
           anyOf:
           - type: string
-            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Budget Allocated
         evidence_tier:

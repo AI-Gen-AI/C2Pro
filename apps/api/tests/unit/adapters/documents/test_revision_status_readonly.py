@@ -151,3 +151,86 @@ async def test_unavailable_revision_status_never_becomes_trusted() -> None:
     assert results[0].status == "unavailable"
     assert results[0].trust_state is None
     assert results[0].is_current is False
+
+
+@pytest.mark.asyncio
+async def test_conflicting_trusted_current_revisions_fail_closed_at_http_boundary() -> None:
+    """Regression: /revisions cannot expose two simultaneous trusted-current states."""
+    tenant_id, document_id, project_id, user_id, a_id, b_id = (uuid4() for _ in range(6))
+    document_lookup = MagicMock()
+    document_lookup.execute = AsyncMock(return_value=SimpleNamespace(project_id=project_id))
+    revisions = MagicMock()
+    revisions.list_lineage = AsyncMock(return_value=[
+        SimpleNamespace(
+            revision_id=revision_id, document_id=document_id,
+            tenant_id=tenant_id, project_id=project_id,
+        )
+        for revision_id in (a_id, b_id)
+    ])
+    reader = MagicMock()
+    reader.read = AsyncMock(side_effect=[
+        RevisionStatus(
+            revision_id=revision_id,
+            rev_no=rev_no,
+            trust_state="trusted",
+            is_current=True,
+            current_revision_id=revision_id,
+            current_basis="trusted",
+        )
+        for rev_no, revision_id in ((1, a_id), (2, b_id))
+    ])
+    with patch(
+        "src.documents.adapters.http.router.SqlAlchemyRevisionStatusReader",
+        return_value=reader,
+    ):
+        with pytest.raises(HTTPException) as error:
+            await list_document_revision_statuses_endpoint(
+                document_id=document_id,
+                _user_id=user_id,
+                tenant_id=tenant_id,
+                get_document=document_lookup,
+                revision_repository=revisions,
+                db=MagicMock(),
+            )
+
+    assert error.value.status_code == 409
+    assert "conflicting" in str(error.value.detail).lower()
+    assert str(a_id) not in str(error.value.detail)
+    assert str(b_id) not in str(error.value.detail)
+    assert reader.read.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_unresolved_historical_and_proposed_revision_both_remain_readable() -> None:
+    """The conflicting-current guard must not suppress a valid A/B read-only preview."""
+    tenant_id, document_id, project_id, user_id, a_id, b_id = (uuid4() for _ in range(6))
+    lookup = MagicMock()
+    lookup.execute = AsyncMock(return_value=SimpleNamespace(project_id=project_id))
+    revs = MagicMock()
+    revs.list_lineage = AsyncMock(return_value=[
+        SimpleNamespace(
+            revision_id=rid, document_id=document_id, project_id=project_id,
+            tenant_id=tenant_id,
+        )
+        for rid in (a_id, b_id)
+    ])
+    states = [
+        RevisionStatus(revision_id=a_id, rev_no=1, trust_state=None, is_current=False,
+                       current_basis="unresolved"),
+        RevisionStatus(revision_id=b_id, rev_no=2, trust_state="proposed", is_current=False,
+                       current_basis="unresolved"),
+    ]
+    reader = MagicMock()
+    reader.read = AsyncMock(side_effect=states)
+    with patch(
+        "src.documents.adapters.http.router.SqlAlchemyRevisionStatusReader",
+        return_value=reader,
+    ):
+        result = await list_document_revision_statuses_endpoint(
+            document_id=document_id, _user_id=user_id, tenant_id=tenant_id,
+            get_document=lookup, revision_repository=revs, db=MagicMock(),
+        )
+
+    assert result == states
+    assert all(state.current_basis == "unresolved" for state in result)
+    assert all(not state.is_current for state in result)
