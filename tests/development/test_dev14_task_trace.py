@@ -119,8 +119,10 @@ def test_pre_pr_base_registry_lookup_refuses_invalid_hash_and_unknown_commit():
         trace.load_registry(ROOT,"f"*40)
 
 
-def test_approved_base_registry_has_same_parent_and_atomic_tasks():
-    base="0de6b6ff2b38e6b3ad9b8c63a9e58e1b2c140fce"
+def test_immutable_checkout_registry_has_same_parent_and_atomic_tasks():
+    # Works on a shallow GitHub checkout as well as a local full worktree.
+    import subprocess
+    base=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
     anchored=trace.load_registry(ROOT,base)
     assert anchored["PQ-HITL-09.1"]["issue"] == 945
     assert anchored["PQ-HITL-04.6"]["issue"] == 940
