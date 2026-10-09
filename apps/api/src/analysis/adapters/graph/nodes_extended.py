@@ -712,7 +712,14 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
             state.get("critique_notes", "") if (state.get("retry_count") or 0) > 0 else ""
         )
         result = await use_case.execute(
-            ParseBudgetCommand(text=text, critique_notes=retry_notes)
+            ParseBudgetCommand(
+                text=text,
+                critique_notes=retry_notes,
+                critique_observations=(
+                    tuple(state.get("critique_observations") or ())
+                    if (state.get("retry_count") or 0) > 0 else ()
+                ),
+            )
         )
         bom_items = [_budget_contract_payload(item) for item in result.bom_items]
     except Exception as exc:
