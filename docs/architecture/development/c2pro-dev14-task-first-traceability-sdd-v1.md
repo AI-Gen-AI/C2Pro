@@ -37,6 +37,8 @@ c2pro_trace:
 
 This is an illustrative schema, NOT a valid authority receipt or evidence of a Product WORK envelope for 09.1. Do not copy placeholders as real values. Allowed effect claims: SPEC_ONLY, IMPLEMENTATION_ONLY, PRODUCT_ACCEPTANCE_PROPOSED. PROD_VALIDATED, TRUSTED and production actions are not permitted claims. Runtime implementation additionally requires the authentic .c2pro work envelope, appropriate principal/role, allowed scope, branch and base SHA, registered workspace guard and security authorization; issue/PR metadata alone is never enough.
 
+**Effect claims are never self-authorizing.** The read-only trace validator MUST compute the actual changed paths from the immutable PR base/head diff and compare them to a trusted, versioned effect-class policy loaded from the approved base (not from the PR's own modifications). SPEC_ONLY has a default-deny, explicit documentation-only allowlist scoped to its existing approved SDD/plan files; edits to Python/TypeScript, tests that execute code, GitHub workflows, schemas, machine-control state, permissions, product runtime, secrets or any other non-allowlisted path are rejected as SPEC_ONLY regardless of its author-supplied field. Documentation outside the allowlist requires an explicit prior scope amendment. Unknown/new/renamed paths and symlinks fail closed; changed paths are normalized before comparison. The absence of a WORK receipt only permits honest descriptive SPEC_ONLY documentation within that bound, never implementation or execution evidence.
+
 Human PR body must succinctly state WHAT user outcome changed, acceptance criterion, WHAT RED test failed then GREEN proof, affected paths, unresolved defects, exact-head CI and independent review, non-goals and next Task. Missing evidence is marked PENDING, never invented.
 
 ## 3. Validator and GitHub CI architecture
@@ -49,7 +51,7 @@ Human PR body must succinctly state WHAT user outcome changed, acceptance criter
 
 **DEV-14.4 — roll out:** pinned, read-only GitHub Action using pull_request event and contents/pull-requests read permission, independent negative tests, no pull_request_target with untrusted checkout, no shell interpolation of PR text, no credentials, and explicit phased AUDIT → ENFORCE policy. Audit existing PRs without blocking unrelated historical work. ENFORCE new PRs only AFTER a real Product WORK assignment route and migration path are verified; avoid adding an unconditionally required job before this capability exists. No weakening of existing CI, security, Product Control guards or human merge policy.
 
-The only acceptable bootstrap exception is individually logged, owner-authorized, restricted to the controlled implementation PR and expires when the validator is operational; no general waiver, no auto-approval.
+**Bootstrap constraint:** Before the *new PR traceability check* exists, a tightly identified DEV-14 implementation PR may be exempt **only from that not-yet-deployed check** and only after the owner and orchestrator record the exact exemption and expiration. This is NOT an exception to any existing .c2pro WORK/envelope, registered workspace, branch/base-SHA guard, security policy, TDD, CI, independent review, human merge, Product Control or production boundary. If those existing preconditions are absent, execution stays EXECUTION_BLOCKED_WORK_ENVELOPE and no bootstrap implementation may begin. The new check cannot validate its own authorization from changes within its own PR; validate against the effective approved base.
 
 ## 4. SDD acceptance scenarios
 
@@ -71,6 +73,9 @@ The only acceptable bootstrap exception is individually logged, owner-authorized
 | TRACE-14 | Head SHA changed after verification | Rerun exact-head gates |
 | TRACE-15 | Spec-only PR with missing work receipt | May document an execution BLOCKER, never claim it executed Product WORK |
 | TRACE-16 | Existing merged PR lacking trace metadata during AUDIT mode | Diagnostic only; no rewrite of history |
+| TRACE-17 | SPEC_ONLY claim with a code, test, workflow, schema or non-allowlisted changed path | REJECT despite declared effect and absent work receipt |
+| TRACE-18 | PR modifies its own Task/SDD/WORK authority to satisfy its guard | REJECT against approved pre-PR authority; separate governance approval required |
+| TRACE-19 | Bootstrap exemption claimed to skip existing WORK, branch, CI or review guards | REJECT; only not-yet-existing trace check may be exempt |
 
 **Test-first:** failing negative tests before new CI code; focused Python pytest with pinned PyYAML, existing .c2pro control validator and Product-Control Guard remain green, then independent principal review. Separate high-blast-radius/security review if the trace changes authority or bypass semantics.
 
