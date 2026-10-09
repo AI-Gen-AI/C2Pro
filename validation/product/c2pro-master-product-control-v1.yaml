@@ -1017,7 +1017,7 @@ product_quality_hitl_2026_10_08:
         status: IN_PROGRESS
         depends_on: [PQ-HITL-09.1]
         acceptance: "Read-only tenant-scoped A=9 B=7 parsed clauses appear as historical/proposed; 0 trusted-current must not show '0 extracted'; API/UI count parity and no cross-tenant leak."
-        note: "QA assigned; #956 baseline + #996 merged defensive guard, #997 FE A9/B7 and trust-current regression in review; API/UI authenticated tenant/project isolation, relogin and operator evidence still required; no B mutation, not ACCEPTED."
+        note: "QA assigned; #956/#996/#997/#999 MERGED_UNACCEPTED code slices (#999 main 4ea4c11d, CI and Codex PASS; Railway API/Worker/Scheduler SUCCESS); live synthetic DB read A=9 B=7 with correct tenant/project/document binding, B artifact PROPOSED, no active trusted. Real authenticated API/UI, separate project ACL/RLS and relogin operator evidence still required; no B mutation, 03.1 NOT ACCEPTED."
       - id: PQ-HITL-03.2
         parent_issue: 939
         title_key: TRUSTED_PROPOSED_EMPTY_STATES
