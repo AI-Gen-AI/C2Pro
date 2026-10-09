@@ -286,7 +286,20 @@ class BudgetExtractionService:
             }
             next_items = [*typed, entry]
             if len(json.dumps({"source_observations_untrusted": next_items}, ensure_ascii=False)) > 1200:
-                break
+                if typed:
+                    # A later claim cannot exceed the strict retry budget;
+                    # all full concerns remain available at the N13 review.
+                    break
+                # Even one claim can expand when JSON escapes control chars.
+                # Preserve a typed, unverified witness instead of falling
+                # back to unrelated free-form notes. 80+60 characters fit
+                # within 1200 even in the worst six-byte JSON escape case.
+                entry["claim_unverified"] = entry["claim_unverified"][:80]
+                entry["source_quote_untrusted"] = entry["source_quote_untrusted"][:60]
+                next_items = [entry]
+                if len(json.dumps({"source_observations_untrusted": next_items}, ensure_ascii=False)) > 1200:
+                    # Explicit fail-closed guard if JSON encoding rules change.
+                    break
             typed.append(entry)
         # Budget the FINAL JSON string, never an intermediate representation.
         # The structured object is encoded once; fallback freeform notes are
