@@ -133,3 +133,38 @@ async def test_revision_status_unavailable_is_not_implicitly_trusted() -> None:
     assert result.items[0].clause_count == 1
     assert result.items[0].trusted_current is False
     assert result.current_trusted_revision_id is None
+
+
+@pytest.mark.asyncio
+async def test_two_current_trusted_revisions_are_conflict_not_arbitrary_last_winner() -> None:
+    """PQ-HITL-03.1: contradictory trusted-current witnesses must fail closed."""
+    tenant, document_id, project_id, a_id, b_id = (uuid4() for _ in range(5))
+    doc = SimpleNamespace(id=document_id, tenant_id=tenant, project_id=project_id)
+    revisions = [
+        SimpleNamespace(revision_id=r_id, rev_no=n, tenant_id=tenant,
+                        document_id=document_id, project_id=project_id)
+        for n, r_id in [(1, a_id), (2, b_id)]
+    ]
+    doc_repo = SimpleNamespace(
+        get_by_id=AsyncMock(return_value=doc),
+        list_clauses_bound_to_revision=AsyncMock(side_effect=[[object()] * 9, [object()] * 7]),
+    )
+    rev_repo = SimpleNamespace(list_lineage=AsyncMock(return_value=revisions))
+    statuses = [
+        RevisionStatus(revision_id=r_id, rev_no=n, trust_state="trusted",
+                       is_current=True, current_revision_id=r_id, current_basis="trusted")
+        for n, r_id in [(1, a_id), (2, b_id)]
+    ]
+    reader = SimpleNamespace(read=AsyncMock(side_effect=statuses))
+
+    with pytest.raises(HTTPException) as exc:
+        await ListDocumentRevisionEvidenceUseCase(
+            document_repository=doc_repo,
+            revision_repository=rev_repo,
+            status_reader=reader,
+        ).execute(tenant_id=tenant, document_id=document_id)
+
+    assert exc.value.status_code == 409
+    assert "conflicting" in str(exc.value.detail).lower()
+    assert a_id.hex not in str(exc.value.detail)
+    assert b_id.hex not in str(exc.value.detail)

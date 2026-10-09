@@ -91,6 +91,14 @@ class ListDocumentRevisionEvidenceUseCase:
                 and source.current_basis == "trusted"
             )
             if trusted_current:
+                if (
+                    current_trusted_revision_id is not None
+                    and current_trusted_revision_id != revision.revision_id
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Conflicting current trusted revisions.",
+                    )
                 current_trusted_revision_id = revision.revision_id
                 scope = "trusted_current"
             elif source and source.trust_state == "proposed":
