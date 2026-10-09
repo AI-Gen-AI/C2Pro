@@ -4,7 +4,7 @@
   "task_id": "PQ-HITL-09.1",
   "status": "SPECIFICATION_FIXTURES_NOT_PRODUCT_ACCEPTANCE",
   "dataset_kind": "SYNTHETIC_AND_VERSIONED",
-  "source_note": "Synthetic sentences grounded in repository PJ-01 contract-a.source.txt §5.2, ordinary terminology and deliberately invented adversarial counterexamples; NOT evidence of actual production revision B.",
+  "source_note": "Q01 clause 5.2 is anchored verbatim to repository PJ-01 contract-a.source.txt; supplemental EUR 132,500, 5 percent and 183-day calculations use a separate explicitly SYNTHETIC contract sentence, not PJ-01. Other adversarial claims are synthetic and not production revision B evidence.",
   "evaluated_by": "deterministic invariant tests; semantic model-output evaluation requires separate QA and calibrated criteria",
   "cases": [
     {
@@ -172,7 +172,9 @@
     "retention_percent": 5,
     "expected_retention_eur": 6625,
     "stated_duration_calendar_days": 183,
-    "duration_basis": "EXPLICIT_STATED_DAYS_ONLY_NO_DATE_ARITHMETIC_INFERRED"
+    "duration_basis": "EXPLICIT_STATED_DAYS_ONLY_NO_DATE_ARITHMETIC_INFERRED",
+    "source_text": "In this independent SYNTHETIC example the agreed contract value is EUR 132,500.00. The contractual retention is 5 percent of each invoice. The specified duration of the works is one hundred eighty-three (183) calendar days.",
+    "source_kind": "SEPARATE_SYNTHETIC_CONTRACT_NOT_PJ01"
   },
   "revision_visibility_fixture": {
     "revision_a": {
