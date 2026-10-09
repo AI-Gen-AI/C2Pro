@@ -216,3 +216,62 @@ def test_task_cannot_substitute_a_different_existing_sdd():
             "docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md")
     with pytest.raises(trace.TraceError,match="sdd_path"):
         trace.validate_claims(metadata(c),registry(),ROOT)
+
+
+def test_agent_work_enforces_exact_base_branch_and_scoped_changed_paths(monkeypatch):
+    import subprocess
+    import yaml
+
+    base=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
+    work={
+        "schema":"c2pro-product-work-envelope-v1",
+        "work_id":"PQ-HITL-09.1",
+        "task_id":"PQ-HITL-09.1",
+        "parent_issue":945,
+        "base_sha":base,
+        "branch":"feat/pq-09",
+        "status":"assigned",
+        "assigned_to":"codex",
+        "workspace_receipt":"verified-receipt-from-base",
+        "acceptance_ids":["PQ-HITL-09.1"],
+        "scope":["tests/goldens/**"],
+        "forbidden_paths":["tests/goldens/internal/**"]
+    }
+    original=trace.read_approved_source
+
+    def fake_source(root,rel,sha):
+        if rel==".c2pro/product-work/PQ-HITL-09.1.yaml":
+            return yaml.safe_dump(work)
+        return original(root,rel,sha)
+    monkeypatch.setattr(trace,"read_approved_source",fake_source)
+    c=claim("PQ-HITL-09.1",945)
+    c["acceptance_ids"]=["PQ-HITL-09.1"]
+    c["execution_work_id"]="PQ-HITL-09.1"
+    c["work_envelope_path"]=".c2pro/product-work/PQ-HITL-09.1.yaml"
+    c["workspace_evidence_ref"]="verified-receipt-from-base"
+    m=metadata(c,effect="IMPLEMENTATION_ONLY")
+
+    trace.validate_claims(m,registry(),ROOT,base,["tests/goldens/golden.py"],"feat/pq-09")
+    with pytest.raises(trace.TraceError,match="forbidden"):
+        trace.validate_claims(m,registry(),ROOT,base,["tests/goldens/internal/unapproved.py"],"feat/pq-09")
+    with pytest.raises(trace.TraceError,match="outside assigned scope"):
+        trace.validate_claims(m,registry(),ROOT,base,["apps/api/unrelated.py"],"feat/pq-09")
+    with pytest.raises(trace.TraceError,match="branch"):
+        trace.validate_claims(m,registry(),ROOT,base,["tests/goldens/golden.py"],"feat/wrong")
+    work["base_sha"]="e"*40
+    with pytest.raises(trace.TraceError,match="base_sha"):
+        trace.validate_claims(m,registry(),ROOT,base,["tests/goldens/golden.py"],"feat/pq-09")
+
+
+def test_spec_only_rejects_new_unregistered_document_against_immutable_base():
+    import subprocess
+    import yaml
+    base=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
+    meta=metadata(claim("PQ-HITL-09.1",945))
+    fence=chr(96)*3
+    body=fence+"yaml\n"+yaml.safe_dump({"c2pro_trace":meta},sort_keys=False)+fence
+    result=trace.audit_pr(body,["docs/architecture/development/unapproved-new-sdd.md"],ROOT,base)
+    assert result["status"]=="REJECT"
+    assert "pre-PR exact-path" in result["reason"]
+    result=trace.audit_pr(body,["docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md"],ROOT,base)
+    assert result["status"]=="PASS_SPEC"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -191,7 +192,9 @@ def validate_effect(effect: str, changed_paths: list[str]) -> None:
 
 
 def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
-                    root: Path = ROOT, base_sha: str | None = None) -> None:
+                    root: Path = ROOT, base_sha: str | None = None,
+                    changed_paths: list[str] | None = None,
+                    head_branch: str | None = None) -> None:
     if set(meta) - TRACE_KEYS or meta.get("schema") != "c2pro-pr-task-trace-v1":
         raise TraceError("unsupported/unknown trace schema keys")
     effect = meta.get("effect_claim")
@@ -250,6 +253,24 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
                 raise TraceError("WORK/Task parent mismatch")
             if not re.fullmatch(r"[0-9a-f]{40}", str(work.get("base_sha", ""))) or not isinstance(work.get("branch"), str):
                 raise TraceError("WORK branch/base SHA missing")
+            if base_sha and work["base_sha"] != base_sha:
+                raise TraceError("WORK base_sha differs from actual PR base")
+            if head_branch and work["branch"] != head_branch:
+                raise TraceError("WORK branch differs from actual PR head")
+            if c.get("workspace_evidence_ref") != work.get("workspace_receipt"):
+                raise TraceError("WORK workspace evidence does not match approved base")
+            if not isinstance(work.get("assigned_to"), str) or not work["assigned_to"]:
+                raise TraceError("WORK assigned worker missing")
+            if changed_paths is not None:
+                patterns = work.get("scope", [])
+                forbidden = work.get("forbidden_paths", [])
+                if not isinstance(patterns, list) or not isinstance(forbidden, list):
+                    raise TraceError("WORK scope/forbidden_paths malformed")
+                for changed in changed_paths:
+                    if any(fnmatch.fnmatchcase(changed, p) for p in forbidden if isinstance(p,str)):
+                        raise TraceError(f"WORK forbidden changed path: {changed}")
+                    if not any(fnmatch.fnmatchcase(changed, p) for p in patterns if isinstance(p,str)):
+                        raise TraceError(f"WORK changed path outside assigned scope: {changed}")
             if work.get("acceptance_ids") != acceptance:
                 raise TraceError("WORK acceptance mismatch")
             if work.get("status") != "assigned":
@@ -268,13 +289,19 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
 
 
 def audit_pr(body: str, changed_paths: list[str], root: Path = ROOT,
-             base_sha: str | None = None) -> dict[str, Any]:
+             base_sha: str | None = None, head_branch: str | None = None) -> dict[str, Any]:
     try:
         meta = parse_trace(body)
         if meta is None:
             return {"status": "MISSING_TRACE", "reason": "PR not yet migrated"}
-        validate_claims(meta, load_registry(root, base_sha), root, base_sha)
+        validate_claims(meta, load_registry(root, base_sha), root, base_sha, changed_paths, head_branch)
         validate_effect(meta["effect_claim"], changed_paths)
+        if meta["effect_claim"] == "SPEC_ONLY" and base_sha:
+            for path in changed_paths:
+                try:
+                    read_approved_source(root, path, base_sha)
+                except TraceError as exc:
+                    raise TraceError(f"SPEC_ONLY new document lacks pre-PR exact-path approval: {path}") from exc
         if meta.get("execution_mode") == "OWNER_SUPERVISED":
             if meta["primary_task"] == "C2PRO-DEV-14":
                 for path in changed_paths:
@@ -313,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
             cwd=ROOT, check=True, capture_output=True,
         )
         paths = [p.decode("utf-8") for p in result.stdout.split(b"\0") if p]
-        verdict = audit_pr(body, paths, ROOT, base)
+        verdict = audit_pr(body, paths, ROOT, base, pr.get("head", {}).get("ref"))
     except (TraceError, OSError, subprocess.CalledProcessError) as exc:
         verdict = {"status": "REJECT", "reason": f"diff unavailable: {type(exc).__name__}"}
     print("C2PRO_PR_TRACE=" + json.dumps(verdict, sort_keys=True))
