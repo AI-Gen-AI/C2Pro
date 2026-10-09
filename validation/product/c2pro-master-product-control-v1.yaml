@@ -1014,10 +1014,10 @@ product_quality_hitl_2026_10_08:
         priority: P0
         role: qa
         size: S
-        status: PLANNED
+        status: IN_PROGRESS
         depends_on: [PQ-HITL-09.1]
         acceptance: "Read-only tenant-scoped A=9 B=7 parsed clauses appear as historical/proposed; 0 trusted-current must not show '0 extracted'; API/UI count parity and no cross-tenant leak."
-        note: "existing #956 only partial; production reads only if authorized"
+        note: "QA assigned; #956 baseline + #996 merged defensive guard, #997 FE A9/B7 and trust-current regression in review; API/UI authenticated tenant/project isolation, relogin and operator evidence still required; no B mutation, not ACCEPTED."
       - id: PQ-HITL-03.2
         parent_issue: 939
         title_key: TRUSTED_PROPOSED_EMPTY_STATES
@@ -1067,7 +1067,7 @@ product_quality_hitl_2026_10_08:
         status: BLOCKED
         depends_on: [PQ-HITL-04.1, PQ-HITL-04.3]
         acceptance: "Every human finalize_v3 entry point (including legacy /hitl/resume and approve) requires server-derived reviewer identity, project/Contract Manager ACL, candidate membership, typed request and 403/409/422 negative tests; keep disabled until safe principal."
-        note: "#980 is gated; no public write route today"
+        note: "Assigned to implementation_lead under existing issue #980. Owner-approved Clerk-primary identity, org invitations/members/roles; C2Pro only project/contract/review-row ACL and explicit REVIEWER/APPROVER, no duplicate org admin. Verify real Clerk plan and org role mapping, fix auto-provisioned USER and mutable tenant on multi-org switch; don't adopt legacy organization_members as authority. Default DENY unassigned, VIEWER and API; guard all approve/reject/resume paths and CAS/RLS. Dependencies 04.1/04.3 + independent security review still BLOCK HTTP activation; no production role/schema mutation."
       - id: PQ-HITL-04.5
         parent_issue: 940
         title_key: IMMUTABLE_CORRECTION_COMPOSER
