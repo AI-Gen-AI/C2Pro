@@ -96,6 +96,42 @@ However, parent scores MUST NOT be implemented as an unqualified arithmetic aver
 
 `Unknown` is never converted to zero merely to complete a roll-up.
 
+## 2026-10-05 Amendment — Canonical Risk Register as Project Controls evolution (APPROVED)
+
+**Status:** Approved direction; non-blocking for current B1/C3b work.
+**Tracking:** #836.
+
+Risk analysis is an extension of this Project Controls backbone, not a new product plane and not an autonomous agent that owns canonical truth.
+
+C2Pro already has N4 risk extraction, `RiskItem` likelihood/severity/confidence, adapter-local probability/impact/risk score, and a risk-to-Coherence bridge. Those are inputs and transitional components. The future canonical capability is a **Risk Register** attached to the same project/WBS hierarchy.
+
+The governed Risk Register will progressively own, where evidence supports them:
+
+- likelihood / probability;
+- impact;
+- inherent risk;
+- exposure / rating;
+- treatment / mitigation;
+- owner and due date;
+- residual risk;
+- evidence quality / confidence;
+- project/WBS scope;
+- Evidence / Alert / Change lineage.
+
+Semantic separation is mandatory:
+
+- **Risk likelihood/probability** is the chance that a future uncertain event occurs.
+- **Coherence certainty/confidence** is confidence that a detected inconsistency/finding is real.
+- **Risk impact/exposure** does not directly overwrite Coherence materiality or Coherence Score.
+- Alerts remain concrete attention/action signals; they do not replace the Risk Register.
+- A high-risk item may coexist with high documentary Coherence when the evidence consistently describes that risk.
+- Unknown likelihood/impact remains Unknown/null; no fabricated zero/green state.
+- AI may extract or propose risk candidates, but canonical risk rating/calibration must be governed, reproducible and testable.
+
+No parallel risk WBS is allowed. Risk items attach to the canonical project/WBS structure established by this ADR.
+
+This amendment accepts architecture direction only. It does not promote realization, deployment, or production-validation status and must not delay B1/C3b qualification.
+
 ## Product-control invariants
 
 - **WBS-1:** one canonical hierarchical WBS per project.
