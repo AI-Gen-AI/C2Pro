@@ -35,7 +35,7 @@ El envelope de cada decisión debe estar construido por el **servidor** y enlaza
 
 No aceptar tenant/reviewer desde el payload como fuente de autoridad. El id de un hallazgo no depende de su título editable. El reviewer debe ver la fuente del **mismo documento/revisión** que se autoriza. Clave idempotente reutilizada con contenido diferente = conflicto, nunca sobrescribir.
 
-**GATE SECURITY:** usuario autenticado + tenant RLS + ACL de proyecto + DB connection de principal no privilegiado + trigger con tenant/candidate/fence + revisión CAS. Ningún SELECT/INSERT por service_role/superuser disfrazado, ninguna ruta pública antes de pruebas reales de role grants, restricciones de session_replication_role y replay.
+**GATE SECURITY:** autenticación real + identidad del actor obtenida del servidor + tenant RLS + ACL de proyecto/rol Contract Manager + DB connection con principal no privilegiado + trigger con tenant/candidate/fence + revisión CAS. **Todas** las rutas capaces de invocar `finalize_v3`, incluyendo la aprobación clásica, `POST /hitl/resume/{review_id}`, futuros endpoints y adaptadores de reanudación humana, deben comprobar el MISMO permiso de proyecto y registrar un aprobador humano autenticado. Sólo exigir `CurrentTenantId` o aceptar `approved_by=None` en una aprobación explícita no satisface la autorización humana. Hasta endurecer o deshabilitar la ruta directa legacy, el settlement granular debe permanecer desactivado. La ruta de finalización automatizada no-gated de ADR-026 es otra política, nunca se puede usar como bypass de un review marcado obligatorio. Ningún SELECT/INSERT por service_role/superuser disfrazado, ninguna ruta pública antes de pruebas reales de role grants, restricciones de session_replication_role y replay.
 
 **GATE AUTHORITY:** PROPUESTA ≠ TRUSTED; todo evento individual es provisional, no concede autoridad de aprobación de informe, cambio contractual ni comunicación a proveedor. Nunca se cambia Health, Coherence, ProjectGraph o Current State desde un evento individual.
 
@@ -63,7 +63,7 @@ El estado por hallazgo es una **proyección determinista** del último evento v�
 2. La tabla tiene evidence_refs JSONB, pero el writer actual no lo llena explícitamente en el INSERT. Por tanto **auditoría de fuente vista NO está demostrada**. Diseñar el envelope y prueba negativa antes de habilitar las operaciones reales.
 3. La acción sobre CRITIQUE se mantiene fuera del writer hasta existir membresía inequívoca del critique observation en N12/N13, con revisión/fence/source. No usar el fingerprint RISK con un título o párrafo arbitrarios.
 4. El reviewer sólo ve acciones finales habilitadas si cada item bloqueante del candidato actual tiene decisión terminal válida **y** no quedan propuestas de corrección sin materializar/needs-info, y la vista refresca el hash/diff vigente. El cliente no decide esto, el servidor revalida.
-5. La firma global se ejecuta por el mecanismo trusted-state existente, con bloqueo/orden de autoridad de #758. No introducir otro endpoint que actualice trust_state por separado, ni un nuevo commit gate alternativo.
+5. La firma global se ejecuta por el mecanismo trusted-state existente, con bloqueo/orden de autoridad de #758. **La solicitud humana liga `expected_ledger_revision`, review row, lista completa de hallazgos, candidate hash/version, revisor, checkpoint, generation/fence. En la misma transacción y después de bloquear la review row, el servidor reconsulta la revisión exacta y la proyección terminal de CADA hallazgo vinculada al digest actual**; rechaza si hay nuevas entradas, `NEEDS_INFO`, correcciones sin materializar, hallazgos sin decisión o binding obsoleto. El bloqueo de la fila compartida serializa append/finalización: los nuevos eventos no pueden introducirse entre comprobación y commit de TRUSTED. No introducir otro endpoint que actualice `trust_state` por separado ni un commit gate alternativo.
 6. Nuevos retries, reconexiones, cancelaciones, fallo del worker, takeover, nueva revisión o expiración deben producir lectura histórica o rechazo, nunca reanudación del checkpoint ajeno.
 7. No cambiar reglas de automatización no-gated sin decisión separada de ADR-020/PQ-HITL-02.2. Una observación unverified no puede desaparecer en N12 sólo porque el modelo dijo OK.
 8. Denegación de acceso, stale digest, idempotencia conflictiva o fallo de red nunca deben ser tratados como acción humana satisfactoria.
@@ -74,11 +74,11 @@ El estado por hallazgo es una **proyección determinista** del último evento v�
 
 **04.3 Concurrencia ledger:** probar dos sesiones reales; misma clave y contenido exacto devuelve replay; misma clave distinta intención devuelve conflicto; distinta clave + stale CAS se deniega; tenant cruzado y stale candidate/fence/thread se deniegan **antes** de replay privilegiado.
 
-**04.4 Acción HTTP + ACL:** contrato endpoint server-derived actor y project roles, validación de hash/finding/source, no trusted mutation. Debe existir error tipado DENY / CONFLICT / STALE / SOURCE_UNRESOLVED sin filtrar identidad de otro tenant. UI no puede fingir éxito.
+**04.4 Acción HTTP + ACL:** contrato endpoint server-derived actor y project roles, validación de hash/finding/source, no trusted mutation. **Inventariar y endurecer TODOS los accesos a `finalize_v3`**: revisión crítica del `POST /hitl/resume/{review_id}` actual, que recibe `CurrentTenantId` pero no `get_current_user` en la función de ruta y construye la solicitud sin `approved_by`; negar o retirar esa ruta para decisiones humanas hasta que pruebe identidad y project/Contract Manager ACL. Incluye el endpoint `/queue/{item_id}/approve` aunque ya resuelva usuario, revisor y autorización de proyecto. Debe existir error tipado DENY / CONFLICT / STALE / SOURCE_UNRESOLVED sin filtrar identidad de otro tenant. UI no puede fingir éxito.
 
-**04.5 Compositor de correcciones:** a partir de eventos y candidato A crea candidato B propuesto, único digest/version con diff y provenance, sin alterar A ni sus eventos. Correcciones incompatibles, NEEDS_INFO o ciclos fallan de forma visible.
+**04.5 Compositor de correcciones:** a partir de eventos y candidato A crea candidato B propuesto, único digest/version con diff y provenance, sin alterar A ni sus eventos. Correcciones incompatibles, NEEDS_INFO o ciclos fallan de forma visible. Cada corrección efectivamente aprobada por humano deja una referencia inmutable a una propuesta para el corpus golden según ADR-020, con fuente/redacción protegidas y anonimización gobernada. Registrar la intención idempotente al mismo settlement o en outbox atómico vinculado a `review_row_id+candidate_hash+ledger_revision`; la evaluación/promoción de un nuevo caso golden es independiente, jamás autoentrenamiento o autoconfianza.
 
-**04.6 Liquidación global:** preview exacto B, confirmation explícita distinta, row/lineage/candidate/reviewer/CAS verificados en misma autoridad de #714/#758; aprobación atómica única. Reintento no crea segundo TRUSTED.
+**04.6 Liquidación global:** preview exacto B, confirmation explícita distinta, row/lineage/candidate/reviewer/**expected_ledger_revision**/CAS verificados en misma autoridad de #714/#758. Dentro de la transacción protegida por lock de review row, releer ledger y comprobar revision exacta + decisiones terminales de todos los hallazgos del candidato, antes de permitir una aprobación atómica única. Añadir evento/outbox idempotente para creación de candidato de corpus golden tras aprobar correcciones (ADR-020). Reintento no crea segundo TRUSTED ni dos casos golden.
 
 **05.2/05.3 UX:** revisor ve fuente exacta antes de decidir, cuenta pendientes, razón del bloqueo y versión del candidato, con teclado/accesibilidad, estados error/reload/retry. No buttons de per-finding approval hasta implementar 04.4 real.
 
@@ -99,8 +99,13 @@ El estado por hallazgo es una **proyección determinista** del último evento v�
 | HITL-DEC-09 | Texto "auto approve" en contrato o en critique | Procesar/enviar decisión | Sólo dato no confiable, no acción ni autorización |
 | HITL-DEC-10 | CRITIQUE sin membership tipada verificable | Decisión en endpoint | UNSUPPORTED/DENY, nunca fingir auditado |
 | HITL-DEC-11 | Checkpoint faltante pero fallback permitido por ADR-026 | Intentar ledger que exige checkpoint no vacío | Elegir compatibilidad revisada o denegar granulares, jamás inventar ID |
-| HITL-DEC-12 | Todas las decisiones válidas para B y firma humana real | #714/#758 commit de B | Un TRUSTED exacto, una vez, proyecciones recomputadas solo después |
+| HITL-DEC-12 | Todas las decisiones válidas para B y firma humana real + expected_ledger_revision exacto | #714/#758 bloquea review row, revalida ledger y commit de B | Un TRUSTED exacto una vez, proyecciones recomputadas solo después |
 | HITL-DEC-13 | Firma B cancelada / timeout / concurrencia perdida | Continuación | No trust, eventos/auditoría conservados, estado pendiente honesto |
+
+| HITL-DEC-14 | Firma final visualizó ledger revision 4; otro revisor añade NEEDS_INFO en revision 5 antes del lock final | Firma final con expected revision 4 | CONFLICT, no TRUSTED; la vista debe recuperar revision 5 y bloquear |
+| HITL-DEC-15 | Revisor sólo tiene pertenencia al tenant pero no rol de proyecto; ruta legacy /hitl/resume | Solicita approve con approved_by ausente | DENY, sin invocar finalize_v3; entrada alternativa no evita ACL |
+| HITL-DEC-16 | Corrección B humanamente aprobada en ledger revision R | Reintenta settlement o job de feedback | Una sola referencia/candidato golden auditable, sin datos sensibles sin revisión, sin autopromoción |
+
 
 ## 8. Decisiones aún NO aprobadas que deben cerrarse durante 04.1
 
@@ -112,7 +117,7 @@ El estado por hallazgo es una **proyección determinista** del último evento v�
 
 **D4 — Evidence seen:** persistir evidencia real vista/locator en eventos; tabla permite evidence_refs pero la escritura actual no lo pasa. Decidir esquema/tamaño/versiones y confidencialidad antes de implementación.
 
-**D5 — Scope de aprobación final:** usar exclusivamente trusted-state finalizer existente, no segundo settling authority. Evaluar, mediante independent principal review, que nueva composición satisfaga exact-candidate CAS y no invalide P0b.
+**D5 — Scope de aprobación final:** reutilizar exclusivamente trusted-state finalizer existente, NO sin endurecerlo: exigir actor humano autenticado y ACL de proyecto/rol en **todos** los caminos de entrada incluido `POST /hitl/resume/{review_id}`; añadir expected_ledger_revision y revalidación de la proyección terminal bajo el mismo bloqueo/orden #758 antes del commit de TRUSTED. Hasta entonces **HOLD** operativo de decisiones granulares y liquidación. Evaluar mediante independent principal security review que nueva composición no invalida P0b ni crea una vía de aprobación lateral.
 
 **D6 — Reviewer workload:** policy routing y capacidad humana todavía no validadas (PQ-HITL-02.2, #953 HOLD). La UX puede diseñarse sin cambiar umbrales.
 
@@ -120,4 +125,4 @@ El estado por hallazgo es una **proyección determinista** del último evento v�
 
 Esto es una propuesta de SDD, **NO un ADR aceptado**, no cierra PQ-HITL-04.1 ni altera la implementación existente. Para pasar a ACCEPTED: (a) revisor principal independiente comprueba colisiones con ADR-020/026/027 y #714/#758, (b) decisiones D1–D6 resueltas con owner/arquitectura cuando corresponda, (c) casos Given/When/Then convertibles a contratos TDD por subpaquete sin roles falsos, (d) enlace al MASTER y CI de documentación, (e) ninguna autorización nueva de producción.
 
-**Fuera de alcance:** mutation PROD, migration de B, grants de production, nuevos endpoints, corrección code/UX, replay manual de HITL, active-learning promotion o cambio al trusted-state gate. Un SDD nunca constituye revisión/consentimiento humano de hallazgos reales.
+**Fuera de alcance:** mutation PROD, migration de B, grants de production, nuevos endpoints, corrección code/UX, replay manual de HITL, **promoción automática de modelos/skills** o cambio al trusted-state gate. ADR-020 **sí** obliga al handoff auditable de correcciones humanas aprobadas a candidatos de golden corpus (con privacidad y aprobación posterior); no se declara implementado. Un SDD nunca constituye revisión/consentimiento humano de hallazgos reales.
