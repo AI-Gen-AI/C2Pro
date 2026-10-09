@@ -777,7 +777,7 @@ This item was previously carried in `.c2pro/control/work-queue.yaml` under the i
 
 ### 2026-10-09 owner-approved DEV-14 task-first extension (SDD 14.1)
 
-**Task identity remains C2PRO-DEV-14**; do not mint another Product WBS or duplicate DEV ID. The owner approved Task-first planning with SDD/TDD and PR-level traceability. Supporting [SDD v1](c2pro-dev14-task-first-traceability-sdd-v1.md) freezes the contract and negative-test matrix; this approval is for bounded governance work, not a waiver of existing .c2pro authority.
+**Task identity remains C2PRO-DEV-14** (tracking issue [#991](https://github.com/AI-Gen-AI/C2Pro/issues/991)); do not mint another Product WBS or duplicate DEV ID. The owner approved Task-first planning with SDD/TDD and PR-level traceability. Supporting [SDD v1](c2pro-dev14-task-first-traceability-sdd-v1.md) freezes the contract and negative-test matrix; this approval is for bounded governance work, not a waiver of existing .c2pro authority.
 
 Break down the existing DEV-14 debt without expanding the current hot work queue into a historical task ledger:
 
