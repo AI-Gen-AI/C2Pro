@@ -265,6 +265,29 @@ class TestParseBudgetUseCase:
         assert res.bom_items == []
         assert res.confidence_score == 0.0
 
+    @pytest.mark.asyncio
+    async def test_budget_retry_receives_bounded_untrusted_critique_feedback(self) -> None:
+        """PQ-HITL-01.1: N9 must be able to correct an N12-flagged BOM omission."""
+        ai = _FakeAI(payload={"items": []})
+        notes = "Missing a confirmed budget line. " + ("X" * 2000)
+        await ParseBudgetUseCase(ai=ai).execute(
+            ParseBudgetCommand(text="Budget source rows", critique_notes=notes)
+        )
+        _, sent = ai.calls[0]
+        assert "Budget source rows" in sent
+        assert "Missing a confirmed budget line." in sent
+        assert "UNTRUSTED_CRITIQUE_FEEDBACK" in sent
+        assert "not instructions" in sent.lower()
+        assert "X" * 1500 not in sent
+
+    @pytest.mark.asyncio
+    async def test_first_budget_parse_without_feedback_uses_original_document(self) -> None:
+        ai = _FakeAI(payload={"items": []})
+        await ParseBudgetUseCase(ai=ai).execute(
+            ParseBudgetCommand(text="Budget source rows")
+        )
+        assert ai.calls[0][1] == "Budget source rows"
+
 @pytest.mark.asyncio
 async def test_critique_receives_original_clause_source_before_asserting_corruption() -> None:
     """PQ-HITL-01: source is not equivalent to extracted risk assertions."""
