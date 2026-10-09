@@ -263,7 +263,9 @@ DOWNSTREAM_RUNS: list[str] = []
 
 
 async def _downstream(state: ProjectState) -> ProjectState:
-    DOWNSTREAM_RUNS.append(str(state.get("human_feedback")))
+    # New fenced workers use a separate marker; legacy UUID checkpoints still
+    # store their marker in critique_notes and have empty human_feedback.
+    DOWNSTREAM_RUNS.append(str(state.get("human_feedback") or state.get("critique_notes")))
     return state
 
 
