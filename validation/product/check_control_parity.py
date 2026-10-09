@@ -770,10 +770,16 @@ def validate_work_package_mirror(doc: dict, md_text: str) -> list[str]:
             continue
         observed[task_id] = (parent.group(1), *role_cells, cells[3])
 
-    packages = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]["work_packages"]
+    spec = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]
+    packages = spec["work_packages"]
+    allowed_statuses = set(spec["status_vocabulary"])
     expected_ids = {str(row["id"]) for row in packages}
     for row in packages:
         task_id = str(row["id"])
+        if _s(row.get("status")) not in allowed_statuses:
+            problems.append(
+                f"PQ-HITL task {task_id}: status='{row.get('status')}' not in status_vocabulary"
+            )
         expected = tuple(_s(row[key]) for key in ("parent_issue", "role", "size", "priority", "status"))
         actual = observed.get(task_id)
         if actual is None:
