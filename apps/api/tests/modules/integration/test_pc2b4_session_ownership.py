@@ -114,6 +114,36 @@ async def test_own_03_a_caller_read_transaction_is_refused_not_ended(db: AsyncSe
     await db.rollback()
 
 
+async def test_own_03b_a_session_bound_to_a_caller_connection_is_refused(db: AsyncSession) -> None:
+    s, change_set_id, ids = await _world(db)
+    document_id = await _document_id(db, s)
+    await db.commit()
+    marker = f"connection-work-{uuid4()}"
+    engine = _engine()
+    try:
+        async with engine.connect() as conn:
+            await conn.begin()  # the caller's own transaction on its own connection
+            await conn.execute(text(
+                "INSERT INTO document_chunks (id, tenant_id, document_id, project_id, content, embedding, metadata) "
+                "VALUES (:id, :t, :d, :p, :c, CAST(:e AS vector), CAST('{}' AS jsonb))"),
+                {"id": uuid4(), "t": s.tenant, "d": document_id, "p": s.project, "c": marker,
+                 "e": "[" + ",".join(["0"] * 1536) + "]"})
+            joined = AsyncSession(bind=conn, expire_on_commit=False)  # commit/rollback would join the caller's
+            with pytest.raises(C2ProException) as refused:
+                await _reviewer(joined, _model(ids)).review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
+                                                            target=ReviewTargetKind.DRAFT, change_set_id=change_set_id)
+            assert refused.value.code == NOT_OWNED
+            assert conn.in_transaction()  # the caller's transaction is still the caller's
+            assert await conn.scalar(text("SELECT count(*) FROM document_chunks WHERE content = :c"),
+                                     {"c": marker}) == 1
+            await joined.close()
+            await conn.rollback()  # the caller decides
+    finally:
+        await engine.dispose()
+    assert await _chunks(s.project, marker) == 0
+    assert await _runs(s.project) == []
+
+
 # =========================================================================== every path ends its own transaction
 async def test_own_04_success_ends_its_transaction_and_the_caller_keeps_its_own_boundaries(db: AsyncSession) -> None:
     s, change_set_id, ids = await _world(db)
@@ -183,6 +213,20 @@ async def test_own_09_a_cancelled_task_ends_its_transaction(db: AsyncSession,
     with pytest.raises(asyncio.CancelledError):
         await _review(db, s, change_set_id, ids)
     assert not db.in_transaction()
+
+
+async def test_own_09b_a_cancellation_inside_its_own_transaction_ends_it_and_its_lock(
+        db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    s, change_set_id, ids = await _world(db)
+
+    async def cancelled_while_reading(*args: Any, **kwargs: Any) -> Any:
+        raise asyncio.CancelledError  # after the target was captured FOR SHARE, before the run opened
+
+    monkeypatch.setattr(reviewer_service, "inventory_evidence", cancelled_while_reading)
+    with pytest.raises(asyncio.CancelledError):
+        await _review(db, s, change_set_id, ids)
+    assert not db.in_transaction()
+    await _no_lock_on(change_set_id)
 
 
 async def test_own_10_a_reused_run_ends_its_transaction_and_holds_no_lock(

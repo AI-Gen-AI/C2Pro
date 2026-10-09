@@ -13,7 +13,8 @@ runs frozen, items immutable). It never creates or edits a change set, never sub
 applies anything and never creates a baseline: proposals wait for the human decision loop.
 
 Transactions: the review commits, so it OWNS the session it is given for the whole call. It refuses a
-session that carries caller work -- an open transaction or pending ORM changes -- instead of committing
+session that carries caller work -- an open transaction, pending ORM changes or a caller's connection
+(whose transaction it would join) -- instead of committing
 or discarding it (``WBSReviewerSessionNotOwnedError``), binds the tenant in its own first transaction
 and ends every transaction it opens on every path, so no caller work and no lock outlives the call. A
 caller hands the Reviewer a session of its own (a request session that already holds a transaction is
@@ -44,7 +45,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from src.core.tenants.types import require_tenant_id
 from src.wbs.adapters.persistence.governance_models import WBSChangeSetORM
@@ -281,7 +282,8 @@ class WBSReviewerService:
                                                 "(never AI, api or a service)")
         tenant_id = require_tenant_id(tenant_id)
         session = self.session
-        if session.in_transaction() or session.new or session.dirty or session.deleted:
+        if (session.in_transaction() or session.new or session.dirty or session.deleted
+                or isinstance(session.bind, AsyncConnection)):  # a connection's transaction would be joined
             raise WBSReviewerSessionNotOwnedError()  # never commit or discard the caller's work
         try:
             return await self._review(project_id=project_id, tenant_id=tenant_id, actor=actor, target=target,
@@ -292,6 +294,8 @@ class WBSReviewerService:
             raise
 
     async def _end_own_transaction(self) -> None:
+        if not self.session.in_transaction():
+            return  # already ended: nothing of the caller's is expired needlessly
         try:
             await self.session.rollback()
         except Exception:  # noqa: BLE001 - the original error is the one that propagates
