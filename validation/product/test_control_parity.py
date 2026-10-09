@@ -48,6 +48,21 @@ def test_atomic_work_package_status_drift_fails() -> None:
     assert any("PQ-HITL-03.1" in p and "status" in p for p in problems), problems
 
 
+def test_invalid_atomic_status_fails_even_if_human_table_matches() -> None:
+    doc = c.load_yaml()
+    packages = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]["work_packages"]
+    task = next(row for row in packages if row["id"] == "PQ-HITL-03.1")
+    task["status"] = "IN_PROGRES"
+    row = next(
+        line for line in _MD_TEXT.splitlines()
+        if line.startswith("| PQ-HITL-03.1 /")
+    )
+    assert "| IN_PROGRESS |" in row
+    changed = _MD_TEXT.replace(row, row.replace("| IN_PROGRESS |", "| IN_PROGRES |"))
+    problems = c.validate_work_package_mirror(doc, changed)
+    assert any("PQ-HITL-03.1" in p and "status_vocabulary" in p for p in problems), problems
+
+
 def test_atomic_work_package_role_drift_fails() -> None:
     row = next(
         line for line in _MD_TEXT.splitlines()
