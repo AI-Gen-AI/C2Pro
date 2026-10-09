@@ -273,7 +273,10 @@ class BudgetExtractionService:
         # consuming a budget retry. Prioritize the structured (still
         # untrusted) observations, then apply the strict total limit.
         concern_marker = "Check the following AI-generated concerns"
-        concern_start = notes.find(concern_marker)
+        # Free-form model notes may contain the same marker as untrusted data.
+        # The evaluator appends its structured block at the end, so choose
+        # that final marker rather than letting earlier text shadow it.
+        concern_start = notes.rfind(concern_marker)
         feedback = (
             notes[concern_start : concern_start + 1200]
             if concern_start >= 0
