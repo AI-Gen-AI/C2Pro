@@ -132,9 +132,9 @@ def test_golden_arithmetic_is_explicit_without_date_or_confidence_inference() ->
     a = _load()["arithmetic_fixture"]
     assert a["source_kind"] == "SEPARATE_SYNTHETIC_CONTRACT_NOT_PJ01"
     source = a["source_text"]
-    value_match = re.search(r"EUR ([0-9,]+)\\.00", source)
+    value_match = re.search(r"EUR ([0-9,]+)\.00", source)
     retention_match = re.search(r"retention is ([0-9]+) percent", source)
-    duration_match = re.search(r"\\(([0-9]+)\\) calendar days", source)
+    duration_match = re.search(r"\(([0-9]+)\) calendar days", source)
     assert value_match is not None
     assert retention_match is not None
     assert duration_match is not None
