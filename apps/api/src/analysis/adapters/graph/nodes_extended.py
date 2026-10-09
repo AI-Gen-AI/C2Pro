@@ -705,7 +705,15 @@ async def budget_parser_extended_node(state: ProjectState) -> ProjectState:
 
     try:
         use_case = ParseBudgetUseCase(ai=get_ai_service(tenant_id))
-        result = await use_case.execute(ParseBudgetCommand(text=text))
+        # First N9 pass receives original source only. Re-entry after N12
+        # critique carries bounded untrusted observations so budget retries
+        # can actually react instead of replaying the identical prompt.
+        retry_notes = (
+            state.get("critique_notes", "") if (state.get("retry_count") or 0) > 0 else ""
+        )
+        result = await use_case.execute(
+            ParseBudgetCommand(text=text, critique_notes=retry_notes)
+        )
         bom_items = [_budget_contract_payload(item) for item in result.bom_items]
     except Exception as exc:
         logger.warning("node_budget_parser_failed", exc_info=True)
