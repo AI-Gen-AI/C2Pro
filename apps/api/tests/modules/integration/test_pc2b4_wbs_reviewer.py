@@ -298,6 +298,7 @@ async def test_08_to_13_the_model_holds_no_governance_authority(db: AsyncSession
     draft = await db.scalar(select(WBSChangeSetORM).where(WBSChangeSetORM.id == change_set_id))
     assert draft is not None
     revision = draft.revision
+    await db.commit()  # the caller ends its own transaction: the Reviewer owns the session it is given
     result = await _review_draft(db, s, change_set_id, _model(ids))
     assert result.run.status == RunStatus.COMPLETED.value
     after = {
@@ -321,6 +322,7 @@ async def test_a_baseline_review_never_creates_a_draft_or_a_baseline(db: AsyncSe
     _, ids, applied = await _baseline_one(db, s)
     baselines = await _count(db, WBSBaselineORM, project_id=s.project)
     change_sets = await _count(db, WBSChangeSetORM, project_id=s.project)
+    await db.commit()  # the caller ends its own transaction: the Reviewer owns the session it is given
     result = await _reviewer(db, _model(ids)).review(project_id=s.project, tenant_id=s.tenant, actor=s.author,
                                                      target=ReviewTargetKind.REVIEW_OPTIMIZE,
                                                      baseline_id=applied.baseline_id)

@@ -12,7 +12,12 @@ failed or cancelled ONLY through the existing PC-2b.2 intelligence store (no sec
 runs frozen, items immutable). It never creates or edits a change set, never submits, approves or
 applies anything and never creates a baseline: proposals wait for the human decision loop.
 
-Transactions: the review commits. The RUNNING run is committed BEFORE any model call, so another
+Transactions: the review commits, so it OWNS the session it is given for the whole call. It refuses a
+session that carries caller work -- an open transaction or pending ORM changes -- instead of committing
+or discarding it (``WBSReviewerSessionNotOwnedError``), binds the tenant in its own first transaction
+and ends every transaction it opens on every path, so no caller work and no lock outlives the call. A
+caller hands the Reviewer a session of its own (a request session that already holds a transaction is
+refused). The RUNNING run is committed BEFORE any model call, so another
 session can see and cancel it, and no change-set lock or open transaction is held while the model
 works; the run is finalized in a fresh transaction that re-reads it under lock and keeps a state
 another session already set (CANCELLED, or FAILED by an expired lease). A RUNNING run whose worker was
@@ -179,8 +184,16 @@ def _unexpected_failure(reason: str = "the review pipeline raised an unexpected 
                                          ai_qualification_run=True, target_is_empty=False))
 
 
+class WBSReviewerSessionNotOwnedError(WBSIntelligenceStateError):
+    """The session carries caller work; the Reviewer commits, so it never runs on a shared transaction."""
+
+    def __init__(self) -> None:
+        super().__init__("the WBS Reviewer needs a session of its own: this one has an open transaction or "
+                         "pending changes, which are left untouched", code="WBS_REVIEWER_SESSION_NOT_OWNED")
+
+
 class WBSReviewerService:
-    """The offline Reviewer over one session; ``review`` commits its own work (see the module docstring)."""
+    """The offline Reviewer over a session it owns for each review (see the module docstring)."""
 
     def __init__(
         self,
@@ -267,6 +280,37 @@ class WBSReviewerService:
             raise WBSIntelligenceForbiddenError("only a human user or admin can request a WBS review "
                                                 "(never AI, api or a service)")
         tenant_id = require_tenant_id(tenant_id)
+        session = self.session
+        if session.in_transaction() or session.new or session.dirty or session.deleted:
+            raise WBSReviewerSessionNotOwnedError()  # never commit or discard the caller's work
+        try:
+            return await self._review(project_id=project_id, tenant_id=tenant_id, actor=actor, target=target,
+                                      change_set_id=change_set_id, baseline_id=baseline_id, evidence=evidence,
+                                      rerun=rerun, cancelled=cancelled)
+        except BaseException:
+            await self._end_own_transaction()  # a refusal or failure never strands the review's own transaction
+            raise
+
+    async def _end_own_transaction(self) -> None:
+        try:
+            await self.session.rollback()
+        except Exception:  # noqa: BLE001 - the original error is the one that propagates
+            logger.warning("wbs_review_rollback_error")
+
+    async def _review(
+        self,
+        *,
+        project_id: UUID,
+        tenant_id: UUID,
+        actor: Actor,
+        target: ReviewTargetKind,
+        change_set_id: UUID | None,
+        baseline_id: UUID | None,
+        evidence: EvidenceRequest | None,
+        rerun: bool,
+        cancelled: Callable[[], bool] | None,
+    ) -> ReviewResult:
+        await self._bind_tenant(tenant_id)  # the review's own first transaction carries the RLS second wall
         await self.store._require_project(project_id, tenant_id)
         scope = RunScope(tenant_id=tenant_id, project_id=project_id)
         request = evidence or EvidenceRequest()
@@ -308,6 +352,7 @@ class WBSReviewerService:
         opened = await self._open(scope=scope, captured=captured, manifest=manifest, profiles=profiles, key=key,
                                   actor=actor, actor_ref=actor_ref, nonce=nonce, provenance=provenance)
         if opened.reused:
+            await self.session.commit()  # end the review's own transaction: no change-set lock outlives the call
             return ReviewResult(run=opened.run, reused=True, manifest=manifest, pipeline=None)
         run_id = opened.run.id
         # The RUNNING run is committed BEFORE any model call: another session can see and cancel it, and
@@ -416,4 +461,5 @@ class WBSReviewerService:
             })
 
 
-__all__ = ["EVENT_RUN_USAGE", "ReviewResult", "ReviewTargetKind", "WBSReviewerService"]
+__all__ = ["EVENT_RUN_USAGE", "ReviewResult", "ReviewTargetKind", "WBSReviewerService",
+           "WBSReviewerSessionNotOwnedError"]
