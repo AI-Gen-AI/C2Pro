@@ -30,10 +30,10 @@ items:
   - work_id: C2PRO-DEV-14
     status: ready
     role: orchestrator
-    work_ref: null
+    work_ref: .c2pro/work/C2PRO-DEV-14.yaml
     priority: P2
     depends_on: []
-    review_policy: independent_principal
+    review_policy: principal_and_challenger
   # DEV-DEBT (registered 2026-08-30, surfaced by P0b-L4-4 / #581): the local web full-test
   # runner is unreliable. apps/web/scripts/vitest-run-all.mjs spawns vitest with shell:true
   # and an UNQUOTED 'src/tests/integration/**'. The shell expands it to 15 paths; --exclude

@@ -77,6 +77,9 @@ jobs:
             migrations:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
+              # Security regression for the migrated HITL downgrade guard
+              # must run against REAL PostgreSQL, never quietly skip.
+              - "apps/api/tests/integration/product_control/test_hitl_downgrade_rls_guard_pg.py"
             backend_docker:
               - "apps/api/**"
               - ".github/workflows/ci.yml"

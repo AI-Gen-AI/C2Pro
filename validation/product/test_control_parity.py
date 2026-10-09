@@ -32,6 +32,74 @@ def test_pristine_passes() -> None:
     assert c.run() == [], "pristine control files must have zero parity problems"
 
 
+def test_atomic_work_package_table_has_exact_state_and_assigned_role() -> None:
+    """All 28 Product task rows must mirror the canonical YAML authority."""
+    assert c.validate_work_package_mirror(c.load_yaml(), _MD_TEXT) == []
+
+
+def test_atomic_work_package_status_drift_fails() -> None:
+    row = next(
+        line for line in _MD_TEXT.splitlines()
+        if line.startswith("| PQ-HITL-03.1 /")
+    )
+    assert "| IN_PROGRESS |" in row
+    changed = _MD_TEXT.replace(row, row.replace("| IN_PROGRESS |", "| PLANNED |"))
+    problems = c.validate_work_package_mirror(c.load_yaml(), changed)
+    assert any("PQ-HITL-03.1" in p and "status" in p for p in problems), problems
+
+
+def test_invalid_atomic_status_fails_even_if_human_table_matches() -> None:
+    doc = c.load_yaml()
+    packages = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]["work_packages"]
+    task = next(row for row in packages if row["id"] == "PQ-HITL-03.1")
+    task["status"] = "IN_PROGRES"
+    row = next(
+        line for line in _MD_TEXT.splitlines()
+        if line.startswith("| PQ-HITL-03.1 /")
+    )
+    assert "| IN_PROGRESS |" in row
+    changed = _MD_TEXT.replace(row, row.replace("| IN_PROGRESS |", "| IN_PROGRES |"))
+    problems = c.validate_work_package_mirror(doc, changed)
+    assert any("PQ-HITL-03.1" in p and "status_vocabulary" in p for p in problems), problems
+
+
+def test_atomic_deliverable_and_acceptance_drift_fails() -> None:
+    row = next(line for line in _MD_TEXT.splitlines() if line.startswith("| PQ-HITL-03.1 /"))
+    changed_title = _MD_TEXT.replace(
+        row, row.replace("REVISION SCOPED READ PROOF", "REVISION SCOPE UNKNOWN")
+    )
+    issues = c.validate_work_package_mirror(c.load_yaml(), changed_title)
+    assert any("PQ-HITL-03.1" in p and "title_key" in p for p in issues), issues
+    changed_acceptance = _MD_TEXT.replace(
+        row, row.replace("no cross-tenant leak", "unverified cross-tenant leak")
+    )
+    issues = c.validate_work_package_mirror(c.load_yaml(), changed_acceptance)
+    assert any("PQ-HITL-03.1" in p and "acceptance" in p for p in issues), issues
+
+
+def test_duplicate_machine_task_and_wrong_declared_count_fail() -> None:
+    doc = c.load_yaml()
+    spec = doc["product_quality_hitl_2026_10_08"]["delivery_specification"]
+    duplicate = dict(spec["work_packages"][0])
+    spec["work_packages"].append(duplicate)
+    problems = c.validate_work_package_mirror(doc, _MD_TEXT)
+    assert any("duplicate" in p and "ID" in p for p in problems), problems
+    assert any("work_package_count" in p for p in problems), problems
+
+
+def test_atomic_work_package_role_drift_fails() -> None:
+    row = next(
+        line for line in _MD_TEXT.splitlines()
+        if line.startswith("| PQ-HITL-04.4 /")
+    )
+    assert "implementation_lead · M · P1" in row
+    changed = _MD_TEXT.replace(
+        row, row.replace("implementation_lead · M · P1", "qa · M · P1")
+    )
+    problems = c.validate_work_package_mirror(c.load_yaml(), changed)
+    assert any("PQ-HITL-04.4" in p and "role" in p for p in problems), problems
+
+
 def test_enums_valid_on_real_yaml() -> None:
     assert c.validate_enums(c.load_yaml()) == [], "every ADR/WBS status must be in its enum"
 

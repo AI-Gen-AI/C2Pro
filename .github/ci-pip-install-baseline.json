@@ -17,16 +17,16 @@
     {
       "behavior": {
         "env": {},
-        "run": "pip install \"pyyaml==6.0.3\" \"pytest>=9.0.3\"",
+        "run": "pip install \"pyyaml==6.0.3\" \"pytest==9.1.1\" \"jsonschema==4.25.1\"",
         "shell": null,
         "working_directory": null
       },
       "context": ".github/workflows/c2pro-development-control.yml::jobs.validate-control::name:Install minimal validation dependencies",
       "file": ".github/workflows/c2pro-development-control.yml",
-      "owner": "@AI-Gen-AI",
-      "reason": "Pre-existing install block present on main d7d1e6c when the drift guard was introduced (#685). Baselined as-is to detect drift; not re-reviewed for intrinsic safety. Remediation tracked in #600.",
-      "remediation_issue": "#600",
-      "sha256": "05ad7aaf0eb745f1b304444fac12ed35a5f3b422d5fcdc0e5d7c9f735e252e3e"
+      "owner": "AI-Gen-AI / C2Pro DEV-14",
+      "reason": "DEV-14 (#991), 2026-10-09: scoped control tests require pinned jsonschema for the collision-free Product WORK envelope schema and pinned pytest; approved owner-supervised C2Pro implementation, no production or provider-route authority.",
+      "remediation_issue": "#991",
+      "sha256": "febd3cf1437ca2816f70e5e2d426b413ed70ecee5080b87c8783894a0af4ab66"
     },
     {
       "behavior": {
@@ -41,6 +41,20 @@
       "reason": "Reviewed under #733: pinned PyYAML + pytest are the minimal dependencies required to execute product-control parity and production-qualification pytest contracts in the isolated guard.",
       "remediation_issue": "#733",
       "sha256": "b21f0dd4c3fe39401cec2a43720866bfeed99c77e1c21e6843d5af30b54abd03"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "python -m pip install --disable-pip-version-check \"pyyaml==6.0.3\"",
+        "shell": null,
+        "working_directory": null
+      },
+      "context": ".github/workflows/c2pro-task-trace-audit.yml::jobs.trace-audit::name:Install read-only parser",
+      "file": ".github/workflows/c2pro-task-trace-audit.yml",
+      "owner": "AI-Gen-AI / C2Pro DEV-14",
+      "reason": "DEV-14 (#991), 2026-10-09: read-only audit job uses a pinned PyYAML parser to inspect PR metadata; no credentials, merge, Product acceptance or enforcement authority.",
+      "remediation_issue": "#991",
+      "sha256": "9b7c9e9229f49e1cc07eb06a1729e31e61ba9ad062458201952e11e761bd3c23"
     },
     {
       "behavior": {
