@@ -267,7 +267,18 @@ class BudgetExtractionService:
     ) -> list[dict[str, Any]]:
         # N12 feedback describes an *untrusted* model concern. It is data for
         # the bounded retry, never an instruction or authoritative source.
-        feedback = critique_feedback.strip()[:1200]
+        notes = critique_feedback.strip()
+        # N12 appends typed concerns *after* free-form notes. Taking the
+        # first 1200 characters could drop every actionable quote while
+        # consuming a budget retry. Prioritize the structured (still
+        # untrusted) observations, then apply the strict total limit.
+        concern_marker = "Check the following AI-generated concerns"
+        concern_start = notes.find(concern_marker)
+        feedback = (
+            notes[concern_start : concern_start + 1200]
+            if concern_start >= 0
+            else notes[:1200]
+        )
         content = text
         if feedback:
             content = (
