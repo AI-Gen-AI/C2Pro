@@ -341,7 +341,7 @@ class TestParseBudgetUseCase:
         import json
 
         ai = _FakeAI(payload={"items": []})
-        quote = ("Quoted \\"payload\\" with backslash \\\\ " * 40)
+        quote = ('Quoted "payload" with backslash ' + chr(92) + ' ') * 40
         await ParseBudgetUseCase(ai=ai).execute(
             ParseBudgetCommand(
                 text="Original document budget",
@@ -352,7 +352,7 @@ class TestParseBudgetUseCase:
             )
         )
         _, content = ai.calls[0]
-        block = content.split("):\\n", 1)[1]
+        block = content.split("):", 1)[1].strip()
         assert len(block) <= 1200
         parsed = json.loads(block)
         assert isinstance(parsed, dict)
@@ -362,10 +362,10 @@ class TestParseBudgetUseCase:
         await ParseBudgetUseCase(ai=ai).execute(
             ParseBudgetCommand(
                 text="Original document budget",
-                critique_notes=('\\\\\\\\\\"' * 1200),
+                critique_notes=('\"' + chr(92)) * 1200,
             )
         )
-        block = ai.calls[0][1].split("):\\n", 1)[1]
+        block = ai.calls[0][1].split("):", 1)[1].strip()
         assert len(block) <= 1200
         assert isinstance(json.loads(block), str)
 
