@@ -440,6 +440,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["confidence_score"] = 0.95  # Mock confidence
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
+        state["critique_observations"] = []
         state["human_approval_required"] = False
         await _apply_temporal_review_gate(state)
         state["node_results"] = [
@@ -479,6 +480,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
         node_result = _failed_node_result("critique", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["human_approval_required"] = True
+        state["critique_observations"] = []
         state["node_results"] = [*state.get("node_results", []), node_result]
         state["messages"].append(AIMessage(content="N12 critique: failed (see node_results)"))
         return state
@@ -486,6 +488,30 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["confidence_score"] = result.confidence
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
+    # Only JSON-safe, explicitly untrusted claims enter the existing
+    # graph checkpoint and NodeResult. LOCATED proves textual occurrence
+    # in the indicated N12 source representation, NOT legal accuracy.
+    source_basis = (
+        "anonymized_text" if state.get("anonymized_text")
+        else "document_text" if state.get("document_text")
+        else "source_unavailable"
+    )
+    state["critique_observations"] = [
+        {
+            "claim": obs.claim,
+            "source_quote": obs.source_quote[:1000],
+            "source_quote_truncated": len(obs.source_quote) > 1000,
+            "witness_status": str(obs.witness.status),
+            "char_start": obs.witness.char_start,
+            "char_end": obs.witness.char_end,
+            "located_text": obs.witness.located_text,
+            "claim_verified": False,
+            "source_basis": source_basis,
+            "document_revision_id": state.get("document_revision_id"),
+            "scope": "N12_SOURCE_EXCERPT_ONLY",
+        }
+        for obs in result.observations
+    ]
     state["human_approval_required"] = result.human_approval_required
     await _apply_temporal_review_gate(state)
     state["node_results"] = [
@@ -585,6 +611,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
 
     Delegates domain routing to HumanInTheLoopService; interrupt stays here.
     """
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        StaleCritiqueReviewEvidence,
+    )
     from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 
     tenant_id = state.get("tenant_id")
@@ -653,6 +682,13 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
+                        # The selected revision must be immutable across
+                        # redelivery and cannot be inferred from quote text.
+                        "document_revision_id": state.get("document_revision_id"),
+                        # Untrusted N12 source-witnessed claims: preserve review
+                        # visibility but NEVER promote quotation match to
+                        # contract truth or to an authorized HITL decision.
+                        "critique_observations": list(state.get("critique_observations", [])),
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}
@@ -677,7 +713,12 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         AIMessage(content="HITL auto-approved; continuing analysis.")
                     )
                     return state
-        # HITL routing must fail open to LangGraph interrupt instead of approving.
+        # A stale evidence/review mismatch is a HARD STOP: falling back to
+        # interrupt would let a human approve a reused review with obsolete
+        # sources. Require explicit reconciliation before retry/resume.
+        except StaleCritiqueReviewEvidence:
+            raise
+        # Other HITL infrastructure failures fall back to a pending interrupt.
         except Exception as exc:  # noqa: BLE001
             import structlog
 

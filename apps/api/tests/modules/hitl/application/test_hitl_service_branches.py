@@ -14,6 +14,7 @@ import pytest
 
 from src.modules.hitl.application.human_in_the_loop_service import (
     HumanInTheLoopService,
+    StaleCritiqueReviewEvidence,
 )
 from src.modules.hitl.domain.entities import (
     ImpactLevel,
@@ -149,3 +150,207 @@ class TestReleaseItemBranches:
 
         with pytest.raises(ValueError, match="requires human approval"):
             await hitl_service.release_item(item_id=item.item_id)
+
+
+
+@pytest.mark.asyncio
+class TestExistingCritiqueEvidenceAuthority:
+    async def test_active_review_rejects_changed_observations_without_rebinding(
+        self, hitl_service: HumanInTheLoopService, mock_repo: AsyncMock,
+    ) -> None:
+        document = uuid4()
+        existing = ReviewItem(
+            item_id=document,
+            item_type="contract",
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            created_at=datetime.now(),
+            sla_due_date=datetime.now() + timedelta(days=1),
+            item_data={"critique_observations": [{"claim": "old", "claim_verified": False}]},
+            metadata={"review_type": "analysis_critique"},
+        )
+        mock_repo.find_active_review.return_value = existing
+        with pytest.raises(StaleCritiqueReviewEvidence):
+            await hitl_service.route_for_review(
+                item_id=document,
+                item_type="contract",
+                confidence=0.8,
+                impact_level=ImpactLevel.HIGH,
+                item_data={
+                    "critique_observations": [{"claim": "new", "claim_verified": False}]
+                },
+                metadata={"document_id": str(document), "review_type": "analysis_critique"},
+            )
+        mock_repo.add_review_item.assert_not_called()
+        mock_repo.update_review_item.assert_not_called()
+
+    async def test_identical_active_critique_evidence_reuses_review_without_update(
+        self, hitl_service: HumanInTheLoopService, mock_repo: AsyncMock,
+    ) -> None:
+        document = uuid4()
+        observations = [{"claim": "same", "claim_verified": False}]
+        existing = ReviewItem(
+            item_id=document,
+            item_type="contract",
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            created_at=datetime.now(),
+            sla_due_date=datetime.now() + timedelta(days=1),
+            item_data={"critique_observations": observations},
+            metadata={"review_type": "analysis_critique"},
+        )
+        mock_repo.find_active_review.return_value = existing
+        status = await hitl_service.route_for_review(
+            item_id=document,
+            item_type="contract",
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            item_data={"critique_observations": observations},
+            metadata={"document_id": str(document), "review_type": "analysis_critique"},
+        )
+        assert status is ReviewStatus.PENDING_REVIEW_REQUIRED
+        mock_repo.add_review_item.assert_not_called()
+        mock_repo.update_review_item.assert_not_called()
+
+
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("stored", "incoming"),
+        [
+            (
+                {"critique_observations": [], "critique_notes": "Old concern",
+                 "document_revision_id": "revision-A"},
+                {"critique_observations": [], "critique_notes": "New concern",
+                 "document_revision_id": "revision-A"},
+            ),
+            (
+                {"critique_observations": [], "critique_notes": "Same concern",
+                 "document_revision_id": "revision-A"},
+                {"critique_observations": [], "critique_notes": "Same concern",
+                 "document_revision_id": "revision-B"},
+            ),
+        ],
+    )
+    async def test_active_critique_reuse_rejects_changed_notes_or_revision(
+        self,
+        hitl_service: HumanInTheLoopService,
+        mock_repo: AsyncMock,
+        stored: dict,
+        incoming: dict,
+    ) -> None:
+        """#937: identical/empty quote lists cannot hide a changed candidate."""
+        document = uuid4()
+        mock_repo.find_active_review.return_value = ReviewItem(
+            item_id=document,
+            item_type="contract",
+            current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+            confidence=0.8,
+            impact_level=ImpactLevel.HIGH,
+            created_at=datetime.now(),
+            sla_due_date=datetime.now() + timedelta(days=1),
+            item_data=stored,
+            metadata={"review_type": "analysis_critique"},
+        )
+        with pytest.raises(StaleCritiqueReviewEvidence):
+            await hitl_service.route_for_review(
+                item_id=document,
+                item_type="contract",
+                confidence=0.8,
+                impact_level=ImpactLevel.HIGH,
+                item_data=incoming,
+                metadata={"document_id": str(document), "review_type": "analysis_critique"},
+            )
+        mock_repo.add_review_item.assert_not_called()
+        mock_repo.update_review_item.assert_not_called()
+
+
+
+@pytest.mark.asyncio
+async def test_late_candidate_binding_does_not_block_same_evidence_review() -> None:
+    """#714: N13 can first create the review before artifact binding is durable."""
+    from unittest.mock import AsyncMock
+
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        HumanInTheLoopService,
+    )
+
+    document = uuid4()
+    evidence = [{"claim": "Read the original", "claim_verified": False}]
+    existing = ReviewItem(
+        item_id=document,
+        item_type="contract",
+        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        confidence=0.7,
+        impact_level=ImpactLevel.HIGH,
+        created_at=datetime.now(),
+        sla_due_date=datetime.now() + timedelta(days=1),
+        item_data={"critique_observations": evidence},
+        metadata={
+            "review_type": "analysis_critique",
+            "candidate_binding": {"artifact_id": "bound-after-initial-review"},
+        },
+    )
+    repo = AsyncMock(spec=IReviewQueueRepository)
+    repo.find_active_review.return_value = existing
+    service = HumanInTheLoopService(
+        review_queue_repo=repo,
+        notification_service=AsyncMock(spec=INotificationService),
+        confidence_router=ConfidenceRouter(),
+    )
+    status = await service.route_for_review(
+        item_id=document,
+        item_type="contract",
+        confidence=0.7,
+        impact_level=ImpactLevel.HIGH,
+        item_data={"critique_observations": evidence},
+        metadata={"document_id": str(document), "review_type": "analysis_critique"},
+    )
+    assert status is ReviewStatus.PENDING_REVIEW_REQUIRED
+    repo.update_review_item.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_two_conflicting_explicit_candidate_bindings_fail_closed() -> None:
+    """A genuine candidate rebind may not silently inherit the prior review."""
+    from unittest.mock import AsyncMock
+
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        HumanInTheLoopService,
+        StaleCritiqueReviewEvidence,
+    )
+
+    document = uuid4()
+    evidence = [{"claim": "Same text", "claim_verified": False}]
+    existing = ReviewItem(
+        item_id=document, item_type="contract",
+        current_status=ReviewStatus.PENDING_REVIEW_REQUIRED,
+        confidence=0.7, impact_level=ImpactLevel.HIGH,
+        created_at=datetime.now(), sla_due_date=datetime.now() + timedelta(days=1),
+        item_data={"critique_observations": evidence},
+        metadata={
+            "review_type": "analysis_critique",
+            "candidate_binding": {"artifact_hash": "a" * 64},
+        },
+    )
+    repo = AsyncMock(spec=IReviewQueueRepository)
+    repo.find_active_review.return_value = existing
+    service = HumanInTheLoopService(
+        review_queue_repo=repo,
+        notification_service=AsyncMock(spec=INotificationService),
+        confidence_router=ConfidenceRouter(),
+    )
+    with pytest.raises(StaleCritiqueReviewEvidence):
+        await service.route_for_review(
+            item_id=document, item_type="contract", confidence=0.7,
+            impact_level=ImpactLevel.HIGH,
+            item_data={"critique_observations": evidence},
+            metadata={
+                "document_id": str(document),
+                "review_type": "analysis_critique",
+                "candidate_binding": {"artifact_hash": "b" * 64},
+            },
+        )
+    repo.update_review_item.assert_not_called()

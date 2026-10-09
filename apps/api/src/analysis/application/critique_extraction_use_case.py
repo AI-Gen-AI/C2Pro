@@ -18,6 +18,7 @@ from src.analysis.domain.ai_extraction import (
     CritiqueExtractionService,
 )
 from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
+from src.analysis.domain.critique_quote_witness import CritiqueObservation
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class CritiqueExtractionResult:
     retry_count: int
     human_approval_required: bool
     critique_notes: str       # possibly cleared by evaluation (OK → "")
+    observations: tuple[CritiqueObservation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -74,4 +76,5 @@ class CritiqueExtractionUseCase:
             retry_count=evaluation.retry_count,
             human_approval_required=evaluation.human_approval_required,
             critique_notes=evaluation.critique_notes,
+            observations=critique.observations,
         )

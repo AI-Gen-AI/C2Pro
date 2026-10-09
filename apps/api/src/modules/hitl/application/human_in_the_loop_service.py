@@ -21,6 +21,10 @@ from src.modules.hitl.ports.notification_service import INotificationService
 from src.modules.hitl.ports.review_queue_repository import IReviewQueueRepository
 
 
+class StaleCritiqueReviewEvidence(RuntimeError):
+    """A pending review must not silently acquire or display another N12 witness set."""
+
+
 class HumanInTheLoopService:
     """Enforces confidence gates, review routing, and SLA escalations."""
 
@@ -64,6 +68,38 @@ class HumanInTheLoopService:
                 review_type=review_type,
             )
             if existing is not None:
+                if review_type == "analysis_critique":
+                    # A takeover/retry may reuse a pending review ONLY when
+                    # its source witnesses and immutable candidate binding
+                    # still describe the same evidence. Never replace an
+                    # already-presented human-review payload silently.
+                    old_data = existing.item_data if isinstance(existing.item_data, dict) else {}
+                    old_meta = existing.metadata if isinstance(existing.metadata, dict) else {}
+                    # #714 binds the immutable candidate AFTER N13 has
+                    # created the review. A one-sided missing binding is
+                    # therefore inconclusive, not proof of a different source.
+                    # The existing #714/#758 DB authority still validates
+                    # a completed binding before any approval/resume.
+                    old_binding = old_meta.get("candidate_binding")
+                    new_binding = metadata.get("candidate_binding")
+                    conflicting_pin = (
+                        old_binding is not None
+                        and new_binding is not None
+                        and old_binding != new_binding
+                    )
+                    if (
+                        old_data.get("critique_observations", [])
+                        != item_data.get("critique_observations", [])
+                        or old_data.get("critique_notes", "")
+                        != item_data.get("critique_notes", "")
+                        or old_data.get("document_revision_id")
+                        != item_data.get("document_revision_id")
+                        or conflicting_pin
+                    ):
+                        raise StaleCritiqueReviewEvidence(
+                            "active critique review has different source evidence; "
+                            "explicit reconciliation is required"
+                        )
                 return ReviewStatus(existing.current_status)
 
         status = self.confidence_router.determine_review_status(

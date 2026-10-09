@@ -167,6 +167,54 @@ class TestRouterNodeThinDelegation:
 
 class TestCritiqueNodeThinDelegation:
     @pytest.mark.asyncio
+    async def test_structured_observations_survive_graph_checkpoint_as_unverified_claims(
+        self, monkeypatch
+    ) -> None:
+        """#937: reviewer must retain quote, witness, revision and honest source basis."""
+        from src.analysis.adapters.graph import nodes
+
+        source = "\n  Clause 5.2: The Contractor shall rectify defects within fourteen days."
+        quote = "The Contractor shall rectify defects"
+        ai = _FakeAI(payload={
+            "status": "OK",
+            "notes": "Check contractual obligation.",
+            "observations": [
+                {"claim": "Rectification is contractor duty", "source_quote": quote},
+                {"claim": "Wrong deadline", "source_quote": "thirty days"},
+            ],
+        })
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
+        state = _make_state(
+            document_text=source,
+            extracted_risks=[{"confidence": 0.9}],
+            document_revision_id="00000000-0000-0000-0000-000000000004",
+        )
+        result = await nodes.critique_node(state)
+        observations = result["critique_observations"]
+        assert len(observations) == 2
+        assert observations[0]["witness_status"] == "LOCATED"
+        assert observations[0]["char_start"] == source.index(quote)
+        assert observations[0]["char_end"] == source.index(quote) + len(quote)
+        assert observations[0]["claim_verified"] is False
+        assert observations[0]["source_basis"] == "document_text"
+        assert observations[0]["document_revision_id"] == state["document_revision_id"]
+        assert observations[1]["witness_status"] == "UNRESOLVED"
+        assert observations[1]["char_start"] is None
+        assert result["retry_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_critique_mock_clears_preexisting_observations(self, monkeypatch) -> None:
+        """Mocked critique never promotes old quoted witnesses into a new checkpoint."""
+        from src.analysis.adapters.graph import nodes
+
+        monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        result = await nodes.critique_node(
+            _make_state(critique_observations=[{"claim": "stale"}])
+        )
+        assert result["critique_observations"] == []
+
+    @pytest.mark.asyncio
     async def test_ok_path(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
@@ -358,6 +406,55 @@ class TestWbsExtractorMockBranch:
 
 
 class TestHumanInterruptNode:
+    @pytest.mark.asyncio
+    async def test_review_item_carries_unverified_critique_observations(
+        self, monkeypatch
+    ) -> None:
+        """#937: structured N12 evidence must reach the N13 review item, not only checkpoint."""
+        from src.analysis.adapters.graph import nodes
+
+        service = _FakeHitlService(ReviewStatus.APPROVED)
+        monkeypatch.setattr(
+            nodes,
+            "get_session_with_tenant",
+            lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "get_hitl_service_for_graph",
+            lambda *, session, tenant_id: service,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            nodes,
+            "interrupt",
+            lambda payload: (_ for _ in ()).throw(
+                AssertionError(f"unexpected interrupt: {payload}")
+            ),
+        )
+        observations = [{
+            "claim": "A thirty-day deadline was alleged",
+            "source_quote": "thirty days",
+            "witness_status": "UNRESOLVED",
+            "char_start": None,
+            "claim_verified": False,
+            "source_basis": "document_text",
+            "scope": "N12_SOURCE_EXCERPT_ONLY",
+        }]
+        result_revision_id = "00000000-0000-0000-0000-000000000a01"
+        await nodes.human_interrupt_node(
+            _make_state(
+                critique_observations=observations,
+                document_revision_id=result_revision_id,
+                doc_type="contract",
+                confidence_score=0.9,
+                human_approval_required=True,
+            )
+        )
+        assert service.calls[0]["item_data"]["critique_observations"] == observations
+        assert service.calls[0]["item_data"]["document_revision_id"] == result_revision_id
+
     @pytest.mark.asyncio
     async def test_auto_approved_hitl_status_continues_without_langgraph_interrupt(
         self, monkeypatch
@@ -1306,3 +1403,47 @@ class TestExtractorAIToolDelegation:
         )
         result = await nodes.budget_parser_node(_make_state(document_text="budget"))
         assert len(result["bom_items"]) == 1
+
+
+
+@pytest.mark.asyncio
+async def test_n13_stale_active_source_review_mismatch_hard_stops_before_interrupt(
+    monkeypatch,
+) -> None:
+    """#937: never resume or ask approval against mismatched source witnesses."""
+    from src.analysis.adapters.graph import nodes
+    from src.modules.hitl.application.human_in_the_loop_service import (
+        StaleCritiqueReviewEvidence,
+    )
+
+    class _StaleService:
+        async def route_for_review(self, **kwargs):
+            raise StaleCritiqueReviewEvidence("source evidence changed")
+
+    monkeypatch.setattr(
+        nodes,
+        "get_session_with_tenant",
+        lambda tenant_id: _AsyncContext(value={"tenant_id": tenant_id}),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        nodes,
+        "get_hitl_service_for_graph",
+        lambda *, session, tenant_id: _StaleService(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        nodes,
+        "interrupt",
+        lambda payload: (_ for _ in ()).throw(
+            AssertionError("stale review reached user interrupt")
+        ),
+    )
+    with pytest.raises(StaleCritiqueReviewEvidence, match="source evidence"):
+        await nodes.human_interrupt_node(
+            _make_state(
+                doc_type="contract",
+                human_approval_required=True,
+                critique_observations=[{"claim": "new", "claim_verified": False}],
+            )
+        )
