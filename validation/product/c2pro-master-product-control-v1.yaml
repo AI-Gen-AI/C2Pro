@@ -874,6 +874,18 @@ product_quality_hitl_2026_10_08:
   delivery_specification:
     schema: pq-hitl-work-breakdown-v1
     spec_ref: docs/product/pq-hitl-2026-01-delivery-spec-v1.md
+    task_traceability_governance:
+      owner_approved: "2026-10-09"
+      dev_parent_work_id: C2PRO-DEV-14
+      dev_subpackages: [DEV-14.1, DEV-14.2, DEV-14.3, DEV-14.4]
+      design_ref: docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md
+      design_state: PROPOSED_NOT_ENFORCED
+      execution_state: EXECUTION_BLOCKED_WORK_ENVELOPE
+      pr_primary_task_rule: "Every new governed PR must identify a canonical Product Task or Dev Task; a defect ID is never sufficient as primary task."
+      pr_cardinality: "One Task can have many PRs; one PR may exceptionally cover multiple Tasks with separately verifiable acceptance."
+      mandatory_linkage: [canonical_task_id, parent_issue_when_product, sdd_acceptance_ids, assigned_work_envelope, workspace_branch_base_guard, exact_head_ci, independent_review]
+      lifecycle_rule: "PR merge alone cannot update Task ACCEPTED, DEPLOYED or PROD_VALIDATED; human Product Control reconciliation is separate."
+      enabling_condition: "Phase-1 PR CI enforcement waits for machine-valid Product WORK envelopes, real assignment and approved staged audit; no bypass of .c2pro current.yaml reconciled_idle."
     tracking_authority: "Product Control YAML owns deliverable/task state; .c2pro work envelope owns execution; PRs carry evidence, not task completion authority."
     work_package_count: 28
     status_vocabulary: [PLANNED, IN_REVIEW_UNMERGED, BLOCKED, DEFERRED, IN_PROGRESS, MERGED_UNACCEPTED, ACCEPTED]
