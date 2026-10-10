@@ -10,7 +10,7 @@ No production mutation, tenant-scoped, deterministic IDs.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_OID, UUID, uuid5
 
 from sqlalchemy import select
@@ -38,6 +38,7 @@ async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int, trust_st
     existing = await db.get(DocumentRevisionORM, rev_id)
     if existing:
         return
+    now = _utcnow_naive()
     db.add(
         DocumentRevisionORM(
             revision_id=rev_id,
@@ -47,7 +48,9 @@ async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int, trust_st
             rev_no=rev_no,
             blob_hash="sha256placeholder",
             blob_key=f"rev/{rev_id}",
-            valid_from=_utcnow_naive(),
+            valid_from=now - timedelta(days=1) if rev_no == 1 else now,
+            # Exactly one open revision per document (uq_docrev_open_revision).
+            valid_to=now if rev_no == 1 else None,
         )
     )
 
