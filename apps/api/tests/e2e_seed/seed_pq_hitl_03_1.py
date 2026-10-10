@@ -17,7 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
-from src.documents.adapters.persistence.models import ClauseORM
+from src.core.auth.models import SubscriptionPlan, Tenant
+from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
+from src.documents.domain.models import DocumentStatus, DocumentType
+from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import DocumentRevisionORM
 
 # Reuse IDs from seed_wedge
@@ -30,6 +33,14 @@ REV_B_ID = UUID("00000000-0000-0000-0000-00000000a902")
 
 ARTIFACT_A_ID = UUID("00000000-0000-0000-0000-00000000b901")
 ARTIFACT_B_ID = UUID("00000000-0000-0000-0000-00000000b902")
+
+# Isolated disposable QA resources; tenant B does NOT have a Clerk Organization.
+# The authenticated E2E user belongs only to TENANT_ID.
+OTHER_TENANT_ID = UUID("00000000-0000-0000-0000-00000000a114")
+OTHER_TENANT_PROJECT_ID = UUID("00000000-0000-0000-0000-00000000c304")
+OTHER_TENANT_DOCUMENT_ID = UUID("00000000-0000-0000-0000-00000000d404")
+SAME_TENANT_PROJECT_ID = UUID("00000000-0000-0000-0000-00000000c305")
+SAME_TENANT_DOCUMENT_ID = UUID("00000000-0000-0000-0000-00000000d405")
 
 def _utcnow_naive():
     return datetime.now(UTC).replace(tzinfo=None)
@@ -97,6 +108,72 @@ async def _upsert_clauses(db: AsyncSession, rev_id: UUID, count: int) -> None:
             )
         )
 
+
+async def _seed_boundary_projects(db: AsyncSession) -> None:
+    """Real foreign-tenant and same-tenant foreign-project fixtures (QA DB only)."""
+    foreign_tenant = await db.get(Tenant, OTHER_TENANT_ID)
+    if foreign_tenant is None:
+        db.add(
+            Tenant(
+                id=OTHER_TENANT_ID,
+                name="PQ-HITL cross-tenant isolation QA",
+                slug="pq-hitl-031-isolation-tenant-b",
+                subscription_plan=SubscriptionPlan.PROFESSIONAL,
+                subscription_status="active",
+                is_active=True,
+            )
+        )
+        await db.flush()
+    elif foreign_tenant.slug != "pq-hitl-031-isolation-tenant-b":
+        raise RuntimeError("ISOLATION_FIXTURE_TENANT_ID_COLLISION")
+
+    for project_id, tenant_id, code in (
+        (OTHER_TENANT_PROJECT_ID, OTHER_TENANT_ID, "PQ031-TENANT-B"),
+        (SAME_TENANT_PROJECT_ID, TENANT_ID, "PQ031-PROJECT-A2"),
+    ):
+        existing = await db.get(ProjectORM, project_id)
+        if existing is not None:
+            if existing.tenant_id != tenant_id:
+                raise RuntimeError("ISOLATION_FIXTURE_PROJECT_SCOPE_CONFLICT")
+            continue
+        db.add(
+            ProjectORM(
+                id=project_id,
+                tenant_id=tenant_id,
+                name=code,
+                code=code,
+                status="active",
+                project_type="construction",
+                currency="EUR",
+            )
+        )
+    await db.flush()
+
+    for document_id, project_id, tenant_id, filename in (
+        (OTHER_TENANT_DOCUMENT_ID, OTHER_TENANT_PROJECT_ID, OTHER_TENANT_ID, "tenant-b-private.pdf"),
+        (SAME_TENANT_DOCUMENT_ID, SAME_TENANT_PROJECT_ID, TENANT_ID, "project-a2-only.pdf"),
+    ):
+        existing = await db.get(DocumentORM, document_id)
+        if existing is not None:
+            if existing.tenant_id != tenant_id or existing.project_id != project_id:
+                raise RuntimeError("ISOLATION_FIXTURE_DOCUMENT_SCOPE_CONFLICT")
+            continue
+        db.add(
+            DocumentORM(
+                id=document_id,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                document_type=DocumentType.CONTRACT,
+                filename=filename,
+                storage_url="synthetic-e2e/" + str(tenant_id) + "/" + filename,
+                file_size_bytes=128,
+                upload_status=DocumentStatus.PARSED,
+                created_by=None,
+            )
+        )
+    await db.flush()
+
+
 async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
     await _upsert_revision(db, REV_A_ID, rev_no=1, trust_state="trusted")
     await _upsert_revision(db, REV_B_ID, rev_no=2, trust_state="proposed")
@@ -108,6 +185,8 @@ async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
     await _upsert_artifact(db, ARTIFACT_B_ID, REV_B_ID, trust_state="proposed", lifecycle_status="active", artifact_version=2)
     await _upsert_clauses(db, REV_A_ID, 9)
     await _upsert_clauses(db, REV_B_ID, 7)
+    await db.flush()
+    await _seed_boundary_projects(db)
     await db.commit()
     # Verify exact counts for idempotency
     stmt_a = select(ClauseORM).where(ClauseORM.revision_id == REV_A_ID)
@@ -122,4 +201,6 @@ async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
         "document_id": DOC_CONTRACT_ID,
         "rev_a_id": REV_A_ID,
         "rev_b_id": REV_B_ID,
+        "other_tenant_project_id": OTHER_TENANT_PROJECT_ID,
+        "same_tenant_project_id": SAME_TENANT_PROJECT_ID,
     }

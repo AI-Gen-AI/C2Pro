@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { establishAuthenticatedSession, openProjects } from "./support/p0b-auth";
 
-const TENANT_ID = "00000000-0000-0000-0000-00000000a113";
+const OTHER_TENANT_PROJECT_ID = "00000000-0000-0000-0000-00000000c304";
+const OTHER_TENANT_DOCUMENT_ID = "00000000-0000-0000-0000-00000000d404";
+const SAME_TENANT_PROJECT_ID = "00000000-0000-0000-0000-00000000c305";
 const PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
 const DOCUMENT_ID = "00000000-0000-0000-0000-00000000d401";
 
@@ -43,7 +45,7 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
 
     await page.getByRole("button", { name: /User menu/i }).click();
     await page.getByRole("menuitem", { name: /Sign out/i }).click();
-    await expect(page.getByText(/Sign in/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to C2Pro" })).toBeVisible();
 
     await establishAuthenticatedSession(page);
     await page.goto(`/projects/${PROJECT_ID}/evidence?documentId=${DOCUMENT_ID}`);
@@ -53,20 +55,40 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await expect(preview.getByText(/9 stored clauses in this selected revision/i)).toBeVisible();
   });
 
-  test("negative access to unknown project returns no data", async ({ page }) => {
+  test("unknown project GET is denied without exposing revision data", async ({ page }) => {
     const unknownProjectId = "00000000-0000-0000-0000-ffffffffffff";
-    await page.goto(`/projects/${unknownProjectId}/evidence?documentId=${DOCUMENT_ID}`);
-    const errorText = page.getByText(/Revision history could not be loaded/i);
-    const notFound = page.getByRole("heading", { name: /Not found|404/i });
-    const forbidden = page.getByText(/Forbidden|403/i);
-    await expect(errorText.or(notFound).or(forbidden)).toBeVisible();
+    const projectResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith("/projects/" + unknownProjectId) &&
+        response.request().method() === "GET",
+    );
+    await page.goto("/projects/" + unknownProjectId + "/evidence?documentId=" + DOCUMENT_ID);
+    expect((await projectResponse).status()).toBe(404);
+    await expect(page.getByTestId("revision-history-readonly")).toHaveCount(0);
   });
 
-  test("negative access to wrong tenant project is forbidden", async ({ page }) => {
-    const otherTenantProjectId = "00000000-0000-0000-0000-00000000c304";
-    await page.goto(`/projects/${otherTenantProjectId}/evidence?documentId=${DOCUMENT_ID}`);
-    const notFound = page.getByRole("heading", { name: /Not found|404/i });
-    const forbidden = page.getByText(/Forbidden|403/i);
-    await expect(notFound.or(forbidden)).toBeVisible();
+  test("real tenant B project and document are hidden from tenant A Clerk user", async ({ page }) => {
+    const projectResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith("/projects/" + OTHER_TENANT_PROJECT_ID) &&
+        response.request().method() === "GET",
+    );
+    await page.goto("/projects/" + OTHER_TENANT_PROJECT_ID + "/evidence?documentId=" + OTHER_TENANT_DOCUMENT_ID);
+    expect((await projectResponse).status()).toBe(404);
+    await expect(page.getByTestId("revision-history-readonly")).toHaveCount(0);
+    await expect(page.getByText("tenant-b-private.pdf")).toHaveCount(0);
+  });
+
+  test("real same-tenant project excludes document belonging to another project", async ({ page }) => {
+    const projectResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.endsWith("/projects/" + SAME_TENANT_PROJECT_ID) &&
+        response.request().method() === "GET",
+    );
+    await page.goto("/projects/" + SAME_TENANT_PROJECT_ID + "/evidence?documentId=" + DOCUMENT_ID);
+    expect((await projectResponse).status()).toBe(200);
+    await expect(page.getByTestId("evidence-link-unavailable")).toBeVisible();
+    await expect(page.getByTestId("revision-history-readonly")).toHaveCount(0);
+    await expect(page.getByText(/9 stored clauses in this selected revision/i)).toHaveCount(0);
   });
 });

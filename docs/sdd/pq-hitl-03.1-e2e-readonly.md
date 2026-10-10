@@ -22,7 +22,7 @@
 6. UI shows `No trusted-current revision is available`.
 7. Evidence panel `revision-specific-preview` loads revision-bound clause text. SOURCE_NAVIGATION_NOT_PROVEN: clause rows are plain text; no real PDF/blob navigation is asserted until authentic source routing exists.
 8. Re-login stability: sign out/in via UI flow, re-assert same states.
-9. Negative access: unknown project / wrong tenant project returns 403/404, no data leakage.
+9. Negative access: an absent project and an actual seeded foreign-tenant project return backend GET 404. A separate seeded project within the authorized tenant remains accessible, but a document owned by the original project cannot be deep-linked through that different project.
 
 ## Non-requirements
 - No HITL approval, no write operations, no mutation of trust state.
@@ -40,6 +40,8 @@
 Separate idempotent fixture `apps/api/tests/e2e_seed/seed_pq_hitl_03_1.py`:
 - Reuse existing tenant `00000000-0000-0000-0000-00000000a113`, project `00000000-0000-0000-0000-00000000c303`, document `00000000-0000-0000-0000-00000000d401` from `seed_wedge`.
 - No new project creation.
+- Also seed real project+document resources in a foreign test tenant and another project+document in the authorized tenant, without a second Clerk identity or production data.
+- Run the seed twice on the disposable PostgreSQL database in CI to detect repeatability regressions.
 - Create two revisions for the document:
   - REV_A_ID: 9 clauses, artifact `trust_state=trusted`, `lifecycle_status=superseded`, `artifact_version=1`.
   - REV_B_ID: 7 clauses, artifact `trust_state=proposed`, `lifecycle_status=active`, `artifact_version=2`.
@@ -55,6 +57,8 @@ Playwright spec `apps/web/src/tests/e2e/pq-hitl-03.1-revision-readonly.spec.ts`:
   - `7 stored clauses in this selected revision`
   - `No trusted-current revision is available`
   - `Proposed — not trusted`
+
+The tests assert actual project HTTP responses rather than assuming visual 404 messages. They verify that the wrong-project document does not open evidence. They do NOT prove fine-grained same-tenant member ACL or full Clerk B-to-A browser isolation.
 
 ## CI reuse
 - Workflow `.github/workflows/ci.yml` with `RUN_FULL_E2E` can execute Playwright against seeded DB.

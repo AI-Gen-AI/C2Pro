@@ -48,6 +48,7 @@ export default defineConfig({
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
+        /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
       ],
       use: {
         ...devices["Desktop Chrome"],

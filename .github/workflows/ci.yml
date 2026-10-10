@@ -1010,6 +1010,8 @@ jobs:
                   async with get_raw_session() as db:
                       await seed_wedge_e2e(db)
                       await seed_pq_hitl_03_1(db)
+                      # Repeat in disposable PostgreSQL: idempotency is observable in CI.
+                      await seed_pq_hitl_03_1(db)
                       user = await db.get(User, USER_ID)
                       if user is None:
                           raise RuntimeError("FRT-192 seed user was not created")
