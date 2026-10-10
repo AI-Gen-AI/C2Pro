@@ -10,7 +10,7 @@ No production mutation, tenant-scoped, deterministic IDs.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import NAMESPACE_OID, UUID, uuid5
 
 from sqlalchemy import select
@@ -32,7 +32,7 @@ ARTIFACT_A_ID = UUID("00000000-0000-0000-0000-00000000b901")
 ARTIFACT_B_ID = UUID("00000000-0000-0000-0000-00000000b902")
 
 def _utcnow_naive():
-    return datetime.utcnow()
+    return datetime.now(UTC).replace(tzinfo=None)
 
 async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int, trust_state: str) -> None:
     existing = await db.get(DocumentRevisionORM, rev_id)
