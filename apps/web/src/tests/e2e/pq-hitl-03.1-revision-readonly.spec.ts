@@ -59,6 +59,7 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     const unknownProjectId = "00000000-0000-0000-0000-ffffffffffff";
     const projectResponse = page.waitForResponse(
       (response) =>
+        new URL(response.url()).pathname.startsWith("/api/") &&
         new URL(response.url()).pathname.endsWith("/projects/" + unknownProjectId) &&
         response.request().method() === "GET",
     );
@@ -70,6 +71,7 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
   test("real tenant B project and document are hidden from tenant A Clerk user", async ({ page }) => {
     const projectResponse = page.waitForResponse(
       (response) =>
+        new URL(response.url()).pathname.startsWith("/api/") &&
         new URL(response.url()).pathname.endsWith("/projects/" + OTHER_TENANT_PROJECT_ID) &&
         response.request().method() === "GET",
     );
@@ -82,6 +84,7 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
   test("real same-tenant project excludes document belonging to another project", async ({ page }) => {
     const projectResponse = page.waitForResponse(
       (response) =>
+        new URL(response.url()).pathname.startsWith("/api/") &&
         new URL(response.url()).pathname.endsWith("/projects/" + SAME_TENANT_PROJECT_ID) &&
         response.request().method() === "GET",
     );
