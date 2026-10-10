@@ -97,6 +97,8 @@ async def _upsert_clauses(db: AsyncSession, rev_id: UUID, count: int) -> None:
 async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
     await _upsert_revision(db, REV_A_ID, rev_no=1, trust_state="trusted")
     await _upsert_revision(db, REV_B_ID, rev_no=2, trust_state="proposed")
+    # Materialize FK parents before adding revision-bound artifacts/clauses.
+    await db.flush()
     # Rev A historical trusted artifact superseded -> not counted as trusted_bound
     await _upsert_artifact(db, ARTIFACT_A_ID, REV_A_ID, trust_state="trusted", lifecycle_status="superseded", artifact_version=1)
     # Rev B proposed active artifact
