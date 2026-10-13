@@ -64,6 +64,20 @@ The tests assert actual project HTTP responses rather than assuming visual 404 m
 - Workflow `.github/workflows/ci.yml` with `RUN_FULL_E2E` can execute Playwright against seeded DB.
 - Secrets provided by GitHub; no local credential exposure.
 
+## Adversarial qualification and acceptance evidence
+- Before COMMIT, assert tenant/project/document/revision-bound A9/B7 clause IDs,
+  source-scoped revision/artifact identity, historical A / proposed B, and
+  canonical current revision resolver UNRESOLVED (no trusted-current authority).
+- Duplicate seed runs on disposable PostgreSQL must be idempotent; a separate
+  PostgreSQL qualification executes savepoint-isolated partial-clause retry and
+  conflicting revision number, artifact trust, and clause content negatives.
+  Each negative MUST fail closed; rollback leaves the fixture unchanged.
+- Successful Playwright captures **only** the synthetic revision panel A/B
+  (no Clerk identity or real contract blobs), uploaded as short-lived QA
+  screenshots on successful gated execution, in addition to HTTP results.
+- These screenshots do not qualify source/PDF navigation; keep
+  SOURCE_NAVIGATION_NOT_PROVEN, which remains assigned to #942.
+
 ## Risks
 - Missing seed data leads to empty revision list.
 - UI text changes break selectors; use data-testid.

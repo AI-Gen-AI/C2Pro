@@ -13,7 +13,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_OID, UUID, uuid5
 
-from sqlalchemy import select
+from sqlalchemy import bindparam, select, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
@@ -21,6 +22,7 @@ from src.core.auth.models import SubscriptionPlan, Tenant
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.current_revision_sql import current_revision_lateral
 from src.temporal.adapters.persistence.models import DocumentRevisionORM
 
 # Reuse IDs from seed_wedge
@@ -45,9 +47,24 @@ SAME_TENANT_DOCUMENT_ID = UUID("00000000-0000-0000-0000-00000000d405")
 def _utcnow_naive():
     return datetime.now(UTC).replace(tzinfo=None)
 
-async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int, trust_state: str) -> None:
+def _assert_revision_identity(existing: DocumentRevisionORM, rev_no: int) -> None:
+    if (
+        existing.tenant_id != TENANT_ID
+        or existing.project_id != PROJECT_ID
+        or existing.document_id != DOC_CONTRACT_ID
+        or existing.rev_no != rev_no
+        or existing.blob_hash != "sha256placeholder"
+        or existing.blob_key != f"rev/{existing.revision_id}"
+        or (existing.valid_to is None) != (rev_no == 2)
+        or (rev_no == 1 and existing.valid_to <= existing.valid_from)
+    ):
+        raise RuntimeError("PQ031_SEED_REVISION_SCOPE_OR_TEMPORAL_CONFLICT")
+
+
+async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int) -> None:
     existing = await db.get(DocumentRevisionORM, rev_id)
-    if existing:
+    if existing is not None:
+        _assert_revision_identity(existing, rev_no)
         return
     now = _utcnow_naive()
     db.add(
@@ -60,14 +77,42 @@ async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int, trust_st
             blob_hash="sha256placeholder",
             blob_key=f"rev/{rev_id}",
             valid_from=now - timedelta(days=1) if rev_no == 1 else now,
-            # Exactly one open revision per document (uq_docrev_open_revision).
             valid_to=now if rev_no == 1 else None,
         )
     )
 
-async def _upsert_artifact(db: AsyncSession, artifact_id: UUID, rev_id: UUID, trust_state: str, lifecycle_status: str, artifact_version: int) -> None:
+
+def _assert_artifact_identity(
+    existing: DocumentArtifactORM,
+    rev_id: UUID,
+    trust_state: str,
+    lifecycle_status: str,
+    artifact_version: int,
+) -> None:
+    if (
+        existing.tenant_id != TENANT_ID
+        or existing.project_id != PROJECT_ID
+        or existing.document_id != DOC_CONTRACT_ID
+        or existing.document_revision_id != rev_id
+        or existing.artifact_version != artifact_version
+        or existing.trust_state != trust_state
+        or existing.lifecycle_status != lifecycle_status
+        or existing.payload != {"revision_id": str(rev_id), "trust_state": trust_state}
+    ):
+        raise RuntimeError("PQ031_SEED_ARTIFACT_IDENTITY_OR_TRUST_CONFLICT")
+
+
+async def _upsert_artifact(
+    db: AsyncSession,
+    artifact_id: UUID,
+    rev_id: UUID,
+    trust_state: str,
+    lifecycle_status: str,
+    artifact_version: int,
+) -> None:
     existing = await db.get(DocumentArtifactORM, artifact_id)
-    if existing:
+    if existing is not None:
+        _assert_artifact_identity(existing, rev_id, trust_state, lifecycle_status, artifact_version)
         return
     db.add(
         DocumentArtifactORM(
@@ -83,18 +128,38 @@ async def _upsert_artifact(db: AsyncSession, artifact_id: UUID, rev_id: UUID, tr
         )
     )
 
+
+def _expected_clause_id(rev_id: UUID, index: int) -> UUID:
+    return uuid5(NAMESPACE_OID, f"{rev_id}-{index}")
+
+
+def _assert_clause_scope(clause: ClauseORM, rev_id: UUID, index: int) -> None:
+    if (
+        clause.tenant_id != TENANT_ID
+        or clause.project_id != PROJECT_ID
+        or clause.document_id != DOC_CONTRACT_ID
+        or clause.revision_id != rev_id
+        or clause.id != _expected_clause_id(rev_id, index)
+        or clause.clause_code != f"{rev_id.hex[:4]}.{index+1}"
+        or clause.full_text != f"Clause {index+1} for revision {rev_id}"
+    ):
+        raise RuntimeError("PQ031_SEED_CLAUSE_SCOPE_OR_CONTENT_CONFLICT")
+
+
 async def _upsert_clauses(db: AsyncSession, rev_id: UUID, count: int) -> None:
-    # Load existing clause ids for this revision
-    stmt = select(ClauseORM.id).where(
-        ClauseORM.document_id == DOC_CONTRACT_ID,
-        ClauseORM.tenant_id == TENANT_ID,
-        ClauseORM.revision_id == rev_id,
-    )
-    result = await db.execute(stmt)
-    existing_ids = set(result.scalars().all())
-    for i in range(count):
-        clause_id = uuid5(NAMESPACE_OID, f"{rev_id}-{i}")
-        if clause_id in existing_ids:
+    # All rows bound to this revision must be in this fixture's exact scope.
+    rows = (
+        await db.execute(select(ClauseORM).where(ClauseORM.revision_id == rev_id))
+    ).scalars().all()
+    existing_by_id = {row.id: row for row in rows}
+    expected_ids = {_expected_clause_id(rev_id, index) for index in range(count)}
+    if len(rows) != len(existing_by_id) or not set(existing_by_id).issubset(expected_ids):
+        raise RuntimeError("PQ031_SEED_UNEXPECTED_REVISION_CLAUSE")
+    for index in range(count):
+        clause_id = _expected_clause_id(rev_id, index)
+        existing = existing_by_id.get(clause_id)
+        if existing is not None:
+            _assert_clause_scope(existing, rev_id, index)
             continue
         db.add(
             ClauseORM(
@@ -103,10 +168,67 @@ async def _upsert_clauses(db: AsyncSession, rev_id: UUID, count: int) -> None:
                 project_id=PROJECT_ID,
                 document_id=DOC_CONTRACT_ID,
                 revision_id=rev_id,
-                clause_code=f"{rev_id.hex[:4]}.{i+1}",
-                full_text=f"Clause {i+1} for revision {rev_id}",
+                clause_code=f"{rev_id.hex[:4]}.{index+1}",
+                full_text=f"Clause {index+1} for revision {rev_id}",
             )
         )
+
+
+async def verify_pq_hitl_03_1_seed(db: AsyncSession) -> None:
+    """Fail closed before COMMIT on binding, counts and canonical trust authority."""
+    document = await db.get(DocumentORM, DOC_CONTRACT_ID)
+    if (
+        document is None
+        or document.tenant_id != TENANT_ID
+        or document.project_id != PROJECT_ID
+    ):
+        raise RuntimeError("PQ031_SEED_DOCUMENT_SCOPE_CONFLICT")
+
+    for revision_id, rev_no, expected_count, artifact_id, trust, lifecycle, version in (
+        (REV_A_ID, 1, 9, ARTIFACT_A_ID, "trusted", "superseded", 1),
+        (REV_B_ID, 2, 7, ARTIFACT_B_ID, "proposed", "active", 2),
+    ):
+        revision = await db.get(DocumentRevisionORM, revision_id)
+        if revision is None:
+            raise RuntimeError("PQ031_SEED_REVISION_MISSING")
+        _assert_revision_identity(revision, rev_no)
+        artifact = await db.get(DocumentArtifactORM, artifact_id)
+        if artifact is None:
+            raise RuntimeError("PQ031_SEED_ARTIFACT_MISSING")
+        _assert_artifact_identity(artifact, revision_id, trust, lifecycle, version)
+        rows = (
+            await db.execute(
+                select(ClauseORM).where(ClauseORM.revision_id == revision_id)
+            )
+        ).scalars().all()
+        if len(rows) != expected_count:
+            raise RuntimeError(f"PQ031_SEED_CLAUSE_COUNT_CONFLICT_{rev_no}")
+        indices = {_expected_clause_id(revision_id, i): i for i in range(expected_count)}
+        if {c.id for c in rows} != set(indices):
+            raise RuntimeError("PQ031_SEED_CLAUSE_IDENTITY_CONFLICT")
+        for clause in rows:
+            _assert_clause_scope(clause, revision_id, indices[clause.id])
+
+    resolver_sql = current_revision_lateral("d.id", "d.tenant_id")
+    stmt = text(
+        "SELECT cur.revision_id, cur.resolved, cur.trusted "
+        "FROM public.documents AS d "
+        f"CROSS JOIN LATERAL {resolver_sql} AS cur "
+        "WHERE d.id = :doc_id AND d.tenant_id = :tenant_id "
+        "AND d.project_id = :project_id"
+    ).bindparams(
+        bindparam("doc_id", type_=PGUUID(as_uuid=True)),
+        bindparam("tenant_id", type_=PGUUID(as_uuid=True)),
+        bindparam("project_id", type_=PGUUID(as_uuid=True)),
+    )
+    status = (
+        await db.execute(
+            stmt,
+            {"doc_id": DOC_CONTRACT_ID, "tenant_id": TENANT_ID, "project_id": PROJECT_ID},
+        )
+    ).one_or_none()
+    if status is None or status.revision_id is not None or status.resolved or status.trusted:
+        raise RuntimeError("PQ031_SEED_TRUSTED_CURRENT_MUST_REMAIN_UNRESOLVED")
 
 
 async def _seed_boundary_projects(db: AsyncSession) -> None:
@@ -175,8 +297,8 @@ async def _seed_boundary_projects(db: AsyncSession) -> None:
 
 
 async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
-    await _upsert_revision(db, REV_A_ID, rev_no=1, trust_state="trusted")
-    await _upsert_revision(db, REV_B_ID, rev_no=2, trust_state="proposed")
+    await _upsert_revision(db, REV_A_ID, rev_no=1)
+    await _upsert_revision(db, REV_B_ID, rev_no=2)
     # Materialize FK parents before adding revision-bound artifacts/clauses.
     await db.flush()
     # Rev A historical trusted artifact superseded -> not counted as trusted_bound
@@ -187,14 +309,8 @@ async def seed_pq_hitl_03_1(db: AsyncSession) -> dict:
     await _upsert_clauses(db, REV_B_ID, 7)
     await db.flush()
     await _seed_boundary_projects(db)
+    await verify_pq_hitl_03_1_seed(db)
     await db.commit()
-    # Verify exact counts for idempotency
-    stmt_a = select(ClauseORM).where(ClauseORM.revision_id == REV_A_ID)
-    stmt_b = select(ClauseORM).where(ClauseORM.revision_id == REV_B_ID)
-    count_a = (await db.execute(stmt_a)).scalars().all()
-    count_b = (await db.execute(stmt_b)).scalars().all()
-    if len(count_a) != 9 or len(count_b) != 7:
-        raise RuntimeError(f"PQ-HITL-03.1 seed verification failed: rev A clauses={len(count_a)}, rev B clauses={len(count_b)}")
     return {
         "tenant_id": TENANT_ID,
         "project_id": PROJECT_ID,

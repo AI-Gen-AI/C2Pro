@@ -29,12 +29,15 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await expect(preview).toBeVisible();
     await expect(preview.getByText(/9 stored clauses in this selected revision/i)).toBeVisible();
     await expect(preview.getByText(/Proposed — not trusted/i)).toBeHidden();
+    // Synthetic revision panel only: do not capture Clerk identity or contract source.
+    await panel.screenshot({ path: test.info().outputPath("pq-hitl-031-rev-a.png") });
 
     await page.getByRole("button", { name: /^Revision 2 —/ }).click();
     await expect(preview.getByText(/7 stored clauses in this selected revision/i)).toBeVisible();
     await expect(preview.getByText(/Proposed — not trusted/i)).toBeVisible();
 
     await expect(preview.getByRole("listitem")).toHaveCount(7);
+    await panel.screenshot({ path: test.info().outputPath("pq-hitl-031-rev-b.png") });
   });
 
   test("re-login stability preserves revision states", async ({ page }) => {
