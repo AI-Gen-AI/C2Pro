@@ -234,6 +234,10 @@ def test_untrusted_attestation_workflow_or_ref_is_rejected() -> None:
 
 def test_duplicate_reviews_and_check_runs_are_rejected() -> None:
     snap = _snapshot()
+    receipt = {"receipt_id": "synthetic"}
+    receipt_digest = "sha256:" + hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    ).hexdigest()
     review = {
         "source": "T1",
         "review_id": 70001,
@@ -243,8 +247,8 @@ def test_duplicate_reviews_and_check_runs_are_rejected() -> None:
         "state": "APPROVED",
         "pr_number": 7,
         "repository_id": 1,
-        "receipt": {"receipt_id": "synthetic"},
-        "body_receipt_digest": "sha256:" + "1" * 64,
+        "receipt": receipt,
+        "body_receipt_digest": receipt_digest,
         "identity_verified": True,
     }
     snap["reviews"] = [review, copy.deepcopy(review)]
@@ -263,3 +267,27 @@ def test_canonical_inputs_digest_is_recomputed_from_trusted_payload() -> None:
         json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()
     assert canonical_inputs_digest(payload) == expected
+
+
+def test_runtime_source_uses_only_public_verifier_api() -> None:
+    source = (
+        __import__("pathlib").Path(__file__).resolve().parents[2]
+        / "scripts/development/review_attestation/github_context_adapter.py"
+    ).read_text(encoding="utf-8")
+    assert "_verify_with_disabled_rules" not in source
+    assert "verifier.verify(receipts, policy, context)" in source
+
+
+def test_audit_workflow_is_base_only_and_has_no_write_permissions() -> None:
+    workflow = (
+        __import__("pathlib").Path(__file__).resolve().parents[2]
+        / ".github/workflows/c2pro-review-attestation-audit.yml"
+    ).read_text(encoding="utf-8")
+    assert "pull_request_target:" in workflow
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "github.event.pull_request.head.sha" not in workflow.split("Checkout trusted base only", 1)[1].split("Setup trusted", 1)[0]
+    assert "contents: write" not in workflow
+    assert "pull-requests: write" not in workflow
+    assert "checks: write" not in workflow
+    assert "id-token: write" not in workflow
