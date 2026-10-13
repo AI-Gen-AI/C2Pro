@@ -312,6 +312,7 @@ context:
     changed_files_complete: true
   effective_risk_class: architecture
   implementation_evidence:
+    work_id: C2PRO-DEV-14
     worker_id: claude_code
     verified: true
     evidence_ref: work-receipt-synthetic

@@ -8,6 +8,10 @@ ablation test switches each rule off in turn and proves some case then slips thr
 from __future__ import annotations
 
 import copy
+import json
+import subprocess
+import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +30,7 @@ from review_receipt_builders import (
 )
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "review_receipts"
+VERIFIER = Path(__file__).resolve().parents[2] / "scripts" / "development" / "verify_review_receipts.py"
 
 
 def codes(receipts: list[dict[str, Any]], policy: dict[str, Any], ctx: dict[str, Any]) -> set[str]:
@@ -741,3 +746,137 @@ def test_public_verify_has_no_rule_ablation_argument() -> None:
     receipts, policy, ctx = normal_case()
     with pytest.raises(TypeError):
         vr.verify(receipts, policy, ctx, disabled_rules=frozenset(vr.RULES))
+
+
+# ============================================================================ #1013 post-merge findings (RED first)
+# CX-P1 / CX-P2 are the Codex review threads on merged #1010; C6 is the AUDIT_ONLY exit-code finding.
+def _foreign_work(receipts: list[dict[str, Any]], ctx: dict[str, Any], index: int = 0) -> None:
+    receipts[index]["work_id"] = "C2PRO-DEV-99"
+    reattest(receipts, ctx)  # a freshly attested receipt: only the work binding can reject it
+
+
+def test_1013_cx_p1_receipt_for_another_work_item_is_rejected() -> None:
+    receipts, policy, ctx = normal_case()
+    _foreign_work(receipts, ctx)
+    assert_rejected("WORK_MISMATCH", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("index", [0, 1, 2])
+def test_1013_cx_p1_every_architecture_role_is_bound_to_the_work(index: int) -> None:
+    receipts, policy, ctx = architecture_case()
+    _foreign_work(receipts, ctx, index)
+    assert_rejected("WORK_MISMATCH", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda e: e.pop("work_id"),
+    lambda e: e.update(work_id=None),
+    lambda e: e.update(work_id=14),
+    lambda e: e.update(work_id=""),
+    lambda e: e.update(work_id="c2pro-dev-14"),
+    lambda e: e.update(work_id="C2PRO-DEV-14 "),
+    lambda e: e.update(work_id="C2PRO-DEV-14\n"),
+    lambda e: e.update(work_id=["C2PRO-DEV-14"]),
+])
+def test_1013_cx_p1_missing_or_malformed_trusted_work_id_fails_closed(mutate: Callable[[dict[str, Any]], Any]) -> None:
+    receipts, policy, ctx = normal_case()
+    mutate(ctx["implementation_evidence"])
+    assert_rejected("IMPLEMENTER_UNVERIFIED", receipts, policy, ctx)
+
+
+def test_1013_cx_p1_receipt_cannot_supply_its_own_work_identity() -> None:
+    """With no trusted work id, the receipt's self-declared one is never used as a fallback."""
+    receipts, policy, ctx = normal_case()
+    del ctx["implementation_evidence"]["work_id"]
+    assert receipts[0]["work_id"] == "C2PRO-DEV-14"
+    assert_rejected("IMPLEMENTER_UNVERIFIED", receipts, policy, ctx)
+
+
+def _ci_run(run_id: int, conclusion: str) -> dict[str, Any]:
+    return {"id": run_id, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD, "conclusion": conclusion,
+            "workflow_path": ".github/workflows/ci.yml", "workflow_sha": "c1" * 20}
+
+
+def _observe(receipts: list[dict[str, Any]], ctx: dict[str, Any], *observed: tuple[int, str]) -> None:
+    receipts[0]["result"]["tests_observed"] = [{"name": "CI Status", "check_run_id": i, "conclusion": c}
+                                               for i, c in observed]
+    reattest(receipts, ctx)
+
+
+def test_1013_cx_p2_approval_that_observed_a_failed_required_check_is_rejected() -> None:
+    """Historical failure (500) then success (501): the gate is green, but the receipt saw only the failure."""
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].insert(0, _ci_run(500, "failure"))
+    _observe(receipts, ctx, (500, "failure"))
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_1013_cx_p2_stale_success_superseded_by_a_newer_run_is_rejected() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].insert(0, _ci_run(499, "success"))
+    _observe(receipts, ctx, (499, "success"))  # a later run (501) exists; the receipt did not see it
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_1013_cx_p2_a_failed_observation_is_not_cleared_by_also_observing_the_success() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].insert(0, _ci_run(500, "failure"))
+    _observe(receipts, ctx, (501, "success"), (500, "failure"))
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_1013_cx_p2_fabricated_required_check_is_rejected() -> None:
+    receipts, policy, ctx = normal_case()
+    _observe(receipts, ctx, (999, "success"))
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_1013_cx_p2_failed_required_check_is_rejected_by_the_receipt_rule_alone() -> None:
+    """The latest run failed and the receipt says so; reject at receipt level, not only at gate level."""
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"][0]["conclusion"] = "failure"
+    _observe(receipts, ctx, (501, "failure"))
+    result = vr._verify_with_disabled_rules(receipts, policy, ctx, frozenset())
+    assert any(v.code == "CHECK_PROVENANCE" and v.receipt_id == receipts[0]["receipt_id"] for v in result.violations)
+
+
+def test_1013_cx_p2_observing_the_latest_successful_run_still_passes() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].insert(0, _ci_run(500, "failure"))
+    _observe(receipts, ctx, (501, "success"))
+    assert vr.verify(receipts, policy, ctx).gate_satisfied
+
+
+def _run_cli(tmp_path: Path, receipts: Any, policy: Any, ctx: Any) -> tuple[int, dict[str, Any]]:
+    for name, value in (("receipts", receipts), ("policy", policy), ("context", ctx)):
+        (tmp_path / f"{name}.yaml").write_text(yaml.safe_dump(value))
+    args = [str(tmp_path / f"{n}.yaml") for n in ("receipts", "policy", "context")]
+    proc = subprocess.run([sys.executable, str(VERIFIER), "--receipts", args[0], "--policy", args[1], "--context", args[2]],
+                          capture_output=True, text=True, check=False, timeout=60)
+    return proc.returncode, json.loads(proc.stdout)
+
+
+def test_1013_c6_audit_only_cli_never_exits_zero_on_a_satisfied_gate(tmp_path: Path) -> None:
+    code, out = _run_cli(tmp_path, *normal_case())
+    assert code != 0, "exit 0 would read as a passing required check"
+    assert out["mode"] == "AUDIT_ONLY" and out["gate_satisfied"] is True  # audit result stays machine-readable
+    assert out.get("authorizes_merge") is False
+
+
+def test_1013_c6_satisfied_and_unsatisfied_audits_have_distinct_nonzero_exits(tmp_path: Path) -> None:
+    receipts, policy, ctx = normal_case()
+    satisfied, _ = _run_cli(tmp_path, receipts, policy, ctx)
+    ctx["check_runs"][0]["conclusion"] = "failure"
+    unsatisfied, out = _run_cli(tmp_path, receipts, policy, ctx)
+    assert 0 not in (satisfied, unsatisfied) and satisfied != unsatisfied
+    assert out["gate_satisfied"] is False and out.get("authorizes_merge") is False
+
+
+def test_1013_c6_an_audit_result_never_satisfies_an_enforce_gate() -> None:
+    result = vr.verify(*normal_case())
+    assert result.gate_satisfied and result.mode == "AUDIT_ONLY"
+    assert getattr(result, "authorizes_merge", None) is False
+    result.mode = "ENFORCE"  # relabelling a result after the fact grants nothing
+    assert getattr(result, "authorizes_merge", None) is False
+    with pytest.raises(TypeError):
+        vr.GateResult(True, "normal", ("principal",), ("principal",), [], mode="ENFORCE")

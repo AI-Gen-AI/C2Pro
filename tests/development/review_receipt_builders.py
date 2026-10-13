@@ -26,6 +26,7 @@ AUTHOR_ID, DISPATCHER_ID, APPROVER_ID = 1000, 1001, 1002
 CI_WORKFLOW, CI_WORKFLOW_SHA = ".github/workflows/ci.yml", "c1" * 20
 CODEX_APP, CODEX_BOT = 900001, 900002
 CHECK_APP = 15368  # GitHub Actions App id (public, constant); synthetic check ids below
+WORK_ID = "C2PRO-DEV-14"  # authoritative work identity, reported by the trusted adapter from the work envelope
 
 CHANGED = [
     {"path": "scripts/example.py", "previous_path": None, "status": "modified", "mode": "100644", "blob_sha": "1" * 40},
@@ -78,8 +79,8 @@ def context(risk: str = "normal", implementer: str | None = "claude_code") -> di
         "pr": {"number": 7, "author_user_id": AUTHOR_ID, "head_sha": HEAD, "base_sha": BASE,
                "merge_base_sha": MERGE_BASE, "changed_files": copy.deepcopy(CHANGED), "changed_files_complete": True},
         "effective_risk_class": risk,
-        "implementation_evidence": ({"worker_id": implementer, "verified": True, "evidence_ref": "work-receipt-synthetic"}
-                                    if implementer else None),
+        "implementation_evidence": ({"work_id": WORK_ID, "worker_id": implementer, "verified": True,
+                                     "evidence_ref": "work-receipt-synthetic"} if implementer else None),
         "app_reviews": {},
         "head_reviews": [],
         "head_reviews_complete": True,
@@ -105,7 +106,7 @@ def receipt(n: int, role: str, worker: str, *, tier: str = "T2", risk: str = "no
         identity = {"workflow_path": ".github/workflows/c2pro-review-attest.yml", "workflow_commit_sha": WORKFLOW_SHA,
                     "run_id": 80000 + n, "run_attempt": 1}
     r: dict[str, Any] = {
-        "schema": "c2pro-review-receipt-v1", "schema_version": 1, "receipt_id": _uuid(n), "work_id": "C2PRO-DEV-14",
+        "schema": "c2pro-review-receipt-v1", "schema_version": 1, "receipt_id": _uuid(n), "work_id": WORK_ID,
         "risk_class": risk,
         "subject": {"repository_id": 1, "repository": "example-org/synthetic-repo", "pr_number": 7, "head_sha": HEAD,
                     "base_sha": BASE, "merge_base_sha": MERGE_BASE, "diff_digest": vr.diff_digest(CHANGED),
