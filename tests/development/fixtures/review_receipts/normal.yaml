@@ -168,6 +168,7 @@ context:
   effective_risk_class: normal
   implementation_evidence:
     worker_id: claude_code
+    work_id: C2PRO-DEV-14
     verified: true
     evidence_ref: work-receipt-synthetic
   app_reviews: {}
