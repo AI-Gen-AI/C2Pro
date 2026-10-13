@@ -54,4 +54,5 @@ jobs:
           python -m pytest -q --confcutdir=tests/development \
             tests/development/test_c2pro_control_plane.py \
             tests/development/test_dev14_task_trace.py \
-            tests/development/test_github_actions_concurrency_policy.py
+            tests/development/test_github_actions_concurrency_policy.py \
+            tests/development/test_review_receipts.py
