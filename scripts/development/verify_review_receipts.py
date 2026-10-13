@@ -466,14 +466,25 @@ def _contradiction_violations(policy: dict[str, Any], context: dict[str, Any]) -
     for entry in context["head_reviews"]:
         source = entry.get("source") if isinstance(entry, dict) else None
         if source == "T1":
-            if (entry.get("app_id"), entry.get("user_id")) in allowed_apps and entry.get("state") != "APPROVED":
-                return [Violation("CONTRADICTING_REVIEW", None, f"App review {entry.get('review_id')} is {entry.get('state')}")]
+            if (entry.get("app_id"), entry.get("user_id")) in allowed_apps and not _app_review_approves(entry, policy, context):
+                return [Violation("CONTRADICTING_REVIEW", None, f"App review {entry.get('review_id')} does not approve")]
         elif source == "T2":
             if not _attested_review_approves(entry.get("receipt"), policy, context):
                 return [Violation("CONTRADICTING_REVIEW", entry.get("receipt_id"), "an attested review at this head does not approve")]
         else:
             return [Violation("CONTRADICTING_REVIEW", None, f"unknown head review source {source!r}")]
     return []
+
+
+def _app_review_approves(entry: dict[str, Any], policy: dict[str, Any], context: dict[str, Any]) -> bool:
+    """An allowlisted App review approves only if APPROVED and its carried receipt verifies and approves.
+
+    Reviews by Apps outside the allowlist are ignored: they carry no authority either way.
+    """
+    receipt = entry.get("receipt")
+    return (entry.get("state") == "APPROVED" and isinstance(receipt, dict)
+            and entry.get("body_receipt_digest") == receipt_digest(receipt)
+            and _attested_review_approves(receipt, policy, context))
 
 
 def _attested_review_approves(receipt: Any, policy: dict[str, Any], context: dict[str, Any]) -> bool:

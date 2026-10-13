@@ -389,12 +389,11 @@ def test_r1_p3_5_t1_review_bound_to_pr_and_repository(field: str, value: int) ->
 
 def test_r1_p1_1_pr_added_job_with_the_required_name_cannot_stand_in_for_ci() -> None:
     receipts, policy, ctx = normal_case()
-    ctx["check_runs"][0]["conclusion"] = "failure"
     ctx["check_runs"].append({"id": 502, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD,
                               "conclusion": "success", "workflow_path": ".github/workflows/pr-added.yml",
                               "workflow_sha": "f" * 40})
-    receipts[0]["result"]["tests_observed"] = []
-    reattest(receipts, ctx)
+    receipts[0]["result"]["tests_observed"] = [{"name": "CI Status", "check_run_id": 502, "conclusion": "success"}]
+    reattest(receipts, ctx)  # real CI stays green: only the receipt-level producer binding can reject this
     assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
 
 
@@ -646,3 +645,21 @@ def test_r2_n9_n10_policy_must_require_synthesis_and_checks(edit: Any) -> None:
     receipts, policy, ctx = normal_case()
     edit(policy)
     assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+# ============================================================================ adversarial review round 3 (RED first)
+def test_r3_an_omitted_approved_app_review_carrying_an_open_p1_contradicts_the_gate() -> None:
+    receipts, policy, ctx = normal_case()
+    hidden = _receipt(7, "principal", "codex", tier="T1")
+    hidden["result"]["findings"].append({"id": "F9", "severity": "P1", "file": None, "line": None, "summary": "x"})
+    ctx["head_reviews"].append({"source": "T1", "review_id": hidden["review"]["identity"]["review_id"],
+                                "user_id": CODEX_BOT, "app_id": CODEX_APP, "state": "APPROVED", "receipt": hidden,
+                                "body_receipt_digest": vr.receipt_digest(hidden)})
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [lambda e: e.pop("receipt"), lambda e: e.update(body_receipt_digest="sha256:" + "0" * 64)])
+def test_r3_an_allowlisted_app_review_without_its_verifiable_receipt_contradicts(edit: Any) -> None:
+    receipts, policy, ctx = _t1_case()
+    edit(ctx["head_reviews"][0])
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)

@@ -138,7 +138,8 @@ def attest(ctx: dict[str, Any], r: dict[str, Any]) -> None:
             "state": "APPROVED", "body_receipt_digest": vr.receipt_digest(r), "pr_number": ctx["pr"]["number"],
             "repository_id": ctx["repository"]["id"]}
         ctx["head_reviews"].append({"source": "T1", "review_id": ident["review_id"], "user_id": ident["github_user_id"],
-                                    "app_id": ident["github_app_id"], "state": "APPROVED"})
+                                    "app_id": ident["github_app_id"], "state": "APPROVED", "receipt": copy.deepcopy(r),
+                                    "body_receipt_digest": vr.receipt_digest(r)})
         return
     ident = r["review"]["identity"]
     ctx["attestations"][r["receipt_id"]] = {
