@@ -1,7 +1,7 @@
 # C2PRO-DEV-15 / Wave 3.11 — LangSmith & prompt egress inventory (static baseline)
 
 **Status:** BOUNDED SOURCE INVENTORY, NOT REMEDIATED / NOT LIVE-QUALIFIED
-**Evidence baseline:** `AI-Gen-AI/C2Pro main@39a7c313766eef181353f594205ee3b88e5955ac`; implementation source inspected before this audit. Tracking: [DEV-15 #958](https://github.com/AI-Gen-AI/C2Pro/issues/958); SDD/implementation-plan PR [#951](https://github.com/AI-Gen-AI/C2Pro/pull/951).
+**Evidence baseline:** `AI-Gen-AI/C2Pro main@39a7c313766eef181353f594205ee3b88e5955ac`; implementation source inspected before this audit. Tracking: [DEV-15 #958](https://github.com/AI-Gen-AI/C2Pro/issues/958) is the current open continuation authority; historical issue [#849](https://github.com/AI-Gen-AI/C2Pro/issues/849) remains CLOSED and is not reopened or reused as active authority. Supporting SDD/implementation-plan PR: [#951](https://github.com/AI-Gen-AI/C2Pro/pull/951).
 **Scope:** A no-network repository inspection under the next read-only DEV-15 work envelope. This is supporting evidence, not a new authority or successful privacy canary test. The later exact-head implementation PRs must re-inventory callers against then-current main.
 **Global decision:** **Retain LangSmith as a maintained, optional integration (YES).** Default-deny external tracing, feedback exports, prompt Hub actions and dataset writes. Langfuse/Phoenix are separately measured candidates, not a preselected replacement. No real contract or production environment was inspected.
 
