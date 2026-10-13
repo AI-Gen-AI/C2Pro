@@ -45,6 +45,20 @@
     {
       "behavior": {
         "env": {},
+        "run": "python -m pip install --disable-pip-version-check \\\n  pytest==9.1.1 pyyaml==6.0.3 jsonschema==4.25.1\n",
+        "shell": "bash",
+        "working_directory": null
+      },
+      "context": ".github/workflows/c2pro-review-attestation-tests.yml::jobs.review-attestation-tests::name:Install bounded test dependencies",
+      "file": ".github/workflows/c2pro-review-attestation-tests.yml",
+      "owner": "AI-Gen-AI / C2Pro DEV-14",
+      "reason": "DEV-14 Option B PR-B (#1011), 2026-10-13: unprivileged no-secrets review-attestation regression workflow installs exact-pinned pytest, PyYAML and jsonschema only to execute synthetic AUDIT_ONLY verifier/adapter tests; no production, provider-route, review or merge authority.",
+      "remediation_issue": "#1011",
+      "sha256": "7df5f7f92c533d076d71070a479a7cdb4485b9a7aa7286996d05b85d4ab0ea8d"
+    },
+    {
+      "behavior": {
+        "env": {},
         "run": "python -m pip install --disable-pip-version-check \"pyyaml==6.0.3\"",
         "shell": null,
         "working_directory": null
