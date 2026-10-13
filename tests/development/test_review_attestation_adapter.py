@@ -15,6 +15,7 @@ from scripts.development.review_attestation.github_context_adapter import (
     EvidenceIncomplete,
     build_trusted_context,
     canonical_inputs_digest,
+    verify_t2_receipt_artifact,
 )
 
 
@@ -291,3 +292,181 @@ def test_audit_workflow_is_base_only_and_has_no_write_permissions() -> None:
     assert "pull-requests: write" not in workflow
     assert "checks: write" not in workflow
     assert "id-token: write" not in workflow
+
+
+def _signed_receipt() -> dict:
+    return {
+        "receipt_id": "00000001-0000-4000-8000-000000000001",
+        "review": {
+            "provider_execution": {
+                "provider": "openai",
+                "model": "synthetic-model",
+                "request_ids": ["req-1"],
+                "response_digest": "sha256:" + "5" * 64,
+                "inputs_digest": "sha256:" + "6" * 64,
+            }
+        },
+    }
+
+
+def _run_facts() -> dict:
+    return {
+        "repository_id": 1,
+        "run_id": 80001,
+        "run_attempt": 1,
+        "workflow_path": ".github/workflows/c2pro-review-attest.yml",
+        "head_sha": WORKFLOW_SHA,
+        "ref": "refs/heads/main",
+        "event": "workflow_dispatch",
+        "environment": "review-attestor",
+        "environment_approved": True,
+        "triggering_actor_id": 1001,
+        "environment_approver_id": 1002,
+    }
+
+
+def test_t2_artifact_verifier_binds_certificate_run_and_canonical_receipt(tmp_path) -> None:
+    receipt = _signed_receipt()
+    artifact = tmp_path / "receipt.json"
+    artifact.write_bytes(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    )
+    bundle = tmp_path / "bundle.jsonl"
+    bundle.write_text("synthetic-bundle", encoding="utf-8")
+    digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    output = [{
+        "verificationResult": {
+            "signature": {
+                "certificate": {
+                    "issuer": "https://token.actions.githubusercontent.com",
+                    "githubWorkflowRepository": "example-org/synthetic-repo",
+                    "githubWorkflowRef": "refs/heads/main",
+                    "sourceRepositoryDigest": WORKFLOW_SHA,
+                    "runnerEnvironment": "github-hosted",
+                    "runInvocationURI": (
+                        "https://github.com/example-org/synthetic-repo/"
+                        "actions/runs/80001/attempts/1"
+                    ),
+                }
+            },
+            "statement": {"subject": [{"digest": {"sha256": digest}}]},
+        }
+    }]
+    seen = {}
+
+    def fake_runner(command, **kwargs):
+        import subprocess
+        seen["command"] = command
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(output), stderr="")
+
+    verified_receipt, claims = verify_t2_receipt_artifact(
+        artifact_path=artifact,
+        bundle_path=bundle,
+        repository="example-org/synthetic-repo",
+        signer_workflow=".github/workflows/c2pro-review-attest.yml",
+        source_ref="refs/heads/main",
+        signer_digest=WORKFLOW_SHA,
+        run_facts=_run_facts(),
+        runner=fake_runner,
+    )
+    assert verified_receipt == receipt
+    assert claims["signature_verified"] is True
+    assert claims["run_id"] == 80001
+    assert claims["run_attempt"] == 1
+    assert claims["subject_digest"] == "sha256:" + digest
+    assert "--deny-self-hosted-runners" in seen["command"]
+    assert "--signer-workflow" in seen["command"]
+    assert "--source-digest" in seen["command"]
+    assert "--signer-digest" in seen["command"]
+
+
+def test_t2_artifact_verifier_fails_when_api_run_approval_fact_is_missing(tmp_path) -> None:
+    receipt = _signed_receipt()
+    artifact = tmp_path / "receipt.json"
+    artifact.write_bytes(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    )
+    bundle = tmp_path / "bundle.jsonl"
+    bundle.write_text("synthetic-bundle", encoding="utf-8")
+    digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    output = [{
+        "verificationResult": {
+            "signature": {
+                "certificate": {
+                    "issuer": "https://token.actions.githubusercontent.com",
+                    "githubWorkflowRepository": "example-org/synthetic-repo",
+                    "githubWorkflowRef": "refs/heads/main",
+                    "sourceRepositoryDigest": WORKFLOW_SHA,
+                    "runnerEnvironment": "github-hosted",
+                    "runInvocationURI": (
+                        "https://github.com/example-org/synthetic-repo/"
+                        "actions/runs/80001/attempts/1"
+                    ),
+                }
+            },
+            "statement": {"subject": [{"digest": {"sha256": digest}}]},
+        }
+    }]
+
+    def fake_runner(command, **kwargs):
+        import subprocess
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(output), stderr="")
+
+    facts = _run_facts()
+    facts.pop("environment_approver_id")
+    with pytest.raises(EvidenceIncomplete, match="environment_approver_id"):
+        verify_t2_receipt_artifact(
+            artifact_path=artifact,
+            bundle_path=bundle,
+            repository="example-org/synthetic-repo",
+            signer_workflow=".github/workflows/c2pro-review-attest.yml",
+            source_ref="refs/heads/main",
+            signer_digest=WORKFLOW_SHA,
+            run_facts=facts,
+            runner=fake_runner,
+        )
+
+
+def test_t2_artifact_verifier_rejects_certificate_from_other_workflow_context(tmp_path) -> None:
+    receipt = _signed_receipt()
+    artifact = tmp_path / "receipt.json"
+    artifact.write_bytes(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    )
+    bundle = tmp_path / "bundle.jsonl"
+    bundle.write_text("synthetic-bundle", encoding="utf-8")
+    digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    output = [{
+        "verificationResult": {
+            "signature": {
+                "certificate": {
+                    "issuer": "https://token.actions.githubusercontent.com",
+                    "githubWorkflowRepository": "attacker/repo",
+                    "githubWorkflowRef": "refs/heads/main",
+                    "sourceRepositoryDigest": WORKFLOW_SHA,
+                    "runnerEnvironment": "github-hosted",
+                    "runInvocationURI": (
+                        "https://github.com/example-org/synthetic-repo/"
+                        "actions/runs/80001/attempts/1"
+                    ),
+                }
+            },
+            "statement": {"subject": [{"digest": {"sha256": digest}}]},
+        }
+    }]
+
+    def fake_runner(command, **kwargs):
+        import subprocess
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(output), stderr="")
+
+    with pytest.raises(EvidenceIncomplete, match="certificate repository"):
+        verify_t2_receipt_artifact(
+            artifact_path=artifact,
+            bundle_path=bundle,
+            repository="example-org/synthetic-repo",
+            signer_workflow=".github/workflows/c2pro-review-attest.yml",
+            source_ref="refs/heads/main",
+            signer_digest=WORKFLOW_SHA,
+            run_facts=_run_facts(),
+            runner=fake_runner,
+        )
