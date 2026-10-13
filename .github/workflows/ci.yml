@@ -1127,7 +1127,7 @@ jobs:
           name: pq-hitl-03-1-qa-screenshots
           path: apps/web/test-results/**/pq-hitl-031-rev-*.png
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
 
       - name: Upload Playwright report on failure
         if: failure()
