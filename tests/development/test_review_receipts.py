@@ -755,7 +755,7 @@ def test_1013_cx_p1_receipt_work_id_must_match_verified_work_identity() -> None:
 
 def test_1013_cx_p1_missing_verified_work_id_fails_closed() -> None:
     receipts, policy, ctx = normal_case()
-    assert "work_id" not in ctx["implementation_evidence"]
+    ctx["implementation_evidence"].pop("work_id")
     assert_rejected("WORK_ID_UNVERIFIED", receipts, policy, ctx)
 
 
