@@ -47,6 +47,7 @@ def policy() -> dict[str, Any]:
             "ref": "refs/heads/main",
             "environment": "review-attestor",
             "dispatcher_user_ids": [DISPATCHER_ID],
+            "approver_user_ids": [APPROVER_ID],
             "prompt_template_shas": [PROMPT_SHA],
         },
         "role_eligibility": {
@@ -81,6 +82,7 @@ def context(risk: str = "normal", implementer: str | None = "claude_code") -> di
                                     if implementer else None),
         "app_reviews": {},
         "head_reviews": [],
+        "head_reviews_complete": True,
         "attestations": {},
         "check_runs": [{"id": 501, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD, "conclusion": "success",
                         "workflow_path": CI_WORKFLOW, "workflow_sha": CI_WORKFLOW_SHA}],
@@ -149,8 +151,7 @@ def attest(ctx: dict[str, Any], r: dict[str, Any]) -> None:
         "response_digest": r["review"]["provider_execution"]["response_digest"],
         "provider": r["review"]["provider_execution"]["provider"], "model": r["review"]["provider_execution"]["model"],
         "request_ids_digest": vr.request_ids_digest(r["review"]["provider_execution"]["request_ids"])}
-    ctx["head_reviews"].append({"source": "T2", "receipt_id": r["receipt_id"], "worker_id": r["review"]["worker_id"],
-                                "verdict": r["result"]["verdict"], "recommended_action": r["result"]["recommended_action"]})
+    ctx["head_reviews"].append({"source": "T2", "receipt_id": r["receipt_id"], "receipt": copy.deepcopy(r)})
 
 
 def normal_case() -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:

@@ -352,7 +352,9 @@ def _negative_suite() -> list[tuple[list[dict[str, Any]], dict[str, Any], dict[s
 
 
 @pytest.mark.parametrize("rule_name", sorted(vr.RULES))
-def test_every_rule_is_load_bearing(rule_name: str) -> None:
+def test_every_rule_is_load_bearing(rule_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    if rule_name == "result_consistency":  # the gate-level contradiction check reuses the same function
+        monkeypatch.setattr(vr, "_consistency", lambda *args, **kwargs: [])
     for receipts, policy, ctx in _negative_suite():
         assert not vr.verify(copy.deepcopy(receipts), policy, ctx).gate_satisfied
     slipped = [i for i, (receipts, policy, ctx) in enumerate(_negative_suite())
@@ -420,8 +422,9 @@ def test_r1_p1_1_any_workflow_change_is_high_blast_radius() -> None:
 
 def test_r1_p1_2_an_omitted_blocking_t2_review_at_the_head_contradicts_the_gate() -> None:
     receipts, policy, ctx = normal_case()
-    ctx["head_reviews"].append({"source": "T2", "receipt_id": "00000009-0000-4000-8000-000000000009",
-                                "worker_id": "codex", "verdict": "BLOCK", "recommended_action": "remediate"})
+    blocked = _receipt(9, "principal", "codex")
+    blocked["result"].update(verdict="BLOCK", recommended_action="remediate")
+    ctx["head_reviews"].append({"source": "T2", "receipt_id": blocked["receipt_id"], "receipt": blocked})
     assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
 
 
@@ -514,7 +517,7 @@ def test_r1_p3_1_strict_schema_types_and_formats(edit: Any) -> None:
     (lambda c, rid: c["implementation_evidence"].update(verified="false"), "IMPLEMENTER_UNVERIFIED"),
     (lambda c, rid: c["attestations"][rid].update(signature_verified="false"), "AUTHOR_CONTROLLED_ATTESTATION"),
     (lambda c, rid: c["attestations"][rid].update(environment_approved="no"), "AUTHOR_CONTROLLED_ATTESTATION"),
-    (lambda c, rid: c["pr"].update(changed_files_complete=False), "DIFF_MISMATCH"),
+    (lambda c, rid: c["pr"].update(changed_files_complete=False), "POLICY_INVALID"),
 ])
 def test_r1_p3_2_truthy_strings_never_stand_in_for_true(edit: Any, code: str) -> None:
     receipts, policy, ctx = normal_case()
@@ -560,3 +563,86 @@ def test_r1_p3_7_synthesis_binds_exactly_the_reviewed_receipts_by_digest(edit: A
     for r in receipts:  # re-sign WITHOUT refreshing references, so the edit survives
         ctx["attestations"][r["receipt_id"]]["subject_digest"] = vr.receipt_digest(r)
     assert_rejected("MISSING_SYNTHESIS", receipts, policy, ctx)
+
+
+# ============================================================================ adversarial review round 2 (RED first)
+def test_r2_n2_an_omitted_approving_receipt_with_an_open_p0_contradicts_the_gate() -> None:
+    receipts, policy, ctx = normal_case()
+    hidden = _receipt(5, "principal", "codex")
+    hidden["result"]["findings"].append({"id": "F9", "severity": "P0", "file": None, "line": None, "summary": "x"})
+    hidden["result"]["security_concern"] = True
+    ctx["head_reviews"].append({"source": "T2", "receipt_id": hidden["receipt_id"], "receipt": hidden})
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [lambda c: c.pop("head_reviews"), lambda c: c.update(head_reviews=None),
+                                  lambda c: c.update(head_reviews_complete=False)])
+def test_r2_n1_missing_or_incomplete_head_reviews_fail_closed(edit: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(ctx)
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("entry", [{"source": "t2", "receipt_id": "x"}, {"source": "T9"}])
+def test_r2_n4_unknown_head_review_sources_fail_closed(entry: dict[str, Any]) -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["head_reviews"].append(entry)
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+def test_r2_n3_a_block_from_a_deregistered_worker_still_contradicts() -> None:
+    receipts, policy, ctx = normal_case()
+    blocked = _receipt(6, "principal", "retired_worker")
+    blocked["result"]["verdict"] = "BLOCK"
+    ctx["head_reviews"].append({"source": "T2", "receipt_id": blocked["receipt_id"], "receipt": blocked})
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+def test_r2_n5_a_newer_failed_run_with_an_unpinned_workflow_wins() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].append(dict(ctx["check_runs"][0], id=600, conclusion="failure", workflow_sha="0" * 40))
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_r2_gate_level_check_rejects_a_pr_added_job_even_without_receipts() -> None:
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    ctx["check_runs"] = [dict(ctx["check_runs"][0], id=502, workflow_path=".github/workflows/pr-added.yml",
+                              workflow_sha="f" * 40)]
+    assert_rejected("CHECK_PROVENANCE", [], policy, ctx)
+
+
+def test_r2_n11_incomplete_diff_fails_closed_at_gate_level() -> None:
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    del ctx["pr"]["changed_files_complete"]
+    assert_rejected("POLICY_INVALID", [], policy, ctx)
+
+
+def test_r2_n6_environment_approver_must_be_allowlisted() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["attestations"][receipts[0]["receipt_id"]]["environment_approver_id"] = 4242
+    assert_rejected("AUTHOR_CONTROLLED_ATTESTATION", receipts, policy, ctx)
+
+
+def test_r2_n7_author_id_must_be_an_integer() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["pr"]["author_user_id"] = str(ctx["pr"]["author_user_id"])
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("stamp", ["2026-01-01", "20260101T000000"])
+def test_r2_n8_issued_at_must_be_strict_rfc3339(stamp: str) -> None:
+    receipts, policy, ctx = normal_case()
+    receipts[0]["issued_at"] = stamp
+    reattest(receipts, ctx)
+    assert_rejected("SCHEMA_INVALID", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [lambda p: p["gates"].update(architecture=["principal"], security=["principal"],
+                                                                  high_blast_radius=["principal"]),
+                                  lambda p: p.update(required_checks=[])])
+def test_r2_n9_n10_policy_must_require_synthesis_and_checks(edit: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(policy)
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)

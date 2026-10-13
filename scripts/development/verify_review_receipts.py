@@ -49,6 +49,7 @@ SYNTHESIS_RISKS = {"architecture", "security", "high_blast_radius"}
 FILE_FIELDS = ("path", "previous_path", "status", "mode", "blob_sha")
 APPROVING_STATES = {"APPROVED"}
 _STRICT_ID = re.compile(r"[a-z0-9_]+")
+_RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,8 @@ def _schema(receipt, policy, context, receipts):
     if not (_STRICT_ID.fullmatch(review["worker_id"]) and _STRICT_ID.fullmatch(review["implementation_worker_id"])):
         return _v("SCHEMA_INVALID", receipt, "worker ids must match exactly")
     try:
+        if not _RFC3339.fullmatch(receipt["issued_at"]):
+            raise ValueError(receipt["issued_at"])
         datetime.fromisoformat(receipt["issued_at"].replace("Z", "+00:00"))
     except ValueError:
         return _v("SCHEMA_INVALID", receipt, "issued_at is not an RFC 3339 timestamp")
@@ -306,7 +309,7 @@ def _t2_identity(receipt: dict[str, Any], policy: dict[str, Any], context: dict[
 def _dispatch_is_independent(claims: dict[str, Any], t2: dict[str, Any], author: int) -> bool:
     actor, approver = claims.get("triggering_actor_id"), claims.get("environment_approver_id")
     return (_is_int(actor) and _is_int(approver) and actor in t2["dispatcher_user_ids"]
-            and claims.get("environment_approved") is True
+            and approver in t2.get("approver_user_ids", []) and claims.get("environment_approved") is True
             and author not in (actor, approver) and approver != actor)
 
 
@@ -425,6 +428,22 @@ def _policy_violations(policy: dict[str, Any], risk: str) -> list[Violation]:
     for lower, higher in pairwise(RISK_RANK):
         if not set(gates.get(lower, [])) <= set(gates.get(higher, [])):
             return [Violation("POLICY_INVALID", None, f"gate for {higher} is weaker than for {lower}")]
+    if any(set(ROLE_ORDER) - set(gates.get(r, [])) for r in SYNTHESIS_RISKS):
+        return [Violation("POLICY_INVALID", None, "architecture/security gates must require all three roles")]
+    if not policy["required_checks"]:
+        return [Violation("POLICY_INVALID", None, "at least one required check must be configured")]
+    return []
+
+
+def _context_violations(context: dict[str, Any]) -> list[Violation]:
+    """The adapter must prove completeness; an absent or partial fact never reads as 'nothing found'."""
+    pr = context["pr"]
+    if not _is_int(pr.get("author_user_id")):
+        return [Violation("POLICY_INVALID", None, "pull request author id is not an integer")]
+    if pr.get("changed_files_complete") is not True:
+        return [Violation("POLICY_INVALID", None, "changed-file list is not known to be complete")]
+    if not isinstance(context.get("head_reviews"), list) or context.get("head_reviews_complete") is not True:
+        return [Violation("POLICY_INVALID", None, "head review evidence is missing or incomplete")]
     return []
 
 
@@ -432,10 +451,11 @@ def _check_violations(policy: dict[str, Any], context: dict[str, Any]) -> list[V
     """Required checks hold once per gate: the latest trusted-producer run on the head must be green."""
     head = context["pr"]["head_sha"]
     for spec in policy["required_checks"]:
-        runs = [c for c in context.get("check_runs", [])
-                if c.get("name") == spec["name"] and _is_int(c.get("id")) and _produced_by(c, spec, head)]
+        runs = [c for c in context.get("check_runs", [])  # latest run of this producer, pinned or not
+                if c.get("name") == spec["name"] and _is_int(c.get("id")) and c.get("app_id") == spec["app_id"]
+                and c.get("workflow_path") == spec["workflow_path"] and c.get("head_sha") == head]
         latest = max(runs, key=lambda c: c["id"]) if runs else None
-        if latest is None or latest.get("conclusion") != "success":
+        if latest is None or latest.get("conclusion") != "success" or not _produced_by(latest, spec, head):
             return [Violation("CHECK_PROVENANCE", None, f"required check {spec['name']!r} has no green latest trusted run")]
     return []
 
@@ -443,15 +463,25 @@ def _check_violations(policy: dict[str, Any], context: dict[str, Any]) -> list[V
 def _contradiction_violations(policy: dict[str, Any], context: dict[str, Any]) -> list[Violation]:
     """Every review recorded at the head counts, not only the receipts the author chose to submit."""
     allowed_apps = {(a["app_id"], a["user_id"]) for a in policy.get("t1_apps", [])}
-    eligible = {w for workers in policy["role_eligibility"].values() for w in workers}
-    for entry in context.get("head_reviews", []):
-        source = entry.get("source")
-        if source == "T1" and (entry.get("app_id"), entry.get("user_id")) in allowed_apps and entry.get("state") != "APPROVED":
-            return [Violation("CONTRADICTING_REVIEW", None, f"App review {entry.get('review_id')} is {entry.get('state')}")]
-        approving = entry.get("verdict") != "BLOCK" and entry.get("recommended_action") == "approve"
-        if source == "T2" and entry.get("worker_id") in eligible and not approving:
-            return [Violation("CONTRADICTING_REVIEW", entry.get("receipt_id"), "an attested review at this head does not approve")]
+    for entry in context["head_reviews"]:
+        source = entry.get("source") if isinstance(entry, dict) else None
+        if source == "T1":
+            if (entry.get("app_id"), entry.get("user_id")) in allowed_apps and entry.get("state") != "APPROVED":
+                return [Violation("CONTRADICTING_REVIEW", None, f"App review {entry.get('review_id')} is {entry.get('state')}")]
+        elif source == "T2":
+            if not _attested_review_approves(entry.get("receipt"), policy, context):
+                return [Violation("CONTRADICTING_REVIEW", entry.get("receipt_id"), "an attested review at this head does not approve")]
+        else:
+            return [Violation("CONTRADICTING_REVIEW", None, f"unknown head review source {source!r}")]
     return []
+
+
+def _attested_review_approves(receipt: Any, policy: dict[str, Any], context: dict[str, Any]) -> bool:
+    """Same consistency rule as a submitted receipt; anything unreadable counts as not approving."""
+    try:
+        return isinstance(receipt, dict) and not _consistency(receipt, policy, context, [])
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _receipt_violations(receipt: Any, policy: dict[str, Any], context: dict[str, Any], receipts: list[Any],
@@ -476,7 +506,7 @@ def verify(receipts: Any, policy: dict[str, Any], context: dict[str, Any],
     """Fail closed: any violation, in any receipt or at gate level, leaves the gate unsatisfied."""
     try:
         risk = effective_risk_class(policy, context)
-        violations = _policy_violations(policy, risk)
+        violations = _context_violations(context) or _policy_violations(policy, risk)
         if violations:
             return GateResult(False, str(risk), (), (), violations)
         required = tuple(policy["gates"][risk])

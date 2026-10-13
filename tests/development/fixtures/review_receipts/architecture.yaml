@@ -230,6 +230,8 @@ policy:
     environment: review-attestor
     dispatcher_user_ids:
     - 1001
+    approver_user_ids:
+    - 1002
     prompt_template_shas:
     - eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
   role_eligibility:
@@ -317,19 +319,229 @@ context:
   head_reviews:
   - source: T2
     receipt_id: 00000001-0000-4000-8000-000000000001
-    worker_id: codex
-    verdict: PASS
-    recommended_action: approve
+    receipt:
+      schema: c2pro-review-receipt-v1
+      schema_version: 1
+      receipt_id: 00000001-0000-4000-8000-000000000001
+      work_id: C2PRO-DEV-14
+      risk_class: architecture
+      subject:
+        repository_id: 1
+        repository: example-org/synthetic-repo
+        pr_number: 7
+        head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        base_sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        merge_base_sha: cccccccccccccccccccccccccccccccccccccccc
+        diff_digest: sha256:b36fae99d981f7e6fd30f60cc9ff8be0e0c3a52ecade0ef6284eee17187ab54e
+        changed_files:
+        - path: scripts/example.py
+          previous_path: null
+          status: modified
+          mode: '100644'
+          blob_sha: '1111111111111111111111111111111111111111'
+        - path: docs/new_name.md
+          previous_path: docs/old_name.md
+          status: renamed
+          mode: '100644'
+          blob_sha: '2222222222222222222222222222222222222222'
+        - path: tools/link
+          previous_path: null
+          status: added
+          mode: '120000'
+          blob_sha: '3333333333333333333333333333333333333333'
+        - path: obsolete.txt
+          previous_path: null
+          status: removed
+          mode: null
+          blob_sha: null
+      review:
+        role: principal
+        worker_id: codex
+        implementation_worker_id: claude_code
+        evidence_tier: T2
+        identity:
+          workflow_path: .github/workflows/c2pro-review-attest.yml
+          workflow_commit_sha: dddddddddddddddddddddddddddddddddddddddd
+          run_id: 80001
+          run_attempt: 1
+        provider_execution:
+          provider: openai
+          model: synthetic-model
+          request_ids:
+          - req-synthetic-1
+          response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+          prompt_template_sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+          inputs_digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+          untrusted_text_wrapped: true
+      result:
+        verdict: PASS
+        findings:
+        - id: F1
+          severity: P3
+          file: null
+          line: null
+          summary: synthetic non-blocking note
+        tests_observed:
+        - name: CI Status
+          check_run_id: 501
+          conclusion: success
+        architecture_drift: false
+        security_concern: false
+        scope_deviation: false
+        recommended_action: approve
+      issued_at: '2026-01-01T00:00:00Z'
   - source: T2
     receipt_id: 00000002-0000-4000-8000-000000000002
-    worker_id: antigravity
-    verdict: PASS
-    recommended_action: approve
+    receipt:
+      schema: c2pro-review-receipt-v1
+      schema_version: 1
+      receipt_id: 00000002-0000-4000-8000-000000000002
+      work_id: C2PRO-DEV-14
+      risk_class: architecture
+      subject:
+        repository_id: 1
+        repository: example-org/synthetic-repo
+        pr_number: 7
+        head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        base_sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        merge_base_sha: cccccccccccccccccccccccccccccccccccccccc
+        diff_digest: sha256:b36fae99d981f7e6fd30f60cc9ff8be0e0c3a52ecade0ef6284eee17187ab54e
+        changed_files:
+        - path: scripts/example.py
+          previous_path: null
+          status: modified
+          mode: '100644'
+          blob_sha: '1111111111111111111111111111111111111111'
+        - path: docs/new_name.md
+          previous_path: docs/old_name.md
+          status: renamed
+          mode: '100644'
+          blob_sha: '2222222222222222222222222222222222222222'
+        - path: tools/link
+          previous_path: null
+          status: added
+          mode: '120000'
+          blob_sha: '3333333333333333333333333333333333333333'
+        - path: obsolete.txt
+          previous_path: null
+          status: removed
+          mode: null
+          blob_sha: null
+      review:
+        role: challenger
+        worker_id: antigravity
+        implementation_worker_id: claude_code
+        evidence_tier: T2
+        identity:
+          workflow_path: .github/workflows/c2pro-review-attest.yml
+          workflow_commit_sha: dddddddddddddddddddddddddddddddddddddddd
+          run_id: 80002
+          run_attempt: 1
+        provider_execution:
+          provider: google
+          model: synthetic-model
+          request_ids:
+          - req-synthetic-2
+          response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+          prompt_template_sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+          inputs_digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+          untrusted_text_wrapped: true
+      result:
+        verdict: PASS
+        findings:
+        - id: F1
+          severity: P3
+          file: null
+          line: null
+          summary: synthetic non-blocking note
+        tests_observed:
+        - name: CI Status
+          check_run_id: 501
+          conclusion: success
+        architecture_drift: false
+        security_concern: false
+        scope_deviation: false
+        recommended_action: approve
+      issued_at: '2026-01-01T00:00:00Z'
   - source: T2
     receipt_id: 00000003-0000-4000-8000-000000000003
-    worker_id: gpt6_orchestrator
-    verdict: PASS
-    recommended_action: approve
+    receipt:
+      schema: c2pro-review-receipt-v1
+      schema_version: 1
+      receipt_id: 00000003-0000-4000-8000-000000000003
+      work_id: C2PRO-DEV-14
+      risk_class: architecture
+      subject:
+        repository_id: 1
+        repository: example-org/synthetic-repo
+        pr_number: 7
+        head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        base_sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        merge_base_sha: cccccccccccccccccccccccccccccccccccccccc
+        diff_digest: sha256:b36fae99d981f7e6fd30f60cc9ff8be0e0c3a52ecade0ef6284eee17187ab54e
+        changed_files:
+        - path: scripts/example.py
+          previous_path: null
+          status: modified
+          mode: '100644'
+          blob_sha: '1111111111111111111111111111111111111111'
+        - path: docs/new_name.md
+          previous_path: docs/old_name.md
+          status: renamed
+          mode: '100644'
+          blob_sha: '2222222222222222222222222222222222222222'
+        - path: tools/link
+          previous_path: null
+          status: added
+          mode: '120000'
+          blob_sha: '3333333333333333333333333333333333333333'
+        - path: obsolete.txt
+          previous_path: null
+          status: removed
+          mode: null
+          blob_sha: null
+      review:
+        role: orchestrator_synthesis
+        worker_id: gpt6_orchestrator
+        implementation_worker_id: claude_code
+        evidence_tier: T2
+        identity:
+          workflow_path: .github/workflows/c2pro-review-attest.yml
+          workflow_commit_sha: dddddddddddddddddddddddddddddddddddddddd
+          run_id: 80003
+          run_attempt: 1
+        provider_execution:
+          provider: openai
+          model: synthetic-model
+          request_ids:
+          - req-synthetic-3
+          response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000003
+          prompt_template_sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+          inputs_digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+          untrusted_text_wrapped: true
+      result:
+        verdict: PASS
+        findings:
+        - id: F1
+          severity: P3
+          file: null
+          line: null
+          summary: synthetic non-blocking note
+        tests_observed:
+        - name: CI Status
+          check_run_id: 501
+          conclusion: success
+        architecture_drift: false
+        security_concern: false
+        scope_deviation: false
+        recommended_action: approve
+        synthesis_of:
+        - receipt_id: 00000001-0000-4000-8000-000000000001
+          digest: sha256:239f0b10fef3dc34850b43a14c6b8b5278b660ad13e4562ae57406e8530566e3
+        - receipt_id: 00000002-0000-4000-8000-000000000002
+          digest: sha256:527eda15c42282f251fd7f73aa6d17428c09818fed2a5de3397209b4117f8c92
+      issued_at: '2026-01-01T00:00:00Z'
+  head_reviews_complete: true
   attestations:
     00000001-0000-4000-8000-000000000001:
       signature_verified: true
