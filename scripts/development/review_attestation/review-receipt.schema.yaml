@@ -54,6 +54,21 @@ properties:
     type: object
     additionalProperties: false
     required: [role, worker_id, implementation_worker_id, evidence_tier, identity]
+    allOf:
+    - if:
+        properties:
+          evidence_tier: {const: T1}
+      then:
+        properties:
+          identity:
+            required: [github_app_id, github_user_id, review_id]
+    - if:
+        properties:
+          evidence_tier: {const: T2}
+      then:
+        properties:
+          identity:
+            required: [workflow_path, workflow_commit_sha, run_id, run_attempt]
     properties:
       role: {enum: [principal, challenger, orchestrator_synthesis]}
       worker_id: {type: string, pattern: '^[a-z0-9_]+$'}

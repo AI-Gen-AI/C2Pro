@@ -86,7 +86,9 @@ def context(risk: str = "normal", implementer: str | None = "claude_code") -> di
         "attestations": {},
         "check_runs": [{"id": 501, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD, "conclusion": "success",
                         "workflow_path": CI_WORKFLOW, "workflow_sha": CI_WORKFLOW_SHA}],
+        "check_runs_complete": True,
         "consumed": {},
+        "consumed_complete": True,
     }
 
 
@@ -151,6 +153,7 @@ def attest(ctx: dict[str, Any], r: dict[str, Any]) -> None:
         "run_id": ident["run_id"], "run_attempt": ident["run_attempt"], "subject_digest": vr.receipt_digest(r),
         "response_digest": r["review"]["provider_execution"]["response_digest"],
         "provider": r["review"]["provider_execution"]["provider"], "model": r["review"]["provider_execution"]["model"],
+        "inputs_digest": r["review"]["provider_execution"]["inputs_digest"],
         "request_ids_digest": vr.request_ids_digest(r["review"]["provider_execution"]["request_ids"])}
     ctx["head_reviews"].append({"source": "T2", "receipt_id": r["receipt_id"], "receipt": copy.deepcopy(r)})
 

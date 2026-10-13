@@ -50,6 +50,7 @@ FILE_FIELDS = ("path", "previous_path", "status", "mode", "blob_sha")
 APPROVING_STATES = {"APPROVED"}
 _STRICT_ID = re.compile(r"[a-z0-9_]+")
 _RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
+_SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
@@ -324,6 +325,11 @@ def _t2_execution(receipt: dict[str, Any], policy: dict[str, Any], context: dict
         return _v("PROMPT_INJECTION", receipt, "PR-authored text reached the model unwrapped")
     if execution["provider"] != policy["worker_providers"].get(receipt["review"]["worker_id"]):
         return _v("PROVIDER_MISMATCH", receipt, "executed provider is not the worker's registered provider")
+    attested_inputs = claims.get("inputs_digest")
+    if not isinstance(attested_inputs, str) or not _SHA256_DIGEST.fullmatch(attested_inputs):
+        return _v("PROVIDER_MISMATCH", receipt, "attestation has no valid provider inputs digest")
+    if execution["inputs_digest"] != attested_inputs:
+        return _v("PROVIDER_MISMATCH", receipt, "provider inputs differ from the attested execution")
     attested = (claims.get("provider"), claims.get("model"), claims.get("request_ids_digest"))
     if attested != (execution["provider"], execution["model"], request_ids_digest(execution["request_ids"])):
         return _v("PROVIDER_MISMATCH", receipt, "provider, model or requests differ from the attested execution")
@@ -444,6 +450,10 @@ def _context_violations(context: dict[str, Any]) -> list[Violation]:
         return [Violation("POLICY_INVALID", None, "changed-file list is not known to be complete")]
     if not isinstance(context.get("head_reviews"), list) or context.get("head_reviews_complete") is not True:
         return [Violation("POLICY_INVALID", None, "head review evidence is missing or incomplete")]
+    if not isinstance(context.get("check_runs"), list) or context.get("check_runs_complete") is not True:
+        return [Violation("POLICY_INVALID", None, "check-run evidence is not known to be complete")]
+    if not isinstance(context.get("consumed"), dict) or context.get("consumed_complete") is not True:
+        return [Violation("POLICY_INVALID", None, "consumed-id evidence is not known to be complete")]
     return []
 
 
@@ -512,8 +522,8 @@ def _receipt_violations(receipt: Any, policy: dict[str, Any], context: dict[str,
     return found
 
 
-def verify(receipts: Any, policy: dict[str, Any], context: dict[str, Any],
-           *, disabled_rules: frozenset[str] = frozenset()) -> GateResult:
+def _verify_internal(receipts: Any, policy: dict[str, Any], context: dict[str, Any],
+                     disabled_rules: frozenset[str]) -> GateResult:
     """Fail closed: any violation, in any receipt or at gate level, leaves the gate unsatisfied."""
     try:
         risk = effective_risk_class(policy, context)
@@ -539,6 +549,17 @@ def verify(receipts: Any, policy: dict[str, Any], context: dict[str, Any],
     satisfied = tuple(r for r in ROLE_ORDER if r in valid_roles)
     return GateResult(gate_satisfied=not violations, risk_class=risk, required_roles=required,
                       satisfied_roles=satisfied, violations=violations)
+
+
+def _verify_with_disabled_rules(receipts: Any, policy: dict[str, Any], context: dict[str, Any],
+                                disabled_rules: frozenset[str]) -> GateResult:
+    """Test-only mutation hook. Production callers must use :func:`verify`."""
+    return _verify_internal(receipts, policy, context, disabled_rules)
+
+
+def verify(receipts: Any, policy: dict[str, Any], context: dict[str, Any]) -> GateResult:
+    """Fail closed with every verification rule enabled."""
+    return _verify_internal(receipts, policy, context, frozenset())
 
 
 def main(argv: list[str] | None = None) -> int:

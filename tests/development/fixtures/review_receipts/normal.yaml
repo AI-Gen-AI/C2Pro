@@ -265,6 +265,7 @@ context:
       response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
       provider: openai
       model: synthetic-model
+      inputs_digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
       request_ids_digest: sha256:836f8af53cb269a0c1bda760f287be4100bfc948ee6c407c1338374e721556a6
   check_runs:
   - id: 501
@@ -274,4 +275,6 @@ context:
     conclusion: success
     workflow_path: .github/workflows/ci.yml
     workflow_sha: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
+  check_runs_complete: true
   consumed: {}
+  consumed_complete: true

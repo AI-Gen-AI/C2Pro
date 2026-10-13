@@ -28,8 +28,8 @@ from review_receipt_builders import (
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "review_receipts"
 
 
-def codes(receipts: list[dict[str, Any]], policy: dict[str, Any], ctx: dict[str, Any], **kw: Any) -> set[str]:
-    result = vr.verify(receipts, policy, ctx, **kw)
+def codes(receipts: list[dict[str, Any]], policy: dict[str, Any], ctx: dict[str, Any]) -> set[str]:
+    result = vr.verify(receipts, policy, ctx)
     assert result.mode == "AUDIT_ONLY"
     return result.codes
 
@@ -56,6 +56,8 @@ def test_valid_architecture_set_satisfies_principal_challenger_and_synthesis() -
 @pytest.mark.parametrize("name", ["normal", "architecture"])
 def test_static_synthetic_fixtures_verify_and_match_the_schema(name: str) -> None:
     case = yaml.safe_load((FIXTURES / f"{name}.yaml").read_text())
+    receipts, policy, context = normal_case() if name == "normal" else architecture_case()
+    assert case == {"receipts": receipts, "policy": policy, "context": context}
     result = vr.verify(case["receipts"], case["policy"], case["context"])
     assert result.gate_satisfied, result.violations
     assert case["context"]["repository"]["full_name"] == "example-org/synthetic-repo"  # never a real repository
@@ -358,7 +360,8 @@ def test_every_rule_is_load_bearing(rule_name: str, monkeypatch: pytest.MonkeyPa
     for receipts, policy, ctx in _negative_suite():
         assert not vr.verify(copy.deepcopy(receipts), policy, ctx).gate_satisfied
     slipped = [i for i, (receipts, policy, ctx) in enumerate(_negative_suite())
-               if vr.verify(copy.deepcopy(receipts), policy, ctx, disabled_rules=frozenset({rule_name})).gate_satisfied]
+               if vr._verify_with_disabled_rules(copy.deepcopy(receipts), policy, ctx,
+                                                 frozenset({rule_name})).gate_satisfied]
     assert slipped, f"disabling rule {rule_name!r} lets no negative case through: the rule is untested"
 
 
@@ -663,3 +666,78 @@ def test_r3_an_allowlisted_app_review_without_its_verifiable_receipt_contradicts
     receipts, policy, ctx = _t1_case()
     edit(ctx["head_reviews"][0])
     assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+# ============================================================================ independent review fixes
+@pytest.mark.parametrize("edit", [
+    lambda c: c.pop("check_runs_complete"),
+    lambda c: c.update(check_runs_complete=False),
+    lambda c: c.update(check_runs_complete="true"),
+    lambda c: c.pop("check_runs"),
+    lambda c: c.pop("consumed_complete"),
+    lambda c: c.update(consumed_complete=False),
+    lambda c: c.update(consumed_complete="true"),
+    lambda c: c.pop("consumed"),
+])
+def test_completeness_flags_are_explicit_true_even_for_a_trivial_empty_gate(edit: Any) -> None:
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    edit(ctx)
+    assert_rejected("POLICY_INVALID", [], policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda claims: claims.pop("inputs_digest"),
+    lambda claims: claims.update(inputs_digest="true"),
+    lambda claims: claims.update(inputs_digest="sha256:" + "0" * 64),
+])
+def test_t2_provider_inputs_digest_must_match_a_valid_attested_claim(edit: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(ctx["attestations"][receipts[0]["receipt_id"]])
+    assert_rejected("PROVIDER_MISMATCH", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("tier,field", [
+    ("T1", "github_app_id"),
+    ("T1", "github_user_id"),
+    ("T1", "review_id"),
+    ("T2", "workflow_path"),
+    ("T2", "workflow_commit_sha"),
+    ("T2", "run_id"),
+    ("T2", "run_attempt"),
+])
+def test_tier_identity_requires_every_binding_field(tier: str, field: str) -> None:
+    receipts, policy, ctx = _t1_case() if tier == "T1" else normal_case()
+    del receipts[0]["review"]["identity"][field]
+    assert_rejected("SCHEMA_INVALID", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("field", ["run_id", "run_attempt"])
+def test_missing_t2_run_binding_cannot_pass_when_both_sides_are_none(field: str) -> None:
+    receipts, policy, ctx = normal_case()
+    receipt = receipts[0]
+    claims = ctx["attestations"][receipt["receipt_id"]]
+    del receipt["review"]["identity"][field]
+    claims.pop(field)
+    claims["subject_digest"] = vr.receipt_digest(receipt)
+    assert_rejected("SCHEMA_INVALID", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("bad_value", [True, 1.0, "1"])
+@pytest.mark.parametrize("tier,field", [
+    ("T1", "github_app_id"),
+    ("T1", "github_user_id"),
+    ("T1", "review_id"),
+    ("T2", "run_id"),
+    ("T2", "run_attempt"),
+])
+def test_tier_identity_ids_are_strict_integers(tier: str, field: str, bad_value: Any) -> None:
+    receipts, policy, ctx = _t1_case() if tier == "T1" else normal_case()
+    receipts[0]["review"]["identity"][field] = bad_value
+    assert_rejected("SCHEMA_INVALID", receipts, policy, ctx)
+
+
+def test_public_verify_has_no_rule_ablation_argument() -> None:
+    receipts, policy, ctx = normal_case()
+    with pytest.raises(TypeError):
+        vr.verify(receipts, policy, ctx, disabled_rules=frozenset(vr.RULES))
