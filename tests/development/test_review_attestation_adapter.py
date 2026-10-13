@@ -470,3 +470,65 @@ def test_t2_artifact_verifier_rejects_certificate_from_other_workflow_context(tm
             run_facts=_run_facts(),
             runner=fake_runner,
         )
+
+
+def test_complete_review_inventory_is_reconciled_with_authoritative_t1_subset() -> None:
+    snap = _snapshot()
+    snap["review_inventory"] = [
+        {
+            "review_id": 71000,
+            "user_id": 2000,
+            "app_id": None,
+            "commit_id": HEAD,
+            "state": "COMMENTED",
+        }
+    ]
+    ctx = build_trusted_context(snap)
+    assert ctx["review_inventory"][0]["review_id"] == 71000
+
+    snap["review_inventory"].append(copy.deepcopy(snap["review_inventory"][0]))
+    with pytest.raises(EvidenceIncomplete, match="duplicate review inventory"):
+        build_trusted_context(snap)
+
+
+def test_complete_check_run_inventory_is_preserved_and_trusted_subset_must_be_present() -> None:
+    snap = _snapshot()
+    snap["check_run_inventory"] = [
+        {
+            "id": 501,
+            "name": "CI Status",
+            "app_id": 15368,
+            "head_sha": HEAD,
+            "conclusion": "success",
+        },
+        {
+            "id": 999,
+            "name": "External Advisory",
+            "app_id": 424242,
+            "head_sha": HEAD,
+            "conclusion": "success",
+        },
+    ]
+    ctx = build_trusted_context(snap)
+    assert {row["id"] for row in ctx["check_run_inventory"]} == {501, 999}
+
+    snap = _snapshot()
+    snap["check_run_inventory"] = []
+    with pytest.raises(EvidenceIncomplete, match="trusted check run"):
+        build_trusted_context(snap)
+
+
+def test_inventory_entries_must_all_be_bound_to_exact_head() -> None:
+    snap = _snapshot()
+    snap["review_inventory"] = [
+        {"review_id": 71000, "user_id": 2000, "app_id": None, "commit_id": "9" * 40, "state": "COMMENTED"}
+    ]
+    with pytest.raises(EvidenceIncomplete, match="review inventory"):
+        build_trusted_context(snap)
+
+    snap = _snapshot()
+    snap["check_run_inventory"] = [
+        {"id": 501, "name": "CI Status", "app_id": 15368, "head_sha": "9" * 40, "conclusion": "success"}
+    ]
+    with pytest.raises(EvidenceIncomplete, match="check-run inventory"):
+        build_trusted_context(snap)
