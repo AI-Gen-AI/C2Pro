@@ -29,4 +29,4 @@ required_checks:
     app_id: 15368
     workflow_path: .github/workflows/ci.yml
     workflow_shas:
-      - 320e8dc106a584cc3ce6b9b6d17b04fa434aa34b
+      - a598cd3cda14150680333e0312195e199ae4eef7
