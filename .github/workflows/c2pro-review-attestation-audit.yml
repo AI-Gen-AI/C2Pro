@@ -149,6 +149,13 @@ jobs:
             const rawChecks = await github.paginate(github.rest.checks.listForRef, {
               owner, repo, ref: pr.head.sha, per_page: 100, filter: 'all'
             });
+            const checkRunInventory = rawChecks.map((c) => ({
+              id: c.id,
+              name: c.name,
+              app_id: c.app && c.app.id,
+              head_sha: c.head_sha,
+              conclusion: c.conclusion
+            }));
             const checks = [];
             const workflowBlobCache = new Map();
             for (const c of rawChecks) {
@@ -218,6 +225,7 @@ jobs:
               reviews: t1,
               t2_reviews: [],
               attestations: {},
+              check_run_inventory: checkRunInventory,
               check_runs: checks,
               consumed: ledger.consumed,
               review_inventory: exactHeadReviews.map((r) => ({
