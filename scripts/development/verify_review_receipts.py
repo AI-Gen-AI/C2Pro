@@ -204,6 +204,11 @@ def _implementer(receipt, policy, context, receipts):
     evidence = context.get("implementation_evidence")
     if not isinstance(evidence, dict) or evidence.get("verified") is not True or not evidence.get("worker_id"):
         return _v("IMPLEMENTER_UNVERIFIED", receipt, "no trusted work receipt names the implementer")
+    work_id = evidence.get("work_id")
+    if not isinstance(work_id, str) or not work_id:
+        return _v("WORK_ID_UNVERIFIED", receipt, "trusted implementation evidence has no verified work id")
+    if receipt.get("work_id") != work_id:
+        return _v("WORK_ID_MISMATCH", receipt, "receipt work id differs from trusted implementation evidence")
     if receipt["review"]["implementation_worker_id"] != evidence["worker_id"]:
         return _v("IMPLEMENTER_MISMATCH", receipt, "declared implementer differs from the work receipt")
     return []
@@ -388,14 +393,33 @@ def _tests(receipt, policy, context, receipts):
     specs = {r["name"]: r for r in policy["required_checks"]}
     if not set(specs) <= {o["name"] for o in observed}:
         return _v("CHECK_PROVENANCE", receipt, "receipt does not observe every required check")
+    head = context["pr"]["head_sha"]
     for o in observed:
         check = checks.get(o["check_run_id"])
         if check is None or o["name"] != check["name"] or o["conclusion"] != check["conclusion"]:
             return _v("CHECK_PROVENANCE", receipt, f"observed test {o['name']!r} does not match a check run")
         spec = specs.get(o["name"])
-        if spec is not None and not _produced_by(check, spec, context["pr"]["head_sha"]):
-            return _v("CHECK_PROVENANCE", receipt, f"observed test {o['name']!r} is not from the trusted producer on the head")
+        if spec is not None:
+            latest = _latest_required_run(spec, context, head)
+            if (latest is None or check["id"] != latest["id"] or check.get("conclusion") != "success"
+                    or o.get("conclusion") != "success" or not _produced_by(check, spec, head)):
+                return _v(
+                    "CHECK_PROVENANCE", receipt,
+                    f"required test {o['name']!r} is not the latest green run from the trusted producer on the head",
+                )
     return []
+
+
+def _latest_required_run(spec: dict[str, Any], context: dict[str, Any], head: str) -> dict[str, Any] | None:
+    """Latest run of the configured producer identity, before workflow-SHA trust is evaluated."""
+    runs = [
+        c for c in context.get("check_runs", [])
+        if c.get("name") == spec["name"] and _is_int(c.get("id"))
+        and c.get("app_id") == spec["app_id"]
+        and c.get("workflow_path") == spec["workflow_path"]
+        and c.get("head_sha") == head
+    ]
+    return max(runs, key=lambda c: c["id"]) if runs else None
 
 
 def _produced_by(check: dict[str, Any], spec: dict[str, Any], head: str) -> bool:
@@ -458,13 +482,10 @@ def _context_violations(context: dict[str, Any]) -> list[Violation]:
 
 
 def _check_violations(policy: dict[str, Any], context: dict[str, Any]) -> list[Violation]:
-    """Required checks hold once per gate: the latest trusted-producer run on the head must be green."""
+    """Required checks hold once per gate: the latest producer run on the head must be pinned and green."""
     head = context["pr"]["head_sha"]
     for spec in policy["required_checks"]:
-        runs = [c for c in context.get("check_runs", [])  # latest run of this producer, pinned or not
-                if c.get("name") == spec["name"] and _is_int(c.get("id")) and c.get("app_id") == spec["app_id"]
-                and c.get("workflow_path") == spec["workflow_path"] and c.get("head_sha") == head]
-        latest = max(runs, key=lambda c: c["id"]) if runs else None
+        latest = _latest_required_run(spec, context, head)
         if latest is None or latest.get("conclusion") != "success" or not _produced_by(latest, spec, head):
             return [Violation("CHECK_PROVENANCE", None, f"required check {spec['name']!r} has no green latest trusted run")]
     return []
@@ -570,10 +591,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     result = verify(yaml.safe_load(args.receipts.read_text()), yaml.safe_load(args.policy.read_text()),
                     yaml.safe_load(args.context.read_text()))
-    print(json.dumps({"mode": result.mode, "gate_satisfied": result.gate_satisfied, "risk_class": result.risk_class,
-                      "required_roles": result.required_roles, "satisfied_roles": result.satisfied_roles,
+    authorization_granted = False
+    cli_status = "AUDIT_ONLY_NON_AUTHORIZING" if result.mode == "AUDIT_ONLY" else "NON_AUTHORIZING"
+    print(json.dumps({"mode": result.mode, "gate_satisfied": result.gate_satisfied,
+                      "authorization_granted": authorization_granted, "cli_status": cli_status,
+                      "risk_class": result.risk_class, "required_roles": result.required_roles,
+                      "satisfied_roles": result.satisfied_roles,
                       "violations": [v.__dict__ for v in result.violations]}, indent=2))
-    return 0 if result.gate_satisfied else 1
+    # AUDIT_ONLY is evidence, never an authorization protocol.  Exit 2 even
+    # when the synthetic gate is technically satisfied so shell consumers
+    # cannot accidentally promote an audit observation via success status.
+    if result.mode == "AUDIT_ONLY":
+        return 2
+    return 1
 
 
 if __name__ == "__main__":
