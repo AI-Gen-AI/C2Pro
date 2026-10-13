@@ -320,7 +320,6 @@ def effective_risk_class(policy: dict[str, Any], context: dict[str, Any]) -> str
 def verify(receipts: list[dict[str, Any]], policy: dict[str, Any], context: dict[str, Any],
            *, disabled_rules: frozenset[str] = frozenset()) -> GateResult:
     """Fail closed: any violation in any receipt leaves the gate unsatisfied."""
-    return GateResult(True, effective_risk_class(policy, context), (), tuple(ROLE_ORDER))  # RED: accept-all stub
     risk = effective_risk_class(policy, context)
     required = tuple(policy["gates"][risk])
     violations: list[Violation] = []
