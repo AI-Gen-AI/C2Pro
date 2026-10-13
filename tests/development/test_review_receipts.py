@@ -741,3 +741,62 @@ def test_public_verify_has_no_rule_ablation_argument() -> None:
     receipts, policy, ctx = normal_case()
     with pytest.raises(TypeError):
         vr.verify(receipts, policy, ctx, disabled_rules=frozenset(vr.RULES))
+
+
+# ============================================================================ #1013 post-merge verifier hardening (RED first)
+def test_1013_cx_p1_receipt_work_id_must_match_verified_work_identity() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["implementation_evidence"]["work_id"] = "C2PRO-DEV-14"
+    receipts[0]["work_id"] = "C2PRO-DEV-99"
+    reattest(receipts, ctx)
+    assert_rejected("WORK_ID_MISMATCH", receipts, policy, ctx)
+
+
+def test_1013_cx_p1_missing_verified_work_id_fails_closed() -> None:
+    receipts, policy, ctx = normal_case()
+    assert "work_id" not in ctx["implementation_evidence"]
+    assert_rejected("WORK_ID_UNVERIFIED", receipts, policy, ctx)
+
+
+def test_1013_cx_p2_receipt_cannot_observe_failed_required_run_when_newer_green_exists() -> None:
+    receipts, policy, ctx = normal_case()
+    failed = dict(ctx["check_runs"][0], id=500, conclusion="failure")
+    ctx["check_runs"].insert(0, failed)
+    receipts[0]["result"]["tests_observed"] = [
+        {"name": "CI Status", "check_run_id": 500, "conclusion": "failure"}
+    ]
+    reattest(receipts, ctx)
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_1013_cx_p2_receipt_must_observe_latest_trusted_required_run() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].append(dict(ctx["check_runs"][0], id=502, conclusion="success"))
+    # Receipt still claims the older successful run 501.
+    reattest(receipts, ctx)
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_1013_c6_audit_only_cli_never_returns_authorizing_success(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    receipts, policy, ctx = normal_case()
+    receipts_path = tmp_path / "receipts.yaml"
+    policy_path = tmp_path / "policy.yaml"
+    context_path = tmp_path / "context.yaml"
+    receipts_path.write_text(yaml.safe_dump(receipts), encoding="utf-8")
+    policy_path.write_text(yaml.safe_dump(policy), encoding="utf-8")
+    context_path.write_text(yaml.safe_dump(ctx), encoding="utf-8")
+
+    code = vr.main([
+        "--receipts", str(receipts_path),
+        "--policy", str(policy_path),
+        "--context", str(context_path),
+    ])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["mode"] == "AUDIT_ONLY"
+    assert payload["gate_satisfied"] is True
+    assert payload["authorization_granted"] is False
+    assert payload["cli_status"] == "AUDIT_ONLY_NON_AUTHORIZING"
+    assert code == 2
