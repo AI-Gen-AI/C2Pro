@@ -1,0 +1,191 @@
+# SYNTHETIC fixture (normal) for #1009 PR-A. Fake repository, ids and SHAs; never a real review.
+receipts:
+- schema: c2pro-review-receipt-v1
+  schema_version: 1
+  receipt_id: 00000001-0000-4000-8000-000000000001
+  work_id: C2PRO-DEV-14
+  risk_class: normal
+  subject:
+    repository_id: 1
+    repository: example-org/synthetic-repo
+    pr_number: 7
+    head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    base_sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    merge_base_sha: cccccccccccccccccccccccccccccccccccccccc
+    diff_digest: sha256:b36fae99d981f7e6fd30f60cc9ff8be0e0c3a52ecade0ef6284eee17187ab54e
+    changed_files:
+    - path: scripts/example.py
+      previous_path: null
+      status: modified
+      mode: '100644'
+      blob_sha: '1111111111111111111111111111111111111111'
+    - path: docs/new_name.md
+      previous_path: docs/old_name.md
+      status: renamed
+      mode: '100644'
+      blob_sha: '2222222222222222222222222222222222222222'
+    - path: tools/link
+      previous_path: null
+      status: added
+      mode: '120000'
+      blob_sha: '3333333333333333333333333333333333333333'
+    - path: obsolete.txt
+      previous_path: null
+      status: removed
+      mode: null
+      blob_sha: null
+  review:
+    role: principal
+    worker_id: codex
+    implementation_worker_id: claude_code
+    evidence_tier: T2
+    identity:
+      workflow_path: .github/workflows/c2pro-review-attest.yml
+      workflow_commit_sha: dddddddddddddddddddddddddddddddddddddddd
+      run_id: 80001
+      run_attempt: 1
+    provider_execution:
+      provider: openai
+      model: synthetic-model
+      request_ids:
+      - req-synthetic-1
+      response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+      prompt_template_sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      inputs_digest: sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+      untrusted_text_wrapped: true
+  result:
+    verdict: PASS
+    findings:
+    - id: F1
+      severity: P3
+      file: null
+      line: null
+      summary: synthetic non-blocking note
+    tests_observed:
+    - name: CI Status
+      check_run_id: 501
+      conclusion: success
+    architecture_drift: false
+    security_concern: false
+    scope_deviation: false
+    recommended_action: approve
+  issued_at: '2026-01-01T00:00:00Z'
+policy:
+  t1_apps:
+  - app_id: 900001
+    user_id: 900002
+  t1_apps_worker:
+    '900001': codex
+  t2:
+    issuer: https://token.actions.githubusercontent.com
+    workflow_path: .github/workflows/c2pro-review-attest.yml
+    workflow_commit_shas:
+    - dddddddddddddddddddddddddddddddddddddddd
+    ref: refs/heads/main
+    environment: review-attestor
+    dispatcher_user_ids:
+    - 1001
+    prompt_template_shas:
+    - eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  role_eligibility:
+    principal:
+    - claude_code
+    - codex
+    challenger:
+    - claude_code
+    - codex
+    - antigravity
+    orchestrator_synthesis:
+    - gpt6_orchestrator
+  worker_providers:
+    claude_code: anthropic
+    codex: openai
+    antigravity: google
+    gpt6_orchestrator: openai
+  gates:
+    trivial: []
+    normal:
+    - principal
+    material:
+    - principal
+    architecture:
+    - principal
+    - challenger
+    - orchestrator_synthesis
+    security:
+    - principal
+    - challenger
+    - orchestrator_synthesis
+    high_blast_radius:
+    - principal
+    - challenger
+    - orchestrator_synthesis
+  high_blast_radius_paths:
+  - scripts/development/verify_review_receipts.py
+  - scripts/development/review_attestation/
+  - .c2pro/control/
+  - .github/workflows/c2pro-review-attest.yml
+  required_checks:
+  - CI Status
+  trusted_check_app_ids:
+  - 15368
+context:
+  repository:
+    id: 1
+    full_name: example-org/synthetic-repo
+  pr:
+    number: 7
+    author_user_id: 1000
+    head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    base_sha: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    merge_base_sha: cccccccccccccccccccccccccccccccccccccccc
+    changed_files:
+    - path: scripts/example.py
+      previous_path: null
+      status: modified
+      mode: '100644'
+      blob_sha: '1111111111111111111111111111111111111111'
+    - path: docs/new_name.md
+      previous_path: docs/old_name.md
+      status: renamed
+      mode: '100644'
+      blob_sha: '2222222222222222222222222222222222222222'
+    - path: tools/link
+      previous_path: null
+      status: added
+      mode: '120000'
+      blob_sha: '3333333333333333333333333333333333333333'
+    - path: obsolete.txt
+      previous_path: null
+      status: removed
+      mode: null
+      blob_sha: null
+  effective_risk_class: normal
+  implementation_evidence:
+    worker_id: claude_code
+    verified: true
+    evidence_ref: work-receipt-synthetic
+  app_reviews: {}
+  attestations:
+    00000001-0000-4000-8000-000000000001:
+      signature_verified: true
+      issuer: https://token.actions.githubusercontent.com
+      repository_id: 1
+      workflow_path: .github/workflows/c2pro-review-attest.yml
+      workflow_commit_sha: dddddddddddddddddddddddddddddddddddddddd
+      ref: refs/heads/main
+      event: workflow_dispatch
+      environment: review-attestor
+      environment_approved: true
+      triggering_actor_id: 1001
+      run_id: 80001
+      run_attempt: 1
+      subject_digest: sha256:55ebb0427db2df2e8b7b19fdc83231c68e75e7d693a55ca5fb938bca85f4f0e2
+      response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+  check_runs:
+  - id: 501
+    name: CI Status
+    app_id: 15368
+    head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    conclusion: success
+  consumed: {}
