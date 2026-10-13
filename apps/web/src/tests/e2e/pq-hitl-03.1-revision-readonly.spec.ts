@@ -8,6 +8,7 @@ const PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
 const DOCUMENT_ID = "00000000-0000-0000-0000-00000000d401";
 
 test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
+  test.describe.configure({ timeout: 120_000 }); // Bounded real Clerk setup + re-login.
   test.beforeEach(async ({ page }) => {
     await establishAuthenticatedSession(page);
   });
