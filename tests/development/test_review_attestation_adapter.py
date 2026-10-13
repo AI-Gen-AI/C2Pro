@@ -69,7 +69,17 @@ def _snapshot() -> dict:
             "evidence_ref": "synthetic:work-receipt:1",
         },
         "reviews": [],
+        "review_inventory": [],
         "attestations": {},
+        "check_run_inventory": [
+            {
+                "id": 501,
+                "name": "CI Status",
+                "app_id": 15368,
+                "head_sha": HEAD,
+                "conclusion": "success",
+            }
+        ],
         "check_runs": [
             {
                 "id": 501,
