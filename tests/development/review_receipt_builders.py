@@ -78,7 +78,7 @@ def context(risk: str = "normal", implementer: str | None = "claude_code") -> di
         "pr": {"number": 7, "author_user_id": AUTHOR_ID, "head_sha": HEAD, "base_sha": BASE,
                "merge_base_sha": MERGE_BASE, "changed_files": copy.deepcopy(CHANGED), "changed_files_complete": True},
         "effective_risk_class": risk,
-        "implementation_evidence": ({"worker_id": implementer, "verified": True, "evidence_ref": "work-receipt-synthetic"}
+        "implementation_evidence": ({"worker_id": implementer, "work_id": "C2PRO-DEV-14", "verified": True, "evidence_ref": "work-receipt-synthetic"}
                                     if implementer else None),
         "app_reviews": {},
         "head_reviews": [],
