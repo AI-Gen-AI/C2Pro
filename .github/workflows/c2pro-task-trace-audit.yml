@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install read-only parser
-        run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3"
+        run: 'python -m pip install --disable-pip-version-check --only-binary=:all: "pyyaml==6.0.3"'
       - name: Audit Task / SDD / WORK references without enforcement
         if: github.event_name == 'pull_request'
         run: python scripts/development/validate_task_trace.py --event "$GITHUB_EVENT_PATH" --mode audit
