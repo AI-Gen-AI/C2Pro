@@ -63,6 +63,21 @@ async def qualify_pq_hitl_03_1(db: AsyncSession) -> None:
         await collision.rollback()
     print("PQ031_EXISTING_REVISION_CONFLICT_PG=PASS")
 
+    # A real reupload lineage has exactly one root (A); B must descend from A.
+    # The seed must reject a pre-existing second root, not silently "repair" it.
+    async with db.begin_nested() as broken_lineage:
+        revision = await db.get(DocumentRevisionORM, REV_B_ID)
+        assert revision is not None
+        assert revision.parent_revision_id == REV_A_ID
+        revision.parent_revision_id = None
+        await db.flush()
+        await _expect_rejection(
+            lambda: _upsert_revision(db, REV_B_ID, 2),
+            "PQ031_SEED_REVISION_SCOPE_OR_TEMPORAL_CONFLICT",
+        )
+        await broken_lineage.rollback()
+    print("PQ031_PARENT_REVISION_CHAIN_PG=PASS")
+
     # A proposed candidate cannot silently become trusted through a reused ID.
     async with db.begin_nested() as bad_trust:
         artifact = await db.get(DocumentArtifactORM, ARTIFACT_B_ID)
