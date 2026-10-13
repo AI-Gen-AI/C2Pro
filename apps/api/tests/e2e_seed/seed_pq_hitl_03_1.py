@@ -2,8 +2,8 @@
 Idempotent seed for PQ-HITL-03.1 E2E read-only revision evidence.
 
 Extends seed_wedge.py with two revisions for DOC_CONTRACT_ID:
-- rev A: 9 clauses, trust_state=trusted, current_basis=unresolved
-- rev B: 7 clauses, trust_state=proposed
+- rev A: 9 clauses, historical trusted, parent_revision_id=None
+- rev B: 7 clauses, proposed, parent_revision_id=REV_A_ID
 
 No production mutation, tenant-scoped, deterministic IDs.
 """
@@ -53,6 +53,7 @@ def _assert_revision_identity(existing: DocumentRevisionORM, rev_no: int) -> Non
         or existing.project_id != PROJECT_ID
         or existing.document_id != DOC_CONTRACT_ID
         or existing.rev_no != rev_no
+        or existing.parent_revision_id != (REV_A_ID if rev_no == 2 else None)
         or existing.blob_hash != "sha256placeholder"
         or existing.blob_key != f"rev/{existing.revision_id}"
         or (existing.valid_to is None) != (rev_no == 2)
@@ -74,6 +75,7 @@ async def _upsert_revision(db: AsyncSession, rev_id: UUID, rev_no: int) -> None:
             project_id=PROJECT_ID,
             tenant_id=TENANT_ID,
             rev_no=rev_no,
+            parent_revision_id=REV_A_ID if rev_no == 2 else None,
             blob_hash="sha256placeholder",
             blob_key=f"rev/{rev_id}",
             valid_from=now - timedelta(days=1) if rev_no == 1 else now,
