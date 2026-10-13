@@ -18,7 +18,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -219,6 +219,157 @@ def _validate_reviews(
             "body_receipt_digest": digest,
         })
     return app_reviews, head_reviews
+
+
+def verify_t2_receipt_artifact(
+    *,
+    artifact_path: Path,
+    bundle_path: Path,
+    repository: str,
+    signer_workflow: str,
+    source_ref: str,
+    signer_digest: str,
+    run_facts: dict[str, Any],
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Verify one canonical receipt artifact and return receipt + trusted claims.
+
+    The signature/certificate is verified by gh. Provider fields are read from
+    the signed receipt artifact itself, not from the workflow-controlled SLSA
+    predicate. Actor/environment facts must come from GitHub API evidence for
+    the exact run bound by the certificate runInvocationURI.
+    """
+    _sha(signer_digest, "T2 signer digest")
+    if not artifact_path.is_file() or not bundle_path.is_file():
+        _fail("attestation artifact or bundle is missing")
+    try:
+        raw = artifact_path.read_bytes()
+        receipt = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EvidenceIncomplete("attested receipt artifact is invalid") from exc
+    if not isinstance(receipt, dict) or raw != canonical_json(receipt):
+        _fail("attested receipt artifact must be canonical JSON bytes")
+    artifact_digest = _receipt_digest(receipt)
+
+    command = [
+        "gh", "attestation", "verify", str(artifact_path),
+        "--repo", repository,
+        "--bundle", str(bundle_path),
+        "--signer-workflow", repository + "/" + signer_workflow,
+        "--source-ref", source_ref,
+        "--source-digest", signer_digest,
+        "--signer-digest", signer_digest,
+        "--cert-oidc-issuer", "https://token.actions.githubusercontent.com",
+        "--deny-self-hosted-runners",
+        "--format", "json",
+    ]
+    try:
+        completed = runner(command, check=False, capture_output=True, text=True)
+    except OSError as exc:
+        raise EvidenceIncomplete("gh attestation verifier is unavailable") from exc
+    if completed.returncode != 0:
+        _fail("gh attestation verification failed")
+    try:
+        rows = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise EvidenceIncomplete("gh attestation verification output is malformed") from exc
+    if not isinstance(rows, list) or len(rows) != 1:
+        _fail("attestation verification must yield exactly one verified statement")
+    verification = _mapping(rows[0].get("verificationResult"), "verificationResult")
+    signature = _mapping(verification.get("signature"), "verificationResult.signature")
+    cert = _mapping(signature.get("certificate"), "verificationResult.signature.certificate")
+    statement = _mapping(verification.get("statement"), "verificationResult.statement")
+
+    if cert.get("issuer") != "https://token.actions.githubusercontent.com":
+        _fail("attestation certificate issuer is not trusted")
+    if cert.get("githubWorkflowRepository") != repository:
+        _fail("attestation certificate repository is not trusted")
+    if cert.get("githubWorkflowRef") != source_ref:
+        _fail("attestation certificate source ref is not trusted")
+    if cert.get("sourceRepositoryDigest") != signer_digest:
+        _fail("attestation certificate source digest is not pinned")
+    if cert.get("runnerEnvironment") != "github-hosted":
+        _fail("self-hosted or unknown attestation runner is forbidden")
+
+    invocation = cert.get("runInvocationURI")
+    if not isinstance(invocation, str):
+        _fail("attestation certificate has no run invocation URI")
+    escaped_repo = re.escape(repository)
+    match = re.fullmatch(
+        rf"https://github\.com/{escaped_repo}/actions/runs/(\d+)/attempts/(\d+)",
+        invocation,
+    )
+    if not match:
+        _fail("attestation run invocation URI is malformed")
+    run_id, run_attempt = int(match.group(1)), int(match.group(2))
+
+    if run_facts.get("run_id") != run_id or run_facts.get("run_attempt") != run_attempt:
+        _fail("attestation run does not match trusted GitHub run facts")
+    if run_facts.get("workflow_path") != signer_workflow:
+        _fail("attestation run workflow path is not trusted")
+    if run_facts.get("head_sha") != signer_digest or run_facts.get("ref") != source_ref:
+        _fail("attestation run source binding is not trusted")
+    if run_facts.get("event") != "workflow_dispatch":
+        _fail("attestation run was not workflow_dispatch")
+    for key in ("triggering_actor_id", "environment_approver_id", "run_id", "run_attempt"):
+        if not _is_int(run_facts.get(key)) or run_facts[key] < 1:
+            _fail(f"attestation run fact {key} is missing")
+    if run_facts.get("environment_approved") is not True:
+        _fail("attestation environment approval is not verified")
+    environment = run_facts.get("environment")
+    if not isinstance(environment, str) or not environment:
+        _fail("attestation environment is missing")
+
+    subjects = statement.get("subject")
+    if not isinstance(subjects, list):
+        _fail("verified statement subject is missing")
+    expected_hex = artifact_digest.removeprefix("sha256:")
+    if not any(
+        isinstance(item, dict)
+        and isinstance(item.get("digest"), dict)
+        and item["digest"].get("sha256") == expected_hex
+        for item in subjects
+    ):
+        _fail("verified statement does not bind the canonical receipt digest")
+
+    review = _mapping(receipt.get("review"), "attested receipt review")
+    execution = _mapping(review.get("provider_execution"), "attested provider execution")
+    request_ids = execution.get("request_ids")
+    if not isinstance(request_ids, list) or not request_ids or not all(isinstance(x, str) and x for x in request_ids):
+        _fail("attested provider request ids are missing")
+    for key in ("response_digest", "inputs_digest"):
+        if not isinstance(execution.get(key), str) or not DIGEST.fullmatch(execution[key]):
+            _fail(f"attested provider {key} is malformed")
+    provider, model = execution.get("provider"), execution.get("model")
+    if not isinstance(provider, str) or not provider or not isinstance(model, str) or not model:
+        _fail("attested provider/model is missing")
+
+    claims = {
+        "signature_verified": True,
+        "issuer": cert["issuer"],
+        "repository_id": run_facts.get("repository_id"),
+        "workflow_path": signer_workflow,
+        "workflow_commit_sha": signer_digest,
+        "ref": source_ref,
+        "event": run_facts["event"],
+        "environment": environment,
+        "environment_approved": True,
+        "triggering_actor_id": run_facts["triggering_actor_id"],
+        "environment_approver_id": run_facts["environment_approver_id"],
+        "run_id": run_id,
+        "run_attempt": run_attempt,
+        "subject_digest": artifact_digest,
+        "response_digest": execution["response_digest"],
+        "provider": provider,
+        "model": model,
+        "inputs_digest": execution["inputs_digest"],
+        "request_ids_digest": "sha256:" + hashlib.sha256(
+            canonical_json(sorted(request_ids))
+        ).hexdigest(),
+    }
+    if not _is_int(claims["repository_id"]):
+        _fail("attestation run repository id is missing")
+    return receipt, claims
 
 
 def _validate_attestations(
