@@ -1,0 +1,32 @@
+# PR-B #1011 -- AUDIT_ONLY verifier policy.
+# NOT canonical review authority. PR-D must separately adopt/enforce a protected policy.
+t1_apps: []
+t1_apps_worker: {}
+t2: null
+role_eligibility:
+  principal: [claude_code, codex]
+  challenger: [claude_code, codex, antigravity]
+  orchestrator_synthesis: [gpt6_orchestrator]
+worker_providers:
+  claude_code: anthropic
+  codex: openai
+  antigravity: google
+  gpt6_orchestrator: openai
+gates:
+  trivial: []
+  normal: [principal]
+  material: [principal]
+  architecture: [principal, challenger, orchestrator_synthesis]
+  security: [principal, challenger, orchestrator_synthesis]
+  high_blast_radius: [principal, challenger, orchestrator_synthesis]
+high_blast_radius_paths:
+  - scripts/development/verify_review_receipts.py
+  - scripts/development/review_attestation/
+  - .c2pro/control/
+  - .github/workflows/
+required_checks:
+  - name: CI Status
+    app_id: 15368
+    workflow_path: .github/workflows/ci.yml
+    workflow_shas:
+      - 320e8dc106a584cc3ce6b9b6d17b04fa434aa34b
