@@ -473,16 +473,89 @@ def _validate_consumed(snapshot: dict[str, Any]) -> dict[str, list[Any]]:
     return result
 
 
+def _validate_review_inventory(snapshot: dict[str, Any], pr: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = _list(snapshot.get("review_inventory"), "review_inventory")
+    seen: set[int] = set()
+    inventory: list[dict[str, Any]] = []
+    for value in raw:
+        row = _mapping(value, "review inventory row")
+        rid = row.get("review_id")
+        if not _is_int(rid) or rid < 1:
+            _fail("review inventory id is invalid")
+        if rid in seen:
+            _fail(f"duplicate review inventory id: {rid}")
+        seen.add(rid)
+        if row.get("commit_id") != pr["head_sha"]:
+            _fail(f"review inventory {rid} is not bound to exact head")
+        user_id = row.get("user_id")
+        app_id = row.get("app_id")
+        if user_id is not None and (not _is_int(user_id) or user_id < 1):
+            _fail(f"review inventory {rid} user_id is invalid")
+        if app_id is not None and (not _is_int(app_id) or app_id < 1):
+            _fail(f"review inventory {rid} app_id is invalid")
+        inventory.append({
+            "review_id": rid,
+            "user_id": user_id,
+            "app_id": app_id,
+            "commit_id": row["commit_id"],
+            "state": row.get("state"),
+        })
+    return inventory
+
+
+def _validate_check_run_inventory(snapshot: dict[str, Any], pr: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = _list(snapshot.get("check_run_inventory"), "check_run_inventory")
+    seen: set[int] = set()
+    inventory: list[dict[str, Any]] = []
+    for value in raw:
+        row = _mapping(value, "check-run inventory row")
+        cid = row.get("id")
+        if not _is_int(cid) or cid < 1:
+            _fail("check-run inventory id is invalid")
+        if cid in seen:
+            _fail(f"duplicate check-run inventory id: {cid}")
+        seen.add(cid)
+        if row.get("head_sha") != pr["head_sha"]:
+            _fail(f"check-run inventory {cid} is not bound to exact head")
+        app_id = row.get("app_id")
+        if app_id is not None and (not _is_int(app_id) or app_id < 1):
+            _fail(f"check-run inventory {cid} app_id is invalid")
+        name = row.get("name")
+        if not isinstance(name, str) or not name:
+            _fail(f"check-run inventory {cid} name is missing")
+        inventory.append({
+            "id": cid,
+            "name": name,
+            "app_id": app_id,
+            "head_sha": row["head_sha"],
+            "conclusion": row.get("conclusion"),
+        })
+    return inventory
+
+
 def build_trusted_context(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Validate an exhaustive trusted snapshot and return verifier context."""
     snapshot = _mapping(snapshot, "snapshot")
     collection = _validate_collection(snapshot)
     repository, pr = _validate_subject(snapshot, collection)
     changed_files = _validate_changed_files(snapshot, pr)
+    review_inventory = _validate_review_inventory(snapshot, pr)
+    check_run_inventory = _validate_check_run_inventory(snapshot, pr)
     app_reviews, head_reviews = _validate_reviews(snapshot, repository, pr)
     attestations = _validate_attestations(snapshot, repository)
     checks = _validate_check_runs(snapshot, pr)
     consumed = _validate_consumed(snapshot)
+
+    review_ids = {row["review_id"] for row in review_inventory}
+    missing_review_ids = sorted(
+        int(review_id) for review_id in app_reviews if int(review_id) not in review_ids
+    )
+    if missing_review_ids:
+        _fail(f"trusted T1 review missing from complete review inventory: {missing_review_ids[0]}")
+    check_ids = {row["id"] for row in check_run_inventory}
+    missing_check_ids = sorted(check["id"] for check in checks if check["id"] not in check_ids)
+    if missing_check_ids:
+        _fail(f"trusted check run missing from complete check-run inventory: {missing_check_ids[0]}")
 
     t2_reviews = snapshot.get("t2_reviews", [])
     if not isinstance(t2_reviews, list):
@@ -523,9 +596,11 @@ def build_trusted_context(snapshot: dict[str, Any]) -> dict[str, Any]:
         "effective_risk_class": risk,
         "implementation_evidence": implementation,
         "app_reviews": app_reviews,
+        "review_inventory": review_inventory,
         "head_reviews": head_reviews,
         "head_reviews_complete": True,
         "attestations": attestations,
+        "check_run_inventory": check_run_inventory,
         "check_runs": checks,
         "check_runs_complete": True,
         "consumed": consumed,
