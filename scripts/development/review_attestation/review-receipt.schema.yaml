@@ -103,5 +103,14 @@ properties:
       security_concern: {type: boolean}
       scope_deviation: {type: boolean}
       recommended_action: {enum: [approve, remediate, escalate]}
-      synthesis_of: {type: array, items: {type: string}, uniqueItems: true}
+      synthesis_of:
+        type: array
+        uniqueItems: true
+        items:
+          type: object
+          additionalProperties: false
+          required: [receipt_id, digest]
+          properties:
+            receipt_id: {type: string}
+            digest: {$ref: '#/$defs/digest'}
   issued_at: {type: string, format: date-time}

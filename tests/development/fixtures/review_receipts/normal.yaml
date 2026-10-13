@@ -124,11 +124,13 @@ policy:
   - scripts/development/verify_review_receipts.py
   - scripts/development/review_attestation/
   - .c2pro/control/
-  - .github/workflows/c2pro-review-attest.yml
+  - .github/workflows/
   required_checks:
-  - CI Status
-  trusted_check_app_ids:
-  - 15368
+  - name: CI Status
+    app_id: 15368
+    workflow_path: .github/workflows/ci.yml
+    workflow_shas:
+    - c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
 context:
   repository:
     id: 1
@@ -160,12 +162,19 @@ context:
       status: removed
       mode: null
       blob_sha: null
+    changed_files_complete: true
   effective_risk_class: normal
   implementation_evidence:
     worker_id: claude_code
     verified: true
     evidence_ref: work-receipt-synthetic
   app_reviews: {}
+  head_reviews:
+  - source: T2
+    receipt_id: 00000001-0000-4000-8000-000000000001
+    worker_id: codex
+    verdict: PASS
+    recommended_action: approve
   attestations:
     00000001-0000-4000-8000-000000000001:
       signature_verified: true
@@ -178,14 +187,20 @@ context:
       environment: review-attestor
       environment_approved: true
       triggering_actor_id: 1001
+      environment_approver_id: 1002
       run_id: 80001
       run_attempt: 1
       subject_digest: sha256:55ebb0427db2df2e8b7b19fdc83231c68e75e7d693a55ca5fb938bca85f4f0e2
       response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+      provider: openai
+      model: synthetic-model
+      request_ids_digest: sha256:836f8af53cb269a0c1bda760f287be4100bfc948ee6c407c1338374e721556a6
   check_runs:
   - id: 501
     name: CI Status
     app_id: 15368
     head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     conclusion: success
+    workflow_path: .github/workflows/ci.yml
+    workflow_sha: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
   consumed: {}

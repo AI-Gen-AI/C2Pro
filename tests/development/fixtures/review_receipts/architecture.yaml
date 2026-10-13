@@ -210,8 +210,10 @@ receipts:
     scope_deviation: false
     recommended_action: approve
     synthesis_of:
-    - 00000001-0000-4000-8000-000000000001
-    - 00000002-0000-4000-8000-000000000002
+    - receipt_id: 00000001-0000-4000-8000-000000000001
+      digest: sha256:239f0b10fef3dc34850b43a14c6b8b5278b660ad13e4562ae57406e8530566e3
+    - receipt_id: 00000002-0000-4000-8000-000000000002
+      digest: sha256:527eda15c42282f251fd7f73aa6d17428c09818fed2a5de3397209b4117f8c92
   issued_at: '2026-01-01T00:00:00Z'
 policy:
   t1_apps:
@@ -267,11 +269,13 @@ policy:
   - scripts/development/verify_review_receipts.py
   - scripts/development/review_attestation/
   - .c2pro/control/
-  - .github/workflows/c2pro-review-attest.yml
+  - .github/workflows/
   required_checks:
-  - CI Status
-  trusted_check_app_ids:
-  - 15368
+  - name: CI Status
+    app_id: 15368
+    workflow_path: .github/workflows/ci.yml
+    workflow_shas:
+    - c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
 context:
   repository:
     id: 1
@@ -303,12 +307,29 @@ context:
       status: removed
       mode: null
       blob_sha: null
+    changed_files_complete: true
   effective_risk_class: architecture
   implementation_evidence:
     worker_id: claude_code
     verified: true
     evidence_ref: work-receipt-synthetic
   app_reviews: {}
+  head_reviews:
+  - source: T2
+    receipt_id: 00000001-0000-4000-8000-000000000001
+    worker_id: codex
+    verdict: PASS
+    recommended_action: approve
+  - source: T2
+    receipt_id: 00000002-0000-4000-8000-000000000002
+    worker_id: antigravity
+    verdict: PASS
+    recommended_action: approve
+  - source: T2
+    receipt_id: 00000003-0000-4000-8000-000000000003
+    worker_id: gpt6_orchestrator
+    verdict: PASS
+    recommended_action: approve
   attestations:
     00000001-0000-4000-8000-000000000001:
       signature_verified: true
@@ -321,10 +342,14 @@ context:
       environment: review-attestor
       environment_approved: true
       triggering_actor_id: 1001
+      environment_approver_id: 1002
       run_id: 80001
       run_attempt: 1
       subject_digest: sha256:239f0b10fef3dc34850b43a14c6b8b5278b660ad13e4562ae57406e8530566e3
       response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000001
+      provider: openai
+      model: synthetic-model
+      request_ids_digest: sha256:836f8af53cb269a0c1bda760f287be4100bfc948ee6c407c1338374e721556a6
     00000002-0000-4000-8000-000000000002:
       signature_verified: true
       issuer: https://token.actions.githubusercontent.com
@@ -336,10 +361,14 @@ context:
       environment: review-attestor
       environment_approved: true
       triggering_actor_id: 1001
+      environment_approver_id: 1002
       run_id: 80002
       run_attempt: 1
       subject_digest: sha256:527eda15c42282f251fd7f73aa6d17428c09818fed2a5de3397209b4117f8c92
       response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000002
+      provider: google
+      model: synthetic-model
+      request_ids_digest: sha256:2d0c5b68b812db2e664226e69fb8806f986ca125d8ee4148865709f73b7f2993
     00000003-0000-4000-8000-000000000003:
       signature_verified: true
       issuer: https://token.actions.githubusercontent.com
@@ -351,14 +380,20 @@ context:
       environment: review-attestor
       environment_approved: true
       triggering_actor_id: 1001
+      environment_approver_id: 1002
       run_id: 80003
       run_attempt: 1
-      subject_digest: sha256:bb48ccd8963ded672f27b32623f2570224a80254e4948057125b52250369769f
+      subject_digest: sha256:28647d2d2af4981efded43f4f412197816c4d57af2d4e3858a13240eab81aa24
       response_digest: sha256:0000000000000000000000000000000000000000000000000000000000000003
+      provider: openai
+      model: synthetic-model
+      request_ids_digest: sha256:4aaa000f983945f1ab595f8ee153881f8f8159eec662f08140d759c2f38b8f2d
   check_runs:
   - id: 501
     name: CI Status
     app_id: 15368
     head_sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     conclusion: success
+    workflow_path: .github/workflows/ci.yml
+    workflow_sha: c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
   consumed: {}

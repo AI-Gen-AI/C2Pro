@@ -43,7 +43,8 @@ def assert_rejected(code: str, receipts: list[dict[str, Any]], policy: dict[str,
 # ============================================================================ positive
 def test_valid_normal_principal_satisfies_the_normal_gate() -> None:
     result = vr.verify(*normal_case())
-    assert result.gate_satisfied and result.satisfied_roles == ("principal",), result.violations
+    assert result.gate_satisfied, result.violations
+    assert result.satisfied_roles == ("principal",)
 
 
 def test_valid_architecture_set_satisfies_principal_challenger_and_synthesis() -> None:
@@ -188,7 +189,8 @@ def test_09_pr_touching_the_verifier_is_high_blast_radius_and_needs_the_full_set
     receipts[0]["subject"]["diff_digest"] = vr.diff_digest(ctx["pr"]["changed_files"])
     reattest(receipts, ctx)
     result = vr.verify(receipts, policy, ctx)
-    assert result.risk_class == "high_blast_radius" and not result.gate_satisfied
+    assert result.risk_class == "high_blast_radius"
+    assert not result.gate_satisfied
     assert {"RISK_DOWNGRADE", "MISSING_CHALLENGER", "MISSING_SYNTHESIS"} <= result.codes
 
 
@@ -324,10 +326,11 @@ def _negative_suite() -> list[tuple[list[dict[str, Any]], dict[str, Any], dict[s
         lambda r: r[0]["review"].update(evidence_tier="T3"),                 # evidence_tier
         lambda r: r[0]["subject"].update(base_sha="9" * 40),                 # subject
         lambda r: [x.update(risk_class="material") for x in r],              # risk_class
-        lambda r: r[0]["review"].update(implementation_worker_id="codex"),   # implementer
+        lambda r: r[0]["review"].update(implementation_worker_id="antigravity"),  # implementer
         lambda r: r[0]["review"].update(worker_id="gpt6_orchestrator"),      # eligibility
-        lambda r: r[0]["review"].update(worker_id="claude_code"),            # independence
-        lambda r: r[0]["result"].update(verdict="BLOCK"),                    # result_consistency
+        lambda r: (r[0]["review"].update(worker_id="claude_code"),           # independence
+                   r[0]["review"]["provider_execution"].update(provider="anthropic")),
+        lambda r: r[0]["result"].update(security_concern=True),              # result_consistency
         lambda r: r[2]["result"].update(synthesis_of=[]),                    # synthesis
         lambda r: r[0]["result"]["tests_observed"][0].update(check_run_id=999),  # tests
     )
@@ -355,3 +358,205 @@ def test_every_rule_is_load_bearing(rule_name: str) -> None:
     slipped = [i for i, (receipts, policy, ctx) in enumerate(_negative_suite())
                if vr.verify(copy.deepcopy(receipts), policy, ctx, disabled_rules=frozenset({rule_name})).gate_satisfied]
     assert slipped, f"disabling rule {rule_name!r} lets no negative case through: the rule is untested"
+
+
+# ============================================================================ adversarial review round 1 (RED first)
+from review_receipt_builders import receipt as _receipt
+
+
+def _t1_case() -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    receipts, policy, ctx = normal_case()
+    receipts[0] = _receipt(1, "principal", "codex", tier="T1")
+    reattest(receipts, ctx)
+    return receipts, policy, ctx
+
+
+@pytest.mark.parametrize("field,value", [("commit_id", "9" * 40), ("state", "COMMENTED")])
+def test_t1_review_must_be_approved_on_the_exact_head(field: str, value: str) -> None:
+    receipts, policy, ctx = _t1_case()
+    ctx["app_reviews"][str(receipts[0]["review"]["identity"]["review_id"])][field] = value
+    assert_rejected("STALE_SHA", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("field,value", [("pr_number", 99), ("repository_id", 2)])
+def test_r1_p3_5_t1_review_bound_to_pr_and_repository(field: str, value: int) -> None:
+    receipts, policy, ctx = _t1_case()
+    ctx["app_reviews"][str(receipts[0]["review"]["identity"]["review_id"])][field] = value
+    assert_rejected("WRONG_SUBJECT", receipts, policy, ctx)
+
+
+def test_r1_p1_1_pr_added_job_with_the_required_name_cannot_stand_in_for_ci() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"][0]["conclusion"] = "failure"
+    ctx["check_runs"].append({"id": 502, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD,
+                              "conclusion": "success", "workflow_path": ".github/workflows/pr-added.yml",
+                              "workflow_sha": "f" * 40})
+    receipts[0]["result"]["tests_observed"] = []
+    reattest(receipts, ctx)
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_r1_p1_1_a_later_failed_rerun_wins_over_an_earlier_success() -> None:
+    receipts, policy, ctx = normal_case()
+    later = dict(ctx["check_runs"][0], id=503, conclusion="failure")
+    ctx["check_runs"].append(later)
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_r1_p1_1_receipt_must_observe_the_required_checks() -> None:
+    receipts, policy, ctx = normal_case()
+    receipts[0]["result"]["tests_observed"] = []
+    reattest(receipts, ctx)
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+def test_r1_p1_1_any_workflow_change_is_high_blast_radius() -> None:
+    receipts, policy, ctx = normal_case()
+    row = {"path": ".github/workflows/ci.yml", "previous_path": None, "status": "modified", "mode": "100644",
+           "blob_sha": "4" * 40}
+    ctx["pr"]["changed_files"].append(row)
+    assert vr.verify(receipts, policy, ctx).risk_class == "high_blast_radius"
+
+
+def test_r1_p1_2_an_omitted_blocking_t2_review_at_the_head_contradicts_the_gate() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["head_reviews"].append({"source": "T2", "receipt_id": "00000009-0000-4000-8000-000000000009",
+                                "worker_id": "codex", "verdict": "BLOCK", "recommended_action": "remediate"})
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+def test_r1_p1_2_a_changes_requested_app_review_at_the_head_contradicts_the_gate() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["head_reviews"].append({"source": "T1", "review_id": 79999, "user_id": CODEX_BOT, "app_id": CODEX_APP,
+                                "state": "CHANGES_REQUESTED"})
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda p, c, rid: (p["t2"]["dispatcher_user_ids"].append(AUTHOR_ID),
+                       c["attestations"][rid].update(triggering_actor_id=AUTHOR_ID)),
+    lambda p, c, rid: c["attestations"][rid].update(environment_approver_id=c["attestations"][rid]["triggering_actor_id"]),
+    lambda p, c, rid: c["attestations"][rid].update(environment_approver_id=AUTHOR_ID),
+    lambda p, c, rid: c["attestations"][rid].pop("environment_approver_id"),
+])
+def test_r1_p2_1_author_dispatch_or_self_approval_is_rejected(edit: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(policy, ctx, receipts[0]["receipt_id"])
+    assert_rejected("AUTHOR_CONTROLLED_ATTESTATION", receipts, policy, ctx)
+
+
+def test_r1_p2_2_unknown_implementer_provider_fails_closed() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["implementation_evidence"]["worker_id"] = "claude_code_v2"
+    receipts[0]["review"]["implementation_worker_id"] = "claude_code_v2"
+    reattest(receipts, ctx)
+    assert_rejected("IMPLEMENTER_PROVIDER_UNKNOWN", receipts, policy, ctx)
+
+
+def test_r1_p2_3_executed_provider_must_be_the_worker_provider() -> None:
+    receipts, policy, ctx = normal_case()
+    receipts[0]["review"]["provider_execution"]["provider"] = "anthropic"
+    reattest(receipts, ctx)
+    assert_rejected("PROVIDER_MISMATCH", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("field", ["provider", "model", "request_ids_digest"])
+def test_r1_p2_3_execution_must_match_the_attested_execution(field: str) -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["attestations"][receipts[0]["receipt_id"]][field] = "tampered"
+    assert_rejected("PROVIDER_MISMATCH", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda r: r["result"].update(architecture_drift=True),
+    lambda r: r["result"]["findings"].append({"id": "F9", "severity": "P0", "file": None, "line": None,
+                                             "summary": "x", "resolved": True}),
+    lambda r: r["result"]["findings"].append(dict(r["result"]["findings"][0])),
+])
+def test_r1_p2_4_drift_self_resolved_criticals_and_duplicate_findings_block(edit: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(receipts[0])
+    reattest(receipts, ctx)
+    assert_rejected("BLOCKING_FINDING", receipts, policy, ctx)
+
+
+def test_r1_p2_5_blast_radius_escalation_keeps_the_stricter_base_gate() -> None:
+    receipts, policy, ctx = normal_case()
+    policy["gates"]["high_blast_radius"] = ["principal"]  # a weaker hbr gate must not override security
+    ctx["effective_risk_class"] = "security"
+    ctx["pr"]["changed_files"].append({"path": ".c2pro/control/routing.yaml", "previous_path": None,
+                                       "status": "modified", "mode": "100644", "blob_sha": "4" * 40})
+    result = vr.verify(receipts, policy, ctx)
+    assert not result.gate_satisfied
+    assert {"POLICY_INVALID", "MISSING_CHALLENGER"} & result.codes
+
+
+def test_r1_p2_6_required_checks_hold_even_without_receipts() -> None:
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    ctx["check_runs"][0]["conclusion"] = "failure"
+    assert_rejected("CHECK_PROVENANCE", [], policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda r: r["review"].update(worker_id="codex\n"),
+    lambda r: r["subject"].update(pr_number=7.0),
+    lambda r: r.update(issued_at="not-a-date"),
+])
+def test_r1_p3_1_strict_schema_types_and_formats(edit: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(receipts[0])
+    reattest(receipts, ctx)
+    assert_rejected("SCHEMA_INVALID", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit,code", [
+    (lambda c, rid: c["implementation_evidence"].update(verified="false"), "IMPLEMENTER_UNVERIFIED"),
+    (lambda c, rid: c["attestations"][rid].update(signature_verified="false"), "AUTHOR_CONTROLLED_ATTESTATION"),
+    (lambda c, rid: c["attestations"][rid].update(environment_approved="no"), "AUTHOR_CONTROLLED_ATTESTATION"),
+    (lambda c, rid: c["pr"].update(changed_files_complete=False), "DIFF_MISMATCH"),
+])
+def test_r1_p3_2_truthy_strings_never_stand_in_for_true(edit: Any, code: str) -> None:
+    receipts, policy, ctx = normal_case()
+    edit(ctx, receipts[0]["receipt_id"])
+    assert_rejected(code, receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("receipts", [[1], "x", None, [None], [{"receipt_id": 5}]])
+def test_r1_p3_3_malformed_submissions_fail_closed_without_raising(receipts: Any) -> None:
+    _, policy, ctx = normal_case()
+    assert not vr.verify(receipts, policy, ctx).gate_satisfied
+
+
+def test_r1_p3_3_unknown_risk_class_fails_closed_without_raising() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "unheard-of"
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+def test_r1_p3_4_exact_protected_directory_path_is_high_blast_radius() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["pr"]["changed_files"].append({"path": "scripts/development/review_attestation", "previous_path": None,
+                                       "status": "added", "mode": "120000", "blob_sha": "4" * 40})
+    assert vr.verify(receipts, policy, ctx).risk_class == "high_blast_radius"
+
+
+def test_r1_p3_6_duplicate_paths_in_the_trusted_diff_fail_closed() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["pr"]["changed_files"].append(dict(ctx["pr"]["changed_files"][0]))
+    receipts[0]["subject"]["changed_files"].append(dict(receipts[0]["subject"]["changed_files"][0]))
+    receipts[0]["subject"]["diff_digest"] = vr.diff_digest(receipts[0]["subject"]["changed_files"])
+    reattest(receipts, ctx)
+    assert_rejected("DIFF_MISMATCH", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda refs: refs.append({"receipt_id": "00000009-0000-4000-8000-000000000009", "digest": "sha256:" + "0" * 64}),
+    lambda refs: refs[0].update(digest="sha256:" + "0" * 64),
+])
+def test_r1_p3_7_synthesis_binds_exactly_the_reviewed_receipts_by_digest(edit: Any) -> None:
+    receipts, policy, ctx = architecture_case()
+    edit(receipts[2]["result"]["synthesis_of"])
+    for r in receipts:  # re-sign WITHOUT refreshing references, so the edit survives
+        ctx["attestations"][r["receipt_id"]]["subject_digest"] = vr.receipt_digest(r)
+    assert_rejected("MISSING_SYNTHESIS", receipts, policy, ctx)

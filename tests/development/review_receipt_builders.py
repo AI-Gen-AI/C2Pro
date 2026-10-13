@@ -22,7 +22,8 @@ _SPEC.loader.exec_module(vr)
 
 HEAD, BASE, MERGE_BASE = "a" * 40, "b" * 40, "c" * 40
 WORKFLOW_SHA, PROMPT_SHA = "d" * 40, "e" * 64
-AUTHOR_ID, DISPATCHER_ID = 1000, 1001
+AUTHOR_ID, DISPATCHER_ID, APPROVER_ID = 1000, 1001, 1002
+CI_WORKFLOW, CI_WORKFLOW_SHA = ".github/workflows/ci.yml", "c1" * 20
 CODEX_APP, CODEX_BOT = 900001, 900002
 CHECK_APP = 15368  # GitHub Actions App id (public, constant); synthetic check ids below
 
@@ -63,10 +64,10 @@ def policy() -> dict[str, Any]:
         },
         "high_blast_radius_paths": [
             "scripts/development/verify_review_receipts.py", "scripts/development/review_attestation/",
-            ".c2pro/control/", ".github/workflows/c2pro-review-attest.yml",
+            ".c2pro/control/", ".github/workflows/",
         ],
-        "required_checks": ["CI Status"],
-        "trusted_check_app_ids": [CHECK_APP],
+        "required_checks": [{"name": "CI Status", "app_id": CHECK_APP, "workflow_path": CI_WORKFLOW,
+                             "workflow_shas": [CI_WORKFLOW_SHA]}],
     }
 
 
@@ -74,13 +75,15 @@ def context(risk: str = "normal", implementer: str | None = "claude_code") -> di
     return {
         "repository": {"id": 1, "full_name": "example-org/synthetic-repo"},
         "pr": {"number": 7, "author_user_id": AUTHOR_ID, "head_sha": HEAD, "base_sha": BASE,
-               "merge_base_sha": MERGE_BASE, "changed_files": copy.deepcopy(CHANGED)},
+               "merge_base_sha": MERGE_BASE, "changed_files": copy.deepcopy(CHANGED), "changed_files_complete": True},
         "effective_risk_class": risk,
         "implementation_evidence": ({"worker_id": implementer, "verified": True, "evidence_ref": "work-receipt-synthetic"}
                                     if implementer else None),
         "app_reviews": {},
+        "head_reviews": [],
         "attestations": {},
-        "check_runs": [{"id": 501, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD, "conclusion": "success"}],
+        "check_runs": [{"id": 501, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD, "conclusion": "success",
+                        "workflow_path": CI_WORKFLOW, "workflow_sha": CI_WORKFLOW_SHA}],
         "consumed": {},
     }
 
@@ -130,7 +133,10 @@ def attest(ctx: dict[str, Any], r: dict[str, Any]) -> None:
         ident = r["review"]["identity"]
         ctx["app_reviews"][str(ident["review_id"])] = {
             "user_id": ident["github_user_id"], "app_id": ident["github_app_id"], "commit_id": ctx["pr"]["head_sha"],
-            "state": "APPROVED", "body_receipt_digest": vr.receipt_digest(r)}
+            "state": "APPROVED", "body_receipt_digest": vr.receipt_digest(r), "pr_number": ctx["pr"]["number"],
+            "repository_id": ctx["repository"]["id"]}
+        ctx["head_reviews"].append({"source": "T1", "review_id": ident["review_id"], "user_id": ident["github_user_id"],
+                                    "app_id": ident["github_app_id"], "state": "APPROVED"})
         return
     ident = r["review"]["identity"]
     ctx["attestations"][r["receipt_id"]] = {
@@ -138,8 +144,13 @@ def attest(ctx: dict[str, Any], r: dict[str, Any]) -> None:
         "repository_id": ctx["repository"]["id"], "workflow_path": ident["workflow_path"],
         "workflow_commit_sha": ident["workflow_commit_sha"], "ref": "refs/heads/main", "event": "workflow_dispatch",
         "environment": "review-attestor", "environment_approved": True, "triggering_actor_id": DISPATCHER_ID,
+        "environment_approver_id": APPROVER_ID,
         "run_id": ident["run_id"], "run_attempt": ident["run_attempt"], "subject_digest": vr.receipt_digest(r),
-        "response_digest": r["review"]["provider_execution"]["response_digest"]}
+        "response_digest": r["review"]["provider_execution"]["response_digest"],
+        "provider": r["review"]["provider_execution"]["provider"], "model": r["review"]["provider_execution"]["model"],
+        "request_ids_digest": vr.request_ids_digest(r["review"]["provider_execution"]["request_ids"])}
+    ctx["head_reviews"].append({"source": "T2", "receipt_id": r["receipt_id"], "worker_id": r["review"]["worker_id"],
+                                "verdict": r["result"]["verdict"], "recommended_action": r["result"]["recommended_action"]})
 
 
 def normal_case() -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
@@ -154,7 +165,8 @@ def architecture_case() -> tuple[list[dict[str, Any]], dict[str, Any], dict[str,
     principal = receipt(1, "principal", "codex", risk="architecture")
     challenger = receipt(2, "challenger", "antigravity", risk="architecture")
     synthesis = receipt(3, "orchestrator_synthesis", "gpt6_orchestrator", risk="architecture",
-                        synthesis_of=[principal["receipt_id"], challenger["receipt_id"]])
+                        synthesis_of=[{"receipt_id": x["receipt_id"], "digest": vr.receipt_digest(x)}
+                                      for x in (principal, challenger)])
     for r in (principal, challenger, synthesis):
         attest(ctx, r)
     return [principal, challenger, synthesis], policy(), ctx
@@ -164,5 +176,11 @@ def reattest(receipts: list[dict[str, Any]], ctx: dict[str, Any]) -> None:
     """Re-sign after a deliberate *legitimate* edit, so a test isolates one rule from tamper checks."""
     ctx["attestations"].clear()
     ctx["app_reviews"].clear()
+    ctx["head_reviews"].clear()
+    by_id = {r["receipt_id"]: r for r in receipts if isinstance(r, dict) and "receipt_id" in r}
+    for r in receipts:  # keep synthesis references bound to the (re-signed) receipts they name
+        for ref in (r.get("result", {}).get("synthesis_of") or []) if isinstance(r, dict) else []:
+            if isinstance(ref, dict) and ref.get("receipt_id") in by_id:
+                ref["digest"] = vr.receipt_digest(by_id[ref["receipt_id"]])
     for r in receipts:
         attest(ctx, r)
