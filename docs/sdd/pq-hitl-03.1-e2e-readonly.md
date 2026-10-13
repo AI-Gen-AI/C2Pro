@@ -45,6 +45,7 @@ Separate idempotent fixture `apps/api/tests/e2e_seed/seed_pq_hitl_03_1.py`:
 - Create two revisions for the document:
   - REV_A_ID: 9 clauses, artifact `trust_state=trusted`, `lifecycle_status=superseded`, `artifact_version=1`.
   - REV_B_ID: 7 clauses, artifact `trust_state=proposed`, `lifecycle_status=active`, `artifact_version=2`.
+- Revision A is the unique root (`parent_revision_id=NULL`); revision B explicitly references REV_A_ID as `parent_revision_id`, matching real reupload lineage. A repeated seed with B as an additional root fails closed.
 - `ClauseORM` linked to `revision_id` only.
 - Trust resolution via artifact resolver yields UNRESOLVED, so `No trusted-current revision is available`.
 
@@ -70,7 +71,7 @@ The tests assert actual project HTTP responses rather than assuming visual 404 m
   canonical current revision resolver UNRESOLVED (no trusted-current authority).
 - Duplicate seed runs on disposable PostgreSQL must be idempotent; a separate
   PostgreSQL qualification executes savepoint-isolated partial-clause retry and
-  conflicting revision number, artifact trust, and clause content negatives.
+  conflicting revision number, missing B-to-A parent lineage, artifact trust, and clause content negatives.
   Each negative MUST fail closed; rollback leaves the fixture unchanged.
 - Successful Playwright captures **only** the synthetic revision panel A/B
   (no Clerk identity or real contract blobs), uploaded as short-lived QA
