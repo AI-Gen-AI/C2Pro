@@ -21,8 +21,8 @@
 5. Selecting Revision B shows `7 stored clauses in this selected revision` and status `Proposed — not trusted`.
 6. UI shows `No trusted-current revision is available`.
 7. Evidence panel `revision-specific-preview` loads revision-bound clause text. SOURCE_NAVIGATION_NOT_PROVEN: clause rows are plain text; no real PDF/blob navigation is asserted until authentic source routing exists.
-8. Re-login stability: sign out/in via UI flow, re-assert same states.
-9. Negative access: an absent project and an actual seeded foreign-tenant project return backend GET 404. A separate seeded project within the authorized tenant remains accessible, but a document owned by the original project cannot be deep-linked through that different project.
+8. Re-login stability: sign out/in via UI flow, re-assert the two-revision inventory, A=9, B=7, B `Proposed — not trusted`, and unresolved trusted-current (no silent promotion).
+9. Negative access: an absent project and an actual seeded foreign-tenant project return backend GET 404. Additionally, an authenticated Clerk tenant-A browser must receive 404 from both `GET /api/v1/documents/{foreignDocumentId}/revisions` and `GET /api/v1/documents/{foreignDocumentId}/entities` for seeded foreign-tenant document B; a project-only 404 is insufficient. These are live same-origin proxy requests using the session bearer in browser memory (never returned or logged). A separate seeded project within the authorized tenant remains accessible, but a document owned by the original project cannot be deep-linked through that different project.
 
 ## Non-requirements
 - No HITL approval, no write operations, no mutation of trust state.
@@ -62,7 +62,7 @@ Playwright spec `apps/web/src/tests/e2e/pq-hitl-03.1-revision-readonly.spec.ts`:
 The tests assert actual project HTTP responses rather than assuming visual 404 messages. They verify that the wrong-project document does not open evidence. They do NOT prove fine-grained same-tenant member ACL or full Clerk B-to-A browser isolation.
 
 ## CI reuse
-- Workflow `.github/workflows/ci.yml` with `RUN_FULL_E2E` can execute Playwright against seeded DB.
+- Workflow `.github/workflows/ci.yml` runs `frontend-e2e-smoke` for **frontend OR backend** path changes (including backend-only PRs); with `RUN_FULL_E2E=true` and Clerk prerequisites it exercises the seeded PostgreSQL and live-auth Playwright evidence. An absent/unavailable harness must never be described as passing the E2E qualification.
 - Secrets provided by GitHub; no local credential exposure.
 
 ## Adversarial qualification and acceptance evidence
