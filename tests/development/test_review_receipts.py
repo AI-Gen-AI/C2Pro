@@ -557,7 +557,7 @@ def test_r1_p3_6_duplicate_paths_in_the_trusted_diff_fail_closed() -> None:
     receipts[0]["subject"]["changed_files"].append(dict(receipts[0]["subject"]["changed_files"][0]))
     receipts[0]["subject"]["diff_digest"] = vr.diff_digest(receipts[0]["subject"]["changed_files"])
     reattest(receipts, ctx)
-    assert_rejected("DIFF_MISMATCH", receipts, policy, ctx)
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)  # #1016: caught by the trusted-input shape check
 
 
 @pytest.mark.parametrize("edit", [
@@ -594,7 +594,7 @@ def test_r2_n1_missing_or_incomplete_head_reviews_fail_closed(edit: Any) -> None
 def test_r2_n4_unknown_head_review_sources_fail_closed(entry: dict[str, Any]) -> None:
     receipts, policy, ctx = normal_case()
     ctx["head_reviews"].append(entry)
-    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)  # #1016: caught by the trusted-input shape check
 
 
 def test_r2_n3_a_block_from_a_deregistered_worker_still_contradicts() -> None:
