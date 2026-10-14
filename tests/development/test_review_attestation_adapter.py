@@ -542,3 +542,95 @@ def test_inventory_entries_must_all_be_bound_to_exact_head() -> None:
     ]
     with pytest.raises(EvidenceIncomplete, match="check-run inventory"):
         build_trusted_context(snap)
+
+
+def test_markerless_app_review_is_preserved_for_contradiction_handling() -> None:
+    snap = _snapshot()
+    snap["review_inventory"] = [{
+        "review_id": 99001,
+        "user_id": 900002,
+        "app_id": 900001,
+        "commit_id": HEAD,
+        "state": "CHANGES_REQUESTED",
+    }]
+    snap["check_run_inventory"] = [{
+        "id": 501,
+        "name": "CI Status",
+        "app_id": 15368,
+        "head_sha": HEAD,
+        "conclusion": "success",
+    }]
+    ctx = build_trusted_context(snap)
+    markerless = [r for r in ctx["head_reviews"] if r.get("review_id") == 99001]
+    assert markerless == [{
+        "source": "T1",
+        "review_id": 99001,
+        "user_id": 900002,
+        "app_id": 900001,
+        "state": "CHANGES_REQUESTED",
+        "receipt": None,
+        "body_receipt_digest": None,
+    }]
+
+
+def test_audit_snapshot_may_truthfully_report_consumption_incomplete() -> None:
+    snap = _snapshot()
+    snap["collection"]["consumed_complete"] = False
+    ctx = build_trusted_context(snap)
+    assert ctx["consumed_complete"] is False
+
+
+def test_t2_bundle_verification_does_not_promote_receipt_execution_fields(tmp_path) -> None:
+    receipt = _signed_receipt()
+    artifact = tmp_path / "receipt.json"
+    artifact.write_bytes(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    )
+    bundle = tmp_path / "bundle.jsonl"
+    bundle.write_text("synthetic-bundle", encoding="utf-8")
+    digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    output = [{
+        "verificationResult": {
+            "signature": {"certificate": {
+                "issuer": "https://token.actions.githubusercontent.com",
+                "githubWorkflowRepository": "example-org/synthetic-repo",
+                "githubWorkflowRef": "refs/heads/main",
+                "sourceRepositoryDigest": WORKFLOW_SHA,
+                "runnerEnvironment": "github-hosted",
+                "runInvocationURI": (
+                    "https://github.com/example-org/synthetic-repo/"
+                    "actions/runs/80001/attempts/1"
+                ),
+            }},
+            "statement": {"subject": [{"digest": {"sha256": digest}}]},
+        }
+    }]
+
+    def fake_runner(command, **kwargs):
+        import subprocess
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(output), stderr="")
+
+    _, claims = verify_t2_receipt_artifact(
+        artifact_path=artifact,
+        bundle_path=bundle,
+        repository="example-org/synthetic-repo",
+        signer_workflow=".github/workflows/c2pro-review-attest.yml",
+        source_ref="refs/heads/main",
+        signer_digest=WORKFLOW_SHA,
+        run_facts=_run_facts(),
+        runner=fake_runner,
+    )
+    for key in ("provider", "model", "request_ids_digest", "inputs_digest", "response_digest"):
+        assert key not in claims
+
+
+def test_audit_workflow_refetches_pr_and_binds_actual_check_producer() -> None:
+    workflow = (
+        __import__("pathlib").Path(__file__).resolve().parents[2]
+        / ".github/workflows/c2pro-review-attestation-audit.yml"
+    ).read_text(encoding="utf-8")
+    assert workflow.count("github.rest.pulls.get") >= 2
+    assert "ref: run.data.head_sha" in workflow
+    assert "run.data.head_sha !== pr.head.sha" in workflow
+    assert "run.data.check_suite_id !== c.check_suite.id" in workflow
+    assert "consumed_complete: false" in workflow
