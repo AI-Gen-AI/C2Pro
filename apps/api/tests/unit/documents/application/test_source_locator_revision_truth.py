@@ -69,12 +69,15 @@ async def test_same_clause_code_uses_only_requested_revision_and_tenant() -> Non
         "Clause 5.2", document_id, tenant_id, revision_id=revision_b
     )
 
-    assert location_a is not None and location_b is not None
+    assert location_a is not None
+    assert location_b is not None
     assert location_a.chunk_text == a.full_text
     assert location_b.chunk_text == b.full_text
     assert location_a.chunk_text != location_b.chunk_text
-    assert location_a.page_number is None and location_a.bbox is None
-    assert location_b.page_number is None and location_b.bbox is None
+    assert location_a.page_number is None
+    assert location_a.bbox is None
+    assert location_b.page_number is None
+    assert location_b.bbox is None
     assert repository.get_clause_by_document_and_code.await_count == 2
     repository.list_revision_clauses.assert_not_awaited()
     repository.list_current_clauses.assert_not_awaited()
@@ -101,7 +104,8 @@ async def test_fuzzy_path_never_queries_other_revisions_or_all_clause_rows() -> 
     assert location is not None
     assert location.document_id == document_id
     assert location.chunk_text == text
-    assert location.page_number is None and location.bbox is None
+    assert location.page_number is None
+    assert location.bbox is None
     repository.list_revision_clauses.assert_awaited_once_with(
         tenant_id, document_id, revision_id
     )
@@ -154,9 +158,7 @@ async def test_missing_selected_revision_has_no_fallback_locator() -> None:
 async def test_missing_tenant_fails_before_calling_repository() -> None:
     repository = AsyncMock()
     with pytest.raises(ValueError, match="tenant_id is required"):
-        await SourceLocator(repository).locate_evidence(
-            "Clause 5.2", uuid4(), None  # type: ignore[arg-type]
-        )
+        await SourceLocator(repository).locate_evidence("Clause 5.2", uuid4(), None)  # type: ignore[arg-type]
     repository.get_clause_by_document_and_code.assert_not_awaited()
     repository.list_current_clauses.assert_not_awaited()
     repository.list_revision_clauses.assert_not_awaited()
