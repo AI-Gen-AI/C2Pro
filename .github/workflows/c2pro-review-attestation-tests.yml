@@ -39,6 +39,8 @@ jobs:
 
       - name: Run offline verifier and adapter suites
         shell: bash
+        env:
+          NO_PROXY: "*"
         run: |
           PYTHONPATH=. pytest --confcutdir=tests/development \
                  tests/development/test_review_receipts.py \
