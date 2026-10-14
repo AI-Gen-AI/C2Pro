@@ -1,14 +1,14 @@
 schema: c2pro-current-v1
 schema_version: 1
 repository: AI-Gen-AI/C2Pro
-control_status: reconciled_idle
+control_status: active
 canonical_plan:
   id: C2PRO-VPS-DEV-CONTROL-V1
   path: docs/architecture/development/c2pro-vps-development-control-plan-v1.md
 baseline:
-  main_sha: 852429c35852ff09048d7a6ca7f8c1b0a61f8c38
-active_campaign: null
-active_work: []
+  main_sha: 4ef80346d71afb8eb236741862259599a986d76b
+active_campaign: DEV14-TASK-FIRST-GOVERNANCE-20261009
+active_work: [C2PRO-DEV-14]
 next_eligible_work: C2PRO-DEV-03
 authority:
   direct_main_mutation: false
