@@ -886,6 +886,9 @@ def test_1013_c6_an_audit_result_never_satisfies_an_enforce_gate() -> None:
 @pytest.mark.parametrize("mutate", [
     lambda c: c["implementation_evidence"].pop("work_id"),
     lambda c: c["implementation_evidence"].update(work_id="not-a-work-id"),
+    lambda c: c["implementation_evidence"].update(worker_id=123),
+    lambda c: c["implementation_evidence"].update(worker_id=""),
+    lambda c: c["implementation_evidence"].update(worker_id="Claude-Code"),
     lambda c: c["implementation_evidence"].update(verified=False),
     lambda c: c.update(implementation_evidence=None),
 ])
