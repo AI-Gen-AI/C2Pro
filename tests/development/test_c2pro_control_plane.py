@@ -213,7 +213,7 @@ def test_active_control_state_accepts_effective_assigned_work(monkeypatch: pytes
     active_current["control_status"] = "active"
     active_current["active_campaign"] = "synthetic-campaign"
     active_current["active_work"] = ["C2PRO-DEV-15"]
-    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+    # Synthetic DEV-15 activation must use DEV-15\u0027s own approved execution baseline,\n    # regardless of which different WORK is active in the real hot state.\n    active_current["baseline"]["main_sha"] = validator.load_yaml(\n        ROOT / ".c2pro" / "work" / "C2PRO-DEV-15.yaml"\n    )["base_sha"]\n    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
     active_queue = copy.deepcopy(queue)
     next(item for item in active_queue["items"] if item["work_id"] == "C2PRO-DEV-15")["status"] = "in_progress"
     real_load = validator.load_yaml
@@ -234,7 +234,7 @@ def test_active_work_requires_selected_worker(monkeypatch: pytest.MonkeyPatch) -
     active_current["control_status"] = "active"
     active_current["active_campaign"] = "synthetic-campaign"
     active_current["active_work"] = ["C2PRO-DEV-15"]
-    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+    # Synthetic DEV-15 activation must use DEV-15\u0027s own approved execution baseline,\n    # regardless of which different WORK is active in the real hot state.\n    active_current["baseline"]["main_sha"] = validator.load_yaml(\n        ROOT / ".c2pro" / "work" / "C2PRO-DEV-15.yaml"\n    )["base_sha"]\n    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
     active_queue = copy.deepcopy(queue)
     next(item for item in active_queue["items"] if item["work_id"] == "C2PRO-DEV-15")["status"] = "in_progress"
     work_path = ROOT / ".c2pro" / "work" / "C2PRO-DEV-15.yaml"
