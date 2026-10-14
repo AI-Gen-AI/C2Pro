@@ -125,3 +125,44 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await expect(page.getByText(/9 stored clauses in this selected revision/i)).toHaveCount(0);
   });
 });
+
+
+// PQ-HITL-09/#945: exercise the real HTTP boundary WITHOUT a Clerk session.
+// This is a negative browser/API test, not a substitute for the second tenant's
+// independently authenticated B-to-A read that remains a separate QA residual.
+test.describe("PQ-HITL-09 anonymous document isolation", () => {
+  test("anonymous client cannot read either synthetic tenant's revisions or entities", async ({ browser }) => {
+    const context = await browser.newContext({
+      baseURL: test.info().project.use.baseURL,
+      // Override any suite storageState: an explicit empty jar is essential.
+      storageState: { cookies: [], origins: [] },
+    });
+    try {
+      const paths = [
+        "/api/v1/documents/" + DOCUMENT_ID + "/revisions",
+        "/api/v1/documents/" + DOCUMENT_ID + "/entities",
+        "/api/v1/documents/" + OTHER_TENANT_DOCUMENT_ID + "/revisions",
+        "/api/v1/documents/" + OTHER_TENANT_DOCUMENT_ID + "/entities",
+      ];
+      for (const path of paths) {
+        const response = await context.request.get(path, { maxRedirects: 0 });
+        const status = response.status();
+        const unauthorized = [401, 403, 404].includes(status);
+        const authRedirect = [302, 303, 307, 308].includes(status) &&
+          /sign-in|sign_in|login|clerk/i.test(response.headers()["location"] ?? "");
+        expect(
+          unauthorized || authRedirect,
+          "Anonymous access unexpectedly permitted or failed unclearly: " + path + " -> " + status,
+        ).toBe(true);
+
+        // No response payload may disclose seeded tenant/revision content.
+        const body = await response.text();
+        expect(body).not.toContain("tenant-b-private.pdf");
+        expect(body).not.toContain("9 stored clauses in this selected revision");
+        expect(body).not.toContain("7 stored clauses in this selected revision");
+      }
+    } finally {
+      await context.close();
+    }
+  });
+});
