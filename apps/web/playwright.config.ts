@@ -48,6 +48,7 @@ export default defineConfig({
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
+        /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
       ],
       use: {
         ...devices["Desktop Chrome"],
@@ -264,6 +265,18 @@ export default defineConfig({
         priority: "p1",
         task: "TASK-FRT-166",
         description: "Document Analysis Pipeline Journey",
+      },
+    },
+    {
+      name: "pq-hitl-03.1-revision-readonly",
+      testMatch: /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "PQ-HITL-03.1",
+        type: "e2e",
+        priority: "p0",
+        description: "Read-only revision evidence, A=9/B=7, unresolved trusted current",
       },
     },
   ],
