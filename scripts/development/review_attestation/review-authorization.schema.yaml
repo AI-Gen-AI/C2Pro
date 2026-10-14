@@ -1,0 +1,88 @@
+# DEV-14 PR-D #1022: canonical review-gate authorization evidence.
+# This object may satisfy the review evidence gate. It NEVER authorizes a Git merge.
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: c2pro-review-authorization-v1
+type: object
+additionalProperties: false
+required:
+  - schema
+  - schema_version
+  - work_id
+  - subject
+  - implementation
+  - risk_class
+  - required_roles
+  - satisfied_roles
+  - accepted_receipts
+  - context_digest
+  - policy_provenance
+  - gate_satisfied
+  - authorizes_merge
+$defs:
+  sha40: {type: string, pattern: '^[0-9a-f]{40}$'}
+  digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+properties:
+  schema: {const: c2pro-review-authorization-v1}
+  schema_version: {const: 1}
+  work_id: {type: string, pattern: '^C2PRO-DEV-[0-9]{2}$'}
+  subject:
+    type: object
+    additionalProperties: false
+    required: [repository_id, repository, pr_number, head_sha, base_sha, merge_base_sha, diff_digest]
+    properties:
+      repository_id: {type: integer, minimum: 1}
+      repository: {type: string, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'}
+      pr_number: {type: integer, minimum: 1}
+      head_sha: {$ref: '#/$defs/sha40'}
+      base_sha: {$ref: '#/$defs/sha40'}
+      merge_base_sha: {$ref: '#/$defs/sha40'}
+      diff_digest: {$ref: '#/$defs/digest'}
+  implementation:
+    type: object
+    additionalProperties: false
+    required: [worker_id, provider, evidence_ref]
+    properties:
+      worker_id: {type: string, pattern: '^[a-z0-9_]+$'}
+      provider: {type: string, minLength: 1}
+      evidence_ref: {type: string, minLength: 1}
+  risk_class: {enum: [trivial, normal, material, architecture, security, high_blast_radius]}
+  required_roles:
+    type: array
+    uniqueItems: true
+    items: {enum: [principal, challenger, orchestrator_synthesis]}
+  satisfied_roles:
+    type: array
+    uniqueItems: true
+    items: {enum: [principal, challenger, orchestrator_synthesis]}
+  accepted_receipts:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [receipt_id, digest, role, worker_id, provider, evidence_tier]
+      properties:
+        receipt_id: {type: string, minLength: 1}
+        digest: {$ref: '#/$defs/digest'}
+        role: {enum: [principal, challenger, orchestrator_synthesis]}
+        worker_id: {type: string, pattern: '^[a-z0-9_]+$'}
+        provider: {type: string, minLength: 1}
+        evidence_tier: {enum: [T1, T2]}
+  context_digest: {$ref: '#/$defs/digest'}
+  policy_provenance:
+    type: object
+    additionalProperties: false
+    required:
+      - canonical_review_policy_digest
+      - canonical_routing_digest
+      - attestation_trust_policy_digest
+      - work_envelope_digest
+      - verifier_sha256
+    properties:
+      canonical_review_policy_digest: {$ref: '#/$defs/digest'}
+      canonical_routing_digest: {$ref: '#/$defs/digest'}
+      attestation_trust_policy_digest: {$ref: '#/$defs/digest'}
+      work_envelope_digest: {$ref: '#/$defs/digest'}
+      verifier_sha256: {type: string, pattern: '^[0-9a-f]{64}$'}
+  gate_satisfied: {const: true}
+  authorizes_merge: {const: false}
