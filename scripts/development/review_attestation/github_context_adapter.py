@@ -115,6 +115,15 @@ def _validate_subject(
     head = _sha(pr.get("head_sha"), "pr head")
     base = _sha(pr.get("base_sha"), "pr base")
     _sha(pr.get("merge_base_sha"), "merge base")
+    head_ref = pr.get("head_ref")
+    if head_ref is not None and (
+        not isinstance(head_ref, str)
+        or not head_ref
+        or head_ref != head_ref.strip()
+        or "\n" in head_ref
+        or "\r" in head_ref
+    ):
+        _fail("pr head_ref is malformed")
     if collection["trusted_base_sha"] != base:
         _fail("trusted base SHA does not match pull request base")
     if collection.get("expected_repository") is not None and collection["expected_repository"] != full_name:
@@ -606,10 +615,15 @@ def build_trusted_context(
     claimed = snapshot.get("implementation_evidence")
     if claimed is not None and not isinstance(claimed, dict):
         _fail("implementation_evidence must be a mapping or null")
-    implementation = _trusted_implementation_evidence(implementation_verifier, {
+    implementation_subject = {
         "repository_id": repository["id"], "pr_number": pr["number"],
         "head_sha": pr["head_sha"], "base_sha": pr["base_sha"],
-    })
+    }
+    if pr.get("head_ref") is not None:
+        implementation_subject["head_ref"] = pr["head_ref"]
+    implementation = _trusted_implementation_evidence(
+        implementation_verifier, implementation_subject
+    )
 
     risk = snapshot.get("effective_risk_class")
     if risk not in {"trivial", "normal", "material", "architecture", "security", "high_blast_radius"}:
@@ -639,6 +653,20 @@ def build_trusted_context(
         "consumed": consumed,
         "consumed_complete": collection["consumed_complete"],
     }
+
+
+def _load_base_work_implementation_verifier(repo_root: Path):
+    path = repo_root / "scripts" / "development" / "review_attestation" / "base_work_implementation_verifier.py"
+    spec = importlib.util.spec_from_file_location("c2pro_base_work_implementation_verifier", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load trusted base-work implementation verifier")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    builder = getattr(module, "build_base_work_implementation_verifier", None)
+    if not callable(builder):
+        raise RuntimeError("trusted base-work verifier exposes no builder")
+    return builder(repo_root)
 
 
 def _load_verifier(repo_root: Path):
@@ -692,7 +720,17 @@ def main(argv: list[str] | None = None) -> int:
     snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
     receipts = yaml.safe_load(args.receipts.read_text(encoding="utf-8"))
     policy = yaml.safe_load(args.policy.read_text(encoding="utf-8"))
-    audit = run_audit(snapshot, receipts, policy)
+    repo_root = Path(__file__).resolve().parents[3]
+    implementation_verifier = None
+    if isinstance(snapshot.get("pr"), dict) and snapshot["pr"].get("head_ref") is not None:
+        implementation_verifier = _load_base_work_implementation_verifier(repo_root)
+    audit = run_audit(
+        snapshot,
+        receipts,
+        policy,
+        repo_root=repo_root,
+        implementation_verifier=implementation_verifier,
+    )
     args.output.write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(audit, indent=2, sort_keys=True))
     return 0

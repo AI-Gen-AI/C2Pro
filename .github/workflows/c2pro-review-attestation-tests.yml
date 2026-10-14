@@ -10,6 +10,9 @@ on:
       - "scripts/development/review_attestation/**"
       - "tests/development/test_review_receipts.py"
       - "tests/development/test_review_attestation_adapter.py"
+      - "tests/development/test_base_work_implementation_verifier.py"
+      - ".c2pro/schemas/work-envelope.schema.yaml"
+      - "scripts/development/validate_c2pro_control.py"
       - ".github/workflows/c2pro-review-attestation-tests.yml"
 
 permissions:
@@ -44,6 +47,7 @@ jobs:
         run: |
           PYTHONPATH=. pytest --confcutdir=tests/development \
                  tests/development/test_review_receipts.py \
-                 tests/development/test_review_attestation_adapter.py -q
+                 tests/development/test_review_attestation_adapter.py \
+                 tests/development/test_base_work_implementation_verifier.py -q
           python scripts/development/validate_c2pro_control.py
           python scripts/development/validate_github_actions_storage_policy.py

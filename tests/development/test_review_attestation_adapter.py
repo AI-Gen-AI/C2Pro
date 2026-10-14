@@ -799,3 +799,65 @@ def test_1011_workflow_cannot_turn_an_audit_into_approval() -> None:
     assert 'report["authorizes_merge"] is False' in source
     assert "AUTHORIZES_MERGE=false" in source
     assert "C2PRO_REVIEW_ATTESTATION_AUDIT=SATISFIED" not in source
+
+
+# ============================================================================ #1023 protected-base implementation provenance
+def test_1023_base_work_provenance_composes_with_audit_without_authorization(tmp_path) -> None:
+    from scripts.development.review_attestation.base_work_implementation_verifier import (
+        build_base_work_implementation_verifier,
+    )
+
+    snap = _trivial_snapshot()
+    snap["pr"]["head_ref"] = "feat/dev14-proof"
+    base = snap["pr"]["base_sha"]
+    current = {
+        "baseline": {"main_sha": base},
+        "active_work": ["C2PRO-DEV-14"],
+    }
+    queue = {
+        "items": [{
+            "work_id": "C2PRO-DEV-14",
+            "status": "awaiting_review",
+            "work_ref": ".c2pro/work/C2PRO-DEV-14.yaml",
+        }]
+    }
+    work = {
+        "schema": "c2pro-work-envelope-v1",
+        "work_id": "C2PRO-DEV-14",
+        "base_sha": base,
+        "branch": snap["pr"]["head_ref"],
+        "worker_selection": {
+            "preferred": "claude_code",
+            "eligible_principals": ["claude_code", "codex"],
+            "eligible_subordinates": [],
+            "selected": "claude_code",
+        },
+        "workspace_receipt": "workspace:synthetic:1023",
+    }
+    for relative, value in (
+        (".c2pro/control/current.yaml", current),
+        (".c2pro/control/work-queue.yaml", queue),
+        (".c2pro/work/C2PRO-DEV-14.yaml", work),
+    ):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+
+    report = run_audit(
+        snap,
+        [],
+        _audit_policy(),
+        implementation_verifier=build_base_work_implementation_verifier(tmp_path),
+    )
+    assert report["gate_satisfied"] is True
+    assert report["implementation_evidence_source"] == "trusted_verifier"
+    assert report["authorizes_merge"] is False
+    assert report["mode"] == "AUDIT_ONLY"
+
+
+def test_1023_workflow_collects_trusted_head_ref_and_adapter_autowires_base_resolver() -> None:
+    workflow = _WORKFLOW.read_text(encoding="utf-8")
+    adapter = (_ROOT / "scripts/development/review_attestation/github_context_adapter.py").read_text(encoding="utf-8")
+    assert "head_ref: pr.head.ref" in workflow
+    assert "build_base_work_implementation_verifier" in adapter
+    assert "authorizes_merge" in adapter

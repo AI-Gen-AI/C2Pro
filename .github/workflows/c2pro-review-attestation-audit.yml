@@ -249,6 +249,7 @@ jobs:
               pr: {
                 number: pr.number,
                 author_user_id: pr.user.id,
+                head_ref: pr.head.ref,
                 head_sha: pr.head.sha,
                 base_sha: pr.base.sha,
                 merge_base_sha: mergeBase,
