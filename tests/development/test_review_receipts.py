@@ -956,3 +956,243 @@ def test_1015_valid_string_implementer_id_still_satisfies_both_gates() -> None:
     ctx["attestations"], ctx["head_reviews"] = {}, []
     assert vr.verify([], policy, ctx).gate_satisfied
     assert vr.verify(*normal_case()).gate_satisfied
+
+
+# ============================================================================ #1016 trusted context/policy shape (RED first)
+# Every fact the verifier trusts is shape-checked before risk, gates or receipts are evaluated. A malformed
+# trusted fact is POLICY_INVALID (CHECK_PROVENANCE for check runs) and never reads as "nothing found".
+_HB_CHANGE = {"path": ".github/workflows/x.yml", "previous_path": None, "status": "added", "mode": "100644",
+              "blob_sha": "4" * 40}
+
+
+def _trivial(ctx: dict[str, Any]) -> dict[str, Any]:
+    ctx["effective_risk_class"] = "trivial"
+    ctx["attestations"], ctx["head_reviews"] = {}, []
+    return ctx
+
+
+def _rejected_without_receipts(code: str, policy: dict[str, Any], ctx: dict[str, Any]) -> None:
+    """The no-receipt trivial path must fail closed too: no receipt rule runs there."""
+    assert_rejected(code, [], policy, _trivial(ctx))
+
+
+# ---- P2-A: check-run records
+@pytest.mark.parametrize("bad_id", ["502", 502.0, True, None, 0, -1])
+def test_1016_p2a_failing_rerun_with_malformed_id_cannot_hide_behind_an_older_green_run(bad_id: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].append(dict(ctx["check_runs"][0], id=bad_id, conclusion="failure"))
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+
+
+@pytest.mark.parametrize("bad_id", ["502", True, None])
+def test_1016_p2a_malformed_check_run_id_fails_closed_without_receipts(bad_id: Any) -> None:
+    _, policy, ctx = normal_case()
+    ctx["check_runs"].append(dict(ctx["check_runs"][0], id=bad_id, conclusion="failure"))
+    _rejected_without_receipts("CHECK_PROVENANCE", policy, ctx)
+
+
+@pytest.mark.parametrize("order", ["success_first", "failure_first"])
+def test_1016_p2a_duplicate_check_run_ids_are_ambiguous(order: str) -> None:
+    _, policy, ctx = normal_case()
+    dup = dict(ctx["check_runs"][0], conclusion="failure")
+    ctx["check_runs"] = [ctx["check_runs"][0], dup] if order == "success_first" else [dup, ctx["check_runs"][0]]
+    _rejected_without_receipts("CHECK_PROVENANCE", policy, ctx)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("name", ""), ("name", None), ("app_id", "15368"), ("app_id", None), ("head_sha", None), ("head_sha", "a" * 39),
+    ("workflow_path", None), ("workflow_path", "./.github/workflows/ci.yml"), ("workflow_sha", None),
+    ("workflow_sha", 123), ("conclusion", 1),
+])
+def test_1016_p2a_malformed_check_run_fields_fail_closed(field: str, value: Any) -> None:
+    _, policy, ctx = normal_case()
+    ctx["check_runs"][0][field] = value
+    _rejected_without_receipts("CHECK_PROVENANCE", policy, ctx)
+
+
+def test_1016_p2a_check_run_entry_must_be_a_mapping() -> None:
+    _, policy, ctx = normal_case()
+    ctx["check_runs"].append("CI Status")
+    _rejected_without_receipts("CHECK_PROVENANCE", policy, ctx)
+
+
+def test_1016_p2a_in_progress_newer_run_still_blocks_and_a_valid_rerun_passes() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["check_runs"].append(dict(ctx["check_runs"][0], id=502, conclusion=None))
+    assert_rejected("CHECK_PROVENANCE", receipts, policy, ctx)
+    receipts, policy, ctx = normal_case()
+    assert vr.verify(receipts, policy, ctx).gate_satisfied  # positive control
+
+
+# ---- P2-B: trusted head-review identity
+def _t1_entry(**overrides: Any) -> dict[str, Any]:
+    entry = {"source": "T1", "review_id": 999, "app_id": CODEX_APP, "user_id": CODEX_BOT,
+             "state": "CHANGES_REQUESTED"}
+    entry.update(overrides)
+    return entry
+
+
+@pytest.mark.parametrize("override,drop", [
+    ({"app_id": str(CODEX_APP)}, None), ({"app_id": None}, None), ({"app_id": True}, None),
+    ({}, "app_id"), ({}, "user_id"), ({"user_id": None}, None), ({"user_id": str(CODEX_BOT)}, None),
+    ({"review_id": "999"}, None), ({}, "review_id"), ({"state": None}, None), ({"state": 1}, None),
+])
+def test_1016_p2b_malformed_blocking_app_review_identity_fails_closed(override: dict[str, Any], drop: str | None) -> None:
+    receipts, policy, ctx = normal_case()
+    entry = _t1_entry(**override)
+    if drop:
+        del entry[drop]
+    ctx["head_reviews"].append(entry)
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+def test_1016_p2b_malformed_app_review_identity_fails_closed_without_receipts() -> None:
+    _, policy, ctx = normal_case()
+    _trivial(ctx)
+    ctx["head_reviews"].append(_t1_entry(app_id=str(CODEX_APP)))
+    assert_rejected("POLICY_INVALID", [], policy, ctx)
+
+
+@pytest.mark.parametrize("entry", [
+    "T1", {"source": "T2"}, {"source": "T2", "receipt_id": 7, "receipt": {}}, {"source": "T2", "receipt_id": "x"},
+    {"source": "T3", "review_id": 1},
+])
+def test_1016_p2b_malformed_head_review_entries_fail_closed(entry: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["head_reviews"].append(entry)
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+def test_1016_p2b_controls_allowlisted_block_still_contradicts_and_foreign_app_has_no_authority() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["head_reviews"].append(_t1_entry())
+    assert_rejected("CONTRADICTING_REVIEW", receipts, policy, ctx)
+    receipts, policy, ctx = normal_case()
+    ctx["head_reviews"].append(_t1_entry(app_id=123456, user_id=654321))  # validly identified, not allowlisted
+    assert vr.verify(receipts, policy, ctx).gate_satisfied
+
+
+@pytest.mark.parametrize("apps", [
+    [{"app_id": str(CODEX_APP), "user_id": CODEX_BOT}], [{"app_id": CODEX_APP}], ["900001"], "900001",
+])
+def test_1016_p2b_malformed_t1_app_allowlist_is_an_invalid_policy(apps: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    policy["t1_apps"] = apps
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+# ---- P2-C: high-blast-radius policy and canonical paths
+@pytest.mark.parametrize("paths", [
+    ".github/workflows/", [], [".github/workflows/", ".github/workflows/"], [""], [None], [7],
+    ["./.github/workflows/"], ["../escape/"], ["/abs/path"], ["a//b/"], [" .github/workflows/"], ["a\\b"],
+])
+def test_1016_p2c_malformed_high_blast_radius_paths_never_downgrade_risk(paths: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    policy["high_blast_radius_paths"] = paths
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+    _, policy, ctx = normal_case()
+    policy["high_blast_radius_paths"] = paths
+    ctx["pr"]["changed_files"].append(dict(_HB_CHANGE))
+    _rejected_without_receipts("POLICY_INVALID", policy, ctx)
+
+
+@pytest.mark.parametrize("path", ["./.github/workflows/x.yml", ".github//workflows/x.yml", "/etc/x", "a/../b",
+                                  "x.yml ", "", None, ".github/workflows/"])
+def test_1016_p2c_non_canonical_changed_paths_fail_closed(path: Any) -> None:
+    _, policy, ctx = normal_case()
+    ctx["pr"]["changed_files"].append(dict(_HB_CHANGE, path=path))
+    _rejected_without_receipts("POLICY_INVALID", policy, ctx)
+
+
+def test_1016_p2c_non_canonical_previous_path_fails_closed() -> None:
+    _, policy, ctx = normal_case()
+    ctx["pr"]["changed_files"].append(dict(_HB_CHANGE, path="docs/x.md", previous_path="./.github/workflows/x.yml",
+                                           status="renamed"))
+    _rejected_without_receipts("POLICY_INVALID", policy, ctx)
+
+
+def test_1016_p2c_control_valid_list_escalates_renames_and_trivial_risk() -> None:
+    _, policy, ctx = normal_case()
+    ctx["pr"]["changed_files"].append(dict(_HB_CHANGE, path="docs/moved.yml", previous_path=".github/workflows/x.yml",
+                                           status="renamed"))
+    result = vr.verify([], policy, _trivial(ctx))
+    assert result.risk_class == "high_blast_radius" and not result.gate_satisfied
+
+
+# ---- P3 discoveries: trusted subject facts on the no-receipt path
+@pytest.mark.parametrize("mutate", [
+    lambda c: c["pr"].update(number="7"), lambda c: c["pr"].update(number=0), lambda c: c["pr"].update(number=True),
+    lambda c: c["pr"].update(head_sha=None), lambda c: c["pr"].update(head_sha="A" * 40),
+    lambda c: c["pr"].update(base_sha=None), lambda c: c["pr"].update(merge_base_sha=123),
+    lambda c: c["repository"].update(id="1"), lambda c: c["repository"].update(full_name="not a repo"),
+    lambda c: c.update(repository=None), lambda c: c.update(effective_risk_class="TRIVIAL"),
+    lambda c: c.update(effective_risk_class=None), lambda c: c["pr"].update(changed_files="x"),
+    lambda c: c["pr"]["changed_files"].append("x"),
+    lambda c: c["pr"]["changed_files"].append(dict(_HB_CHANGE, path="scripts/example.py")),
+    lambda c: c["pr"]["changed_files"].append(dict(_HB_CHANGE, status="moved")),
+    lambda c: c["pr"]["changed_files"].append(dict(_HB_CHANGE, mode="100777")),
+    lambda c: c["pr"]["changed_files"].append(dict(_HB_CHANGE, blob_sha="z" * 40)),
+    lambda c: c.update(app_reviews=[]), lambda c: c.update(attestations=[]),
+])
+def test_1016_p3_malformed_subject_facts_fail_closed_without_receipts(mutate: Callable[[dict[str, Any]], Any]) -> None:
+    _, policy, ctx = normal_case()
+    _trivial(ctx)
+    mutate(ctx)
+    assert_rejected("POLICY_INVALID", [], policy, ctx)
+
+
+@pytest.mark.parametrize("entry", [None, [], ["7", HEAD], [7], [7, HEAD, 1], [7, "a" * 39], "7"])
+def test_1016_p3_malformed_consumed_ledger_entry_fails_closed(entry: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["consumed"][f"receipt:{receipts[0]['receipt_id']}"] = entry
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+def test_1016_p3_consumed_ledger_key_must_be_typed() -> None:
+    receipts, policy, ctx = normal_case()
+    ctx["consumed"]["no-kind-prefix"] = [7, HEAD]
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+# ---- policy shape
+@pytest.mark.parametrize("mutate", [
+    lambda p: p.update(gates=[]), lambda p: p["gates"].pop("trivial"), lambda p: p["gates"].update(trivial=None),
+    lambda p: p["gates"].update(normal="principal"), lambda p: p["gates"].update(normal=["reviewer"]),
+    lambda p: p["gates"].update(normal=["principal", "principal"]),
+    lambda p: p.update(required_checks={}), lambda p: p["required_checks"].append("CI"),
+    lambda p: p["required_checks"][0].update(app_id="15368"), lambda p: p["required_checks"][0].update(app_id=None),
+    lambda p: p["required_checks"][0].update(workflow_path=None),
+    lambda p: p["required_checks"][0].update(workflow_path="./.github/workflows/ci.yml"),
+    lambda p: p["required_checks"][0].update(workflow_shas="c1" * 20),
+    lambda p: p["required_checks"][0].update(workflow_shas=[]),
+    lambda p: p["required_checks"][0].update(workflow_shas=["c1" * 19]),
+    lambda p: p["required_checks"][0].update(name=""),
+    lambda p: p.update(role_eligibility={"principal": "codex"}),
+    lambda p: p["role_eligibility"].update(principal=["Codex"]),
+    lambda p: p.update(worker_providers={"codex": None}), lambda p: p.update(t1_apps_worker={"900001": 5}),
+    lambda p: p.update(t2="enabled"), lambda p: p["t2"].update(workflow_commit_shas="d" * 40),
+    lambda p: p["t2"].update(dispatcher_user_ids=["1001"]), lambda p: p["t2"].update(issuer=None),
+])
+def test_1016_malformed_trusted_policy_fails_closed(mutate: Callable[[dict[str, Any]], Any]) -> None:
+    _, policy, ctx = normal_case()
+    mutate(policy)
+    _rejected_without_receipts("POLICY_INVALID", policy, ctx)
+
+
+@pytest.mark.parametrize("bad", [None, [], "policy", 7])
+def test_1016_non_mapping_policy_or_context_fails_closed(bad: Any) -> None:
+    receipts, policy, ctx = normal_case()
+    assert_rejected("POLICY_INVALID", receipts, bad, ctx)
+    assert_rejected("POLICY_INVALID", receipts, policy, bad)
+
+
+def test_1016_positive_controls_audit_policy_t2_disabled_and_empty_t1_still_valid() -> None:
+    """The committed AUDIT_ONLY policy (t2: null, t1_apps: []) keeps passing the shape check."""
+    audit_policy = yaml.safe_load((Path(__file__).resolve().parents[2]
+                                   / "scripts/development/review_attestation/audit-policy.yaml").read_text())
+    _, _, ctx = normal_case()
+    _trivial(ctx)
+    audit_policy["required_checks"][0]["workflow_shas"] = ["c1" * 20]
+    assert vr.verify([], audit_policy, ctx).gate_satisfied
+    assert vr.verify(*normal_case()).gate_satisfied
+    assert vr.verify(*architecture_case()).gate_satisfied
