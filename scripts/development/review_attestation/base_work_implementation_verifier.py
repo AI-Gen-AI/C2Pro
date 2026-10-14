@@ -100,8 +100,8 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
         return None
 
     baseline = current.get("baseline", {}).get("main_sha")
-    if baseline != base_sha:
-        return None
+    if not isinstance(baseline, str) or not _SHA40.fullmatch(baseline):
+        raise ProvenanceError("current baseline is malformed")
 
     items = queue.get("items")
     if not isinstance(items, list):
@@ -127,7 +127,9 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
         work = _load_mapping(work_path)
         if work.get("schema") != "c2pro-work-envelope-v1" or work.get("work_id") != work_id:
             raise ProvenanceError(f"active work {work_id} envelope identity is invalid")
-        if work.get("base_sha") != base_sha or work.get("branch") != head_ref:
+        if work.get("base_sha") != baseline:
+            raise ProvenanceError(f"active work {work_id} base_sha differs from current execution baseline")
+        if work.get("branch") != head_ref:
             continue
 
         selection = work.get("worker_selection")
@@ -161,7 +163,10 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
         "work_id": work["work_id"],
         "worker_id": selected,
         "verified": True,
-        "evidence_ref": f"protected-base:{work['work_id']}:{receipt}:head:{head_sha}",
+        "evidence_ref": (
+            f"protected-base:{base_sha}:work:{work['work_id']}:"
+            f"baseline:{baseline}:{receipt}:head:{head_sha}"
+        ),
     }
 
 
