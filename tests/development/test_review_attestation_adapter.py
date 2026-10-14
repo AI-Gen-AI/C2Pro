@@ -112,7 +112,6 @@ def test_builds_complete_context_without_executing_pr_code() -> None:
         "changed_files_complete",
         "reviews_complete",
         "check_runs_complete",
-        "consumed_complete",
         "attestations_complete",
     ],
 )
