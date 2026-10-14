@@ -914,7 +914,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
+    # Revision/browser acceptance crosses API boundaries: backend-only PRs must not skip it.
+    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
