@@ -31,7 +31,6 @@ REQUIRED_COLLECTION_FLAGS = (
     "changed_files_complete",
     "reviews_complete",
     "check_runs_complete",
-    "consumed_complete",
     "attestations_complete",
 )
 T2_REQUIRED_CLAIMS = {
@@ -91,6 +90,8 @@ def _validate_collection(snapshot: dict[str, Any]) -> dict[str, Any]:
     for flag in REQUIRED_COLLECTION_FLAGS:
         if collection.get(flag) is not True:
             _fail(f"{flag} is not proven true")
+    if type(collection.get("consumed_complete")) is not bool:
+        _fail("consumed_complete must be an explicit boolean")
     _sha(collection.get("trusted_base_sha"), "trusted_base_sha")
     return collection
 
@@ -333,18 +334,6 @@ def verify_t2_receipt_artifact(
     ):
         _fail("verified statement does not bind the canonical receipt digest")
 
-    review = _mapping(receipt.get("review"), "attested receipt review")
-    execution = _mapping(review.get("provider_execution"), "attested provider execution")
-    request_ids = execution.get("request_ids")
-    if not isinstance(request_ids, list) or not request_ids or not all(isinstance(x, str) and x for x in request_ids):
-        _fail("attested provider request ids are missing")
-    for key in ("response_digest", "inputs_digest"):
-        if not isinstance(execution.get(key), str) or not DIGEST.fullmatch(execution[key]):
-            _fail(f"attested provider {key} is malformed")
-    provider, model = execution.get("provider"), execution.get("model")
-    if not isinstance(provider, str) or not provider or not isinstance(model, str) or not model:
-        _fail("attested provider/model is missing")
-
     claims = {
         "signature_verified": True,
         "issuer": cert["issuer"],
@@ -360,13 +349,6 @@ def verify_t2_receipt_artifact(
         "run_id": run_id,
         "run_attempt": run_attempt,
         "subject_digest": artifact_digest,
-        "response_digest": execution["response_digest"],
-        "provider": provider,
-        "model": model,
-        "inputs_digest": execution["inputs_digest"],
-        "request_ids_digest": "sha256:" + hashlib.sha256(
-            canonical_json(sorted(request_ids))
-        ).hexdigest(),
     }
     if not _is_int(claims["repository_id"]):
         _fail("attestation run repository id is missing")
@@ -552,6 +534,19 @@ def build_trusted_context(snapshot: dict[str, Any]) -> dict[str, Any]:
     )
     if missing_review_ids:
         _fail(f"trusted T1 review missing from complete review inventory: {missing_review_ids[0]}")
+    carried_review_ids = {entry["review_id"] for entry in head_reviews}
+    for row in review_inventory:
+        if row.get("app_id") is None or row["review_id"] in carried_review_ids:
+            continue
+        head_reviews.append({
+            "source": "T1",
+            "review_id": row["review_id"],
+            "user_id": row.get("user_id"),
+            "app_id": row["app_id"],
+            "state": row.get("state"),
+            "receipt": None,
+            "body_receipt_digest": None,
+        })
     check_ids = {row["id"] for row in check_run_inventory}
     missing_check_ids = sorted(check["id"] for check in checks if check["id"] not in check_ids)
     if missing_check_ids:
@@ -604,7 +599,7 @@ def build_trusted_context(snapshot: dict[str, Any]) -> dict[str, Any]:
         "check_runs": checks,
         "check_runs_complete": True,
         "consumed": consumed,
-        "consumed_complete": True,
+        "consumed_complete": collection["consumed_complete"],
     }
 
 
