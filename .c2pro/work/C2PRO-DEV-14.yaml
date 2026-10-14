@@ -3,18 +3,18 @@ schema_version: 1
 work_id: C2PRO-DEV-14
 campaign_id: DEV14-TASK-FIRST-GOVERNANCE-20261009
 role: orchestrator
-base_sha: 540b23b4f79c55165a7d4106e67a7d32afb12afa
-branch: feat/dev14-task-first-governed-implementation-20261009
+base_sha: 4ef80346d71afb8eb236741862259599a986d76b
+branch: feat/dev14-product-work-receipts-20261015
 risk_class: architecture
 scope:
-  - implement the pre-existing DEV-14 product WORK namespace extension as specified by issue 991 and the independently reviewed DEV-14.1 SDD
+  - harden the already-merged DEV-14 Product WORK namespace from PR 995 with a protected-base-authenticated, issuer-bound receipt contract for actual workspace assignment
   - preserve Product MASTER ownership and enforce valid Product Task to parent issue and SDD acceptance linkage without PR self-authorization
-  - build a deterministic PR trace validator with negative RED then GREEN tests for duplicate or unknown metadata and unauthorized execution
+  - extend existing deterministic Product WORK and Task Trace validators with RED to GREEN tests for missing, forged, duplicate, stale, mismatched branch or untrusted workspace receipts; do not duplicate PR 995
   - verify canonical WORK queue, selected principal, approved baseline and registered workspace before any code execution
-  - stage a read-only pull_request CI trace guard in AUDIT mode before separately authorizing enforcement
+  - preserve read-only Task Trace and Review Attestation AUDIT modes; no enforcement or reviewer/merge promotion in this work
   - require independently reviewed exact-head tests with a principal other than the implementing principal and architecture challenger
 out_of_scope:
-  - implementation before this envelope becomes effective through the approved control-plane promotion path
+  - any Codex code implementation until the separate owner-dispatch activation PR is independently reviewed, merged through human authority, and the workspace evidence independently validated
   - treating ready queue status or null worker selection as runtime execution authority
   - creating Product Task execution authority from this DEV namespace
   - modifying Product MASTER task acceptance or production qualification as a side effect of PR merge
@@ -67,5 +67,6 @@ worker_selection:
   preferred: claude_code
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
-  selected: null
+  selected: codex
 timeout_resource_policy: bounded_local_development_only_no_production_or_network_data_exports
+workspace_receipt: "orchestrator-observed-local-sha256:f5c6fe1be727ad1dab305d1fa93c219626a2f52b83ffb96417758190fb1c9d74"
