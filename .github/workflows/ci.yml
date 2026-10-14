@@ -149,7 +149,7 @@ jobs:
       #   python apps/api/scripts/mypy_ratchet.py --update apps/api/mypy-baseline.txt < mypy-report.txt
       - name: Upload mypy report (Linux-canonical baseline source)
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: mypy-report
@@ -230,7 +230,7 @@ jobs:
             --junit-xml=apps/api/root-core-unit-results.xml
 
       - name: Upload unit test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: unit-test-results-py${{ matrix.python-version }}
@@ -241,7 +241,7 @@ jobs:
           retention-days: 3
 
       - name: Upload unit coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: unit-coverage-py${{ matrix.python-version }}
@@ -296,7 +296,7 @@ jobs:
 
       - name: Upload Presidio NER test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: presidio-ner-test-results
           path: apps/api/presidio-ner-test-results.xml
@@ -492,7 +492,7 @@ jobs:
             --tb=short -q
 
       - name: Upload C2.5/C2.6 security coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: c25-c26-security-coverage
           path: apps/api/.coverage.c25*
@@ -500,7 +500,7 @@ jobs:
           retention-days: 3
 
       - name: Upload security test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: backend-security-results
@@ -558,7 +558,7 @@ jobs:
         run: python -m pytest tests/integration/ --tb=short --junit-xml=integration-test-results.xml
 
       - name: Upload integration test results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: integration-test-results
@@ -600,13 +600,13 @@ jobs:
         run: python -m pytest tests/core --tb=short --junit-xml=core-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload core test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: core-test-results
           path: apps/api/core-test-results.xml
       - name: Upload core coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: core-coverage
@@ -647,13 +647,13 @@ jobs:
         run: python -m pytest tests/coherence --tb=short --junit-xml=coherence-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload coherence test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: coherence-test-results
           path: apps/api/coherence-test-results.xml
       - name: Upload coherence coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: coherence-coverage
@@ -694,13 +694,13 @@ jobs:
         run: python -m pytest tests/modules -m "not requires_services" --tb=short --junit-xml=modules-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload modules test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: modules-test-results
           path: apps/api/modules-test-results.xml
       - name: Upload modules coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           retention-days: 3
           name: modules-coverage
@@ -724,27 +724,27 @@ jobs:
       - name: Setup backend environment
         uses: ./.github/actions/setup-python-backend
       - name: Download Python 3.11 unit coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: unit-coverage-py3.11
           path: apps/api/coverage-data/unit
       - name: Download core coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: core-coverage
           path: apps/api/coverage-data/core
       - name: Download coherence coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: coherence-coverage
           path: apps/api/coverage-data/coherence
       - name: Download modules coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: modules-coverage
           path: apps/api/coverage-data/modules
       - name: Download C2.5/C2.6 security coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: c25-c26-security-coverage
           path: apps/api/coverage-data/c25-c26-security
@@ -760,7 +760,7 @@ jobs:
           coverage report --fail-under=70
           coverage xml -o merged-coverage.xml
       - name: Upload merged backend coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backend-combined-coverage
           path: apps/api/merged-coverage.xml
@@ -1123,7 +1123,7 @@ jobs:
 
       - name: Upload PQ-HITL-03.1 sanitized QA screenshots
         if: ${{ success() && vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pq-hitl-03-1-qa-screenshots
           path: apps/web/test-results/**/pq-hitl-031-rev-*.png
@@ -1132,7 +1132,7 @@ jobs:
 
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -1140,7 +1140,7 @@ jobs:
 
       - name: Upload E2E backend log on failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-backend-log
           path: ${{ runner.temp }}/c2pro-e2e-api.log
@@ -1363,7 +1363,7 @@ jobs:
 
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: p0b-playwright-report
           path: |
@@ -1373,7 +1373,7 @@ jobs:
 
       - name: Upload P0b service logs on failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: p0b-service-logs
           path: |
@@ -1512,7 +1512,7 @@ jobs:
 
       - name: Download all test artifacts
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: test-results
 
@@ -1578,7 +1578,7 @@ jobs:
 
       - name: Upload quality gate report
         continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-quality-report
           path: quality-report.md
