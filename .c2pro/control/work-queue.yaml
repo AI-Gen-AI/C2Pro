@@ -28,7 +28,7 @@ items:
   # as C2PRO-DEV-05, colliding with the canonical AF-DEV integration work package. Reconciled
   # to the next free control id; product envelopes remain non-blocking until implemented.
   - work_id: C2PRO-DEV-14
-    status: ready
+    status: in_progress
     role: orchestrator
     work_ref: .c2pro/work/C2PRO-DEV-14.yaml
     priority: P2
