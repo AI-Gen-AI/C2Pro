@@ -1,5 +1,5 @@
-# Technical regression tests for Option B review-attestation code.
-# This workflow has no secrets and grants no review/merge authority.
+# Diagnostic slice for #1020: bisect the zero-job workflow parser failure.
+# AUDIT_ONLY; no secrets; no review/merge authority.
 name: C2Pro Review Attestation Tests
 
 on:
@@ -22,12 +22,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout pull-request code for unprivileged tests only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.11"
 
@@ -41,7 +41,6 @@ jobs:
         shell: bash
         env:
           NO_PROXY: "*"
-          no_proxy: "*"
         run: |
           PYTHONPATH=. pytest --confcutdir=tests/development \
                  tests/development/test_review_receipts.py \
