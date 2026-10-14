@@ -24,6 +24,8 @@ from typing import Any, Callable
 import yaml
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+WORK_ID = re.compile(r"C2PRO-DEV-[0-9]{2}")  # same shape as the verifier; always fullmatch
+WORKER_ID = re.compile(r"[a-z0-9_]+")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 ALLOWED_FILE_STATUS = {"added", "modified", "removed", "renamed", "copied", "changed"}
 ALLOWED_MODES = {"100644", "100755", "120000", "160000", "040000"}
@@ -475,6 +477,8 @@ def _validate_review_inventory(snapshot: dict[str, Any], pr: dict[str, Any]) -> 
             _fail(f"review inventory {rid} user_id is invalid")
         if app_id is not None and (not _is_int(app_id) or app_id < 1):
             _fail(f"review inventory {rid} app_id is invalid")
+        if app_id is not None and (user_id is None or not isinstance(row.get("state"), str) or not row["state"]):
+            _fail(f"review inventory {rid} is an App review without a complete user id and state")
         inventory.append({
             "review_id": rid,
             "user_id": user_id,
@@ -515,7 +519,37 @@ def _validate_check_run_inventory(snapshot: dict[str, Any], pr: dict[str, Any]) 
     return inventory
 
 
-def build_trusted_context(snapshot: dict[str, Any]) -> dict[str, Any]:
+ImplementationVerifier = Callable[[dict[str, Any]], Any]
+
+
+def _trusted_implementation_evidence(
+    implementation_verifier: ImplementationVerifier | None, subject: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Implementer identity comes only from a trusted provenance source injected by trusted code.
+
+    The snapshot is collected data, not a provenance source, so a claim it carries is never used.
+    Without an injected verifier the evidence is None and the verifier reports IMPLEMENTER_UNVERIFIED.
+    """
+    if implementation_verifier is None:
+        return None
+    try:
+        evidence = implementation_verifier(dict(subject))
+    except Exception as exc:  # noqa: BLE001 - an unavailable provenance source never yields identity
+        raise EvidenceIncomplete(f"implementation provenance source failed: {type(exc).__name__}") from exc
+    if not isinstance(evidence, dict) or evidence.get("verified") is not True:
+        _fail("implementation provenance source returned no verified evidence")
+    if not isinstance(evidence.get("work_id"), str) or not WORK_ID.fullmatch(evidence["work_id"]):
+        _fail("implementation provenance source returned a malformed work id")
+    if not isinstance(evidence.get("worker_id"), str) or not WORKER_ID.fullmatch(evidence["worker_id"]):
+        _fail("implementation provenance source returned a malformed worker id")
+    if not isinstance(evidence.get("evidence_ref"), str) or not evidence["evidence_ref"]:
+        _fail("implementation provenance source returned no evidence reference")
+    return {key: evidence[key] for key in ("work_id", "worker_id", "verified", "evidence_ref")}
+
+
+def build_trusted_context(
+    snapshot: dict[str, Any], *, implementation_verifier: ImplementationVerifier | None = None
+) -> dict[str, Any]:
     """Validate an exhaustive trusted snapshot and return verifier context."""
     snapshot = _mapping(snapshot, "snapshot")
     collection = _validate_collection(snapshot)
@@ -569,9 +603,13 @@ def build_trusted_context(snapshot: dict[str, Any]) -> dict[str, Any]:
             _fail(f"T2 head review {receipt_id} has no verified attestation")
         head_reviews.append({"source": "T2", "receipt_id": receipt_id, "receipt": receipt})
 
-    implementation = snapshot.get("implementation_evidence")
-    if implementation is not None and not isinstance(implementation, dict):
+    claimed = snapshot.get("implementation_evidence")
+    if claimed is not None and not isinstance(claimed, dict):
         _fail("implementation_evidence must be a mapping or null")
+    implementation = _trusted_implementation_evidence(implementation_verifier, {
+        "repository_id": repository["id"], "pr_number": pr["number"],
+        "head_sha": pr["head_sha"], "base_sha": pr["base_sha"],
+    })
 
     risk = snapshot.get("effective_risk_class")
     if risk not in {"trivial", "normal", "material", "architecture", "security", "high_blast_radius"}:
@@ -622,13 +660,18 @@ def run_audit(
     policy: dict[str, Any],
     *,
     repo_root: Path | None = None,
+    implementation_verifier: ImplementationVerifier | None = None,
 ) -> dict[str, Any]:
-    """Invoke only the verifier public API and return an AUDIT_ONLY result."""
-    context = build_trusted_context(snapshot)
+    """Invoke only the verifier public API and return an AUDIT_ONLY result that never authorizes a merge."""
+    context = build_trusted_context(snapshot, implementation_verifier=implementation_verifier)
     verifier = _load_verifier(repo_root or Path(__file__).resolve().parents[3])
     result = verifier.verify(receipts, policy, context)
+    if result.authorizes_merge is not False:
+        _fail("the verifier reported a merge authorization; AUDIT_ONLY never authorizes")
     return {
         "mode": "AUDIT_ONLY",
+        "authorizes_merge": False,
+        "implementation_evidence_source": "none" if context["implementation_evidence"] is None else "trusted_verifier",
         "gate_satisfied": bool(result.gate_satisfied),
         "risk_class": result.risk_class,
         "required_roles": list(result.required_roles),

@@ -103,7 +103,7 @@ def test_builds_complete_context_without_executing_pr_code() -> None:
     assert ctx["head_reviews_complete"] is True
     assert ctx["check_runs_complete"] is True
     assert ctx["consumed_complete"] is True
-    assert ctx["implementation_evidence"]["worker_id"] == "claude_code"
+    assert ctx["implementation_evidence"] is None  # #1011: a snapshot claim is never a provenance source
 
 
 @pytest.mark.parametrize(
@@ -164,7 +164,7 @@ def test_implementation_identity_must_be_verified_not_inferred() -> None:
         "evidence_ref": "git-author-is-not-proof",
     }
     ctx = build_trusted_context(snap)
-    assert ctx["implementation_evidence"]["verified"] is False
+    assert ctx["implementation_evidence"] is None  # #1011: never passed through, verified or not
 
 
 def test_rejects_forged_or_ambiguous_t1_review_identity() -> None:
