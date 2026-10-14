@@ -171,3 +171,26 @@ def test_1023_unsafe_work_ref_fails_closed(tmp_path: Path, bad_ref: str) -> None
 def test_1023_trusted_subject_requires_canonical_head_ref(tmp_path: Path, head_ref: Any) -> None:
     with pytest.raises(ProvenanceError, match="head_ref"):
         resolve_base_work_implementation(_repo(tmp_path), _subject(head_ref=head_ref))
+
+
+def test_1023_noncanonical_in_repo_work_ref_is_rejected(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    alt = root / ".c2pro/work/alternate.yaml"
+    alt.write_text((root / f".c2pro/work/{WORK_ID}.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    queue_path = root / ".c2pro/control/work-queue.yaml"
+    queue = yaml.safe_load(queue_path.read_text())
+    queue["items"][0]["work_ref"] = ".c2pro/work/alternate.yaml"
+    _write(queue_path, queue)
+    with pytest.raises(ProvenanceError, match="canonical DEV work-envelope path"):
+        resolve_base_work_implementation(root, _subject())
+
+
+def test_1023_symlinked_work_envelope_is_rejected(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    canonical = root / f".c2pro/work/{WORK_ID}.yaml"
+    target = root / ".c2pro/work/real.yaml"
+    target.write_text(canonical.read_text(encoding="utf-8"), encoding="utf-8")
+    canonical.unlink()
+    canonical.symlink_to(target.name)
+    with pytest.raises(ProvenanceError, match="symlink"):
+        resolve_base_work_implementation(root, _subject())
