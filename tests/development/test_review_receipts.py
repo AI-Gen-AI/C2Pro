@@ -880,3 +880,46 @@ def test_1013_c6_an_audit_result_never_satisfies_an_enforce_gate() -> None:
     assert getattr(result, "authorizes_merge", None) is False
     with pytest.raises(TypeError):
         vr.GateResult(True, "normal", ("principal",), ("principal",), [], mode="ENFORCE")
+
+
+# ============================================================================ #1015 Codex review of cafdf946 (RED first)
+@pytest.mark.parametrize("mutate", [
+    lambda c: c["implementation_evidence"].pop("work_id"),
+    lambda c: c["implementation_evidence"].update(work_id="not-a-work-id"),
+    lambda c: c["implementation_evidence"].update(verified=False),
+    lambda c: c.update(implementation_evidence=None),
+])
+def test_1015_trusted_work_evidence_fails_closed_even_when_the_gate_needs_no_receipt(
+        mutate: Callable[[dict[str, Any]], Any]) -> None:
+    """A trivial gate requires no roles, so no receipt rule runs; the context check must still catch bad evidence."""
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    ctx["attestations"], ctx["head_reviews"] = {}, []
+    mutate(ctx)
+    assert_rejected("IMPLEMENTER_UNVERIFIED", [], policy, ctx)
+
+
+def test_1015_valid_trusted_work_evidence_still_satisfies_a_trivial_gate() -> None:
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    ctx["attestations"], ctx["head_reviews"] = {}, []
+    assert vr.verify([], policy, ctx).gate_satisfied
+
+
+def test_1015_authorizes_merge_is_false_even_if_the_module_mode_is_reconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = vr.verify(*normal_case())
+    monkeypatch.setattr(vr, "ENFORCEMENT_MODE", "ENFORCE")
+    result.mode = "ENFORCE"
+    assert result.gate_satisfied and result.authorizes_merge is False
+
+
+def test_1015_duplicate_required_check_names_are_an_invalid_policy() -> None:
+    """Two producers under one name: a receipt could observe only one of them; refuse the policy instead."""
+    receipts, policy, ctx = normal_case()
+    other = {"name": "CI Status", "app_id": CHECK_APP, "workflow_path": ".github/workflows/other.yml",
+             "workflow_shas": ["b2" * 20]}
+    policy["required_checks"].append(other)
+    ctx["check_runs"].append({"id": 601, "name": "CI Status", "app_id": CHECK_APP, "head_sha": HEAD,
+                              "conclusion": "success", "workflow_path": other["workflow_path"], "workflow_sha": "b2" * 20})
+    _observe(receipts, ctx, (601, "success"))  # the receipt observed only the second producer
+    assert_rejected("POLICY_INVALID", receipts, policy, ctx)
