@@ -85,8 +85,8 @@ class GateResult:
 
     @property
     def authorizes_merge(self) -> bool:
-        """Always False while this module is AUDIT_ONLY, whatever the result object later claims."""
-        return ENFORCEMENT_MODE == "ENFORCE" and self.mode == "ENFORCE" and self.gate_satisfied
+        """Always False: this verifier is AUDIT_ONLY and has no authorization path, however it is reconfigured."""
+        return False
 
 
 # ---------------------------------------------------------------------------- digests
@@ -217,17 +217,26 @@ def _risk(receipt, policy, context, receipts):
 @rule("implementer")
 def _implementer(receipt, policy, context, receipts):
     """The trusted work receipt names both the work item and its implementer; the receipt must match both."""
-    evidence = context.get("implementation_evidence")
-    if not isinstance(evidence, dict) or evidence.get("verified") is not True or not evidence.get("worker_id"):
-        return _v("IMPLEMENTER_UNVERIFIED", receipt, "no trusted work receipt names the implementer")
-    work_id = evidence.get("work_id")
-    if not isinstance(work_id, str) or not _WORK_ID.fullmatch(work_id):
-        return _v("IMPLEMENTER_UNVERIFIED", receipt, "the trusted work receipt names no valid work id")
-    if receipt["work_id"] != work_id:
+    problem = _work_evidence_problem(context)
+    if problem:
+        return _v("IMPLEMENTER_UNVERIFIED", receipt, problem)
+    evidence = context["implementation_evidence"]
+    if receipt["work_id"] != evidence["work_id"]:
         return _v("WORK_MISMATCH", receipt, "receipt is for another work item than the trusted work receipt")
     if receipt["review"]["implementation_worker_id"] != evidence["worker_id"]:
         return _v("IMPLEMENTER_MISMATCH", receipt, "declared implementer differs from the work receipt")
     return []
+
+
+def _work_evidence_problem(context: dict[str, Any]) -> str | None:
+    """Why the trusted work receipt cannot identify the work and its implementer, or None if it can."""
+    evidence = context.get("implementation_evidence")
+    if not isinstance(evidence, dict) or evidence.get("verified") is not True or not evidence.get("worker_id"):
+        return "no trusted work receipt names the implementer"
+    work_id = evidence.get("work_id")
+    if not isinstance(work_id, str) or not _WORK_ID.fullmatch(work_id):
+        return "the trusted work receipt names no valid work id"
+    return None
 
 
 @rule("eligibility")
@@ -475,6 +484,9 @@ def _policy_violations(policy: dict[str, Any], risk: str) -> list[Violation]:
         return [Violation("POLICY_INVALID", None, "architecture/security gates must require all three roles")]
     if not policy["required_checks"]:
         return [Violation("POLICY_INVALID", None, "at least one required check must be configured")]
+    names = [spec["name"] for spec in policy["required_checks"]]
+    if len(set(names)) != len(names):
+        return [Violation("POLICY_INVALID", None, "required check names must be unique, one producer each")]
     return []
 
 
@@ -491,6 +503,9 @@ def _context_violations(context: dict[str, Any]) -> list[Violation]:
         return [Violation("POLICY_INVALID", None, "check-run evidence is not known to be complete")]
     if not isinstance(context.get("consumed"), dict) or context.get("consumed_complete") is not True:
         return [Violation("POLICY_INVALID", None, "consumed-id evidence is not known to be complete")]
+    problem = _work_evidence_problem(context)  # checked here too: a gate with no required role runs no receipt rule
+    if problem:
+        return [Violation("IMPLEMENTER_UNVERIFIED", None, problem)]
     return []
 
 
