@@ -66,9 +66,9 @@
       "context": ".github/workflows/c2pro-review-attestation-tests.yml::jobs.review-attestation-tests::name:Run offline verifier and adapter suites",
       "file": ".github/workflows/c2pro-review-attestation-tests.yml",
       "owner": "AI-Gen-AI / C2Pro DEV-14",
-      "reason": "DEV-14 Option B PR-B (#1011), 2026-10-14: reviewed unprivileged regression step executes only synthetic governance tests and read-only validators. The drift guard classifies the literal PYTHONPATH assignment as install-relevant; this step performs no package installation, has no secrets and grants no production, review or merge authority.",
-      "remediation_issue": "#1011",
-      "sha256": "7936ba618ec3e00f8b1977720568144ffdf57027b0511b0ecc0e9dabeb761319"
+      "reason": "DEV-14 implementation provenance (#1023), 2026-10-14: reviewed unprivileged regression step now also runs the synthetic protected-base implementation-provenance resolver tests. The drift guard classifies the literal PYTHONPATH assignment as install-relevant; this step performs no package installation, has no secrets and grants no production, review or merge authority.",
+      "remediation_issue": "#1023",
+      "sha256": "d27efa2c5293cad4c67ffe3c1bb308e136f2acfda875848de91b79f2b8199673"
     },
     {
       "behavior": {
