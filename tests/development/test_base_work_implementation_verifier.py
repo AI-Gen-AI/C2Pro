@@ -11,7 +11,8 @@ from scripts.development.review_attestation.base_work_implementation_verifier im
     resolve_base_work_implementation,
 )
 
-BASE = "b" * 40
+PROTECTED_BASE = "b" * 40
+EXEC_BASE = "c" * 40
 HEAD = "a" * 40
 BRANCH = "feat/dev14-proof"
 WORK_ID = "C2PRO-DEV-14"
@@ -27,7 +28,7 @@ def _subject(**overrides: Any) -> dict[str, Any]:
         "repository_id": 1,
         "pr_number": 7,
         "head_sha": HEAD,
-        "base_sha": BASE,
+        "base_sha": PROTECTED_BASE,
         "head_ref": BRANCH,
     }
     value.update(overrides)
@@ -41,7 +42,7 @@ def _repo(
     queue_status: str = "in_progress",
     selected: Any = "codex",
     receipt: Any = "workspace:synthetic:1",
-    base_sha: str = BASE,
+    base_sha: str = EXEC_BASE,
     branch: str = BRANCH,
     eligible_principals: list[str] | None = None,
     eligible_subordinates: list[str] | None = None,
@@ -49,7 +50,7 @@ def _repo(
 ) -> Path:
     active = [WORK_ID] if active is None else active
     current = {
-        "baseline": {"main_sha": BASE},
+        "baseline": {"main_sha": EXEC_BASE},
         "active_work": active,
     }
     queue = {
@@ -102,7 +103,10 @@ def test_1023_positive_base_pinned_assignment_proves_implementer(tmp_path: Path)
         "work_id": WORK_ID,
         "worker_id": "codex",
         "verified": True,
-        "evidence_ref": f"protected-base:{WORK_ID}:workspace:synthetic:1:head:{HEAD}",
+        "evidence_ref": (
+            f"protected-base:{PROTECTED_BASE}:work:{WORK_ID}:"
+            f"baseline:{EXEC_BASE}:workspace:synthetic:1:head:{HEAD}"
+        ),
     }
 
 
@@ -111,18 +115,32 @@ def test_1023_idle_control_plane_proves_no_implementer(tmp_path: Path) -> None:
     assert resolve_base_work_implementation(root, _subject()) is None
 
 
-def test_1023_stale_control_baseline_proves_no_implementer(tmp_path: Path) -> None:
+def test_1026_protected_base_may_differ_from_execution_baseline(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    assert PROTECTED_BASE != EXEC_BASE
+    evidence = resolve_base_work_implementation(root, _subject())
+    assert evidence is not None
+    assert f"protected-base:{PROTECTED_BASE}" in evidence["evidence_ref"]
+    assert f"baseline:{EXEC_BASE}" in evidence["evidence_ref"]
+
+
+def test_1026_work_baseline_must_match_current_execution_baseline(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     current_path = root / ".c2pro/control/current.yaml"
     current = yaml.safe_load(current_path.read_text())
-    current["baseline"]["main_sha"] = "c" * 40
+    current["baseline"]["main_sha"] = "d" * 40
     _write(current_path, current)
-    assert resolve_base_work_implementation(root, _subject()) is None
+    with pytest.raises(ProvenanceError, match="base_sha differs from current execution baseline"):
+        resolve_base_work_implementation(root, _subject())
 
 
-def test_1023_wrong_branch_or_work_base_proves_no_implementer(tmp_path: Path) -> None:
-    assert resolve_base_work_implementation(_repo(tmp_path / "branch", branch="feat/other"), _subject()) is None
-    assert resolve_base_work_implementation(_repo(tmp_path / "base", base_sha="c" * 40), _subject()) is None
+def test_1023_wrong_branch_proves_no_implementer(tmp_path: Path) -> None:
+    assert resolve_base_work_implementation(_repo(tmp_path, branch="feat/other"), _subject()) is None
+
+
+def test_1026_wrong_work_execution_baseline_fails_closed(tmp_path: Path) -> None:
+    with pytest.raises(ProvenanceError, match="base_sha differs from current execution baseline"):
+        resolve_base_work_implementation(_repo(tmp_path, base_sha="d" * 40), _subject())
 
 
 @pytest.mark.parametrize("status", ["ready", "blocked"])
