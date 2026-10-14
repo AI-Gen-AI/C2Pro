@@ -57,6 +57,14 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await page.getByRole("button", { name: /^Revision 1 —/ }).click();
     const preview = page.getByTestId("revision-specific-preview");
     await expect(preview.getByText(/9 stored clauses in this selected revision/i)).toBeVisible();
+
+    // Re-login must preserve the complete A/B inventory and B's non-trusted state.
+    const revisions = page.getByRole("button", { name: /^Revision \\d+ —/ });
+    await expect(revisions).toHaveCount(2);
+    await page.getByRole("button", { name: /^Revision 2 —/ }).click();
+    await expect(preview.getByText(/7 stored clauses in this selected revision/i)).toBeVisible();
+    await expect(preview.getByText(/Proposed — not trusted/i)).toBeVisible();
+    await expect(preview.getByRole("listitem")).toHaveCount(7);
   });
 
   test("unknown project GET is denied without exposing revision data", async ({ page }) => {
@@ -73,6 +81,24 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
   });
 
   test("real tenant B project and document are hidden from tenant A Clerk user", async ({ page }) => {
+    // The project route's 404 cannot prove document-scoped RLS. Call BOTH APIs
+    // using the actual authenticated Clerk session from the browser; no token
+    // or tenant identifier may leave this evaluate callback or enter artifacts.
+    const documentStatuses = await page.evaluate(async (documentId) => {
+      const token = await window.Clerk?.session?.getToken();
+      const tenantId = window.Clerk?.organization?.publicMetadata?.tenant_id;
+      if (!token || typeof tenantId !== "string") {
+        throw new Error("PQ031_AUTH_CONTEXT_MISSING");
+      }
+      const headers = { Authorization: `Bearer ${token}`, "X-Tenant-ID": tenantId };
+      const responses = await Promise.all([
+        fetch(`/api/v1/documents/${documentId}/revisions`, { headers, redirect: "manual" }),
+        fetch(`/api/v1/documents/${documentId}/entities`, { headers, redirect: "manual" }),
+      ]);
+      return responses.map((response) => response.status);
+    }, OTHER_TENANT_DOCUMENT_ID);
+    expect(documentStatuses).toEqual([404, 404]);
+
     const projectResponse = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname.startsWith("/api/") &&
