@@ -21,6 +21,10 @@ Receipts are untrusted claims; every field that matters is re-derived from ``con
 Signature verification of an attestation bundle (Sigstore) is the adapter's job (PR-B); this
 module checks the verified claims it reports. Re-verifying the same receipt for the same PR and
 head is idempotent; any other reuse is rejected. In PR-A only synthetic contexts exist.
+
+The result is an audit observation, never an authorization: ``authorizes_merge`` is always false and
+the CLI never exits 0 (3 = evidence would satisfy the gate, 1 = it would not), so neither a CI status
+nor a caller reading the exit code can treat an AUDIT_ONLY run as a passing review gate.
 """
 
 from __future__ import annotations
@@ -48,9 +52,13 @@ RISK_RANK = ("trivial", "normal", "material", "architecture", "security", "high_
 SYNTHESIS_RISKS = {"architecture", "security", "high_blast_radius"}
 FILE_FIELDS = ("path", "previous_path", "status", "mode", "blob_sha")
 APPROVING_STATES = {"APPROVED"}
+# CLI exit codes. AUDIT_ONLY never exits 0, so no CI status or caller can read an audit as approval.
+EXIT_AUDIT_NOT_SATISFIED = 1
+EXIT_AUDIT_SATISFIED_NOT_AUTHORIZATION = 3
 _STRICT_ID = re.compile(r"[a-z0-9_]+")
 _RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+_WORK_ID = re.compile(r"C2PRO-DEV-[0-9]{2}")  # same shape as the receipt schema; always fullmatch
 
 
 @dataclass(frozen=True)
@@ -62,16 +70,23 @@ class Violation:
 
 @dataclass
 class GateResult:
+    """An audit observation. ``gate_satisfied`` describes the evidence; it is never an authorization."""
+
     gate_satisfied: bool
     risk_class: str
     required_roles: tuple[str, ...]
     satisfied_roles: tuple[str, ...]
     violations: list[Violation] = field(default_factory=list)
-    mode: str = ENFORCEMENT_MODE
+    mode: str = field(default=ENFORCEMENT_MODE, init=False)  # set by this module only, never by a caller
 
     @property
     def codes(self) -> set[str]:
         return {v.code for v in self.violations}
+
+    @property
+    def authorizes_merge(self) -> bool:
+        """Always False: this verifier is AUDIT_ONLY and has no authorization path, however it is reconfigured."""
+        return False
 
 
 # ---------------------------------------------------------------------------- digests
@@ -201,12 +216,30 @@ def _risk(receipt, policy, context, receipts):
 
 @rule("implementer")
 def _implementer(receipt, policy, context, receipts):
-    evidence = context.get("implementation_evidence")
-    if not isinstance(evidence, dict) or evidence.get("verified") is not True or not evidence.get("worker_id"):
-        return _v("IMPLEMENTER_UNVERIFIED", receipt, "no trusted work receipt names the implementer")
+    """The trusted work receipt names both the work item and its implementer; the receipt must match both."""
+    problem = _work_evidence_problem(context)
+    if problem:
+        return _v("IMPLEMENTER_UNVERIFIED", receipt, problem)
+    evidence = context["implementation_evidence"]
+    if receipt["work_id"] != evidence["work_id"]:
+        return _v("WORK_MISMATCH", receipt, "receipt is for another work item than the trusted work receipt")
     if receipt["review"]["implementation_worker_id"] != evidence["worker_id"]:
         return _v("IMPLEMENTER_MISMATCH", receipt, "declared implementer differs from the work receipt")
     return []
+
+
+def _work_evidence_problem(context: dict[str, Any]) -> str | None:
+    """Why the trusted work receipt cannot identify the work and its implementer, or None if it can."""
+    evidence = context.get("implementation_evidence")
+    if not isinstance(evidence, dict) or evidence.get("verified") is not True:
+        return "no trusted work receipt names the implementer"
+    worker_id = evidence.get("worker_id")
+    if not isinstance(worker_id, str) or not _STRICT_ID.fullmatch(worker_id):
+        return "the trusted work receipt names no valid implementer id"
+    work_id = evidence.get("work_id")
+    if not isinstance(work_id, str) or not _WORK_ID.fullmatch(work_id):
+        return "the trusted work receipt names no valid work id"
+    return None
 
 
 @rule("eligibility")
@@ -383,24 +416,40 @@ def _consistency(receipt, policy, context, receipts):
 
 @rule("tests")
 def _tests(receipt, policy, context, receipts):
+    """An approval must have seen every required check green on its latest trusted run at the head."""
     observed = receipt["result"]["tests_observed"]
     checks = {c["id"]: c for c in context.get("check_runs", []) if _is_int(c.get("id"))}
     specs = {r["name"]: r for r in policy["required_checks"]}
     if not set(specs) <= {o["name"] for o in observed}:
         return _v("CHECK_PROVENANCE", receipt, "receipt does not observe every required check")
+    head = context["pr"]["head_sha"]
     for o in observed:
         check = checks.get(o["check_run_id"])
         if check is None or o["name"] != check["name"] or o["conclusion"] != check["conclusion"]:
             return _v("CHECK_PROVENANCE", receipt, f"observed test {o['name']!r} does not match a check run")
         spec = specs.get(o["name"])
-        if spec is not None and not _produced_by(check, spec, context["pr"]["head_sha"]):
+        if spec is None:
+            continue
+        if not _produced_by(check, spec, head):
             return _v("CHECK_PROVENANCE", receipt, f"observed test {o['name']!r} is not from the trusted producer on the head")
+        latest = _latest_run(spec, context)
+        if latest is None or check["id"] != latest["id"] or check["conclusion"] != "success":
+            return _v("CHECK_PROVENANCE", receipt, f"observed required check {o['name']!r} is not its latest successful run")
     return []
 
 
 def _produced_by(check: dict[str, Any], spec: dict[str, Any], head: str) -> bool:
     return (check.get("app_id") == spec["app_id"] and check.get("workflow_path") == spec["workflow_path"]
             and check.get("workflow_sha") in spec["workflow_shas"] and check.get("head_sha") == head)
+
+
+def _latest_run(spec: dict[str, Any], context: dict[str, Any]) -> dict[str, Any] | None:
+    """Latest run of this producer on the head, pinned or not, so an unpinned rerun is never skipped over."""
+    head = context["pr"]["head_sha"]
+    runs = [c for c in context.get("check_runs", [])
+            if c.get("name") == spec["name"] and _is_int(c.get("id")) and c.get("app_id") == spec["app_id"]
+            and c.get("workflow_path") == spec["workflow_path"] and c.get("head_sha") == head]
+    return max(runs, key=lambda c: c["id"]) if runs else None
 
 
 @rule("synthesis")
@@ -438,6 +487,9 @@ def _policy_violations(policy: dict[str, Any], risk: str) -> list[Violation]:
         return [Violation("POLICY_INVALID", None, "architecture/security gates must require all three roles")]
     if not policy["required_checks"]:
         return [Violation("POLICY_INVALID", None, "at least one required check must be configured")]
+    names = [spec["name"] for spec in policy["required_checks"]]
+    if len(set(names)) != len(names):
+        return [Violation("POLICY_INVALID", None, "required check names must be unique, one producer each")]
     return []
 
 
@@ -454,6 +506,9 @@ def _context_violations(context: dict[str, Any]) -> list[Violation]:
         return [Violation("POLICY_INVALID", None, "check-run evidence is not known to be complete")]
     if not isinstance(context.get("consumed"), dict) or context.get("consumed_complete") is not True:
         return [Violation("POLICY_INVALID", None, "consumed-id evidence is not known to be complete")]
+    problem = _work_evidence_problem(context)  # checked here too: a gate with no required role runs no receipt rule
+    if problem:
+        return [Violation("IMPLEMENTER_UNVERIFIED", None, problem)]
     return []
 
 
@@ -461,10 +516,7 @@ def _check_violations(policy: dict[str, Any], context: dict[str, Any]) -> list[V
     """Required checks hold once per gate: the latest trusted-producer run on the head must be green."""
     head = context["pr"]["head_sha"]
     for spec in policy["required_checks"]:
-        runs = [c for c in context.get("check_runs", [])  # latest run of this producer, pinned or not
-                if c.get("name") == spec["name"] and _is_int(c.get("id")) and c.get("app_id") == spec["app_id"]
-                and c.get("workflow_path") == spec["workflow_path"] and c.get("head_sha") == head]
-        latest = max(runs, key=lambda c: c["id"]) if runs else None
+        latest = _latest_run(spec, context)
         if latest is None or latest.get("conclusion") != "success" or not _produced_by(latest, spec, head):
             return [Violation("CHECK_PROVENANCE", None, f"required check {spec['name']!r} has no green latest trusted run")]
     return []
@@ -570,10 +622,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     result = verify(yaml.safe_load(args.receipts.read_text()), yaml.safe_load(args.policy.read_text()),
                     yaml.safe_load(args.context.read_text()))
-    print(json.dumps({"mode": result.mode, "gate_satisfied": result.gate_satisfied, "risk_class": result.risk_class,
+    print(json.dumps({"mode": result.mode, "gate_satisfied": result.gate_satisfied,
+                      "authorizes_merge": result.authorizes_merge, "risk_class": result.risk_class,
                       "required_roles": result.required_roles, "satisfied_roles": result.satisfied_roles,
                       "violations": [v.__dict__ for v in result.violations]}, indent=2))
-    return 0 if result.gate_satisfied else 1
+    return EXIT_AUDIT_SATISFIED_NOT_AUTHORIZATION if result.gate_satisfied else EXIT_AUDIT_NOT_SATISFIED
 
 
 if __name__ == "__main__":
