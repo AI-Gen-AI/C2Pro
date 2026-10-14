@@ -655,6 +655,20 @@ def build_trusted_context(
     }
 
 
+def _load_base_work_implementation_verifier(repo_root: Path):
+    path = repo_root / "scripts" / "development" / "review_attestation" / "base_work_implementation_verifier.py"
+    spec = importlib.util.spec_from_file_location("c2pro_base_work_implementation_verifier", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load trusted base-work implementation verifier")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    builder = getattr(module, "build_base_work_implementation_verifier", None)
+    if not callable(builder):
+        raise RuntimeError("trusted base-work verifier exposes no builder")
+    return builder(repo_root)
+
+
 def _load_verifier(repo_root: Path):
     path = repo_root / "scripts" / "development" / "verify_review_receipts.py"
     spec = importlib.util.spec_from_file_location("c2pro_verify_review_receipts", path)
@@ -709,9 +723,7 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = Path(__file__).resolve().parents[3]
     implementation_verifier = None
     if isinstance(snapshot.get("pr"), dict) and snapshot["pr"].get("head_ref") is not None:
-        from base_work_implementation_verifier import build_base_work_implementation_verifier
-
-        implementation_verifier = build_base_work_implementation_verifier(repo_root)
+        implementation_verifier = _load_base_work_implementation_verifier(repo_root)
     audit = run_audit(
         snapshot,
         receipts,
