@@ -157,8 +157,10 @@ async def test_missing_selected_revision_has_no_fallback_locator() -> None:
 @pytest.mark.asyncio
 async def test_missing_tenant_fails_before_calling_repository() -> None:
     repository = AsyncMock()
+    locator = SourceLocator(repository)
+    doc_id = uuid4()
     with pytest.raises(ValueError, match="tenant_id is required"):
-        await SourceLocator(repository).locate_evidence("Clause 5.2", uuid4(), None)  # type: ignore[arg-type]
+        await locator.locate_evidence("Clause 5.2", doc_id, None)  # type: ignore[arg-type]
     repository.get_clause_by_document_and_code.assert_not_awaited()
     repository.list_current_clauses.assert_not_awaited()
     repository.list_revision_clauses.assert_not_awaited()
