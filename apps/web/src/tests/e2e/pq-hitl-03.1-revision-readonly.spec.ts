@@ -59,7 +59,7 @@ test.describe("PQ-HITL-03.1 revision read-only evidence", () => {
     await expect(preview.getByText(/9 stored clauses in this selected revision/i)).toBeVisible();
 
     // Re-login must preserve the complete A/B inventory and B's non-trusted state.
-    const revisions = page.getByRole("button", { name: /^Revision \\d+ —/ });
+    const revisions = page.getByRole("button", { name: /^Revision [0-9]+ —/ });
     await expect(revisions).toHaveCount(2);
     await page.getByRole("button", { name: /^Revision 2 —/ }).click();
     await expect(preview.getByText(/7 stored clauses in this selected revision/i)).toBeVisible();
