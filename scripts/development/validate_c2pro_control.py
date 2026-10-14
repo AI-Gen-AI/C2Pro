@@ -178,8 +178,19 @@ def validate_work_envelope(current: dict[str, Any], queue: dict[str, Any]) -> No
         require(set(principals).issubset(PRINCIPAL_WORKERS), f"{ref}: unknown principal worker eligibility")
         require(set(subordinates).issubset(SUBORDINATE_WORKERS), f"{ref}: unknown subordinate worker eligibility")
         selected = selection.get("selected")
+        workspace_receipt = work.get("workspace_receipt")
         if selected is not None:
             require(selected in principals or selected in subordinates, f"{ref}: selected worker must be eligible")
+            require(
+                isinstance(workspace_receipt, str)
+                and bool(workspace_receipt.strip())
+                and workspace_receipt == workspace_receipt.strip()
+                and "\n" not in workspace_receipt
+                and "\r" not in workspace_receipt,
+                f"{ref}: selected worker requires a valid workspace_receipt",
+            )
+        elif workspace_receipt is not None:
+            require(False, f"{ref}: workspace_receipt requires an explicit selected worker")
         require(work.get("review_policy") in {"optional", "independent_principal", "principal_and_challenger"}, f"{ref}: invalid review policy")
         require(bool(work.get("scope")), f"{ref}: scope must not be empty")
         require(bool(work.get("acceptance_criteria")), f"{ref}: acceptance criteria must not be empty")
