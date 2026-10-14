@@ -15,6 +15,7 @@ from scripts.development.review_attestation.github_context_adapter import (
     EvidenceIncomplete,
     build_trusted_context,
     canonical_inputs_digest,
+    run_audit,
     verify_t2_receipt_artifact,
 )
 
@@ -633,3 +634,57 @@ def test_audit_workflow_refetches_pr_and_binds_actual_check_producer() -> None:
     assert "run.data.head_sha !== pr.head.sha" in workflow
     assert "run.data.check_suite_id !== c.check_suite.id" in workflow
     assert "consumed_complete: false" in workflow
+
+
+def test_prb_reconcile_run_audit_exposes_non_authorization(monkeypatch, tmp_path) -> None:
+    class _Result:
+        mode = "AUDIT_ONLY"
+        gate_satisfied = True
+        authorizes_merge = False
+        risk_class = "normal"
+        required_roles = ("principal",)
+        satisfied_roles = ("principal",)
+        violations = []
+
+    class _Verifier:
+        @staticmethod
+        def verify(receipts, policy, context):
+            return _Result()
+
+    monkeypatch.setattr(
+        "scripts.development.review_attestation.github_context_adapter._load_verifier",
+        lambda repo_root: _Verifier,
+    )
+    report = run_audit(_snapshot(), [], {}, repo_root=tmp_path)
+    assert report["mode"] == "AUDIT_ONLY"
+    assert report["gate_satisfied"] is True
+    assert report["authorizes_merge"] is False
+
+
+def test_prb_reconcile_current_audit_state_fails_closed_with_real_verifier() -> None:
+    snap = _snapshot()
+    snap["implementation_evidence"] = None
+    snap["collection"]["consumed_complete"] = False
+    policy_path = (
+        __import__("pathlib").Path(__file__).resolve().parents[2]
+        / "scripts/development/review_attestation/audit-policy.yaml"
+    )
+    import yaml
+    policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    report = run_audit(snap, [], policy)
+    assert report["mode"] == "AUDIT_ONLY"
+    assert report["gate_satisfied"] is False
+    assert report["authorizes_merge"] is False
+    assert any(
+        v["code"] in {"IMPLEMENTER_UNVERIFIED", "POLICY_INVALID"}
+        for v in report["violations"]
+    )
+
+
+def test_prb_reconcile_workflow_asserts_non_authorizing_unsatisfied_audit() -> None:
+    workflow = (
+        __import__("pathlib").Path(__file__).resolve().parents[2]
+        / ".github/workflows/c2pro-review-attestation-audit.yml"
+    ).read_text(encoding="utf-8")
+    assert 'assert report["authorizes_merge"] is False' in workflow
+    assert 'assert report["gate_satisfied"] is False' in workflow
