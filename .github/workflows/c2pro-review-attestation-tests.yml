@@ -43,7 +43,8 @@ jobs:
           NO_PROXY: "*"
           no_proxy: "*"
         run: |
-          pytest tests/development/test_review_receipts.py \
+          PYTHONPATH=. pytest --confcutdir=tests/development \
+                 tests/development/test_review_receipts.py \
                  tests/development/test_review_attestation_adapter.py -q
           python scripts/development/validate_c2pro_control.py
           python scripts/development/validate_github_actions_storage_policy.py
