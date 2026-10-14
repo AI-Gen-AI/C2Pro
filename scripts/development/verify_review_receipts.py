@@ -231,8 +231,11 @@ def _implementer(receipt, policy, context, receipts):
 def _work_evidence_problem(context: dict[str, Any]) -> str | None:
     """Why the trusted work receipt cannot identify the work and its implementer, or None if it can."""
     evidence = context.get("implementation_evidence")
-    if not isinstance(evidence, dict) or evidence.get("verified") is not True or not evidence.get("worker_id"):
+    if not isinstance(evidence, dict) or evidence.get("verified") is not True:
         return "no trusted work receipt names the implementer"
+    worker_id = evidence.get("worker_id")
+    if not isinstance(worker_id, str) or not _STRICT_ID.fullmatch(worker_id):
+        return "the trusted work receipt names no valid implementer id"
     work_id = evidence.get("work_id")
     if not isinstance(work_id, str) or not _WORK_ID.fullmatch(work_id):
         return "the trusted work receipt names no valid work id"
