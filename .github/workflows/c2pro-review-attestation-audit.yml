@@ -49,19 +49,29 @@ jobs:
             const fs = require('fs');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const pr = context.payload.pull_request;
-            if (!pr) throw new Error('pull_request_target payload missing pull request');
-            if (pr.base.repo.full_name !== process.env.EXPECTED_REPOSITORY) {
+            const eventPr = context.payload.pull_request;
+            if (!eventPr) throw new Error('pull_request_target payload missing pull request');
+            if (eventPr.base.repo.full_name !== process.env.EXPECTED_REPOSITORY) {
               throw new Error('base repository mismatch');
             }
-            if (String(pr.number) !== String(process.env.EXPECTED_PR_NUMBER)) {
+            if (String(eventPr.number) !== String(process.env.EXPECTED_PR_NUMBER)) {
               throw new Error('pull request number mismatch');
             }
-            if (pr.head.sha !== process.env.EXPECTED_HEAD_SHA || pr.base.sha !== process.env.TRUSTED_BASE_SHA) {
+            if (eventPr.head.sha !== process.env.EXPECTED_HEAD_SHA || eventPr.base.sha !== process.env.TRUSTED_BASE_SHA) {
               throw new Error('event SHA binding mismatch');
             }
 
             const repoInfo = await github.rest.repos.get({owner, repo});
+            const freshPrResponse = await github.rest.pulls.get({
+              owner, repo, pull_number: eventPr.number
+            });
+            const pr = freshPrResponse.data;
+            if (pr.head.sha !== process.env.EXPECTED_HEAD_SHA || pr.base.sha !== process.env.TRUSTED_BASE_SHA) {
+              throw new Error('pull request moved before trusted collection');
+            }
+            if (pr.base.repo.full_name !== repoInfo.data.full_name || pr.base.repo.id !== repoInfo.data.id) {
+              throw new Error('fresh pull request base repository mismatch');
+            }
             const comparison = await github.rest.repos.compareCommitsWithBasehead({
               owner, repo, basehead: pr.base.sha + '...' + pr.head.sha
             });
@@ -165,18 +175,31 @@ jobs:
               const run = await github.rest.actions.getWorkflowRun({
                 owner, repo, run_id: Number(match[1])
               });
+              if (run.data.head_sha !== pr.head.sha) {
+                throw new Error('workflow run head does not match PR head: ' + c.id);
+              }
+              if (!c.check_suite || run.data.check_suite_id !== c.check_suite.id) {
+                throw new Error('workflow run/check-suite mismatch: ' + c.id);
+              }
+              if (!run.data.repository || run.data.repository.id !== repoInfo.data.id) {
+                throw new Error('workflow run repository mismatch: ' + c.id);
+              }
+              if (run.data.head_repository && run.data.head_repository.id !== repoInfo.data.id) {
+                throw new Error('workflow run head repository mismatch: ' + c.id);
+              }
               const workflowPath = run.data.path;
               if (!workflowPath) throw new Error('workflow path unavailable for check: ' + c.id);
-              let workflowSha = workflowBlobCache.get(workflowPath);
+              const cacheKey = workflowPath + '@' + run.data.head_sha;
+              let workflowSha = workflowBlobCache.get(cacheKey);
               if (!workflowSha) {
                 const wf = await github.rest.repos.getContent({
-                  owner, repo, path: workflowPath, ref: pr.base.sha
+                  owner, repo, path: workflowPath, ref: run.data.head_sha
                 });
                 if (Array.isArray(wf.data) || !wf.data.sha) {
-                  throw new Error('trusted base workflow blob unavailable: ' + workflowPath);
+                  throw new Error('executed workflow blob unavailable: ' + workflowPath);
                 }
                 workflowSha = wf.data.sha;
-                workflowBlobCache.set(workflowPath, workflowSha);
+                workflowBlobCache.set(cacheKey, workflowSha);
               }
               checks.push({
                 id: c.id,
@@ -196,6 +219,18 @@ jobs:
               throw new Error('audit consumption ledger malformed');
             }
 
+            const finalPrResponse = await github.rest.pulls.get({
+              owner, repo, pull_number: pr.number
+            });
+            const finalPr = finalPrResponse.data;
+            if (
+              finalPr.head.sha !== pr.head.sha ||
+              finalPr.base.sha !== pr.base.sha ||
+              finalPr.changed_files !== pr.changed_files
+            ) {
+              throw new Error('pull request moved during trusted collection');
+            }
+
             const snapshot = {
               collection: {
                 trusted_base_sha: pr.base.sha,
@@ -207,7 +242,7 @@ jobs:
                 changed_files_complete: true,
                 reviews_complete: true,
                 check_runs_complete: true,
-                consumed_complete: true,
+                consumed_complete: false,
                 attestations_complete: true
               },
               repository: {id: repoInfo.data.id, full_name: repoInfo.data.full_name},
