@@ -1,0 +1,6 @@
+{
+  "_mode": "AUDIT_ONLY",
+  "_authority": "none",
+  "_note": "Bootstrap empty ledger for PR-B audit. PR-D must define protected durable consumption before enforcement.",
+  "consumed": {}
+}
