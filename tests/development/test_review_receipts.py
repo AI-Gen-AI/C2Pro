@@ -923,3 +923,33 @@ def test_1015_duplicate_required_check_names_are_an_invalid_policy() -> None:
                               "conclusion": "success", "workflow_path": other["workflow_path"], "workflow_sha": "b2" * 20})
     _observe(receipts, ctx, (601, "success"))  # the receipt observed only the second producer
     assert_rejected("POLICY_INVALID", receipts, policy, ctx)
+
+
+# ============================================================================ #1015 Codex review of 9a7215b3 (RED first)
+_BAD_IMPLEMENTER_IDS = [123, True, ["claude_code"], {"id": 1}, "Claude Code", "claude_code\n", " claude_code", "claude_code "]
+
+
+@pytest.mark.parametrize("bad_worker", _BAD_IMPLEMENTER_IDS)
+def test_1015_trusted_implementer_id_must_be_a_strict_worker_id(bad_worker: Any) -> None:
+    """Truthiness is not identity: a non-string or malformed implementer id must fail even with no receipts."""
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    ctx["attestations"], ctx["head_reviews"] = {}, []
+    ctx["implementation_evidence"]["worker_id"] = bad_worker
+    assert_rejected("IMPLEMENTER_UNVERIFIED", [], policy, ctx)
+
+
+@pytest.mark.parametrize("bad_worker", _BAD_IMPLEMENTER_IDS)
+def test_1015_malformed_implementer_id_is_still_rejected_at_nontrivial_risk(bad_worker: Any) -> None:
+    """Regression guard: the nontrivial path already failed closed (IMPLEMENTER_MISMATCH) and must keep doing so."""
+    receipts, policy, ctx = normal_case()
+    ctx["implementation_evidence"]["worker_id"] = bad_worker
+    assert not vr.verify(receipts, policy, ctx).gate_satisfied
+
+
+def test_1015_valid_string_implementer_id_still_satisfies_both_gates() -> None:
+    _, policy, ctx = normal_case()
+    ctx["effective_risk_class"] = "trivial"
+    ctx["attestations"], ctx["head_reviews"] = {}, []
+    assert vr.verify([], policy, ctx).gate_satisfied
+    assert vr.verify(*normal_case()).gate_satisfied
