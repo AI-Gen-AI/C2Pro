@@ -633,3 +633,169 @@ def test_audit_workflow_refetches_pr_and_binds_actual_check_producer() -> None:
     assert "run.data.head_sha !== pr.head.sha" in workflow
     assert "run.data.check_suite_id !== c.check_suite.id" in workflow
     assert "consumed_complete: false" in workflow
+
+
+# ============================================================================ #1011 follow-up (RED first)
+# implementation_evidence provenance, explicit non-authorization, and adapter/verifier revalidation.
+import pathlib  # noqa: E402
+
+import yaml  # noqa: E402
+
+from scripts.development.review_attestation.github_context_adapter import main as adapter_main  # noqa: E402
+from scripts.development.review_attestation.github_context_adapter import run_audit  # noqa: E402
+
+_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_WORKFLOW = _ROOT / ".github/workflows/c2pro-review-attestation-audit.yml"
+
+
+def _trusted_evidence() -> dict:
+    return {"work_id": "C2PRO-DEV-14", "worker_id": "claude_code", "verified": True,
+            "evidence_ref": "synthetic:trusted-work-receipt:1"}
+
+
+def _audit_policy(check_sha: str = WORKFLOW_SHA) -> dict:
+    policy = yaml.safe_load((_ROOT / "scripts/development/review_attestation/audit-policy.yaml").read_text())
+    policy["required_checks"][0]["workflow_shas"] = [check_sha]
+    return policy
+
+
+def _trivial_snapshot() -> dict:
+    snap = _snapshot()
+    snap["effective_risk_class"] = "trivial"
+    return snap
+
+
+@pytest.mark.parametrize("claim", [
+    _trusted_evidence(),
+    {"worker_id": "claude_code", "verified": True, "evidence_ref": "synthetic:work-receipt:1"},
+    {"work_id": "C2PRO-DEV-14", "worker_id": "codex", "verified": True, "evidence_ref": "git-author:codex"},
+])
+def test_1011_snapshot_supplied_implementation_evidence_is_never_trusted(claim: dict) -> None:
+    """The snapshot is collected data, not a provenance source: a self-declared verified claim is dropped."""
+    snap = _snapshot()
+    snap["implementation_evidence"] = claim
+    ctx = build_trusted_context(snap)
+    assert ctx["implementation_evidence"] is None
+
+
+def test_1011_worker_identity_is_never_inferred_from_author_branch_or_comments() -> None:
+    snap = _snapshot()
+    snap["implementation_evidence"] = None
+    snap["pr"]["head_ref"] = "claude/1011-adapter-provenance"
+    snap["pr"]["author_login"] = "codex-bot"
+    snap["comments"] = [{"body": "implemented by claude_code for C2PRO-DEV-14"}]
+    assert build_trusted_context(snap)["implementation_evidence"] is None
+
+
+def test_1011_without_a_trusted_provenance_source_the_audit_reports_implementer_unverified() -> None:
+    report = run_audit(_trivial_snapshot(), [], _audit_policy())
+    assert report["gate_satisfied"] is False
+    assert "IMPLEMENTER_UNVERIFIED" in {v["code"] for v in report["violations"]}
+    assert report["implementation_evidence_source"] == "none"
+
+
+def test_1011_only_an_injected_trusted_verifier_can_supply_implementation_evidence() -> None:
+    seen = []
+
+    def trusted_verifier(subject: dict) -> dict:
+        seen.append(subject)
+        return _trusted_evidence()
+
+    ctx = build_trusted_context(_trivial_snapshot(), implementation_verifier=trusted_verifier)
+    assert ctx["implementation_evidence"] == _trusted_evidence()
+    assert seen == [{"repository_id": 1, "pr_number": 7, "head_sha": HEAD, "base_sha": BASE}]
+
+
+@pytest.mark.parametrize("returned", [
+    None, "claude_code", {}, dict(_trusted_evidence(), verified=False), dict(_trusted_evidence(), verified="true"),
+    dict(_trusted_evidence(), work_id="C2PRO-DEV-9"), dict(_trusted_evidence(), work_id=14),
+    dict(_trusted_evidence(), worker_id="Claude Code"), dict(_trusted_evidence(), worker_id=123),
+    dict(_trusted_evidence(), evidence_ref=""), {k: v for k, v in _trusted_evidence().items() if k != "work_id"},
+])
+def test_1011_malformed_trusted_verifier_output_fails_closed(returned) -> None:
+    with pytest.raises(EvidenceIncomplete):
+        build_trusted_context(_trivial_snapshot(), implementation_verifier=lambda subject: returned)
+
+
+def test_1011_trusted_verifier_errors_fail_closed() -> None:
+    def broken(subject: dict) -> dict:
+        raise RuntimeError("provenance store unavailable")
+
+    with pytest.raises(EvidenceIncomplete):
+        build_trusted_context(_trivial_snapshot(), implementation_verifier=broken)
+
+
+@pytest.mark.parametrize("satisfied", [True, False])
+def test_1011_audit_report_always_states_it_does_not_authorize_merge(satisfied: bool) -> None:
+    snap = _trivial_snapshot()
+    verifier = (lambda subject: _trusted_evidence()) if satisfied else None
+    report = run_audit(snap, [], _audit_policy(), implementation_verifier=verifier)
+    assert report["gate_satisfied"] is satisfied
+    assert report["authorizes_merge"] is False
+    assert report["mode"] == "AUDIT_ONLY"
+
+
+def test_1011_adapter_refuses_a_verifier_that_claims_authorization(monkeypatch) -> None:
+    import scripts.development.review_attestation.github_context_adapter as adapter
+
+    real_loader = adapter._load_verifier
+
+    def loader(repo_root):
+        module = real_loader(repo_root)
+
+        class Authorizing:
+            def __getattr__(self, name):
+                return getattr(module, name)
+
+            @staticmethod
+            def verify(receipts, policy, context):
+                result = module.verify(receipts, policy, context)
+
+                class Claim:
+                    def __getattr__(self, name):
+                        return True if name == "authorizes_merge" else getattr(result, name)
+                return Claim()
+        return Authorizing()
+
+    monkeypatch.setattr(adapter, "_load_verifier", loader)
+    with pytest.raises(EvidenceIncomplete):
+        adapter.run_audit(_trivial_snapshot(), [], _audit_policy(), implementation_verifier=lambda s: _trusted_evidence())
+
+
+def test_1011_cli_report_carries_non_authorization(tmp_path) -> None:
+    files = {}
+    for name, value in (("snapshot", _trivial_snapshot()), ("receipts", []), ("policy", _audit_policy())):
+        files[name] = tmp_path / f"{name}.json"
+        files[name].write_text(json.dumps(value), encoding="utf-8")
+    out = tmp_path / "audit.json"
+    code = adapter_main(["--snapshot", str(files["snapshot"]), "--receipts", str(files["receipts"]),
+                         "--policy", str(files["policy"]), "--output", str(out)])
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert code == 0  # the audit ran; exit status never encodes approval
+    assert report["authorizes_merge"] is False and report["gate_satisfied"] is False
+
+
+@pytest.mark.parametrize("row", [
+    {"user_id": None}, {"state": None}, {"state": ""},
+])
+def test_1011_app_review_inventory_rows_need_complete_identity(row: dict) -> None:
+    snap = _snapshot()
+    entry = {"review_id": 99001, "user_id": 900002, "app_id": 900001, "commit_id": HEAD,
+             "state": "CHANGES_REQUESTED"}
+    entry.update(row)
+    snap["review_inventory"] = [entry]
+    with pytest.raises(EvidenceIncomplete):
+        build_trusted_context(snap)
+
+
+def test_1011_workflow_cannot_turn_an_audit_into_approval() -> None:
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    perms = workflow["permissions"]
+    assert all(level == "read" for level in perms.values()), perms
+    source = _WORKFLOW.read_text(encoding="utf-8")
+    for forbidden in ("gh pr review", "gh pr merge", "createReview", "pulls.merge", "addLabels",
+                      "enable-auto-merge", "--approve", "issues.createComment", "checks.create"):
+        assert forbidden not in source, forbidden
+    assert 'report["authorizes_merge"] is False' in source
+    assert "AUTHORIZES_MERGE=false" in source
+    assert "C2PRO_REVIEW_ATTESTATION_AUDIT=SATISFIED" not in source
