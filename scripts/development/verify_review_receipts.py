@@ -59,6 +59,12 @@ _STRICT_ID = re.compile(r"[a-z0-9_]+")
 _RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _WORK_ID = re.compile(r"C2PRO-DEV-[0-9]{2}")  # same shape as the receipt schema; always fullmatch
+_SHA40 = re.compile(r"[0-9a-f]{40}")
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+_REPO_NAME = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+_FILE_STATUSES = {"added", "modified", "removed", "renamed", "copied", "changed"}
+_FILE_MODES = {"100644", "100755", "120000", "160000", "040000"}
+_CONSUMED_KINDS = ("receipt", "review", "run")
 
 
 @dataclass(frozen=True)
@@ -493,19 +499,171 @@ def _policy_violations(policy: dict[str, Any], risk: str) -> list[Violation]:
     return []
 
 
-def _context_violations(context: dict[str, Any]) -> list[Violation]:
-    """The adapter must prove completeness; an absent or partial fact never reads as 'nothing found'."""
-    pr = context["pr"]
-    if not _is_int(pr.get("author_user_id")):
-        return [Violation("POLICY_INVALID", None, "pull request author id is not an integer")]
-    if pr.get("changed_files_complete") is not True:
-        return [Violation("POLICY_INVALID", None, "changed-file list is not known to be complete")]
-    if not isinstance(context.get("head_reviews"), list) or context.get("head_reviews_complete") is not True:
-        return [Violation("POLICY_INVALID", None, "head review evidence is missing or incomplete")]
-    if not isinstance(context.get("check_runs"), list) or context.get("check_runs_complete") is not True:
-        return [Violation("POLICY_INVALID", None, "check-run evidence is not known to be complete")]
-    if not isinstance(context.get("consumed"), dict) or context.get("consumed_complete") is not True:
-        return [Violation("POLICY_INVALID", None, "consumed-id evidence is not known to be complete")]
+# ---------------------------------------------------------------------------- trusted input shape (#1016)
+class _Malformed(Exception):
+    """A trusted fact has the wrong shape; the gate fails closed instead of reading it as 'nothing found'."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code, self.detail = code, detail
+
+
+def _need(ok: bool, detail: str, code: str = "POLICY_INVALID") -> None:
+    if not ok:
+        raise _Malformed(code, detail)
+
+
+def _pos_int(value: Any) -> bool:
+    return _is_int(value) and value >= 1
+
+
+def _sha40(value: Any) -> bool:
+    return isinstance(value, str) and _SHA40.fullmatch(value) is not None
+
+
+def _text(value: Any) -> bool:
+    return isinstance(value, str) and value != "" and value == value.strip() and _strict_strings(value)
+
+
+def _canonical_path(value: Any, *, directory: bool = False) -> bool:
+    """Repository-relative, normalized: no leading '/', './' or '../' segments, no empty segment, no backslash."""
+    if not _text(value) or value.startswith("/") or "\\" in value or any(ord(ch) < 32 for ch in value):
+        return False
+    body = value[:-1] if directory and value.endswith("/") else value
+    return all(part not in ("", ".", "..") for part in body.split("/"))
+
+
+def _unique_list(value: Any, item_ok: Callable[[Any], bool], *, allow_empty: bool = False) -> bool:
+    return (isinstance(value, list) and (allow_empty or bool(value)) and all(item_ok(item) for item in value)
+            and len({repr(item) for item in value}) == len(value))
+
+
+def _policy_shape(policy: Any) -> None:
+    _need(isinstance(policy, dict), "policy is not a mapping")
+    gates = policy.get("gates")
+    _need(isinstance(gates, dict) and set(gates) == set(RISK_RANK), "gates must define exactly every risk class")
+    for risk in RISK_RANK:
+        _need(_unique_list(gates[risk], lambda role: role in ROLE_ORDER, allow_empty=True), f"gate {risk} is malformed")
+    eligibility = policy.get("role_eligibility")
+    _need(isinstance(eligibility, dict) and set(eligibility) <= set(ROLE_ORDER), "role_eligibility is malformed")
+    for workers in eligibility.values():
+        _need(_unique_list(workers, _strict_worker, allow_empty=True), "role_eligibility lists a malformed worker")
+    providers = policy.get("worker_providers")
+    _need(isinstance(providers, dict) and all(_strict_worker(k) and _text(v) for k, v in providers.items()),
+          "worker_providers is malformed")
+    checks = policy.get("required_checks")
+    _need(_unique_list(checks, _required_check_ok), "required_checks must be a non-empty list of well-formed specs")
+    _need(_unique_list(policy.get("high_blast_radius_paths"), lambda p: _canonical_path(p, directory=True)),
+          "high_blast_radius_paths must be a non-empty list of unique canonical paths")
+    _need(_unique_list(policy.get("t1_apps", []), lambda a: isinstance(a, dict) and set(a) == {"app_id", "user_id"}
+                       and _pos_int(a["app_id"]) and _pos_int(a["user_id"]), allow_empty=True),
+          "t1_apps is malformed")
+    mapping = policy.get("t1_apps_worker", {})
+    _need(isinstance(mapping, dict) and all(isinstance(k, str) and k.isdigit() and _strict_worker(v)
+                                            for k, v in mapping.items()), "t1_apps_worker is malformed")
+    _t2_policy_shape(policy.get("t2"))
+
+
+def _strict_worker(value: Any) -> bool:
+    return isinstance(value, str) and _STRICT_ID.fullmatch(value) is not None
+
+
+def _required_check_ok(spec: Any) -> bool:
+    return (isinstance(spec, dict) and _text(spec.get("name")) and _pos_int(spec.get("app_id"))
+            and _canonical_path(spec.get("workflow_path")) and _unique_list(spec.get("workflow_shas"), _sha40))
+
+
+def _t2_policy_shape(t2: Any) -> None:
+    if t2 is None:
+        return  # T2 disabled; any T2 receipt then fails as T2_DISABLED
+    _need(isinstance(t2, dict) and bool(t2), "t2 must be null or a populated mapping")
+    _need(all(_text(t2.get(k)) for k in ("issuer", "ref", "environment")), "t2 identity fields are malformed")
+    _need(_canonical_path(t2.get("workflow_path")), "t2 workflow_path is not canonical")
+    _need(_unique_list(t2.get("workflow_commit_shas"), _sha40), "t2 workflow_commit_shas is malformed")
+    _need(_unique_list(t2.get("dispatcher_user_ids"), _pos_int), "t2 dispatcher_user_ids is malformed")
+    _need(_unique_list(t2.get("approver_user_ids", []), _pos_int, allow_empty=True), "t2 approver_user_ids is malformed")
+    _need(_unique_list(t2.get("prompt_template_shas"), lambda s: isinstance(s, str) and bool(_HEX64.fullmatch(s))),
+          "t2 prompt_template_shas is malformed")
+
+
+def _context_shape(context: Any) -> None:
+    _need(isinstance(context, dict), "context is not a mapping")
+    repo = context.get("repository")
+    _need(isinstance(repo, dict) and _pos_int(repo.get("id")) and isinstance(repo.get("full_name"), str)
+          and _REPO_NAME.fullmatch(repo["full_name"]) is not None, "repository identity is malformed")
+    pr = context.get("pr")
+    _need(isinstance(pr, dict) and _pos_int(pr.get("number")), "pull request number is malformed")
+    _need(_pos_int(pr.get("author_user_id")), "pull request author id is not a positive integer")
+    _need(all(_sha40(pr.get(k)) for k in ("head_sha", "base_sha", "merge_base_sha")), "head/base/merge-base SHA is malformed")
+    _need(pr.get("changed_files_complete") is True, "changed-file list is not known to be complete")
+    files = pr.get("changed_files")
+    _need(isinstance(files, list) and bool(files) and all(_changed_file_ok(f) for f in files),
+          "changed-file list has a malformed or non-canonical entry")
+    _need(len({f["path"] for f in files}) == len(files), "duplicate paths in the changed-file list")
+    _need(context.get("effective_risk_class") in RISK_RANK, "effective risk class is unknown")
+    _need(isinstance(context.get("head_reviews"), list) and context.get("head_reviews_complete") is True,
+          "head review evidence is missing or incomplete")
+    for entry in context["head_reviews"]:
+        _need(_head_review_ok(entry), "a head review entry has a malformed source or identity")
+    for key in ("app_reviews", "attestations"):
+        value = context.get(key, {})
+        _need(isinstance(value, dict) and all(isinstance(k, str) and isinstance(v, dict) for k, v in value.items()),
+              f"{key} is malformed")
+    _check_runs_shape(context)
+    consumed = context.get("consumed")
+    _need(isinstance(consumed, dict) and context.get("consumed_complete") is True,
+          "consumed-id evidence is not known to be complete")
+    for key, value in consumed.items():
+        kind, _, ident = key.partition(":") if isinstance(key, str) else ("", "", "")
+        _need(kind in _CONSUMED_KINDS and ident != "", f"consumed ledger key {key!r} is malformed")
+        _need(isinstance(value, list) and len(value) == 2 and _pos_int(value[0]) and _sha40(value[1]),
+              f"consumed ledger entry {key!r} is malformed")
+
+
+def _changed_file_ok(entry: Any) -> bool:
+    return (isinstance(entry, dict) and _canonical_path(entry.get("path"))
+            and (entry.get("previous_path") is None or _canonical_path(entry["previous_path"]))
+            and entry.get("status") in _FILE_STATUSES
+            and (entry.get("mode") is None or entry["mode"] in _FILE_MODES)
+            and (entry.get("blob_sha") is None or _sha40(entry["blob_sha"])))
+
+
+def _head_review_ok(entry: Any) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("source") == "T1":  # identified before any allowlist filtering
+        return (_pos_int(entry.get("review_id")) and _pos_int(entry.get("app_id")) and _pos_int(entry.get("user_id"))
+                and _text(entry.get("state")))
+    if entry.get("source") == "T2":
+        return _text(entry.get("receipt_id")) and isinstance(entry.get("receipt"), dict)
+    return False
+
+
+def _check_runs_shape(context: dict[str, Any]) -> None:
+    runs = context.get("check_runs")
+    _need(isinstance(runs, list) and context.get("check_runs_complete") is True,
+          "check-run evidence is not known to be complete")
+    seen: set[int] = set()
+    for run in runs:
+        _need(isinstance(run, dict) and _pos_int(run.get("id")), "a check run has no valid integer id", "CHECK_PROVENANCE")
+        _need(run["id"] not in seen, f"check run id {run['id']} is ambiguous (duplicated)", "CHECK_PROVENANCE")
+        seen.add(run["id"])
+        conclusion = run.get("conclusion")
+        _need(_text(run.get("name")) and _pos_int(run.get("app_id")) and _sha40(run.get("head_sha"))
+              and _canonical_path(run.get("workflow_path")) and _sha40(run.get("workflow_sha"))
+              and (conclusion is None or _text(conclusion)),
+              f"check run {run['id']} has a malformed field", "CHECK_PROVENANCE")
+
+
+def _trusted_input_violations(policy: Any, context: Any) -> list[Violation]:
+    """Shape-check every trusted fact before risk, gates or receipts read it; exceptions also fail closed."""
+    try:
+        _policy_shape(policy)
+        _context_shape(context)
+    except _Malformed as bad:
+        return [Violation(bad.code, None, bad.detail)]
+    except Exception as exc:  # noqa: BLE001 - an unusable trusted input never passes
+        return [Violation("POLICY_INVALID", None, f"trusted input unreadable: {type(exc).__name__}")]
     problem = _work_evidence_problem(context)  # checked here too: a gate with no required role runs no receipt rule
     if problem:
         return [Violation("IMPLEMENTER_UNVERIFIED", None, problem)]
@@ -577,9 +735,12 @@ def _receipt_violations(receipt: Any, policy: dict[str, Any], context: dict[str,
 def _verify_internal(receipts: Any, policy: dict[str, Any], context: dict[str, Any],
                      disabled_rules: frozenset[str]) -> GateResult:
     """Fail closed: any violation, in any receipt or at gate level, leaves the gate unsatisfied."""
+    violations = _trusted_input_violations(policy, context)
+    if violations:
+        return GateResult(False, "unknown", (), (), violations)
     try:
         risk = effective_risk_class(policy, context)
-        violations = _context_violations(context) or _policy_violations(policy, risk)
+        violations = _policy_violations(policy, risk)
         if violations:
             return GateResult(False, str(risk), (), (), violations)
         required = tuple(policy["gates"][risk])
