@@ -59,7 +59,7 @@
     {
       "behavior": {
         "env": {},
-        "run": "PYTHONPATH=. pytest --confcutdir=tests/development \\\n       tests/development/test_review_receipts.py \\\n       tests/development/test_review_attestation_adapter.py -q\npython scripts/development/validate_c2pro_control.py\npython scripts/development/validate_github_actions_storage_policy.py\n",
+        "run": "PYTHONPATH=. pytest --confcutdir=tests/development \\\n       tests/development/test_review_receipts.py \\\n       tests/development/test_review_attestation_adapter.py \\\n       tests/development/test_base_work_implementation_verifier.py -q\npython scripts/development/validate_c2pro_control.py\npython scripts/development/validate_github_actions_storage_policy.py\n",
         "shell": "bash",
         "working_directory": null
       },
