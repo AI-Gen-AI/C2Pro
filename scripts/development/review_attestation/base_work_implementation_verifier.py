@@ -44,17 +44,28 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     return value
 
 
-def _safe_repo_path(root: Path, raw: Any) -> Path:
+def _safe_repo_path(root: Path, raw: Any, *, work_id: str) -> Path:
     if not isinstance(raw, str) or not raw or raw.startswith("/"):
         raise ProvenanceError("work_ref is missing or unsafe")
     rel = Path(raw)
     if any(part in ("", ".", "..") for part in rel.parts):
         raise ProvenanceError("work_ref is not canonical")
+    expected = Path(".c2pro") / "work" / f"{work_id}.yaml"
+    if rel != expected:
+        raise ProvenanceError("work_ref is not the canonical DEV work-envelope path")
+
     root_resolved = root.resolve()
-    path = (root / rel).resolve(strict=False)
+    raw_path = root / rel
+    # Reject symlinks at every repository-relative component before resolving.
+    cursor = root
+    for part in rel.parts:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise ProvenanceError("work_ref traverses a symlink")
+    path = raw_path.resolve(strict=False)
     if path != root_resolved and root_resolved not in path.parents:
         raise ProvenanceError("work_ref escapes repository")
-    if path.is_symlink() or not path.is_file():
+    if not path.is_file():
         raise ProvenanceError("work_ref does not resolve to a regular trusted-base file")
     return path
 
@@ -112,7 +123,7 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
             raise ProvenanceError(f"active work {work_id} is absent from the queue")
         if item.get("status") not in _EFFECTIVE_QUEUE_STATES:
             raise ProvenanceError(f"active work {work_id} is not in an effective implementation state")
-        work_path = _safe_repo_path(repo_root, item.get("work_ref"))
+        work_path = _safe_repo_path(repo_root, item.get("work_ref"), work_id=work_id)
         work = _load_mapping(work_path)
         if work.get("schema") != "c2pro-work-envelope-v1" or work.get("work_id") != work_id:
             raise ProvenanceError(f"active work {work_id} envelope identity is invalid")
