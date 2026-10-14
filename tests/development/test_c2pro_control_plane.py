@@ -29,19 +29,29 @@ def test_work_queue_contains_only_open_work() -> None:
     assert all(item["work_id"] != "C2PRO-DEV-01" for item in queue["items"])
 
 
-def test_current_schema_allows_reconciled_idle_status() -> None:
+def test_current_status_is_schema_allowed() -> None:
     current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
     schema = validator.load_yaml(ROOT / ".c2pro" / "schemas" / "current.schema.yaml")
-    allowed = schema["properties"]["control_status"]["enum"]
-    assert current["control_status"] == "reconciled_idle"
-    assert "reconciled_idle" in allowed
+    allowed = set(schema["properties"]["control_status"]["enum"])
+    assert current["control_status"] in allowed
+    assert {"reconciled_idle", "active"} <= allowed
 
 
-def test_idle_control_plane_does_not_keep_completed_work_hot() -> None:
+def test_control_plane_hot_state_matches_status() -> None:
     current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
     queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
-    assert current["active_work"] == []
-    assert "C2PRO-DEV-02" not in {item["work_id"] for item in queue["items"]}
+    statuses = {item["work_id"]: item["status"] for item in queue["items"]}
+
+    if current["control_status"] == "reconciled_idle":
+        assert current["active_work"] == []
+        assert current["active_campaign"] is None
+        assert not any(status in validator.ACTIVE_QUEUE_STATES for status in statuses.values())
+    elif current["control_status"] == "active":
+        assert current["active_work"]
+        assert current["active_campaign"]
+        assert all(statuses[work_id] in validator.ACTIVE_QUEUE_STATES for work_id in current["active_work"])
+
+    assert "C2PRO-DEV-02" not in statuses
     validator.validate_identity_preserving_principal_handoff(
         current,
         queue,
@@ -138,6 +148,109 @@ def test_current_validator_rejects_completed_history_flag(monkeypatch: pytest.Mo
     monkeypatch.setattr(validator, "load_yaml", fake_load)
     with pytest.raises(ValueError, match="completed history is forbidden"):
         validator.validate_current()
+
+
+def test_current_validator_rejects_idle_with_active_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    invalid = copy.deepcopy(current)
+    invalid["control_status"] = "reconciled_idle"
+    invalid["active_work"] = ["C2PRO-DEV-15"]
+    invalid["active_campaign"] = "synthetic-campaign"
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == validator.CONTROL / "current.yaml":
+            return invalid
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    with pytest.raises(ValueError, match="reconciled_idle cannot have active_work"):
+        validator.validate_current()
+
+
+def test_current_validator_rejects_active_without_work_or_campaign(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    invalid = copy.deepcopy(current)
+    invalid["control_status"] = "active"
+    invalid["active_work"] = []
+    invalid["active_campaign"] = None
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == validator.CONTROL / "current.yaml":
+            return invalid
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    with pytest.raises(ValueError, match="active status requires active_work"):
+        validator.validate_current()
+
+
+def test_queue_validator_rejects_active_work_in_non_effective_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    active_current = copy.deepcopy(current)
+    active_current["control_status"] = "active"
+    active_current["active_campaign"] = "synthetic-campaign"
+    active_current["active_work"] = ["C2PRO-DEV-15"]
+    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+    invalid = copy.deepcopy(queue)
+    next(item for item in invalid["items"] if item["work_id"] == "C2PRO-DEV-15")["status"] = "ready"
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == validator.CONTROL / "work-queue.yaml":
+            return invalid
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    with pytest.raises(ValueError, match="active work C2PRO-DEV-15 must be in an effective queue state"):
+        validator.validate_queue(active_current)
+
+
+def test_active_control_state_accepts_effective_assigned_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    active_current = copy.deepcopy(current)
+    active_current["control_status"] = "active"
+    active_current["active_campaign"] = "synthetic-campaign"
+    active_current["active_work"] = ["C2PRO-DEV-15"]
+    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+    active_queue = copy.deepcopy(queue)
+    next(item for item in active_queue["items"] if item["work_id"] == "C2PRO-DEV-15")["status"] = "in_progress"
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == validator.CONTROL / "work-queue.yaml":
+            return active_queue
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    assert validator.validate_queue(active_current) == active_queue
+    validator.validate_work_envelope(active_current, active_queue)
+
+
+def test_active_work_requires_selected_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    current = validator.load_yaml(ROOT / ".c2pro" / "control" / "current.yaml")
+    active_current = copy.deepcopy(current)
+    active_current["control_status"] = "active"
+    active_current["active_campaign"] = "synthetic-campaign"
+    active_current["active_work"] = ["C2PRO-DEV-15"]
+    queue = validator.load_yaml(ROOT / ".c2pro" / "control" / "work-queue.yaml")
+    active_queue = copy.deepcopy(queue)
+    next(item for item in active_queue["items"] if item["work_id"] == "C2PRO-DEV-15")["status"] = "in_progress"
+    work_path = ROOT / ".c2pro" / "work" / "C2PRO-DEV-15.yaml"
+    invalid_work = copy.deepcopy(validator.load_yaml(work_path))
+    invalid_work["worker_selection"]["selected"] = None
+    invalid_work.pop("workspace_receipt", None)
+    real_load = validator.load_yaml
+
+    def fake_load(path: Path):
+        if path == work_path:
+            return invalid_work
+        return real_load(path)
+
+    monkeypatch.setattr(validator, "load_yaml", fake_load)
+    with pytest.raises(ValueError, match="active work requires a selected worker"):
+        validator.validate_work_envelope(active_current, active_queue)
 
 
 def test_routing_validator_rejects_subordinate_principal_promotion(monkeypatch: pytest.MonkeyPatch) -> None:
