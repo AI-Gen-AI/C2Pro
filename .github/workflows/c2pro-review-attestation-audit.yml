@@ -288,7 +288,12 @@ jobs:
           import json
           report = json.load(open("/tmp/c2pro-review-audit.json", encoding="utf-8"))
           assert report["mode"] == "AUDIT_ONLY"
-          print("C2PRO_REVIEW_ATTESTATION_AUDIT=" + ("SATISFIED" if report["gate_satisfied"] else "UNSATISFIED"))
+          assert report["authorizes_merge"] is False
+          # An audit observation only: this job succeeding means the audit ran, never that a review approved.
+          print("AUTHORIZES_MERGE=false")
+          print("C2PRO_REVIEW_ATTESTATION_AUDIT_OBSERVATION="
+                + ("EVIDENCE_WOULD_SATISFY_GATE" if report["gate_satisfied"] else "EVIDENCE_INSUFFICIENT"))
+          print("IMPLEMENTATION_EVIDENCE_SOURCE=" + report["implementation_evidence_source"])
           for violation in report["violations"]:
               print(f"{violation['code']}: {violation['detail']}")
           PY
