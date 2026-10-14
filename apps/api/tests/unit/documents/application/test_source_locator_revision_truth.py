@@ -126,7 +126,8 @@ async def test_unresolved_trusted_current_never_falls_back_to_historical_rows() 
 
 
 @pytest.mark.asyncio
-async def test_foreign_tenant_or_missing_revision_has_no_fallback_locator() -> None:
+async def test_missing_selected_revision_has_no_fallback_locator() -> None:
+    # This mock models a missing revision only; it CANNOT attest cross-tenant RLS.
     tenant_id, document_id, revision_id = (uuid4() for _ in range(3))
     repository = AsyncMock()
     repository.get_clause_by_document_and_code.return_value = None
