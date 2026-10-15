@@ -202,9 +202,18 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
           /sign-in|sign_in|login|clerk/i.test(
             response.headers()["location"] ?? "",
           );
+        // Use the SAME bounded, nonsecret diagnostic for both an unexpected
+        // status/redirect and a denial response that carries protected data.
+        // Never include the URL, Location header, response body or clause text.
+        const mimeClass = /application\/json/i.test(
+          response.headers()["content-type"] ?? "",
+        ) ? "json" : "non_json";
+        const diagnostic =
+          `PQ939_ANONYMOUS_DENIAL_FAILED origin=${isBackendOrigin ? "railway" : "frontend"}` +
+          ` route=${endpointKind} status=${status} mime=${mimeClass}`;
         expect(
           denied || loginRedirect,
-          "Anonymous revision or clause-data API returned a non-denial",
+          `${diagnostic} gates=not_denied`,
         ).toBe(true);
 
         // HTTP denial alone is NOT proof of confidentiality. Fail closed if
@@ -260,7 +269,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         ].filter(Boolean);
         expect(
           failedGates.length,
-          `PQ939_ANONYMOUS_DENIAL_FAILED origin=${isBackendOrigin ? "railway" : "frontend"} route=${endpointKind} status=${status} mime=${/application\/json/i.test(response.headers()["content-type"] ?? "") ? "json" : "non_json"} gates=${failedGates.join(",")}`,
+          `${diagnostic} gates=${failedGates.join(",")}`,
         ).toBe(0);
       }
     }
