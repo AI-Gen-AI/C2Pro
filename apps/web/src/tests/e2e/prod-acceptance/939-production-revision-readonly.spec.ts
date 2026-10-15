@@ -221,7 +221,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
                 Object.keys(payload).length === 0 ||
                 !Object.entries(payload).every(
                   ([key, value]) =>
-                    ["detail", "error", "message"].includes(key) &&
+                    ["detail", "error", "message", "reason_code"].includes(key) &&
                     typeof value === "string",
                 );
             } catch {
