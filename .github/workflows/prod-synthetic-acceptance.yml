@@ -478,6 +478,8 @@ jobs:
           PROD_INPUT_EXECUTION_MODE: ${{ inputs.execution_mode }}
           PROD_INPUT_REQUIRE_HITL: ${{ inputs.require_hitl }}
           PQ939_STEP_OUTCOME: ${{ steps.pq939_revision_qa.outcome }}
+          PQ939_DB_BEFORE_OUTCOME: ${{ steps.pq939_db_before.outcome }}
+          PQ939_DB_AFTER_OUTCOME: ${{ steps.pq939_db_after.outcome }}
         shell: bash
         run: |
           {
@@ -494,10 +496,14 @@ jobs:
             echo "- lifecycle authority: **false**"
             if [ "$PROD_INPUT_EXECUTION_MODE" = "pq-hitl-03-readonly" ]; then
               echo "- #939 QA step outcome: \`$PQ939_STEP_OUTCOME\`"
-              if [ "$PQ939_STEP_OUTCOME" = "success" ]; then
-                echo "- #939: bounded A9/B7 UI, relogin and anonymous revision/entities checks PASSED (not two-principal isolation)."
+              echo "- #939 tenant snapshot before: \`$PQ939_DB_BEFORE_OUTCOME\`"
+              echo "- #939 tenant snapshot after: \`$PQ939_DB_AFTER_OUTCOME\`"
+              if [ "$PQ939_STEP_OUTCOME" = "success" ] &&
+                 [ "$PQ939_DB_BEFORE_OUTCOME" = "success" ] &&
+                 [ "$PQ939_DB_AFTER_OUTCOME" = "success" ]; then
+                echo "- #939: bounded UI/anonymous checks and tenant-visible durable-state comparison PASSED; other side effects, second principal and PDF navigation NOT VERIFIED."
               else
-                echo "- #939: NOT VERIFIED / failed, see exact test step and bounded artifacts; no acceptance claim."
+                echo "- #939: NOT VERIFIED / failed or skipped mandatory QA or tenant-state snapshot; no acceptance claim."
               fi
             fi
             echo
