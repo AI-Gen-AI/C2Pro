@@ -125,6 +125,9 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   // Clerk's own cross-origin session requests are excluded; product/API
   // writes on the approved C2Pro frontend/backend are forbidden.
   let observedProductWriteRequests = 0;
+  // Never record URL strings, query parameters, opaque Next action IDs,
+  // request bodies, headers or protected document identifiers. Category only.
+  const observedNonReadCategories = new Map<string, number>();
   page.on("request", (request) => {
     const method = request.method().toUpperCase();
     if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
@@ -133,6 +136,11 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
       url = new URL(request.url());
     } catch {
       observedProductWriteRequests += 1; // Unknown write target: fail closed.
+      const category = `unknown_origin:${method}:unparseable`;
+      observedNonReadCategories.set(
+        category,
+        (observedNonReadCategories.get(category) ?? 0) + 1,
+      );
       return;
     }
     const validHost = [
@@ -142,7 +150,33 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     ].includes(url.hostname);
     // Include server actions/form POSTs outside /api/ as well.
     // Clerk's separate account/auth hosts are not among these app origins.
-    if (validHost) observedProductWriteRequests += 1;
+    if (validHost) {
+      observedProductWriteRequests += 1;
+      const originCategory =
+        url.hostname === "c2pro-production.up.railway.app"
+          ? "railway"
+          : "frontend";
+      const routeCategory = url.pathname.startsWith("/api/")
+        ? "api"
+        : url.pathname.startsWith("/_next/")
+          ? "next_internal"
+          : /^\\/sign-in(?:\\/|$)/.test(url.pathname)
+            ? "sign_in"
+            : /^\\/sign-out(?:\\/|$)/.test(url.pathname)
+              ? "sign_out"
+              : url.pathname === "/projects"
+                ? "projects_index"
+                : url.pathname.startsWith("/projects/")
+                  ? "projects_detail"
+                  : "other_app";
+      // Boolean only: the actual Next-Action header value is secret-ish.
+      const nextAction = Boolean(request.headers()["next-action"]);
+      const category = `${originCategory}:${method}:${routeCategory}:next_action=${nextAction}`;
+      observedNonReadCategories.set(
+        category,
+        (observedNonReadCategories.get(category) ?? 0) + 1,
+      );
+    }
   });
 
   await signInSyntheticProductionUser(page);
@@ -311,9 +345,16 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   await signInSyntheticProductionUser(page);
   expect((await assertRevisionPanel(page)).apiOrigin).toBe(provenApiOrigin);
   await signOutThroughUi(page);
+  // Emit ONLY bounded and deterministic request categories on failure.
+  // Each recorded non-read request still makes qualification FAIL; diagnostics
+  // cannot turn a browser POST/server action into an authorized product write.
+  const nonReadCategories = [...observedNonReadCategories.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, count]) => `${category}:${count}`)
+    .join(" | ");
   expect(
     observedProductWriteRequests,
-    "Production QA emitted a product/API write request",
+    `Production QA emitted a product/API write request: categories=${nonReadCategories}`,
   ).toBe(0);
 
   const output = path.join(
