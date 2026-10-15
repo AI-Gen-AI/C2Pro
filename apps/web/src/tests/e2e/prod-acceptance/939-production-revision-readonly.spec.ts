@@ -65,6 +65,7 @@ async function assertRevisionPanel(page: Page): Promise<void> {
     preview.getByText(/9 stored clauses in this selected revision/i),
   ).toBeVisible();
   await expect(preview.getByRole("listitem")).toHaveCount(9);
+  await expect(preview.getByText(new RegExp(REV_A_ID))).toBeVisible();
 
   await panel.getByRole("button", { name: /^Revision 2 —/ }).click();
   await expect(
@@ -72,6 +73,7 @@ async function assertRevisionPanel(page: Page): Promise<void> {
   ).toBeVisible();
   await expect(preview.getByText(/Proposed — not trusted/i)).toBeVisible();
   await expect(preview.getByRole("listitem")).toHaveCount(7);
+  await expect(preview.getByText(new RegExp(REV_B_ID))).toBeVisible();
 
   // Frontend controls must not advertise a fabricated trusted-current basis.
   await expect(
@@ -141,7 +143,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         lifecycle_authority: false,
         mutation_performed: false,
         credential_material_recorded: false,
-        revision_ids_checked_in_database: [REV_A_ID, REV_B_ID].length === 2,
+        revision_ids_matched_expected: true,
       },
       null,
       2,
