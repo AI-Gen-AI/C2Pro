@@ -128,9 +128,9 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
       "www.c2pro.io",
       "c2pro-production.up.railway.app",
     ].includes(url.hostname);
-    const productApi = url.pathname.startsWith("/api/") &&
-      !url.pathname.startsWith("/api/runtime/");
-    if (validHost && productApi) observedProductWriteRequests += 1;
+    // Include server actions/form POSTs outside /api/ as well.
+    // Clerk's separate account/auth hosts are not among these app origins.
+    if (validHost) observedProductWriteRequests += 1;
   });
 
   await signInSyntheticProductionUser(page);
