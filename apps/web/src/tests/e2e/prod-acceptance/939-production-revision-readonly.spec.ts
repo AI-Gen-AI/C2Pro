@@ -39,6 +39,19 @@ function requireExactSyntheticTarget(): void {
   }
 }
 
+// Stable four-field, category-only diagnostics: never emit raw method/URL/header.
+function nonReadCategory(
+  rawMethod: string,
+  host: "frontend" | "railway" | "unknown_origin",
+  route: string,
+  nextActionPresent: boolean,
+): string {
+  const method = ["POST", "PUT", "PATCH", "DELETE", "CONNECT", "TRACE"].includes(rawMethod)
+    ? rawMethod
+    : "other";
+  return `${method}:${host}:${route}:${nextActionPresent}`;
+}
+
 type ObservedRevisionPanel = {
   apiOrigin: string;
   // This exact revision endpoint yielded HTTP 200 with real Clerk auth.
@@ -136,7 +149,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
       url = new URL(request.url());
     } catch {
       observedProductWriteRequests += 1; // Unknown write target: fail closed.
-      const category = `unknown_origin:${method}:unparseable`;
+      const category = nonReadCategory(method, "unknown_origin", "unparseable", false);
       observedNonReadCategories.set(
         category,
         (observedNonReadCategories.get(category) ?? 0) + 1,
@@ -173,7 +186,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
                   : "other_app";
       // Boolean only: the actual Next-Action header value is secret-ish.
       const nextAction = Boolean(request.headers()["next-action"]);
-      const category = `${originCategory}:${method}:${routeCategory}:next_action=${nextAction}`;
+      const category = nonReadCategory(method, originCategory, routeCategory, nextAction);
       observedNonReadCategories.set(
         category,
         (observedNonReadCategories.get(category) ?? 0) + 1,
