@@ -47,10 +47,18 @@ type ObservedRevisionPanel = {
 
 async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
   const apiHistory = page.waitForResponse(
-    (r) =>
-      r.request().method() === "GET" &&
-      new URL(r.url()).pathname ===
-        `/api/v1/documents/${DOCUMENT_ID}/revisions`,
+    (r) => {
+      const pathname = new URL(r.url()).pathname;
+      // Orval strips /api/v1 for the default same-origin /api proxy;
+      // direct backend calls keep /api/v1. Accept only these two routes.
+      return (
+        r.request().method() === "GET" &&
+        [
+          `/api/documents/${DOCUMENT_ID}/revisions`,
+          `/api/v1/documents/${DOCUMENT_ID}/revisions`,
+        ].includes(pathname)
+      );
+    },
     { timeout: 60_000 },
   );
 
