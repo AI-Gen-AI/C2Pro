@@ -39,7 +39,13 @@ function requireExactSyntheticTarget(): void {
   }
 }
 
-async function assertRevisionPanel(page: Page): Promise<string> {
+type ObservedRevisionPanel = {
+  apiOrigin: string;
+  // Only held in test process memory; never included in output or exceptions.
+  protectedClauseText: string[];
+};
+
+async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
   const apiHistory = page.waitForResponse(
     (r) =>
       r.request().method() === "GET" &&
@@ -76,6 +82,7 @@ async function assertRevisionPanel(page: Page): Promise<string> {
   ).toBeVisible();
   await expect(preview.getByRole("listitem")).toHaveCount(9);
   await expect(preview.getByText(new RegExp(REV_A_ID))).toBeVisible();
+  const clauseTextA = await preview.getByRole("listitem").allTextContents();
 
   await panel.getByRole("button", { name: /^Revision 2 —/ }).click();
   await expect(
@@ -84,12 +91,16 @@ async function assertRevisionPanel(page: Page): Promise<string> {
   await expect(preview.getByText(/Proposed — not trusted/i)).toBeVisible();
   await expect(preview.getByRole("listitem")).toHaveCount(7);
   await expect(preview.getByText(new RegExp(REV_B_ID))).toBeVisible();
+  const clauseTextB = await preview.getByRole("listitem").allTextContents();
 
   // Frontend controls must not advertise a fabricated trusted-current basis.
   await expect(
     panel.getByRole("button", { name: /Trusted current/i }),
   ).toHaveCount(0);
-  return liveApiOrigin;
+  return {
+    apiOrigin: liveApiOrigin,
+    protectedClauseText: [...clauseTextA, ...clauseTextB],
+  };
 }
 
 test("existing A9/B7 remains revision-scoped after real production relogin", async ({
@@ -99,7 +110,8 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   requireExactSyntheticTarget();
 
   await signInSyntheticProductionUser(page);
-  const provenApiOrigin = await assertRevisionPanel(page);
+  const authorized = await assertRevisionPanel(page);
+  const provenApiOrigin = authorized.apiOrigin;
 
   await signOutThroughUi(page);
 
@@ -139,6 +151,42 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
           denied || loginRedirect,
           "Anonymous revision or clause-data API returned a non-denial",
         ).toBe(true);
+
+        // HTTP denial alone is NOT proof of confidentiality. Fail closed if
+        // any known revision ID or in-memory synthetic clause content leaked
+        // through an error response. Never log the body or clause strings.
+        const deniedBody = (await response.body()).toString("utf8");
+        const normalizedBody = deniedBody.replace(/\\s+/g, " ").toLowerCase();
+        const leakedIdentifier = [REV_A_ID, REV_B_ID].some((id) =>
+          normalizedBody.includes(id.toLowerCase()),
+        );
+        const leakedClause = authorized.protectedClauseText.some((text) => {
+          const canonical = text.replace(/\\s+/g, " ").trim().toLowerCase();
+          if (canonical.length < 24) return false;
+          return normalizedBody.includes(canonical.slice(0, 48));
+        });
+        // Recognizable JSON data structures cannot be laundered through
+        // a 401/403/404 payload either.
+        let structuredDataLeak = false;
+        if (/application\\/json/i.test(response.headers()["content-type"] ?? "")) {
+          try {
+            const payload: unknown = JSON.parse(deniedBody);
+            structuredDataLeak =
+              Array.isArray(payload) ||
+              (typeof payload === "object" &&
+                payload !== null &&
+                ["revision_id", "revisions", "items", "entities", "clauses"].some(
+                  (field) => Object.hasOwn(payload, field),
+                ));
+          } catch {
+            // Malformed JSON on a denied response is not a clean denial.
+            structuredDataLeak = true;
+          }
+        }
+        expect(
+          leakedIdentifier || leakedClause || structuredDataLeak,
+          "Denial response leaked synthetic revision/clause evidence",
+        ).toBe(false);
       }
     }
   } finally {
@@ -146,7 +194,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   }
 
   await signInSyntheticProductionUser(page);
-  expect(await assertRevisionPanel(page)).toBe(provenApiOrigin);
+  expect((await assertRevisionPanel(page)).apiOrigin).toBe(provenApiOrigin);
   await signOutThroughUi(page);
 
   const output = path.join(
@@ -169,6 +217,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         logout_relogin: "PASS",
         anonymous_read_denied: true,
         anonymous_clause_entities_denied: true,
+        denial_payload_non_disclosure: true,
         second_tenant_principal_isolation: "NOT_VERIFIED",
         source_pdf_navigation: "NOT_VERIFIED",
         lifecycle_authority: false,
