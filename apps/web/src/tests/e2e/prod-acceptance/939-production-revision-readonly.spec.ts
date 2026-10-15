@@ -160,9 +160,11 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         ? "api"
         : url.pathname.startsWith("/_next/")
           ? "next_internal"
-          : /^\\/sign-in(?:\\/|$)/.test(url.pathname)
+          : url.pathname === "/sign-in" ||
+              url.pathname.startsWith("/sign-in/")
             ? "sign_in"
-            : /^\\/sign-out(?:\\/|$)/.test(url.pathname)
+            : url.pathname === "/sign-out" ||
+                url.pathname.startsWith("/sign-out/")
               ? "sign_out"
               : url.pathname === "/projects"
                 ? "projects_index"
