@@ -299,6 +299,15 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     await anon.close();
   }
 
+  // Production run #38776664922 proved all anonymous denials but triggered
+  // the 20-requests/user/minute production limit on the second signed-in
+  // A/B view (429 on revision-scoped entities). Respect the existing 60s
+  // limiter window BETWEEN signed-in sessions; this is test pacing, not an
+  // API retry, permission bypass, rate-limit configuration change, or
+  // relaxation of the A9/B7 / HTTP 200 assertions below. Waiting more than
+  // one full window also avoids depending on runner/server clock alignment.
+  await page.waitForTimeout(61_000);
+
   await signInSyntheticProductionUser(page);
   expect((await assertRevisionPanel(page)).apiOrigin).toBe(provenApiOrigin);
   await signOutThroughUi(page);
