@@ -220,7 +220,8 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         // HTTP denial alone is NOT proof of confidentiality. Fail closed if
         // any known revision ID or in-memory synthetic clause content leaked
         // through an error response. Never log the body or clause strings.
-        const deniedBody = (await response.body()).toString("utf8");
+        const deniedBytes = await response.body();
+        const deniedBody = deniedBytes.toString("utf8");
         const normalizedBody = deniedBody.replace(/\s+/g, " ").toLowerCase();
         const leakedIdentifier = [REV_A_ID, REV_B_ID].some((id) =>
           normalizedBody.includes(id.toLowerCase()),
@@ -240,7 +241,8 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         // when authenticated can be denied by Next.js with its generic HTML
         // 404 page BEFORE reaching the backend proxy. This is not a JSON API
         // error envelope. Accept ONLY an identifiable, bounded, generic 404
-        // HTML page for the protected frontend route, and keep protected
+        // HTML page for the protected frontend route, with the size limit
+        // enforced on actual response bytes, and keep protected
         // revision-ID/clause-fragment scans active for the entire HTML body.
         // Railway/direct-API denials MUST continue to use flat JSON envelopes.
         const genericFrontend404 =
@@ -248,7 +250,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
           origin === frontendOrigin &&
           status === 404 &&
           isHtmlResponse &&
-          deniedBody.length <= 65536 &&
+          deniedBytes.length <= 65536 &&
           /^<!doctype html\b/i.test(deniedBody.trimStart().slice(0, 80)) &&
           /\b404\b/.test(deniedBody.slice(0, 16384)) &&
           /(?:not found|could not be found)/i.test(
