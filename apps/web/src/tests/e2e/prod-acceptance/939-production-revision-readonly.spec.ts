@@ -80,8 +80,8 @@ function requireNoExplicitAppServerActions(): void {
         "grep", "-l", "--fixed-strings",
         "-e", "'use server'", "-e", '"use server"',
         checkoutSha, "--",
-        "apps/web",
-        ":(exclude)apps/web/src/tests",
+        ":(top)apps/web",
+        ":(top,exclude)apps/web/src/tests",
       ],
       { encoding: "utf8", timeout: 10_000 },
     );
@@ -89,8 +89,9 @@ function requireNoExplicitAppServerActions(): void {
       throw new Error("PQ939_APP_SERVER_ACTION_SOURCE_REQUIRES_REVIEW");
     }
   } catch (error) {
-    // git grep exit 1 strictly means no source matches. Everything else,
-    // including an unavailable git executable, fails the precondition.
+    // Git top-anchored pathspecs are crucial: CI invokes Playwright from
+    // apps/web, not the repository root. Exit 1 is only a no-match result
+    // after pathspecs have been rooted; other failures stay fail-closed.
     if ((error as { status?: number }).status === 1) return;
     throw error;
   }
