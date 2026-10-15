@@ -151,8 +151,17 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     // Rejecting one while exposing /entities would leak contract evidence.
     // The authenticated 200 establishes that this is a REAL endpoint,
     // so an accidental 404 from a different API host cannot pass the test.
-    // Also exercise the frontend's same-origin proxy, if distinct.
-    for (const origin of new Set([provenApiOrigin, frontendOrigin])) {
+    // The public Railway API is directly accessible; testing only the
+    // same-origin frontend proxy could falsely pass due to Clerk middleware.
+    // Keep its origin in the existing strict production API allowlist.
+    const directBackendOrigin = requireProductionApiOrigin(
+      "https://c2pro-production.up.railway.app",
+    );
+    for (const origin of new Set([
+      provenApiOrigin,
+      frontendOrigin,
+      directBackendOrigin,
+    ])) {
       if (origin !== frontendOrigin) requireProductionApiOrigin(origin);
       for (const endpoint of [
         `/api/v1/documents/${DOCUMENT_ID}/revisions`,
