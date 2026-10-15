@@ -41,6 +41,9 @@ function requireExactSyntheticTarget(): void {
 
 type ObservedRevisionPanel = {
   apiOrigin: string;
+  // This exact revision endpoint yielded HTTP 200 with real Clerk auth.
+  // Reuse it for anonymous negatives instead of guessing a proxy route.
+  revisionPath: string;
   // Only held in test process memory; never included in output or exceptions.
   protectedClauseText: string[];
 };
@@ -107,6 +110,7 @@ async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
   ).toHaveCount(0);
   return {
     apiOrigin: liveApiOrigin,
+    revisionPath: new URL(authorizedHistory.url()).pathname,
     protectedClauseText: [...clauseTextA, ...clauseTextB],
   };
 }
@@ -171,12 +175,22 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
       directBackendOrigin,
     ])) {
       if (origin !== frontendOrigin) requireProductionApiOrigin(origin);
-      for (const endpoint of [
-        `/api/v1/documents/${DOCUMENT_ID}/revisions`,
-        `/api/v1/documents/${DOCUMENT_ID}/entities`,
-        `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_A_ID}`,
-        `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_B_ID}`,
-      ]) {
+      const isBackendOrigin =
+        origin === directBackendOrigin ||
+        (origin === provenApiOrigin && origin !== frontendOrigin);
+      const revisionsPath = isBackendOrigin
+        ? `/api/v1/documents/${DOCUMENT_ID}/revisions`
+        : authorized.revisionPath;
+      if (!revisionsPath.endsWith("/revisions")) {
+        throw new Error("PQ939_AUTHENTICATED_REVISION_ROUTE_UNEXPECTED");
+      }
+      const entitiesPath = revisionsPath.replace(/\/revisions$/, "/entities");
+      for (const [endpointKind, endpoint] of [
+        ["revisions", revisionsPath],
+        ["entities", entitiesPath],
+        ["entities_a", `${entitiesPath}?revision_id=${REV_A_ID}`],
+        ["entities_b", `${entitiesPath}?revision_id=${REV_B_ID}`],
+      ] as const) {
         const response = await anon.request.get(origin + endpoint, {
           maxRedirects: 0,
           failOnStatusCode: false,
@@ -188,9 +202,18 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
           /sign-in|sign_in|login|clerk/i.test(
             response.headers()["location"] ?? "",
           );
+        // Use the SAME bounded, nonsecret diagnostic for both an unexpected
+        // status/redirect and a denial response that carries protected data.
+        // Never include the URL, Location header, response body or clause text.
+        const mimeClass = /application\/json/i.test(
+          response.headers()["content-type"] ?? "",
+        ) ? "json" : "non_json";
+        const diagnostic =
+          `PQ939_ANONYMOUS_DENIAL_FAILED origin=${isBackendOrigin ? "railway" : "frontend"}` +
+          ` route=${endpointKind} status=${status} mime=${mimeClass}`;
         expect(
           denied || loginRedirect,
-          "Anonymous revision or clause-data API returned a non-denial",
+          `${diagnostic} gates=not_denied`,
         ).toBe(true);
 
         // HTTP denial alone is NOT proof of confidentiality. Fail closed if
@@ -237,10 +260,17 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
             }
           }
         }
+        // Diagnose failure by origin, endpoint category, HTTP status and
+        // boolean gates ONLY. Never log tokens, URLs, payload or clause text.
+        const failedGates = [
+          leakedIdentifier ? "revision_id_present" : null,
+          leakedClause ? "clause_fragment_present" : null,
+          structuredDataLeak ? "denial_envelope_unrecognized" : null,
+        ].filter(Boolean);
         expect(
-          leakedIdentifier || leakedClause || structuredDataLeak,
-          "Denial response leaked synthetic revision/clause evidence",
-        ).toBe(false);
+          failedGates.length,
+          `${diagnostic} gates=${failedGates.join(",")}`,
+        ).toBe(0);
       }
     }
   } finally {
