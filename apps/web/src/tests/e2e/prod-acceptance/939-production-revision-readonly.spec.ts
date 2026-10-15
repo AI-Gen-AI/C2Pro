@@ -59,15 +59,29 @@ function nonReadCategory(
 // internal auth/session operations; any new native app actions force review.
 // This conservative scan is not a substitute for runtime side-effect checks.
 function requireNoExplicitAppServerActions(): void {
+  // The controls may be dispatched from an older main SHA to examine a
+  // distinct live composite runtime. NEVER apply a HEAD source inspection
+  // as authority for a different frontend. Provider-observed Vercel SHA
+  // must match the exact checked-out commit to permit this narrow exception.
+  const observedFrontendSha = process.env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA;
+  if (!observedFrontendSha || !/^[0-9a-f]{40}$/.test(observedFrontendSha)) {
+    throw new Error("PQ939_FRONTEND_SOURCE_PROVENANCE_MISSING");
+  }
+  const checkoutSha = execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8", timeout: 10_000,
+  }).trim();
+  if (checkoutSha !== observedFrontendSha) {
+    throw new Error("PQ939_FRONTEND_SHA_DIFFERS_FROM_CHECKOUT");
+  }
   try {
     const candidates = execFileSync(
       "git",
       [
         "grep", "-l", "--fixed-strings",
         "-e", "'use server'", "-e", '"use server"',
-        "HEAD", "--",
-        "apps/web/app", "apps/web/components", "apps/web/hooks",
-        "apps/web/lib", "apps/web/stores", "apps/web/contexts",
+        checkoutSha, "--",
+        "apps/web",
+        ":(exclude)apps/web/src/tests",
       ],
       { encoding: "utf8", timeout: 10_000 },
     );
