@@ -318,6 +318,7 @@ jobs:
       # Reuse existing protected Clerk credentials, tenant and deployment
       # preflight, and browser toolchain. GET/UI-only on an approved fixture.
       - name: Qualify #939 A9/B7 revisions on deployed read-only UI
+        id: pq939_revision_qa
         if: ${{ inputs.execution_mode == 'pq-hitl-03-readonly' }}
         env:
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
@@ -443,6 +444,7 @@ jobs:
           PROD_INPUT_FRONTEND_COMMIT_SHA: ${{ inputs.frontend_commit_sha }}
           PROD_INPUT_EXECUTION_MODE: ${{ inputs.execution_mode }}
           PROD_INPUT_REQUIRE_HITL: ${{ inputs.require_hitl }}
+          PQ939_STEP_OUTCOME: ${{ steps.pq939_revision_qa.outcome }}
         shell: bash
         run: |
           {
@@ -458,7 +460,12 @@ jobs:
             echo "- identity preflight mutates product data: **false**"
             echo "- lifecycle authority: **false**"
             if [ "$PROD_INPUT_EXECUTION_MODE" = "pq-hitl-03-readonly" ]; then
-              echo "- #939: deployed read-only A/B, relogin, anonymous negative; no second-principal isolation claim."
+              echo "- #939 QA step outcome: \`$PQ939_STEP_OUTCOME\`"
+              if [ "$PQ939_STEP_OUTCOME" = "success" ]; then
+                echo "- #939: bounded A9/B7 UI, relogin and anonymous revision/entities checks PASSED (not two-principal isolation)."
+              else
+                echo "- #939: NOT VERIFIED / failed, see exact test step and bounded artifacts; no acceptance claim."
+              fi
             fi
             echo
             echo "No credential/token values are included in this summary."
