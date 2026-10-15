@@ -156,19 +156,19 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         // any known revision ID or in-memory synthetic clause content leaked
         // through an error response. Never log the body or clause strings.
         const deniedBody = (await response.body()).toString("utf8");
-        const normalizedBody = deniedBody.replace(/\\s+/g, " ").toLowerCase();
+        const normalizedBody = deniedBody.replace(/\s+/g, " ").toLowerCase();
         const leakedIdentifier = [REV_A_ID, REV_B_ID].some((id) =>
           normalizedBody.includes(id.toLowerCase()),
         );
         const leakedClause = authorized.protectedClauseText.some((text) => {
-          const canonical = text.replace(/\\s+/g, " ").trim().toLowerCase();
+          const canonical = text.replace(/\s+/g, " ").trim().toLowerCase();
           if (canonical.length < 24) return false;
           return normalizedBody.includes(canonical.slice(0, 48));
         });
         // Recognizable JSON data structures cannot be laundered through
         // a 401/403/404 payload either.
         let structuredDataLeak = false;
-        if (/application\\/json/i.test(response.headers()["content-type"] ?? "")) {
+        if (/application\/json/i.test(response.headers()["content-type"] ?? "")) {
           try {
             const payload: unknown = JSON.parse(deniedBody);
             structuredDataLeak =
