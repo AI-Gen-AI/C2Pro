@@ -144,6 +144,27 @@ export default defineConfig({
       },
     },
     {
+      // PQ-HITL-03 / #939: existing qualified production Clerk principal,
+      // pre-existing bounded synthetic project/document, GET/UI only.
+      // Explicitly selected by protected production qualification workflow.
+      name: "prod-pq-hitl-03-readonly",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]939-production-revision-readonly\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "PQ-HITL-03-PROD-READONLY",
+        type: "production-qualification-readonly",
+        manualOnly: true,
+        description: "Deployed real Clerk A9/B7 read-only Evidence Viewer and re-login",
+      },
+    },
+    {
       // Manual-only production qualification. No testing-token setup, no
       // storageState and no managed local web server. The caller must set
       // PLAYWRIGHT_SKIP_WEBSERVER=1 and point PLAYWRIGHT_BASE_URL at c2pro.io.
