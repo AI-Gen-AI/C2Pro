@@ -180,7 +180,11 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   // /sign-in and one on this synthetic evidence page per session. Do NOT
   // conflate these known, narrowly scoped auth transitions with a business
   // document mutation. Unknown Next actions and ALL API non-reads still FAIL.
-  let session: 0 | 1 | 2 = 1;
+  let lifecyclePhase:
+    | "signin1" | "read1" | "logout1"
+    | "anonymous" | "pacing"
+    | "signin2" | "read2" | "logout2"
+    | "complete" = "signin1";
   const observedClerkTransitions = new Map<string, number>();
   const clerkTransitionRequests: Request[] = [];
   // Never record URL strings, query parameters, opaque Next action IDs,
@@ -236,15 +240,18 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         (observedNonReadCategories.get(category) ?? 0) + 1,
       );
 
+      // Allow only a Clerk framework POST during the exact UI-triggered
+      // sign-in/sign-out helper, NEVER while reading the A/B evidence.
       const allowedClerkSessionTransition =
-        session !== 0 &&
         originCategory === "frontend" &&
         method === "POST" &&
         nextAction &&
-        (url.pathname === "/sign-in" ||
-          url.pathname === `/projects/${PROJECT_ID}/evidence`);
+        (((lifecyclePhase === "signin1" || lifecyclePhase === "signin2") &&
+          url.pathname === "/sign-in") ||
+          ((lifecyclePhase === "logout1" || lifecyclePhase === "logout2") &&
+            url.pathname === `/projects/${PROJECT_ID}/evidence`));
       if (allowedClerkSessionTransition) {
-        const transition = `session${session}:${routeCategory}`;
+        const transition = `${lifecyclePhase}:${routeCategory}`;
         observedClerkTransitions.set(
           transition,
           (observedClerkTransitions.get(transition) ?? 0) + 1,
@@ -259,14 +266,16 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   });
 
   await signInSyntheticProductionUser(page);
+  lifecyclePhase = "read1";
   const authorized = await assertRevisionPanel(page);
   const initialEvidenceFingerprint = evidenceFingerprint(
     authorized.protectedClauseText,
   );
   const provenApiOrigin = authorized.apiOrigin;
 
+  lifecyclePhase = "logout1";
   await signOutThroughUi(page);
-  session = 0;
+  lifecyclePhase = "anonymous";
 
   // A fresh, cookie-free browser context, without bearer or Clerk session,
   // must NOT be able to read this qualified synthetic document.
@@ -423,10 +432,12 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   // API retry, permission bypass, rate-limit configuration change, or
   // relaxation of the A9/B7 / HTTP 200 assertions below. Waiting more than
   // one full window also avoids depending on runner/server clock alignment.
+  lifecyclePhase = "pacing";
   await page.waitForTimeout(61_000);
 
-  session = 2;
+  lifecyclePhase = "signin2";
   await signInSyntheticProductionUser(page);
+  lifecyclePhase = "read2";
   const secondAuthorized = await assertRevisionPanel(page);
   expect(secondAuthorized.apiOrigin).toBe(provenApiOrigin);
   expect(
@@ -434,15 +445,16 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
       initialEvidenceFingerprint,
     "PQ939_REVISION_CONTENT_FINGERPRINT_CHANGED",
   ).toBe(true);
+  lifecyclePhase = "logout2";
   await signOutThroughUi(page);
-  session = 0;
+  lifecyclePhase = "complete";
 
   // Match exactly the four individually scoped authentication control-plane
   // actions actually observed in run #38801876319; new/extra action classes
   // cannot silently become exempt from the zero-product-write invariant.
   const expectedClerkTransitions = [
-    "session1:sign_in", "session1:projects_detail",
-    "session2:sign_in", "session2:projects_detail",
+    "signin1:sign_in", "logout1:projects_detail",
+    "signin2:sign_in", "logout2:projects_detail",
   ];
   const unexpectedAuthActions = [...observedClerkTransitions.entries()]
     .filter(([category, count]) =>
@@ -470,8 +482,9 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   ).toBe(0);
 
   // Emit ONLY bounded and deterministic request categories on failure.
-  // Each recorded non-read request still makes qualification FAIL; diagnostics
-  // cannot turn a browser POST/server action into an authorized product write.
+  // Each unrecognized non-read request still makes qualification FAIL.
+  // The only exclusions are response-verified Clerk session transitions
+  // within these exact lifecycle phases and exact frontend routes.
   const nonReadCategories = [...observedNonReadCategories.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([category, count]) => `${category}:${count}`)
