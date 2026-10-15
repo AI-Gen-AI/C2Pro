@@ -96,9 +96,17 @@ function requireNoExplicitAppServerActions(): void {
   }
 }
 
-function evidenceFingerprint(clauseText: string[]): string {
+function evidenceFingerprint(
+  clausesA: string[],
+  clausesB: string[],
+): string {
+  // Preserve revision identity, ordered clause position, and A/B partition.
+  // No protected text or digest is ever logged or written to artifacts.
   return createHash("sha256")
-    .update(JSON.stringify([...clauseText].sort()))
+    .update(JSON.stringify({
+      revisionA: { id: REV_A_ID, clauses: clausesA },
+      revisionB: { id: REV_B_ID, clauses: clausesB },
+    }))
     .digest("hex");
 }
 
@@ -109,6 +117,8 @@ type ObservedRevisionPanel = {
   revisionPath: string;
   // Only held in test process memory; never included in output or exceptions.
   protectedClauseText: string[];
+  protectedClauseTextA: string[];
+  protectedClauseTextB: string[];
 };
 
 async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
@@ -175,6 +185,8 @@ async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
     apiOrigin: liveApiOrigin,
     revisionPath: new URL(authorizedHistory.url()).pathname,
     protectedClauseText: [...clauseTextA, ...clauseTextB],
+    protectedClauseTextA: clauseTextA,
+    protectedClauseTextB: clauseTextB,
   };
 }
 
@@ -283,7 +295,8 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   lifecyclePhase = "read1";
   const authorized = await assertRevisionPanel(page);
   const initialEvidenceFingerprint = evidenceFingerprint(
-    authorized.protectedClauseText,
+    authorized.protectedClauseTextA,
+    authorized.protectedClauseTextB,
   );
   const provenApiOrigin = authorized.apiOrigin;
 
@@ -455,8 +468,10 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   const secondAuthorized = await assertRevisionPanel(page);
   expect(secondAuthorized.apiOrigin).toBe(provenApiOrigin);
   expect(
-    evidenceFingerprint(secondAuthorized.protectedClauseText) ===
-      initialEvidenceFingerprint,
+    evidenceFingerprint(
+      secondAuthorized.protectedClauseTextA,
+      secondAuthorized.protectedClauseTextB,
+    ) === initialEvidenceFingerprint,
     "PQ939_REVISION_CONTENT_FINGERPRINT_CHANGED",
   ).toBe(true);
   lifecyclePhase = "logout2";
