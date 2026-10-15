@@ -85,6 +85,8 @@ async def _snapshot(tenant: UUID, key: bytes) -> dict[str, object]:
             try:
                 await conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
                 await conn.execute(text("SET TRANSACTION READ ONLY"))
+                await conn.execute(text("SET LOCAL statement_timeout = '30000ms'"))
+                await conn.execute(text("SET LOCAL lock_timeout = '3000ms'"))
                 await conn.execute(
                     text("SELECT set_config('app.current_tenant', :tenant, true)"),
                     {"tenant": str(tenant)},
@@ -114,10 +116,15 @@ async def _snapshot(tenant: UUID, key: bytes) -> dict[str, object]:
                 # tables must be visible, otherwise FAIL; never skip silently.
                 discovery = await conn.execute(
                     text(
-                        "SELECT DISTINCT table_name "
-                        "FROM information_schema.columns "
-                        "WHERE table_schema = 'public' AND column_name = 'tenant_id' "
-                        "ORDER BY table_name"
+                        "SELECT DISTINCT c.table_name "
+                        "FROM information_schema.columns AS c "
+                        "JOIN information_schema.tables AS t "
+                        "ON t.table_schema = c.table_schema "
+                        "AND t.table_name = c.table_name "
+                        "WHERE c.table_schema = 'public' "
+                        "AND c.column_name = 'tenant_id' "
+                        "AND t.table_type = 'BASE TABLE' "
+                        "ORDER BY c.table_name"
                     )
                 )
                 names = [row.table_name for row in discovery]
