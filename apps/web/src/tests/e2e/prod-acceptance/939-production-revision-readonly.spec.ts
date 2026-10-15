@@ -99,18 +99,27 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     storageState: { cookies: [], origins: [] },
   });
   try {
-    const response = await anon.request.get(
+    // Cover BOTH revision metadata and the actual clause-text endpoint.
+    // Rejecting one while exposing /entities would leak contract evidence.
+    for (const endpoint of [
       `/api/v1/documents/${DOCUMENT_ID}/revisions`,
-      { maxRedirects: 0 },
-    );
-    const status = response.status();
-    const denied = [401, 403, 404].includes(status);
-    const loginRedirect =
-      [302, 303, 307, 308].includes(status) &&
-      /sign-in|sign_in|login|clerk/i.test(
-        response.headers()["location"] ?? "",
-      );
-    expect(denied || loginRedirect).toBe(true);
+      `/api/v1/documents/${DOCUMENT_ID}/entities`,
+      `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_A_ID}`,
+      `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_B_ID}`,
+    ]) {
+      const response = await anon.request.get(endpoint, { maxRedirects: 0 });
+      const status = response.status();
+      const denied = [401, 403, 404].includes(status);
+      const loginRedirect =
+        [302, 303, 307, 308].includes(status) &&
+        /sign-in|sign_in|login|clerk/i.test(
+          response.headers()["location"] ?? "",
+        );
+      expect(
+        denied || loginRedirect,
+        "Anonymous revision or clause-data API returned a non-denial",
+      ).toBe(true);
+    }
   } finally {
     await anon.close();
   }
@@ -138,6 +147,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         canonical_current: "UNRESOLVED_IN_VIEW",
         logout_relogin: "PASS",
         anonymous_read_denied: true,
+        anonymous_clause_entities_denied: true,
         second_tenant_principal_isolation: "NOT_VERIFIED",
         source_pdf_navigation: "NOT_VERIFIED",
         lifecycle_authority: false,
