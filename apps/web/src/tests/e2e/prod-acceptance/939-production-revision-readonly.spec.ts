@@ -109,6 +109,30 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
 }) => {
   requireExactSyntheticTarget();
 
+  // Observe the entire qualification lifecycle, including login/logout.
+  // Clerk's own cross-origin session requests are excluded; product/API
+  // writes on the approved C2Pro frontend/backend are forbidden.
+  let observedProductWriteRequests = 0;
+  page.on("request", (request) => {
+    const method = request.method().toUpperCase();
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
+    let url: URL;
+    try {
+      url = new URL(request.url());
+    } catch {
+      observedProductWriteRequests += 1; // Unknown write target: fail closed.
+      return;
+    }
+    const validHost = [
+      "c2pro.io",
+      "www.c2pro.io",
+      "c2pro-production.up.railway.app",
+    ].includes(url.hostname);
+    const productApi = url.pathname.startsWith("/api/") &&
+      !url.pathname.startsWith("/api/runtime/");
+    if (validHost && productApi) observedProductWriteRequests += 1;
+  });
+
   await signInSyntheticProductionUser(page);
   const authorized = await assertRevisionPanel(page);
   const provenApiOrigin = authorized.apiOrigin;
@@ -209,6 +233,10 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   await signInSyntheticProductionUser(page);
   expect((await assertRevisionPanel(page)).apiOrigin).toBe(provenApiOrigin);
   await signOutThroughUi(page);
+  expect(
+    observedProductWriteRequests,
+    "Production QA emitted a product/API write request",
+  ).toBe(0);
 
   const output = path.join(
     process.cwd(),
@@ -234,7 +262,8 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         second_tenant_principal_isolation: "NOT_VERIFIED",
         source_pdf_navigation: "NOT_VERIFIED",
         lifecycle_authority: false,
-        mutation_performed: false,
+        product_write_requests_observed: observedProductWriteRequests,
+        database_side_effects: "NOT_VERIFIED",
         credential_material_recorded: false,
         revision_ids_matched_expected: true,
       },
