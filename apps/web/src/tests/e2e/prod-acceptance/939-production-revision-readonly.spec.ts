@@ -162,25 +162,38 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         );
         const leakedClause = authorized.protectedClauseText.some((text) => {
           const canonical = text.replace(/\s+/g, " ").trim().toLowerCase();
-          if (canonical.length < 24) return false;
-          return normalizedBody.includes(canonical.slice(0, 48));
+          // Scan overlapping sliding fragments, not just the clause prefix.
+          // Diagnostic proxies could reveal an excerpt from the middle.
+          if (canonical.length < 16) return normalizedBody.includes(canonical);
+          for (let offset = 0; offset <= canonical.length - 16; offset += 12) {
+            const fragment = canonical.slice(offset, offset + 32);
+            if (normalizedBody.includes(fragment)) return true;
+          }
+          return normalizedBody.includes(canonical.slice(-16));
         });
-        // Recognizable JSON data structures cannot be laundered through
-        // a 401/403/404 payload either.
+        // Only a small, flat error envelope is an acceptable API denial.
+        // Reject unexpected JSON structures, including nested arrays/objects
+        // under "detail", without ever printing an error response body.
         let structuredDataLeak = false;
-        if (/application\/json/i.test(response.headers()["content-type"] ?? "")) {
-          try {
-            const payload: unknown = JSON.parse(deniedBody);
-            structuredDataLeak =
-              Array.isArray(payload) ||
-              (typeof payload === "object" &&
-                payload !== null &&
-                ["revision_id", "revisions", "items", "entities", "clauses"].some(
-                  (field) => Object.hasOwn(payload, field),
-                ));
-          } catch {
-            // Malformed JSON on a denied response is not a clean denial.
+        if (denied) {
+          if (!/application\/json/i.test(response.headers()["content-type"] ?? "")) {
             structuredDataLeak = true;
+          } else {
+            try {
+              const payload: unknown = JSON.parse(deniedBody);
+              structuredDataLeak =
+                typeof payload !== "object" ||
+                payload === null ||
+                Array.isArray(payload) ||
+                Object.keys(payload).length === 0 ||
+                !Object.entries(payload).every(
+                  ([key, value]) =>
+                    ["detail", "error", "message"].includes(key) &&
+                    typeof value === "string",
+                );
+            } catch {
+              structuredDataLeak = true;
+            }
           }
         }
         expect(
