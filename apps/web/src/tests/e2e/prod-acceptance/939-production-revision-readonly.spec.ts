@@ -4,10 +4,12 @@
  * Clerk identity and existing A/B document. Never creates or changes data,
  * never makes HITL decisions and never promotes trust.
  */
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Request } from "@playwright/test";
 
 import {
   signInSyntheticProductionUser,
@@ -50,6 +52,40 @@ function nonReadCategory(
     ? rawMethod
     : "other";
   return `${method}:${host}:${route}:${nextActionPresent}`;
+}
+
+// Extra defence: this bounded exception relies on no app-authored Server Actions
+// in the checked-out Next frontend source. Clerk's versioned SDK owns its
+// internal auth/session operations; any new native app actions force review.
+// This conservative scan is not a substitute for runtime side-effect checks.
+function requireNoExplicitAppServerActions(): void {
+  try {
+    const candidates = execFileSync(
+      "git",
+      [
+        "grep", "-l", "--fixed-strings",
+        "-e", "'use server'", "-e", '"use server"',
+        "HEAD", "--",
+        "apps/web/app", "apps/web/components", "apps/web/hooks",
+        "apps/web/lib", "apps/web/stores", "apps/web/contexts",
+      ],
+      { encoding: "utf8", timeout: 10_000 },
+    );
+    if (candidates.trim()) {
+      throw new Error("PQ939_APP_SERVER_ACTION_SOURCE_REQUIRES_REVIEW");
+    }
+  } catch (error) {
+    // git grep exit 1 strictly means no source matches. Everything else,
+    // including an unavailable git executable, fails the precondition.
+    if ((error as { status?: number }).status === 1) return;
+    throw error;
+  }
+}
+
+function evidenceFingerprint(clauseText: string[]): string {
+  return createHash("sha256")
+    .update(JSON.stringify([...clauseText].sort()))
+    .digest("hex");
 }
 
 type ObservedRevisionPanel = {
@@ -133,11 +169,20 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   browser,
 }) => {
   requireExactSyntheticTarget();
+  requireNoExplicitAppServerActions();
 
   // Observe the entire qualification lifecycle, including login/logout.
   // Clerk's own cross-origin session requests are excluded; product/API
   // writes on the approved C2Pro frontend/backend are forbidden.
   let observedProductWriteRequests = 0;
+  // Login and logout require Clerk's session/Organization control-plane
+  // updates. The previous real run observed exactly one Next-Action POST on
+  // /sign-in and one on this synthetic evidence page per session. Do NOT
+  // conflate these known, narrowly scoped auth transitions with a business
+  // document mutation. Unknown Next actions and ALL API non-reads still FAIL.
+  let session: 0 | 1 | 2 = 1;
+  const observedClerkTransitions = new Map<string, number>();
+  const clerkTransitionRequests: Request[] = [];
   // Never record URL strings, query parameters, opaque Next action IDs,
   // request bodies, headers or protected document identifiers. Category only.
   const observedNonReadCategories = new Map<string, number>();
@@ -164,7 +209,6 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     // Include server actions/form POSTs outside /api/ as well.
     // Clerk's separate account/auth hosts are not among these app origins.
     if (validHost) {
-      observedProductWriteRequests += 1;
       const originCategory =
         url.hostname === "c2pro-production.up.railway.app"
           ? "railway"
@@ -191,14 +235,38 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         category,
         (observedNonReadCategories.get(category) ?? 0) + 1,
       );
+
+      const allowedClerkSessionTransition =
+        session !== 0 &&
+        originCategory === "frontend" &&
+        method === "POST" &&
+        nextAction &&
+        (url.pathname === "/sign-in" ||
+          url.pathname === `/projects/${PROJECT_ID}/evidence`);
+      if (allowedClerkSessionTransition) {
+        const transition = `session${session}:${routeCategory}`;
+        observedClerkTransitions.set(
+          transition,
+          (observedClerkTransitions.get(transition) ?? 0) + 1,
+        );
+        clerkTransitionRequests.push(request);
+      } else {
+        // Always fail closed for API writes, unrelated Next actions, unknown
+        // target paths/methods, and requests during the anonymous/pacing phase.
+        observedProductWriteRequests += 1;
+      }
     }
   });
 
   await signInSyntheticProductionUser(page);
   const authorized = await assertRevisionPanel(page);
+  const initialEvidenceFingerprint = evidenceFingerprint(
+    authorized.protectedClauseText,
+  );
   const provenApiOrigin = authorized.apiOrigin;
 
   await signOutThroughUi(page);
+  session = 0;
 
   // A fresh, cookie-free browser context, without bearer or Clerk session,
   // must NOT be able to read this qualified synthetic document.
@@ -357,9 +425,50 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   // one full window also avoids depending on runner/server clock alignment.
   await page.waitForTimeout(61_000);
 
+  session = 2;
   await signInSyntheticProductionUser(page);
-  expect((await assertRevisionPanel(page)).apiOrigin).toBe(provenApiOrigin);
+  const secondAuthorized = await assertRevisionPanel(page);
+  expect(secondAuthorized.apiOrigin).toBe(provenApiOrigin);
+  expect(
+    evidenceFingerprint(secondAuthorized.protectedClauseText) ===
+      initialEvidenceFingerprint,
+    "PQ939_REVISION_CONTENT_FINGERPRINT_CHANGED",
+  ).toBe(true);
   await signOutThroughUi(page);
+  session = 0;
+
+  // Match exactly the four individually scoped authentication control-plane
+  // actions actually observed in run #38801876319; new/extra action classes
+  // cannot silently become exempt from the zero-product-write invariant.
+  const expectedClerkTransitions = [
+    "session1:sign_in", "session1:projects_detail",
+    "session2:sign_in", "session2:projects_detail",
+  ];
+  const unexpectedAuthActions = [...observedClerkTransitions.entries()]
+    .filter(([category, count]) =>
+      !expectedClerkTransitions.includes(category) || count !== 1,
+    ).map(([category]) => category);
+  const absentAuthActions = expectedClerkTransitions.filter(
+    (category) => observedClerkTransitions.get(category) !== 1,
+  );
+  expect(
+    unexpectedAuthActions.length + absentAuthActions.length,
+    "PQ939_CLERK_AUTH_BOUNDARY_UNVERIFIED",
+  ).toBe(0);
+  const clerkResponses = await Promise.all(
+    clerkTransitionRequests.map(async (request) => {
+      const response = await request.response();
+      return !request.failure() &&
+        response !== null &&
+        response.status() >= 200 &&
+        response.status() < 400;
+    }),
+  );
+  expect(
+    clerkResponses.filter((passed) => !passed).length,
+    "PQ939_CLERK_AUTH_ACTION_FAILED",
+  ).toBe(0);
+
   // Emit ONLY bounded and deterministic request categories on failure.
   // Each recorded non-read request still makes qualification FAIL; diagnostics
   // cannot turn a browser POST/server action into an authorized product write.
