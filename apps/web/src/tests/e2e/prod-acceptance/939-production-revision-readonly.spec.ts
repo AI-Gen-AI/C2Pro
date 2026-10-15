@@ -13,6 +13,10 @@ import {
   signInSyntheticProductionUser,
   signOutThroughUi,
 } from "./support/prod-auth.synthetic";
+import {
+  requireProductionApiOrigin,
+  requireProductionOrigin,
+} from "./support/prod-preflight";
 
 const PROJECT_ID = "e7c6031f-cd9e-4642-a5ea-35a0207ceaeb";
 const DOCUMENT_ID = "9769cb1f-cef7-4832-a1aa-de916448bb43";
@@ -35,7 +39,7 @@ function requireExactSyntheticTarget(): void {
   }
 }
 
-async function assertRevisionPanel(page: Page): Promise<void> {
+async function assertRevisionPanel(page: Page): Promise<string> {
   const apiHistory = page.waitForResponse(
     (r) =>
       r.request().method() === "GET" &&
@@ -45,7 +49,13 @@ async function assertRevisionPanel(page: Page): Promise<void> {
   );
 
   await page.goto(`/projects/${PROJECT_ID}/evidence?documentId=${DOCUMENT_ID}`);
-  expect((await apiHistory).status()).toBe(200);
+  const authorizedHistory = await apiHistory;
+  expect(authorizedHistory.status()).toBe(200);
+  const liveApiOrigin = new URL(authorizedHistory.url()).origin;
+  // Only accept the existing vetted production frontend proxy or backend API.
+  if (liveApiOrigin !== requireProductionOrigin(page.url())) {
+    requireProductionApiOrigin(liveApiOrigin);
+  }
 
   const panel = page.getByTestId("revision-history-readonly");
   await expect(panel).toBeVisible({ timeout: 30_000 });
@@ -79,6 +89,7 @@ async function assertRevisionPanel(page: Page): Promise<void> {
   await expect(
     panel.getByRole("button", { name: /Trusted current/i }),
   ).toHaveCount(0);
+  return liveApiOrigin;
 }
 
 test("existing A9/B7 remains revision-scoped after real production relogin", async ({
@@ -88,44 +99,54 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   requireExactSyntheticTarget();
 
   await signInSyntheticProductionUser(page);
-  await assertRevisionPanel(page);
+  const provenApiOrigin = await assertRevisionPanel(page);
 
   await signOutThroughUi(page);
 
   // A fresh, cookie-free browser context, without bearer or Clerk session,
   // must NOT be able to read this qualified synthetic document.
+  const frontendOrigin = requireProductionOrigin(page.url());
   const anon = await browser.newContext({
-    baseURL: new URL(page.url()).origin,
+    baseURL: frontendOrigin,
     storageState: { cookies: [], origins: [] },
   });
   try {
     // Cover BOTH revision metadata and the actual clause-text endpoint.
     // Rejecting one while exposing /entities would leak contract evidence.
-    for (const endpoint of [
-      `/api/v1/documents/${DOCUMENT_ID}/revisions`,
-      `/api/v1/documents/${DOCUMENT_ID}/entities`,
-      `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_A_ID}`,
-      `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_B_ID}`,
-    ]) {
-      const response = await anon.request.get(endpoint, { maxRedirects: 0 });
-      const status = response.status();
-      const denied = [401, 403, 404].includes(status);
-      const loginRedirect =
-        [302, 303, 307, 308].includes(status) &&
-        /sign-in|sign_in|login|clerk/i.test(
-          response.headers()["location"] ?? "",
-        );
-      expect(
-        denied || loginRedirect,
-        "Anonymous revision or clause-data API returned a non-denial",
-      ).toBe(true);
+    // The authenticated 200 establishes that this is a REAL endpoint,
+    // so an accidental 404 from a different API host cannot pass the test.
+    // Also exercise the frontend's same-origin proxy, if distinct.
+    for (const origin of new Set([provenApiOrigin, frontendOrigin])) {
+      if (origin !== frontendOrigin) requireProductionApiOrigin(origin);
+      for (const endpoint of [
+        `/api/v1/documents/${DOCUMENT_ID}/revisions`,
+        `/api/v1/documents/${DOCUMENT_ID}/entities`,
+        `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_A_ID}`,
+        `/api/v1/documents/${DOCUMENT_ID}/entities?revision_id=${REV_B_ID}`,
+      ]) {
+        const response = await anon.request.get(origin + endpoint, {
+          maxRedirects: 0,
+          failOnStatusCode: false,
+        });
+        const status = response.status();
+        const denied = [401, 403, 404].includes(status);
+        const loginRedirect =
+          [302, 303, 307, 308].includes(status) &&
+          /sign-in|sign_in|login|clerk/i.test(
+            response.headers()["location"] ?? "",
+          );
+        expect(
+          denied || loginRedirect,
+          "Anonymous revision or clause-data API returned a non-denial",
+        ).toBe(true);
+      }
     }
   } finally {
     await anon.close();
   }
 
   await signInSyntheticProductionUser(page);
-  await assertRevisionPanel(page);
+  expect(await assertRevisionPanel(page)).toBe(provenApiOrigin);
   await signOutThroughUi(page);
 
   const output = path.join(
