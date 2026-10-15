@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 SOURCE = Path(__file__).resolve().parents[2] / "scripts" / "pq939_tenant_durable_attestation.py"
 SPEC = importlib.util.spec_from_file_location("pq939_tenant_durable_attestation", SOURCE)
 assert SPEC and SPEC.loader
