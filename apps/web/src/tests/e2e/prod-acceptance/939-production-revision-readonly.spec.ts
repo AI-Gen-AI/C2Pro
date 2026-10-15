@@ -205,9 +205,10 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         // Use the SAME bounded, nonsecret diagnostic for both an unexpected
         // status/redirect and a denial response that carries protected data.
         // Never include the URL, Location header, response body or clause text.
-        const mimeClass = /application\/json/i.test(
-          response.headers()["content-type"] ?? "",
-        ) ? "json" : "non_json";
+        const contentType = response.headers()["content-type"] ?? "";
+        const isJsonResponse = /application\/json/i.test(contentType);
+        const isHtmlResponse = /^text\/html(?:;|$)/i.test(contentType);
+        const mimeClass = isJsonResponse ? "json" : isHtmlResponse ? "html" : "other";
         const diagnostic =
           `PQ939_ANONYMOUS_DENIAL_FAILED origin=${isBackendOrigin ? "railway" : "frontend"}` +
           ` route=${endpointKind} status=${status} mime=${mimeClass}`;
@@ -219,7 +220,8 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         // HTTP denial alone is NOT proof of confidentiality. Fail closed if
         // any known revision ID or in-memory synthetic clause content leaked
         // through an error response. Never log the body or clause strings.
-        const deniedBody = (await response.body()).toString("utf8");
+        const deniedBytes = await response.body();
+        const deniedBody = deniedBytes.toString("utf8");
         const normalizedBody = deniedBody.replace(/\s+/g, " ").toLowerCase();
         const leakedIdentifier = [REV_A_ID, REV_B_ID].some((id) =>
           normalizedBody.includes(id.toLowerCase()),
@@ -235,13 +237,33 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
           }
           return normalizedBody.includes(canonical.slice(-16));
         });
-        // Only a small, flat error envelope is an acceptable API denial.
-        // Reject unexpected JSON structures, including nested arrays/objects
-        // under "detail", without ever printing an error response body.
+        // An anonymous same-origin request to a route proven HTTP 200
+        // when authenticated can be denied by Next.js with its generic HTML
+        // 404 page BEFORE reaching the backend proxy. This is not a JSON API
+        // error envelope. Accept ONLY an identifiable, bounded, generic 404
+        // HTML page for the protected frontend route, with the size limit
+        // enforced on actual response bytes, and keep protected
+        // revision-ID/clause-fragment scans active for the entire HTML body.
+        // Railway/direct-API denials MUST continue to use flat JSON envelopes.
+        const genericFrontend404 =
+          !isBackendOrigin &&
+          origin === frontendOrigin &&
+          status === 404 &&
+          isHtmlResponse &&
+          deniedBytes.length <= 65536 &&
+          /^<!doctype html\b/i.test(deniedBody.trimStart().slice(0, 80)) &&
+          /\b404\b/.test(deniedBody.slice(0, 16384)) &&
+          /(?:not found|could not be found)/i.test(
+            deniedBody.slice(0, 16384),
+          );
+
+        // Flat JSON error envelopes remain required for every other API
+        // denial. Reject nested arrays/objects under "detail"; never print
+        // any error response body or protected contract content.
         let structuredDataLeak = false;
         if (denied) {
-          if (!/application\/json/i.test(response.headers()["content-type"] ?? "")) {
-            structuredDataLeak = true;
+          if (!isJsonResponse) {
+            structuredDataLeak = !genericFrontend404;
           } else {
             try {
               const payload: unknown = JSON.parse(deniedBody);
