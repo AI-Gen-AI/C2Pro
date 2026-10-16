@@ -5,11 +5,10 @@
  * never makes HITL decisions and never promotes trust.
  */
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { test, expect, type Page, type Request } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 import {
   signInSyntheticProductionUser,
@@ -19,6 +18,7 @@ import {
   requireProductionApiOrigin,
   requireProductionOrigin,
 } from "./support/prod-preflight";
+import { classifyNonReadRequest } from "./support/prod-nonread-boundary";
 
 const PROJECT_ID = "e7c6031f-cd9e-4642-a5ea-35a0207ceaeb";
 const DOCUMENT_ID = "9769cb1f-cef7-4832-a1aa-de916448bb43";
@@ -52,49 +52,6 @@ function nonReadCategory(
     ? rawMethod
     : "other";
   return `${method}:${host}:${route}:${nextActionPresent}`;
-}
-
-// Extra defence: this bounded exception relies on no app-authored Server Actions
-// in the checked-out Next frontend source. Clerk's versioned SDK owns its
-// internal auth/session operations; any new native app actions force review.
-// This conservative scan is not a substitute for runtime side-effect checks.
-function requireNoExplicitAppServerActions(): void {
-  // The controls may be dispatched from an older main SHA to examine a
-  // distinct live composite runtime. NEVER apply a HEAD source inspection
-  // as authority for a different frontend. Provider-observed Vercel SHA
-  // must match the exact checked-out commit to permit this narrow exception.
-  const observedFrontendSha = process.env.PROD_ACCEPTANCE_OBSERVED_FRONTEND_SHA;
-  if (!observedFrontendSha || !/^[0-9a-f]{40}$/.test(observedFrontendSha)) {
-    throw new Error("PQ939_FRONTEND_SOURCE_PROVENANCE_MISSING");
-  }
-  const checkoutSha = execFileSync("git", ["rev-parse", "HEAD"], {
-    encoding: "utf8", timeout: 10_000,
-  }).trim();
-  if (checkoutSha !== observedFrontendSha) {
-    throw new Error("PQ939_FRONTEND_SHA_DIFFERS_FROM_CHECKOUT");
-  }
-  try {
-    const candidates = execFileSync(
-      "git",
-      [
-        "grep", "-l", "--fixed-strings",
-        "-e", "'use server'", "-e", '"use server"',
-        checkoutSha, "--",
-        ":(top)apps/web",
-        ":(top,exclude)apps/web/src/tests",
-      ],
-      { encoding: "utf8", timeout: 10_000 },
-    );
-    if (candidates.trim()) {
-      throw new Error("PQ939_APP_SERVER_ACTION_SOURCE_REQUIRES_REVIEW");
-    }
-  } catch (error) {
-    // Git top-anchored pathspecs are crucial: CI invokes Playwright from
-    // apps/web, not the repository root. Exit 1 is only a no-match result
-    // after pathspecs have been rooted; other failures stay fail-closed.
-    if ((error as { status?: number }).status === 1) return;
-    throw error;
-  }
 }
 
 function evidenceFingerprint(
@@ -196,30 +153,22 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   browser,
 }) => {
   requireExactSyntheticTarget();
-  requireNoExplicitAppServerActions();
 
   // Observe the entire qualification lifecycle, including login/logout.
   // Clerk's own cross-origin session requests are excluded; product/API
   // writes on the approved C2Pro frontend/backend are forbidden.
   let observedProductWriteRequests = 0;
-  // Login and logout require Clerk's session/Organization control-plane
-  // updates. The previous real run observed exactly one Next-Action POST on
-  // /sign-in and one on this synthetic evidence page per session. Do NOT
-  // conflate these known, narrowly scoped auth transitions with a business
-  // document mutation. Unknown Next actions and ALL API non-reads still FAIL.
-  let lifecyclePhase:
-    | "signin1" | "read1" | "logout1"
-    | "anonymous" | "pacing"
-    | "signin2" | "read2" | "logout2"
-    | "complete" = "signin1";
-  const observedClerkTransitions = new Map<string, number>();
-  const clerkTransitionRequests: Request[] = [];
+  // A Next-Action header only identifies framework transport; it does NOT
+  // attribute an opaque action ID to Clerk or establish no business writes.
+  // Strictly count every first-party non-read, including login and logout,
+  // until independent deployed action/side-effect evidence exists.
   // Never record URL strings, query parameters, opaque Next action IDs,
   // request bodies, headers or protected document identifiers. Category only.
   const observedNonReadCategories = new Map<string, number>();
   page.on("request", (request) => {
     const method = request.method().toUpperCase();
-    if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
+    const disposition = classifyNonReadRequest(method, request.url());
+    if (disposition === "read" || disposition === "external_provider") return;
     let url: URL;
     try {
       url = new URL(request.url());
@@ -267,33 +216,15 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         (observedNonReadCategories.get(category) ?? 0) + 1,
       );
 
-      // Allow only a Clerk framework POST during the exact UI-triggered
-      // sign-in/sign-out helper, NEVER while reading the A/B evidence.
-      const allowedClerkSessionTransition =
-        originCategory === "frontend" &&
-        method === "POST" &&
-        nextAction &&
-        (((lifecyclePhase === "signin1" || lifecyclePhase === "signin2") &&
-          url.pathname === "/sign-in") ||
-          ((lifecyclePhase === "logout1" || lifecyclePhase === "logout2") &&
-            url.pathname === `/projects/${PROJECT_ID}/evidence`));
-      if (allowedClerkSessionTransition) {
-        const transition = `${lifecyclePhase}:${routeCategory}`;
-        observedClerkTransitions.set(
-          transition,
-          (observedClerkTransitions.get(transition) ?? 0) + 1,
-        );
-        clerkTransitionRequests.push(request);
-      } else {
-        // Always fail closed for API writes, unrelated Next actions, unknown
-        // target paths/methods, and requests during the anonymous/pacing phase.
-        observedProductWriteRequests += 1;
-      }
+      // No first-party POST, including a Server Action on /sign-in or a
+      // synthetic evidence page, can be exempted by URL, header or phase.
+      // Keep the test FAIL-CLOSED until exact deployed Clerk provenance and
+      // comprehensive no-write effects are independently established.
+      observedProductWriteRequests += 1;
     }
   });
 
   await signInSyntheticProductionUser(page);
-  lifecyclePhase = "read1";
   const authorized = await assertRevisionPanel(page);
   const initialEvidenceFingerprint = evidenceFingerprint(
     authorized.protectedClauseTextA,
@@ -301,9 +232,7 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   );
   const provenApiOrigin = authorized.apiOrigin;
 
-  lifecyclePhase = "logout1";
   await signOutThroughUi(page);
-  lifecyclePhase = "anonymous";
 
   // A fresh, cookie-free browser context, without bearer or Clerk session,
   // must NOT be able to read this qualified synthetic document.
@@ -460,12 +389,9 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   // API retry, permission bypass, rate-limit configuration change, or
   // relaxation of the A9/B7 / HTTP 200 assertions below. Waiting more than
   // one full window also avoids depending on runner/server clock alignment.
-  lifecyclePhase = "pacing";
   await page.waitForTimeout(61_000);
 
-  lifecyclePhase = "signin2";
   await signInSyntheticProductionUser(page);
-  lifecyclePhase = "read2";
   const secondAuthorized = await assertRevisionPanel(page);
   expect(secondAuthorized.apiOrigin).toBe(provenApiOrigin);
   expect(
@@ -475,46 +401,12 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     ) === initialEvidenceFingerprint,
     "PQ939_REVISION_CONTENT_FINGERPRINT_CHANGED",
   ).toBe(true);
-  lifecyclePhase = "logout2";
   await signOutThroughUi(page);
-  lifecyclePhase = "complete";
-
-  // Match exactly the four individually scoped authentication control-plane
-  // actions actually observed in run #38801876319; new/extra action classes
-  // cannot silently become exempt from the zero-product-write invariant.
-  const expectedClerkTransitions = [
-    "signin1:sign_in", "logout1:projects_detail",
-    "signin2:sign_in", "logout2:projects_detail",
-  ];
-  const unexpectedAuthActions = [...observedClerkTransitions.entries()]
-    .filter(([category, count]) =>
-      !expectedClerkTransitions.includes(category) || count !== 1,
-    ).map(([category]) => category);
-  const absentAuthActions = expectedClerkTransitions.filter(
-    (category) => observedClerkTransitions.get(category) !== 1,
-  );
-  expect(
-    unexpectedAuthActions.length + absentAuthActions.length,
-    "PQ939_CLERK_AUTH_BOUNDARY_UNVERIFIED",
-  ).toBe(0);
-  const clerkResponses = await Promise.all(
-    clerkTransitionRequests.map(async (request) => {
-      const response = await request.response();
-      return !request.failure() &&
-        response !== null &&
-        response.status() >= 200 &&
-        response.status() < 400;
-    }),
-  );
-  expect(
-    clerkResponses.filter((passed) => !passed).length,
-    "PQ939_CLERK_AUTH_ACTION_FAILED",
-  ).toBe(0);
 
   // Emit ONLY bounded and deterministic request categories on failure.
-  // Each unrecognized non-read request still makes qualification FAIL.
-  // The only exclusions are response-verified Clerk session transitions
-  // within these exact lifecycle phases and exact frontend routes.
+  // ALL first-party non-read requests make qualification FAIL, including
+  // opaque Next-Action POSTs in expected Clerk UI flows. Response status,
+  // URL and lifecycle phase cannot establish which action executed.
   const nonReadCategories = [...observedNonReadCategories.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([category, count]) => `${category}:${count}`)
