@@ -480,7 +480,9 @@ _CLAUSE_BOUNDARY = re.compile(
     # Numbered headings without a dash are only recognized when followed
     # by a capitalized title; reject unnumbered decimal prose like
     # '5.2 percent interest ...' rather than minting false clause IDs.
-    r"|\d{1,3}(?:\.\d{1,3}){1,6}\.?[ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
+    r"|\d{1,3}(?:\.\d{1,3}){0,6}\.?[ \t]+"
+    r"(?!(?i:percent|percentage|porcentaje|kg|km|mg|mw|kw)\b)"
+    r"(?=[A-ZÁÉÍÓÚÜÑ])"
     r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION))\w*"
     r"|(?i:(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA))\b"
     r")",
@@ -563,7 +565,7 @@ def _explicit_source_clause_heading_code(segment: str) -> str | None:
     # 5.2 Payment terms / 5.2. Payment terms. Lower-case prose starting
     # with a decimal is NOT reliable clause structure.
     nested = re.match(
-        r"^(\d{1,3}(?:\.\d{1,3}){1,6})\.?[ \t]+(?=[A-ZÁÉÍÓÚÜÑ])",
+        r"^(\d{1,3}(?:\.\d{1,3}){0,6})\.?[ \t]+(?=[A-ZÁÉÍÓÚÜÑ])",
         heading,
     )
     if not nested:
