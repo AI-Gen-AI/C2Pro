@@ -38,7 +38,19 @@ REQUIRED_TABLES = {
     "project_events",
 }
 # Known project-only tables must be represented; absence is not a PASS.
-REQUIRED_PROJECT_TABLES = {"extractions", "knowledge_graph_nodes", "procurement_bom_items"}
+# Canonical project_id-only RLS tables from the deployed schema migrations.
+# A missing SELECT grant must fail coverage, not silently yield a clean snapshot.
+REQUIRED_PROJECT_TABLES = {
+    "extractions",
+    "procurement_bom_items",
+    "procurement_budget_items",
+    "procurement_wbs_items",
+    "bom_revisions",
+    "knowledge_graph_edges",
+    "knowledge_graph_nodes",
+    "procurement_plan_snapshots",
+    "stakeholder_alerts",
+}
 MAX_TABLES = 200
 MAX_ROWS_PER_TABLE = 50_000
 

@@ -119,3 +119,19 @@ def test_column_level_grants_limit_hashed_projection() -> None:
     assert 't."tenant_id" = :tenant_id' in sql
     with pytest.raises(attest.AttestationFailure, match="SCOPE_COLUMN"):
         attest._selectable_columns([("tenant_id", False)], "tenant_id")
+
+
+def test_all_schema_defined_project_only_rls_tables_are_mandatory() -> None:
+    # 20260315000200 + 20260319000300 migrations: missing catalog visibility
+    # must fail rather than attest an incomplete, tenant-scoped snapshot.
+    assert attest.REQUIRED_PROJECT_TABLES == {
+        "extractions",
+        "procurement_bom_items",
+        "procurement_budget_items",
+        "procurement_wbs_items",
+        "bom_revisions",
+        "knowledge_graph_edges",
+        "knowledge_graph_nodes",
+        "procurement_plan_snapshots",
+        "stakeholder_alerts",
+    }
