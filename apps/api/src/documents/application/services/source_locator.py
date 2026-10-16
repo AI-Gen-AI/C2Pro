@@ -67,8 +67,29 @@ _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
 # single quotes use a greedy outer delimiter to preserve possessive apostrophes.
 _EXPLICIT_QUOTE = re.compile(
     r'''"([^"\n]+)"|“([^”\n]+)”|«([^»\n]+)»'''
-    r'''|(?<!\w)'([^\n]+)'(?!\w)|‘([^\n]+)’'''
+    r'''|(?<!\w)'([^\n]+)'(?!\w)'''
 )
+
+
+def _explicit_quotes(text: str) -> list[str]:
+    """Extract every delimited quote, including curly possessive apostrophes.
+
+    For U+2018/U+2019, use the last closing mark before the next opening mark:
+    it preserves internal possessives yet does not swallow adjacent excerpts.
+    """
+    found = [
+        (match.start(), next(part for part in match.groups() if part is not None))
+        for match in _EXPLICIT_QUOTE.finditer(text)
+    ]
+    start = text.find("‘")
+    while start != -1:
+        next_start = text.find("‘", start + 1)
+        limit = next_start if next_start != -1 else len(text)
+        end = text.rfind("’", start + 1, limit)
+        if end != -1:
+            found.append((start, text[start + 1 : end]))
+        start = next_start
+    return [candidate for _, candidate in sorted(found)]
 _REFERENCE_ONLY_FRAMING = re.compile(
     r"(?:see|refer\s+to|according\s+to|under|per|cf\.?|as\s+per|"
     r"seg[uú]n(?:\s+(?:la|el))?|v[eé]ase|consulte|conforme\s+a|de\s+acuerdo\s+con)",
@@ -202,10 +223,7 @@ class SourceLocator:
     ) -> tuple[QuoteStatus, list[str], ClaimSupport]:
         """Compare the claim with the clause without ever confirming the claim."""
         claim = self.clause_regex.sub(" ", query_text).strip(_EDGE_PUNCTUATION)
-        explicit = [
-            next(part for part in match.groups() if part is not None)
-            for match in _EXPLICIT_QUOTE.finditer(query_text)
-        ]
+        explicit = _explicit_quotes(query_text)
         # Every explicitly delimited quotation must be present in the source.
         # Checking only the first permits a fabricated second quote to pass.
         if explicit:

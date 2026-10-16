@@ -533,3 +533,43 @@ def test_hyphenated_english_compound_numbers_are_atomic() -> None:
     assert _duration_conflicts("twenty-three days", "24 days") == [
         "duration_not_in_source:23 day"
     ]
+
+
+async def test_multiple_smart_single_quotes_are_independent(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay the invoiced amount.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    valid = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’ and ‘the invoiced amount’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    invented = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’ and ‘renewal is automatic’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert valid is not None and invented is not None
+    assert valid.quote_status == "VERBATIM"
+    assert invented.quote_status == "NOT_VERBATIM"
+
+
+async def test_curly_possessives_and_adjacent_quotes_are_not_truncated(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor’s obligations apply to the invoices.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    good = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor’s obligations apply’ and ‘the invoices’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    bad = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor’s obligations apply’ and ‘automatic renewal’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert good is not None and bad is not None
+    assert good.quote_status == "VERBATIM"
+    assert bad.quote_status == "NOT_VERBATIM"
