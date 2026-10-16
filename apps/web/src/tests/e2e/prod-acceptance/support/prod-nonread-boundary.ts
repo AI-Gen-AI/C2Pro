@@ -2,7 +2,7 @@
  *
  * An opaque Next-Action ID, route, browser phase or 2xx/3xx HTTP response
  * cannot establish that a POST is a Clerk session operation. There are NO
- * first-party exceptions without independently verified action provenance.
+ * exemptions without independently verified action provenance.
  */
 const APP_HOSTS = new Set([
   "c2pro.io",
@@ -12,7 +12,7 @@ const APP_HOSTS = new Set([
 
 export type NonReadDisposition =
   | "read"
-  | "external_provider"
+  | "unverified_external_nonread"
   | "unparseable_nonread"
   | "unverified_first_party_nonread";
 
@@ -29,5 +29,5 @@ export function classifyNonReadRequest(
   }
   return APP_HOSTS.has(url.hostname)
     ? "unverified_first_party_nonread"
-    : "external_provider";
+    : "unverified_external_nonread";
 }
