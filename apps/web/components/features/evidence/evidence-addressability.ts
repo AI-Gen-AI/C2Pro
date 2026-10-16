@@ -24,6 +24,7 @@ export interface SourceEvidenceClause {
   page: number | null;
   startOffset: number | null;
   endOffset: number | null;
+  revisionId?: string | null;
 }
 
 export type EvidenceAddressResolution =
@@ -84,6 +85,7 @@ export function sourceEvidenceClausesFromDocumentDetail(
     const metadata = asRecord(clause.extracted_entities);
     const evidenceLocation = asRecord(metadata?.evidence_location);
     const clauseCode = asString(clause.clause_code);
+    const revisionId = asString(clause.revision_id);
     const title = asString(clause.title);
     const fullText = asString(clause.full_text);
 
@@ -95,6 +97,7 @@ export function sourceEvidenceClausesFromDocumentDetail(
         page: asPage(evidenceLocation?.page_number),
         startOffset: asNonNegativeInteger(clause.text_start_offset),
         endOffset: asNonNegativeInteger(clause.text_end_offset),
+        ...(revisionId ? { revisionId } : {}),
       },
     ];
   });
@@ -109,17 +112,31 @@ export function resolveEvidenceAddress({
   evidenceId,
   semanticTargets,
   sourceClauses,
+  revisionId,
+  documentRevisionId,
 }: {
   evidenceId: string;
   semanticTargets: SemanticEvidenceTarget[];
   sourceClauses: SourceEvidenceClause[];
+  revisionId?: string | null;
+  documentRevisionId?: string | null;
 }): EvidenceAddressResolution {
-  const semanticTarget = semanticTargets.find((target) => target.id === evidenceId);
-  if (semanticTarget) {
-    return { kind: "semantic", target: semanticTarget };
+  // A pinned source must match BOTH the current PDF revision and the clause.
+  // Never fall through to a current semantic projection on a stale revision.
+  if (revisionId && revisionId !== documentRevisionId) {
+    return { kind: "unresolved" };
+  }
+  if (!revisionId) {
+    const semanticTarget = semanticTargets.find((target) => target.id === evidenceId);
+    if (semanticTarget) {
+      return { kind: "semantic", target: semanticTarget };
+    }
   }
 
-  const sourceClause = sourceClauses.find((target) => target.id === evidenceId);
+  const sourceClause = sourceClauses.find(
+    (target) => target.id === evidenceId &&
+      (!revisionId || target.revisionId === revisionId),
+  );
   if (!sourceClause) {
     return { kind: "unresolved" };
   }
