@@ -134,3 +134,39 @@ def test_coerce_risk_accepts_common_field_aliases() -> None:
     assert risk.title == "Garantía definitiva ejecutable"
     assert risk.impact.value == "HIGH"
     assert risk.source_quote == "garantía definitiva por importe de 4.713.657,54 €"
+
+
+def test_n4_structured_clause_ref_flows_from_real_candidate_to_graph_state() -> None:
+    tool = _tool()
+    risk = tool._coerce_risk({
+        "title": "Defects deadline",
+        "summary": "Defect rectification has a contractual deadline.",
+        "category": "QUALITY",
+        "probability": "MEDIUM",
+        "impact": "HIGH",
+        "clause_ref": " 5.2 ",
+        "source_quote": "5.2 The Contractor must rectify defects within fourteen days.",
+    })
+    assert risk is not None
+    assert risk.clause_ref == "5.2"
+    assert tool._risk_item_to_dict(risk)["clause_ref"] == "5.2"
+
+    no_code = tool._coerce_risk({
+        "title": "Payment date",
+        "summary": "Payment may be delayed.",
+        "category": "BUDGET",
+        "probability": "MEDIUM",
+        "impact": "HIGH",
+        "source_quote": "Payment is due by the end of the following month.",
+    })
+    assert no_code is not None
+    assert tool._risk_item_to_dict(no_code)["clause_ref"] is None
+
+
+def test_n4_prompt_requests_explicit_clause_number_without_guessing() -> None:
+    _, system_prompt = _tool()._build_default_prompt(
+        RiskExtractionInput(document_text="5.2 The Contractor shall pay."),
+        is_retry=False,
+    )
+    assert '"clause_ref"' in system_prompt
+    assert "never infer a clause number" in system_prompt

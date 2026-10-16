@@ -352,7 +352,8 @@ For each risk, return a JSON object with EXACTLY these keys:
   "impact": "LOW|MEDIUM|HIGH|CRITICAL",
   "mitigation_suggestion": "Concrete mitigation step",
   "source_quote": "Verbatim multi-sentence excerpt from the contract that substantiates the risk (NOT a section heading or single word — at least 80 chars of real contract text)",
-  "source_text_snippet": "Same or longer surrounding context for traceability"
+  "source_text_snippet": "Same or longer surrounding context for traceability",
+  "clause_ref": "Explicit source clause number such as 5.2, or null if no numbered clause is visible"
 }
 
 CRITICAL OUTPUT RULES:
@@ -362,6 +363,7 @@ CRITICAL OUTPUT RULES:
 3. Every risk MUST have all keys above. Omit risks you cannot ground in a verbatim quote.
 4. Prefer FEWER, well-grounded risks (3-8) over many superficial ones.
 5. source_quote must be ≥80 characters of contract text. NEVER use section labels alone.
+6. clause_ref is ONLY the exact numeric section number explicitly printed in the contract adjacent to the cited text (e.g., 5.2). If none is explicit, emit null; never infer a clause number.
 """.strip()
 
         user_prompt = f"CONTRACT:\n\n{input_data.document_text}"
@@ -472,6 +474,7 @@ CRITICAL OUTPUT RULES:
             mitigation_suggestion=mitigation,
             source_quote=source_quote,
             source_text_snippet=source_text_snippet,
+            clause_ref=self._clean_text(item.get("clause_ref")),
         )
 
     def _clean_text(self, value: Any) -> str | None:
@@ -632,6 +635,7 @@ CRITICAL OUTPUT RULES:
             "mitigation_suggestion": risk.mitigation_suggestion,
             "source_quote": risk.source_quote,
             "source_text_snippet": risk.source_text_snippet,
+            "clause_ref": risk.clause_ref,
             "risk_score": risk.risk_score,
             "immediate_alert": risk.immediate_alert,
         }
