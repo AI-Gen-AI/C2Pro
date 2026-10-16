@@ -485,10 +485,10 @@ _INLINE_CONTRACT_TITLES = re.compile(
     r"|Termination[ \t]+Rights"
     r"|Penalty[ \t]+Cap"
     r"|Scope[ \t]+of[ \t]+(?:Work|Works|Services)"
-    r"|Definitions(?=[ \t]+[a-z])"
-    r"|Notice(?=[ \t]+[a-z])"
-    r"|Payment(?=[ \t]+[a-z])"
-    r"|Penalty(?=[ \t]+[a-z])"
+    r"|Definitions(?=[ \t]+(?-i:[a-z]))"
+    r"|Notice(?=[ \t]+(?-i:[a-z]))"
+    r"|Payment(?=[ \t]+(?-i:[a-z]))"
+    r"|Penalty(?=[ \t]+(?-i:[a-z]))"
     r")(?![A-Za-zÁÉÍÓÚÜÑáéíóúüñ])",
     re.IGNORECASE,
 )
