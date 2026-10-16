@@ -330,6 +330,14 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.queryByTestId("evidence-link-revision-unavailable")).not.toBeInTheDocument();
     expect(screen.getByTestId("evidence-link-source-clause")).toHaveTextContent("5.2");
     expect(screen.getByTestId("viewer-highlight-ids")).toHaveTextContent("source-clause-clause-52");
+    expect(screen.getByTestId("viewer-highlight-ids")).not.toHaveTextContent("highlight-clause-1");
+    expect(screen.getByTestId("historical-evidence-read-only")).toHaveTextContent(
+      /current-revision alerts/i,
+    );
+    expect(screen.queryByRole("button", { name: /approve entity clause-1/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^export$/i })).toBeDisabled();
+    expect(useDocumentEntitiesMock).toHaveBeenCalledWith(null);
+    expect(useDocumentAlertsMock).toHaveBeenCalledWith(null);
     expect(screen.getByTestId("viewer-file-url")).toHaveTextContent(
       "/documents/doc-1/download?revision_id=rev-b",
     );

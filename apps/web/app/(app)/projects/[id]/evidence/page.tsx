@@ -68,6 +68,7 @@ export default function EvidencePage() {
   const requestedDocumentId = searchParams.get("documentId");
   const requestedHighlightId = searchParams.get("highlightId");
   const requestedRevisionId = searchParams.get("revisionId");
+  const revisionReadOnly = Boolean(requestedRevisionId);
   const { isLoaded: isUserLoaded, user } = useUser();
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
@@ -134,19 +135,19 @@ export default function EvidencePage() {
     loading: entitiesLoading,
     error: entitiesError,
     refetch: refetchEntities,
-  } = useDocumentEntities(selectedDocumentId);
+  } = useDocumentEntities(revisionReadOnly ? null : selectedDocumentId);
   const {
     alerts,
     loading: alertsLoading,
     error: alertsError,
     refetch: refetchAlerts,
-  } = useDocumentAlerts(selectedDocumentId);
+  } = useDocumentAlerts(revisionReadOnly ? null : selectedDocumentId);
   const {
     items: evidenceTimeline,
-  } = useDocumentHistory(selectedDocumentId);
+  } = useDocumentHistory(revisionReadOnly ? null : selectedDocumentId);
   const {
     explanation: relationshipExplanation,
-  } = useDocumentRelationshipExplanation(selectedDocumentId);
+  } = useDocumentRelationshipExplanation(revisionReadOnly ? null : selectedDocumentId);
   const shouldResolveSourceEvidence = Boolean(
     selectedDocumentId &&
       requestedDocumentId === selectedDocumentId &&
@@ -281,12 +282,17 @@ export default function EvidencePage() {
           ]
         : [];
 
-    return [...mappedEntityHighlights, ...alertHighlights, ...sourceClauseHighlight];
+    // A revision-pinned PDF must never receive current entity/alert overlays.
+    // Only the clause verified against the requested revision is addressable.
+    return revisionReadOnly
+      ? sourceClauseHighlight
+      : [...mappedEntityHighlights, ...alertHighlights, ...sourceClauseHighlight];
   }, [
     apiEntities,
     entityHighlights,
     alertsState,
     requestedEvidenceResolution,
+    revisionReadOnly,
   ]);
 
   const activeHighlightId = useMemo(() => {
@@ -318,7 +324,7 @@ export default function EvidencePage() {
 
   const mappedEntities = useMemo<ExtractedEntity[]>(
     () =>
-      apiEntities.map((entity) => ({
+      (revisionReadOnly ? [] : apiEntities).map((entity) => ({
         id: entity.id,
         type: normalizeEntityType(entity.type),
         text: entity.text,
@@ -327,7 +333,7 @@ export default function EvidencePage() {
         page: entity.page,
         validationStatus: "pending",
       })),
-    [apiEntities],
+    [apiEntities, revisionReadOnly],
   );
   const relationshipGraph = useMemo(() => {
     return {
@@ -821,8 +827,9 @@ export default function EvidencePage() {
       <EvidenceHeader
         projectName={projectName}
         documentCount={documents.length}
-        entityCount={entities.length}
-        alertCount={alertsState.length}
+        entityCount={revisionReadOnly ? 0 : entities.length}
+        alertCount={revisionReadOnly ? 0 : alertsState.length}
+        readOnlyRevision={revisionReadOnly}
         splitView={splitView}
         onRefresh={handleRefreshClick}
         onExportJson={handleExportJson}
@@ -881,16 +888,17 @@ export default function EvidencePage() {
 
       <EvidenceWorkspace
         splitView={splitView}
+        readOnlyRevision={revisionReadOnly}
         selectedDocument={requestedRevisionUnavailable ? null : selectedDocument}
         selectedDocumentId={requestedRevisionUnavailable ? null : selectedDocumentId}
         highlights={requestedRevisionUnavailable ? [] : highlights}
         selectedRevisionId={requestedRevisionUnavailable ? null : requestedRevisionId}
         activeHighlightId={activeHighlightId}
         activePanelTab={activePanelTab}
-        entities={entities}
+        entities={revisionReadOnly ? [] : entities}
         entitiesLoading={entitiesLoading}
         entitiesError={entitiesError}
-        alertsState={alertsState}
+        alertsState={revisionReadOnly ? [] : alertsState}
         alertsLoading={alertsLoading}
         alertsError={alertsError}
         activeEntityId={activeEntityId}
