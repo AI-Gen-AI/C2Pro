@@ -320,7 +320,7 @@ describe("EvidencePage highlight mapping", () => {
       } as Record<string, string>)[key] ?? null,
     });
     useDocumentDetailMock.mockReturnValue({
-      data: { id: "doc-1", revision_id: "rev-b", clauses: [
+      data: { id: "doc-1", project_id: "proj-1", revision_id: "rev-b", clauses: [
         { id: "clause-52", revision_id: "rev-b", clause_code: "5.2",
           title: "Defects", text_start_offset: 10, text_end_offset: 48,
           extracted_entities: { evidence_location: { page_number: 3 } } },
@@ -330,6 +330,12 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.queryByTestId("evidence-link-revision-unavailable")).not.toBeInTheDocument();
     expect(screen.getByTestId("evidence-link-source-clause")).toHaveTextContent("5.2");
     expect(screen.getByTestId("viewer-highlight-ids")).toHaveTextContent("source-clause-clause-52");
+    expect(screen.getByTestId("viewer-file-url")).toHaveTextContent(
+      "/documents/doc-1/download?revision_id=rev-b",
+    );
+    expect(useDocumentDetailMock).toHaveBeenCalledWith(
+      "doc-1", { revision_id: "rev-b" }, expect.anything(),
+    );
   });
 
   it("does not infer a revision identifier from a legacy document detail", () => {
@@ -343,6 +349,34 @@ describe("EvidencePage highlight mapping", () => {
         { id: "clause-52", clause_code: "5.2",
           extracted_entities: { evidence_location: { page_number: 3 } } },
       ] }, isLoading: false,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-link-revision-unavailable")).toBeInTheDocument();
+    expect(screen.queryByTestId("viewer-file-url")).not.toBeInTheDocument();
+  });
+
+  it("blocks PDF access before historical revision metadata has loaded", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1", revisionId: "rev-b", highlightId: "clause-52",
+      } as Record<string, string>)[key] ?? null,
+    });
+    useDocumentDetailMock.mockReturnValue({ data: undefined, isLoading: true });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-link-revision-unavailable")).toBeInTheDocument();
+    expect(screen.queryByTestId("viewer-file-url")).not.toBeInTheDocument();
+  });
+
+  it("rejects a matching revision from an unrelated project detail", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1", revisionId: "rev-b", highlightId: "clause-52",
+      } as Record<string, string>)[key] ?? null,
+    });
+    useDocumentDetailMock.mockReturnValue({
+      data: { id: "doc-1", project_id: "wrong-project", revision_id: "rev-b",
+        clauses: [{ id: "clause-52", revision_id: "rev-b" }] },
+      isLoading: false,
     });
     render(<EvidencePage />);
     expect(screen.getByTestId("evidence-link-revision-unavailable")).toBeInTheDocument();
