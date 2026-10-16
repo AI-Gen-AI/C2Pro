@@ -532,6 +532,29 @@ def _split_contract_into_clauses(parsed_text: str) -> list[str]:
     return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
 
 
+def _explicit_source_clause_heading_code(segment: str) -> str | None:
+    """Only preserve an actual leading numbered clause heading.
+
+    Do not mine internal mentions such as "under clause 5.2", derive IDs from
+    model prose, or treat quantity-prefixed paragraphs as clause evidence.
+    Header numbering remains a locator, not substantive claim support.
+    """
+    heading = segment.split("\n", 1)[0].strip()
+    # 1.- or 5.2.- or 5.2. - source heading with a separator.
+    separated = re.match(
+        r"^(\d{1,3}(?:\.\d{1,3}){0,6})\s*\.\s*[-–](?=\s|$)",
+        heading,
+    )
+    if separated:
+        return separated.group(1)
+    # 5.2 Payment terms / 5.2. Payment terms (not a bare amount or 2026).
+    nested = re.match(
+        r"^(\d{1,3}(?:\.\d{1,3}){1,6})\.?\s+[^\W\d_]",
+        heading,
+    )
+    return nested.group(1) if nested else None
+
+
 def _extract_contract_clauses(
     *,
     document_id: UUID,
@@ -631,7 +654,9 @@ def _extract_contract_clauses(
                 project_id=project_id,
                 tenant_id=tenant_id,
                 document_id=document_id,
-                clause_code=f"AUTO-{index:03d}",
+                # Numeric source headers survive ingestion for N4→N13 exact
+                # persisted-code matching; prose/unlabeled spans keep AUTO.
+                clause_code=_explicit_source_clause_heading_code(segment) or f"AUTO-{index:03d}",
                 clause_type=clause_type,
                 title=segment[:80],
                 full_text=segment,

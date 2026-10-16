@@ -44,3 +44,34 @@ def test_extract_contract_clauses_groups_numbered_clauses_not_sentences() -> Non
     assert any(c.full_text.startswith("3.-") for c in clauses)
     # Far fewer than the ~7 sentence-fragments the old splitter produced.
     assert len(clauses) <= 5
+
+
+def test_explicit_clause_heading_codes_survive_deterministic_ingestion() -> None:
+    text = (
+        "5.2.- The Contractor shall rectify all defects within fourteen days of notice, "
+        "without undue delay and at its own cost.\n\n"
+        "6.3 Payment terms require certification and settlement within thirty days, "
+        "with withholding only where expressly permitted.\n\n"
+        "The Contractor remains responsible under clause 6.4 for site handover "
+        "and all costs including storage and delivery of materials.\n\n"
+        "1.- Notices must be made in writing to the address specified in the contract, "
+        "and are deemed received upon acknowledgement."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [c.clause_code for c in clauses] == ["5.2", "6.3", "AUTO-003", "1"]
+    for clause in clauses:
+        assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_unlabeled_or_nonheading_numeric_text_does_not_promote_a_source_code() -> None:
+    text = (
+        "The rate is 5.2 percent per month and payments are due within fourteen days "
+        "of receiving the full and final engineer certification."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert len(clauses) == 1
+    assert clauses[0].clause_code == "AUTO-001"
