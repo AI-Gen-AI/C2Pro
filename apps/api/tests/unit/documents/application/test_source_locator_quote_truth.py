@@ -655,3 +655,17 @@ async def test_internal_semicolon_in_real_quote_remains_verbatim(ids) -> None:
     )
     assert actual is not None
     assert actual.quote_status == "VERBATIM"
+
+
+def test_teen_written_days_and_parenthesized_numbers_match() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("13 days", "thirteen (13) days") == []
+    assert _duration_conflicts("16 días", "dieciséis (16) días") == []
+    assert _duration_conflicts("17 days", "seventeen days") == []
+    assert _duration_conflicts("18 days", "eighteen days") == []
+    assert _duration_conflicts("19 días", "diecinueve días") == []
+    assert _duration_conflicts("23 days", "veintitrés (23) días") == []
+    assert _duration_conflicts("13 days", "fourteen (14) days") == [
+        "duration_not_in_source:13 day"
+    ]
