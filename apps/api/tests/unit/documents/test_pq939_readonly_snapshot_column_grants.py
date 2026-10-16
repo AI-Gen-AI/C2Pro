@@ -103,12 +103,29 @@ def test_grant_exactly_identity_and_scope_columns_only() -> None:
     assert "authenticated" not in sql
 
 
+def test_grants_have_role_specific_restrictive_synthetic_project_scope() -> None:
+    m = _migration()
+    sql = m.GRANT_SQL
+    assert "CREATE POLICY %I ON public.%I AS RESTRICTIVE" in sql
+    assert "FOR SELECT TO %I USING" in sql
+    assert "pq939_acceptance_project_readonly" in sql
+    # Must match the protected fixture constant in pq939 attestation.
+    assert "e7c6031f-cd9e-4642-a5ea-35a0207ceaeb" in sql
+    assert "project_id = %L::uuid" in sql
+    assert sql.index("CREATE POLICY %I") < sql.index("GRANT SELECT (id, project_id)")
+    assert "AS PERMISSIVE" not in sql
+    assert "FOR ALL TO" not in sql
+    assert "USING (true)" not in sql
+    assert "WITH CHECK (true)" not in sql
+
+
 def test_downgrade_reverses_only_our_grants() -> None:
     m = _migration()
     down = m.REVOKE_SQL
     assert "REVOKE SELECT (id, project_id) ON TABLE public.%I FROM %I" in down
     assert "REVOKE ALL" not in down
-    assert "DROP POLICY" not in down
+    assert "DROP POLICY IF EXISTS %I ON public.%I" in down
+    assert "pq939_acceptance_project_readonly" in down
     assert "DROP ROLE" not in down
 
 
