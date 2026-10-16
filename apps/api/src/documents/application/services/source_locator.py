@@ -133,6 +133,17 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
             )
         ]
         closing = separated[0] if separated else endings[-1]
+        # If the only possible closer is followed by free prose, its
+        # apostrophe may instead be a plural possessive in an unclosed quote.
+        # This syntax is ambiguous; it must NOT certify a partial quote.
+        if (
+            not separated
+            and len(endings) == 1
+            and closing + 1 < len(text)
+            and text[closing + 1].isspace()
+            and re.match(r"\s+\w", text[closing + 1 :])
+        ):
+            malformed = True
         found.append((opening, text[opening + 1 : closing]))
         cursor = closing + 1
 
@@ -196,6 +207,9 @@ _NUMBER_WORDS.update({
     for tens, base in _ES_TENS.items()
     for one, increment in _ES_ONES.items()
 })
+# Include standalone decades as well as composed values (forty, forty-one).
+_NUMBER_WORDS.update(_EN_TENS)
+_NUMBER_WORDS.update(_ES_TENS)
 _DURATION = re.compile(
     r"\b(\d+|" + "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
     + r")[\s-]*(?:\((\d+)\)[\s-]*)?(?:(calendar|working|business)[\s-]+)?"

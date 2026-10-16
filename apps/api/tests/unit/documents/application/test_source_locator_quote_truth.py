@@ -703,3 +703,33 @@ async def test_ascii_single_quoted_excerpts_remain_independent(ids) -> None:
     assert good is not None and bad is not None
     assert good.quote_status == "VERBATIM"
     assert bad.quote_status == "NOT_VERBATIM"
+
+
+async def test_unclosed_ascii_plural_possessive_fails_closed(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractors shall pay.",
+    )
+    result = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: 'The Contractors' invented obligation",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert result is not None
+    assert result.quote_status == "NOT_VERBATIM"
+
+
+def test_standalone_tens_are_supported_in_english_and_spanish() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("40 days", "forty days") == []
+    assert _duration_conflicts("50 days", "fifty days") == []
+    assert _duration_conflicts("70 days", "seventy days") == []
+    assert _duration_conflicts("80 days", "eighty days") == []
+    assert _duration_conflicts("40 días", "cuarenta días") == []
+    assert _duration_conflicts("50 días", "cincuenta días") == []
+    assert _duration_conflicts("70 días", "setenta días") == []
+    assert _duration_conflicts("80 días", "ochenta días") == []
+    assert _duration_conflicts("40 days", "fifty days") == [
+        "duration_not_in_source:40 day"
+    ]
