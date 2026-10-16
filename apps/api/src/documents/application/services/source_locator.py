@@ -66,11 +66,11 @@ _QUOTE_CHARS = str.maketrans("", "", "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb")
 _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
 # Match explicit quoted evidence independently from citation framing.
 _EXPLICIT_QUOTE = re.compile(
-    r"""["“«]([^"”»]+)["”»]|(?<!\\w)'([^']+)'(?!\\w)|‘([^’]+)’"""
+    r"""["“«]([^"”»]+)["”»]|(?<!\w)'([^']+)'(?!\w)|‘([^’]+)’"""
 )
 _REFERENCE_ONLY_FRAMING = re.compile(
-    r"(?:see|refer\\s+to|according\\s+to|under|per|cf\\.?|as\\s+per|"
-    r"seg[uú]n|v[eé]ase|consulte|conforme\\s+a|de\\s+acuerdo\\s+con)",
+    r"(?:see|refer\s+to|according\s+to|under|per|cf\.?|as\s+per|"
+    r"seg[uú]n|v[eé]ase|consulte|conforme\s+a|de\s+acuerdo\s+con)",
     re.IGNORECASE,
 )
 _NUMBER_WORDS = {
