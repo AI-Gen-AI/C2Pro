@@ -188,6 +188,10 @@ export function mapAlertSeverityToPdfSeverity(
   }
 }
 
-export function buildDocumentDownloadUrl(documentId: string): string {
-  return `${env.API_BASE_URL}/documents/${documentId}/download`;
+export function buildDocumentDownloadUrl(
+  documentId: string,
+  revisionId?: string | null,
+): string {
+  const base = `${env.API_BASE_URL}/documents/${encodeURIComponent(documentId)}/download`;
+  return revisionId ? `${base}?revision_id=${encodeURIComponent(revisionId)}` : base;
 }
