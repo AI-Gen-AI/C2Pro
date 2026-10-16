@@ -112,12 +112,17 @@ def _coverage_error(
     if not required.issubset(catalog):
         return "REQUIRED_TABLE_NOT_DEPLOYED"
 
+    # Catalog scope is independent of SELECT grants. Diagnose absent
+    # project/scope columns before a privilege-filtered missing-table result.
+    if any(not catalog[name][1] for name in REQUIRED_PROJECT_TABLES):
+        return "REQUIRED_PROJECT_COLUMN_MISSING"
+
+    if any(not any(catalog[name]) for name in required):
+        return "REQUIRED_SCOPE_COLUMN_MISSING"
+
     visible = dict(scoped)
     if not required.issubset(visible):
         return "REQUIRED_TABLE_NOT_VISIBLE_TO_VERIFIER"
-
-    if any(not catalog[name][1] for name in REQUIRED_PROJECT_TABLES):
-        return "REQUIRED_PROJECT_COLUMN_MISSING"
 
     if any(visible[name] != "project_id" for name in REQUIRED_PROJECT_TABLES):
         return "REQUIRED_PROJECT_SCOPE_MISMATCH"
