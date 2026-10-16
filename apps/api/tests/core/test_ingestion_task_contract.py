@@ -87,3 +87,46 @@ def test_nested_heading_without_hyphen_is_retained_when_a_separate_paragraph() -
     )
     assert len(clauses) == 1
     assert clauses[0].clause_code == "6.3"
+
+
+def test_mixed_article_and_single_line_numeric_headings_each_get_their_own_clause() -> None:
+    text = (
+        "ARTICLE 6 – General conditions for the execution of the Works.\n"
+        "6.1 Definitions establish the obligations of each party and define the "
+        "scope of services, responsibilities and timing of acceptance.\n"
+        "6.3 Payment shall follow certification within thirty calendar days "
+        "of the Engineer's receipt of supporting information.\n"
+        "6.4 Notice must be sent in writing as described in the Contract "
+        "within the timeframes applicable to each claim."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [clause.clause_code for clause in clauses] == ["AUTO-001", "6.1", "6.3", "6.4"]
+    for clause in clauses:
+        assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_decimal_prose_is_not_promoted_to_clause_even_near_real_heading() -> None:
+    text = (
+        "5.2 percent interest applies when payment is delayed by more than "
+        "thirty days after a valid invoice is received.\n"
+        "6.3 Payment conditions must be reviewed by the Engineer before any "
+        "payment certificate can be issued."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [c.clause_code for c in clauses] == ["AUTO-001", "6.3"]
+
+
+def test_explicit_keyword_labelled_clause_number_is_preserved() -> None:
+    text = (
+        "SECTION 5.2 Defect rectification is the obligation of the Contractor "
+        "and all rectification work is at the Contractor's cost."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert len(clauses) == 1
+    assert clauses[0].clause_code == "5.2"
