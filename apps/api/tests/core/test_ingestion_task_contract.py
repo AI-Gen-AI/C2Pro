@@ -102,7 +102,7 @@ def test_mixed_article_and_single_line_numeric_headings_each_get_their_own_claus
     clauses = _extract_contract_clauses(
         document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
     )
-    assert [clause.clause_code for clause in clauses] == ["AUTO-001", "6.1", "6.3", "6.4"]
+    assert [clause.clause_code for clause in clauses] == ["6", "6.1", "6.3", "6.4"]
     for clause in clauses:
         assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
 

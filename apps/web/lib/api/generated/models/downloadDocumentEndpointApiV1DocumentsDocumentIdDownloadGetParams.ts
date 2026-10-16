@@ -38,9 +38,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams = {
-  /**
-   * Download this exact immutable, hash-verified revision (read-only).
-   */
-  revision_id?: string | null;
-};
+export type DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams =
+  {
+    /**
+     * Download this exact immutable, hash-verified revision (read-only).
+     */
+    revision_id?: string | null;
+  };
