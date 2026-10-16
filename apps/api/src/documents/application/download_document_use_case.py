@@ -10,7 +10,11 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from src.documents.application.document_source import fetch_source_file, resolve_source_revision
+from src.documents.application.document_source import (
+    RevisionSourceError,
+    fetch_source_file,
+    resolve_source_revision,
+)
 from src.documents.application.get_document_use_case import GetDocumentUseCase  # Reuse use case
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
@@ -30,7 +34,13 @@ class DownloadDocumentUseCase:
         self.get_document_use_case = get_document_use_case
         self.revision_repository = revision_repository
 
-    async def execute(self, document_id: UUID, user_id: UUID, tenant_id: UUID) -> tuple[Path, str]:
+    async def execute(
+        self,
+        document_id: UUID,
+        user_id: UUID,
+        tenant_id: UUID,
+        revision_id: UUID | None = None,
+    ) -> tuple[Path, str]:
         """
         Retrieves the actual file from storage for a given document.
         Enforces security by checking document ownership via tenant_id.
@@ -39,12 +49,14 @@ class DownloadDocumentUseCase:
         document = await self.get_document_use_case.execute(document_id, user_id, tenant_id)
 
         try:
+            if revision_id is not None and self.revision_repository is None:
+                raise RevisionSourceError("revision repository unavailable")
             revision = (
                 await resolve_source_revision(
                     revision_repository=self.revision_repository,
                     document_id=document.id,
                     tenant_id=document.tenant_id,
-                    revision_id=None,
+                    revision_id=revision_id,
                 )
                 if self.revision_repository is not None
                 else None
@@ -56,6 +68,13 @@ class DownloadDocumentUseCase:
             if not media_type:
                 media_type = "application/octet-stream"
             return file_path, media_type
+        except RevisionSourceError as exc:
+            # Cross-tenant/missing revision and corrupted revision bytes
+            # must never fall back to the document's current object.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Revision not available.",
+            ) from exc
         except FileNotFoundError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="File content not found in storage."
