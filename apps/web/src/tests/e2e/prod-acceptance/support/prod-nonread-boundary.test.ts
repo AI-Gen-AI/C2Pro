@@ -31,12 +31,12 @@ describe("PQ939 production first-party non-read fail-closed boundary", () => {
     );
   });
 
-  it("excludes unrelated provider origins but never claims their provenance", () => {
+  it("does not waive external-provider or unknown-origin POSTs without attributable safety", () => {
     expect(classifyNonReadRequest("POST", "https://accounts.clerk.com/session")).toBe(
-      "external_provider",
+      "unverified_external_nonread",
     );
     expect(classifyNonReadRequest("POST", "https://c2pro.io.evil.invalid/sign-in")).toBe(
-      "external_provider",
+      "unverified_external_nonread",
     );
   });
 
