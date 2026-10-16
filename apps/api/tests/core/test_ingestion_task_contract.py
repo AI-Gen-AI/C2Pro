@@ -200,3 +200,78 @@ def test_single_capitalized_quantity_word_does_not_establish_source_identity() -
         )
         assert len(clauses) == 1
         assert clauses[0].clause_code == "AUTO-001"
+
+
+def test_multiword_money_amounts_do_not_mint_clause_ids_or_split_real_sections() -> None:
+    """Codex P2: title-case currency phrases are not a source heading."""
+    from src.core.tasks.ingestion_tasks import _explicit_source_clause_heading_code
+
+    amounts = (
+        "5 Million Dollars remain payable under the services contract "
+        "following final verification and payment certification.",
+        "5 British Pounds remain payable as a nominal contractual balance "
+        "without establishing any separately numbered obligation.",
+        "5.2 Million Dollars remain outstanding until the relevant invoices "
+        "are approved under the payment schedule.",
+        "5.2 British Pounds remain a nominal amount on the schedule and "
+        "must not count as a separately numbered clause.",
+        "5. Dollars. The payment remains outstanding until the Engineer "
+        "certifies compliance with the invoicing requirements.",
+    )
+    for prose in amounts:
+        assert _explicit_source_clause_heading_code(prose) is None
+        clauses = _extract_contract_clauses(
+            document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=prose
+        )
+        assert len(clauses) == 1
+        assert clauses[0].clause_code == "AUTO-001"
+        assert clauses[0].full_text == prose
+        assert (clauses[0].text_start_offset, clauses[0].text_end_offset) == (
+            0, len(prose)
+        )
+
+
+def test_one_word_numbered_heading_on_own_line_stays_navigable() -> None:
+    """Codex P2: 1. Scope then newline is an explicit standalone heading."""
+    from src.core.tasks.ingestion_tasks import _explicit_source_clause_heading_code
+
+    text = (
+        "1. Scope\n"
+        "The Contractor shall perform all the civil works in Annex A and "
+        "maintain the site to the standard required by the Engineer.\n"
+        "6. Payment Terms require the Engineer to certify each invoice "
+        "within thirty calendar days after receiving valid documentation.\n"
+        "7 General Conditions govern the execution of the Works and "
+        "set binding obligations for the Contractor and Employer.\n"
+        "8.1 Termination Rights define the material breaches which permit "
+        "either party to end the contract after written notice."
+    )
+    assert _explicit_source_clause_heading_code(text) == "1"
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [c.clause_code for c in clauses] == ["1", "6", "7", "8.1"]
+    assert clauses[0].full_text.startswith("1. Scope\nThe Contractor")
+    for clause in clauses:
+        assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_amount_prose_cannot_collide_with_a_genuine_source_code() -> None:
+    """Neither bare nor decimal monetary prose can forge an exact heading."""
+    text = (
+        "5 Million Dollars remain payable following final acceptance "
+        "and certification of executed quantities.\n"
+        "5.2 Million Dollars represent the maximum aggregate price for "
+        "the completed works and certified variations.\n"
+        "5.- Obligations shall remain enforceable throughout the agreement "
+        "and all notices must be delivered by registered mail.\n"
+        "5.2.- Warranty duties apply to the Contractor during the warranty "
+        "period and all defects must be rectified at its own cost."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [c.clause_code for c in clauses] == ["AUTO-001", "5", "5.2"]
+    assert "5.2 Million Dollars" in clauses[0].full_text
+    for clause in clauses:
+        assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
