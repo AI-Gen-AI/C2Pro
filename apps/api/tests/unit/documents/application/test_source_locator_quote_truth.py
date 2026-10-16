@@ -573,3 +573,26 @@ async def test_curly_possessives_and_adjacent_quotes_are_not_truncated(ids) -> N
     assert good is not None and bad is not None
     assert good.quote_status == "VERBATIM"
     assert bad.quote_status == "NOT_VERBATIM"
+
+
+async def test_curly_possessive_in_framing_is_not_quote_close(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay the invoiced amount.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    result = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’; the Employer’s records call this "
+        "‘the invoiced amount’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert result is not None
+    assert result.quote_status == "VERBATIM"
+    fabricated = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’; the Employer’s records call this "
+        "‘renewal is automatic’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert fabricated is not None
+    assert fabricated.quote_status == "NOT_VERBATIM"

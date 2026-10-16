@@ -85,7 +85,22 @@ def _explicit_quotes(text: str) -> list[str]:
     while start != -1:
         next_start = text.find("‘", start + 1)
         limit = next_start if next_start != -1 else len(text)
-        end = text.rfind("’", start + 1, limit)
+        endings = [
+            i for i in range(start + 1, limit) if text[i] == "’"
+        ]
+        # A closing quote before punctuation or a connecting conjunction
+        # takes precedence over possessives in the surrounding prose.
+        # Without such a delimiter, preserve internal possessives by using
+        # the final closing mark before the next quotation opens.
+        boundaries = [
+            i for i in endings
+            if (
+                i + 1 == len(text)
+                or text[i + 1] in ";,.:!?)]}"
+                or re.match(r"\s+(?:and|or|but)\b", text[i + 1 :], re.IGNORECASE)
+            )
+        ]
+        end = (boundaries[0] if boundaries else endings[-1]) if endings else -1
         if end != -1:
             found.append((start, text[start + 1 : end]))
         start = next_start
