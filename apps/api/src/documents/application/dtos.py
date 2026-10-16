@@ -236,8 +236,9 @@ class DocumentListResponse(BaseModel):
 
 
 class DocumentDetailResponse(DocumentResponse):
-    """Detailed document response."""
+    """Detailed document response; revision_id is validated for explicit pinned reads."""
     clauses: list[JsonDict] | None = None
+    revision_id: UUID | None = None
 
 
 class EvidenceHistoryEventResponse(BaseModel):
