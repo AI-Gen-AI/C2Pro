@@ -38,6 +38,17 @@ DECLARE
     scoped record;
     relation_oid oid;
 BEGIN
+    -- Ephemeral CI migration databases deliberately omit the protected
+    -- production acceptance account. Absence grants nothing; real G0
+    -- qualification separately requires this role and its table visibility.
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_roles
+        WHERE rolname = 'c2pro_prod_acceptance_ro'
+    ) THEN
+        RETURN;
+    END IF;
+
+    -- A present account must be a strictly unprivileged login, or abort.
     IF NOT EXISTS (
         SELECT 1
           FROM pg_catalog.pg_roles
