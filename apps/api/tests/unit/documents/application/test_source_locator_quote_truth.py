@@ -626,3 +626,32 @@ async def test_plural_possessive_and_conjunction_inside_real_quote(ids) -> None:
     )
     assert valid is not None
     assert valid.quote_status == "VERBATIM"
+
+
+async def test_internal_semicolon_does_not_certify_truncated_quote(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Owners accept the pricing.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    fake = await locator.locate_evidence(
+        "Clause 5.2: ‘The Owners; consultants may terminate’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert fake is not None
+    assert fake.quote_status == "NOT_VERBATIM"
+
+
+async def test_internal_semicolon_in_real_quote_remains_verbatim(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Owners; consultants may terminate.",
+    )
+    actual = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: ‘The Owners; consultants may terminate’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert actual is not None
+    assert actual.quote_status == "VERBATIM"

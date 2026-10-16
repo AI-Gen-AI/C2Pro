@@ -91,8 +91,9 @@ def _explicit_quotes(text: str) -> list[str]:
         # Punctuation following a closing quote is a strong boundary.
         # A conjunction is NOT: in "‘The Owners’ and consultants may
         # terminate’" the first U+2019 is an internal plural possessive.
-        # Without a strong boundary, prefer the final closing mark to avoid
-        # certifying a truncated fragment as VERBATIM (fail closed).
+        # If several closers appear, prefer the final strong closer; accepting
+        # the first semicolon before a later actual close would permit a
+        # fabricated tail to be certified VERBATIM. Ambiguity fails closed.
         boundaries = [
             i for i in endings
             if (
@@ -100,7 +101,7 @@ def _explicit_quotes(text: str) -> list[str]:
                 or text[i + 1] in ";,.:!?)]}"
             )
         ]
-        end = (boundaries[0] if boundaries else endings[-1]) if endings else -1
+        end = (boundaries[-1] if boundaries else endings[-1]) if endings else -1
         if end != -1:
             found.append((start, text[start + 1 : end]))
         start = next_start
