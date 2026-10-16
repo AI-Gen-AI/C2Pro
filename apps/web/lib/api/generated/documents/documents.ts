@@ -57,7 +57,6 @@ import type {
   BodyReuploadDocumentFileApiV1DocumentsDocumentIdFilePatch,
   BodyUploadDocumentForProcessingApiV1ProjectsProjectIdDocumentsPost,
   DocumentDetailResponse,
-  DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   DocumentEntityResponse,
   DocumentHistoryResponse,
   DocumentListResponse,
@@ -65,6 +64,7 @@ import type {
   DocumentRelationshipExplanationResponse,
   DocumentResponse,
   DocumentUploadResponse,
+  DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   HTTPValidationError,
@@ -2041,7 +2041,9 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
-  params: undefined | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
+  params:
+    | undefined
+    | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -2084,7 +2086,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
-  params: undefined | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -2127,7 +2129,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
-  params: undefined | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -2158,7 +2160,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
-  params: undefined | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
