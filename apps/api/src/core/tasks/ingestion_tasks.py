@@ -504,7 +504,7 @@ _SOFT_NUMBERED_HEADING = re.compile(
     r"^(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})\.?[ \t]+(?P<title>.+)$"
 )
 _PUNCTUATED_SECTION_TITLE = re.compile(
-    r"^(?:[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*)"
+    r"^(?P<title>[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*)"
     r"[.:][ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
 )
 _NUMERIC_LINE_START = re.compile(r"(?m)^[ \t]*(?=\d)")
@@ -529,7 +529,8 @@ def _soft_source_heading_code(line: str) -> str | None:
     title = candidate.group("title").strip()
     if title.casefold().rstrip(".:") in _STANDALONE_CONTRACT_TITLES:
         return candidate.group("code")
-    if _PUNCTUATED_SECTION_TITLE.match(title):
+    punctuated = _PUNCTUATED_SECTION_TITLE.match(title)
+    if punctuated and punctuated.group("title").casefold() in _STANDALONE_CONTRACT_TITLES:
         return candidate.group("code")
     if _INLINE_CONTRACT_TITLES.match(title):
         return candidate.group("code")
