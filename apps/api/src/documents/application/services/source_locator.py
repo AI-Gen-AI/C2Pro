@@ -277,8 +277,13 @@ def _normalise(text: str) -> str:
 
 
 def _contains_words(quote: str, source: str) -> bool:
-    """A quote must start and end on word boundaries: "4 days" is not in "14 days"."""
-    return re.search(rf"(?<!\w){re.escape(quote)}(?!\w)", source) is not None
+    """A quote's word edges must be word boundaries: "4 days" is not in "14 days".
+
+    Punctuation edges need no guard, so "(a) ..." still matches in "5.2(a) ...".
+    """
+    lead = r"(?<!\w)" if re.match(r"\w", quote) else ""
+    trail = r"(?!\w)" if re.search(r"\w\Z", quote) else ""
+    return re.search(lead + re.escape(quote) + trail, source) is not None
 
 
 # Reduce written hundreds to numeric values before the regular duration
