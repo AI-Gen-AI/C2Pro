@@ -23,6 +23,7 @@ interface EvidenceHeaderProps {
   entityCount: number;
   alertCount: number;
   splitView: boolean;
+  readOnlyRevision?: boolean;
   onRefresh: () => void;
   onExportJson: () => void;
   onExportCsv: () => void;
@@ -37,6 +38,7 @@ export function EvidenceHeader({
   entityCount,
   alertCount,
   splitView,
+  readOnlyRevision = false,
   onRefresh,
   onExportJson,
   onExportCsv,
@@ -76,7 +78,8 @@ export function EvidenceHeader({
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="rounded-xl bg-background/95 shadow-sm">
+              <Button variant="outline" size="sm" disabled={readOnlyRevision}
+                      className="rounded-xl bg-background/95 shadow-sm">
                 <Download className="mr-2 h-4 w-4" />
                 Export
                 <ChevronDown className="ml-2 h-4 w-4" />
@@ -112,6 +115,7 @@ export function EvidenceHeader({
             variant="outline"
             size="sm"
             onClick={onOpenTemplates}
+            disabled={readOnlyRevision}
             className="rounded-xl bg-background/95 shadow-sm"
           >
             Evidence Templates
