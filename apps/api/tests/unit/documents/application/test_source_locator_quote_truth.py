@@ -829,3 +829,65 @@ async def test_curly_quoted_citation_suffix_must_match_entire_framing(ids) -> No
     assert fabricated is not None and valid is not None
     assert fabricated.quote_status == "NOT_VERBATIM"
     assert valid.quote_status == "VERBATIM"
+
+
+async def test_true_outer_smart_closer_takes_priority_over_plural_comma(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Owners’, Consultants’ respective obligations apply",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    valid = await locator.locate_evidence(
+        "Clause 5.2: ‘The Owners’, Consultants’ respective obligations apply’ "
+        "under this agreement",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    invented = await locator.locate_evidence(
+        "Clause 5.2: ‘The Owners’, Consultants’ invented termination right’ "
+        "under this agreement",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert valid is not None and invented is not None
+    assert valid.quote_status == "VERBATIM"
+    assert invented.quote_status == "NOT_VERBATIM"
+
+
+async def test_ascii_quote_followed_by_full_contract_attribution(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay all fees.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    valid = await locator.locate_evidence(
+        "Clause 5.2: 'The Contractor shall pay' under this agreement",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    fake = await locator.locate_evidence(
+        "Clause 5.2: 'The Contractor shall pay' under this agreement invented right",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert valid is not None and fake is not None
+    assert valid.quote_status == "VERBATIM"
+    assert fake.quote_status == "NOT_VERBATIM"
+
+
+async def test_terminal_punctuation_does_not_invalidate_whole_suffix(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay all fees.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    valid = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’ under this agreement.",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    fake = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’ under this agreement invented right.",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert valid is not None and fake is not None
+    assert valid.quote_status == "VERBATIM"
+    assert fake.quote_status == "NOT_VERBATIM"

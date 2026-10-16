@@ -70,6 +70,20 @@ _EXPLICIT_QUOTE = re.compile(
 )
 
 
+_CITATION_SUFFIX = re.compile(
+    r"\s+(?:under\s+(?:this|the)\s+(?:agreement|contract)"
+    r"|pursuant\s+to\s+(?:this|the)\s+(?:agreement|contract)"
+    r"|according\s+to\s+clause\s+\d+(?:\.\d+)*"
+    r"|as\s+(?:per|stated\s+in)\s+clause\s+\d+(?:\.\d+)*)"
+    r"\s*[.!?]?\s*",
+    re.IGNORECASE,
+)
+
+
+def _is_citation_suffix(text: str) -> bool:
+    return _CITATION_SUFFIX.fullmatch(text) is not None
+
+
 def _explicit_quotes(text: str) -> tuple[list[str], bool]:
     """Extract separately delimited excerpts, never accepting malformed quotes.
 
@@ -99,7 +113,16 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
             i for i in endings
             if i + 1 == len(text) or text[i + 1] in ";,.:!?)]}"
         ]
-        end = (boundaries[-1] if boundaries else endings[-1]) if endings else -1
+        # The genuine outer quote may be followed by a permitted citation
+        # suffix while an internal plural possessive precedes punctuation.
+        # Prefer a *whole-suffix* closer over any punctuation heuristic.
+        suffix_closers = [
+            i for i in endings if _is_citation_suffix(text[i + 1 :limit])
+        ]
+        end = (
+            suffix_closers[-1] if suffix_closers else
+            boundaries[-1] if boundaries else endings[-1]
+        ) if endings else -1
         if end == -1:
             malformed = True
         elif (
@@ -107,15 +130,7 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
             and len(endings) == 1
             and end + 1 < len(text)
             and re.match(r"\s+\w", text[end + 1 :])
-            and not re.fullmatch(
-                r"\s+(?:under\s+(?:this|the)\s+(?:agreement|contract)"
-                r"|pursuant\s+to\s+(?:this|the)\s+(?:agreement|contract)"
-                r"|according\s+to\s+clause\s+\d+(?:\.\d+)*"
-                r"|as\s+(?:per|stated\s+in)\s+clause\s+\d+(?:\.\d+)*)"
-                r"\s*",
-                text[end + 1 :],
-                re.IGNORECASE,
-            )
+            and not _is_citation_suffix(text[end + 1 :])
         ):
             # A lone possessive followed by arbitrary prose is NOT proof of
             # a closing U+2019. Known citation framing following a quotation
@@ -161,6 +176,7 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
             and closing + 1 < len(text)
             and text[closing + 1].isspace()
             and re.match(r"\s+\w", text[closing + 1 :])
+            and not _is_citation_suffix(text[closing + 1 :])
         ):
             malformed = True
         found.append((opening, text[opening + 1 : closing]))
