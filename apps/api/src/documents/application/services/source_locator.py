@@ -145,8 +145,11 @@ def _durations(text: str) -> set[tuple[int, str, str]]:
         value = int(digits) if digits else (
             int(number) if number.isdigit() else _NUMBER_WORDS[number.lower()]
         )
-                explicit_qualifier = (post_qualifier or qualifier).lower()
-        if explicit_qualifier in {"hábil", "hábiles", "habil", "habiles", "laborable", "laborables", "working"}:
+        explicit_qualifier = (post_qualifier or qualifier).lower()
+        if explicit_qualifier in {
+            "hábil", "hábiles", "habil", "habiles",
+            "laborable", "laborables", "working",
+        }:
             explicit_qualifier = "business"
         elif explicit_qualifier in {"natural", "naturales", "calendario"}:
             explicit_qualifier = "calendar"
