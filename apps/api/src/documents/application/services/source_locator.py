@@ -102,6 +102,15 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
         end = (boundaries[-1] if boundaries else endings[-1]) if endings else -1
         if end == -1:
             malformed = True
+        elif (
+            next_start == -1
+            and len(endings) == 1
+            and end + 1 < len(text)
+            and re.match(r"\s+\w", text[end + 1 :])
+        ):
+            # A lone possessive followed by unquoted prose is NOT proof of
+            # a closing U+2019. Reject rather than certify a truncated prefix.
+            malformed = True
         else:
             found.append((start, text[start + 1 : end]))
         start = next_start
@@ -242,20 +251,33 @@ _HUNDRED_WORDS = {
     "four hundred": 400, "five hundred": 500, "six hundred": 600,
     "seven hundred": 700, "eight hundred": 800,
     "nine hundred": 900, "cien": 100, "ciento": 100,
-    "doscientos": 200, "trescientos": 300, "cuatrocientos": 400,
-    "quinientos": 500, "seiscientos": 600, "setecientos": 700,
-    "ochocientos": 800, "novecientos": 900,
+    "doscientos": 200, "doscientas": 200,
+    "trescientos": 300, "trescientas": 300,
+    "cuatrocientos": 400, "cuatrocientas": 400,
+    "quinientos": 500, "quinientas": 500,
+    "seiscientos": 600, "seiscientas": 600,
+    "setecientos": 700, "setecientas": 700,
+    "ochocientos": 800, "ochocientas": 800,
+    "novecientos": 900, "novecientas": 900,
 }
 _HUNDRED_PARTS = "|".join(
-    sorted(map(re.escape, _HUNDRED_WORDS), key=len, reverse=True)
+    sorted(
+        (re.escape(word).replace(r"\ ", r"[\s-]+") for word in _HUNDRED_WORDS),
+        key=len,
+        reverse=True,
+    )
 )
 _SUBHUNDRED_PARTS = "|".join(
-    sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True)
+    sorted(
+        (re.escape(word).replace(r"\ ", r"[\s-]+") for word in _NUMBER_WORDS),
+        key=len,
+        reverse=True,
+    )
 )
 _HUNDREDS_RE = re.compile(
     rf"\b({_HUNDRED_PARTS})"
-    rf"(?:\s+(?:and\s+)?({_SUBHUNDRED_PARTS}))?"
-    r"(?=\s*(?:\(\d+\)\s*)?"
+    rf"(?:[\s-]+(?:and[\s-]+)?({_SUBHUNDRED_PARTS}))?"
+    r"(?=[\s-]*(?:\(\d+\)[\s-]*)?"
     r"(?:(?:calendar|working|business)[\s-]+)?"
     r"(?:days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b)",
     re.IGNORECASE,
@@ -263,8 +285,13 @@ _HUNDREDS_RE = re.compile(
 
 
 def _normalize_hundreds(match: re.Match[str]) -> str:
-    base = _HUNDRED_WORDS[match.group(1).lower()]
-    rest = _NUMBER_WORDS[match.group(2).lower()] if match.group(2) else 0
+    base_key = re.sub(r"[\s-]+", " ", match.group(1).lower())
+    base = _HUNDRED_WORDS[base_key]
+    if match.group(2):
+        part_key = re.sub(r"\s+", " ", match.group(2).lower())
+        rest = _NUMBER_WORDS[part_key]
+    else:
+        rest = 0
     return str(base + rest)
 
 

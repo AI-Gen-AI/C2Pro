@@ -747,3 +747,45 @@ def test_written_hundreds_are_parsed_atomically() -> None:
     assert _duration_conflicts("180 days", "one hundred seventy days") == [
         "duration_not_in_source:180 day"
     ]
+
+
+async def test_unclosed_curly_plural_possessive_fails_closed(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractors shall pay.",
+    )
+    result = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: ‘The Contractors’ invented obligation",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert result is not None
+    assert result.quote_status == "NOT_VERBATIM"
+
+
+def test_hyphenated_written_hundreds_match_numeric_deadline() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("180 days", "one-hundred-eighty-day period") == []
+    assert _duration_conflicts("180 days", "one-hundred-and-eighty-day period") == []
+    assert _duration_conflicts("185 days", "one-hundred-eighty-five days") == []
+    assert _duration_conflicts("220 days", "two-hundred-twenty-day period") == []
+    assert _duration_conflicts("180 days", "one-hundred-seventy-day period") == [
+        "duration_not_in_source:180 day"
+    ]
+
+
+def test_feminine_spanish_hundreds_match_week_deadlines() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("200 semanas", "doscientas semanas") == []
+    assert _duration_conflicts("300 semanas", "trescientas semanas") == []
+    assert _duration_conflicts("400 semanas", "cuatrocientas semanas") == []
+    assert _duration_conflicts("500 semanas", "quinientas semanas") == []
+    assert _duration_conflicts("600 semanas", "seiscientas semanas") == []
+    assert _duration_conflicts("700 semanas", "setecientas semanas") == []
+    assert _duration_conflicts("800 semanas", "ochocientas semanas") == []
+    assert _duration_conflicts("900 semanas", "novecientas semanas") == []
+    assert _duration_conflicts("200 semanas", "trescientas semanas") == [
+        "duration_not_in_source:200 week"
+    ]
