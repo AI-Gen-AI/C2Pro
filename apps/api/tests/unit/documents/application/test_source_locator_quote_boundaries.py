@@ -95,8 +95,8 @@ async def test_whole_word_quote_remains_verbatim(quote: str, source: str) -> Non
     [
         ("plazo de 14 días", "en un plazo de 14 (catorce) días"),
         ("within 14 days", "within 14 (fourteen) days"),
-        ("en 30 días", "en 30 días"),
-        ("en 30 días", "en 30 días"),
+        ("en 30 días", "en 30 di\u0301as"),
+        ("en 30 di\u0301as", "en 30 días"),
         ("within 1,000 days", "within 1,000 days"),
         ("within 24 hours", "within twenty-four (24) hours"),
     ],
@@ -141,9 +141,36 @@ async def test_spanish_plural_party_is_detected(claim: str, party: str) -> None:
 
 @pytest.mark.parametrize(
     "reference",
-    ["Subclause 5.2", "Subcláusula 5.2", "Sub-Clause 5.2", "Subcláusula 5.2", "Cláusula 5.2"],
+    ["Subclause 5.2", "Subcláusula 5.2", "Sub-Clause 5.2", "Subcla\u0301usula 5.2", "Cla\u0301usula 5.2"],
 )
 async def test_subclause_reference_uses_the_clause_code_path(reference: str) -> None:
     location = await _locate(reference, "5.2 The Contractor shall bear the cost.")
 
     assert location.match_method == "clause_code"
+
+
+@pytest.mark.parametrize(
+    ("claim", "source"),
+    [("within 30 days", "Deadline,30 days"), ("en 30 días", "Plazo.30 días")],
+)
+async def test_duration_directly_after_punctuation_is_parsed(claim: str, source: str) -> None:
+    location = await _locate(f"Clause 5.2: {claim}", source)
+
+    assert location.term_conflicts == []
+
+
+async def test_fuzzy_match_compares_canonically_equal_text() -> None:
+    decomposed = "Plazo: di\u0301as ha\u0301biles."
+    tenant_id, document_id = uuid4(), uuid4()
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=uuid4(), text=decomposed
+    )
+    repository = AsyncMock()
+    repository.list_current_clauses.return_value = [clause]
+    locator = SourceLocator(repository)
+
+    location = await locator.locate_evidence("di\u0301as ha\u0301biles", document_id, tenant_id)
+
+    assert location is not None
+    assert location.match_method == "text_similarity"
+    assert location.chunk_text == decomposed
