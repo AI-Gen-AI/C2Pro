@@ -62,11 +62,11 @@ class SourceLocation(BaseModel):
     bbox: list[float] | None = Field(None, description="Bounding box for highlighting in a PDF viewer.")
 
 
-_QUOTE_CHARS = str.maketrans("", "", "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb")
 _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
-# Match explicit quoted evidence independently from citation framing.
+# Match explicit source quotation separately from citation framing. ASCII
+# single quotes use a greedy outer delimiter to preserve possessive apostrophes.
 _EXPLICIT_QUOTE = re.compile(
-    r"""["“«]([^"”»]+)["”»]|(?<!\w)'(.+?)'(?!\w)|‘([^’]+)’"""
+    r"""["“«]([^"”»]+)["”»]|(?<!\w)'([^\n]+)'(?!\w)|‘([^’]+)’"""
 )
 _REFERENCE_ONLY_FRAMING = re.compile(
     r"(?:see|refer\s+to|according\s+to|under|per|cf\.?|as\s+per|"
@@ -88,7 +88,7 @@ _NUMBER_WORDS = {
 }
 _DURATION = re.compile(
     r"\b(\d+|" + "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
-    + r")\s*(?:\((\d+)\)\s*)?(?:(?:calendar|working|business)\s+)?-?"
+    + r")\s*(?:\((\d+)\)\s*)?(?:(calendar|working|business)\s+)?-?"
     r"(days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b",
     re.IGNORECASE,
 )
@@ -104,17 +104,37 @@ _PARTIES = {
 
 
 def _normalise(text: str) -> str:
-    return " ".join(text.translate(_QUOTE_CHARS).lower().split())
+    # Compare source text verbatim modulo case/whitespace; punctuation such as
+    # Contractor's / Contractors changes the source and must NOT be deleted.
+    return " ".join(text.lower().split())
 
 
-def _durations(text: str) -> set[str]:
-    found = set()
-    for number, digits, unit in _DURATION.findall(text):
+def _durations(text: str) -> set[tuple[int, str, str]]:
+    found: set[tuple[int, str, str]] = set()
+    for number, digits, qualifier, unit in _DURATION.findall(text):
         value = int(digits) if digits else (
             int(number) if number.isdigit() else _NUMBER_WORDS[number.lower()]
         )
-        found.add(f"{value} {_UNITS[unit[0].lower()]}")
+        found.add((value, _UNITS[unit[0].lower()], qualifier.lower()))
     return found
+
+
+def _duration_conflicts(claim: str, clause_text: str) -> list[str]:
+    source = _durations(clause_text)
+    conflicts = []
+    for value, unit, qualifier in _durations(claim):
+        # Missing day qualifier is less specific, not proof of contradiction.
+        # Explicit calendar vs business/working qualifiers DO conflict.
+        if any(
+            value == sv and unit == su and (
+                not qualifier or not sq or qualifier == sq
+            )
+            for sv, su, sq in source
+        ):
+            continue
+        label = f"{value} {qualifier + ' ' if qualifier else ''}{unit}"
+        conflicts.append(f"duration_not_in_source:{label}")
+    return sorted(conflicts)
 
 
 def _parties(text: str) -> set[str]:
@@ -159,7 +179,7 @@ class SourceLocator:
         else:
             quote_status = "NOT_VERBATIM"
         conflicts = sorted(
-            [f"duration_not_in_source:{d}" for d in _durations(claim) - _durations(clause_text)]
+            _duration_conflicts(claim, clause_text)
             + [f"party_not_in_source:{p}" for p in _parties(claim) - _parties(clause_text)]
         )
         return quote_status, conflicts, "CONFLICT_DETECTED" if conflicts else "UNVERIFIED"

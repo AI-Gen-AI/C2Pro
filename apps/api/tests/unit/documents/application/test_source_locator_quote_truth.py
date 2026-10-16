@@ -337,3 +337,53 @@ async def test_single_quoted_possessive_is_verbatim(ids) -> None:
     assert location is not None
     assert location.quote_status == "VERBATIM"
     assert location.claim_support == "UNVERIFIED"
+
+
+async def test_plural_possessive_quote_keeps_outer_delimiters(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractors' obligations apply",
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "According to Clause 5.2, 'The Contractors' obligations apply'",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.quote_status == "VERBATIM"
+
+
+async def test_internal_apostrophe_is_not_ignored_for_verbatim(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractors obligations apply",
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "According to Clause 5.2, 'The Contractor's obligations apply'",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.quote_status == "NOT_VERBATIM"
+    assert location.claim_support == "UNVERIFIED"
+
+
+async def test_calendar_and_business_days_are_not_equivalent(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 Contractor shall respond within 30 calendar days",
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: Contractor shall respond within 30 business days",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert "duration_not_in_source:30 business day" in location.term_conflicts
+    assert location.claim_support == "CONFLICT_DETECTED"
+
+
+def test_missing_day_qualifier_does_not_invent_conflict() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+    assert _duration_conflicts("30 days", "30 calendar days") == []
+    assert _duration_conflicts("30 days", "30-day period") == []
