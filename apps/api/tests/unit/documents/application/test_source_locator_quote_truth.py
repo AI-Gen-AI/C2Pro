@@ -305,3 +305,35 @@ async def test_framed_quote_with_wrong_term_remains_conflicting(ids) -> None:
     assert location.quote_status == "NOT_VERBATIM"
     assert "duration_not_in_source:30 day" in location.term_conflicts
     assert location.claim_support == "CONFLICT_DETECTED"
+
+
+async def test_hyphenated_duration_is_not_a_false_conflict(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    source = (
+        "5.2 The Contractor must notify the Engineer within a 30-day period."
+    )
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a, text=source
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: The Contractor must notify the Engineer within 30 days",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.claim_support == "UNVERIFIED"
+    assert "duration_not_in_source:30 day" not in location.term_conflicts
+
+
+async def test_single_quoted_possessive_is_verbatim(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    source = "5.2 The Contractor's obligations apply"
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a, text=source
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "According to Clause 5.2, 'The Contractor's obligations apply'",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.quote_status == "VERBATIM"
+    assert location.claim_support == "UNVERIFIED"
