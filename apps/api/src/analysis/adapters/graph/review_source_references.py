@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
 # Accept explicit numbered contractual clause codes; never mine free text.
-_EXPLICIT_CLAUSE_CODE = re.compile(r"^(?:§\\s*)?\\d+(?:\\.\\d+)*$")
+_EXPLICIT_CLAUSE_CODE = re.compile(r"^(?:§\s*)?\d+(?:\.\d+)*$")
 
 
 def review_risk_clause_codes(risks: object) -> set[str]:
