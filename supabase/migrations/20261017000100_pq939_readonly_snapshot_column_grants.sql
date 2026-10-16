@@ -89,6 +89,16 @@ BEGIN
             RAISE EXCEPTION 'PQ939_UNEXPECTED_TABLE_PRIVILEGES';
         END IF;
 
+        -- A column-only downgrade must never revoke an unrelated grant
+        -- that was present before this migration. Refuse such prestate.
+        IF pg_catalog.has_column_privilege(
+                'c2pro_prod_acceptance_ro', relation_oid, 'id', 'SELECT'
+           ) OR pg_catalog.has_column_privilege(
+                'c2pro_prod_acceptance_ro', relation_oid, 'project_id', 'SELECT'
+           ) THEN
+            RAISE EXCEPTION 'PQ939_UNEXPECTED_COLUMN_PRIVILEGES';
+        END IF;
+
         -- A custom app.current_tenant GUC alone is caller-settable.
         -- This role alone is further confined to the single approved
         -- synthetic project even if the tenant GUC is manipulated.
