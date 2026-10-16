@@ -596,3 +596,33 @@ async def test_curly_possessive_in_framing_is_not_quote_close(ids) -> None:
     )
     assert fabricated is not None
     assert fabricated.quote_status == "NOT_VERBATIM"
+
+
+async def test_plural_possessive_before_conjunction_is_not_quote_boundary(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Owners are jointly responsible.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    fabricated = await locator.locate_evidence(
+        "Clause 5.2: ‘The Owners’ and consultants may terminate’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert fabricated is not None
+    assert fabricated.quote_status == "NOT_VERBATIM"
+
+
+async def test_plural_possessive_and_conjunction_inside_real_quote(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Owners’ and consultants may terminate.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    valid = await locator.locate_evidence(
+        "Clause 5.2: ‘The Owners’ and consultants may terminate’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert valid is not None
+    assert valid.quote_status == "VERBATIM"

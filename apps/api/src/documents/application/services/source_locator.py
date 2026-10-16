@@ -88,16 +88,16 @@ def _explicit_quotes(text: str) -> list[str]:
         endings = [
             i for i in range(start + 1, limit) if text[i] == "’"
         ]
-        # A closing quote before punctuation or a connecting conjunction
-        # takes precedence over possessives in the surrounding prose.
-        # Without such a delimiter, preserve internal possessives by using
-        # the final closing mark before the next quotation opens.
+        # Punctuation following a closing quote is a strong boundary.
+        # A conjunction is NOT: in "‘The Owners’ and consultants may
+        # terminate’" the first U+2019 is an internal plural possessive.
+        # Without a strong boundary, prefer the final closing mark to avoid
+        # certifying a truncated fragment as VERBATIM (fail closed).
         boundaries = [
             i for i in endings
             if (
                 i + 1 == len(text)
                 or text[i + 1] in ";,.:!?)]}"
-                or re.match(r"\s+(?:and|or|but)\b", text[i + 1 :], re.IGNORECASE)
             )
         ]
         end = (boundaries[0] if boundaries else endings[-1]) if endings else -1
