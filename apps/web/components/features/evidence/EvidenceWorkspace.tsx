@@ -15,6 +15,7 @@ interface EvidenceWorkspaceProps {
   splitView: boolean;
   selectedDocument: DocumentInfo | null;
   selectedDocumentId: string | null;
+  selectedRevisionId?: string | null;
   highlights: PdfHighlight[];
   activeHighlightId: string | null;
   activePanelTab: EvidencePanelTab;
@@ -69,6 +70,7 @@ export function EvidenceWorkspace({
   splitView,
   selectedDocument,
   selectedDocumentId,
+  selectedRevisionId,
   highlights,
   activeHighlightId,
   activePanelTab,
@@ -106,6 +108,7 @@ export function EvidenceWorkspace({
         <EvidenceViewerPanel
           selectedDocument={selectedDocument}
           selectedDocumentId={selectedDocumentId}
+          selectedRevisionId={selectedRevisionId}
           highlights={highlights}
           activeHighlightId={activeHighlightId}
           onHighlightClick={onHighlightClick}

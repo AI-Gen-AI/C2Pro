@@ -157,7 +157,7 @@ export default function EvidencePage() {
     isLoading: documentDetailLoading,
   } = useGetDocumentEndpointApiV1DocumentsDocumentIdGet(
     selectedDocumentId ?? "",
-    undefined,
+    requestedRevisionId ? { revision_id: requestedRevisionId } : undefined,
     { query: { enabled: shouldResolveSourceEvidence } },
   );
   const [alertsState, setAlertsState] = useState(alerts);
@@ -177,11 +177,17 @@ export default function EvidencePage() {
     typeof (documentDetail as unknown as Record<string, unknown> | undefined)?.revision_id === "string"
       ? String((documentDetail as unknown as Record<string, unknown>).revision_id)
       : null;
+  // Block pinned PDF navigation from the first render through the entire
+  // asynchronous revision check. Never fetch the unpinned current PDF.
   const requestedRevisionUnavailable = Boolean(
     requestedRevisionId &&
     selectedDocumentId === requestedDocumentId &&
-    !documentDetailLoading &&
-    documentRevisionId !== requestedRevisionId,
+    (
+      documentDetailLoading ||
+      documentRevisionId !== requestedRevisionId ||
+      documentDetail?.id !== selectedDocumentId ||
+      documentDetail?.project_id !== id
+    ),
   );
   const semanticEvidenceTargets = useMemo(
     () => [
@@ -878,6 +884,7 @@ export default function EvidencePage() {
         selectedDocument={requestedRevisionUnavailable ? null : selectedDocument}
         selectedDocumentId={requestedRevisionUnavailable ? null : selectedDocumentId}
         highlights={requestedRevisionUnavailable ? [] : highlights}
+        selectedRevisionId={requestedRevisionUnavailable ? null : requestedRevisionId}
         activeHighlightId={activeHighlightId}
         activePanelTab={activePanelTab}
         entities={entities}
