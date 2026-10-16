@@ -71,8 +71,12 @@ async def test_migration_enforces_restrictive_rls_for_two_synthetic_tenants() ->
 
     conn = await asyncpg.connect(_DSN)
     try:
-        # One outer rollback guarantees no residue in the migrated test DB.
-        async with conn.transaction():
+        # NEVER auto-commit a successful synthetic role/schema fixture.
+        # An asyncpg transaction context commits on normal exit, so rollback
+        # explicitly even when every assertion succeeds.
+        txn = conn.transaction()
+        await txn.start()
+        try:
             await conn.execute(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS")
             await conn.execute(f"CREATE SCHEMA {schema}")
             await conn.execute(f"GRANT USAGE ON SCHEMA {schema} TO {role}")
@@ -174,5 +178,7 @@ async def test_migration_enforces_restrictive_rls_for_two_synthetic_tenants() ->
                     "SELECT has_column_privilege($1, "
                     f"'{schema}.{table}', 'project_id', 'SELECT')", role
                 ) is False
+        finally:
+            await txn.rollback()
     finally:
         await conn.close()
