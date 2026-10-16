@@ -241,3 +241,30 @@ describe('ReviewItemCard #714 decision readiness', () => {
     expect(screen.getByTestId('reject-doc-456')).toBeEnabled();
   });
 });
+
+describe('PQ-HITL-06 review item source navigation', () => {
+  it('renders independent source links only when document, revision and clause IDs exist', () => {
+    render(
+      <ReviewItemCard
+        item={{ ...item, item_data: {
+          ...item.item_data,
+          source_references: [
+            { document_id: 'doc-123', revision_id: 'rev-a', clause_id: 'clause-52', clause_code: '5.2' },
+            { document_id: 'doc-123', revision_id: 'rev-a', clause_id: 'clause-13', clause_code: '1.3' },
+          ],
+        } }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Inspect cited clause §5.2' })).toHaveAttribute(
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-52',
+    );
+    expect(screen.getByRole('link', { name: 'Inspect cited clause §1.3' })).toHaveAttribute(
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-13',
+    );
+    expect(screen.getByRole('link', { name: 'View evidence' })).toBeInTheDocument();
+  });
+});
