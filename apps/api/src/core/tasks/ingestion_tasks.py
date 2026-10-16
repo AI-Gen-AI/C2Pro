@@ -500,9 +500,38 @@ _STANDALONE_CONTRACT_TITLES = {
     "warranty", "insurance", "price", "termination", "penalties",
     "delivery", "acceptance", "quality", "confidentiality", "duration",
 }
-_SOFT_NUMBERED_HEADING = re.compile(
-    r"^(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})\.?[ \t]+(?P<title>.+)$"
-)
+
+def _bounded_numeric_heading(line: str) -> tuple[str, str] | None:
+    """Parse at most seven 1-3 digit components without regex backtracking."""
+    cursor = 0
+    end_code = 0
+    length = len(line)
+
+    for component in range(7):
+        start = cursor
+        while cursor < length and line[cursor].isdecimal() and cursor - start < 3:
+            cursor += 1
+        if cursor == start or (cursor < length and line[cursor].isdecimal()):
+            return None
+        end_code = cursor
+        if cursor + 1 < length and line[cursor] == "." and line[cursor + 1].isdecimal():
+            if component == 6:
+                return None
+            cursor += 1
+            continue
+        break
+
+    if cursor < length and line[cursor] == ".":
+        cursor += 1
+    if cursor >= length or line[cursor] not in " \t":
+        return None
+    while cursor < length and line[cursor] in " \t":
+        cursor += 1
+    if cursor == length:
+        return None
+    return line[:end_code], line[cursor:]
+
+
 _PUNCTUATED_SECTION_TITLE = re.compile(
     r"^(?P<title>[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*)"
     r"[.:][ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
@@ -523,17 +552,18 @@ def _soft_source_heading_code(line: str) -> str | None:
     Unknown title-cased text is not source identity. The same predicate gates
     both span segmentation and persisted clause-code assignment.
     """
-    candidate = _SOFT_NUMBERED_HEADING.match(line.strip())
+    candidate = _bounded_numeric_heading(line.strip())
     if candidate is None:
         return None
-    title = candidate.group("title").strip()
+    code, title = candidate
+    title = title.strip()
     if title.casefold().rstrip(".:") in _STANDALONE_CONTRACT_TITLES:
-        return candidate.group("code")
+        return code
     punctuated = _PUNCTUATED_SECTION_TITLE.match(title)
     if punctuated and punctuated.group("title").casefold() in _STANDALONE_CONTRACT_TITLES:
-        return candidate.group("code")
+        return code
     if _INLINE_CONTRACT_TITLES.match(title):
-        return candidate.group("code")
+        return code
     return None
 
 def _trimmed_clause_span(
@@ -559,7 +589,10 @@ def _split_contract_clause_spans(
     # identity predicate. Purely numeric prose must not split clause bodies.
     boundaries = {match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)}
     for candidate in _NUMERIC_LINE_START.finditer(parsed_text):
-        first_line = parsed_text[candidate.end():].split("\n", 1)[0]
+        line_end = parsed_text.find("\n", candidate.end())
+        first_line = parsed_text[
+            candidate.end():line_end if line_end != -1 else len(parsed_text)
+        ]
         if _soft_source_heading_code(first_line) is not None:
             boundaries.add(candidate.start())
     ordered_boundaries = sorted(boundaries)
