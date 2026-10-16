@@ -118,7 +118,8 @@ _NUMBER_WORDS.update({
 _DURATION = re.compile(
     r"\b(\d+|" + "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
     + r")[\s-]*(?:\((\d+)\)[\s-]*)?(?:(calendar|working|business)[\s-]+)?"
-    r"(days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b",
+    r"(days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b"
+    r"(?:[\s-]+(h[aá]biles?|naturales?|laborables?|calendario))?",
     re.IGNORECASE,
 )
 _UNITS = {"d": "day", "w": "week", "s": "week", "m": "month"}
@@ -140,11 +141,16 @@ def _normalise(text: str) -> str:
 
 def _durations(text: str) -> set[tuple[int, str, str]]:
     found: set[tuple[int, str, str]] = set()
-    for number, digits, qualifier, unit in _DURATION.findall(text):
+    for number, digits, qualifier, unit, post_qualifier in _DURATION.findall(text):
         value = int(digits) if digits else (
             int(number) if number.isdigit() else _NUMBER_WORDS[number.lower()]
         )
-        found.add((value, _UNITS[unit[0].lower()], qualifier.lower()))
+                explicit_qualifier = (post_qualifier or qualifier).lower()
+        if explicit_qualifier in {"hábil", "hábiles", "habil", "habiles", "laborable", "laborables", "working"}:
+            explicit_qualifier = "business"
+        elif explicit_qualifier in {"natural", "naturales", "calendario"}:
+            explicit_qualifier = "calendar"
+        found.add((value, _UNITS[unit[0].lower()], explicit_qualifier))
     return found
 
 
@@ -192,18 +198,25 @@ class SourceLocator:
     ) -> tuple[QuoteStatus, list[str], ClaimSupport]:
         """Compare the claim with the clause without ever confirming the claim."""
         claim = self.clause_regex.sub(" ", query_text).strip(_EDGE_PUNCTUATION)
-        explicit = _EXPLICIT_QUOTE.search(query_text)
+        explicit = [
+            next(part for part in match.groups() if part is not None)
+            for match in _EXPLICIT_QUOTE.finditer(query_text)
+        ]
+        # Every explicitly delimited quotation must be present in the source.
+        # Checking only the first permits a fabricated second quote to pass.
         if explicit:
-            # Citation prefixes are not part of the source's literal quotation.
-            candidate = next(part for part in explicit.groups() if part is not None)
+            candidates = explicit
         elif not claim or _REFERENCE_ONLY_FRAMING.fullmatch(claim):
-            candidate = ""
+            candidates = []
         else:
-            candidate = claim
-        quote = _normalise(candidate).strip(_EDGE_PUNCTUATION)
-        if not re.search(r"\w", quote):
+            candidates = [claim]
+        quotes = [
+            _normalise(candidate).strip(_EDGE_PUNCTUATION)
+            for candidate in candidates
+        ]
+        if not any(re.search(r"\w", quote) for quote in quotes):
             quote_status: QuoteStatus = "NO_QUOTE"
-        elif quote in _normalise(clause_text):
+        elif all(quote and quote in _normalise(clause_text) for quote in quotes):
             quote_status = "VERBATIM"
         else:
             quote_status = "NOT_VERBATIM"

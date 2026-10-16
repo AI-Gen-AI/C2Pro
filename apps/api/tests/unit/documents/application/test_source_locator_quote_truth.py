@@ -443,3 +443,52 @@ async def test_guillemets_keep_nested_ascii_quotes(ids) -> None:
     )
     assert found is not None
     assert found.quote_status == "VERBATIM"
+
+
+async def test_all_explicit_quotes_must_match_not_just_first(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay the invoiced amount.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    fabricated = await locator.locate_evidence(
+        'Clause 5.2: "The Contractor shall pay" and "renewal is automatic"',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    correct = await locator.locate_evidence(
+        'Clause 5.2: "The Contractor shall pay" and "the invoiced amount"',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert fabricated is not None and correct is not None
+    assert fabricated.quote_status == "NOT_VERBATIM"
+    assert correct.quote_status == "VERBATIM"
+    assert fabricated.claim_support == "UNVERIFIED"
+
+
+def test_spanish_day_qualifiers_detect_deterministic_conflicts() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("30 días hábiles", "30 días naturales") == [
+        "duration_not_in_source:30 business day"
+    ]
+    assert _duration_conflicts("30 días naturales", "30 calendar days") == []
+    assert _duration_conflicts("30 días hábiles", "30 business days") == []
+    assert _duration_conflicts("30 días laborables", "30 días hábiles") == []
+    assert _duration_conflicts("30 días", "30 días naturales") == []
+    assert _duration_conflicts("30 días hábiles", "30 días") == []
+
+
+async def test_spanish_qualified_deadline_conflict_on_source_locator(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 El Contratista dispone de 30 días naturales.",
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Cláusula 5.2: El Contratista dispone de 30 días hábiles.",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert "duration_not_in_source:30 business day" in location.term_conflicts
+    assert location.claim_support == "CONFLICT_DETECTED"
