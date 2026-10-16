@@ -107,9 +107,12 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
             and len(endings) == 1
             and end + 1 < len(text)
             and re.match(r"\s+\w", text[end + 1 :])
-            and not re.match(
+            and not re.fullmatch(
                 r"\s+(?:under\s+(?:this|the)\s+(?:agreement|contract)"
-                r"|pursuant\s+to|according\s+to|as\s+(?:per|stated\s+in))\b",
+                r"|pursuant\s+to\s+(?:this|the)\s+(?:agreement|contract)"
+                r"|according\s+to\s+clause\s+\d+(?:\.\d+)*"
+                r"|as\s+(?:per|stated\s+in)\s+clause\s+\d+(?:\.\d+)*)"
+                r"\s*",
                 text[end + 1 :],
                 re.IGNORECASE,
             )

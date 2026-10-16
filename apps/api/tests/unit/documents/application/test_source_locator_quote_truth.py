@@ -809,3 +809,23 @@ async def test_smart_quote_followed_by_known_reference_framing_is_verbatim(ids) 
     assert valid is not None and invented is not None
     assert valid.quote_status == "VERBATIM"
     assert invented.quote_status == "NOT_VERBATIM"
+
+
+async def test_curly_quoted_citation_suffix_must_match_entire_framing(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractors shall pay.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    fabricated = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractors’ under this agreement invented obligation",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    valid = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractors’ under this agreement",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert fabricated is not None and valid is not None
+    assert fabricated.quote_status == "NOT_VERBATIM"
+    assert valid.quote_status == "VERBATIM"
