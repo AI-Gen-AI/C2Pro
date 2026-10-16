@@ -475,12 +475,15 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
 # ordinal word (PRIMERA … DÉCIMA). Anchored at line start to avoid mid-sentence
 # matches. Used to split a contract into clause-sized chunks instead of sentences.
 _CLAUSE_BOUNDARY = re.compile(
-    r"(?m)^\s*(?:"
-    r"\d{1,3}(?:\.\d{1,3}){0,6}\s*\.\s*[-–]"
-    r"|(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION)\w*"
-    r"|(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA)\b"
+    r"(?m)^[ \t]*(?:"
+    r"\d{1,3}(?:\.\d{1,3}){0,6}[ \t]*\.[ \t]*[-–]"
+    # Numbered headings without a dash are only recognized when followed
+    # by a capitalized title; reject unnumbered decimal prose like
+    # '5.2 percent interest ...' rather than minting false clause IDs.
+    r"|\d{1,3}(?:\.\d{1,3}){1,6}\.?[ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
+    r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION))\w*"
+    r"|(?i:(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA))\b"
     r")",
-    re.IGNORECASE,
 )
 
 
@@ -547,12 +550,28 @@ def _explicit_source_clause_heading_code(segment: str) -> str | None:
     )
     if separated:
         return separated.group(1)
-    # 5.2 Payment terms / 5.2. Payment terms (not a bare amount or 2026).
+    # A keyword-labeled source header ('Clause 5.2', 'Artículo 6.3').
+    labelled = re.match(
+        r"^(?:CLAUSE|SECTION|ARTICLE|CL[ÁA]USULA|ART[ÍI]CULO)[ \t]+"
+        r"(\d{1,3}(?:\.\d{1,3}){0,6})(?=\b|\.)",
+        heading,
+        re.IGNORECASE,
+    )
+    if labelled:
+        return labelled.group(1)
+
+    # 5.2 Payment terms / 5.2. Payment terms. Lower-case prose starting
+    # with a decimal is NOT reliable clause structure.
     nested = re.match(
-        r"^(\d{1,3}(?:\.\d{1,3}){1,6})\.?\s+[^\W\d_]",
+        r"^(\d{1,3}(?:\.\d{1,3}){1,6})\.?[ \t]+(?=[A-ZÁÉÍÓÚÜÑ])",
         heading,
     )
-    return nested.group(1) if nested else None
+    if not nested:
+        return None
+    first_word = heading[nested.end(1):].lstrip(" .\t").split(" ", 1)[0].casefold()
+    if first_word in {"percent", "percentage", "porcentaje", "kg", "km", "mg", "mw", "kw"}:
+        return None
+    return nested.group(1)
 
 
 def _extract_contract_clauses(
