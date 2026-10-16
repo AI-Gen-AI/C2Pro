@@ -65,6 +65,9 @@ def test_guards_enforce_login_non_bypass_force_rls_and_project_policy() -> None:
         "projects",
         "has_table_privilege(",
         "'INSERT,UPDATE,DELETE'",
+        "PQ939_UNEXPECTED_COLUMN_PRIVILEGES",
+        "'id', 'SELECT'",
+        "'project_id', 'SELECT'",
     ):
         assert gate in sql
     assert "RAISE EXCEPTION" in sql
