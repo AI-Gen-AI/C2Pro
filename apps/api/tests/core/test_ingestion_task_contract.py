@@ -275,3 +275,25 @@ def test_amount_prose_cannot_collide_with_a_genuine_source_code() -> None:
     assert "5.2 Million Dollars" in clauses[0].full_text
     for clause in clauses:
         assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_bounded_seven_component_heading_and_large_numeric_input() -> None:
+    """S8786 regression: bounded numeric parser and stable source offsets."""
+    from src.core.tasks.ingestion_tasks import (
+        _soft_source_heading_code,
+        _split_contract_clause_spans,
+    )
+
+    assert _soft_source_heading_code("1.2.3.4.5.6.7 Scope") == "1.2.3.4.5.6.7"
+    assert _soft_source_heading_code("1.2.3.4.5.6.7.8 Scope") is None
+    assert _soft_source_heading_code("5.2 Million Dollars") is None
+    assert _soft_source_heading_code("1. Scope") == "1"
+
+    source = "\r\n".join(
+        f"{index % 9 + 1}. Scope of Work section {index} describes duties."
+        for index in range(600)
+    )
+    spans = _split_contract_clause_spans(source)
+    assert len(spans) == 600
+    for segment, start, end in spans:
+        assert source[start:end] == segment
