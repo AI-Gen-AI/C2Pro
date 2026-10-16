@@ -66,7 +66,8 @@ _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
 # Match explicit source quotation separately from citation framing. ASCII
 # single quotes use a greedy outer delimiter to preserve possessive apostrophes.
 _EXPLICIT_QUOTE = re.compile(
-    r"""["“«]([^"”»]+)["”»]|(?<!\w)'([^\n]+)'(?!\w)|‘([^’]+)’"""
+    r'''"([^"\n]+)"|“([^”\n]+)”|«([^»\n]+)»'''
+    r'''|(?<!\w)'([^\n]+)'(?!\w)|‘([^’\n]+)’'''
 )
 _REFERENCE_ONLY_FRAMING = re.compile(
     r"(?:see|refer\s+to|according\s+to|under|per|cf\.?|as\s+per|"

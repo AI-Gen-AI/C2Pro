@@ -409,3 +409,37 @@ def test_compound_number_words_match_numeric_deadline() -> None:
     assert _duration_conflicts("twenty two days", "21 days") == [
         "duration_not_in_source:22 day"
     ]
+
+
+async def test_nested_quote_delimiters_cannot_fake_verbatim(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    source = '5.2 The "Contractor" shall pay'
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a, text=source
+    )
+    locator = SourceLocator(_code_repository(clause))
+    wrong = await locator.locate_evidence(
+        'Clause 5.2: “The "Contractor" may terminate”',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    right = await locator.locate_evidence(
+        'Clause 5.2: “The "Contractor" shall pay”',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert wrong is not None and right is not None
+    assert wrong.quote_status == "NOT_VERBATIM"
+    assert right.quote_status == "VERBATIM"
+
+
+async def test_guillemets_keep_nested_ascii_quotes(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text='5.2 The "Contractor" shall pay',
+    )
+    found = await SourceLocator(_code_repository(clause)).locate_evidence(
+        'According to Clause 5.2: «The "Contractor" shall pay»',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert found is not None
+    assert found.quote_status == "VERBATIM"
