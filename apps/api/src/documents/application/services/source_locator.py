@@ -107,9 +107,16 @@ def _explicit_quotes(text: str) -> tuple[list[str], bool]:
             and len(endings) == 1
             and end + 1 < len(text)
             and re.match(r"\s+\w", text[end + 1 :])
+            and not re.match(
+                r"\s+(?:under\s+(?:this|the)\s+(?:agreement|contract)"
+                r"|pursuant\s+to|according\s+to|as\s+(?:per|stated\s+in))\b",
+                text[end + 1 :],
+                re.IGNORECASE,
+            )
         ):
-            # A lone possessive followed by unquoted prose is NOT proof of
-            # a closing U+2019. Reject rather than certify a truncated prefix.
+            # A lone possessive followed by arbitrary prose is NOT proof of
+            # a closing U+2019. Known citation framing following a quotation
+            # is safe, but unsupported wording must fail closed.
             malformed = True
         else:
             found.append((start, text[start + 1 : end]))

@@ -789,3 +789,23 @@ def test_feminine_spanish_hundreds_match_week_deadlines() -> None:
     assert _duration_conflicts("200 semanas", "trescientas semanas") == [
         "duration_not_in_source:200 week"
     ]
+
+
+async def test_smart_quote_followed_by_known_reference_framing_is_verbatim(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay the fees.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    valid = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor shall pay’ under this agreement",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    invented = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractors’ invented obligation",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert valid is not None and invented is not None
+    assert valid.quote_status == "VERBATIM"
+    assert invented.quote_status == "NOT_VERBATIM"
