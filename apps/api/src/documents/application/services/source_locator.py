@@ -252,7 +252,8 @@ _NUMBER_WORDS.update(_ES_TENS)
 _THOUSANDS = re.compile(r"\d{1,3}(?:[.,]\d{3})+")
 _WORD_NUMBERS = "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
 _DURATION = re.compile(
-    r"(?<![\w.,])(" + _THOUSANDS.pattern + r"|\d+(?:[.,]\d+)?|" + _WORD_NUMBERS
+    # Not inside a word or a number ("1.5", "1,000"), but "Deadline,30 days" still parses.
+    r"(?<!\w)(?<!\d[.,])(" + _THOUSANDS.pattern + r"|\d+(?:[.,]\d+)?|" + _WORD_NUMBERS
     + r")[\s-]*(?:\((\d+|" + _WORD_NUMBERS + r")\)[\s-]*)?"
     r"(?:(calendar|working|business)[\s-]+)?"
     r"(days?|weeks?|months?|hours?|d[ií]as?|semanas?|meses|mes|horas?)\b"
@@ -466,7 +467,7 @@ class SourceLocator:
             A SourceLocation object if a satisfactory match is found, otherwise None.
         """
         scoped_tenant_id = require_tenant_id(tenant_id)
-        # Decomposed accents ("Cláusula") must reach the same clause-code path.
+        # Decomposed accents ("Cla\u0301usula") must reach the same clause-code path.
         query_text = unicodedata.normalize("NFC", query_text)
         # --- Fast Path: Direct Code Match ---
         match = self.clause_regex.search(query_text)
@@ -513,7 +514,10 @@ class SourceLocator:
             return None
 
         # Create a dictionary of clause texts to search against
-        choices = {c.id: c.full_text for c in all_clauses if c.full_text}
+        # Score on NFC text so canonically equal accents match; chunk_text stays original.
+        choices = {
+            c.id: unicodedata.normalize("NFC", c.full_text) for c in all_clauses if c.full_text
+        }
 
         # Use rapidfuzz to find the best match
         best_match = process.extractOne(query_text, choices, scorer=fuzz.partial_ratio)
