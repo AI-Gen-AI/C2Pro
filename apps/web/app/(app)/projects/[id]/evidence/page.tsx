@@ -62,6 +62,35 @@ function semanticTargetType(entityType: string): EvidenceTargetType {
   }
 }
 
+type SourceLinkNoticeKind =
+  | "revision"
+  | "document"
+  | "highlight"
+  | "source-clause"
+  | "fallback"
+  | null;
+
+function selectSourceLinkNotice({
+  revisionUnavailable,
+  documentUnavailable,
+  highlightUnavailable,
+  hasSourceClause,
+  documentFallback,
+}: {
+  revisionUnavailable: boolean;
+  documentUnavailable: boolean;
+  highlightUnavailable: boolean;
+  hasSourceClause: boolean;
+  documentFallback: boolean;
+}): SourceLinkNoticeKind {
+  if (revisionUnavailable) return "revision";
+  if (documentUnavailable) return "document";
+  if (highlightUnavailable) return "highlight";
+  if (hasSourceClause) return "source-clause";
+  if (documentFallback) return "fallback";
+  return null;
+}
+
 export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -822,6 +851,14 @@ export default function EvidencePage() {
     popup.print();
   }, [alertsState, entities, highlights.length, selectedDocument]);
 
+  const sourceLinkNotice = selectSourceLinkNotice({
+    revisionUnavailable: requestedRevisionUnavailable,
+    documentUnavailable: requestedDocumentUnavailable,
+    highlightUnavailable: requestedHighlightUnavailable,
+    hasSourceClause: Boolean(requestedSourceClause),
+    documentFallback: Boolean(requestedDocumentFallback),
+  });
+
   return (
     <div className="space-y-6">
       <EvidenceHeader
@@ -851,38 +888,42 @@ export default function EvidencePage() {
         </Alert>
       ) : null}
 
-      {requestedRevisionUnavailable ? (
+      {sourceLinkNotice === "revision" && (
         <Alert data-testid="evidence-link-revision-unavailable">
           <AlertDescription>
             This source revision cannot be verified against the PDF currently
             available. No document or highlight was opened for this revision-bound link.
           </AlertDescription>
         </Alert>
-      ) : requestedDocumentUnavailable ? (
+      )}
+      {sourceLinkNotice === "document" && (
         <Alert data-testid="evidence-link-unavailable">
           <AlertDescription>
             The linked document is not available in this project, so no other document was opened.
           </AlertDescription>
         </Alert>
-      ) : requestedHighlightUnavailable ? (
+      )}
+      {sourceLinkNotice === "highlight" && (
         <Alert data-testid="evidence-link-unavailable">
           <AlertDescription>
             The linked evidence was not found in this document. Nothing else was selected.
           </AlertDescription>
         </Alert>
-      ) : requestedSourceClause ? (
+      )}
+      {sourceLinkNotice === "source-clause" && requestedSourceClause && (
         <Alert data-testid="evidence-link-source-clause">
           <AlertDescription>
             Showing source clause {requestedSourceClause.clauseCode ?? requestedSourceClause.id} on page {requestedSourceClause.page}. Exact highlight unavailable when source geometry is not persisted.
           </AlertDescription>
         </Alert>
-      ) : requestedDocumentFallback ? (
+      )}
+      {sourceLinkNotice === "fallback" && (
         <Alert data-testid="evidence-link-document-fallback">
           <AlertDescription>
             Exact highlight unavailable. The linked source evidence has no resolvable page span, so its source document is shown without inventing a page.
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
       <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} />
 
