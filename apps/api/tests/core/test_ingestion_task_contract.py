@@ -130,3 +130,32 @@ def test_explicit_keyword_labelled_clause_number_is_preserved() -> None:
     )
     assert len(clauses) == 1
     assert clauses[0].clause_code == "5.2"
+
+
+def test_single_level_numbered_headings_are_preserved_without_guessing_prose() -> None:
+    text = (
+        "6. Payment Terms require certification of all invoices within thirty "
+        "calendar days of receipt of the supporting documents.\n"
+        "7 General Conditions govern the responsibilities of the Engineer "
+        "and the Contractor and describe written notice requirements.\n"
+        "8.1 Termination Rights define the grounds and conditions under which "
+        "either party may lawfully terminate the Contract."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [clause.clause_code for clause in clauses] == ["6", "7", "8.1"]
+    for clause in clauses:
+        assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_quantity_prefix_is_not_single_level_clause_heading() -> None:
+    text = (
+        "5 Percent interest applies to outstanding sums under this "
+        "agreement, calculated on each calendar month until final payment."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert len(clauses) == 1
+    assert clauses[0].clause_code == "AUTO-001"
