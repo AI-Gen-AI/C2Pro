@@ -83,3 +83,39 @@ def test_missing_protected_preflight_fails_before_connect(
     assert "PROTECTED_TENANT_PREFLIGHT_MISSING" in captured.err
     assert not (runner / "baseline.json").exists()
     assert not (runner / "key").exists()
+
+
+def test_indirect_project_scopes_are_not_skipped() -> None:
+    assert attest._table_scope(False, True) == "project_id"
+    assert attest._table_scope(True, True) == "tenant_id"
+    assert attest._table_scope(True, False) == "tenant_id"
+    with pytest.raises(attest.AttestationFailure, match="UNSCOPED"):
+        attest._table_scope(False, False)
+    assert {"extractions", "knowledge_graph_nodes", "procurement_bom_items"}.issubset(
+        attest.REQUIRED_PROJECT_TABLES
+    )
+
+
+def test_project_fingerprint_joins_scoped_projects() -> None:
+    sql = attest._fingerprint_sql(
+        "extractions", ["id", "project_id", "data_json"], "project_id"
+    )
+    assert 't."project_id" IN (SELECT p.id FROM public.projects AS p' in sql
+    assert "p.tenant_id = :tenant_id" in sql
+    assert 't."data_json"' in sql
+    assert "row_to_json(scoped)" in sql
+    assert "row_to_json(t)" not in sql
+
+
+def test_column_level_grants_limit_hashed_projection() -> None:
+    columns, missing = attest._selectable_columns(
+        [("document_id", True), ("tenant_id", True),
+         ("stage", True), ("secret_payload", False)], "tenant_id"
+    )
+    assert columns == ["document_id", "tenant_id", "stage"]
+    assert missing == 1
+    sql = attest._fingerprint_sql("document_processing_operations", columns, "tenant_id")
+    assert "secret_payload" not in sql
+    assert 't."tenant_id" = :tenant_id' in sql
+    with pytest.raises(attest.AttestationFailure, match="SCOPE_COLUMN"):
+        attest._selectable_columns([("tenant_id", False)], "tenant_id")

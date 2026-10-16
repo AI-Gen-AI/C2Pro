@@ -501,7 +501,7 @@ jobs:
               if [ "$PQ939_STEP_OUTCOME" = "success" ] &&
                  [ "$PQ939_DB_BEFORE_OUTCOME" = "success" ] &&
                  [ "$PQ939_DB_AFTER_OUTCOME" = "success" ]; then
-                echo "- #939: bounded UI/anonymous checks and tenant-visible durable-state comparison PASSED; other side effects, second principal and PDF navigation NOT VERIFIED."
+                echo "- #939: bounded UI/anonymous checks PASSED; tenant/project-scoped verifier-readable columns unchanged. Ungranted columns, transient/global/external effects, second principal and PDF navigation NOT VERIFIED."
               else
                 echo "- #939: NOT VERIFIED / failed or skipped mandatory QA or tenant-state snapshot; no acceptance claim."
               fi
