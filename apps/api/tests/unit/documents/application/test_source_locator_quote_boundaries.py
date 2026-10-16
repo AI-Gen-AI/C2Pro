@@ -65,6 +65,7 @@ async def _locate(query: str, source: str):  # noqa: ANN202
         ('"payment is due within"', "Prepayment is due within ten days."),
         ('"4 days after receipt"', "Notice within 14 days after receipt."),
         ('"contractor shall bear"', "The Subcontractor shall bear the cost."),
+        ('"(a) The Contractor shall pay"', "5.2(a) The Contractor shall payout."),
     ],
 )
 async def test_quote_inside_a_longer_word_is_not_verbatim(quote: str, source: str) -> None:
@@ -79,6 +80,8 @@ async def test_quote_inside_a_longer_word_is_not_verbatim(quote: str, source: st
         ('"contractor shall bear"', "The Contractor shall bear the cost."),
         ('"the Contractor\'s cost"', "at the Contractor's cost."),
         ('"14 days"', "Notice within 14 days."),
+        ('"(a) The Contractor shall pay"', "5.2(a) The Contractor shall pay the cost."),
+        ('"Contractor shall pay (b)"', "The Contractor shall pay (b)2 instalments."),
     ],
 )
 async def test_whole_word_quote_remains_verbatim(quote: str, source: str) -> None:
