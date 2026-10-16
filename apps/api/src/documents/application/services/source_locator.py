@@ -67,7 +67,7 @@ _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
 # single quotes use a greedy outer delimiter to preserve possessive apostrophes.
 _EXPLICIT_QUOTE = re.compile(
     r'''"([^"\n]+)"|“([^”\n]+)”|«([^»\n]+)»'''
-    r'''|(?<!\w)'([^\n]+)'(?!\w)|‘([^’\n]+)’'''
+    r'''|(?<!\w)'([^\n]+)'(?!\w)|‘([^\n]+)’'''
 )
 _REFERENCE_ONLY_FRAMING = re.compile(
     r"(?:see|refer\s+to|according\s+to|under|per|cf\.?|as\s+per|"
@@ -98,9 +98,10 @@ _EN_ONES = {
     "six": 6, "seven": 7, "eight": 8, "nine": 9,
 }
 _NUMBER_WORDS.update({
-    f"{tens} {one}": base + increment
+    f"{tens}{separator}{one}": base + increment
     for tens, base in _EN_TENS.items()
     for one, increment in _EN_ONES.items()
+    for separator in (" ", "-")
 })
 _ES_TENS = {
     "treinta": 30, "cuarenta": 40, "cincuenta": 50,

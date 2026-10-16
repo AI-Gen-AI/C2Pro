@@ -492,3 +492,44 @@ async def test_spanish_qualified_deadline_conflict_on_source_locator(ids) -> Non
     assert location is not None
     assert "duration_not_in_source:30 business day" in location.term_conflicts
     assert location.claim_support == "CONFLICT_DETECTED"
+
+
+async def test_smart_single_quote_possessive_cannot_truncate_evidence(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    result = await locator.locate_evidence(
+        "Clause 5.2: ‘The Contractor’s right to terminate applies’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert result is not None
+    assert result.quote_status == "NOT_VERBATIM"
+    assert result.claim_support == "UNVERIFIED"
+
+
+async def test_smart_single_quote_possessive_matches_whole_quote(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor’s right to terminate applies",
+    )
+    result = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: ‘The Contractor’s right to terminate applies’",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert result is not None
+    assert result.quote_status == "VERBATIM"
+
+
+def test_hyphenated_english_compound_numbers_are_atomic() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("twenty-three days", "23 days") == []
+    assert _duration_conflicts("forty-six calendar days", "46 calendar days") == []
+    assert _duration_conflicts("thirty-one days", "31 days") == []
+    assert _duration_conflicts("twenty-three days", "24 days") == [
+        "duration_not_in_source:23 day"
+    ]
