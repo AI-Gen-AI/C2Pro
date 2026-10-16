@@ -118,3 +118,50 @@ describe("evidence addressability", () => {
     ).toEqual({ kind: "unresolved" });
   });
 });
+
+describe("PQ-HITL-06 pinned source revision", () => {
+  const sources = sourceEvidenceClausesFromDocumentDetail([
+    {
+      id: "clause-52", clause_code: "5.2", revision_id: "rev-b",
+      text_start_offset: 10, text_end_offset: 40,
+      extracted_entities: { evidence_location: { page_number: 3 } },
+    },
+  ]);
+  const base = {
+    evidenceId: "clause-52",
+    semanticTargets: [{ id: "clause-52", type: "CLAUSE" as const, label: "Current semantic view" }],
+    sourceClauses: sources,
+  };
+
+  it("rejects a stale A revision even when semantic/current clauses collide", () => {
+    expect(resolveEvidenceAddress({
+      ...base, revisionId: "rev-a", documentRevisionId: "rev-b",
+    })).toEqual({ kind: "unresolved" });
+    expect(resolveEvidenceAddress({
+      ...base, revisionId: "rev-a", documentRevisionId: "rev-a",
+    })).toEqual({ kind: "unresolved" });
+  });
+
+  it("requires an immutable PDF revision and matching source clause", () => {
+    expect(resolveEvidenceAddress({
+      ...base, revisionId: "rev-b", documentRevisionId: "rev-b",
+    })).toMatchObject({
+      kind: "raw-clause", targetType: "DOCUMENT_SPAN",
+      target: { id: "clause-52", revisionId: "rev-b", page: 3 },
+    });
+    expect(resolveEvidenceAddress({
+      ...base, revisionId: "rev-b", documentRevisionId: null,
+    })).toEqual({ kind: "unresolved" });
+  });
+
+  it("does not silently infer revision for a clause missing metadata", () => {
+    expect(resolveEvidenceAddress({
+      evidenceId: "unversioned", semanticTargets: [],
+      sourceClauses: [{
+        id: "unversioned", clauseCode: "1.3", label: "Missing revision",
+        page: 2, startOffset: 0, endOffset: 20,
+      }],
+      revisionId: "rev-b", documentRevisionId: "rev-b",
+    })).toEqual({ kind: "unresolved" });
+  });
+});
