@@ -28,6 +28,22 @@ BEGIN
         RAISE EXCEPTION 'PQ939_READONLY_ROLE_GUARD_FAILED';
     END IF;
 
+    -- A RESTRICTIVE policy TO this role also binds every role inheriting
+    -- its privileges, and those roles would inherit the column grants.
+    -- Refuse any other RLS-subject role that has this role's privileges.
+    IF EXISTS (
+        SELECT 1
+          FROM pg_catalog.pg_roles AS member
+         WHERE member.rolname <> 'c2pro_prod_acceptance_ro'
+           AND NOT member.rolsuper
+           AND NOT member.rolbypassrls
+           AND pg_catalog.pg_has_role(
+                member.oid, 'c2pro_prod_acceptance_ro', 'USAGE'
+           )
+    ) THEN
+        RAISE EXCEPTION 'PQ939_READONLY_ROLE_MEMBERSHIP_GUARD_FAILED';
+    END IF;
+
     FOR scoped IN
         SELECT v.table_name
           FROM (VALUES

@@ -183,3 +183,58 @@ async def test_migration_enforces_restrictive_rls_for_two_synthetic_tenants() ->
             await txn.rollback()
     finally:
         await conn.close()
+
+
+async def test_migration_refuses_role_inherited_by_another_rls_subject_role() -> None:
+    """A RESTRICTIVE policy TO the role would silently confine its members."""
+    assert _DSN is not None
+    parsed = urlparse(_DSN)
+    assert parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+    assert parsed.path.rsplit("/", 1)[-1].endswith("_test")
+
+    suffix = uuid4().hex[:12]
+    schema = f"pq939_mbr_{suffix}"
+    role = f"pq939_ro_{suffix}"
+    member = f"pq939_member_{suffix}"
+    m = _migration()
+
+    conn = await asyncpg.connect(_DSN)
+    try:
+        txn = conn.transaction()
+        await txn.start()
+        try:
+            await conn.execute(f"CREATE ROLE {role} LOGIN NOSUPERUSER NOBYPASSRLS")
+            await conn.execute(f"CREATE ROLE {member} LOGIN NOSUPERUSER NOBYPASSRLS")
+            await conn.execute(f"CREATE SCHEMA {schema}")
+            await conn.execute(
+                f"CREATE TABLE {schema}.projects (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)"
+            )
+            for table in m.PROJECT_ONLY_TABLES:
+                await conn.execute(
+                    f"CREATE TABLE {schema}.{table} (id uuid PRIMARY KEY, project_id uuid NOT NULL)"
+                )
+                await conn.execute(f"ALTER TABLE {schema}.{table} ENABLE ROW LEVEL SECURITY")
+                await conn.execute(f"ALTER TABLE {schema}.{table} FORCE ROW LEVEL SECURITY")
+                await conn.execute(
+                    f"CREATE POLICY {table}_tenant_read ON {schema}.{table} "
+                    "FOR SELECT USING (project_id IN "
+                    f"(SELECT p.id FROM {schema}.projects p WHERE p.tenant_id = "
+                    "NULLIF(current_setting('app.current_tenant', true), '')::uuid))"
+                )
+
+            # NOINHERIT membership grants no privileges: still allowed.
+            await conn.execute(f"GRANT {role} TO {member}")
+            await conn.execute(f"ALTER ROLE {member} NOINHERIT")
+            await conn.execute("SAVEPOINT noinherit")
+            await conn.execute(_fixture_sql(m.GRANT_SQL, schema, role))
+            await conn.execute("ROLLBACK TO SAVEPOINT noinherit")
+
+            await conn.execute(f"ALTER ROLE {member} INHERIT")
+            with pytest.raises(
+                asyncpg.RaiseError, match="PQ939_READONLY_ROLE_MEMBERSHIP_GUARD_FAILED"
+            ):
+                await conn.execute(_fixture_sql(m.GRANT_SQL, schema, role))
+        finally:
+            await txn.rollback()
+    finally:
+        await conn.close()

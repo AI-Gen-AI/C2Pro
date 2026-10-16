@@ -155,3 +155,13 @@ def test_no_payload_grants_or_production_state_proof_claim() -> None:
     ):
         assert forbidden not in sql
     assert "pg_catalog.has_table_privilege" in sql
+
+
+def test_membership_guard_precedes_restrictive_policy_and_grant() -> None:
+    sql = _migration().GRANT_SQL
+    guard = "RAISE EXCEPTION 'PQ939_READONLY_ROLE_MEMBERSHIP_GUARD_FAILED'"
+    assert "pg_catalog.pg_has_role(" in sql
+    assert "NOT member.rolsuper" in sql
+    assert "NOT member.rolbypassrls" in sql
+    assert sql.index("PQ939_READONLY_ROLE_GUARD_FAILED") < sql.index(guard)
+    assert sql.index(guard) < sql.index("CREATE POLICY %I")
