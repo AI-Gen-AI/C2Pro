@@ -124,7 +124,7 @@ def test_column_level_grants_limit_hashed_projection() -> None:
 def test_all_schema_defined_project_only_rls_tables_are_mandatory() -> None:
     # 20260315000200 + 20260319000300 migrations: missing catalog visibility
     # must fail rather than attest an incomplete, tenant-scoped snapshot.
-    assert attest.REQUIRED_PROJECT_TABLES == {
+    assert {
         "extractions",
         "procurement_bom_items",
         "procurement_budget_items",
@@ -134,4 +134,4 @@ def test_all_schema_defined_project_only_rls_tables_are_mandatory() -> None:
         "knowledge_graph_nodes",
         "procurement_plan_snapshots",
         "stakeholder_alerts",
-    }
+    } == attest.REQUIRED_PROJECT_TABLES
