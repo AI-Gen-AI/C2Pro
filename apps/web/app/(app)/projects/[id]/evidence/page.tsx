@@ -67,6 +67,7 @@ export default function EvidencePage() {
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
   const requestedHighlightId = searchParams.get("highlightId");
+  const requestedRevisionId = searchParams.get("revisionId");
   const { isLoaded: isUserLoaded, user } = useUser();
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
@@ -169,6 +170,19 @@ export default function EvidencePage() {
     () => sourceEvidenceClausesFromDocumentDetail(documentDetail?.clauses),
     [documentDetail?.clauses],
   );
+  // The generated document-detail type does not guarantee an immutable
+  // PDF revision identity yet. An absent/incorrect server binding must
+  // block a revision-pinned link rather than display today's PDF as history.
+  const documentRevisionId =
+    typeof (documentDetail as unknown as Record<string, unknown> | undefined)?.revision_id === "string"
+      ? String((documentDetail as unknown as Record<string, unknown>).revision_id)
+      : null;
+  const requestedRevisionUnavailable = Boolean(
+    requestedRevisionId &&
+    selectedDocumentId === requestedDocumentId &&
+    !documentDetailLoading &&
+    documentRevisionId !== requestedRevisionId,
+  );
   const semanticEvidenceTargets = useMemo(
     () => [
       ...apiEntities.map((entity) => ({
@@ -186,7 +200,7 @@ export default function EvidencePage() {
   );
   const requestedHighlightKey =
     requestedDocumentId && requestedHighlightId
-      ? `${requestedDocumentId}:${requestedHighlightId}`
+      ? `${requestedDocumentId}:${requestedRevisionId ?? "current"}:${requestedHighlightId}`
       : null;
   const requestedEvidenceResolution = useMemo(() => {
     if (
@@ -200,10 +214,14 @@ export default function EvidencePage() {
       evidenceId: requestedHighlightId,
       semanticTargets: semanticEvidenceTargets,
       sourceClauses,
+      revisionId: requestedRevisionId,
+      documentRevisionId,
     });
   }, [
     requestedDocumentId,
     requestedHighlightId,
+    requestedRevisionId,
+    documentRevisionId,
     selectedDocumentId,
     semanticEvidenceTargets,
     sourceClauses,
@@ -820,7 +838,14 @@ export default function EvidencePage() {
         </Alert>
       ) : null}
 
-      {requestedDocumentUnavailable ? (
+      {requestedRevisionUnavailable ? (
+        <Alert data-testid="evidence-link-revision-unavailable">
+          <AlertDescription>
+            This source revision cannot be verified against the PDF currently
+            available. No document or highlight was opened for this revision-bound link.
+          </AlertDescription>
+        </Alert>
+      ) : requestedDocumentUnavailable ? (
         <Alert data-testid="evidence-link-unavailable">
           <AlertDescription>
             The linked document is not available in this project, so no other document was opened.
@@ -850,9 +875,9 @@ export default function EvidencePage() {
 
       <EvidenceWorkspace
         splitView={splitView}
-        selectedDocument={selectedDocument}
-        selectedDocumentId={selectedDocumentId}
-        highlights={highlights}
+        selectedDocument={requestedRevisionUnavailable ? null : selectedDocument}
+        selectedDocumentId={requestedRevisionUnavailable ? null : selectedDocumentId}
+        highlights={requestedRevisionUnavailable ? [] : highlights}
         activeHighlightId={activeHighlightId}
         activePanelTab={activePanelTab}
         entities={entities}

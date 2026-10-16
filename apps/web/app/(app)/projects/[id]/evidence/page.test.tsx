@@ -294,6 +294,61 @@ describe("EvidencePage highlight mapping", () => {
     });
   });
 
+  it("blocks a stale A revision and never opens another/current PDF", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1", revisionId: "rev-a", highlightId: "clause-52",
+      } as Record<string, string>)[key] ?? null,
+    });
+    useDocumentDetailMock.mockReturnValue({
+      data: { id: "doc-1", revision_id: "rev-b", clauses: [
+        { id: "clause-52", revision_id: "rev-b", clause_code: "5.2",
+          extracted_entities: { evidence_location: { page_number: 3 } } },
+      ] }, isLoading: false,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-link-revision-unavailable")).toHaveTextContent(
+      /source revision cannot be verified/i,
+    );
+    expect(screen.queryByTestId("viewer-file-url")).not.toBeInTheDocument();
+  });
+
+  it("uses matching server PDF and clause revision to focus a real source page", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1", revisionId: "rev-b", highlightId: "clause-52",
+      } as Record<string, string>)[key] ?? null,
+    });
+    useDocumentDetailMock.mockReturnValue({
+      data: { id: "doc-1", revision_id: "rev-b", clauses: [
+        { id: "clause-52", revision_id: "rev-b", clause_code: "5.2",
+          title: "Defects", text_start_offset: 10, text_end_offset: 48,
+          extracted_entities: { evidence_location: { page_number: 3 } } },
+      ] }, isLoading: false,
+    });
+    render(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-link-revision-unavailable")).not.toBeInTheDocument();
+    expect(screen.getByTestId("evidence-link-source-clause")).toHaveTextContent("5.2");
+    expect(screen.getByTestId("viewer-highlight-ids")).toHaveTextContent("source-clause-clause-52");
+  });
+
+  it("does not infer a revision identifier from a legacy document detail", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1", revisionId: "rev-a", highlightId: "clause-52",
+      } as Record<string, string>)[key] ?? null,
+    });
+    useDocumentDetailMock.mockReturnValue({
+      data: { id: "doc-1", clauses: [
+        { id: "clause-52", clause_code: "5.2",
+          extracted_entities: { evidence_location: { page_number: 3 } } },
+      ] }, isLoading: false,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-link-revision-unavailable")).toBeInTheDocument();
+    expect(screen.queryByTestId("viewer-file-url")).not.toBeInTheDocument();
+  });
+
   it("maps entity selection to the generated highlight id", () => {
     render(<EvidencePage />);
 
