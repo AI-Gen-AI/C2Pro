@@ -36,9 +36,6 @@ from src.analysis.adapters.graph.review_source_references import (
     grounded_review_source_references,
     review_risk_clause_codes,
 )
-from src.documents.adapters.persistence.sqlalchemy_document_repository import (
-    SqlAlchemyDocumentRepository,
-)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -58,6 +55,9 @@ from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 from src.core.processing_authority import fence_current
+from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+    SqlAlchemyDocumentRepository,
+)
 from src.shared_kernel.enums import AlertSeverity
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
