@@ -461,6 +461,8 @@ class SourceLocator:
             A SourceLocation object if a satisfactory match is found, otherwise None.
         """
         scoped_tenant_id = require_tenant_id(tenant_id)
+        # Decomposed accents ("Cláusula") must reach the same clause-code path.
+        query_text = unicodedata.normalize("NFC", query_text)
         # --- Fast Path: Direct Code Match ---
         match = self.clause_regex.search(query_text)
         if match:
