@@ -7,6 +7,8 @@ fuzzy text matching.
 """
 
 import re
+import unicodedata
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -245,14 +247,19 @@ _NUMBER_WORDS.update({
 # Include standalone decades as well as composed values (forty, forty-one).
 _NUMBER_WORDS.update(_EN_TENS)
 _NUMBER_WORDS.update(_ES_TENS)
+# Grouped thousands ("1,000", "1.000") before decimals ("1.5", "1,5"), so a
+# number is never read from its tail ("000", "5").
+_THOUSANDS = re.compile(r"\d{1,3}(?:[.,]\d{3})+")
+_WORD_NUMBERS = "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
 _DURATION = re.compile(
-    r"\b(\d+|" + "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
-    + r")[\s-]*(?:\((\d+)\)[\s-]*)?(?:(calendar|working|business)[\s-]+)?"
-    r"(days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b"
+    r"(?<![\w.,])(" + _THOUSANDS.pattern + r"|\d+(?:[.,]\d+)?|" + _WORD_NUMBERS
+    + r")[\s-]*(?:\((\d+|" + _WORD_NUMBERS + r")\)[\s-]*)?"
+    r"(?:(calendar|working|business)[\s-]+)?"
+    r"(days?|weeks?|months?|hours?|d[ií]as?|semanas?|meses|mes|horas?)\b"
     r"(?:[\s-]+(h[aá]biles?|naturales?|laborables?|calendario))?",
     re.IGNORECASE,
 )
-_UNITS = {"d": "day", "w": "week", "s": "week", "m": "month"}
+_UNITS = {"d": "day", "w": "week", "s": "week", "m": "month", "h": "hour"}
 _PARTIES = {
     "employer": r"employer|empleador",
     "owner": r"owner|propietario",
@@ -267,6 +274,11 @@ def _normalise(text: str) -> str:
     # Compare source text verbatim modulo case/whitespace; punctuation such as
     # Contractor's / Contractors changes the source and must NOT be deleted.
     return " ".join(text.lower().split())
+
+
+def _contains_words(quote: str, source: str) -> bool:
+    """A quote must start and end on word boundaries: "4 days" is not in "14 days"."""
+    return re.search(rf"(?<!\w){re.escape(quote)}(?!\w)", source) is not None
 
 
 # Reduce written hundreds to numeric values before the regular duration
@@ -305,7 +317,7 @@ _HUNDREDS_RE = re.compile(
     rf"(?:[\s-]+(?:and[\s-]+)?({_SUBHUNDRED_PARTS}))?"
     r"(?=[\s-]*(?:\(\d+\)[\s-]*)?"
     r"(?:(?:calendar|working|business)[\s-]+)?"
-    r"(?:days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b)",
+    r"(?:days?|weeks?|months?|hours?|d[ií]as?|semanas?|meses|mes|horas?)\b)",
     re.IGNORECASE,
 )
 
@@ -321,13 +333,20 @@ def _normalize_hundreds(match: re.Match[str]) -> str:
     return str(base + rest)
 
 
-def _durations(text: str) -> set[tuple[int, str, str]]:
-    found: set[tuple[int, str, str]] = set()
+def _number_value(token: str) -> Decimal:
+    if _THOUSANDS.fullmatch(token):
+        return Decimal(re.sub(r"[.,]", "", token))
+    if token[0].isdigit():
+        return Decimal(token.replace(",", "."))
+    return Decimal(_NUMBER_WORDS[token.lower()])
+
+
+def _durations(text: str) -> set[tuple[Decimal, str, str]]:
+    found: set[tuple[Decimal, str, str]] = set()
     normalized = _HUNDREDS_RE.sub(_normalize_hundreds, text)
-    for number, digits, qualifier, unit, post_qualifier in _DURATION.findall(normalized):
-        value = int(digits) if digits else (
-            int(number) if number.isdigit() else _NUMBER_WORDS[number.lower()]
-        )
+    for number, restated, qualifier, unit, post_qualifier in _DURATION.findall(normalized):
+        # A digit restatement ("fourteen (14)") wins; a word one ("14 (catorce)") does not.
+        value = _number_value(restated if restated.isdigit() else number)
         explicit_qualifier = (post_qualifier or qualifier).lower()
         if explicit_qualifier in {
             "hábil", "hábiles", "habil", "habiles",
@@ -353,7 +372,7 @@ def _duration_conflicts(claim: str, clause_text: str) -> list[str]:
             for sv, su, sq in source
         ):
             continue
-        label = f"{value} {qualifier + ' ' if qualifier else ''}{unit}"
+        label = f"{value.normalize():f} {qualifier + ' ' if qualifier else ''}{unit}"
         conflicts.append(f"duration_not_in_source:{label}")
     return sorted(conflicts)
 
@@ -362,7 +381,7 @@ def _parties(text: str) -> set[str]:
     return {
         name
         for name, pattern in _PARTIES.items()
-        if re.search(rf"\b(?:{pattern})s?\b", text, re.IGNORECASE)
+        if re.search(rf"\b(?:{pattern})(?:es|s)?\b", text, re.IGNORECASE)
     }
 
 
@@ -374,7 +393,7 @@ class SourceLocator:
         self.document_repository = document_repository
         # Regex to find clause references like "Clause 14.2", "Sub-Clause 3.1.a" or "§5.2"
         self.clause_regex = re.compile(
-            r'(?:§\s*|\b(?:cláusula|clausula|clause|sub-clause|sub-cláusula)\s+)'
+            r'(?:§\s*|\b(?:sub-?)?(?:cláusula|clausula|clause)\s+)'
             r'([0-9]+\.[0-9]+(?:\.[a-zA-Z0-9]+)*)',
             re.IGNORECASE,
         )
@@ -383,6 +402,8 @@ class SourceLocator:
         self, query_text: str, clause_text: str
     ) -> tuple[QuoteStatus, list[str], ClaimSupport]:
         """Compare the claim with the clause without ever confirming the claim."""
+        query_text = unicodedata.normalize("NFC", query_text)
+        clause_text = unicodedata.normalize("NFC", clause_text)
         claim = self.clause_regex.sub(" ", query_text).strip(_EDGE_PUNCTUATION)
         explicit, malformed_quote = _explicit_quotes(query_text)
         # Every explicitly delimited quotation must be present in the source.
@@ -401,7 +422,7 @@ class SourceLocator:
             quote_status: QuoteStatus = "NOT_VERBATIM"
         elif not any(re.search(r"\w", quote) for quote in quotes):
             quote_status = "NO_QUOTE"
-        elif all(quote and quote in _normalise(clause_text) for quote in quotes):
+        elif all(quote and _contains_words(quote, _normalise(clause_text)) for quote in quotes):
             quote_status = "VERBATIM"
         else:
             quote_status = "NOT_VERBATIM"
