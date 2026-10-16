@@ -177,7 +177,17 @@ def test_required_table_hidden_from_verifier_fails_closed(unreadable: str) -> No
 def test_required_project_column_missing_fails_closed() -> None:
     scoped, catalog = _complete_synthetic_coverage()
     catalog["extractions"] = (True, False)
+    # Real information_schema can still show a table with only tenant_id.
+    # The protected catalog must identify the absent project_id first.
+    scoped = [(name, scope) for name, scope in scoped if name != "extractions"]
     assert attest._coverage_error(scoped, catalog) == "REQUIRED_PROJECT_COLUMN_MISSING"
+
+
+def test_required_scope_columns_missing_fails_before_visibility_check() -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    catalog["clauses"] = (False, False)
+    scoped = [(name, scope) for name, scope in scoped if name != "clauses"]
+    assert attest._coverage_error(scoped, catalog) == "REQUIRED_SCOPE_COLUMN_MISSING"
 
 
 def test_required_project_scope_mismatch_fails_closed() -> None:
