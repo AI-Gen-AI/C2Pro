@@ -733,3 +733,17 @@ def test_standalone_tens_are_supported_in_english_and_spanish() -> None:
     assert _duration_conflicts("40 days", "fifty days") == [
         "duration_not_in_source:40 day"
     ]
+
+
+def test_written_hundreds_are_parsed_atomically() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("180 days", "one hundred eighty days") == []
+    assert _duration_conflicts("180 days", "one hundred and eighty days") == []
+    assert _duration_conflicts("185 days", "one hundred eighty five days") == []
+    assert _duration_conflicts("280 days", "two hundred eighty days") == []
+    assert _duration_conflicts("180 días", "ciento ochenta días") == []
+    assert _duration_conflicts("300 days", "three hundred days") == []
+    assert _duration_conflicts("180 days", "one hundred seventy days") == [
+        "duration_not_in_source:180 day"
+    ]

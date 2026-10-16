@@ -234,9 +234,44 @@ def _normalise(text: str) -> str:
     return " ".join(text.lower().split())
 
 
+# Reduce written hundreds to numeric values before the regular duration
+# extractor. Otherwise an unsupported prefix can cause "eighty days" to
+# be misread from "one hundred eighty days" and invent a conflict.
+_HUNDRED_WORDS = {
+    "one hundred": 100, "two hundred": 200, "three hundred": 300,
+    "four hundred": 400, "five hundred": 500, "six hundred": 600,
+    "seven hundred": 700, "eight hundred": 800,
+    "nine hundred": 900, "cien": 100, "ciento": 100,
+    "doscientos": 200, "trescientos": 300, "cuatrocientos": 400,
+    "quinientos": 500, "seiscientos": 600, "setecientos": 700,
+    "ochocientos": 800, "novecientos": 900,
+}
+_HUNDRED_PARTS = "|".join(
+    sorted(map(re.escape, _HUNDRED_WORDS), key=len, reverse=True)
+)
+_SUBHUNDRED_PARTS = "|".join(
+    sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True)
+)
+_HUNDREDS_RE = re.compile(
+    rf"\b({_HUNDRED_PARTS})"
+    rf"(?:\s+(?:and\s+)?({_SUBHUNDRED_PARTS}))?"
+    r"(?=\s*(?:\(\d+\)\s*)?"
+    r"(?:(?:calendar|working|business)[\s-]+)?"
+    r"(?:days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b)",
+    re.IGNORECASE,
+)
+
+
+def _normalize_hundreds(match: re.Match[str]) -> str:
+    base = _HUNDRED_WORDS[match.group(1).lower()]
+    rest = _NUMBER_WORDS[match.group(2).lower()] if match.group(2) else 0
+    return str(base + rest)
+
+
 def _durations(text: str) -> set[tuple[int, str, str]]:
     found: set[tuple[int, str, str]] = set()
-    for number, digits, qualifier, unit, post_qualifier in _DURATION.findall(text):
+    normalized = _HUNDREDS_RE.sub(_normalize_hundreds, text)
+    for number, digits, qualifier, unit, post_qualifier in _DURATION.findall(normalized):
         value = int(digits) if digits else (
             int(number) if number.isdigit() else _NUMBER_WORDS[number.lower()]
         )
