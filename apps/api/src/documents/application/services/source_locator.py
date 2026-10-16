@@ -86,6 +86,34 @@ _NUMBER_WORDS = {
     }.items()
     for word in words.split()
 }
+# Treat space-separated composite numerals as one deadline value. The regex
+# sorts the longest alternatives first so it cannot match only the tail "one".
+_EN_TENS = {
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+}
+_EN_ONES = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9,
+}
+_NUMBER_WORDS.update({
+    f"{tens} {one}": base + increment
+    for tens, base in _EN_TENS.items()
+    for one, increment in _EN_ONES.items()
+})
+_ES_TENS = {
+    "treinta": 30, "cuarenta": 40, "cincuenta": 50,
+    "sesenta": 60, "setenta": 70, "ochenta": 80, "noventa": 90,
+}
+_ES_ONES = {
+    "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9,
+}
+_NUMBER_WORDS.update({
+    f"{tens} y {one}": base + increment
+    for tens, base in _ES_TENS.items()
+    for one, increment in _ES_ONES.items()
+})
 _DURATION = re.compile(
     r"\b(\d+|" + "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
     + r")[\s-]*(?:\((\d+)\)[\s-]*)?(?:(calendar|working|business)[\s-]+)?"

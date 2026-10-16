@@ -397,3 +397,15 @@ def test_hyphenated_qualified_day_units_do_not_create_false_conflicts() -> None:
     assert _duration_conflicts("30-business-day period", "30-calendar-day period") == [
         "duration_not_in_source:30 business day"
     ]
+
+
+def test_compound_number_words_match_numeric_deadline() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("twenty one days", "21 days") == []
+    assert _duration_conflicts("twenty-eight days", "28 days") == []
+    assert _duration_conflicts("thirty one days", "31-day period") == []
+    assert _duration_conflicts("treinta y uno días", "31 días") == []
+    assert _duration_conflicts("twenty two days", "21 days") == [
+        "duration_not_in_source:22 day"
+    ]
