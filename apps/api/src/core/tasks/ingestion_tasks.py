@@ -470,17 +470,31 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     return data
 
 
-# A new clause starts at a numbered header ("28.-", "28.1.-", "1.-"), a section
-# keyword (CLÁUSULA / ESTIPULACIÓN / ARTÍCULO / CLAUSE / ARTICLE / SECTION), or an
-# ordinal word (PRIMERA … DÉCIMA). Anchored at line start to avoid mid-sentence
-# matches. Used to split a contract into clause-sized chunks instead of sentences.
+# Bare single-level numbers are ambiguous: "5 Dollars remain payable" is
+# prose, not an evidenced clause. Require at least a two-word title (e.g.
+# "7 General Conditions") or a punctuated one-word title ("1. Scope. The").
+# True hyphenated headings and explicit ARTICLE/SECTION labels bypass this
+# conservative heuristic. This is a locator only, never substantive evidence.
+_TITLE_WORD = r"[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*"
+_SINGLE_LEVEL_HEADING = (
+    rf"\d{{1,3}}\.?[ \t]+(?:"
+    rf"{_TITLE_WORD}[ \t]+{_TITLE_WORD}\b"
+    rf"|{_TITLE_WORD}[.:][ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
+    r")"
+)
+_SINGLE_LEVEL_HEADING_RE = re.compile(rf"^{_SINGLE_LEVEL_HEADING}")
+
+
+# A clause starts at an explicitly structured header or a conservative
+# numbered title. Apply the SAME single-level guard when assigning codes.
 _CLAUSE_BOUNDARY = re.compile(
     r"(?m)^[ \t]*(?:"
     r"\d{1,3}(?:\.\d{1,3}){0,6}[ \t]*\.[ \t]*[-–]"
-    # Numbered headings without a dash are only recognized when followed
-    # by a capitalized title; reject unnumbered decimal prose like
-    # '5.2 percent interest ...' rather than minting false clause IDs.
-    r"|\d{1,3}(?:\.\d{1,3}){0,6}\.?[ \t]+"
+    # A bare integer needs the structurally guarded title above. Nested
+    # numbers preserve existing explicit subsection handling, but reject
+    # numeric quantity prose (e.g. "5.2 percent interest").
+    rf"|{_SINGLE_LEVEL_HEADING}"
+    r"|\d{1,3}(?:\.\d{1,3}){1,6}\.?[ \t]+"
     r"(?!(?i:percent|percentage|porcentaje|kg|km|mg|mw|kw)\b)"
     r"(?=[A-ZÁÉÍÓÚÜÑ])"
     r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION))\w*"
@@ -569,6 +583,10 @@ def _explicit_source_clause_heading_code(segment: str) -> str | None:
         heading,
     )
     if not nested:
+        return None
+    # Splitting and code promotion must agree; never mint "5" merely
+    # because one prose word after a quantity happens to be capitalized.
+    if nested.group(1).isdigit() and not _SINGLE_LEVEL_HEADING_RE.match(heading):
         return None
     first_word = heading[nested.end(1):].lstrip(" .\t").split(" ", 1)[0].casefold()
     if first_word in {"percent", "percentage", "porcentaje", "kg", "km", "mg", "mw", "kw"}:
