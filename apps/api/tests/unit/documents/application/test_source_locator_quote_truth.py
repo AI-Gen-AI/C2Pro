@@ -387,3 +387,13 @@ def test_missing_day_qualifier_does_not_invent_conflict() -> None:
     from src.documents.application.services.source_locator import _duration_conflicts
     assert _duration_conflicts("30 days", "30 calendar days") == []
     assert _duration_conflicts("30 days", "30-day period") == []
+
+
+def test_hyphenated_qualified_day_units_do_not_create_false_conflicts() -> None:
+    from src.documents.application.services.source_locator import _duration_conflicts
+
+    assert _duration_conflicts("30 business days", "30-business-day period") == []
+    assert _duration_conflicts("30-business-day period", "30 business days") == []
+    assert _duration_conflicts("30-business-day period", "30-calendar-day period") == [
+        "duration_not_in_source:30 business day"
+    ]

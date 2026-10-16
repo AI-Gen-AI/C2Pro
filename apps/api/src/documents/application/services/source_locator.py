@@ -88,7 +88,7 @@ _NUMBER_WORDS = {
 }
 _DURATION = re.compile(
     r"\b(\d+|" + "|".join(sorted(map(re.escape, _NUMBER_WORDS), key=len, reverse=True))
-    + r")\s*(?:\((\d+)\)\s*)?(?:(calendar|working|business)\s+)?-?"
+    + r")[\s-]*(?:\((\d+)\)[\s-]*)?(?:(calendar|working|business)[\s-]+)?"
     r"(days?|weeks?|months?|d[ií]as?|semanas?|meses|mes)\b",
     re.IGNORECASE,
 )
