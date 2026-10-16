@@ -155,8 +155,9 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   requireExactSyntheticTarget();
 
   // Observe the entire qualification lifecycle, including login/logout.
-  // Clerk's own cross-origin session requests are excluded; product/API
-  // writes on the approved C2Pro frontend/backend are forbidden.
+  // Until independently attributed, neither Clerk-provider nor unknown-origin
+  // non-reads prove they lack product side effects. Watch the browser CONTEXT
+  // (including service-worker requests), not only a single page.
   let observedProductWriteRequests = 0;
   // A Next-Action header only identifies framework transport; it does NOT
   // attribute an opaque action ID to Clerk or establish no business writes.
@@ -165,10 +166,10 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   // Never record URL strings, query parameters, opaque Next action IDs,
   // request bodies, headers or protected document identifiers. Category only.
   const observedNonReadCategories = new Map<string, number>();
-  page.on("request", (request) => {
+  page.context().on("request", (request) => {
     const method = request.method().toUpperCase();
     const disposition = classifyNonReadRequest(method, request.url());
-    if (disposition === "read" || disposition === "external_provider") return;
+    if (disposition === "read") return;
     let url: URL;
     try {
       url = new URL(request.url());
@@ -220,6 +221,16 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
       // synthetic evidence page, can be exempted by URL, header or phase.
       // Keep the test FAIL-CLOSED until exact deployed Clerk provenance and
       // comprehensive no-write effects are independently established.
+      observedProductWriteRequests += 1;
+    } else {
+      // An arbitrary cross-origin endpoint can receive a business write.
+      // Never exempt it merely because the hostname is not first-party.
+      // Categorize only: do not log the provider hostname, URL or payload.
+      const category = nonReadCategory(method, "unknown_origin", "external_nonread", false);
+      observedNonReadCategories.set(
+        category,
+        (observedNonReadCategories.get(category) ?? 0) + 1,
+      );
       observedProductWriteRequests += 1;
     }
   });
@@ -404,9 +415,9 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   await signOutThroughUi(page);
 
   // Emit ONLY bounded and deterministic request categories on failure.
-  // ALL first-party non-read requests make qualification FAIL, including
-  // opaque Next-Action POSTs in expected Clerk UI flows. Response status,
-  // URL and lifecycle phase cannot establish which action executed.
+  // ALL non-read requests make qualification FAIL, including opaque
+  // Next-Action POSTs and external provider writes. Neither the status,
+  // URL nor lifecycle phase identifies an executed action's side effects.
   const nonReadCategories = [...observedNonReadCategories.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([category, count]) => `${category}:${count}`)
