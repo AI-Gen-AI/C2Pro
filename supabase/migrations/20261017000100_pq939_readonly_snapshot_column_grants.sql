@@ -89,6 +89,20 @@ BEGIN
             RAISE EXCEPTION 'PQ939_UNEXPECTED_TABLE_PRIVILEGES';
         END IF;
 
+        -- A custom app.current_tenant GUC alone is caller-settable.
+        -- This role alone is further confined to the single approved
+        -- synthetic project even if the tenant GUC is manipulated.
+        -- RESTRICTIVE policies compose with the existing permissive RLS.
+        EXECUTE format(
+            'CREATE POLICY %I ON public.%I AS RESTRICTIVE '
+            'FOR SELECT TO %I USING '
+            '(project_id = %L::uuid)',
+            'pq939_acceptance_project_readonly',
+            scoped.table_name,
+            'c2pro_prod_acceptance_ro',
+            'e7c6031f-cd9e-4642-a5ea-35a0207ceaeb'
+        );
+
         EXECUTE format(
             'GRANT SELECT (id, project_id) ON TABLE public.%I TO %I',
             scoped.table_name, 'c2pro_prod_acceptance_ro'
