@@ -669,3 +669,37 @@ def test_teen_written_days_and_parenthesized_numbers_match() -> None:
     assert _duration_conflicts("13 days", "fourteen (14) days") == [
         "duration_not_in_source:13 day"
     ]
+
+
+async def test_unclosed_smart_quote_with_possessive_must_fail_closed(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay.",
+    )
+    location = await SourceLocator(_code_repository(clause)).locate_evidence(
+        "Clause 5.2: ‘The Contractor’s invented tail",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.quote_status == "NOT_VERBATIM"
+
+
+async def test_ascii_single_quoted_excerpts_remain_independent(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a,
+        text="5.2 The Contractor shall pay the invoiced amount.",
+    )
+    locator = SourceLocator(_code_repository(clause))
+    good = await locator.locate_evidence(
+        "Clause 5.2: 'The Contractor shall pay' and 'the invoiced amount'",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    bad = await locator.locate_evidence(
+        "Clause 5.2: 'The Contractor shall pay' and 'renewal is automatic'",
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert good is not None and bad is not None
+    assert good.quote_status == "VERBATIM"
+    assert bad.quote_status == "NOT_VERBATIM"

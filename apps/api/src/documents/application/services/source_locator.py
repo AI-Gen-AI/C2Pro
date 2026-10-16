@@ -67,45 +67,78 @@ _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
 # single quotes use a greedy outer delimiter to preserve possessive apostrophes.
 _EXPLICIT_QUOTE = re.compile(
     r'''"([^"\n]+)"|“([^”\n]+)”|«([^»\n]+)»'''
-    r'''|(?<!\w)'([^\n]+)'(?!\w)'''
 )
 
 
-def _explicit_quotes(text: str) -> list[str]:
-    """Extract every delimited quote, including curly possessive apostrophes.
+def _explicit_quotes(text: str) -> tuple[list[str], bool]:
+    """Extract separately delimited excerpts, never accepting malformed quotes.
 
-    For U+2018/U+2019, use the last closing mark before the next opening mark:
-    it preserves internal possessives yet does not swallow adjacent excerpts.
+    Paired typographic marks and ASCII single quotes may contain possessives.
+    A missing true closing delimiter is explicitly non-verbatim (fail closed).
     """
     found = [
         (match.start(), next(part for part in match.groups() if part is not None))
         for match in _EXPLICIT_QUOTE.finditer(text)
     ]
+    malformed = False
+
     start = text.find("‘")
     while start != -1:
         next_start = text.find("‘", start + 1)
         limit = next_start if next_start != -1 else len(text)
         endings = [
-            i for i in range(start + 1, limit) if text[i] == "’"
-        ]
-        # Punctuation following a closing quote is a strong boundary.
-        # A conjunction is NOT: in "‘The Owners’ and consultants may
-        # terminate’" the first U+2019 is an internal plural possessive.
-        # If several closers appear, prefer the final strong closer; accepting
-        # the first semicolon before a later actual close would permit a
-        # fabricated tail to be certified VERBATIM. Ambiguity fails closed.
-        boundaries = [
-            i for i in endings
-            if (
-                i + 1 == len(text)
-                or text[i + 1] in ";,.:!?)]}"
+            i for i in range(start + 1, limit)
+            if text[i] == "’"
+            and not (
+                i + 1 < len(text)
+                and text[i - 1].isalnum()
+                and text[i + 1].isalnum()
             )
         ]
+        boundaries = [
+            i for i in endings
+            if i + 1 == len(text) or text[i + 1] in ";,.:!?)]}"
+        ]
         end = (boundaries[-1] if boundaries else endings[-1]) if endings else -1
-        if end != -1:
+        if end == -1:
+            malformed = True
+        else:
             found.append((start, text[start + 1 : end]))
         start = next_start
-    return [candidate for _, candidate in sorted(found)]
+
+    cursor = 0
+    while cursor < len(text):
+        opening = text.find("'", cursor)
+        if opening == -1:
+            break
+        if opening > 0 and text[opening - 1].isalnum():
+            cursor = opening + 1
+            continue
+        endings = [
+            i for i in range(opening + 1, len(text))
+            if text[i] == "'" and (
+                i + 1 == len(text) or not text[i + 1].isalnum()
+            )
+        ]
+        if not endings:
+            malformed = True
+            cursor = opening + 1
+            continue
+        # A delimiter immediately followed by a new explicitly quoted
+        # excerpt is a true closer, not an internal plural possessive.
+        separated = [
+            i for i in endings
+            if re.match(
+                r"\s+(?:and|or|but)\s+'", text[i + 1 :], re.IGNORECASE
+            )
+        ]
+        closing = separated[0] if separated else endings[-1]
+        found.append((opening, text[opening + 1 : closing]))
+        cursor = closing + 1
+
+    return [candidate for _, candidate in sorted(found)], malformed
+
+
 _REFERENCE_ONLY_FRAMING = re.compile(
     r"(?:see|refer\s+to|according\s+to|under|per|cf\.?|as\s+per|"
     r"seg[uú]n(?:\s+(?:la|el))?|v[eé]ase|consulte|conforme\s+a|de\s+acuerdo\s+con)",
@@ -249,7 +282,7 @@ class SourceLocator:
     ) -> tuple[QuoteStatus, list[str], ClaimSupport]:
         """Compare the claim with the clause without ever confirming the claim."""
         claim = self.clause_regex.sub(" ", query_text).strip(_EDGE_PUNCTUATION)
-        explicit = _explicit_quotes(query_text)
+        explicit, malformed_quote = _explicit_quotes(query_text)
         # Every explicitly delimited quotation must be present in the source.
         # Checking only the first permits a fabricated second quote to pass.
         if explicit:
@@ -262,8 +295,10 @@ class SourceLocator:
             _normalise(candidate).strip(_EDGE_PUNCTUATION)
             for candidate in candidates
         ]
-        if not any(re.search(r"\w", quote) for quote in quotes):
-            quote_status: QuoteStatus = "NO_QUOTE"
+        if malformed_quote:
+            quote_status: QuoteStatus = "NOT_VERBATIM"
+        elif not any(re.search(r"\w", quote) for quote in quotes):
+            quote_status = "NO_QUOTE"
         elif all(quote and quote in _normalise(clause_text) for quote in quotes):
             quote_status = "VERBATIM"
         else:
