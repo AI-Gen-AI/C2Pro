@@ -125,7 +125,7 @@ async def test_migration_enforces_restrictive_rls_for_two_synthetic_tenants() ->
             await conn.execute(_fixture_sql(m.GRANT_SQL, schema, role))
 
             policies = await conn.fetch(
-                "SELECT c.relname AS table_name, p.polpermissive, p.polcmd, "
+                "SELECT c.relname AS table_name, p.polpermissive, p.polcmd::text AS command, "
                 "p.polroles, pg_get_expr(p.polqual,p.polrelid) AS expression "
                 "FROM pg_catalog.pg_policy p "
                 "JOIN pg_catalog.pg_class c ON c.oid=p.polrelid "
@@ -135,7 +135,8 @@ async def test_migration_enforces_restrictive_rls_for_two_synthetic_tenants() ->
                 "pq939_acceptance_project_readonly",
             )
             assert {r["table_name"] for r in policies} == set(m.PROJECT_ONLY_TABLES)
-            assert all(r["polpermissive"] is False and r["polcmd"] == "r" for r in policies)
+            assert all(r["polpermissive"] is False for r in policies)
+            assert all(r["command"] == "r" for r in policies)
             assert all(str(APPROVED_PROJECT) in r["expression"] for r in policies)
 
             await conn.execute(f"SET LOCAL ROLE {role}")
