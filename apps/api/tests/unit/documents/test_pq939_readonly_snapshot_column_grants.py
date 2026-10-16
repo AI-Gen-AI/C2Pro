@@ -71,6 +71,19 @@ def test_guards_enforce_login_non_bypass_force_rls_and_project_policy() -> None:
     assert "IF NOT EXISTS" in sql
 
 
+def test_missing_ci_role_skips_grant_without_relaxing_real_role_guard() -> None:
+    sql = _migration().GRANT_SQL
+    # CI fixture deliberately lacks the production-only login; SQL does not
+    # create a fake account, but the actual qualification still fails closed
+    # if its protected read-only account / visible tables are unavailable.
+    assert sql.count("IF NOT EXISTS (") >= 2
+    assert "RETURN;" in sql
+    assert sql.index("RETURN;") < sql.index("RAISE EXCEPTION 'PQ939_READONLY_ROLE_GUARD_FAILED'")
+    assert sql.index("RAISE EXCEPTION 'PQ939_READONLY_ROLE_GUARD_FAILED'") < sql.index("GRANT SELECT")
+    assert "CREATE ROLE" not in sql
+    assert "CREATE USER" not in sql
+
+
 def test_grant_exactly_identity_and_scope_columns_only() -> None:
     m = _migration()
     sql = m.GRANT_SQL
