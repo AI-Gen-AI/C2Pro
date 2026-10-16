@@ -50,7 +50,7 @@ def test_explicit_clause_heading_codes_survive_deterministic_ingestion() -> None
     text = (
         "5.2.- The Contractor shall rectify all defects within fourteen days of notice, "
         "without undue delay and at its own cost.\n\n"
-        "6.3 Payment terms require certification and settlement within thirty days, "
+        "6.3.- Payment terms require certification and settlement within thirty days, "
         "with withholding only where expressly permitted.\n\n"
         "The Contractor remains responsible under clause 6.4 for site handover "
         "and all costs including storage and delivery of materials.\n\n"
@@ -60,7 +60,7 @@ def test_explicit_clause_heading_codes_survive_deterministic_ingestion() -> None
     clauses = _extract_contract_clauses(
         document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
     )
-    assert [c.clause_code for c in clauses] == ["5.2", "6.3", "AUTO-003", "1"]
+    assert [c.clause_code for c in clauses] == ["5.2", "6.3", "1"]
     for clause in clauses:
         assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
 
@@ -75,3 +75,15 @@ def test_unlabeled_or_nonheading_numeric_text_does_not_promote_a_source_code() -
     )
     assert len(clauses) == 1
     assert clauses[0].clause_code == "AUTO-001"
+
+
+def test_nested_heading_without_hyphen_is_retained_when_a_separate_paragraph() -> None:
+    text = (
+        "6.3 Payment terms require certification and settlement within thirty days, "
+        "unless the parties have agreed to a longer period expressly in writing."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert len(clauses) == 1
+    assert clauses[0].clause_code == "6.3"
