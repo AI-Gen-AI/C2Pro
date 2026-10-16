@@ -267,4 +267,43 @@ describe('PQ-HITL-06 review item source navigation', () => {
     );
     expect(screen.getByRole('link', { name: 'View evidence' })).toBeInTheDocument();
   });
+
+  it('preserves three distinct multi-document §6.1/§6.3/§6.4 source addresses', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    render(
+      <ReviewItemCard
+        item={{ ...item, item_data: {
+          ...item.item_data,
+          critique_notes: 'An unverified critique of §6.1 and §6.4.',
+          source_references: [
+            { document_id: 'doc-a', revision_id: 'rev-a', clause_id: 'a-61', clause_code: '6.1' },
+            { document_id: 'doc-a', revision_id: 'rev-a', clause_id: 'a-63', clause_code: '6.3' },
+            { document_id: 'doc-b', revision_id: 'rev-b', clause_id: 'b-64', clause_code: '6.4' },
+            { document_id: 'doc-a', revision_id: 'rev-a', clause_id: 'a-61', clause_code: '6.1' },
+            { document_id: 'doc-b', revision_id: 'rev-b', clause_code: '6.2' },
+            { document_id: 'doc-b', clause_id: 'forged-65', clause_code: '6.5' },
+          ],
+        } }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={onApprove}
+        onReject={onReject}
+      />,
+    );
+
+    const sourceLinks = screen.getAllByRole('link', { name: /^Inspect cited clause §/ });
+    expect(sourceLinks).toHaveLength(3);
+    expect(sourceLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-61',
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-63',
+      '/projects/project-1/evidence?documentId=doc-b&revisionId=rev-b&highlightId=b-64',
+    ]);
+    // A source link locates a clause; it never turns the prose into a
+    // verified finding or executes an HITL decision on navigation.
+    expect(screen.queryByRole('link', { name: /§6\.5/ })).not.toBeInTheDocument();
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
 });
