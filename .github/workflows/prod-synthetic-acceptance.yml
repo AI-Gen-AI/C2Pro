@@ -293,6 +293,23 @@ jobs:
             --clerk-org-id "$PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"
           echo "PROD_ACCEPTANCE_TENANT_PREFLIGHT_VERIFIED=1" >> "$GITHUB_ENV"
 
+      # Independent, read-only RLS-bound PostgreSQL snapshot of the
+      # preauthorized synthetic tenant. Baseline + key stay in RUNNER_TEMP,
+      # never in the uploaded product-qualification artifact. This does
+      # NOT authorize Server Actions or prove transient/global no-writes.
+      - name: Capture pre-journey tenant durable fingerprint
+        id: pq939_db_before
+        if: ${{ inputs.execution_mode == 'pq-hitl-03-readonly' }}
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/pq939_tenant_durable_attestation.py before \
+            --baseline "$RUNNER_TEMP/pq939-tenant-baseline.json" \
+            --key-file "$RUNNER_TEMP/pq939-tenant-snapshot.key"
+
       - name: Execute non-mutating real production identity preflight
         env:
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
@@ -342,6 +359,22 @@ jobs:
             --project=prod-pq-hitl-03-readonly \
             --reporter=line \
             --workers=1
+
+      - name: Compare post-journey tenant durable fingerprint
+        id: pq939_db_after
+        # Always compare after the real browser test, INCLUDING on FAIL.
+        # Never use an independent DB check to override a failed zero-write
+        # assertion, nor infer state outside tenant-visible durable rows.
+        if: ${{ always() && inputs.execution_mode == 'pq-hitl-03-readonly' && steps.pq939_db_before.outcome == 'success' }}
+        env:
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python apps/api/scripts/pq939_tenant_durable_attestation.py after \
+            --baseline "$RUNNER_TEMP/pq939-tenant-baseline.json" \
+            --key-file "$RUNNER_TEMP/pq939-tenant-snapshot.key"
 
       - name: Execute real production browser journey
         if: ${{ inputs.execution_mode == 'full-journey' }}
@@ -445,6 +478,8 @@ jobs:
           PROD_INPUT_EXECUTION_MODE: ${{ inputs.execution_mode }}
           PROD_INPUT_REQUIRE_HITL: ${{ inputs.require_hitl }}
           PQ939_STEP_OUTCOME: ${{ steps.pq939_revision_qa.outcome }}
+          PQ939_DB_BEFORE_OUTCOME: ${{ steps.pq939_db_before.outcome }}
+          PQ939_DB_AFTER_OUTCOME: ${{ steps.pq939_db_after.outcome }}
         shell: bash
         run: |
           {
@@ -461,10 +496,14 @@ jobs:
             echo "- lifecycle authority: **false**"
             if [ "$PROD_INPUT_EXECUTION_MODE" = "pq-hitl-03-readonly" ]; then
               echo "- #939 QA step outcome: \`$PQ939_STEP_OUTCOME\`"
-              if [ "$PQ939_STEP_OUTCOME" = "success" ]; then
-                echo "- #939: bounded A9/B7 UI, relogin and anonymous revision/entities checks PASSED (not two-principal isolation)."
+              echo "- #939 tenant snapshot before: \`$PQ939_DB_BEFORE_OUTCOME\`"
+              echo "- #939 tenant snapshot after: \`$PQ939_DB_AFTER_OUTCOME\`"
+              if [ "$PQ939_STEP_OUTCOME" = "success" ] &&
+                 [ "$PQ939_DB_BEFORE_OUTCOME" = "success" ] &&
+                 [ "$PQ939_DB_AFTER_OUTCOME" = "success" ]; then
+                echo "- #939: bounded UI/anonymous checks PASSED; tenant/project-scoped verifier-readable columns unchanged. Ungranted columns, transient/global/external effects, second principal and PDF navigation NOT VERIFIED."
               else
-                echo "- #939: NOT VERIFIED / failed, see exact test step and bounded artifacts; no acceptance claim."
+                echo "- #939: NOT VERIFIED / failed or skipped mandatory QA or tenant-state snapshot; no acceptance claim."
               fi
             fi
             echo
