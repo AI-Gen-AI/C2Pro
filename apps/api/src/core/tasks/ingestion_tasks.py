@@ -470,38 +470,70 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     return data
 
 
-# Bare single-level numbers are ambiguous: "5 Dollars remain payable" is
-# prose, not an evidenced clause. Require at least a two-word title (e.g.
-# "7 General Conditions") or a punctuated one-word title ("1. Scope. The").
-# True hyphenated headings and explicit ARTICLE/SECTION labels bypass this
-# conservative heuristic. This is a locator only, never substantive evidence.
-_TITLE_WORD = r"[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*"
-_SINGLE_LEVEL_HEADING = (
-    rf"\d{{1,3}}\.?[ \t]+(?:"
-    rf"{_TITLE_WORD}[ \t]+{_TITLE_WORD}\b"
-    rf"|{_TITLE_WORD}[.:][ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
-    r")"
+# A numbered heading is only a source locator when its structure supplies
+# evidence of a heading. A title-cased currency phrase ("5 Million Dollars")
+# is not such evidence, even if it has two title-cased words. Ambiguous numeric
+# prose remains AUTO-NNN and cannot be used for verified N4->N13 navigation.
+#
+# Explicit "5.2.-" and "SECTION 5.2" are handled independently by the
+# hard-heading recognizer. For otherwise unmarked inline headings, accept
+# only conventional contractual section titles; unknown titles fail closed.
+_INLINE_CONTRACT_TITLES = re.compile(
+    r"^(?:"
+    r"General[ \t]+Conditions"
+    r"|Payment[ \t]+(?:Terms|Conditions)"
+    r"|Termination[ \t]+Rights"
+    r"|Penalty[ \t]+Cap"
+    r"|Scope[ \t]+of[ \t]+(?:Work|Works|Services)"
+    r"|Definitions(?=[ \t]+[a-z])"
+    r"|Notice(?=[ \t]+[a-z])"
+    r"|Payment(?=[ \t]+[a-z])"
+    r"|Penalty(?=[ \t]+[a-z])"
+    r")(?![A-Za-zÁÉÍÓÚÜÑáéíóúüñ])",
+    re.IGNORECASE,
 )
-_SINGLE_LEVEL_HEADING_RE = re.compile(rf"^{_SINGLE_LEVEL_HEADING}")
-
-
-# A clause starts at an explicitly structured header or a conservative
-# numbered title. Apply the SAME single-level guard when assigning codes.
+# A standalone line can be a genuine one-word section heading ("1. Scope\n")
+# even when the body begins on the next line. Still require an identifiable
+# contractual title, not any capitalized currency/unit.
+_STANDALONE_CONTRACT_TITLES = {
+    "scope", "payment", "definitions", "notice", "notices", "liability",
+    "warranty", "insurance", "price", "termination", "penalties",
+    "delivery", "acceptance", "quality", "confidentiality", "duration",
+}
+_SOFT_NUMBERED_HEADING = re.compile(
+    r"^(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})\.?[ \t]+(?P<title>.+)$"
+)
+_PUNCTUATED_SECTION_TITLE = re.compile(
+    r"^(?:[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*)"
+    r"[.:][ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
+)
+_NUMERIC_LINE_START = re.compile(r"(?m)^[ \t]*(?=\d)")
 _CLAUSE_BOUNDARY = re.compile(
     r"(?m)^[ \t]*(?:"
     r"\d{1,3}(?:\.\d{1,3}){0,6}[ \t]*\.[ \t]*[-–]"
-    # A bare integer needs the structurally guarded title above. Nested
-    # numbers preserve existing explicit subsection handling, but reject
-    # numeric quantity prose (e.g. "5.2 percent interest").
-    rf"|{_SINGLE_LEVEL_HEADING}"
-    r"|\d{1,3}(?:\.\d{1,3}){1,6}\.?[ \t]+"
-    r"(?!(?i:percent|percentage|porcentaje|kg|km|mg|mw|kw)\b)"
-    r"(?=[A-ZÁÉÍÓÚÜÑ])"
     r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION))\w*"
     r"|(?i:(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA))\b"
-    r")",
+    r")"
 )
 
+
+def _soft_source_heading_code(line: str) -> str | None:
+    """Parse only recognizably structured unmarked numeric section headings.
+
+    Unknown title-cased text is not source identity. The same predicate gates
+    both span segmentation and persisted clause-code assignment.
+    """
+    candidate = _SOFT_NUMBERED_HEADING.match(line.strip())
+    if candidate is None:
+        return None
+    title = candidate.group("title").strip()
+    if title.casefold().rstrip(".:") in _STANDALONE_CONTRACT_TITLES:
+        return candidate.group("code")
+    if _PUNCTUATED_SECTION_TITLE.match(title):
+        return candidate.group("code")
+    if _INLINE_CONTRACT_TITLES.match(title):
+        return candidate.group("code")
+    return None
 
 def _trimmed_clause_span(
     parsed_text: str,
@@ -522,11 +554,18 @@ def _split_contract_clause_spans(
     parsed_text: str,
 ) -> list[tuple[str, int, int]]:
     """Split contract text while preserving exact source offsets."""
-    boundaries = [match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    # Hard structural markers and soft recognizable titles share one source
+    # identity predicate. Purely numeric prose must not split clause bodies.
+    boundaries = {match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)}
+    for candidate in _NUMERIC_LINE_START.finditer(parsed_text):
+        first_line = parsed_text[candidate.end():].split("\n", 1)[0]
+        if _soft_source_heading_code(first_line) is not None:
+            boundaries.add(candidate.start())
+    ordered_boundaries = sorted(boundaries)
     spans: list[tuple[int, int]] = []
 
-    if boundaries:
-        cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
+    if ordered_boundaries:
+        cut_points = ([0] if ordered_boundaries[0] > 0 else []) + ordered_boundaries + [len(parsed_text)]
         spans = [
             (cut_points[index], cut_points[index + 1])
             for index in range(len(cut_points) - 1)
@@ -576,23 +615,9 @@ def _explicit_source_clause_heading_code(segment: str) -> str | None:
     if labelled:
         return labelled.group(1)
 
-    # 5.2 Payment terms / 5.2. Payment terms. Lower-case prose starting
-    # with a decimal is NOT reliable clause structure.
-    nested = re.match(
-        r"^(\d{1,3}(?:\.\d{1,3}){0,6})\.?[ \t]+(?=[A-ZÁÉÍÓÚÜÑ])",
-        heading,
-    )
-    if not nested:
-        return None
-    # Splitting and code promotion must agree; never mint "5" merely
-    # because one prose word after a quantity happens to be capitalized.
-    if nested.group(1).isdigit() and not _SINGLE_LEVEL_HEADING_RE.match(heading):
-        return None
-    first_word = heading[nested.end(1):].lstrip(" .\t").split(" ", 1)[0].casefold()
-    if first_word in {"percent", "percentage", "porcentaje", "kg", "km", "mg", "mw", "kw"}:
-        return None
-    return nested.group(1)
-
+    # Avoid a second looser interpretation: a span recognized by the
+    # splitter must be the same span eligible for an exact source code.
+    return _soft_source_heading_code(heading)
 
 def _extract_contract_clauses(
     *,
