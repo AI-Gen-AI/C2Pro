@@ -255,3 +255,53 @@ async def test_spanish_claim_with_wrong_deadline_is_flagged(ids) -> None:
     assert location is not None
     assert "duration_not_in_source:30 day" in location.term_conflicts
     assert location.claim_support == "CONFLICT_DETECTED"
+
+
+async def test_reference_only_framing_does_not_claim_a_quote(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a, text=SOURCE_A
+    )
+    locator = SourceLocator(_code_repository(clause))
+
+    for reference in ("See Clause 5.2", "According to Clause 5.2", "Según la cláusula 5.2"):
+        location = await locator.locate_evidence(
+            reference, document_id, tenant_id, revision_id=revision_a
+        )
+        assert location is not None
+        assert location.quote_status == "NO_QUOTE"
+        assert location.term_conflicts == []
+        assert location.claim_support == "UNVERIFIED"
+
+
+async def test_explicit_quote_ignores_citation_framing(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a, text=SOURCE_A
+    )
+    locator = SourceLocator(_code_repository(clause))
+    location = await locator.locate_evidence(
+        'According to Clause 5.2, "The Contractor shall bear the cost of '
+        'remedial works within fourteen (14) days"',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.quote_status == "VERBATIM"
+    assert location.term_conflicts == []
+    assert location.claim_support == "UNVERIFIED"
+
+
+async def test_framed_quote_with_wrong_term_remains_conflicting(ids) -> None:
+    tenant_id, document_id, revision_a, _ = ids
+    clause = _clause(
+        tenant_id=tenant_id, document_id=document_id, revision_id=revision_a, text=SOURCE_A
+    )
+    locator = SourceLocator(_code_repository(clause))
+    location = await locator.locate_evidence(
+        'According to Clause 5.2, "The Contractor bears the cost within 30 days"',
+        document_id, tenant_id, revision_id=revision_a,
+    )
+    assert location is not None
+    assert location.quote_status == "NOT_VERBATIM"
+    assert "duration_not_in_source:30 day" in location.term_conflicts
+    assert location.claim_support == "CONFLICT_DETECTED"

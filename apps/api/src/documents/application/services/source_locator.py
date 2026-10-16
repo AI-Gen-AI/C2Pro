@@ -64,6 +64,15 @@ class SourceLocation(BaseModel):
 
 _QUOTE_CHARS = str.maketrans("", "", "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb")
 _EDGE_PUNCTUATION = " \t\n:;,.-\u2013\u2014"
+# Match explicit quoted evidence independently from citation framing.
+_EXPLICIT_QUOTE = re.compile(
+    r"""["“«]([^"”»]+)["”»]|(?<!\\w)'([^']+)'(?!\\w)|‘([^’]+)’"""
+)
+_REFERENCE_ONLY_FRAMING = re.compile(
+    r"(?:see|refer\\s+to|according\\s+to|under|per|cf\\.?|as\\s+per|"
+    r"seg[uú]n|v[eé]ase|consulte|conforme\\s+a|de\\s+acuerdo\\s+con)",
+    re.IGNORECASE,
+)
 _NUMBER_WORDS = {
     word: value
     for value, words in {
@@ -134,7 +143,15 @@ class SourceLocator:
     ) -> tuple[QuoteStatus, list[str], ClaimSupport]:
         """Compare the claim with the clause without ever confirming the claim."""
         claim = self.clause_regex.sub(" ", query_text).strip(_EDGE_PUNCTUATION)
-        quote = _normalise(claim).strip(_EDGE_PUNCTUATION)
+        explicit = _EXPLICIT_QUOTE.search(query_text)
+        if explicit:
+            # Citation prefixes are not part of the source's literal quotation.
+            candidate = next(part for part in explicit.groups() if part is not None)
+        elif not claim or _REFERENCE_ONLY_FRAMING.fullmatch(claim):
+            candidate = ""
+        else:
+            candidate = claim
+        quote = _normalise(candidate).strip(_EDGE_PUNCTUATION)
         if not re.search(r"\w", quote):
             quote_status: QuoteStatus = "NO_QUOTE"
         elif quote in _normalise(clause_text):
