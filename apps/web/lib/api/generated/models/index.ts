@@ -149,6 +149,7 @@ export * from "./dLQListResponse";
 export * from "./dLQRetryResponse";
 export * from "./documentDetailResponse";
 export * from "./documentDetailResponseClauses";
+export * from "./downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams";
 export * from "./documentEntityResponse";
 export * from "./documentEntityResponseMetadata";
 export * from "./documentHistoryResponse";
