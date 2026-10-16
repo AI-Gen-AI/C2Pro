@@ -159,3 +159,44 @@ def test_quantity_prefix_is_not_single_level_clause_heading() -> None:
     )
     assert len(clauses) == 1
     assert clauses[0].clause_code == "AUTO-001"
+
+
+def test_quantity_prose_before_true_numbered_sections_never_creates_a_false_locator() -> None:
+    """A capitalized currency word is insufficient evidence of a clause header."""
+    text = (
+        "5 Dollars remain payable as an amount under the existing agreement "
+        "and must be settled after certification of the completed work.\n"
+        "5. Euros remain payable as another amount under the contract "
+        "and may not be characterized as a separately numbered obligation.\n"
+        "7 General Conditions govern the responsibilities of the Engineer "
+        "and the Contractor in relation to written notices and claims.\n"
+        "8.1 Termination Rights define the circumstances under which "
+        "either party can lawfully terminate for breach."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=text
+    )
+    assert [clause.clause_code for clause in clauses] == [
+        "AUTO-001", "7", "8.1"
+    ]
+    assert clauses[0].full_text.startswith("5 Dollars")
+    assert "5. Euros" in clauses[0].full_text
+    for clause in clauses:
+        assert text[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_single_capitalized_quantity_word_does_not_establish_source_identity() -> None:
+    """A lone title-cased unit is not a trustworthy bare integer heading."""
+    from src.core.tasks.ingestion_tasks import _explicit_source_clause_heading_code
+
+    for prefix in ("5 Dollars", "12 Euros", "5. Dollars", "17 Shares"):
+        prose = (
+            f"{prefix} remain payable upon final certification, "
+            "subject to all outstanding contractual obligations."
+        )
+        assert _explicit_source_clause_heading_code(prose) is None
+        clauses = _extract_contract_clauses(
+            document_id=uuid4(), project_id=uuid4(), tenant_id=uuid4(), parsed_text=prose
+        )
+        assert len(clauses) == 1
+        assert clauses[0].clause_code == "AUTO-001"
