@@ -136,7 +136,10 @@ async def test_spanish_plural_party_is_detected(claim: str, party: str) -> None:
     assert f"party_not_in_source:{party}" in location.term_conflicts
 
 
-@pytest.mark.parametrize("reference", ["Subclause 5.2", "Subcláusula 5.2", "Sub-Clause 5.2"])
+@pytest.mark.parametrize(
+    "reference",
+    ["Subclause 5.2", "Subcláusula 5.2", "Sub-Clause 5.2", "Subcláusula 5.2", "Cláusula 5.2"],
+)
 async def test_subclause_reference_uses_the_clause_code_path(reference: str) -> None:
     location = await _locate(reference, "5.2 The Contractor shall bear the cost.")
 
