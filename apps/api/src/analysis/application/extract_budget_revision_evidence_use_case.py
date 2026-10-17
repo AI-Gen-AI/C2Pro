@@ -19,6 +19,7 @@ from src.analysis.domain.budget_row_evidence import (
 )
 from src.coherence.domain.budget_line_availability import structured_budget_assessment_from_rows
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+from src.documents.application.document_source import verify_revision_file_hash
 from src.documents.domain.models import Document, DocumentType
 from src.temporal.domain.document_revision import DocumentRevision
 from src.wbs.adapters.persistence.link_authority import require_linkable_wbs_nodes
@@ -62,6 +63,7 @@ class ExtractBudgetRevisionEvidenceUseCase:
         existing_row_identities: Collection[tuple[UUID, str]],
     ) -> BudgetRevisionEvidenceResult:
         _require_matching_budget_revision(document, revision)
+        verify_revision_file_hash(source_path, revision.blob_hash)
         parsed_rows = await self.parser.parse_budget(source_path)
         verified_locators = {str(row["source_locator"]) for row in parsed_rows}
         wbs_by_locator = {

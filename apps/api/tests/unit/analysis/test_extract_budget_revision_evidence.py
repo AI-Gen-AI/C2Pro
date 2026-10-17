@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
 
@@ -48,14 +49,14 @@ def _document() -> Document:
     )
 
 
-def _revision() -> DocumentRevision:
+def _revision(source: Path | None = None) -> DocumentRevision:
     return DocumentRevision(
         revision_id=REVISION,
         document_id=DOCUMENT,
         project_id=PROJECT,
         tenant_id=TENANT,
         rev_no=1,
-        blob_hash="a" * 64,
+        blob_hash=sha256(source.read_bytes()).hexdigest() if source else "a" * 64,
         blob_key="revisions/budget.xlsx",
         valid_from=NOW,
         created_at=NOW,
@@ -82,7 +83,7 @@ async def test_extracts_a_real_xlsx_row_with_locator_provenance_and_approved_wbs
         parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
     ).execute(
         document=_document(),
-        revision=_revision(),
+        revision=_revision(source),
         source_path=source,
         existing_row_identities=frozenset(),
     )
@@ -98,6 +99,16 @@ async def test_extracts_a_real_xlsx_row_with_locator_provenance_and_approved_wbs
     assert row.wbs_baseline_id == BASELINE
     assert row.wbs_node_id == WBS_NODE
     assert result.assessment_reason == "approved_budget_comparison_missing"
+
+
+@pytest.mark.asyncio
+async def test_rejects_tampered_xlsx_before_parsing(tmp_path: Path) -> None:
+    source = tmp_path / "budget.xlsx"
+    _budget_xlsx(source)
+    revision = _revision(source)
+    source.write_bytes(source.read_bytes() + b"tampered")
+    with pytest.raises(Exception, match="blob hash mismatch"):
+        await ExtractBudgetRevisionEvidenceUseCase(parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()).execute(document=_document(), revision=revision, source_path=source, existing_row_identities=frozenset())
 
 
 @pytest.mark.asyncio
@@ -117,7 +128,7 @@ async def test_real_rows_with_mixed_units_or_monetary_bases_stay_not_assessed(
         parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
     ).execute(
         document=_document(),
-        revision=_revision(),
+        revision=_revision(source),
         source_path=source,
         existing_row_identities=frozenset(),
     )
@@ -136,7 +147,7 @@ async def test_redelivery_skips_an_already_recorded_revision_locator(tmp_path: P
         parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
     ).execute(
         document=_document(),
-        revision=_revision(),
+        revision=_revision(source),
         source_path=source,
         existing_row_identities=frozenset({(REVISION, "Budget 2026!2")}),
     )
