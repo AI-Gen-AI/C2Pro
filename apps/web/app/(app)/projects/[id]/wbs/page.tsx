@@ -57,7 +57,7 @@ function WBSAuthorityBanner({ authority }: { authority: ProjectWBSAuthority }) {
             className="rounded border px-2 py-0.5 text-xs"
             data-testid="wbs-authority-draft-pending"
           >
-            Draft change pending review
+            Open WBS change set
           </span>
         ) : null}
       </div>

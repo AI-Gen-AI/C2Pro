@@ -209,7 +209,10 @@ describe("ProjectWBSPage", () => {
     );
   });
 
-  it("flags a pending draft change set on top of an approved baseline", () => {
+  it("flags an open WBS change set on top of an approved baseline, without claiming it is pending review", () => {
+    // `draft_exists` is true for both an unsubmitted DRAFT and a SUBMITTED change set
+    // (backend's `open_change_sets > 0`); an unsubmitted draft is NOT "pending review",
+    // so the banner must not assert a review status the backend does not report.
     hookState.items = [root];
     hookState.totalItems = 2;
     hookState.authority = authority({
@@ -221,7 +224,11 @@ describe("ProjectWBSPage", () => {
     });
     renderWithProviders(<ProjectWBSPage />);
 
-    expect(screen.getByTestId("wbs-authority-draft-pending")).toBeInTheDocument();
+    const flag = screen.getByTestId("wbs-authority-draft-pending");
+    expect(flag).toBeInTheDocument();
+    expect(flag).toHaveTextContent("Open WBS change set");
+    expect(flag).not.toHaveTextContent(/pending review/i);
+    expect(screen.queryByText(/pending review/i)).not.toBeInTheDocument();
   });
 
   it("renders coverage honestly, distinguishing approved scope from unapproved legacy items", () => {
