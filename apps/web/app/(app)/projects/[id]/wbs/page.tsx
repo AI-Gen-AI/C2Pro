@@ -5,6 +5,11 @@
  * IR-4: read-only view of the authoritative project WBS (procurement WBS store).
  * No create/edit/move actions are offered because no served endpoint persists them.
  *
+ * PC-7a (#672/#688): shows the real WBS authority state from the single resolver
+ * (PC-2a.3 / ADR-029) -- NO_WBS / DRAFT_ONLY / LEGACY_UNGOVERNED / APPROVED_BASELINE --
+ * instead of silently implying every WBS is an approved baseline. Dates and budget on
+ * the rows below are never approved schedule/cost authority, in every state.
+ *
  * Test Suite ID: TASK-1427
  */
 
@@ -17,6 +22,52 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronDown, Expand, Loader2 } from "lucide-react";
 import { useWBSTree, type WBSTreeItem } from "@/hooks/useWBSTree";
+import type { ProjectWBSAuthority } from "@/lib/api/generated/models";
+
+const AUTHORITY_BANNER_CLASSES: Record<string, string> = {
+  APPROVED_BASELINE: "border-green-200 bg-green-50 text-green-900",
+  DRAFT_ONLY: "border-blue-200 bg-blue-50 text-blue-900",
+  LEGACY_UNGOVERNED: "border-amber-200 bg-amber-50 text-amber-900",
+  NO_WBS: "border-muted bg-muted/50 text-muted-foreground",
+};
+
+function WBSAuthorityBanner({ authority }: { authority: ProjectWBSAuthority }) {
+  const bannerClasses =
+    AUTHORITY_BANNER_CLASSES[authority.display_state] ?? AUTHORITY_BANNER_CLASSES.NO_WBS;
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ${bannerClasses}`}
+      data-testid="wbs-authority-banner"
+      data-authority-state={authority.display_state}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-medium" data-testid="wbs-authority-label">
+            {authority.scope_label}
+          </p>
+          {authority.display_state === "APPROVED_BASELINE" && authority.applied_at ? (
+            <p className="text-xs opacity-80" data-testid="wbs-authority-applied-at">
+              Approved {authority.applied_at.slice(0, 10)}
+            </p>
+          ) : null}
+        </div>
+        {authority.draft_exists && authority.display_state !== "DRAFT_ONLY" ? (
+          <span
+            className="rounded border px-2 py-0.5 text-xs"
+            data-testid="wbs-authority-draft-pending"
+          >
+            Draft change pending review
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 text-xs opacity-80" data-testid="wbs-authority-disclaimer">
+        Dates and budget below are informational only -- not approved schedule or cost
+        authority.
+      </p>
+    </div>
+  );
+}
 
 function labelItemType(itemType: string | null | undefined): string | null {
   if (!itemType) return null;
@@ -124,6 +175,8 @@ export default function ProjectWBSPage() {
   const {
     items,
     totalItems,
+    coverage,
+    authority,
     isLoading,
     isError,
     error,
@@ -168,6 +221,21 @@ export default function ProjectWBSPage() {
           Expand All
         </Button>
       </div>
+
+      {authority ? <WBSAuthorityBanner authority={authority} /> : null}
+
+      {coverage ? (
+        <p className="text-sm text-muted-foreground" data-testid="wbs-coverage-summary">
+          {coverage.total_items === 1 ? "1 item" : `${coverage.total_items} items`} total ·{" "}
+          {coverage.items_with_budget} with budget · {coverage.items_with_dates} with dates
+          {coverage.approved_scope_items ? (
+            <> · {coverage.approved_scope_items} in the approved baseline</>
+          ) : null}
+          {coverage.unapproved_legacy_items ? (
+            <> · {coverage.unapproved_legacy_items} unapproved legacy</>
+          ) : null}
+        </p>
+      ) : null}
 
       <Card data-testid="wbs-tree">
         <CardHeader className="flex flex-row items-center justify-between">

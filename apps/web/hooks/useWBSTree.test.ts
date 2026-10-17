@@ -3,6 +3,9 @@
  * useWBSTree consumes the authoritative GET /projects/{id}/wbs contract (IR-4):
  * root items with nested `children`, procurement fields, and no write operations
  * (the in-memory write routes it used to call are no longer served).
+ *
+ * PC-7a (#672/#688): `coverage` and the single-resolver `authority` block
+ * (PC-2a.3 / ADR-029) must pass through unchanged -- they used to be dropped.
  */
 import { renderHook, act } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -87,9 +90,24 @@ const runtimePayload = {
     items_with_dates: 1,
     items_with_alerts: 0,
     completion_average: 0,
+    approved_scope_items: 0,
+    unapproved_legacy_items: 4,
   },
   alerts: [],
   total_items: 4,
+  authority: {
+    state: "LEGACY_UNGOVERNED",
+    display_state: "LEGACY_UNGOVERNED",
+    approved: false,
+    scope_label: "Unapproved / Legacy WBS",
+    baseline_id: null,
+    baseline_no: null,
+    tree_digest: null,
+    applied_at: null,
+    draft_exists: false,
+    dates_schedule_authority: false,
+    budget_cost_authority: false,
+  },
 };
 
 describe("useWBSTree (authoritative WBS contract)", () => {
@@ -120,6 +138,57 @@ describe("useWBSTree (authoritative WBS contract)", () => {
     });
     expect(secondRoot.children).toEqual([]);
     expect(result.current.totalItems).toBe(4);
+  });
+
+  it("passes coverage through unchanged instead of dropping it", () => {
+    getMockData.mockReturnValue(runtimePayload);
+    const { result } = renderHook(() => useWBSTree({ projectId: "proj-wbs" }), {
+      wrapper: createTestWrapper(),
+    });
+
+    expect(result.current.coverage).toEqual(runtimePayload.coverage);
+  });
+
+  it("passes the single-resolver authority block through unchanged", () => {
+    getMockData.mockReturnValue(runtimePayload);
+    const { result } = renderHook(() => useWBSTree({ projectId: "proj-wbs" }), {
+      wrapper: createTestWrapper(),
+    });
+
+    expect(result.current.authority).toEqual(runtimePayload.authority);
+  });
+
+  it.each([
+    ["NO_WBS", "No WBS"],
+    ["DRAFT_ONLY", "Draft WBS (not approved)"],
+    ["LEGACY_UNGOVERNED", "Unapproved / Legacy WBS"],
+    ["APPROVED_BASELINE", "Approved WBS Baseline #3"],
+  ] as const)("surfaces authority.display_state=%s with its scope label", (displayState, scopeLabel) => {
+    getMockData.mockReturnValue({
+      ...runtimePayload,
+      authority: {
+        state: displayState === "DRAFT_ONLY" ? "NO_WBS" : displayState,
+        display_state: displayState,
+        approved: displayState === "APPROVED_BASELINE",
+        scope_label: scopeLabel,
+        baseline_id: displayState === "APPROVED_BASELINE" ? "base-3" : null,
+        baseline_no: displayState === "APPROVED_BASELINE" ? 3 : null,
+        tree_digest: null,
+        applied_at: displayState === "APPROVED_BASELINE" ? "2026-10-01T00:00:00+00:00" : null,
+        draft_exists: displayState === "DRAFT_ONLY",
+        dates_schedule_authority: false,
+        budget_cost_authority: false,
+      },
+    });
+    const { result } = renderHook(() => useWBSTree({ projectId: "proj-wbs" }), {
+      wrapper: createTestWrapper(),
+    });
+
+    expect(result.current.authority?.display_state).toBe(displayState);
+    expect(result.current.authority?.scope_label).toBe(scopeLabel);
+    // Never, in any authority state, treat WBS dates/budget as approved authority.
+    expect(result.current.authority?.dates_schedule_authority).toBe(false);
+    expect(result.current.authority?.budget_cost_authority).toBe(false);
   });
 
   it("does not invent progress the contract does not carry", () => {
@@ -166,5 +235,7 @@ describe("useWBSTree (authoritative WBS contract)", () => {
 
     expect(result.current.items).toEqual([]);
     expect(result.current.totalItems).toBeNull();
+    expect(result.current.coverage).toBeNull();
+    expect(result.current.authority).toBeNull();
   });
 });
