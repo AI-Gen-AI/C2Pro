@@ -110,6 +110,32 @@ class _Denied:
 
 
 
+@pytest.mark.asyncio
+async def test_schedule_evidence_rejects_missing_formula_workbook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A source workbook without the formula view cannot certify evidence."""
+    source = tmp_path / "missing-formula-view.xlsx"
+    _xlsx(source)
+    original_open = openpyxl.load_workbook
+    opened_formula_view = False
+
+    def _missing_formula_view(*args: object, **kwargs: object):
+        nonlocal opened_formula_view
+        if kwargs.get("data_only") is False:
+            opened_formula_view = True
+            return None
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", _missing_formula_view)
+    with pytest.raises(
+        ExcelParsingError,
+        match="Formula workbook unavailable for verified schedule evidence",
+    ):
+        await ExcelFileParser().parse_schedule(source, include_evidence=True)
+    assert opened_formula_view
+
+
 @pytest.mark.parametrize("include_evidence", [False, True])
 @pytest.mark.asyncio
 async def test_schedule_openpyxl_lifecycle_runs_off_event_loop(
