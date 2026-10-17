@@ -218,8 +218,12 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
       />,
     );
     await waitFor(() => {
-      expect(viewer).toHaveAttribute("data-file", "/api/documents/doc-a/download?revision_id=rev-b");
-      expect(viewer).toHaveAttribute("data-page", "5");
+      // Lazy PDFViewer may remount on revision B; query the CURRENT DOM node,
+      // not the stale ref obtained before the A-to-B transition.
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute(
+        "data-file", "/api/documents/doc-a/download?revision_id=rev-b"
+      );
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "5");
     });
   });
 
