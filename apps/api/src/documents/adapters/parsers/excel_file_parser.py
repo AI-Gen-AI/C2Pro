@@ -204,6 +204,12 @@ class ExcelFileParser:
                 raise ExcelParsingError(
                     "Formula workbook unavailable for verified budget evidence"
                 )
+            # Evidence mode fails closed above; keep the workbook used for
+            # cell inspection non-optional for static type checking. The
+            # legacy path never consults this evidence-only sheet.
+            evidence_formula_sheet = (
+                formula_sheet if formula_sheet is not None else sheet
+            )
 
             header_row_index, headers = self._find_budget_headers(sheet)
             if header_row_index is None:
@@ -253,7 +259,7 @@ class ExcelFileParser:
                     for column_index, column_name in enumerate(headers, start=1):
                         if column_name not in evidence_columns:
                             continue
-                        if formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                        if evidence_formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
                             raise ExcelParsingError(
                                 "Unverified formula-derived budget evidence at "
                                 f"{sheet.title}!{row_index} ({column_name}); "
@@ -276,7 +282,7 @@ class ExcelFileParser:
                     row_currency = row_data.get("currency")
                     for monetary_field in ("unit price", "total"):
                         column_index = headers.index(monetary_field) + 1
-                        number_format = formula_sheet.cell(
+                        number_format = evidence_formula_sheet.cell(
                             row=row_index, column=column_index
                         ).number_format
                         self._require_budget_currency_consistency(
