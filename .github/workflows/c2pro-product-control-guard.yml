@@ -11,6 +11,7 @@ on:
     paths:
       - "validation/product/**"
       - "evidence/product-qualification/**"
+      - "apps/api/tests/fixtures/pq_hitl_09_multidoc_journey_matrix_v1.json"
       - "docs/product/00-c2pro-master-product-control-v1.md"
       - ".github/workflows/c2pro-product-control-guard.yml"
   push:
@@ -18,6 +19,7 @@ on:
     paths:
       - "validation/product/**"
       - "evidence/product-qualification/**"
+      - "apps/api/tests/fixtures/pq_hitl_09_multidoc_journey_matrix_v1.json"
       - "docs/product/00-c2pro-master-product-control-v1.md"
 
 concurrency:
