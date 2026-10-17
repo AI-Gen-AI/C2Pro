@@ -111,6 +111,12 @@ class ExcelFileParser:
                 raise ExcelParsingError(
                     "Formula workbook unavailable for verified schedule evidence"
                 )
+            # Evidence mode fails closed above; keep the workbook used for
+            # cell inspection non-optional for static type checking. The
+            # legacy path never consults this evidence-only sheet.
+            evidence_formula_sheet = (
+                formula_sheet if formula_sheet is not None else sheet
+            )
 
             header_row_index, headers = self._find_schedule_headers(sheet, include_evidence=include_evidence)
             if header_row_index is None:
@@ -137,7 +143,7 @@ class ExcelFileParser:
                     for column_index, name in enumerate(headers, start=1):
                         if name not in evidence_columns:
                             continue
-                        if formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                        if evidence_formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
                             category = (
                                 "date" if name in {"start date", "end date"} else "source"
                             )
