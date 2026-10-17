@@ -859,3 +859,44 @@ The migration is successful when the owner can issue a bounded high-level develo
 10. approve a PR under machine-enforced policy;
 11. escalate only material authority/product/security decisions;
 12. preserve Product Runtime separation and no direct agent mutation of `main`.
+
+<!-- ACC01_OWNER_SUPERVISED_PILOT_20261017_START -->
+## Annex — ACC-01 owner-supervised branch-only development pilot (17–31 October 2026)
+
+**Status: PROPOSED POLICY AMENDMENT — NOT EFFECTIVE UNTIL INDEPENDENT REVIEW AND HUMAN MERGE INTO THE APPROVED CONTROL BASE.** Owner explicitly approved preparing this narrowly scoped temporary route on 17 October 2026, following the blockers documented at [#991](https://github.com/AI-Gen-AI/C2Pro/issues/991) and sprint [#1049](https://github.com/AI-Gen-AI/C2Pro/issues/1049). This annex changes ONLY the precondition for **writing draft application code to dedicated non-protected feature branches** during the pilot; it never creates Product WORK receipts or grants branch merge, protected refs, database/production privileges, deployment, HITL decisions, acceptance or trust promotion.
+
+### Why this pilot exists
+
+Two first-pass agents (Claude PC-7a; Codex PC-3) returned audit-only results with zero changes/tests because `.c2pro/control/current.yaml` is `reconciled_idle` and `.c2pro/product-work/` has no assigned Task. This is a correct fail-closed interpretation under the previous policy. DEV-14 (#991) remains a separate development-control project, and creating a new WORK cryptographic issuer or autonomous orchestrator is expressly excluded from the December C2Pro delivery scope by the owner (#1036). The existing `scripts/development/validate_task_trace.py` recognizes `OWNER_SUPERVISED` as **Task-to-PR audit only**, NOT as execution authority. Its current Product registry does not cover the PC-7a/PC-3 issue #672; do not forge PQ-HITL IDs, WORK receipts, `active_work`, trace PASS or review attestation to make it appear covered.
+
+### Strict manual authorization for two implementation branches only
+
+Only after this policy amendment is independently reviewed and merged, this **explicit owner decision plus a verified isolated workspace assignment** may replace the otherwise missing Product WORK envelope **for branch-local code development only**, with the following bounded identities:
+
+| Lane | Principal implementer | Allowed feature branch (from exact main observed 17-Oct-2026) | Scope |
+| --- | --- | --- | --- |
+| PC-7a / #672/#688 | `claude_code` | `feat/acc01-pc7a-wbs-ui-20261017` | Existing WBS frontend hook and page; WBS-scoped UI tests; expose backend `authority.display_state`, `coverage`, approved scope label and baseline identity without inventing approval or financial/schedule authority |
+| PC-3 / #672 | `codex` | `feat/acc01-pc3-budget-evidence-20261017` | Narrowly scoped budget-document source-row extraction, typed provenance, existing coherence/alert integration and dedicated tests; tenant/project/revision-bound BudgetRow; no BOM or legacy WBS costs as truth. Any necessary additive schema migration must receive independent data/security review and be tested ONLY on disposable local DB. |
+
+**Initial approved base:** `3d11aeee8b0455a372e30a7d3aa56582e2b45ca5` (checked against GitHub `main` on 17-Oct-2026). Workers MUST fetch/revalidate current protected main before working, establish a separately created clean worktree and ensure branch ancestry, no forbidden path overlap and one active writer per workspace. The owner/orchestrator, not the worker, owns workspace creation and validation. The presence of a Git branch or tmux session **alone does not prove a valid workspace**. A changed base demands a fresh bounded record, never silent rebase onto unreviewed control.
+
+The GitHub issue comment that identifies owner authorization, implementer, scope, base/head, working directory and clean-workspace evidence is a **manual branch-only activity record**, not a synthetic Product WORK receipt. No writes should begin until an actual clean workspace is verified and the approved amendment is effective. If runtime guards reject the operation, STOP and report the guard; no force, shell tricks, downgraded checks, permissions, forged provenance or self-authored control edits.
+
+### Absolute boundaries and existing integration gates
+
+- Never write directly to `main`, rewrite/force-push shared history, change protected branch rules or mark product acceptance from a PR. All **merges remain human-directed, exact-HEAD CI green, genuine independent principal review (Claude vs Codex), correct scope, zero open P1/P2, required review threads closed, existing review-attestation and security gates satisfied**. Any missing required gate means HOLD rather than waiver.
+- No customer data, actual production DB/GRANT/migrations applied, deployments, roles, secrets, credentials, provider routing, live cost/paid providers, review B HITL decision or PROPOSED→TRUSTED transition. Disposable synthetic test data only. No CI/review bypass, and no changes to `.c2pro/**`, `.github/**`, Product MASTER or runtime trust policy under the two implementation branches.
+- `gemini_cli` and `opencode` remain QA/specialist workers and cannot satisfy the principal-review gate in the current `.c2pro/control/routing.yaml`. Keep existing OpenCode #1044 and Gemini #945 work parallel and non-overlapping.
+- `OWNER_SUPERVISED` is a trace-audit mode, not automatic execution/PR approval; because PC-7a/PC-3 aren't in the existing PR trace registry, label such PRs `PRODUCT_TASK_TRACE_UNSUPPORTED/OWNER_PILOT` in prose instead of claiming `TASK_MAPPED` or `PASS`. Preserve the current non-blocking task-trace diagnostic, but never bypass any genuinely required CI, Review Attestation, tests or security checks. A future expansion to enforce these tasks requires a separate accepted validator change; not part of this pilot.
+- Freeze path ownership: Claude never edits OpenCode PDF/evidence files or Codex Budget/Coherence files; Codex never edits WBS UI. Tests follow file ownership. One worker = one feature-branch author. Escalate collisions or a request to broaden scope; do not stretch this pilot by interpretation.
+
+### Verification and expiry
+
+1. First artifact is an actual scoped source diff with tests RED→GREEN; record `TASK, OWNER_PERMISSION, WORKSPACE, BASE_SHA, HEAD_SHA, FILES, TESTS, CI, REVIEWER, RISK, NEXT_USER_DEMO` in #1049.
+2. WBS reads **real** `ProjectWBSResponse.authority/coverage` already present in API/types, including `DRAFT_ONLY`, and does not turn legacy/planned cost/dates into authority.
+3. Budget extraction preserves genuine document/revision/row identity; when facts aren't comparable, `BUDGET=NOT_ASSESSED` rather than Score=100. Alert linkage to WBS is delivered using canonical trusted records, not the placeholder `alerts: []` in the current WBS view.
+4. Both feature PRs require independent principal review, exact-head green required checks and owner merge decision; branch-code completion is not deployed E2E acceptance.
+5. **Expires at 23:59 Europe/Madrid on 31-Oct-2026**, or on the merge/closure of the two named feature PRs, whichever is earlier. No automatic renewal or extension to another task/branch. Expiry does not itself revert code or authorize merges.
+
+This temporary branch-only development permission is distinct from DEV-14 Product WORK and MUST NOT be represented as a change to `current.yaml`, a Product acceptance proof or a workaround to pass failed CI. If it cannot be honored without breaking an effective host/workspace/security guard, the pilot remains blocked at that boundary until the owner resolves the incompatibility.
+<!-- ACC01_OWNER_SUPERVISED_PILOT_20261017_END -->
