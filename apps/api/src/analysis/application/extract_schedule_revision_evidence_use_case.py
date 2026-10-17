@@ -76,8 +76,13 @@ class ExtractScheduleRevisionEvidenceUseCase:
     ) -> ScheduleRevisionEvidenceResult:
         if document.document_type is not DocumentType.SCHEDULE:
             raise InvalidScheduleEvidenceError("source document is not a schedule")
-        if (document.file_format or "").lower() != ".xlsx":
-            raise InvalidScheduleEvidenceError("this observation extractor supports only XLSX")
+        # Format is a property of the IMMUTABLE selected source revision.
+        # The document's current filename/format may have changed on reupload.
+        # A revision with no provable XLSX extension is NOT silently accepted.
+        if Path(revision.blob_key).suffix.lower() != ".xlsx":
+            raise InvalidScheduleEvidenceError(
+                "selected source revision is not a supported XLSX schedule"
+            )
         if (
             document.id != revision.document_id
             or document.tenant_id != revision.tenant_id
