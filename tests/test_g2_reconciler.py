@@ -69,12 +69,44 @@ def mock_control_plane(tmp_path):
                 "work_ref": ".c2pro/work/C2PRO-DEV-02.yaml",
                 "priority": "P0",
                 "depends_on": [],
-                "review_policy": "principal_and_challenger",
+                "review_policy": "optional",
             }
         ]
     }
     with open(wq_file, "w", encoding="utf-8") as f:
         yaml.dump(wq_data, f)
+
+    # Canonical trivial/optional envelope for baseline G2 behavior. Mandatory
+    # review identities are exercised in test_review_reconciliation_policy.py.
+    work_dir = tmp_path / ".c2pro" / "work"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    with open(work_dir / "C2PRO-DEV-02.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(
+            {
+                "schema": "c2pro-work-envelope-v1",
+                "schema_version": 1,
+                "work_id": "C2PRO-DEV-02",
+                "role": "orchestrator",
+                "risk_class": "trivial",
+                "review_policy": "optional",
+            },
+            f,
+        )
+    with open(control_dir / "review-policy.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(
+            {
+                "schema": "c2pro-review-policy-v1",
+                "schema_version": 1,
+                "risk_classes": {
+                    "trivial": {
+                        "independent_principal_review": "optional",
+                        "challenger": False,
+                        "orchestrator_synthesis": False,
+                    }
+                },
+            },
+            f,
+        )
 
     # 2. Setup current.yaml
     current_file = control_dir / "current.yaml"
