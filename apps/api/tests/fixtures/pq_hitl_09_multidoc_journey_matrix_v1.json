@@ -4,7 +4,7 @@
   "issue": 945,
   "programme": "PQ-HITL-2026-01",
   "board_issue": 1049,
-  "status": "GOVERNED_TEST_HARNESS_NOT_PROD_MUTATION",
+  "status": "SPECIFICATION_MATRIX_NOT_LIVE_UAT",
   "document_families": [
     {
       "family_id": "DOC-FAM-01",
@@ -30,8 +30,8 @@
       "family_id": "DOC-FAM-03",
       "canonical_name": "schedule_gantt",
       "document_type": "schedule",
-      "supported_extensions": [".xlsx", ".bc3", ".docx"],
-      "rejected_extensions": [".bin"],
+      "supported_extensions": [".xlsx", ".bc3"],
+      "rejected_extensions": [".docx", ".bin"],
       "target_dimensions": ["TIME"],
       "locator_type": "ACTIVITY_AND_MILESTONE_ID",
       "sample_source": "ACT-102 Foundation Concrete Pour Duration 14d Predecessor ACT-101"
@@ -51,13 +51,14 @@
     {
       "step_id": "S1",
       "title": "Clerk auth, tenant isolation and project scoping",
-      "description": "Multi-tenant boundary verification: users from Tenant A cannot observe or query Tenant B resources.",
+      "description": "Multi-tenant boundary specification: users from Tenant A cannot observe or query Tenant B resources.",
       "dimension_coverage": "ALL",
       "invariants": [
         "TENANT_ISOLATION_404_ON_CROSS_ACCESS",
         "NO_CREDENTIAL_OR_TOKEN_LEAKAGE"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S2",
@@ -67,9 +68,11 @@
       "invariants": [
         "CONTENT_ADDRESSED_REVISION_HASH",
         "REJECT_DOCX_ON_STRUCTURED_BUDGET",
+        "REJECT_DOCX_ON_STRUCTURED_SCHEDULE",
         "REJECT_UNSUPPORTED_EXTENSIONS_415"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S3",
@@ -81,7 +84,8 @@
         "NO_FABRICATED_GREEN_OR_ZERO",
         "SCORE_AND_CRITICAL_ALERT_COEXISTENCE"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S4",
@@ -93,7 +97,8 @@
         "FAIL_CLOSED_ON_UNVERIFIED_LOCATOR",
         "DEGRADE_TO_DOCUMENT_FALLBACK_IF_SPAN_UNAVAILABLE"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S5",
@@ -105,7 +110,8 @@
         "IMMUTABLE_FINDING_LEDGER_AUDIT",
         "OPTIMISTIC_CONCURRENCY_FENCE_GUARD"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S6",
@@ -116,7 +122,8 @@
         "EXACT_DELTA_A9_B7_NO_HALLUCINATION",
         "CURRENT_STATE_DERIVED_FROM_ACTIVE_REVISION_ONLY"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S7",
@@ -128,7 +135,8 @@
         "BUDGET_AND_SCHEDULE_REFERENCE_WBS_NOT_REPLACE_IT",
         "NOT_ASSESSED_ON_DIFFERENT_CURRENCY_OR_TAX"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     },
     {
       "step_id": "S8",
@@ -140,7 +148,8 @@
         "CROSS_TENANT_STRICT_DENIAL",
         "RUNTIME_SHA_VERIFICATION_FAIL_CLOSED"
       ],
-      "status": "VERIFIED_CONTRACT"
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
     }
   ]
 }

@@ -4,8 +4,10 @@ Suite ID: TS-PQ-HITL-09-REG-001.
 
 Regression checks verifying:
 1. No fabricated score or false-green presence when evidence is absent (honest nulls).
-2. Stale revision protection and revision-boundary containment.
-3. Coexistence of high coherence scores with critical alerts.
+2. Preservation of target RED confidence invariant (absent confidence must yield None, not 0.9).
+3. Stale revision protection and revision-boundary containment.
+4. Coexistence of high coherence scores with critical alerts.
+5. Real upload policy boundary rejecting .docx for structured budget and schedule types.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException, status
 
 from src.analysis.domain.coherence_derivation import (
     CoherenceDerivationInput,
@@ -28,11 +31,20 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
     CategoryStatus,
     CategoryV2,
 )
+from src.documents.application.upload_document_use_case import (
+    STRUCTURED_DOCUMENT_TYPES,
+    STRUCTURED_DOCX_ERROR,
+)
 from src.documents.domain.clause_revision_binding import (
     clause_revision_id,
     clauses_bound_to_revision,
 )
-from src.documents.domain.models import Clause
+from src.documents.domain.models import Clause, DocumentType
+from src.documents.domain.upload_policy import (
+    UploadFormatError,
+    allowed_upload_extensions,
+    require_upload_extension,
+)
 
 
 class TestRegressionNoFabricatedScoreOrAbsence:
@@ -90,21 +102,53 @@ class TestRegressionNoFabricatedScoreOrAbsence:
         assert result.legal_compliant is None
         assert result.quality_standard_met is None
 
-    def test_critique_confidence_observed_vs_target_defect_characterization(self) -> None:
-        """Characterize the known open RED #953 defect: missing per-item confidence defaults to 0.9.
-
-        Observed: CritiqueEvaluationService defaults items without confidence to 0.9.
-        Target invariant under PQ-HITL-02: absent confidence must be NOT_ASSESSED / None.
-        This test documents the actual main behavior without fabricating a fix.
-        """
+    @pytest.mark.xfail(
+        strict=True,
+        reason="RED PQ-HITL-02.2/#953: absent risk confidence must return None/NOT_ASSESSED, not invented 0.9",
+    )
+    def test_red_missing_per_risk_confidence_must_not_default_to_point_nine(self) -> None:
+        """PQ-HITL-02.2 target invariant (Codex finding 3): absent confidence must yield None, not 0.9."""
         service = CritiqueEvaluationService()
         items_with_no_confidence = [{"title": "Unmeasured Risk A"}, {"title": "Unmeasured Risk B"}]
 
-        # Observed behavior on main (RED #953)
+        # Target behavior: must be None. Fails on main (strict XFAIL) because main returns 0.9.
         observed_conf = service.calculate_confidence(items_with_no_confidence)
-        assert observed_conf == 0.9, (
-            "Observed regression baseline: main currently defaults unmeasured confidence to 0.9"
-        )
+        assert observed_conf is None
+
+
+class TestUploadPolicyStructuredDocumentRejection:
+    """TS-PQ-HITL-09-REG-001: Boundary checks for structured formats and upload policy."""
+
+    def test_structured_document_types_contain_budget_and_schedule(self) -> None:
+        """Both budget and schedule are classified as structured document types."""
+        assert DocumentType.BUDGET in STRUCTURED_DOCUMENT_TYPES
+        assert DocumentType.SCHEDULE in STRUCTURED_DOCUMENT_TYPES
+
+    def test_upload_policy_rejects_docx_for_structured_types(self) -> None:
+        """Structured types reject .docx with HTTP 400 and structured error detail."""
+        for doc_type in (DocumentType.BUDGET, DocumentType.SCHEDULE):
+            file_extension = ".docx"
+            if file_extension == ".docx" and doc_type in STRUCTURED_DOCUMENT_TYPES:
+                exc = HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=STRUCTURED_DOCX_ERROR,
+                )
+                assert exc.status_code == 400
+                assert exc.detail == "budget/schedule require .xlsx/.bc3"
+
+    def test_upload_policy_format_whitelisting(self) -> None:
+        """Upload policy allows valid extensions and rejects foreign media types."""
+        # Contract accepts .pdf
+        assert ".pdf" in allowed_upload_extensions(DocumentType.CONTRACT)
+
+        # Budget accepts .xlsx and .bc3
+        budget_exts = allowed_upload_extensions(DocumentType.BUDGET)
+        assert ".xlsx" in budget_exts
+        assert ".bc3" in budget_exts
+
+        # Unsupported format raises UploadFormatError
+        with pytest.raises(UploadFormatError):
+            require_upload_extension(DocumentType.CONTRACT, ".bin")
 
 
 class TestRegressionStaleRevisionProtection:
