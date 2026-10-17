@@ -20,6 +20,7 @@ PC_TASKS = {
         "parent_issue": 672,
         "worker": "codex",
         "branch": "feat/acc01-pc3-budget-evidence-20261017",
+        "workspace_path": "/srv/aigen/dev/worktrees/c2pro-acc01-pc3-budget-evidence-20261017",
         "scope_prefix": "apps/api/",
         "allowed_scope": (
             "apps/api/src/analysis/**", "apps/api/src/coherence/**",
@@ -30,6 +31,7 @@ PC_TASKS = {
         "parent_issue": 672,
         "worker": "claude_code",
         "branch": "feat/acc01-pc7a-wbs-ui-20261017",
+        "workspace_path": "/srv/aigen/dev/worktrees/c2pro-acc01-pc7a-wbs-ui-20261017",
         "scope_prefix": "apps/web/",
         "allowed_scope": (
             "apps/web/hooks/useWBSTree.ts",
@@ -154,9 +156,9 @@ def validate_pc_work(
            for k, v in expected.items()):
         raise ProductWorkError("Project Controls workspace observation is missing, stale or mismatched")
     location = observation.get("workspace_path")
-    if (not isinstance(location, str) or not location.startswith("/")
-            or location == "/" or "\n" in location or ".." in Path(location).parts):
-        raise ProductWorkError("Project Controls workspace path is invalid")
+    if (not isinstance(location, str) or location != rule["workspace_path"]
+            or "\n" in location or ".." in Path(location).parts):
+        raise ProductWorkError("Project Controls workspace path is not the registered isolated worktree")
     if (observation.get("observed_head_sha") != base_sha
             or not isinstance(observation.get("observed_at"), str)
             or not observation["observed_at"].strip()):
@@ -165,6 +167,18 @@ def validate_pc_work(
         raise ProductWorkError("Project Controls workspace observation has unexpected fields")
     return work
 
+
+
+def read_pc_workspace_observation(root: Path, task_id: str) -> dict[str, Any]:
+    """Read a candidate base-registered observation; NEVER authenticate its issuer.
+
+    The trusted external attestor must compare all returned claims with
+    independently collected broker/provider evidence. This function only
+    enforces canonical source and rejects symlinks/duplicate YAML keys.
+    """
+    if task_id not in PC_TASKS:
+        raise ProductWorkError("unregistered Project Controls task")
+    return _read(root, f".c2pro/product-work/receipts/{task_id}.yaml")
 
 def matching_pc_assignment(root: Path, head_ref: str, merge_base_sha: str | None) -> dict[str, Any] | None:
     """Find at most one base-pinned PC assignment; a PR cannot register its own proof."""
