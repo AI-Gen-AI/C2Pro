@@ -210,6 +210,25 @@ class ExcelFileParser:
                 start=header_row_index + 1,
             ):
                 row_data = dict(zip(headers, row, strict=False))
+                if include_evidence:
+                    # A verified source hash attests bytes, NOT formula evaluation.
+                    # Inspect all consumed evidence fields, not only numeric cells.
+                    # Check before empty-row/subtotal skips: cached formulas may be
+                    # None under data_only=True and otherwise vanish silently.
+                    assert formula_sheet is not None
+                    evidence_columns = {
+                        "item", "quantity", "unit price", "total", "unit",
+                        "currency", "tax basis", "wbs node id",
+                    }
+                    for column_index, column_name in enumerate(headers, start=1):
+                        if column_name not in evidence_columns:
+                            continue
+                        if formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                            raise ExcelParsingError(
+                                "Unverified formula-derived budget evidence at "
+                                f"{sheet.title}!{row_index} ({column_name}); "
+                                "source formula requires separately attested evaluation"
+                            )
                 if not any(row_data.values()):
                     continue
                 stated_total = self._extract_declared_total(row_data)
@@ -220,19 +239,6 @@ class ExcelFileParser:
                 unit_price: float | Decimal | None
                 total: float | Decimal | None
                 if include_evidence:
-                    # Without a trusted formula evaluator and recalculation receipt,
-                    # even a populated Excel cache cannot attest the source amount.
-                    assert formula_sheet is not None
-                    for column_index, column_name in enumerate(headers, start=1):
-                        if column_name not in ("quantity", "unit price", "total"):
-                            continue
-                        raw_cell = formula_sheet.cell(row=row_index, column=column_index)
-                        if raw_cell.data_type == "f":
-                            raise ExcelParsingError(
-                                "Unverified formula-derived budget amount at "
-                                f"{sheet.title}!{row_index} ({column_name}); "
-                                "verified numeric evidence requires literal cells"
-                            )
                     # Evidence MUST use original cell values, not the lossy
                     # float-normalization used by the legacy analysis parser.
                     quantity = self._coerce_budget_decimal(row_data.get("quantity"))
@@ -479,11 +485,19 @@ class ExcelFileParser:
             )
         elif "," in cleaned:
             left, right = cleaned.rsplit(",", 1)
-            normalized = (
-                f"{left.replace(',', '')}.{right}"
-                if len(right) in {1, 2}
-                else cleaned.replace(",", "")
-            )
+            # No source locale is attested. A single comma with three or more
+            # following digits could mean decimal or thousands grouping:
+            # 0,125 must NEVER silently become 125.
+            if cleaned.count(",") == 1 and len(right) >= 3:
+                raise ExcelParsingError(
+                    "Ambiguous single-comma decimal in verified budget evidence"
+                )
+            if cleaned.count(",") > 1:
+                if re.fullmatch(r"-?\\d{1,3}(?:,\\d{3}){2,}", cleaned) is None:
+                    raise ExcelParsingError("Ambiguous budget number grouping")
+                normalized = cleaned.replace(",", "")
+            else:
+                normalized = f"{left}.{right}"
         else:
             normalized = cleaned
         try:
