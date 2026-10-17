@@ -603,6 +603,10 @@ class ExcelFileParser:
         # on ambiguous unsupported labels, including "JPY" and "INR".
         # Bracket directives ([Red], [>=100]) are Excel metadata, not units.
         format_literals = re.sub(r"\[[^\]]*\]", "", remaining_format)
+        # Excel formats may spell an ISO label as escaped literal letters
+        # (\J\P\Y) or adjacent quoted spans ("J""P""Y").
+        format_literals = re.sub(r"\\([A-Z])", r"\1", format_literals)
+        format_literals = format_literals.replace('""', "")
         iso_labels = re.findall(
             r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])", format_literals
         )
