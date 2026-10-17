@@ -115,15 +115,15 @@ async def test_budget_revision_hash_validation_runs_off_event_loop(
 
     source = tmp_path / "hash-worker-budget.xlsx"
     _budget_xlsx(source)
-    original_verify = module.verify_revision_file_hash
+    original_verify = module.read_verified_revision_file
     hashing_threads: list[threading.Thread] = []
     caller_thread = threading.current_thread()
 
-    def _record_hash(source_path: Path, blob_hash: str) -> None:
+    def _record_hash(source_path: Path, blob_hash: str) -> bytes:
         hashing_threads.append(threading.current_thread())
-        original_verify(source_path, blob_hash)
+        return original_verify(source_path, blob_hash)
 
-    monkeypatch.setattr(module, "verify_revision_file_hash", _record_hash)
+    monkeypatch.setattr(module, "read_verified_revision_file", _record_hash)
     result = await ExtractBudgetRevisionEvidenceUseCase(
         parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
     ).execute(
@@ -133,6 +133,62 @@ async def test_budget_revision_hash_validation_runs_off_event_loop(
     assert len(result.rows) == 1
     assert len(hashing_threads) == 1
     assert hashing_threads[0] is not caller_thread
+
+
+@pytest.mark.asyncio
+async def test_budget_revision_uses_verified_snapshot_after_source_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replacing a shared path after hash verification cannot change evidence."""
+    from src.analysis.application import extract_budget_revision_evidence_use_case as module
+
+    source = tmp_path / "original-budget.xlsx"
+    replacement = tmp_path / "tampered-budget.xlsx"
+    _budget_xlsx(source)
+    _budget_xlsx(replacement)
+    revision = _revision(source)
+    workbook = openpyxl.load_workbook(replacement)
+    workbook.active.cell(row=2, column=1).value = 'TAMPERED ITEM'
+    workbook.save(replacement)
+    workbook.close()
+    original_read = module.read_verified_revision_file
+
+    def _swap_after_verified_snapshot(path: Path, digest: str) -> bytes:
+        snapshot = original_read(path, digest)
+        path.write_bytes(replacement.read_bytes())
+        return snapshot
+
+    monkeypatch.setattr(
+        module, "read_verified_revision_file", _swap_after_verified_snapshot
+    )
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+    ).execute(
+        document=_document(), revision=revision, source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    assert result.rows[0].description == "Concrete"
+    assert sha256(source.read_bytes()).hexdigest() != revision.blob_hash
+
+
+@pytest.mark.asyncio
+async def test_budget_evidence_rejects_formula_header(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cached label of a formula cannot authorize a source column."""
+    source = tmp_path / "formula-header-budget.xlsx"
+    _budget_xlsx(source)
+    original_load = openpyxl.load_workbook
+
+    def _formula_header(*args: object, **kwargs: object):
+        workbook = original_load(*args, **kwargs)
+        if kwargs.get("data_only") is False:
+            workbook.active.cell(row=1, column=1).value = '="Item"'
+        return workbook
+
+    monkeypatch.setattr(openpyxl, "load_workbook", _formula_header)
+    with pytest.raises(ExcelParsingError, match="Unverified formula-derived budget header"):
+        await ExcelFileParser().parse_budget(source, include_evidence=True)
 
 
 @pytest.mark.parametrize("include_evidence", [False, True])
