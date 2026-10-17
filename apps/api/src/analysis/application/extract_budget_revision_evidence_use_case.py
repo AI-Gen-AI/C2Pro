@@ -20,7 +20,7 @@ from src.analysis.domain.budget_row_evidence import (
 )
 from src.coherence.domain.budget_line_availability import structured_budget_assessment_from_rows
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
-from src.documents.application.document_source import verify_revision_file_hash
+from src.documents.application.document_source import read_verified_revision_file
 from src.documents.domain.models import Document, DocumentType
 from src.temporal.domain.document_revision import DocumentRevision
 from src.wbs.adapters.persistence.link_authority import require_linkable_wbs_nodes
@@ -64,8 +64,12 @@ class ExtractBudgetRevisionEvidenceUseCase:
         existing_row_identities: Collection[tuple[UUID, str]],
     ) -> BudgetRevisionEvidenceResult:
         _require_matching_budget_revision(document, revision)
-        await asyncio.to_thread(verify_revision_file_hash, source_path, revision.blob_hash)
-        parsed_rows = await self.parser.parse_budget(source_path, include_evidence=True)
+        source_bytes = await asyncio.to_thread(
+            read_verified_revision_file, source_path, revision.blob_hash
+        )
+        parsed_rows = await self.parser.parse_budget(
+            source_path, include_evidence=True, source_bytes=source_bytes
+        )
         # Idempotent redelivery must not re-authorize links that were safely
         # persisted against an older WBS baseline. Only NEW rows need approval.
         known = set(existing_row_identities)
