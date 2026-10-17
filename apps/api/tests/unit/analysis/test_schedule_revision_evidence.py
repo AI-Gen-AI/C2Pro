@@ -174,11 +174,10 @@ async def test_schedule_source_code_alone_never_links_canonical_wbs(tmp_path: Pa
         ("id", UUID("77777777-7777-7777-7777-777777777777")),
         ("tenant_id", UUID("88888888-8888-8888-8888-888888888888")),
         ("project_id", UUID("99999999-9999-9999-9999-999999999999")),
-        ("file_format", ".bc3"),
     ],
 )
 @pytest.mark.asyncio
-async def test_wrong_identity_or_unimplemented_file_format_rejected(
+async def test_wrong_document_identity_rejected(
     tmp_path: Path, field: str, value: object,
 ) -> None:
     path = tmp_path / "schedule.xlsx"
@@ -191,6 +190,52 @@ async def test_wrong_identity_or_unimplemented_file_format_rejected(
             revision=_revision(path),
             source_path=path,
         )
+
+
+@pytest.mark.asyncio
+async def test_historical_xlsx_revision_survives_current_document_bc3_format(
+    tmp_path: Path,
+) -> None:
+    """Mutable current document metadata cannot invalidate a pinned XLSX revision."""
+    path = tmp_path / "schedule.xlsx"
+    _xlsx(path)
+    current_document = replace(_document(), file_format=".bc3", filename="schedule.bc3")
+    result = await ExtractScheduleRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_Approved(),
+    ).execute(document=current_document, revision=_revision(path), source_path=path)
+    assert len(result.rows) == 3
+    assert result.rows[0].revision_id == REVISION
+
+
+@pytest.mark.asyncio
+async def test_revision_with_non_xlsx_object_key_is_rejected_even_if_document_says_xlsx(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "schedule.xlsx"
+    _xlsx(path)
+    with pytest.raises(InvalidScheduleEvidenceError, match="selected source revision"):
+        await ExtractScheduleRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_Approved(),
+        ).execute(
+            document=_document(),
+            revision=_revision(path).model_copy(update={"blob_key": "revisions/schedule.bc3"}),
+            source_path=path,
+        )
+
+
+@pytest.mark.asyncio
+async def test_legacy_schedule_header_activity_id_still_maps_as_activity(tmp_path: Path) -> None:
+    """Evidence-only ID aliases must not steal legacy 'activity' task matching."""
+    path = tmp_path / "legacy-activity.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Activity ID", "Start Date", "End Date"])
+    sheet.append(["A-101", "2026-11-01", "2026-11-05"])
+    workbook.save(path)
+    workbook.close()
+
+    legacy = await ExcelFileParser().parse_schedule(path)
+    assert legacy[0]["task"] == "A-101"
 
 
 @pytest.mark.asyncio
