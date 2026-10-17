@@ -2,11 +2,17 @@
  * PC-7b (#672, board #1049): useProjectAlerts must call the real, served alerts
  * route and never fabricate a source clause id. See the hook's own header comment
  * for the route-wiring verification against apps/api/src/alerts/adapters/http/router.py.
+ *
+ * Codex P2 (PR #1059): also covers the fetch-race invariants -- never a fake zero
+ * before the first request resolves, never project A's rows under project B, a
+ * late A response can never overwrite B (success or failure direction), and a
+ * failure always surfaces as `error`, never a silent empty result.
  */
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useProjectAlerts } from "@/hooks/useProjectAlerts";
+import type { ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
 
 const { getMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
@@ -275,6 +281,135 @@ describe("useProjectAlerts project mapping", () => {
     );
     expect(getMock).toHaveBeenCalledTimes(2);
   });
+
+  it("never reports a fake zero/loaded state before the first request resolves", async () => {
+    let resolveFetch: ((value: unknown) => void) | undefined;
+    getMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const history: Array<{ loading: boolean; alertCount: number; error: boolean }> = [];
+    const { result } = renderHook(() => {
+      const state = useProjectAlerts("proj-slow");
+      history.push({
+        loading: state.loading,
+        alertCount: state.alerts.length,
+        error: state.error !== null,
+      });
+      return state;
+    });
+
+    // Every render recorded so far happened before the request resolved: none of
+    // them may claim "done loading, 0 alerts, no error" -- that would be a fake
+    // empty/zero state the backend never actually reported.
+    expect(history.every((snapshot) => snapshot.loading)).toBe(true);
+    expect(result.current.loading).toBe(true);
+    expect(result.current.alerts).toEqual([]);
+
+    await act(async () => {
+      resolveFetch?.({ data: { items: [], total: 0 } });
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    // Only the final, resolved render may legitimately report an empty list.
+    expect(result.current.alerts).toEqual([]);
+  });
+
+  it(
+    "never shows project A's alerts under project B, and a late A response cannot overwrite B",
+    async () => {
+      let resolveA: ((value: unknown) => void) | undefined;
+      let resolveB: ((value: unknown) => void) | undefined;
+      getMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveA = resolve;
+          }),
+      );
+      getMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveB = resolve;
+          }),
+      );
+
+      const { result, rerender } = renderHook(
+        ({ projectId }: { projectId: string }) => useProjectAlerts(projectId),
+        { initialProps: { projectId: "proj-a" } },
+      );
+
+      // Switch to project B before A's request has resolved.
+      rerender({ projectId: "proj-b" });
+      expect(result.current.loading).toBe(true);
+      expect(result.current.alerts).toEqual([]);
+
+      // A resolves LATE, after B's request has already started.
+      await act(async () => {
+        resolveA?.({
+          data: {
+            items: [
+              { id: "a-alert", category: "LEGAL", severity: "high", status: "open", message: "From A" },
+            ],
+            total: 1,
+          },
+        });
+      });
+      // A's late response must never be visible once the page has moved on to B.
+      expect(result.current.alerts).toEqual([]);
+      expect(result.current.loading).toBe(true); // B is still in flight
+
+      await act(async () => {
+        resolveB?.({
+          data: {
+            items: [
+              { id: "b-alert", category: "TIME", severity: "low", status: "open", message: "From B" },
+            ],
+            total: 1,
+          },
+        });
+      });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.alerts.map((a: ReviewAlert) => a.id)).toEqual(["b-alert"]);
+    },
+  );
+
+  it("does not let a stale failed request overwrite a newer successful one", async () => {
+    let rejectA: ((error: Error) => void) | undefined;
+    getMock.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectA = reject;
+        }),
+    );
+    getMock.mockResolvedValueOnce({
+      data: {
+        items: [{ id: "b-1", category: "TIME", severity: "low", status: "open", message: "ok" }],
+        total: 1,
+      },
+    });
+
+    const { result, rerender } = renderHook(
+      ({ projectId }: { projectId: string }) => useProjectAlerts(projectId),
+      { initialProps: { projectId: "proj-a" } },
+    );
+    rerender({ projectId: "proj-b" });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.alerts.map((a: ReviewAlert) => a.id)).toEqual(["b-1"]);
+    expect(result.current.error).toBeNull();
+
+    // A's request fails LATE, after B already succeeded -- must not surface as
+    // an error for the page that has already moved on to B's real result.
+    await act(async () => {
+      rejectA?.(new Error("stale A failure"));
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.alerts.map((a: ReviewAlert) => a.id)).toEqual(["b-1"]);
+  });
+
 });
 
 async function runMapping(items: unknown[], expected: unknown[]) {

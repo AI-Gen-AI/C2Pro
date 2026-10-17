@@ -16,9 +16,19 @@
  * mapping already reviewed in `app/(app)/projects/[id]/alerts/page.tsx`: the
  * persisted `source_clause_id` first, then the detector's `detection_evidence`
  * clause/document as a fallback, and nothing when neither exists.
+ *
+ * Codex P2 (PR #1059, exact HEAD 6f68051): the previous version initialized
+ * `loading` to `false` and refetched in a plain `useEffect([projectId])`, so (a)
+ * the very first render could report "0 alerts" before any request had even
+ * started, and (b) nothing stopped a late response for a superseded `projectId`
+ * from overwriting state set by a newer request (classic fetch race). Fixed by
+ * tagging every state snapshot with the `projectId` it belongs to and deriving
+ * the returned `alerts`/`loading`/`error` against the *current* `projectId` prop
+ * -- not the state variable's own timing -- plus an incrementing request id so a
+ * stale response (success or failure) for an old `projectId` is dropped outright.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { apiClient } from "@/lib/api/client";
 import type { ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
 
@@ -93,40 +103,79 @@ function transformAlert(alert: AlertResponse): ReviewAlert {
   };
 }
 
+interface AlertsSnapshot {
+  /** The project this snapshot's alerts/error actually belong to. */
+  projectId: string | null;
+  alerts: ReviewAlert[];
+  loading: boolean;
+  error: Error | null;
+}
+
+const INITIAL_SNAPSHOT: AlertsSnapshot = {
+  projectId: null,
+  alerts: [],
+  loading: false,
+  error: null,
+};
+
 export function useProjectAlerts(
   projectId: string | null,
 ): UseProjectAlertsResult {
-  const [alerts, setAlerts] = useState<ReviewAlert[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [snapshot, setSnapshot] = useState<AlertsSnapshot>(INITIAL_SNAPSHOT);
+  // Monotonic token: only the response for the most recently started request is
+  // ever allowed to write state, so a late A-response can never overwrite B.
+  const latestRequestRef = useRef(0);
 
-  const fetchAlerts = async () => {
+  const fetchAlerts = useCallback(async () => {
+    const requestId = ++latestRequestRef.current;
+
     if (!projectId) {
-      setAlerts([]);
+      setSnapshot({ projectId: null, alerts: [], loading: false, error: null });
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    setSnapshot((prev) => ({
+      projectId,
+      // Never show project A's rows under project B while B is loading.
+      alerts: prev.projectId === projectId ? prev.alerts : [],
+      loading: true,
+      error: null,
+    }));
 
     try {
       const response = await apiClient.get<AlertListResponse>(
         `/alerts/projects/${projectId}`,
       );
-      setAlerts(response.data.items.map(transformAlert));
+      if (requestId !== latestRequestRef.current) return; // superseded by a newer request
+      setSnapshot({
+        projectId,
+        alerts: response.data.items.map(transformAlert),
+        loading: false,
+        error: null,
+      });
     } catch (err) {
+      if (requestId !== latestRequestRef.current) return; // superseded by a newer request
       const error =
         err instanceof Error ? err : new Error("Failed to fetch alerts");
-      setError(error);
       console.error("Error fetching project alerts:", err);
-    } finally {
-      setLoading(false);
+      setSnapshot({ projectId, alerts: [], loading: false, error });
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     fetchAlerts();
-  }, [projectId]);
+  }, [fetchAlerts]);
 
-  return { alerts, loading, error, refetch: fetchAlerts };
+  // Derived, not read straight off state: if `projectId` changed but the effect
+  // above has not committed its reset yet, `snapshot.projectId` is still the old
+  // one -- so compute output against the *current* prop instead of trusting the
+  // state variable's own timing. This is what actually prevents a one-render
+  // flash of project A's alerts/count while the page already says project B.
+  const belongsToCurrentProject = snapshot.projectId === projectId;
+  return {
+    alerts: belongsToCurrentProject ? snapshot.alerts : [],
+    loading: !projectId ? false : !belongsToCurrentProject || snapshot.loading,
+    error: belongsToCurrentProject ? snapshot.error : null,
+    refetch: fetchAlerts,
+  };
 }
