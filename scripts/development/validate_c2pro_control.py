@@ -238,9 +238,15 @@ def validate_product_envelopes() -> None:
     import jsonschema
     from importlib.util import module_from_spec, spec_from_file_location
 
-    from scripts.development.product_work_identity import (
-        PC_TASKS, ProductWorkError, validate_pc_work,
-    )
+    try:
+        from scripts.development.product_work_identity import (
+            PC_TASKS, ProductWorkError, validate_pc_work,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name != "scripts":
+            raise
+        # This validator is also executed directly as a script by CI.
+        from product_work_identity import PC_TASKS, ProductWorkError, validate_pc_work
 
     spec = spec_from_file_location("c2pro_task_trace", ROOT / "scripts" / "development" / "validate_task_trace.py")
     assert spec is not None and spec.loader is not None
