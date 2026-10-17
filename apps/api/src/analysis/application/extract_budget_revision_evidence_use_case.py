@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-
 from collections.abc import Collection
 from dataclasses import dataclass
 from decimal import Decimal
