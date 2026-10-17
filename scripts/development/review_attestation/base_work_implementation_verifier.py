@@ -171,7 +171,10 @@ def _resolve_dev_work_implementation(repo_root: Path, subject: dict[str, Any]) -
 
 
 
-def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -> dict[str, Any] | None:
+def resolve_base_work_implementation(
+    repo_root: Path, subject: dict[str, Any], *,
+    workspace_attestation_verifier: Any = None,
+) -> dict[str, Any] | None:
     """Resolve DEV or PC independently from protected-base records only.
 
     PC is *not* placed into the DEV hot queue. A Product branch needs its
@@ -203,13 +206,33 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
         raise ProvenanceError(f"Project Controls WORK provenance invalid: {exc}") from exc
     if work is None:
         return None
+    # A registered YAML observation is NOT proof of who actually inspected
+    # the workspace. Only a separate authenticated verifier injected by
+    # trusted code may confer implementation identity. Currently the
+    # AUDIT_ONLY workflow supplies no such verifier and must fail closed.
+    if workspace_attestation_verifier is None:
+        return None
+    try:
+        result = workspace_attestation_verifier({
+            "work_id": work["work_id"],
+            "worker_id": work["assigned_to"],
+            "base_sha": work["base_sha"],
+            "branch": work["branch"],
+            "workspace_receipt": work["workspace_receipt"],
+            "pr_base_sha": base_sha,
+            "pr_head_sha": head_sha,
+            "pr_merge_base_sha": merge_base,
+        })
+    except Exception as exc:
+        raise ProvenanceError("trusted external workspace attestation failed") from exc
+    if result is not True:
+        return None
     return {
         "work_id": work["work_id"],
         "worker_id": work["assigned_to"],
         "verified": True,
-        # Verified = protected-base control-plane assignment provenance only.
-        # Live VPS presence, independent principal review, CI, merge and Product
-        # acceptance remain separately gated; this does not attest a CLI call.
+        # Verified only after trusted external workspace attestation, NOT from
+        # YAML, PR text or the author. Review/CI/merge remain separately gated.
         "evidence_ref": (
             f"protected-base:{base_sha}:product-work:{work['work_id']}:"
             f"baseline:{work['base_sha']}:"
