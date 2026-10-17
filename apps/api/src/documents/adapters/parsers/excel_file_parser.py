@@ -516,6 +516,15 @@ class ExcelFileParser:
                     )
                 markers.extend(found)
         remaining_format = re.sub(r"\[\$[^\]]*\]", "", number_format)
+        # Unicode currency symbols outside our supported EUR/USD/GBP scope
+        # must never be mistaken for a currency-free numeric format.
+        if any(
+            unicodedata.category(char) == "Sc" and char not in "€$£"
+            for char in number_format
+        ):
+            raise ExcelParsingError(
+                f"Unsupported budget currency format marker at {locator}"
+            )
         markers.extend(re.findall(currency_pattern, remaining_format, flags=re.I))
         if not markers:
             return
