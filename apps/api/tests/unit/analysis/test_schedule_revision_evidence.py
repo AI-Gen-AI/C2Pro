@@ -9,6 +9,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
+import threading
 from uuid import UUID
 
 import openpyxl
@@ -106,6 +107,32 @@ class _Denied:
         self, *, tenant_id: UUID, project_id: UUID, node_ids: set[UUID]
     ) -> UUID:
         raise InvalidScheduleEvidenceError("foreign or retired WBS node")
+
+
+
+@pytest.mark.parametrize("include_evidence", [False, True])
+@pytest.mark.asyncio
+async def test_schedule_openpyxl_lifecycle_runs_off_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, include_evidence: bool,
+) -> None:
+    """Both XLSX opens in evidence mode execute in a worker, not on the event loop."""
+    path = tmp_path / "threaded-schedule.xlsx"
+    _xlsx(path)
+    original_open = openpyxl.load_workbook
+    caller_thread = threading.current_thread()
+    called_on: list[threading.Thread] = []
+
+    def _record_open(*args: object, **kwargs: object):
+        called_on.append(threading.current_thread())
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", _record_open)
+    rows = await ExcelFileParser().parse_schedule(
+        path, include_evidence=include_evidence
+    )
+    assert len(rows) == 3
+    assert len(called_on) == (2 if include_evidence else 1)
+    assert all(worker is not caller_thread for worker in called_on)
 
 
 @pytest.mark.asyncio
