@@ -492,6 +492,44 @@ class ExcelFileParser:
         return canonical
 
     @staticmethod
+    def _budget_numeric_format_sections(value: Any, number_format: str) -> str:
+        """Discard only Excel's fourth, text-only format section for numeric cells.
+
+        Split at actual section delimiters, not semicolons inside quoted
+        literals, escaped sequences or bracket directives.
+        """
+        if not isinstance(value, (int, float, Decimal)):
+            return number_format
+        sections: list[str] = []
+        current: list[str] = []
+        quoted = False
+        escaped = False
+        bracket_depth = 0
+        for char in number_format:
+            if escaped:
+                current.append(char)
+                escaped = False
+            elif char == "\\" and not quoted:
+                current.append(char)
+                escaped = True
+            elif char == '"':
+                current.append(char)
+                quoted = not quoted
+            elif char == "[" and not quoted:
+                current.append(char)
+                bracket_depth += 1
+            elif char == "]" and not quoted and bracket_depth:
+                current.append(char)
+                bracket_depth -= 1
+            elif char == ";" and not quoted and not bracket_depth:
+                sections.append("".join(current))
+                current = []
+            else:
+                current.append(char)
+        sections.append("".join(current))
+        return ";".join(sections[:3]) if len(sections) == 4 else number_format
+
+    @staticmethod
     def _require_budget_currency_consistency(
         value: Any, currency: Any, *, locator: str, number_format: str = ""
     ) -> None:
@@ -500,6 +538,9 @@ class ExcelFileParser:
         A source SHA authenticates Excel number formats as well as stored values.
         Generic locale codes (such as [$-409]) are not currency denominations.
         """
+        number_format = ExcelFileParser._budget_numeric_format_sections(
+            value, number_format
+        )
         currency_pattern = r"(?<![A-Za-z])(?:EUR|USD|GBP)(?![A-Za-z])|[€$£]"
         markers = re.findall(
             currency_pattern, value if isinstance(value, str) else "", flags=re.I
