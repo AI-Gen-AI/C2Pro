@@ -65,10 +65,18 @@ class ExtractBudgetRevisionEvidenceUseCase:
         _require_matching_budget_revision(document, revision)
         verify_revision_file_hash(source_path, revision.blob_hash)
         parsed_rows = await self.parser.parse_budget(source_path, include_evidence=True)
-        verified_locators = {str(row["source_locator"]) for row in parsed_rows}
+        # Idempotent redelivery must not re-authorize links that were safely
+        # persisted against an older WBS baseline. Only NEW rows need approval.
+        known = set(existing_row_identities)
+        new_rows = [
+            row
+            for row in parsed_rows
+            if (revision.revision_id, str(row["source_locator"])) not in known
+        ]
+        verified_locators = {str(row["source_locator"]) for row in new_rows}
         wbs_by_locator = {
             str(row["source_locator"]): UUID(str(row["wbs_node_id"]))
-            for row in parsed_rows
+            for row in new_rows
             if row.get("wbs_node_id") not in (None, "")
         }
         scope = None
@@ -86,8 +94,7 @@ class ExtractBudgetRevisionEvidenceUseCase:
             )
 
         rows: list[BudgetRowEvidence] = []
-        known = set(existing_row_identities)
-        for parsed in parsed_rows:
+        for parsed in new_rows:
             locator = str(parsed["source_locator"])
             identity = (revision.revision_id, locator)
             if identity in known:
