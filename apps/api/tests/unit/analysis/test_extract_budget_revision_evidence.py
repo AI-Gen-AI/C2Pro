@@ -549,6 +549,69 @@ async def test_budget_evidence_accepts_matching_or_locale_only_currency_formats(
 
 
 @pytest.mark.parametrize(
+    ("value", "number_format"),
+    [
+        (Decimal("100.00"), '#,##0.00 "EUR";[RED]-#,##0.00 "JPY"'),
+        (Decimal("-100.00"), '#,##0.00 "JPY";[RED]-#,##0.00 "EUR"'),
+        (Decimal("0"), '#,##0.00 "JPY";-#,##0.00 "JPY";0.00 "EUR"'),
+        (Decimal("100"), '#,##0.00 "EUR";-#,##0.00 "JPY";0.00 "JPY";"JPY"@'),
+        (Decimal("0"), '#,##0.00 "EUR";[RED]-#,##0.00 "JPY"'),
+    ],
+)
+def test_budget_ignores_currency_in_non_applicable_numeric_sections(
+    value: Decimal, number_format: str,
+) -> None:
+    ExcelFileParser._require_budget_currency_consistency(
+        value, "EUR", locator="Sheet1!2 (total)", number_format=number_format
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "number_format"),
+    [
+        (Decimal("100"), '#,##0.00 "JPY";[RED]-#,##0.00 "EUR"'),
+        (Decimal("-100"), '#,##0.00 "EUR";[RED]-#,##0.00 "JPY"'),
+        (Decimal("0"), '#,##0.00 "EUR";-#,##0.00 "EUR";0.00 "JPY"'),
+    ],
+)
+def test_budget_rejects_currency_in_applicable_numeric_section(
+    value: Decimal, number_format: str,
+) -> None:
+    with pytest.raises(ExcelParsingError, match="Unsupported budget currency format"):
+        ExcelFileParser._require_budget_currency_consistency(
+            value, "EUR", locator="Sheet1!2 (total)", number_format=number_format
+        )
+
+
+@pytest.mark.parametrize(
+    "number_format",
+    [
+        '#,##0.00 "EUR";[RED]-#,##0.00 "JPY"',
+        '€#,##0.00;[RED]-#,##0.00 "INR";€0.00;"JPY"@',
+    ],
+)
+@pytest.mark.asyncio
+async def test_verified_budget_positive_amount_ignores_negative_currency_section(
+    tmp_path: Path, number_format: str,
+) -> None:
+    source = tmp_path / "positive-eur-negative-jpy.xlsx"
+    _budget_xlsx(source)
+    workbook = openpyxl.load_workbook(source)
+    workbook.active.cell(row=2, column=4).number_format = number_format
+    workbook.save(source)
+    workbook.close()
+
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].currency == "EUR"
+
+
+@pytest.mark.parametrize(
     "number_format",
     [
         '€#,##0.00;€-#,##0.00;€0.00;"₹"@',
