@@ -581,7 +581,14 @@ async def test_budget_numeric_evidence_ignores_text_only_format_section(
 
 @pytest.mark.parametrize(
     "number_format",
-    ['"JPY" #,##0.00', 'JPY #,##0.00', '"INR" #,##0.00', '"KRW" #,##0.00'],
+    [
+        '"JPY" #,##0.00',
+        'JPY #,##0.00',
+        '"INR" #,##0.00',
+        '"KRW" #,##0.00',
+        r'\J\P\Y #,##0.00',
+        '"J""P""Y" #,##0.00',
+    ],
 )
 @pytest.mark.asyncio
 async def test_budget_evidence_rejects_unsupported_iso_currency_format(
