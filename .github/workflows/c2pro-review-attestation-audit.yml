@@ -232,6 +232,7 @@ jobs:
             const finalPr = finalPrResponse.data;
             if (
               finalPr.head.sha !== pr.head.sha ||
+              finalPr.head.ref !== pr.head.ref ||
               finalPr.base.sha !== pr.base.sha ||
               finalPr.changed_files !== pr.changed_files ||
               !finalPr.head.repo ||
