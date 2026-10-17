@@ -76,7 +76,24 @@ def test_pc_protected_base_assignment_does_not_use_idle_dev_queue(
     tmp_path: Path, task: str, worker: str,
 ) -> None:
     _case(tmp_path, task)
-    evidence = resolve_base_work_implementation(tmp_path, _subject(task))
+    # Even an apparently well-formed protected-base YAML is NOT a verifiable
+    # receipt by itself. The production AUDIT_ONLY workflow has no external
+    # verifier, so returns no implementation evidence.
+    assert resolve_base_work_implementation(tmp_path, _subject(task)) is None
+
+    observed = []
+    def synthetic_trusted_verifier(request: dict) -> bool:
+        observed.append(request)
+        return (request["work_id"] == task
+                and request["worker_id"] == worker
+                and request["pr_merge_base_sha"] == EXEC_BASE)
+
+    # This mock exercises the *injection boundary*, not a real attestation.
+    evidence = resolve_base_work_implementation(
+        tmp_path, _subject(task),
+        workspace_attestation_verifier=synthetic_trusted_verifier,
+    )
+    assert len(observed) == 1
     assert evidence is not None
     assert evidence["verified"] is True
     assert evidence["work_id"] == task
@@ -183,6 +200,36 @@ def test_unknown_pc_id_never_falls_back_to_dev_work(tmp_path: Path) -> None:
         work_path("PC-99")
     _case(tmp_path)
     assert matching_pc_assignment(tmp_path, "feat/unrelated", EXEC_BASE) is None
+
+
+
+def test_untrusted_or_rejecting_attestor_never_proves_pc_identity(tmp_path: Path) -> None:
+    _case(tmp_path)
+    assert resolve_base_work_implementation(
+        tmp_path, _subject(), workspace_attestation_verifier=lambda _: False,
+    ) is None
+    with pytest.raises(ProvenanceError, match="external workspace attestation failed"):
+        resolve_base_work_implementation(
+            tmp_path, _subject(),
+            workspace_attestation_verifier=lambda _: 1 / 0,
+        )
+
+
+@pytest.mark.parametrize("which,key,malicious", [
+    ("work", "assigned_to", "claude_code"),
+    ("receipt", "worker_id", "claude_code"),
+    ("receipt", "observed_by", "attacker"),
+    ("receipt", "clean", "false"),
+])
+def test_duplicate_yaml_authority_keys_fail_closed(
+    tmp_path: Path, which: str, key: str, malicious: str,
+) -> None:
+    work_file, receipt_file = _case(tmp_path)
+    target = work_file if which == "work" else receipt_file
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(f"{key}: {malicious}\n")
+    with pytest.raises(ProvenanceError, match="Project Controls WORK provenance invalid"):
+        resolve_base_work_implementation(tmp_path, _subject())
 
 
 def test_pc_ids_not_dev_namespace_or_forged_legacy_identity() -> None:
