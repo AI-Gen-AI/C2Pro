@@ -117,8 +117,14 @@ export function PdfEvidenceViewer({
   }, [isDemo, watermark]);
 
   const activeHighlights = useMemo(() => {
-    if (currentHighlights.length > 0) {
-      return currentHighlights;
+    // Production citations may arrive after the PDF mounts or change while
+    // the revision URL remains identical. Use the latest parent evidence for
+    // the exact URL; retain the local list only for the demo-only document B
+    // switch. Never display stale citations from a previous prop snapshot.
+    const evidenceForFile =
+      currentFileUrl === fileUrl ? highlights : currentHighlights;
+    if (evidenceForFile.length > 0) {
+      return evidenceForFile;
     }
     // Only allow demo fallback in demo mode
     if (isDemo && currentFileUrl.includes("doc-b")) {
@@ -133,7 +139,7 @@ export function PdfEvidenceViewer({
       ];
     }
     return [];
-  }, [currentFileUrl, currentHighlights, isDemo]);
+  }, [currentFileUrl, currentHighlights, fileUrl, highlights, isDemo]);
 
   // A source deep link may be pinned to a PDF page other than page 1.
   // Resolve ONLY a source highlight belonging to this exact file's current
