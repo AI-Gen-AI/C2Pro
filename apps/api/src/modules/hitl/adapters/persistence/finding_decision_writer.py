@@ -44,6 +44,65 @@ class FindingDecisionWriteReceipt:
     replayed: bool
 
 
+# Refuse runtime writes through postgres/service_role or a table owner,
+# even with FORCE RLS: BYPASSRLS and superuser sessions can skip policies.
+# Preflight in the SAME transaction before the review lock or any replay.
+# This is necessary but NOT sufficient to authenticate the ORIGINAL DB
+# connection: a superuser can SET SESSION AUTHORIZATION to spoof a safe
+# session_user. Production enablement therefore separately requires a
+# dedicated login credential, exclusive nonprivileged pool, and an audited
+# no-session-authorization policy. Until provisioned, writer remains denied.
+# This intentionally denies operation until a dedicated, unprivileged LOGIN
+# principal has been provisioned with only the required tenant-scoped grants.
+_SAFE_DB_ROLE = text("""
+SELECT (
+    current_user = session_user
+    AND current_setting('app.current_tenant', true) = :tenant_id
+    AND EXISTS (
+        SELECT 1 FROM pg_roles r
+         WHERE r.rolname = current_user
+           AND r.rolcanlogin
+           AND NOT r.rolsuper
+           AND NOT r.rolbypassrls
+           AND NOT r.rolcreaterole
+           AND NOT r.rolcreatedb
+           AND NOT r.rolreplication
+           -- A dedicated ledger LOGIN must have no role memberships,
+           -- including NOINHERIT/SET ROLE paths to the table owner or
+           -- destructive privileges. Give it direct, scoped GRANTs only.
+           AND NOT EXISTS (
+               SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid
+           )
+    )
+    -- PG15 allows parameter-specific GRANT SET without SUPERUSER. Such a
+    -- role could disable normal row/foreign-key guard triggers by switching
+    -- replication mode, despite all table/RLS checks being satisfied.
+    AND current_setting('session_replication_role') = 'origin'
+    AND NOT has_parameter_privilege(current_user, 'session_replication_role', 'SET')
+    AND NOT has_parameter_privilege(current_user, 'session_replication_role', 'ALTER SYSTEM')
+    AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'SELECT')
+    AND has_table_privilege(current_user, 'public.hitl_finding_decisions', 'INSERT')
+    -- RLS and the row trigger DO NOT protect TRUNCATE; inherited write and
+    -- maintenance capabilities also violate the append-only contract.
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'UPDATE')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'DELETE')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'TRUNCATE')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'REFERENCES')
+    AND NOT has_table_privilege(current_user, 'public.hitl_finding_decisions', 'TRIGGER')
+    AND EXISTS (
+        SELECT 1 FROM pg_class c
+         WHERE c.oid = 'public.hitl_finding_decisions'::regclass
+           AND c.relrowsecurity
+           AND c.relforcerowsecurity
+           AND NOT pg_has_role(
+               (SELECT r.oid FROM pg_roles r WHERE r.rolname = current_user),
+               c.relowner,
+               'MEMBER'
+           )
+    )
+) AS safe_hitl_writer_role
+""")
+
 _LOCK = text("""
 SELECT id, project_id, document_id, thread_id, checkpoint_id,
        lineage_generation, lineage_fencing_token, review_metadata
@@ -168,6 +227,16 @@ class FindingDecisionLedgerWriter:
         if draft.finding_kind is not FindingDecisionKind.RISK:
             raise FindingDecisionIdentityError(
                 "critique observations require their own typed persisted evidence envelope"
+            )
+
+        # RLS is only meaningful when the connection itself cannot bypass
+        # it; verifying the caller's tenant UUID alone is not a DB authority.
+        principal = (
+            await self._session.execute(_SAFE_DB_ROLE, {"tenant_id": str(tenant_id)})
+        ).mappings().first()
+        if not principal or principal.get("safe_hitl_writer_role") is not True:
+            raise FindingDecisionIdentityError(
+                "database principal is not authorized for non-bypass HITL ledger writes"
             )
 
         keys = {
