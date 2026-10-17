@@ -148,6 +148,41 @@ function parseCritiqueObservations(notes: string): { number: number; title: stri
   });
 }
 
+// Typed, untrusted model observations. A source location is NOT validation of
+// the criticism, nor permission to approve an individual finding.
+type CritiqueWitnessDisplay = {
+  claim: string;
+  quote: string;
+  witnessStatus: string;
+  sourceBasis: string | null;
+  revisionId: string | null;
+  quoteTruncated: boolean;
+};
+
+function sourceCritiqueObservations(
+  data: ReviewItemResponse['item_data'],
+): CritiqueWitnessDisplay[] {
+  const raw = data?.['critique_observations'];
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 32).flatMap((value): CritiqueWitnessDisplay[] => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const observation = value as Record<string, unknown>;
+    const claim = observation.claim;
+    if (typeof claim !== 'string' || !claim.trim()) return [];
+    return [{
+      claim: claim.trim(),
+      quote: typeof observation.source_quote === 'string' ? observation.source_quote : '',
+      witnessStatus: typeof observation.witness_status === 'string'
+        ? observation.witness_status : 'UNRESOLVED',
+      sourceBasis: typeof observation.source_basis === 'string'
+        ? observation.source_basis : null,
+      revisionId: typeof observation.document_revision_id === 'string'
+        ? observation.document_revision_id : null,
+      quoteTruncated: observation.source_quote_truncated === true,
+    }];
+  });
+}
+
 export function ReviewItemCard({
   item,
   projectId,
@@ -183,6 +218,7 @@ export function ReviewItemCard({
   const reason = getString(item.item_data, 'reason');
   const modelConclusion = getString(item.item_data, 'critique_notes');
   const critiqueObservations = modelConclusion ? parseCritiqueObservations(modelConclusion) : null;
+  const sourceObservations = sourceCritiqueObservations(item.item_data);
   const approveMeaning =
     getString(item.item_data, 'approve_meaning') ??
     (item.resumable ? null : DEFAULT_APPROVE_MEANING);
@@ -247,6 +283,45 @@ export function ReviewItemCard({
           {reason ? <p className="mt-1 text-sm">{reason}</p> : null}
           {summary && summary !== title ? (
             <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+          ) : null}
+
+          {sourceObservations.length > 0 ? (
+            <section className="mt-3 space-y-2" aria-label="Source-witnessed critique observations">
+              <p className="font-medium text-sm">
+                {sourceObservations.length} observations requiring human verification
+              </p>
+              <p className="text-xs text-muted-foreground">
+                AI-generated quality concerns, not verified contractual findings.
+                A located quotation confirms only matching text in the supplied source excerpt.
+                These items cannot be approved individually in this review.
+              </p>
+              {sourceObservations.map((observation, index) => (
+                <div key={index} className="rounded-md border p-3 text-sm">
+                  <p className="font-medium">{index + 1}. {observation.claim}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {observation.witnessStatus === 'LOCATED'
+                      ? 'Source text located — claim not verified'
+                      : `Source witness: ${observation.witnessStatus} — claim not verified`}
+                  </p>
+                  {observation.quote ? (
+                    <blockquote className="mt-2 whitespace-pre-wrap border-l-2 pl-3 text-muted-foreground">
+                      {observation.quote}
+                      {observation.quoteTruncated ? ' [truncated; not independently verified]' : ''}
+                    </blockquote>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      No source quotation supplied.
+                    </p>
+                  )}
+                  {observation.sourceBasis ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Source representation: {observation.sourceBasis}
+                      {observation.revisionId ? ` · Revision ${observation.revisionId}` : ''}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </section>
           ) : null}
 
           {modelConclusion ? (

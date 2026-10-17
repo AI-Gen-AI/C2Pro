@@ -16,7 +16,7 @@ whatever thread id production hands it, and the REAL
 the thread naming: the tests observe what production does, so they keep
 their meaning after the lineage identity changes.
 
-Ownership is read out of the checkpoint itself. ``critique_notes`` carries
+Ownership is read out of the checkpoint itself. ``human_feedback`` carries
 the writing worker's name: it is a real ``ProjectState`` channel, so it
 lands in ``channel_values`` and travels with the persisted checkpoint,
 which makes "who wrote the checkpoint this review resolves to" an
@@ -263,7 +263,9 @@ DOWNSTREAM_RUNS: list[str] = []
 
 
 async def _downstream(state: ProjectState) -> ProjectState:
-    DOWNSTREAM_RUNS.append(str(state.get("critique_notes")))
+    # New fenced workers use a separate marker; legacy UUID checkpoints still
+    # store their marker in critique_notes and have empty human_feedback.
+    DOWNSTREAM_RUNS.append(str(state.get("human_feedback") or state.get("critique_notes")))
     return state
 
 
@@ -327,9 +329,9 @@ class _RealGraphWorker:
         if self.release is not None:
             await self.release.wait()
 
-        # critique_notes is a real ProjectState channel, so the writer's name
+        # human_feedback is a real ProjectState channel, so the writer's name
         # is persisted INSIDE the checkpoint and travels with it.
-        run_state = {**state, "critique_notes": self.name}
+        run_state = {**state, "human_feedback": self.name}
         result = await self.app.ainvoke(run_state, self.config)
         self.checkpoint_ids.append(await self._latest_checkpoint_id())
 
@@ -370,7 +372,7 @@ class _RealGraphWorker:
         become selectable as the current lineage.
         """
         assert self.app is not None and self.config is not None
-        await self.app.aupdate_state(self.config, {"critique_notes": self.name})
+        await self.app.aupdate_state(self.config, {"human_feedback": self.name})
         appended = await self._latest_checkpoint_id()
         self.checkpoint_ids.append(appended)
         return appended
@@ -438,7 +440,7 @@ async def _owner_of(saver: AsyncPostgresSaver, thread_id: str, checkpoint_id: st
         thread_id=thread_id, checkpoint_id=checkpoint_id
     )
     assert restored is not None, f"no checkpoint for {thread_id}/{checkpoint_id}"
-    return str(restored.checkpoint.get("channel_values", {}).get("critique_notes"))
+    return str(restored.checkpoint.get("channel_values", {}).get("human_feedback"))
 
 
 async def _op(db: AsyncSession, document_id: UUID) -> Any:

@@ -101,9 +101,26 @@ def merge_node_results(
     so both patterns are safe and the channel never collides under parallel
     fan-out.
     """
-    merged: list[NodeResult[object]] = list(existing or [])
-    seen = {_node_result_signature(r) for r in merged}
-    for result in incoming or []:
+    incoming_items = list(incoming or [])
+    # N12 may retry and re-emit its full accumulated state. Its observations
+    # and retry_count are versioned within NodeResult.data, but the generic
+    # signature deliberately does not hash data. Retain only the latest N12
+    # attempt, otherwise a stale critique can survive in checkpoint state or
+    # inflate the Documentation Health node-count denominator.
+    latest_critique = next(
+        (result for result in reversed(incoming_items) if result.node == "critique"),
+        None,
+    )
+    merged: list[NodeResult[object]] = [
+        result for result in (existing or [])
+        if latest_critique is None or result.node != "critique"
+    ]
+    if latest_critique is not None:
+        incoming_items = [
+            result for result in incoming_items if result.node != "critique"
+        ] + [latest_critique]
+    seen = {_node_result_signature(result) for result in merged}
+    for result in incoming_items:
         signature = _node_result_signature(result)
         if signature not in seen:
             merged.append(result)

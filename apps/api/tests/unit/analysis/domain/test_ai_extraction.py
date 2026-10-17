@@ -97,6 +97,48 @@ class TestCritiqueExtractionService:
         assert res == CritiqueResult(status="OK", notes="looks good")
 
     @pytest.mark.asyncio
+    async def test_located_quality_claim_with_ok_cannot_bypass_review(self) -> None:
+        """A located quote is not verification that a quality concern is false."""
+        source = "The contract contains a fourteen-day rectification obligation."
+        quote = "fourteen-day rectification obligation"
+        ai = _FakeAI(
+            payload={
+                "status": "OK",
+                "notes": "No other problems.",
+                "observations": [
+                    {
+                        "claim": "Rectification obligation not extracted",
+                        "source_quote": quote,
+                    }
+                ],
+            }
+        )
+        result = await CritiqueExtractionService().extract(
+            items=[{"title": "payment only"}],
+            doc_type="contract",
+            source_text=source,
+            ai=ai,
+        )
+        assert result.status == "RETRY"
+        assert len(result.observations) == 1
+        assert result.observations[0].witness.status.value == "LOCATED"
+        assert result.observations[0].witness.claim_verified is False
+        assert "human verification" in result.notes
+        assert "Rectification obligation not extracted" in result.notes
+        assert "fourteen-day rectification obligation" in result.notes
+        assert "do not assume" in result.notes
+
+    @pytest.mark.asyncio
+    async def test_empty_ok_observations_remain_ok(self) -> None:
+        result = await CritiqueExtractionService().extract(
+            items=[], doc_type="contract",
+            source_text="Complete contract.",
+            ai=_FakeAI(payload={"status": "OK", "notes": "No quality concerns.", "observations": []}),
+        )
+        assert result.status == "OK"
+        assert result.observations == ()
+
+    @pytest.mark.asyncio
     async def test_returns_retry(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload={"status": "RETRY", "notes": "redo"})

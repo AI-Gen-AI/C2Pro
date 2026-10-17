@@ -111,3 +111,25 @@ def test_merge_keeps_distinct_status_for_same_node():
         [_nr("a", NodeStatus.FAILED, err=err)],
     )
     assert {r.status for r in merged} == {NodeStatus.OK, NodeStatus.FAILED}
+
+
+def test_merge_replaces_stale_critique_attempt_and_keeps_health_denominator_stable() -> None:
+    """PQ-HITL-01.1: only the latest N12 attempt can inform N13/Health."""
+    from src.analysis.domain.documentation_health import build_documentation_health_signal
+
+    extractor = _nr("risk_extractor")
+    first = NodeResult(
+        node="critique", status=NodeStatus.OK,
+        data={"retry_count": 1, "status": "RETRY", "claim": "old"},
+    )
+    latest = NodeResult(
+        node="critique", status=NodeStatus.OK,
+        data={"retry_count": 2, "status": "RETRY", "claim": "new"},
+    )
+    acc = merge_node_results([], [extractor, first])
+    # N12 sequentially re-emits its previous result alongside the new attempt.
+    merged = merge_node_results(acc, [extractor, first, latest])
+    assert [x.node for x in merged] == ["risk_extractor", "critique"]
+    assert merged[-1].data == latest.data
+    assert build_documentation_health_signal(merged).total_count == 2
+    assert merge_node_results(merged, list(merged)) == merged
