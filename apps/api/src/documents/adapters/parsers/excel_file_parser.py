@@ -6,6 +6,7 @@ using the openpyxl library, encapsulating external library details.
 """
 
 import asyncio
+from io import BytesIO
 import re
 import unicodedata
 from numbers import Number
@@ -70,15 +71,18 @@ class ExcelFileParser:
     """
 
     async def parse_schedule(
-        self, file_path: Path, *, include_evidence: bool = False
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
     ) -> list[dict[str, Any]]:
         """Run the synchronous XLSX lifecycle off the asyncio event loop."""
         return await asyncio.to_thread(
-            self._parse_schedule_sync, file_path, include_evidence=include_evidence
+            self._parse_schedule_sync, file_path, include_evidence=include_evidence,
+            source_bytes=source_bytes,
         )
 
     def _parse_schedule_sync(
-        self, file_path: Path, *, include_evidence: bool = False
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
     ) -> list[dict[str, Any]]:
         """
         Parses schedule data from a standard Excel file format.
@@ -99,10 +103,18 @@ class ExcelFileParser:
             ExcelParsingError: If the file cannot be opened or does not match the expected format.
         """
         try:
-            workbook = openpyxl.load_workbook(file_path, data_only=True)
+            if source_bytes is not None and not include_evidence:
+                raise ExcelParsingError("Source byte snapshot requires evidence mode")
+            workbook = openpyxl.load_workbook(
+                BytesIO(source_bytes) if source_bytes is not None else file_path,
+                data_only=True,
+            )
             sheet = workbook.active
             formula_workbook = (
-                openpyxl.load_workbook(file_path, data_only=False)
+                openpyxl.load_workbook(
+                    BytesIO(source_bytes) if source_bytes is not None else file_path,
+                    data_only=False,
+                )
                 if include_evidence
                 else None
             )
@@ -124,6 +136,18 @@ class ExcelFileParser:
                 raise ExcelParsingError(
                     f"Missing one or more required headers: {', '.join(expected_headers)}"
                 )
+
+            if include_evidence:
+                # Cached formula-derived header labels must never determine
+                # evidence column authority, even if all row cells are literal.
+                for column_index in range(1, len(headers) + 1):
+                    if evidence_formula_sheet.cell(
+                        row=header_row_index, column=column_index
+                    ).data_type == "f":
+                        raise ExcelParsingError(
+                            "Unverified formula-derived schedule header at "
+                            f"{sheet.title}!{header_row_index} column {column_index}"
+                        )
 
             schedule_data = []
             for row_index, row in enumerate(
