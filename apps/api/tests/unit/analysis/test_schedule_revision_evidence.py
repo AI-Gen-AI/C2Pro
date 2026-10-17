@@ -5,11 +5,11 @@ These tests do NOT certify an approved schedule, a critical path or a live demo.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
-import threading
 from uuid import UUID
 
 import openpyxl
