@@ -24,7 +24,7 @@ from typing import Any, Callable
 import yaml
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-WORK_ID = re.compile(r"C2PRO-DEV-[0-9]{2}")  # same shape as the verifier; always fullmatch
+WORK_ID = re.compile(r"(?:C2PRO-DEV-[0-9]{2}|PC-3|PC-7a)")  # registered DEV or bounded PC, fullmatch
 WORKER_ID = re.compile(r"[a-z0-9_]+")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 ALLOWED_FILE_STATUS = {"added", "modified", "removed", "renamed", "copied", "changed"}
@@ -115,6 +115,13 @@ def _validate_subject(
     head = _sha(pr.get("head_sha"), "pr head")
     base = _sha(pr.get("base_sha"), "pr base")
     _sha(pr.get("merge_base_sha"), "merge base")
+    # Collected by the trusted GitHub API workflow, not inferred from head_ref.
+    if "head_repository_id" in pr or "head_repository_full_name" in pr:
+        if not _is_int(pr.get("head_repository_id")) or pr["head_repository_id"] < 1:
+            _fail("PR head repository ID is invalid")
+        head_repo_name = pr.get("head_repository_full_name")
+        if not isinstance(head_repo_name, str) or "/" not in head_repo_name or head_repo_name != head_repo_name.strip():
+            _fail("PR head repository full_name is invalid")
     head_ref = pr.get("head_ref")
     if head_ref is not None and (
         not isinstance(head_ref, str)
@@ -616,11 +623,16 @@ def build_trusted_context(
     if claimed is not None and not isinstance(claimed, dict):
         _fail("implementation_evidence must be a mapping or null")
     implementation_subject = {
-        "repository_id": repository["id"], "pr_number": pr["number"],
+        "repository_id": repository["id"], "repository_full_name": repository["full_name"],
+        "pr_number": pr["number"],
         "head_sha": pr["head_sha"], "base_sha": pr["base_sha"],
+        "merge_base_sha": pr["merge_base_sha"],
     }
     if pr.get("head_ref") is not None:
         implementation_subject["head_ref"] = pr["head_ref"]
+    if "head_repository_id" in pr:
+        implementation_subject["head_repository_id"] = pr["head_repository_id"]
+        implementation_subject["head_repository_full_name"] = pr["head_repository_full_name"]
     implementation = _trusted_implementation_evidence(
         implementation_verifier, implementation_subject
     )

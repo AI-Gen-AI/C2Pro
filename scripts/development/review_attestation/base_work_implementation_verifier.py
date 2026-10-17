@@ -83,7 +83,7 @@ def _subject(subject: dict[str, Any]) -> tuple[str, str, str]:
     return base, head, head_ref
 
 
-def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -> dict[str, Any] | None:
+def _resolve_dev_work_implementation(repo_root: Path, subject: dict[str, Any]) -> dict[str, Any] | None:
     """Return trusted implementation evidence for one exact PR subject, or None.
 
     None means the protected base has no effective work matching this branch.
@@ -166,6 +166,114 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
         "evidence_ref": (
             f"protected-base:{base_sha}:work:{work['work_id']}:"
             f"baseline:{baseline}:{receipt}:head:{head_sha}"
+        ),
+    }
+
+
+
+def resolve_base_work_implementation(
+    repo_root: Path, subject: dict[str, Any], *,
+    workspace_attestation_verifier: Any = None,
+) -> dict[str, Any] | None:
+    """Resolve DEV or PC independently from protected-base records only.
+
+    PC is *not* placed into the DEV hot queue. A Product branch needs its
+    own canonical registered WORK and orchestrator observation on the
+    protected base. Neither record is created by this verifier.
+    """
+    try:
+        from scripts.development.product_work_identity import (
+            PC_TASKS, ProductWorkError, matching_pc_assignment,
+            read_pc_workspace_observation, validate_pc_work,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name != "scripts":
+            raise
+        # Loaded by the AUDIT_ONLY CLI through importlib without repo-root PYTHONPATH.
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from product_work_identity import (
+            PC_TASKS, ProductWorkError, matching_pc_assignment,
+            read_pc_workspace_observation, validate_pc_work,
+        )
+
+    base_sha, head_sha, head_ref = _subject(subject)
+    if head_ref not in {rule["branch"] for rule in PC_TASKS.values()}:
+        return _resolve_dev_work_implementation(repo_root, subject)
+
+    # A short branch name is NOT a repository identity. A fork can reuse it.
+    # Missing or inconsistent trusted GitHub repository/PR binding fails closed
+    # before any external attestor can influence the result.
+    base_repo_id = subject.get("repository_id")
+    head_repo_id = subject.get("head_repository_id")
+    base_repo_name = subject.get("repository_full_name")
+    head_repo_name = subject.get("head_repository_full_name")
+    pr_number = subject.get("pr_number")
+    if (type(base_repo_id) is not int or base_repo_id < 1
+            or type(head_repo_id) is not int or head_repo_id != base_repo_id
+            or not isinstance(base_repo_name, str) or not base_repo_name
+            or not isinstance(head_repo_name, str) or head_repo_name != base_repo_name
+            or type(pr_number) is not int or pr_number < 1):
+        raise ProvenanceError("Project Controls PR head repository/PR identity is missing or differs from trusted base")
+
+    merge_base = subject.get("merge_base_sha")
+    if not isinstance(merge_base, str) or not _SHA40.fullmatch(merge_base):
+        raise ProvenanceError("Project Controls PR merge-base is unverified")
+    try:
+        work = matching_pc_assignment(repo_root, head_ref, merge_base)
+    except ProductWorkError as exc:
+        raise ProvenanceError(f"Project Controls WORK provenance invalid: {exc}") from exc
+    if work is None:
+        return None
+    # A registered YAML observation is NOT proof of who actually inspected
+    # the workspace. Only a separate authenticated verifier injected by
+    # trusted code may confer implementation identity. Currently the
+    # AUDIT_ONLY workflow supplies no such verifier and must fail closed.
+    if workspace_attestation_verifier is None:
+        return None
+    try:
+        # These are UNTRUSTED claims from the immutable protected-base record,
+        # not issuer authentication. Re-check against the verified WORK before
+        # giving the candidate fields to a separately trusted attestor.
+        observation = read_pc_workspace_observation(repo_root, work["work_id"])
+        validate_pc_work(repo_root, work["work_id"], work=work, observation=observation)
+    except ProductWorkError as exc:
+        raise ProvenanceError("Project Controls workspace observation invalid") from exc
+    try:
+        result = workspace_attestation_verifier({
+            "repository_id": base_repo_id,
+            "repository_full_name": base_repo_name,
+            "pr_number": pr_number,
+            "head_repository_id": head_repo_id,
+            "head_repository_full_name": head_repo_name,
+            "head_full_ref": f"{head_repo_name}:{head_ref}",
+            "work_id": work["work_id"],
+            "worker_id": work["assigned_to"],
+            "base_sha": work["base_sha"],
+            "branch": work["branch"],
+            "workspace_receipt": work["workspace_receipt"],
+            "workspace_path": observation["workspace_path"],
+            "workspace_observed_at": observation["observed_at"],
+            "workspace_observed_head_sha": observation["observed_head_sha"],
+            "workspace_observed_clean": observation["clean"],
+            "pr_base_sha": base_sha,
+            "pr_head_sha": head_sha,
+            "pr_merge_base_sha": merge_base,
+        })
+    except Exception as exc:
+        raise ProvenanceError("trusted external workspace attestation failed") from exc
+    if result is not True:
+        return None
+    return {
+        "work_id": work["work_id"],
+        "worker_id": work["assigned_to"],
+        "verified": True,
+        # Verified only after trusted external workspace attestation, NOT from
+        # YAML, PR text or the author. Review/CI/merge remain separately gated.
+        "evidence_ref": (
+            f"protected-base:{base_sha}:product-work:{work['work_id']}:"
+            f"baseline:{work['base_sha']}:"
+            f"{work['workspace_receipt']}:head:{head_sha}"
         ),
     }
 
