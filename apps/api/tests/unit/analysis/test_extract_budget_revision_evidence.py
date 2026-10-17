@@ -259,6 +259,50 @@ async def test_rejects_ambiguous_single_comma_decimal_source_text(
         )
 
 
+@pytest.mark.parametrize(
+    "source",
+    ["1.234", "0.125", "1e3", "12abc34", "1 234", "2+3", "1,234.56.7"],
+)
+def test_verified_budget_amount_rejects_ambiguous_or_unsupported_source_syntax(
+    source: str,
+) -> None:
+    with pytest.raises(ExcelParsingError):
+        ExcelFileParser._coerce_budget_decimal(source)
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("1.234,50", Decimal("1234.50")),
+        ("1,234.50", Decimal("1234.50")),
+        ("12,30 EUR", Decimal("12.30")),
+        ("99999999999999.99", Decimal("99999999999999.99")),
+        ("(100.00)", Decimal("-100.00")),
+        ("1.234.567", Decimal("1234567")),
+        ("1,234,567", Decimal("1234567")),
+    ],
+)
+def test_verified_budget_amount_preserves_exact_numeric_semantics(
+    source: str, expected: Decimal,
+) -> None:
+    assert ExcelFileParser._coerce_budget_decimal(source) == expected
+
+
+@pytest.mark.asyncio
+async def test_budget_evidence_rejects_duplicate_canonical_headers(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "duplicate-total.xlsx"
+    _budget_xlsx(path)
+    wb = openpyxl.load_workbook(path)
+    wb.active.cell(row=1, column=9).value = "Total (Gross)"
+    wb.active.cell(row=2, column=9).value = 99999
+    wb.save(path)
+    wb.close()
+    with pytest.raises(ExcelParsingError, match="Duplicate canonical budget evidence columns"):
+        await ExcelFileParser().parse_budget(path, include_evidence=True)
+
+
 @pytest.mark.asyncio
 async def test_redelivery_of_retired_wbs_row_skips_new_authority_check(
     tmp_path: Path,
