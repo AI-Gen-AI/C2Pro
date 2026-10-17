@@ -68,7 +68,9 @@ class ExcelFileParser:
     Encapsulates the logic specific to the Excel format and `openpyxl` library.
     """
 
-    async def parse_schedule(self, file_path: Path) -> list[dict[str, Any]]:
+    async def parse_schedule(
+        self, file_path: Path, *, include_evidence: bool = False
+    ) -> list[dict[str, Any]]:
         """
         Parses schedule data from a standard Excel file format.
 
@@ -77,6 +79,9 @@ class ExcelFileParser:
 
         Args:
             file_path: The path to the Excel file (.xlsx).
+            include_evidence: Opt in to source-row identity and explicit ID columns.
+                Default output stays byte-for-byte compatible with legacy callers.
+                The caller must separately verify the immutable revision SHA-256.
 
         Returns:
             A list of dictionaries, where each dictionary represents a schedule task.
@@ -87,6 +92,12 @@ class ExcelFileParser:
         try:
             workbook = openpyxl.load_workbook(file_path, data_only=True)
             sheet = workbook.active
+            formula_workbook = (
+                openpyxl.load_workbook(file_path, data_only=False)
+                if include_evidence
+                else None
+            )
+            formula_sheet = formula_workbook.active if formula_workbook else None
 
             header_row_index, headers = self._find_schedule_headers(sheet)
             if header_row_index is None:
@@ -96,20 +107,39 @@ class ExcelFileParser:
                 )
 
             schedule_data = []
-            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+            for row_index, row in enumerate(
+                sheet.iter_rows(min_row=header_row_index + 1, values_only=True),
+                start=header_row_index + 1,
+            ):
                 row_data = dict(zip(headers, row, strict=False))
-                # Filter out empty rows
-                if any(row_data.values()):
-                    schedule_data.append(
-                        {
-                            "task": row_data.get("task"),
-                            "start_date": row_data.get("start date"),
-                            "end_date": row_data.get("end date"),
-                            "duration": row_data.get("duration"),
-                            "wbs": row_data.get("wbs"),
-                            "predecessors": row_data.get("predecessors"),
-                        }
-                    )
+                if not any(row_data.values()):
+                    continue
+                schedule_row = {
+                    "task": row_data.get("task"),
+                    "start_date": row_data.get("start date"),
+                    "end_date": row_data.get("end date"),
+                    "duration": row_data.get("duration"),
+                    "wbs": row_data.get("wbs"),
+                    "predecessors": row_data.get("predecessors"),
+                }
+                if include_evidence:
+                    # The hash authenticates XLSX bytes, not Excel's cached
+                    # calculations. Formula-derived dates cannot be trusted.
+                    assert formula_sheet is not None
+                    for column_index, name in enumerate(headers, start=1):
+                        if name in {"start date", "end date"} and (
+                            formula_sheet.cell(row=row_index, column=column_index).data_type == "f"
+                        ):
+                            raise ExcelParsingError(
+                                f"Unverified schedule date formula at {sheet.title}!{row_index} ({name})"
+                            )
+                    schedule_row.update({
+                        "source_locator": f"{sheet.title}!{row_index}",
+                        "source_activity_id": row_data.get("activity id"),
+                        "source_milestone_id": row_data.get("milestone id"),
+                        "wbs_node_id": row_data.get("wbs node id"),
+                    })
+                schedule_data.append(schedule_row)
             return schedule_data
 
         except ExcelParsingError:
@@ -124,6 +154,9 @@ class ExcelFileParser:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
                 workbook_to_close.close()
+            formula_to_close = locals().get("formula_workbook")
+            if formula_to_close is not None and hasattr(formula_to_close, "close"):
+                formula_to_close.close()
 
     @staticmethod
     def _schedule_header_aliases() -> dict[str, set[str]]:
@@ -134,6 +167,9 @@ class ExcelFileParser:
             "duration": {"duration", "duracion"},
             "wbs": {"wbs"},
             "predecessors": {"predecessors", "predecesoras"},
+            "activity id": {"activity id", "id actividad", "activity code"},
+            "milestone id": {"milestone id", "id hito"},
+            "wbs node id": {"wbs node id", "id nodo wbs", "id wbs"},
         }
 
     @classmethod
