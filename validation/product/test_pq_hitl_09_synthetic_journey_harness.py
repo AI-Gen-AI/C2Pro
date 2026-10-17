@@ -58,9 +58,14 @@ class TestMatrixFixtureSchemaCoverage:
         # Contract supports text/pdf
         assert ".pdf" in type_map["contract"]["supported_extensions"]
 
-        # Budget is structured: supports .xlsx/.bc3, rejects .docx
+        # Budget PDF is uploadable as unstructured source, not XLSX row evidence.
         assert ".xlsx" in type_map["budget"]["supported_extensions"]
         assert ".bc3" in type_map["budget"]["supported_extensions"]
+        assert ".pdf" in type_map["budget"]["supported_extensions"]
+        assert ".pdf" not in type_map["budget"]["rejected_extensions"]
+        assert "does not establish structured budget row extraction" in (
+            type_map["budget"]["format_qualification"]
+        )
         assert ".docx" in type_map["budget"]["rejected_extensions"]
 
         # Schedule is structured: supports .xlsx/.bc3, rejects .docx (Codex finding 1)
