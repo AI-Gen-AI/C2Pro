@@ -112,6 +112,27 @@ class ExcelFileParser:
                 start=header_row_index + 1,
             ):
                 row_data = dict(zip(headers, row, strict=False))
+                if include_evidence:
+                    # The immutable source SHA proves cell bytes, not Excel's
+                    # cached formula evaluation. Reject formulas in ALL consumed
+                    # evidence fields before checking for an apparently blank row:
+                    # data_only=True can return None for every formula cell.
+                    assert formula_sheet is not None
+                    evidence_columns = {
+                        "task", "start date", "end date", "duration", "wbs",
+                        "predecessors", "activity id", "milestone id", "wbs node id",
+                    }
+                    for column_index, name in enumerate(headers, start=1):
+                        if name not in evidence_columns:
+                            continue
+                        if formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                            category = (
+                                "date" if name in {"start date", "end date"} else "source"
+                            )
+                            raise ExcelParsingError(
+                                f"Unverified schedule {category} formula at "
+                                f"{sheet.title}!{row_index} ({name})"
+                            )
                 if not any(row_data.values()):
                     continue
                 schedule_row = {
@@ -123,16 +144,6 @@ class ExcelFileParser:
                     "predecessors": row_data.get("predecessors"),
                 }
                 if include_evidence:
-                    # The hash authenticates XLSX bytes, not Excel's cached
-                    # calculations. Formula-derived dates cannot be trusted.
-                    assert formula_sheet is not None
-                    for column_index, name in enumerate(headers, start=1):
-                        if name in {"start date", "end date"} and (
-                            formula_sheet.cell(row=row_index, column=column_index).data_type == "f"
-                        ):
-                            raise ExcelParsingError(
-                                f"Unverified schedule date formula at {sheet.title}!{row_index} ({name})"
-                            )
                     schedule_row.update({
                         "source_locator": f"{sheet.title}!{row_index}",
                         "source_activity_id": row_data.get("activity id"),
