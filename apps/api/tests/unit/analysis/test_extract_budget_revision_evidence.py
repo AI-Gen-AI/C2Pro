@@ -351,6 +351,11 @@ async def test_budget_evidence_accepts_matching_explicit_currency_markers(
         (4, '[$€-407]#,##0.00', "USD"),
         (5, '"£"#,##0.00', "EUR"),
         (4, '[$JPY-409]#,##0.00', "EUR"),
+        (4, '¥#,##0.00', "EUR"),
+        (5, '₹#,##0.00', "EUR"),
+        (4, '₩#,##0.00', "EUR"),
+        (5, '"¥"#,##0.00', "EUR"),
+        (4, '€"₹"#,##0.00', "EUR"),
     ],
 )
 @pytest.mark.asyncio
