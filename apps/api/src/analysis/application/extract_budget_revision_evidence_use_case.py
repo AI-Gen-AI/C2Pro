@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from collections.abc import Collection
 from dataclasses import dataclass
 from decimal import Decimal
@@ -63,7 +65,7 @@ class ExtractBudgetRevisionEvidenceUseCase:
         existing_row_identities: Collection[tuple[UUID, str]],
     ) -> BudgetRevisionEvidenceResult:
         _require_matching_budget_revision(document, revision)
-        verify_revision_file_hash(source_path, revision.blob_hash)
+        await asyncio.to_thread(verify_revision_file_hash, source_path, revision.blob_hash)
         parsed_rows = await self.parser.parse_budget(source_path, include_evidence=True)
         # Idempotent redelivery must not re-authorize links that were safely
         # persisted against an older WBS baseline. Only NEW rows need approval.
