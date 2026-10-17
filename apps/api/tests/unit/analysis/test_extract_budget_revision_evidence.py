@@ -288,6 +288,60 @@ def test_verified_budget_amount_preserves_exact_numeric_semantics(
     assert ExcelFileParser._coerce_budget_decimal(source) == expected
 
 
+@pytest.mark.parametrize(
+    ("unit_source", "total_source", "currency"),
+    [
+        ("$100", "$1200", "EUR"),
+        ("EUR 100 USD", "1200", "EUR"),
+        ("100", "£1200", "EUR"),
+        ("€100", "€1200", None),
+    ],
+)
+@pytest.mark.asyncio
+async def test_budget_evidence_rejects_foreign_or_conflicting_currency_markers(
+    tmp_path: Path, unit_source: str, total_source: str, currency: str | None,
+) -> None:
+    path = tmp_path / "conflicting-currency.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    sheet = workbook.active
+    sheet.cell(row=2, column=4).value = unit_source
+    sheet.cell(row=2, column=5).value = total_source
+    sheet.cell(row=2, column=6).value = currency
+    workbook.save(path)
+    workbook.close()
+    with pytest.raises(ExcelParsingError, match="currency marker conflicts"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=_document(), revision=_revision(path), source_path=path,
+            existing_row_identities=frozenset(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_budget_evidence_accepts_matching_explicit_currency_markers(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "matching-currency.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    sheet = workbook.active
+    sheet.cell(row=2, column=4).value = "EUR 100"
+    sheet.cell(row=2, column=5).value = "€1200"
+    workbook.save(path)
+    workbook.close()
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(path), source_path=path,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].unit_price == Decimal("100")
+    assert result.rows[0].amount == Decimal("1200")
+
+
 @pytest.mark.asyncio
 async def test_budget_evidence_rejects_duplicate_canonical_headers(
     tmp_path: Path,
