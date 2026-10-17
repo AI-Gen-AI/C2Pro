@@ -71,6 +71,11 @@ class TestMatrixFixtureSchemaCoverage:
         # Schedule is structured: supports .xlsx/.bc3, rejects .docx (Codex finding 1)
         assert ".xlsx" in type_map["schedule"]["supported_extensions"]
         assert ".bc3" in type_map["schedule"]["supported_extensions"]
+        assert ".pdf" in type_map["schedule"]["supported_extensions"]
+        assert ".pdf" not in type_map["schedule"]["rejected_extensions"]
+        assert "not as a verified structured Gantt activity extraction" in (
+            type_map["schedule"]["format_qualification"]
+        )
         assert ".docx" in type_map["schedule"]["rejected_extensions"]
 
     def test_eight_scenarios_declared_with_non_empty_invariants(self) -> None:
