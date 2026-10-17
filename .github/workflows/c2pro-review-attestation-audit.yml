@@ -72,6 +72,13 @@ jobs:
             if (pr.base.repo.full_name !== repoInfo.data.full_name || pr.base.repo.id !== repoInfo.data.id) {
               throw new Error('fresh pull request base repository mismatch');
             }
+            // Only trusted API identities: never infer the head repository from a branch name.
+            if (!pr.head.repo || !Number.isInteger(pr.head.repo.id) ||
+                typeof pr.head.repo.full_name !== 'string' || !pr.head.repo.full_name) {
+              throw new Error('PR head repository identity unavailable');
+            }
+            const headRepositoryId = pr.head.repo.id;
+            const headRepositoryFullName = pr.head.repo.full_name;
             const comparison = await github.rest.repos.compareCommitsWithBasehead({
               owner, repo, basehead: pr.base.sha + '...' + pr.head.sha
             });
@@ -225,8 +232,12 @@ jobs:
             const finalPr = finalPrResponse.data;
             if (
               finalPr.head.sha !== pr.head.sha ||
+              finalPr.head.ref !== pr.head.ref ||
               finalPr.base.sha !== pr.base.sha ||
-              finalPr.changed_files !== pr.changed_files
+              finalPr.changed_files !== pr.changed_files ||
+              !finalPr.head.repo ||
+              finalPr.head.repo.id !== headRepositoryId ||
+              finalPr.head.repo.full_name !== headRepositoryFullName
             ) {
               throw new Error('pull request moved during trusted collection');
             }
@@ -250,6 +261,8 @@ jobs:
                 number: pr.number,
                 author_user_id: pr.user.id,
                 head_ref: pr.head.ref,
+                head_repository_id: headRepositoryId,
+                head_repository_full_name: headRepositoryFullName,
                 head_sha: pr.head.sha,
                 base_sha: pr.base.sha,
                 merge_base_sha: mergeBase,
