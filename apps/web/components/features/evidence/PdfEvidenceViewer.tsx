@@ -138,12 +138,23 @@ export function PdfEvidenceViewer({
   // evidence list. Do not infer a page from unknown/document-fallback links.
   // PDFViewer tracks changes to initialPage and navigates its rendered Page.
   useEffect(() => {
-    if (!activeHighlightId || currentFileUrl !== fileUrl) return;
-    const cited = highlights.find((item) => item.id === activeHighlightId);
-    if (!cited || !Number.isSafeInteger(cited.page) || cited.page < 1) return;
+    if (currentFileUrl !== fileUrl) return;
+    const cited = activeHighlightId
+      ? highlights.find((item) => item.id === activeHighlightId)
+      : undefined;
+    if (!cited || !Number.isSafeInteger(cited.page) || cited.page < 1) {
+      // From an exact-page citation to document fallback, remove the stale
+      // active source/page. Do not reset manual page navigation when there
+      // was no selected source highlight in the first place.
+      if (activeId !== null) {
+        setActiveId(null);
+        setStatePage(1);
+      }
+      return;
+    }
     setActiveId(cited.id);
     setStatePage(cited.page);
-  }, [activeHighlightId, currentFileUrl, fileUrl, highlights]);
+  }, [activeHighlightId, activeId, currentFileUrl, fileUrl, highlights]);
 
   const handleEvidenceClick = (clauseId: string) => {
     const match = activeHighlights.find((item) => item.clauseId === clauseId);
