@@ -58,14 +58,19 @@ async def verify_pre(
     project_id: UUID,
     document_id: UUID,
     source_revision_id: UUID,
+    recovery_revision_id: UUID | None = None,
 ) -> tuple[list[Check], dict[str, str]]:
     p = {
         "tenant_id": tenant_id,
         "project_id": project_id,
         "document_id": document_id,
         "source_revision_id": source_revision_id,
+        "recovery_revision_id": recovery_revision_id,
         "document_id_text": str(document_id),
         "source_revision_id_text": str(source_revision_id),
+        "recovery_revision_id_text": (
+            str(recovery_revision_id) if recovery_revision_id else None
+        ),
     }
     project_count = await _scalar(
         conn,
@@ -80,18 +85,6 @@ async def verify_pre(
         """
         SELECT count(*) FROM documents
          WHERE id=:document_id AND project_id=:project_id AND tenant_id=:tenant_id
-        """,
-        p,
-    )
-    source_count = await _scalar(
-        conn,
-        """
-        SELECT count(*) FROM document_revisions
-         WHERE revision_id=:source_revision_id
-           AND document_id=:document_id
-           AND project_id=:project_id
-           AND tenant_id=:tenant_id
-           AND valid_to IS NULL
         """,
         p,
     )
@@ -117,18 +110,152 @@ async def verify_pre(
         """,
         p,
     )
+
     checks = [
         Check("qualification project exists", project_count == 1, f"projects={project_count}"),
         Check("accepted document exists", document_count == 1, f"documents={document_count}"),
-        Check("source revision is current", source_count == 1, f"current_source={source_count}"),
-        Check("document has exactly one revision before mutation", revision_count == 1, f"revisions={revision_count}"),
-        Check("revision B has not already been qualified", change_count == 0, f"later_change_events={change_count}"),
     ]
-    return checks, {
+    identifiers = {
         "project_id": str(project_id),
         "document_id": str(document_id),
         "source_revision_id": str(source_revision_id),
     }
+
+    if recovery_revision_id is None:
+        source_count = await _scalar(
+            conn,
+            """
+            SELECT count(*) FROM document_revisions
+             WHERE revision_id=:source_revision_id
+               AND document_id=:document_id
+               AND project_id=:project_id
+               AND tenant_id=:tenant_id
+               AND valid_to IS NULL
+            """,
+            p,
+        )
+        checks.extend(
+            [
+                Check("source revision is current", source_count == 1, f"current_source={source_count}"),
+                Check(
+                    "document has exactly one revision before mutation",
+                    revision_count == 1,
+                    f"revisions={revision_count}",
+                ),
+                Check(
+                    "revision B has not already been qualified",
+                    change_count == 0,
+                    f"later_change_events={change_count}",
+                ),
+            ]
+        )
+        return checks, identifiers
+
+    source_historical = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_revisions
+         WHERE revision_id=:source_revision_id
+           AND document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND valid_to IS NOT NULL
+        """,
+        p,
+    )
+    recovery_current = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM document_revisions
+         WHERE revision_id=:recovery_revision_id
+           AND parent_revision_id=:source_revision_id
+           AND document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+           AND valid_to IS NULL
+        """,
+        p,
+    )
+    recovery_clause_count = await _scalar(
+        conn,
+        """
+        SELECT count(*) FROM clauses
+         WHERE revision_id=:recovery_revision_id
+           AND document_id=:document_id
+           AND project_id=:project_id
+           AND tenant_id=:tenant_id
+        """,
+        p,
+    )
+    recovery_state = await conn.execute(
+        text(
+            """
+            SELECT d.upload_status::text AS upload_status,
+                   op.revision_id,
+                   op.stage::text AS stage,
+                   op.phase::text AS phase,
+                   op.outcome::text AS outcome
+              FROM documents d
+              JOIN document_processing_operations op ON op.document_id=d.id
+             WHERE d.id=:document_id
+               AND d.project_id=:project_id
+               AND d.tenant_id=:tenant_id
+            """
+        ),
+        p,
+    )
+    row = recovery_state.mappings().one_or_none()
+    op_matches = bool(
+        row
+        and row["revision_id"] == recovery_revision_id
+        and row["upload_status"] == "error"
+        and row["stage"] == "INGESTION"
+        and row["phase"] == "PENDING"
+        and row["outcome"] == "ingestion_failed"
+    )
+    checks.extend(
+        [
+            Check(
+                "recovery source revision is historical",
+                source_historical == 1,
+                f"historical_source={source_historical}",
+            ),
+            Check(
+                "recovery revision B is current child of source",
+                recovery_current == 1,
+                f"current_recovery={recovery_current}",
+            ),
+            Check(
+                "recovery project has exactly A+B revisions",
+                revision_count == 2,
+                f"revisions={revision_count}",
+            ),
+            Check(
+                "failed recovery revision has no persisted clauses",
+                recovery_clause_count == 0,
+                f"recovery_clauses={recovery_clause_count}",
+            ),
+            Check(
+                "processing authority is pinned to failed revision B",
+                op_matches,
+                (
+                    "state="
+                    + (
+                        f"{row['upload_status']}/{row['stage']}/{row['phase']}/{row['outcome']}"
+                        if row
+                        else "missing"
+                    )
+                ),
+            ),
+            Check(
+                "recovery revision B has no qualified change event yet",
+                change_count == 0,
+                f"later_change_events={change_count}",
+            ),
+        ]
+    )
+    identifiers["recovery_revision_id"] = str(recovery_revision_id)
+    return checks, identifiers
 
 
 async def verify_post(
@@ -396,6 +523,7 @@ async def verify(
     project_id: UUID,
     document_id: UUID,
     source_revision_id: UUID,
+    recovery_revision_id: UUID | None,
     target_revision_id: UUID | None,
     no_change_target_revision_id: UUID | None,
     no_change_expected_blob_hash: str | None,
@@ -417,6 +545,7 @@ async def verify(
                         project_id=project_id,
                         document_id=document_id,
                         source_revision_id=source_revision_id,
+                        recovery_revision_id=recovery_revision_id,
                     )
                 else:
                     if no_change_target_revision_id is None:
@@ -452,6 +581,7 @@ def main() -> int:
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--document-id", required=True)
     parser.add_argument("--source-revision-id", required=True)
+    parser.add_argument("--recovery-revision-id")
     parser.add_argument("--target-revision-id")
     parser.add_argument("--no-change-target-revision-id")
     parser.add_argument("--no-change-expected-blob-hash")
@@ -469,6 +599,11 @@ def main() -> int:
             project_id=_uuid(args.project_id, "project id"),
             document_id=_uuid(args.document_id, "document id"),
             source_revision_id=_uuid(args.source_revision_id, "source revision id"),
+            recovery_revision_id=(
+                _uuid(args.recovery_revision_id, "recovery revision id")
+                if args.recovery_revision_id
+                else None
+            ),
             target_revision_id=(
                 _uuid(args.target_revision_id, "target revision id")
                 if args.target_revision_id
