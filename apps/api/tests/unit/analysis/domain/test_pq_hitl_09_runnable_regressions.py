@@ -13,7 +13,7 @@ Regression checks verifying:
 from __future__ import annotations
 
 from io import BytesIO
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -152,6 +152,41 @@ class TestUploadPolicyStructuredDocumentRejection:
             finally:
                 await file.close()
         project_repo.exists_by_id.assert_not_called()
+
+    @pytest.mark.parametrize("kind", [DocumentType.BUDGET, DocumentType.SCHEDULE])
+    @pytest.mark.asyncio
+    async def test_actual_upload_accepts_pdf_as_unstructured_source(
+        self, kind: DocumentType,
+    ) -> None:
+        """Test the REAL application upload boundary, not only extension helpers.
+
+        An accepted PDF upload does not imply parsed structured Budget/Schedule rows.
+        """
+        document_repo = AsyncMock()
+        project_repo = AsyncMock()
+        project_repo.exists_by_id.return_value = True
+        storage = AsyncMock()
+        storage.file_exists.return_value = True
+        use_case = UploadDocumentUseCase(
+            document_repository=document_repo,
+            storage_service=storage,
+            project_repository=project_repo,
+        )
+        file = UploadFile(
+            filename=f"{kind.value}-source.pdf", file=BytesIO(b"%PDF-1.4 test fixture")
+        )
+        try:
+            uploaded = await use_case.execute(
+                project_id=uuid4(), file=file, document_type=kind,
+                user_id=uuid4(), tenant_id=uuid4(),
+            )
+            assert uploaded.file_format == ".pdf"
+            assert uploaded.document_type == kind
+            document_repo.add.assert_awaited_once()
+            document_repo.commit.assert_awaited()
+            project_repo.exists_by_id.assert_awaited_once()
+        finally:
+            await file.close()
 
     def test_upload_policy_format_whitelisting(self) -> None:
         """Upload policy allows valid extensions and rejects foreign media types."""
