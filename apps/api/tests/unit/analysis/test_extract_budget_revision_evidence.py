@@ -342,6 +342,70 @@ async def test_budget_evidence_accepts_matching_explicit_currency_markers(
     assert result.rows[0].amount == Decimal("1200")
 
 
+
+@pytest.mark.parametrize(
+    ("column", "number_format"),
+    [
+        (4, '$#,##0.00'),
+        (5, '[$USD-409]#,##0.00'),
+        (4, '[$€-407]#,##0.00'),
+        (5, '"£"#,##0.00'),
+        (4, '[$JPY-409]#,##0.00'),
+    ],
+)
+@pytest.mark.asyncio
+async def test_budget_evidence_rejects_conflicting_numeric_cell_currency_formats(
+    tmp_path: Path, column: int, number_format: str,
+) -> None:
+    """A numeric Excel value can carry a conflicting currency in its number format."""
+    path = tmp_path / "format-currency-conflict.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    workbook.active.cell(row=2, column=column).number_format = number_format
+    workbook.save(path)
+    workbook.close()
+    with pytest.raises(ExcelParsingError, match="currency (marker conflicts|format marker)"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+        ).execute(
+            document=_document(), revision=_revision(path), source_path=path,
+            existing_row_identities=frozenset(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("number_format", "currency"),
+    [
+        ('€#,##0.00', "EUR"),
+        ('[$€-407]#,##0.00', "EUR"),
+        ('[$-409]#,##0.00', "EUR"),
+        ('[$-409]#,##0.00', "USD"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_budget_evidence_accepts_matching_or_locale_only_currency_formats(
+    tmp_path: Path, number_format: str, currency: str,
+) -> None:
+    """A locale directive alone never becomes a dollar denomination."""
+    path = tmp_path / "format-currency-valid.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    sheet = workbook.active
+    sheet.cell(row=2, column=4).number_format = number_format
+    sheet.cell(row=2, column=6).value = currency
+    workbook.save(path)
+    workbook.close()
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+    ).execute(
+        document=_document(), revision=_revision(path), source_path=path,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].unit_price == Decimal("100")
+    assert result.rows[0].currency == currency
+
+
 @pytest.mark.asyncio
 async def test_budget_evidence_rejects_duplicate_canonical_headers(
     tmp_path: Path,
