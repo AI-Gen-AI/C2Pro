@@ -497,8 +497,8 @@ class ExcelFileParser:
             return None
         # Accept ONLY explicit currency labels, not arbitrary text. Deleting
         # unsupported characters silently turned "1e3" into "13".
-        source = re.sub(r"\\s*(?:EUR|USD|GBP|€|\\$|£)\\s*$", "", source, flags=re.I).strip()
-        source = re.sub(r"^(?:EUR|USD|GBP|€|\\$|£)\\s*", "", source, flags=re.I).strip()
+        source = re.sub(r"\s*(?:EUR|USD|GBP|€|\$|£)\s*$", "", source, flags=re.I).strip()
+        source = re.sub(r"^(?:EUR|USD|GBP|€|\$|£)\s*", "", source, flags=re.I).strip()
         accounting_negative = source.startswith("(") and source.endswith(")")
         if accounting_negative:
             source = source[1:-1].strip()
@@ -509,9 +509,9 @@ class ExcelFileParser:
         if "," in source and "." in source:
             # Both separators require explicit thousands grouping to
             # disambiguate the decimal separator.
-            if re.fullmatch(r"-?[0-9]{1,3}(?:\\.[0-9]{3})+,[0-9]{1,}", source):
+            if re.fullmatch(r"-?[0-9]{1,3}(?:\.[0-9]{3})+,[0-9]{1,}", source):
                 normalized = source.replace(".", "").replace(",", ".")
-            elif re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3})+\\.[0-9]{1,}", source):
+            elif re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{1,}", source):
                 normalized = source.replace(",", "")
             else:
                 raise ExcelParsingError("Ambiguous mixed budget numeric separators")
@@ -529,7 +529,7 @@ class ExcelFileParser:
                 normalized = source.replace(",", ".")
         elif "." in source:
             if source.count(".") > 1:
-                if not re.fullmatch(r"-?[0-9]{1,3}(?:\\.[0-9]{3}){2,}", source):
+                if not re.fullmatch(r"-?[0-9]{1,3}(?:\.[0-9]{3}){2,}", source):
                     raise ExcelParsingError("Ambiguous budget number grouping")
                 normalized = source.replace(".", "")
             else:
