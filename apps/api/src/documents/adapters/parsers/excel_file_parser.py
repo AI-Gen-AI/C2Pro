@@ -495,156 +495,17 @@ class ExcelFileParser:
     def _require_budget_currency_consistency(
         value: Any, currency: Any, *, locator: str, number_format: str = ""
     ) -> None:
-        """Reject conflicting markers from cell text AND source XLSX number format.
+        """Reject conflicting currency markers in both source text and XLSX formats.
 
-        XLSX commonly stores currency symbols only as number formats for numeric
-        cells. Locale-only directives such as [$-409] are NOT currency symbols.
+        A source SHA authenticates Excel number formats as well as stored values.
+        Generic locale codes (such as [$-409]) are not currency denominations.
         """
         currency_pattern = r"(?<![A-Za-z])(?:EUR|USD|GBP)(?![A-Za-z])|[€$£]"
         markers = re.findall(
             currency_pattern, value if isinstance(value, str) else "", flags=re.I
         )
-        # Excel localized currency formats: [$€-407], [$-409], [$USD-409].
-        # Strip locale-only directives [$-409] without treating their '
-
-    @staticmethod
-    def _coerce_budget_decimal(value: Any) -> Decimal | None:
-        """Parse a source cell as Decimal without any intermediate float conversion.
-
-        Applies the established ES/EN separator heuristic while retaining all
-        decimal digits from text cells; an XLSX binary-float cell has only the
-        precision already encoded by the original workbook.
-        """
-        if value is None or isinstance(value, bool):
-            return None
-        if isinstance(value, (int, float, Decimal)):
-            try:
-                decimal = Decimal(str(value))
-                return decimal if decimal.is_finite() else None
-            except InvalidOperation:
-                return None
-        if not isinstance(value, str):
-            return None
-        source = value.strip()
-        if not source:
-            return None
-        # Accept ONLY explicit currency labels, not arbitrary text. Deleting
-        # unsupported characters silently turned "1e3" into "13".
-        source = re.sub(r"\s*(?:EUR|USD|GBP|€|\$|£)\s*$", "", source, flags=re.I).strip()
-        source = re.sub(r"^(?:EUR|USD|GBP|€|\$|£)\s*", "", source, flags=re.I).strip()
-        accounting_negative = source.startswith("(") and source.endswith(")")
-        if accounting_negative:
-            source = source[1:-1].strip()
-        if not re.fullmatch(r"-?[0-9]+(?:[.,][0-9]+)*", source):
-            raise ExcelParsingError("Unsupported verified budget numeric syntax")
-        if accounting_negative and source.startswith("-"):
-            raise ExcelParsingError("Ambiguous accounting negative")
-        if "," in source and "." in source:
-            # Both separators require explicit thousands grouping to
-            # disambiguate the decimal separator.
-            if re.fullmatch(r"-?[0-9]{1,3}(?:\.[0-9]{3})+,[0-9]{1,}", source):
-                normalized = source.replace(".", "").replace(",", ".")
-            elif re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{1,}", source):
-                normalized = source.replace(",", "")
-            else:
-                raise ExcelParsingError("Ambiguous mixed budget numeric separators")
-        elif "," in source:
-            if source.count(",") > 1:
-                if not re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3}){2,}", source):
-                    raise ExcelParsingError("Ambiguous budget number grouping")
-                normalized = source.replace(",", "")
-            else:
-                _, fractional = source.split(",", 1)
-                if len(fractional) >= 3:
-                    raise ExcelParsingError(
-                        "Ambiguous single-comma decimal in verified budget evidence"
-                    )
-                normalized = source.replace(",", ".")
-        elif "." in source:
-            if source.count(".") > 1:
-                if not re.fullmatch(r"-?[0-9]{1,3}(?:\.[0-9]{3}){2,}", source):
-                    raise ExcelParsingError("Ambiguous budget number grouping")
-                normalized = source.replace(".", "")
-            else:
-                _, fractional = source.split(".", 1)
-                if len(fractional) == 3:
-                    raise ExcelParsingError(
-                        "Ambiguous single-dot decimal in verified budget evidence"
-                    )
-                normalized = source
-        else:
-            normalized = source
-        if accounting_negative:
-            normalized = "-" + normalized
-        try:
-            decimal = Decimal(normalized)
-            return decimal if decimal.is_finite() else None
-        except InvalidOperation:
-            return None
-
-    @staticmethod
-    def _coerce_budget_number(value: Any) -> float | None:
-        if value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, Number):
-            return float(cast(float, value))
-        if not isinstance(value, str):
-            return None
-
-        text = value.strip()
-        if not text:
-            return None
-
-        cleaned = re.sub(r"[^0-9,.\-]", "", text)
-        if cleaned in {"", "-", ".", ","}:
-            return None
-
-        if "," in cleaned and "." in cleaned:
-            if cleaned.rfind(",") > cleaned.rfind("."):
-                normalized = cleaned.replace(".", "").replace(",", ".")
-            else:
-                normalized = cleaned.replace(",", "")
-        elif "," in cleaned:
-            left, right = cleaned.rsplit(",", 1)
-            if len(right) in {1, 2}:
-                normalized = f"{left.replace(',', '')}.{right}"
-            else:
-                normalized = cleaned.replace(",", "")
-        else:
-            normalized = cleaned
-
-        try:
-            return float(normalized)
-        except ValueError:
-            return None
-
-    @classmethod
-    def _extract_declared_total(cls, row_data: dict[str, Any]) -> float | None:
-        item = row_data.get("item")
-        quantity = row_data.get("quantity")
-        unit_price = row_data.get("unit price")
-        total = cls._coerce_budget_number(row_data.get("total"))
-        if total is None or quantity not in (None, "") or unit_price not in (None, ""):
-            return None
-        if not isinstance(item, str):
-            return None
-        label = item.strip().lower()
-        declared_total_labels = (
-            "total presupuesto",
-            "total general",
-            "total licitacion",
-            "total licitación",
-            "presupuesto total",
-            "grand total",
-            "declared total",
-        )
-        if label == "total" or any(marker in label for marker in declared_total_labels):
-            return total
-        return None
-
-        # introducer as a claim that the amount is denominated in dollars.
+        # Localized currency formats include the currency marker inside a
+        # bracket directive. Locale-only directives contain no currency marker.
         for directive in re.findall(r"\[\$([^\]]*)\]", number_format):
             symbol = directive.split("-", 1)[0].strip()
             if symbol:
