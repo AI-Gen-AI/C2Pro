@@ -412,6 +412,58 @@ async def test_budget_evidence_accepts_matching_or_locale_only_currency_formats(
     assert result.rows[0].currency == currency
 
 
+
+@pytest.mark.parametrize(
+    "number_format",
+    [
+        '€#,##0.00;€-#,##0.00;€0.00;"₹"@',
+        '€"#;#"0.00;€-#,##0.00;€0.00;"¥"@',
+        r'€\;0.00;€-#,##0.00;€0.00;"₹"@',
+    ],
+)
+@pytest.mark.asyncio
+async def test_budget_numeric_evidence_ignores_text_only_format_section(
+    tmp_path: Path, number_format: str,
+) -> None:
+    """The fourth Excel format section applies to text, not numeric amounts."""
+    path = tmp_path / "numeric-with-text-format.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    workbook.active.cell(row=2, column=4).number_format = number_format
+    workbook.save(path)
+    workbook.close()
+
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+    ).execute(
+        document=_document(), revision=_revision(path), source_path=path,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].currency == "EUR"
+    assert result.rows[0].unit_price == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_budget_currency_rejects_unsupported_symbol_in_numeric_format_section(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "numeric-section-unsupported.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    workbook.active.cell(row=2, column=4).number_format = '₹#,##0.00;€-#,##0.00;€0.00;"¥"@'
+    workbook.save(path)
+    workbook.close()
+
+    with pytest.raises(ExcelParsingError, match="Unsupported budget currency format"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+        ).execute(
+            document=_document(), revision=_revision(path), source_path=path,
+            existing_row_identities=frozenset(),
+        )
+
+
 @pytest.mark.asyncio
 async def test_budget_evidence_rejects_duplicate_canonical_headers(
     tmp_path: Path,
