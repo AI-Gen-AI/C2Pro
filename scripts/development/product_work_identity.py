@@ -48,8 +48,21 @@ def _read(root: Path, rel: str) -> dict[str, Any]:
             raise ProductWorkError("symlink in Product WORK authority path")
     if not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
         raise ProductWorkError("Product WORK authority file missing or outside trusted base")
+    class UniqueLoader(yaml.SafeLoader):
+        pass
+
+    def reject_duplicates(loader: yaml.SafeLoader, node: yaml.MappingNode) -> dict:
+        result = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=True)
+            if not isinstance(key, str) or key in result:
+                raise ProductWorkError("duplicate or non-string key in Product WORK authority YAML")
+            result[key] = loader.construct_object(value_node, deep=True)
+        return result
+
+    UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, reject_duplicates)
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueLoader)
     except (OSError, yaml.YAMLError) as exc:
         raise ProductWorkError("invalid Product WORK authority YAML") from exc
     if not isinstance(data, dict):
