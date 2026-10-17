@@ -20,7 +20,12 @@ DELIVERY_SPEC = Path("docs/product/pq-hitl-2026-01-delivery-spec-v1.md")
 DEV_ISSUES = {"C2PRO-DEV-14": 991}
 DEV_SDD = {"C2PRO-DEV-14": "docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md"}
 # Existing Project Controls issue #672; no new Product WBS or issue is created.
-from scripts.development.product_work_identity import PC_TASKS, PC_SDD, validate_pc_work, ProductWorkError
+try:
+    from scripts.development.product_work_identity import PC_TASKS, PC_SDD, validate_pc_work, ProductWorkError
+except ModuleNotFoundError as exc:
+    if exc.name != "scripts":
+        raise
+    from product_work_identity import PC_TASKS, PC_SDD, validate_pc_work, ProductWorkError
 DEV14_CHANGED_PATHS = (
     "scripts/development/", "tests/development/", ".c2pro/schemas/",
     ".c2pro/product-work/", "docs/architecture/development/", ".github/workflows/",
