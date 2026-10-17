@@ -99,7 +99,7 @@ class ExcelFileParser:
             )
             formula_sheet = formula_workbook.active if formula_workbook else None
 
-            header_row_index, headers = self._find_schedule_headers(sheet)
+            header_row_index, headers = self._find_schedule_headers(sheet, include_evidence=include_evidence)
             if header_row_index is None:
                 expected_headers = ["task/actividad", "start date/inicio", "end date/fin"]
                 raise ExcelParsingError(
@@ -159,22 +159,29 @@ class ExcelFileParser:
                 formula_to_close.close()
 
     @staticmethod
-    def _schedule_header_aliases() -> dict[str, set[str]]:
-        return {
+    def _schedule_header_aliases(*, include_evidence: bool = False) -> dict[str, set[str]]:
+        aliases = {
             "task": {"task", "actividad", "tarea", "activity"},
             "start date": {"start date", "inicio", "comienzo", "fecha inicio"},
             "end date": {"end date", "fin", "termino", "fecha fin"},
             "duration": {"duration", "duracion"},
             "wbs": {"wbs"},
             "predecessors": {"predecessors", "predecesoras"},
-            "activity id": {"activity id", "id actividad", "activity code"},
-            "milestone id": {"milestone id", "id hito"},
-            "wbs node id": {"wbs node id", "id nodo wbs", "id wbs"},
         }
+        if include_evidence:
+            # The extra ID aliases must NOT alter legacy header resolution.
+            aliases.update({
+                "activity id": {"activity id", "id actividad", "activity code"},
+                "milestone id": {"milestone id", "id hito"},
+                "wbs node id": {"wbs node id", "id nodo wbs", "id wbs"},
+            })
+        return aliases
 
     @classmethod
-    def _find_schedule_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:
-        aliases = cls._schedule_header_aliases()
+    def _find_schedule_headers(
+        cls, sheet: Any, *, include_evidence: bool = False
+    ) -> tuple[int | None, list[str]]:
+        aliases = cls._schedule_header_aliases(include_evidence=include_evidence)
         required = {"task", "start date", "end date"}
 
         for row_index, row in enumerate(sheet.iter_rows(values_only=True), start=1):
