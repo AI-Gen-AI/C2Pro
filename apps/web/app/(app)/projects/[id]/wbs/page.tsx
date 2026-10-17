@@ -10,19 +10,112 @@
  * instead of silently implying every WBS is an approved baseline. Dates and budget on
  * the rows below are never approved schedule/cost authority, in every state.
  *
+ * PC-7b (#672, board #1049): adds a live project-alerts panel (real
+ * `GET /alerts/projects/{project_id}`, via `useProjectAlerts`) with an honest count
+ * -- never implied before the fetch resolves -- and source-linked navigation using
+ * only a real, persisted `source_clause_id`. No clause id is ever invented here.
+ *
  * Test Suite ID: TASK-1427
  */
 
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { env } from "@/config/env";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronDown, Expand, Loader2 } from "lucide-react";
 import { useWBSTree, type WBSTreeItem } from "@/hooks/useWBSTree";
+import { useProjectAlerts } from "@/hooks/useProjectAlerts";
 import type { ProjectWBSAuthority } from "@/lib/api/generated/models";
+
+const ALERT_SEVERITY_CLASSES: Record<string, string> = {
+  critical: "border-red-200 bg-red-50 text-red-900",
+  high: "border-orange-200 bg-orange-50 text-orange-900",
+  medium: "border-amber-200 bg-amber-50 text-amber-900",
+  low: "border-muted bg-muted/50 text-muted-foreground",
+};
+
+function WBSAlertsPanel({ projectId }: { projectId: string }) {
+  const { alerts, loading, error } = useProjectAlerts(projectId);
+
+  if (loading) {
+    return (
+      <Card data-testid="wbs-alerts-panel">
+        <CardContent className="py-4 text-sm text-muted-foreground">
+          Loading project alerts…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card data-testid="wbs-alerts-panel">
+        <CardContent className="py-4 text-sm text-red-800" data-testid="wbs-alerts-error">
+          Failed to load project alerts: {error.message}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card data-testid="wbs-alerts-panel">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Project Alerts</CardTitle>
+        <span className="text-sm text-muted-foreground" data-testid="wbs-alerts-count">
+          {alerts.length === 1 ? "1 alert" : `${alerts.length} alerts`}
+        </span>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {alerts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No alerts recorded for this project.</p>
+        ) : (
+          alerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`rounded-lg border p-2 text-sm ${
+                ALERT_SEVERITY_CLASSES[alert.severity] ?? ALERT_SEVERITY_CLASSES.low
+              }`}
+              data-testid={`wbs-alert-${alert.id}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span>{alert.title}</span>
+                {alert.clauseId ? (
+                  alert.addressableClauseId && alert.sourceDocumentId ? (
+                    <Link
+                      href={
+                        `/projects/${encodeURIComponent(projectId)}/evidence` +
+                        `?documentId=${encodeURIComponent(alert.sourceDocumentId)}` +
+                        `&highlightId=${encodeURIComponent(alert.addressableClauseId)}`
+                      }
+                      className="shrink-0 font-mono text-xs underline"
+                      aria-label={`View evidence for ${alert.addressableClauseId}`}
+                      data-testid={`wbs-alert-${alert.id}-evidence-link`}
+                    >
+                      {alert.clauseId}
+                    </Link>
+                  ) : (
+                    // A clause was reported by the detector but is not yet
+                    // persisted/addressable -- shown for context, never linked.
+                    <span
+                      className="shrink-0 font-mono text-xs opacity-70"
+                      data-testid={`wbs-alert-${alert.id}-clause`}
+                    >
+                      {alert.clauseId}
+                    </span>
+                  )
+                ) : null}
+              </div>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 const AUTHORITY_BANNER_CLASSES: Record<string, string> = {
   APPROVED_BASELINE: "border-green-200 bg-green-50 text-green-900",
@@ -236,6 +329,8 @@ export default function ProjectWBSPage() {
           ) : null}
         </p>
       ) : null}
+
+      <WBSAlertsPanel projectId={projectId} />
 
       <Card data-testid="wbs-tree">
         <CardHeader className="flex flex-row items-center justify-between">
