@@ -897,3 +897,4 @@ def test_dev14_protected_collector_observes_head_repo_identity() -> None:
     assert "head_repository_full_name: headRepositoryFullName" in source
     assert "finalPr.head.repo.id !== headRepositoryId" in source
     assert "finalPr.head.repo.full_name !== headRepositoryFullName" in source
+    assert "finalPr.head.ref !== pr.head.ref" in source
