@@ -23,7 +23,7 @@ from src.analysis.domain.schedule_activity_evidence import (
     observed_date_status,
 )
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
-from src.documents.application.document_source import verify_revision_file_hash
+from src.documents.application.document_source import read_verified_revision_file
 from src.documents.domain.models import Document, DocumentType
 from src.temporal.domain.document_revision import DocumentRevision
 from src.wbs.adapters.persistence.link_authority import require_linkable_wbs_nodes
@@ -92,8 +92,12 @@ class ExtractScheduleRevisionEvidenceUseCase:
             raise InvalidScheduleEvidenceError("document does not match immutable revision")
 
         # Hash BEFORE parsing; no fallback to mutable current document bytes.
-        await asyncio.to_thread(verify_revision_file_hash, source_path, revision.blob_hash)
-        parsed = await self.parser.parse_schedule(source_path, include_evidence=True)
+        source_bytes = await asyncio.to_thread(
+            read_verified_revision_file, source_path, revision.blob_hash
+        )
+        parsed = await self.parser.parse_schedule(
+            source_path, include_evidence=True, source_bytes=source_bytes
+        )
 
         # Duplicated source IDs must not silently become two authoritative
         # activities; blank activity IDs are allowed and still have row identities.
