@@ -145,15 +145,15 @@ async def test_schedule_revision_hash_validation_runs_off_event_loop(
 
     source = tmp_path / "hash-worker-schedule.xlsx"
     _xlsx(source)
-    original_verify = module.verify_revision_file_hash
+    original_verify = module.read_verified_revision_file
     hashing_threads: list[threading.Thread] = []
     caller_thread = threading.current_thread()
 
-    def _record_hash(source_path: Path, blob_hash: str) -> None:
+    def _record_hash(source_path: Path, blob_hash: str) -> bytes:
         hashing_threads.append(threading.current_thread())
-        original_verify(source_path, blob_hash)
+        return original_verify(source_path, blob_hash)
 
-    monkeypatch.setattr(module, "verify_revision_file_hash", _record_hash)
+    monkeypatch.setattr(module, "read_verified_revision_file", _record_hash)
     result = await ExtractScheduleRevisionEvidenceUseCase(
         parser=ExcelFileParser(), approved_scope_service=_Approved(),
     ).execute(
@@ -162,6 +162,61 @@ async def test_schedule_revision_hash_validation_runs_off_event_loop(
     assert len(result.rows) == 3
     assert len(hashing_threads) == 1
     assert hashing_threads[0] is not caller_thread
+
+
+@pytest.mark.asyncio
+async def test_schedule_revision_uses_verified_snapshot_after_source_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replacing a shared path after hash verification cannot change evidence."""
+    from src.analysis.application import extract_schedule_revision_evidence_use_case as module
+
+    source = tmp_path / "original-schedule.xlsx"
+    replacement = tmp_path / "tampered-schedule.xlsx"
+    _xlsx(source)
+    _xlsx(replacement)
+    revision = _revision(source)
+    workbook = openpyxl.load_workbook(replacement)
+    workbook.active.cell(row=2, column=2).value = 'TAMPERED ACTIVITY'
+    workbook.save(replacement)
+    workbook.close()
+    original_read = module.read_verified_revision_file
+
+    def _swap_after_verified_snapshot(path: Path, digest: str) -> bytes:
+        snapshot = original_read(path, digest)
+        path.write_bytes(replacement.read_bytes())
+        return snapshot
+
+    monkeypatch.setattr(
+        module, "read_verified_revision_file", _swap_after_verified_snapshot
+    )
+    result = await ExtractScheduleRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_Approved(),
+    ).execute(
+        document=_document(), revision=revision, source_path=source,
+    )
+    assert result.rows[0].activity_name == "Foundation"
+    assert sha256(source.read_bytes()).hexdigest() != revision.blob_hash
+
+
+@pytest.mark.asyncio
+async def test_schedule_evidence_rejects_formula_header(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cached label of a formula cannot authorize a source column."""
+    source = tmp_path / "formula-header-schedule.xlsx"
+    _xlsx(source)
+    original_load = openpyxl.load_workbook
+
+    def _formula_header(*args: object, **kwargs: object):
+        workbook = original_load(*args, **kwargs)
+        if kwargs.get("data_only") is False:
+            workbook.active.cell(row=1, column=2).value = '="Task"'
+        return workbook
+
+    monkeypatch.setattr(openpyxl, "load_workbook", _formula_header)
+    with pytest.raises(ExcelParsingError, match="Unverified formula-derived schedule header"):
+        await ExcelFileParser().parse_schedule(source, include_evidence=True)
 
 
 @pytest.mark.parametrize("include_evidence", [False, True])
