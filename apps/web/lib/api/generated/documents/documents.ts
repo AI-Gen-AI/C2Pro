@@ -64,6 +64,7 @@ import type {
   DocumentRelationshipExplanationResponse,
   DocumentResponse,
   DocumentUploadResponse,
+  DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   HTTPValidationError,
@@ -1935,18 +1936,26 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
  */
 export const downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet = (
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   signal?: AbortSignal,
 ) => {
   return orvalApiClient<unknown>({
     url: `/api/v1/documents/${documentId}/download`,
     method: "GET",
+    params,
     signal,
   });
 };
 
 export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey =
-  (documentId: string) => {
-    return [`/api/v1/documents/${documentId}/download`] as const;
+  (
+    documentId: string,
+    params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
+  ) => {
+    return [
+      `/api/v1/documents/${documentId}/download`,
+      ...(params ? [params] : []),
+    ] as const;
   };
 
 export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions =
@@ -1959,6 +1968,7 @@ export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQuery
     TError = void | HTTPValidationError,
   >(
     documentId: string,
+    params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
     options?: {
       query?: Partial<
         UseQueryOptions<
@@ -1979,6 +1989,7 @@ export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQuery
       queryOptions?.queryKey ??
       getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey(
         documentId,
+        params,
       );
 
     const queryFn: QueryFunction<
@@ -1990,6 +2001,7 @@ export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQuery
     > = ({ signal }) =>
       downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet(
         documentId,
+        params,
         signal,
       );
 
@@ -2029,6 +2041,9 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params:
+    | undefined
+    | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -2071,6 +2086,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -2113,6 +2129,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -2143,6 +2160,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -2163,6 +2181,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   const queryOptions =
     getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions(
       documentId,
+      params,
       options,
     );
 

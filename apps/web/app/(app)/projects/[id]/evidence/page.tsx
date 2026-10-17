@@ -62,11 +62,42 @@ function semanticTargetType(entityType: string): EvidenceTargetType {
   }
 }
 
+type SourceLinkNoticeKind =
+  | "revision"
+  | "document"
+  | "highlight"
+  | "source-clause"
+  | "fallback"
+  | null;
+
+function selectSourceLinkNotice({
+  revisionUnavailable,
+  documentUnavailable,
+  highlightUnavailable,
+  hasSourceClause,
+  documentFallback,
+}: {
+  revisionUnavailable: boolean;
+  documentUnavailable: boolean;
+  highlightUnavailable: boolean;
+  hasSourceClause: boolean;
+  documentFallback: boolean;
+}): SourceLinkNoticeKind {
+  if (revisionUnavailable) return "revision";
+  if (documentUnavailable) return "document";
+  if (highlightUnavailable) return "highlight";
+  if (hasSourceClause) return "source-clause";
+  if (documentFallback) return "fallback";
+  return null;
+}
+
 export default function EvidencePage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestedDocumentId = searchParams.get("documentId");
   const requestedHighlightId = searchParams.get("highlightId");
+  const requestedRevisionId = searchParams.get("revisionId");
+  const revisionReadOnly = Boolean(requestedRevisionId);
   const { isLoaded: isUserLoaded, user } = useUser();
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
@@ -133,19 +164,19 @@ export default function EvidencePage() {
     loading: entitiesLoading,
     error: entitiesError,
     refetch: refetchEntities,
-  } = useDocumentEntities(selectedDocumentId);
+  } = useDocumentEntities(revisionReadOnly ? null : selectedDocumentId);
   const {
     alerts,
     loading: alertsLoading,
     error: alertsError,
     refetch: refetchAlerts,
-  } = useDocumentAlerts(selectedDocumentId);
+  } = useDocumentAlerts(revisionReadOnly ? null : selectedDocumentId);
   const {
     items: evidenceTimeline,
-  } = useDocumentHistory(selectedDocumentId);
+  } = useDocumentHistory(revisionReadOnly ? null : selectedDocumentId);
   const {
     explanation: relationshipExplanation,
-  } = useDocumentRelationshipExplanation(selectedDocumentId);
+  } = useDocumentRelationshipExplanation(revisionReadOnly ? null : selectedDocumentId);
   const shouldResolveSourceEvidence = Boolean(
     selectedDocumentId &&
       requestedDocumentId === selectedDocumentId &&
@@ -156,7 +187,7 @@ export default function EvidencePage() {
     isLoading: documentDetailLoading,
   } = useGetDocumentEndpointApiV1DocumentsDocumentIdGet(
     selectedDocumentId ?? "",
-    undefined,
+    requestedRevisionId ? { revision_id: requestedRevisionId } : undefined,
     { query: { enabled: shouldResolveSourceEvidence } },
   );
   const [alertsState, setAlertsState] = useState(alerts);
@@ -168,6 +199,25 @@ export default function EvidencePage() {
   const sourceClauses = useMemo(
     () => sourceEvidenceClausesFromDocumentDetail(documentDetail?.clauses),
     [documentDetail?.clauses],
+  );
+  // The generated document-detail type does not guarantee an immutable
+  // PDF revision identity yet. An absent/incorrect server binding must
+  // block a revision-pinned link rather than display today's PDF as history.
+  const documentRevisionId =
+    typeof (documentDetail as unknown as Record<string, unknown> | undefined)?.revision_id === "string"
+      ? String((documentDetail as unknown as Record<string, unknown>).revision_id)
+      : null;
+  // Block pinned PDF navigation from the first render through the entire
+  // asynchronous revision check. Never fetch the unpinned current PDF.
+  const requestedRevisionUnavailable = Boolean(
+    requestedRevisionId &&
+    selectedDocumentId === requestedDocumentId &&
+    (
+      documentDetailLoading ||
+      documentRevisionId !== requestedRevisionId ||
+      documentDetail?.id !== selectedDocumentId ||
+      documentDetail?.project_id !== id
+    ),
   );
   const semanticEvidenceTargets = useMemo(
     () => [
@@ -186,7 +236,7 @@ export default function EvidencePage() {
   );
   const requestedHighlightKey =
     requestedDocumentId && requestedHighlightId
-      ? `${requestedDocumentId}:${requestedHighlightId}`
+      ? `${requestedDocumentId}:${requestedRevisionId ?? "current"}:${requestedHighlightId}`
       : null;
   const requestedEvidenceResolution = useMemo(() => {
     if (
@@ -200,10 +250,14 @@ export default function EvidencePage() {
       evidenceId: requestedHighlightId,
       semanticTargets: semanticEvidenceTargets,
       sourceClauses,
+      revisionId: requestedRevisionId,
+      documentRevisionId,
     });
   }, [
     requestedDocumentId,
     requestedHighlightId,
+    requestedRevisionId,
+    documentRevisionId,
     selectedDocumentId,
     semanticEvidenceTargets,
     sourceClauses,
@@ -257,12 +311,17 @@ export default function EvidencePage() {
           ]
         : [];
 
-    return [...mappedEntityHighlights, ...alertHighlights, ...sourceClauseHighlight];
+    // A revision-pinned PDF must never receive current entity/alert overlays.
+    // Only the clause verified against the requested revision is addressable.
+    return revisionReadOnly
+      ? sourceClauseHighlight
+      : [...mappedEntityHighlights, ...alertHighlights, ...sourceClauseHighlight];
   }, [
     apiEntities,
     entityHighlights,
     alertsState,
     requestedEvidenceResolution,
+    revisionReadOnly,
   ]);
 
   const activeHighlightId = useMemo(() => {
@@ -294,7 +353,7 @@ export default function EvidencePage() {
 
   const mappedEntities = useMemo<ExtractedEntity[]>(
     () =>
-      apiEntities.map((entity) => ({
+      (revisionReadOnly ? [] : apiEntities).map((entity) => ({
         id: entity.id,
         type: normalizeEntityType(entity.type),
         text: entity.text,
@@ -303,7 +362,7 @@ export default function EvidencePage() {
         page: entity.page,
         validationStatus: "pending",
       })),
-    [apiEntities],
+    [apiEntities, revisionReadOnly],
   );
   const relationshipGraph = useMemo(() => {
     return {
@@ -792,13 +851,22 @@ export default function EvidencePage() {
     popup.print();
   }, [alertsState, entities, highlights.length, selectedDocument]);
 
+  const sourceLinkNotice = selectSourceLinkNotice({
+    revisionUnavailable: requestedRevisionUnavailable,
+    documentUnavailable: requestedDocumentUnavailable,
+    highlightUnavailable: requestedHighlightUnavailable,
+    hasSourceClause: Boolean(requestedSourceClause),
+    documentFallback: Boolean(requestedDocumentFallback),
+  });
+
   return (
     <div className="space-y-6">
       <EvidenceHeader
         projectName={projectName}
         documentCount={documents.length}
-        entityCount={entities.length}
-        alertCount={alertsState.length}
+        entityCount={revisionReadOnly ? 0 : entities.length}
+        alertCount={revisionReadOnly ? 0 : alertsState.length}
+        readOnlyRevision={revisionReadOnly}
         splitView={splitView}
         onRefresh={handleRefreshClick}
         onExportJson={handleExportJson}
@@ -820,45 +888,58 @@ export default function EvidencePage() {
         </Alert>
       ) : null}
 
-      {requestedDocumentUnavailable ? (
+      {sourceLinkNotice === "revision" && (
+        <Alert data-testid="evidence-link-revision-unavailable">
+          <AlertDescription>
+            This source revision cannot be verified against the PDF currently
+            available. No document or highlight was opened for this revision-bound link.
+          </AlertDescription>
+        </Alert>
+      )}
+      {sourceLinkNotice === "document" && (
         <Alert data-testid="evidence-link-unavailable">
           <AlertDescription>
             The linked document is not available in this project, so no other document was opened.
           </AlertDescription>
         </Alert>
-      ) : requestedHighlightUnavailable ? (
+      )}
+      {sourceLinkNotice === "highlight" && (
         <Alert data-testid="evidence-link-unavailable">
           <AlertDescription>
             The linked evidence was not found in this document. Nothing else was selected.
           </AlertDescription>
         </Alert>
-      ) : requestedSourceClause ? (
+      )}
+      {sourceLinkNotice === "source-clause" && requestedSourceClause && (
         <Alert data-testid="evidence-link-source-clause">
           <AlertDescription>
             Showing source clause {requestedSourceClause.clauseCode ?? requestedSourceClause.id} on page {requestedSourceClause.page}. Exact highlight unavailable when source geometry is not persisted.
           </AlertDescription>
         </Alert>
-      ) : requestedDocumentFallback ? (
+      )}
+      {sourceLinkNotice === "fallback" && (
         <Alert data-testid="evidence-link-document-fallback">
           <AlertDescription>
             Exact highlight unavailable. The linked source evidence has no resolvable page span, so its source document is shown without inventing a page.
           </AlertDescription>
         </Alert>
-      ) : null}
+      )}
 
       <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} />
 
       <EvidenceWorkspace
         splitView={splitView}
-        selectedDocument={selectedDocument}
-        selectedDocumentId={selectedDocumentId}
-        highlights={highlights}
+        readOnlyRevision={revisionReadOnly}
+        selectedDocument={requestedRevisionUnavailable ? null : selectedDocument}
+        selectedDocumentId={requestedRevisionUnavailable ? null : selectedDocumentId}
+        highlights={requestedRevisionUnavailable ? [] : highlights}
+        selectedRevisionId={requestedRevisionUnavailable ? null : requestedRevisionId}
         activeHighlightId={activeHighlightId}
         activePanelTab={activePanelTab}
-        entities={entities}
+        entities={revisionReadOnly ? [] : entities}
         entitiesLoading={entitiesLoading}
         entitiesError={entitiesError}
-        alertsState={alertsState}
+        alertsState={revisionReadOnly ? [] : alertsState}
         alertsLoading={alertsLoading}
         alertsError={alertsError}
         activeEntityId={activeEntityId}

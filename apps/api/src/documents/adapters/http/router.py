@@ -723,6 +723,10 @@ async def get_document_endpoint(
         tenant_id=tenant_id, document_id=document_id, revision_id=revision_id
     )
     response_data = DocumentResponse.model_validate(document).model_dump()
+    # This identity is sent only after GetDocumentWithClausesUseCase has
+    # verified revision ownership within the requested tenant and document.
+    # It does not confer TRUSTED status or mutate current lifecycle state.
+    response_data["revision_id"] = revision_id
     response_data["clauses"] = [
         {
             "id": clause.id,
@@ -957,8 +961,17 @@ async def download_document_endpoint(
     user_id: CurrentUserId,
     tenant_id: CurrentTenantId,
     download_use_case: DownloadDocumentUseCase = Depends(get_download_use_case),
+    revision_id: UUID | None = Query(
+        default=None,
+        description="Download this exact immutable, hash-verified revision (read-only).",
+    ),
 ) -> FileResponse:
-    file_path, media_type = await download_use_case.execute(document_id, user_id, tenant_id)
+    if revision_id is None:
+        file_path, media_type = await download_use_case.execute(document_id, user_id, tenant_id)
+    else:
+        file_path, media_type = await download_use_case.execute(
+            document_id, user_id, tenant_id, revision_id=revision_id
+        )
     return FileResponse(path=file_path, filename=file_path.name, media_type=media_type)
 
 

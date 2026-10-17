@@ -1441,6 +1441,17 @@ paths:
           type: string
           format: uuid
           title: Document Id
+      - name: revision_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Download this exact immutable, hash-verified revision (read-only).
+          title: Revision Id
+        description: Download this exact immutable, hash-verified revision (read-only).
       responses:
         '200':
           description: Successful Response
@@ -7313,6 +7324,12 @@ components:
             type: array
           - type: 'null'
           title: Clauses
+        revision_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Revision Id
       type: object
       required:
       - id

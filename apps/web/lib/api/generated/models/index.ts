@@ -168,6 +168,7 @@ export * from "./documentsSection";
 export * from "./documentStatus";
 export * from "./documentType";
 export * from "./documentUploadResponse";
+export * from "./downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams";
 export * from "./enrichedCoherenceResult";
 export * from "./enrichedCoherenceResultAuditCoverage";
 export * from "./enrichedCoherenceResultCategoryScores";
