@@ -568,6 +568,18 @@ class ExcelFileParser:
                     )
                 markers.extend(found)
         remaining_format = re.sub(r"\[\$[^\]]*\]", "", number_format)
+        # A quoted or literal uppercase three-letter monetary label must not
+        # silently change the declared EUR/USD/GBP denomination. Fail closed
+        # on ambiguous unsupported labels, including "JPY" and "INR".
+        # Bracket directives ([Red], [>=100]) are Excel metadata, not units.
+        format_literals = re.sub(r"\[[^\]]*\]", "", remaining_format)
+        iso_labels = re.findall(
+            r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])", format_literals
+        )
+        if any(code not in {"EUR", "USD", "GBP"} for code in iso_labels):
+            raise ExcelParsingError(
+                f"Unsupported budget currency format marker at {locator}"
+            )
         # Unicode currency symbols outside our supported EUR/USD/GBP scope
         # must never be mistaken for a currency-free numeric format.
         if any(
