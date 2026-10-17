@@ -59,6 +59,7 @@ def _case(root: Path, task: str = "PC-3", *, status: str = "assigned") -> tuple[
     # The DEV control remains idle and is never reinterpreted as PC authority.
     _write(root / ".c2pro/control/current.yaml",
            {"control_status": "reconciled_idle", "active_work": []})
+    _write(root / ".c2pro/control/work-queue.yaml", {"items": []})
     return work_path_abs, observation_path
 
 
