@@ -150,4 +150,101 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
     expect(viewerProxy).toHaveAttribute("data-active-highlight", "none");
     expect(screen.queryByTitle(/pdf document viewer/i)).not.toBeInTheDocument();
   });
+
+  it("opens a revision-bound clause on its verified PDF page, not page 1", async () => {
+    const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+    render(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={[
+          {
+            id: "source-clause-52",
+            clauseId: "52",
+            page: 3,
+            text: "Verified source clause 5.2",
+            severity: "high",
+          },
+        ]}
+        activeHighlightId="source-clause-52"
+        onHighlightClick={() => {}}
+      />,
+    );
+
+    const viewer = await screen.findByTestId("react-pdf-viewer-proxy");
+    await waitFor(() => {
+      expect(viewer).toHaveAttribute("data-page", "3");
+    });
+    expect(viewer).toHaveAttribute(
+      "data-file",
+      "/api/documents/doc-a/download?revision_id=rev-a",
+    );
+  });
+
+  it("navigates on a new source highlight and revision switch without stale pages", async () => {
+    const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+    const sourceA = [
+      { id: "source-a", clauseId: "a", page: 4, text: "A", severity: "high" as const },
+      { id: "source-a2", clauseId: "a2", page: 2, text: "A2", severity: "low" as const },
+    ];
+    const { rerender } = render(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={sourceA}
+        activeHighlightId="source-a"
+        onHighlightClick={() => {}}
+      />,
+    );
+    const viewer = await screen.findByTestId("react-pdf-viewer-proxy");
+    await waitFor(() => expect(viewer).toHaveAttribute("data-page", "4"));
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={sourceA}
+        activeHighlightId="source-a2"
+        onHighlightClick={() => {}}
+      />,
+    );
+    await waitFor(() => expect(viewer).toHaveAttribute("data-page", "2"));
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-b"
+        highlights={[
+          { id: "source-b", clauseId: "b", page: 5, text: "B", severity: "high" },
+        ]}
+        activeHighlightId="source-b"
+        onHighlightClick={() => {}}
+      />,
+    );
+    await waitFor(() => {
+      expect(viewer).toHaveAttribute("data-file", "/api/documents/doc-a/download?revision_id=rev-b");
+      expect(viewer).toHaveAttribute("data-page", "5");
+    });
+  });
+
+  it("never guesses a PDF page for unknown or document-fallback source links", async () => {
+    const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+    const { rerender } = render(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={[]}
+        activeHighlightId={null}
+        onHighlightClick={() => {}}
+      />,
+    );
+    const viewer = await screen.findByTestId("react-pdf-viewer-proxy");
+    expect(viewer).toHaveAttribute("data-page", "1");
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={[]}
+        activeHighlightId="unverified-clause"
+        onHighlightClick={() => {}}
+      />,
+    );
+    await waitFor(() => expect(viewer).toHaveAttribute("data-page", "1"));
+  });
+
 });
