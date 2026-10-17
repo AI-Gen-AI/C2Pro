@@ -65,7 +65,9 @@ def _case(root: Path, task: str = "PC-3", *, status: str = "assigned") -> tuple[
 
 def _subject(task: str = "PC-3", **extra: str) -> dict:
     return {
-        "repository_id": 123, "pr_number": 321,
+        "repository_id": 123, "repository_full_name": "AI-Gen-AI/C2Pro",
+        "head_repository_id": 123, "head_repository_full_name": "AI-Gen-AI/C2Pro",
+        "pr_number": 321,
         "base_sha": PROTECTED_BASE, "merge_base_sha": EXEC_BASE,
         "head_sha": HEAD, "head_ref": PC_TASKS[task]["branch"], **extra,
     }
@@ -194,6 +196,50 @@ def test_branch_and_merge_base_bound_to_trusted_github_subject(tmp_path: Path) -
     with pytest.raises(ProvenanceError, match="merge-base is unverified"):
         resolve_base_work_implementation(tmp_path, _subject(merge_base_sha="invalid"))
     assert resolve_base_work_implementation(tmp_path, _subject(head_ref="feat/other")) is None
+
+
+
+@pytest.mark.parametrize("changed_subject", [
+    {"head_repository_id": 999},
+    {"head_repository_id": None},
+    {"head_repository_id": True},
+    {"head_repository_full_name": "attacker/C2Pro"},
+    {"head_repository_full_name": ""},
+    {"repository_full_name": "wrong/C2Pro"},
+    {"pr_number": None},
+    {"pr_number": 0},
+    {"pr_number": True},
+])
+def test_cross_fork_or_missing_pr_identity_is_rejected_before_attestor(
+    tmp_path: Path, changed_subject: dict,
+) -> None:
+    _case(tmp_path)
+    invoked = []
+    with pytest.raises(ProvenanceError, match="head repository/PR identity"):
+        resolve_base_work_implementation(
+            tmp_path, _subject(**changed_subject),
+            workspace_attestation_verifier=lambda req: (invoked.append(req), True)[1],
+        )
+    assert invoked == []
+
+
+def test_authenticated_subject_passes_complete_pr_identity_to_attestor(
+    tmp_path: Path,
+) -> None:
+    _case(tmp_path)
+    received = []
+    evidence = resolve_base_work_implementation(
+        tmp_path, _subject(),
+        workspace_attestation_verifier=lambda req: (received.append(req), True)[1],
+    )
+    assert evidence and evidence["work_id"] == "PC-3"
+    assert received[0]["repository_id"] == received[0]["head_repository_id"] == 123
+    assert received[0]["repository_full_name"] == received[0]["head_repository_full_name"]
+    assert received[0]["head_full_ref"] == (
+        "AI-Gen-AI/C2Pro:feat/acc01-pc3-budget-evidence-20261017"
+    )
+    assert received[0]["pr_number"] == 321
+    assert received[0]["pr_head_sha"] == HEAD
 
 
 def test_unknown_pc_id_never_falls_back_to_dev_work(tmp_path: Path) -> None:
