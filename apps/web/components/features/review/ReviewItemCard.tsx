@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useState } from 'react';
+import { reviewSourceLinks } from './review-source-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
@@ -201,6 +202,7 @@ export function ReviewItemCard({
     'source_document_id',
     'evidence_document_id',
   ]);
+  const citedSourceLinks = reviewSourceLinks(projectId, item.item_data);
   const createdAt = formatDate(item.created_at);
   const slaDueDate = formatDate(item.sla_due_date);
   const reviewedAt = formatDate(item.approved_at);
@@ -294,11 +296,21 @@ export function ReviewItemCard({
             {documentId ? (
               <Link
                 className="font-medium text-primary underline-offset-4 hover:underline"
-                href={`/projects/${projectId}/evidence?documentId=${encodeURIComponent(documentId)}`}
+                href={`/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(documentId)}`}
               >
                 View evidence
               </Link>
             ) : null}
+            {citedSourceLinks.map((source) => (
+              <Link
+                key={source.key}
+                href={source.href}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+                title="Pending server verification of document revision and source clause"
+              >
+                {source.label}
+              </Link>
+            ))}
           </div>
 
           {isPending && (approveMeaning || rejectMeaning) ? (

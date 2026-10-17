@@ -71,7 +71,20 @@ class ExcelFileParser:
     Encapsulates the logic specific to the Excel format and `openpyxl` library.
     """
 
-    async def parse_schedule(self, file_path: Path) -> list[dict[str, Any]]:
+    async def parse_schedule(
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
+    ) -> list[dict[str, Any]]:
+        """Run the synchronous XLSX lifecycle off the asyncio event loop."""
+        return await asyncio.to_thread(
+            self._parse_schedule_sync, file_path, include_evidence=include_evidence,
+            source_bytes=source_bytes,
+        )
+
+    def _parse_schedule_sync(
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
+    ) -> list[dict[str, Any]]:
         """
         Parses schedule data from a standard Excel file format.
 
@@ -80,6 +93,9 @@ class ExcelFileParser:
 
         Args:
             file_path: The path to the Excel file (.xlsx).
+            include_evidence: Opt in to source-row identity and explicit ID columns.
+                Default output stays byte-for-byte compatible with legacy callers.
+                The caller must separately verify the immutable revision SHA-256.
 
         Returns:
             A list of dictionaries, where each dictionary represents a schedule task.
@@ -88,31 +104,96 @@ class ExcelFileParser:
             ExcelParsingError: If the file cannot be opened or does not match the expected format.
         """
         try:
-            workbook = openpyxl.load_workbook(file_path, data_only=True)
+            if source_bytes is not None and not include_evidence:
+                raise ExcelParsingError("Source byte snapshot requires evidence mode")
+            workbook = openpyxl.load_workbook(
+                BytesIO(source_bytes) if source_bytes is not None else file_path,
+                data_only=True,
+            )
             sheet = workbook.active
+            formula_workbook = (
+                openpyxl.load_workbook(
+                    BytesIO(source_bytes) if source_bytes is not None else file_path,
+                    data_only=False,
+                )
+                if include_evidence
+                else None
+            )
+            formula_sheet = formula_workbook.active if formula_workbook else None
+            if include_evidence and formula_sheet is None:
+                raise ExcelParsingError(
+                    "Formula workbook unavailable for verified schedule evidence"
+                )
+            # Evidence mode fails closed above; keep the workbook used for
+            # cell inspection non-optional for static type checking. The
+            # legacy path never consults this evidence-only sheet.
+            evidence_formula_sheet = (
+                formula_sheet if formula_sheet is not None else sheet
+            )
 
-            header_row_index, headers = self._find_schedule_headers(sheet)
+            header_row_index, headers = self._find_schedule_headers(sheet, include_evidence=include_evidence)
             if header_row_index is None:
                 expected_headers = ["task/actividad", "start date/inicio", "end date/fin"]
                 raise ExcelParsingError(
                     f"Missing one or more required headers: {', '.join(expected_headers)}"
                 )
 
+            if include_evidence:
+                # Cached formula-derived header labels must never determine
+                # evidence column authority, even if all row cells are literal.
+                for column_index in range(1, len(headers) + 1):
+                    if evidence_formula_sheet.cell(
+                        row=header_row_index, column=column_index
+                    ).data_type == "f":
+                        raise ExcelParsingError(
+                            "Unverified formula-derived schedule header at "
+                            f"{sheet.title}!{header_row_index} column {column_index}"
+                        )
+
             schedule_data = []
-            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+            for row_index, row in enumerate(
+                sheet.iter_rows(min_row=header_row_index + 1, values_only=True),
+                start=header_row_index + 1,
+            ):
                 row_data = dict(zip(headers, row, strict=False))
-                # Filter out empty rows
-                if any(row_data.values()):
-                    schedule_data.append(
-                        {
-                            "task": row_data.get("task"),
-                            "start_date": row_data.get("start date"),
-                            "end_date": row_data.get("end date"),
-                            "duration": row_data.get("duration"),
-                            "wbs": row_data.get("wbs"),
-                            "predecessors": row_data.get("predecessors"),
-                        }
-                    )
+                if include_evidence:
+                    # The immutable source SHA proves cell bytes, not Excel's
+                    # cached formula evaluation. Reject formulas in ALL consumed
+                    # evidence fields before checking for an apparently blank row:
+                    # data_only=True can return None for every formula cell.
+                    evidence_columns = {
+                        "task", "start date", "end date", "duration", "wbs",
+                        "predecessors", "activity id", "milestone id", "wbs node id",
+                    }
+                    for column_index, name in enumerate(headers, start=1):
+                        if name not in evidence_columns:
+                            continue
+                        if evidence_formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                            category = (
+                                "date" if name in {"start date", "end date"} else "source"
+                            )
+                            raise ExcelParsingError(
+                                f"Unverified schedule {category} formula at "
+                                f"{sheet.title}!{row_index} ({name})"
+                            )
+                if not any(row_data.values()):
+                    continue
+                schedule_row = {
+                    "task": row_data.get("task"),
+                    "start_date": row_data.get("start date"),
+                    "end_date": row_data.get("end date"),
+                    "duration": row_data.get("duration"),
+                    "wbs": row_data.get("wbs"),
+                    "predecessors": row_data.get("predecessors"),
+                }
+                if include_evidence:
+                    schedule_row.update({
+                        "source_locator": f"{sheet.title}!{row_index}",
+                        "source_activity_id": row_data.get("activity id"),
+                        "source_milestone_id": row_data.get("milestone id"),
+                        "wbs_node_id": row_data.get("wbs node id"),
+                    })
+                schedule_data.append(schedule_row)
             return schedule_data
 
         except ExcelParsingError:
@@ -127,10 +208,13 @@ class ExcelFileParser:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
                 workbook_to_close.close()
+            formula_to_close = locals().get("formula_workbook")
+            if formula_to_close is not None and hasattr(formula_to_close, "close"):
+                formula_to_close.close()
 
     @staticmethod
-    def _schedule_header_aliases() -> dict[str, set[str]]:
-        return {
+    def _schedule_header_aliases(*, include_evidence: bool = False) -> dict[str, set[str]]:
+        aliases = {
             "task": {"task", "actividad", "tarea", "activity"},
             "start date": {"start date", "inicio", "comienzo", "fecha inicio"},
             "end date": {"end date", "fin", "termino", "fecha fin"},
@@ -138,10 +222,20 @@ class ExcelFileParser:
             "wbs": {"wbs"},
             "predecessors": {"predecessors", "predecesoras"},
         }
+        if include_evidence:
+            # The extra ID aliases must NOT alter legacy header resolution.
+            aliases.update({
+                "activity id": {"activity id", "id actividad", "activity code"},
+                "milestone id": {"milestone id", "id hito"},
+                "wbs node id": {"wbs node id", "id nodo wbs", "id wbs"},
+            })
+        return aliases
 
     @classmethod
-    def _find_schedule_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:
-        aliases = cls._schedule_header_aliases()
+    def _find_schedule_headers(
+        cls, sheet: Any, *, include_evidence: bool = False
+    ) -> tuple[int | None, list[str]]:
+        aliases = cls._schedule_header_aliases(include_evidence=include_evidence)
         required = {"task", "start date", "end date"}
 
         for row_index, row in enumerate(sheet.iter_rows(values_only=True), start=1):

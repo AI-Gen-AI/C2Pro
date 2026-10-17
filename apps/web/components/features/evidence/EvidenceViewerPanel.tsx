@@ -9,6 +9,7 @@ import { buildDocumentDownloadUrl } from "./evidence-page-utils";
 interface EvidenceViewerPanelProps {
   selectedDocument: DocumentInfo | null;
   selectedDocumentId: string | null;
+  selectedRevisionId?: string | null;
   highlights: PdfHighlight[];
   activeHighlightId: string | null;
   onHighlightClick: (id: string) => void;
@@ -17,6 +18,7 @@ interface EvidenceViewerPanelProps {
 export function EvidenceViewerPanel({
   selectedDocument,
   selectedDocumentId,
+  selectedRevisionId,
   highlights,
   activeHighlightId,
   onHighlightClick,
@@ -39,7 +41,7 @@ export function EvidenceViewerPanel({
       <CardContent className="p-0">
         {selectedDocumentId ? (
           <LazyPdfEvidenceViewer
-            fileUrl={buildDocumentDownloadUrl(selectedDocumentId)}
+            fileUrl={buildDocumentDownloadUrl(selectedDocumentId, selectedRevisionId)}
             highlights={highlights}
             activeHighlightId={activeHighlightId}
             onHighlightClick={onHighlightClick}

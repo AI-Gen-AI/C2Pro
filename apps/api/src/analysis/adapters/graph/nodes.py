@@ -32,6 +32,10 @@ from src.analysis.adapters.graph.nodes_extended import (
 from src.analysis.adapters.graph.review_lineage import (
     claim_review_lineage_for_current_attempt,
 )
+from src.analysis.adapters.graph.review_source_references import (
+    grounded_review_source_references,
+    review_risk_clause_codes,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -51,6 +55,9 @@ from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 from src.core.processing_authority import fence_current
+from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+    SqlAlchemyDocumentRepository,
+)
 from src.shared_kernel.enums import AlertSeverity
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
@@ -641,6 +648,38 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                     if impact == ImpactLevel.HIGH
                     else "This analysis requires human confirmation before it can complete."
                 )
+                # Derive navigation only from structured N4 risk clause_ref
+                # codes that match immutable rows physically bound to this
+                # tenant/project/document/revision. N12 critique prose has NO
+                # authoritative clause IDs; never synthesize links from it.
+                source_references: list[dict[str, str]] = []
+                risk_codes = review_risk_clause_codes(state.get("extracted_risks"))
+                revision_id = state.get("document_revision_id")
+                if risk_codes and revision_id:
+                    try:
+                        pinned_revision = UUID(revision_id)
+                        pinned_document = UUID(state["document_id"])
+                        pinned_project = UUID(state["project_id"])
+                        repo = SqlAlchemyDocumentRepository(session)
+                        persisted = await repo.list_clauses_bound_to_revision(
+                            UUID(tenant_id), pinned_document, pinned_revision
+                        )
+                        source_references = grounded_review_source_references(
+                            tenant_id=UUID(tenant_id),
+                            project_id=pinned_project,
+                            document_id=pinned_document,
+                            revision_id=pinned_revision,
+                            clause_codes=risk_codes,
+                            persisted_clauses=persisted,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        # A lookup error must not upgrade a risky critique to
+                        # evidence; review still proceeds with document fallback.
+                        logger.warning(
+                            "hitl_source_reference_unavailable",
+                            reason=type(exc).__name__,
+                            document_id=state.get("document_id"),
+                        )
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
                     item_type=doc_type,
@@ -653,6 +692,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
                         "critique_notes": state.get("critique_notes", ""),
+                        "source_references": source_references,
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}
