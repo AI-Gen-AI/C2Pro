@@ -158,10 +158,12 @@ class TestUploadPolicyStructuredDocumentRejection:
         # Contract accepts .pdf
         assert ".pdf" in allowed_upload_extensions(DocumentType.CONTRACT)
 
-        # Budget accepts .xlsx and .bc3
+        # The real upload policy ALSO accepts budget PDF as a source document,
+        # without promising verified structured rows from that PDF.
         budget_exts = allowed_upload_extensions(DocumentType.BUDGET)
         assert ".xlsx" in budget_exts
         assert ".bc3" in budget_exts
+        assert ".pdf" in budget_exts
 
         # Unsupported format raises UploadFormatError
         with pytest.raises(UploadFormatError):
