@@ -493,7 +493,7 @@ class ExcelFileParser:
                     "Ambiguous single-comma decimal in verified budget evidence"
                 )
             if cleaned.count(",") > 1:
-                if re.fullmatch(r"-?\\d{1,3}(?:,\\d{3}){2,}", cleaned) is None:
+                if re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3}){2,}", cleaned) is None:
                     raise ExcelParsingError("Ambiguous budget number grouping")
                 normalized = cleaned.replace(",", "")
             else:
