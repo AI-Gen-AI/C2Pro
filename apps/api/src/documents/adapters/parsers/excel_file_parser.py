@@ -189,7 +189,10 @@ class ExcelFileParser:
                 )
 
             budget_data: BudgetRows = BudgetRows()
-            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+            for row_index, row in enumerate(
+                sheet.iter_rows(min_row=header_row_index + 1, values_only=True),
+                start=header_row_index + 1,
+            ):
                 row_data = dict(zip(headers, row, strict=False))
                 if not any(row_data.values()):
                     continue
@@ -223,6 +226,14 @@ class ExcelFileParser:
                         "category": self._infer_budget_category(
                             row_data.get("item"), unit_value
                         ),
+                        "currency": row_data.get("currency"),
+                        "tax_basis": row_data.get("tax basis"),
+                        "wbs_node_id": row_data.get("wbs node id"),
+                        "source_locator": f"{sheet.title}!{row_index}",
+                        "numeric_provenance": {
+                            field: repr(row_data.get(field))
+                            for field in ("quantity", "unit price", "total")
+                        },
                     }
                 )
             return budget_data
@@ -295,6 +306,9 @@ class ExcelFileParser:
                 "medida",
                 "unidad de medida",
             },
+            "currency": {"currency", "moneda", "divisa"},
+            "tax basis": {"tax basis", "base fiscal", "impuestos", "tax"},
+            "wbs node id": {"wbs node id", "wbs id", "id wbs"},
         }
 
     @classmethod
