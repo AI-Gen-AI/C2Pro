@@ -375,6 +375,44 @@ async def test_redelivery_of_retired_wbs_row_skips_new_authority_check(
     assert result.assessment_reason == "no_verified_budget_rows"
 
 
+
+@pytest.mark.asyncio
+async def test_budget_historical_xlsx_revision_survives_current_bc3_format(
+    tmp_path: Path,
+) -> None:
+    """Format changes in mutable document metadata do not rewrite source history."""
+    source = tmp_path / "historical-budget.xlsx"
+    _budget_xlsx(source)
+    current = replace(_document(), file_format=".bc3", filename="budget.bc3")
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+    ).execute(
+        document=current, revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].revision_id == REVISION
+
+
+@pytest.mark.asyncio
+async def test_budget_rejects_non_xlsx_selected_revision_with_valid_xlsx_bytes(
+    tmp_path: Path,
+) -> None:
+    """Current XLSX metadata or an XLSX-shaped blob cannot attest a BC3 revision."""
+    source = tmp_path / "budget.xlsx"
+    _budget_xlsx(source)
+    non_xlsx_revision = _revision(source).model_copy(
+        update={"blob_key": "revisions/budget.bc3"}
+    )
+    with pytest.raises(InvalidBudgetRowEvidenceError, match="selected source revision"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService(),
+        ).execute(
+            document=_document(), revision=non_xlsx_revision, source_path=source,
+            existing_row_identities=frozenset(),
+        )
+
+
 @pytest.mark.asyncio
 async def test_rejects_tampered_xlsx_before_parsing(tmp_path: Path) -> None:
     source = tmp_path / "budget.xlsx"
