@@ -200,6 +200,10 @@ class ExcelFileParser:
                 else None
             )
             formula_sheet = formula_workbook.active if formula_workbook else None
+            if include_evidence and formula_sheet is None:
+                raise ExcelParsingError(
+                    "Formula workbook unavailable for verified budget evidence"
+                )
 
             header_row_index, headers = self._find_budget_headers(sheet)
             if header_row_index is None:
@@ -242,7 +246,6 @@ class ExcelFileParser:
                     # Inspect all consumed evidence fields, not only numeric cells.
                     # Check before empty-row/subtotal skips: cached formulas may be
                     # None under data_only=True and otherwise vanish silently.
-                    assert formula_sheet is not None
                     evidence_columns = {
                         "item", "quantity", "unit price", "total", "unit",
                         "currency", "tax basis", "wbs node id",
@@ -272,7 +275,6 @@ class ExcelFileParser:
                     # into seemingly verified EUR 100, or hide EUR 100 USD.
                     row_currency = row_data.get("currency")
                     for monetary_field in ("unit price", "total"):
-                        assert formula_sheet is not None
                         column_index = headers.index(monetary_field) + 1
                         number_format = formula_sheet.cell(
                             row=row_index, column=column_index
