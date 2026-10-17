@@ -197,6 +197,21 @@ def resolve_base_work_implementation(
     if head_ref not in {rule["branch"] for rule in PC_TASKS.values()}:
         return _resolve_dev_work_implementation(repo_root, subject)
 
+    # A short branch name is NOT a repository identity. A fork can reuse it.
+    # Missing or inconsistent trusted GitHub repository/PR binding fails closed
+    # before any external attestor can influence the result.
+    base_repo_id = subject.get("repository_id")
+    head_repo_id = subject.get("head_repository_id")
+    base_repo_name = subject.get("repository_full_name")
+    head_repo_name = subject.get("head_repository_full_name")
+    pr_number = subject.get("pr_number")
+    if (type(base_repo_id) is not int or base_repo_id < 1
+            or type(head_repo_id) is not int or head_repo_id != base_repo_id
+            or not isinstance(base_repo_name, str) or not base_repo_name
+            or not isinstance(head_repo_name, str) or head_repo_name != base_repo_name
+            or type(pr_number) is not int or pr_number < 1):
+        raise ProvenanceError("Project Controls PR head repository/PR identity is missing or differs from trusted base")
+
     merge_base = subject.get("merge_base_sha")
     if not isinstance(merge_base, str) or not _SHA40.fullmatch(merge_base):
         raise ProvenanceError("Project Controls PR merge-base is unverified")
@@ -214,6 +229,12 @@ def resolve_base_work_implementation(
         return None
     try:
         result = workspace_attestation_verifier({
+            "repository_id": base_repo_id,
+            "repository_full_name": base_repo_name,
+            "pr_number": pr_number,
+            "head_repository_id": head_repo_id,
+            "head_repository_full_name": head_repo_name,
+            "head_full_ref": f"{head_repo_name}:{head_ref}",
             "work_id": work["work_id"],
             "worker_id": work["assigned_to"],
             "base_sha": work["base_sha"],
