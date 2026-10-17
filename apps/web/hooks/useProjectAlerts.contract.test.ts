@@ -1,3 +1,8 @@
+/**
+ * PC-7b (#672, board #1049): useProjectAlerts must call the real, served alerts
+ * route and never fabricate a source clause id. See the hook's own header comment
+ * for the route-wiring verification against apps/api/src/alerts/adapters/http/router.py.
+ */
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,83 +32,153 @@ describe("useProjectAlerts project mapping", () => {
     expect(result.current.alerts).toEqual([]);
   });
 
-  it("maps unknown severities and statuses to safe defaults", async () => {
-    getMock.mockResolvedValueOnce({
-      data: {
-        items: [
-          {
-            id: "a-9",
-            category: "UNKNOWN",
-            severity: "urgent",
-            status: "mystery",
-            message: "Unexpected payload",
-          },
-        ],
-        total: 1,
-      },
-    });
+  it("calls the real, served GET /alerts/projects/{project_id} route", async () => {
+    getMock.mockResolvedValueOnce({ data: { items: [], total: 0 } });
 
-    const { result } = renderHook(() => useProjectAlerts("proj-5"));
+    renderHook(() => useProjectAlerts("proj-5"));
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    expect(result.current.alerts).toEqual([
-      {
-        id: "a-9",
-        title: "Unexpected payload",
-        severity: "medium",
-        status: "pending",
-        clauseId: "clause-a-9",
-        assignee: "project.manager",
-      },
-    ]);
+    await waitFor(() => expect(getMock).toHaveBeenCalledWith("/alerts/projects/proj-5"));
   });
 
-  it("maps known categories and statuses to review ownership semantics", async () => {
-    getMock.mockResolvedValueOnce({
-      data: {
-        items: [
-          {
-            id: "a-1",
-            category: "LEGAL",
-            severity: "high",
-            status: "open",
-            message: "Legal issue",
-          },
-          {
-            id: "a-2",
-            category: "QUALITY",
-            severity: "low",
-            status: "rejected",
-            message: "Quality issue",
-          },
-        ],
-        total: 2,
-      },
-    });
+  it("maps unknown severities and statuses to safe defaults, without a clause id", () => {
+    return runMapping(
+      [
+        {
+          id: "a-9",
+          category: "UNKNOWN",
+          severity: "urgent",
+          status: "mystery",
+          message: "Unexpected payload",
+        },
+      ],
+      [
+        {
+          id: "a-9",
+          title: "Unexpected payload",
+          severity: "medium",
+          status: "pending",
+          assignee: "project.manager",
+        },
+      ],
+    );
+  });
 
-    const { result } = renderHook(() => useProjectAlerts("proj-legal"));
+  it("maps known categories and statuses to review ownership semantics", () => {
+    return runMapping(
+      [
+        {
+          id: "a-1",
+          category: "LEGAL",
+          severity: "high",
+          status: "open",
+          message: "Legal issue",
+        },
+        {
+          id: "a-2",
+          category: "QUALITY",
+          severity: "low",
+          status: "rejected",
+          message: "Quality issue",
+        },
+      ],
+      [
+        {
+          id: "a-1",
+          title: "Legal issue",
+          severity: "high",
+          status: "pending",
+          assignee: "legal.reviewer",
+        },
+        {
+          id: "a-2",
+          title: "Quality issue",
+          severity: "low",
+          status: "rejected",
+          assignee: "qa.manager",
+        },
+      ],
+    );
+  });
 
-    await waitFor(() => expect(result.current.loading).toBe(false));
+  it("never fabricates a clause id when the backend resolved none", () => {
+    return runMapping(
+      [
+        {
+          id: "a-10",
+          category: "SCOPE",
+          severity: "medium",
+          status: "open",
+          message: "No evidence resolved yet",
+          source_clause_id: null,
+          detection_evidence: null,
+        },
+      ],
+      [
+        {
+          id: "a-10",
+          title: "No evidence resolved yet",
+          severity: "medium",
+          status: "pending",
+          assignee: "project.manager",
+        },
+      ],
+    );
+  });
 
-    expect(result.current.alerts).toEqual([
-      {
-        id: "a-1",
-        title: "Legal issue",
-        severity: "high",
-        status: "pending",
-        clauseId: "clause-a-1",
-        assignee: "legal.reviewer",
-      },
-      {
-        id: "a-2",
-        title: "Quality issue",
-        severity: "low",
-        status: "rejected",
-        clauseId: "clause-a-2",
-        assignee: "qa.manager",
-      },
-    ]);
+  it("surfaces the real persisted source_clause_id and links it to its document", () => {
+    return runMapping(
+      [
+        {
+          id: "a-11",
+          category: "LEGAL",
+          severity: "high",
+          status: "open",
+          message: "Indemnity clause conflicts with schedule",
+          source_clause_id: "clause-§5.2",
+          detection_evidence: { source_document_id: "doc-42" },
+        },
+      ],
+      [
+        {
+          id: "a-11",
+          title: "Indemnity clause conflicts with schedule",
+          severity: "high",
+          status: "pending",
+          assignee: "legal.reviewer",
+          clauseId: "clause-§5.2",
+          addressableClauseId: "clause-§5.2",
+          sourceDocumentId: "doc-42",
+        },
+      ],
+    );
+  });
+
+  it("falls back to the detector's own evidence clause when nothing is persisted yet", () => {
+    return runMapping(
+      [
+        {
+          id: "a-12",
+          category: "BUDGET",
+          severity: "critical",
+          status: "open",
+          message: "Line item exceeds approved scope",
+          source_clause_id: null,
+          detection_evidence: { source_clause_id: "clause-§3.1", source_document_id: "doc-7" },
+        },
+      ],
+      [
+        {
+          id: "a-12",
+          title: "Line item exceeds approved scope",
+          severity: "critical",
+          status: "pending",
+          assignee: "finance.analyst",
+          // Unresolved/unpersisted: shown for context, but never a clickable
+          // evidence link -- only a persisted source clause is addressable.
+          clauseId: "clause-§3.1",
+        },
+      ],
+    );
   });
 
   it("surfaces backend request failures", async () => {
@@ -194,7 +269,6 @@ describe("useProjectAlerts project mapping", () => {
           title: "Second alert",
           severity: "critical",
           status: "approved",
-          clauseId: "clause-a-2",
           assignee: "scheduler",
         },
       ]),
@@ -202,3 +276,13 @@ describe("useProjectAlerts project mapping", () => {
     expect(getMock).toHaveBeenCalledTimes(2);
   });
 });
+
+async function runMapping(items: unknown[], expected: unknown[]) {
+  getMock.mockResolvedValueOnce({ data: { items, total: items.length } });
+
+  const { result } = renderHook(() => useProjectAlerts("proj-mapping"));
+
+  await waitFor(() => expect(result.current.loading).toBe(false));
+
+  expect(result.current.alerts).toEqual(expected);
+}

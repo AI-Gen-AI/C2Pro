@@ -7,10 +7,15 @@
  * PC-7a (#672/#688): the page must show the real WBS authority state from the single
  * resolver (NO_WBS / DRAFT_ONLY / LEGACY_UNGOVERNED / APPROVED_BASELINE) and coverage,
  * and must never present WBS dates/budget as approved schedule/cost authority.
+ *
+ * PC-7b (#672, board #1049): the page must show a real alert count/panel and must
+ * never imply 0/known alerts before the fetch actually resolves, and must never link
+ * a clause that was not actually persisted as addressable evidence.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, renderWithProviders, screen } from "@/src/tests/test-utils";
 import type { WBSTreeItem } from "@/hooks/useWBSTree";
+import type { ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
 import type {
   ProjectWBSAuthority,
   ProjectWBSCoverage,
@@ -67,6 +72,23 @@ vi.mock("@/hooks/useWBSTree", () => ({
   }),
 }));
 
+const { alertsState } = vi.hoisted(() => ({
+  alertsState: {
+    alerts: [] as ReviewAlert[],
+    loading: false,
+    error: null as Error | null,
+  },
+}));
+
+vi.mock("@/hooks/useProjectAlerts", () => ({
+  useProjectAlerts: () => ({
+    alerts: alertsState.alerts,
+    loading: alertsState.loading,
+    error: alertsState.error,
+    refetch: vi.fn(),
+  }),
+}));
+
 function authority(overrides: Partial<ProjectWBSAuthority>): ProjectWBSAuthority {
   return {
     state: "LEGACY_UNGOVERNED",
@@ -107,6 +129,9 @@ describe("ProjectWBSPage", () => {
   beforeEach(() => {
     hookState.coverage = null;
     hookState.authority = null;
+    alertsState.alerts = [];
+    alertsState.loading = false;
+    alertsState.error = null;
   });
 
   it("renders the canonical WBS route", () => {
@@ -259,5 +284,81 @@ describe("ProjectWBSPage", () => {
     renderWithProviders(<ProjectWBSPage />);
 
     expect(screen.queryByTestId("wbs-coverage-summary")).not.toBeInTheDocument();
+  });
+
+  it("shows a loading state for alerts instead of implying a count before the fetch resolves", () => {
+    hookState.items = [];
+    hookState.totalItems = 0;
+    alertsState.loading = true;
+    renderWithProviders(<ProjectWBSPage />);
+
+    expect(screen.getByText(/loading project alerts/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("wbs-alerts-count")).not.toBeInTheDocument();
+  });
+
+  it("shows an alert fetch failure honestly instead of a fabricated empty/zero state", () => {
+    hookState.items = [];
+    hookState.totalItems = 0;
+    alertsState.error = new Error("alerts service unavailable");
+    renderWithProviders(<ProjectWBSPage />);
+
+    expect(screen.getByTestId("wbs-alerts-error")).toHaveTextContent(
+      "alerts service unavailable",
+    );
+    expect(screen.queryByTestId("wbs-alerts-count")).not.toBeInTheDocument();
+  });
+
+  it("shows the real alert count and no-alerts message when none are recorded", () => {
+    hookState.items = [];
+    hookState.totalItems = 0;
+    alertsState.alerts = [];
+    renderWithProviders(<ProjectWBSPage />);
+
+    expect(screen.getByTestId("wbs-alerts-count")).toHaveTextContent("0 alerts");
+    expect(screen.getByText(/no alerts recorded for this project/i)).toBeInTheDocument();
+  });
+
+  it("links an alert's real, persisted source_clause_id to its evidence document", () => {
+    hookState.items = [];
+    hookState.totalItems = 0;
+    alertsState.alerts = [
+      {
+        id: "alert-1",
+        title: "Indemnity clause conflicts with schedule",
+        severity: "high",
+        status: "pending",
+        clauseId: "clause-§5.2",
+        addressableClauseId: "clause-§5.2",
+        sourceDocumentId: "doc-42",
+      },
+    ];
+    renderWithProviders(<ProjectWBSPage />);
+
+    expect(screen.getByTestId("wbs-alerts-count")).toHaveTextContent("1 alert");
+    const link = screen.getByTestId("wbs-alert-alert-1-evidence-link");
+    expect(link).toHaveTextContent("clause-§5.2");
+    expect(link).toHaveAttribute(
+      "href",
+      "/projects/proj-real-wbs/evidence?documentId=doc-42&highlightId=clause-%C2%A75.2",
+    );
+  });
+
+  it("shows an unresolved detector clause id as plain text, never as a fabricated link", () => {
+    hookState.items = [];
+    hookState.totalItems = 0;
+    alertsState.alerts = [
+      {
+        id: "alert-2",
+        title: "Line item exceeds approved scope",
+        severity: "critical",
+        status: "pending",
+        // Reported by the detector but not yet persisted as addressable evidence.
+        clauseId: "clause-§3.1",
+      },
+    ];
+    renderWithProviders(<ProjectWBSPage />);
+
+    expect(screen.getByTestId("wbs-alert-alert-2-clause")).toHaveTextContent("clause-§3.1");
+    expect(screen.queryByTestId("wbs-alert-alert-2-evidence-link")).not.toBeInTheDocument();
   });
 });
