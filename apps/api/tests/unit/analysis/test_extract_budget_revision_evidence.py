@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
@@ -18,7 +19,7 @@ from src.analysis.domain.budget_row_evidence import (
     InvalidBudgetRowEvidenceError,
     UnapprovedWBSMappingError,
 )
-from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.temporal.domain.document_revision import DocumentRevision
 
@@ -129,6 +130,107 @@ async def test_extracts_a_real_xlsx_row_with_locator_provenance_and_approved_wbs
     assert row.wbs_baseline_id == BASELINE
     assert row.wbs_node_id == WBS_NODE
     assert result.assessment_reason == "approved_budget_comparison_missing"
+
+
+
+@pytest.mark.asyncio
+async def test_immutable_budget_evidence_preserves_large_decimal_text(
+    tmp_path: Path,
+) -> None:
+    """Converting financial text via legacy float silently changes the value."""
+    source = tmp_path / "precise.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Item", "Quantity", "Unit", "Unit Price", "Total", "Currency", "Tax Basis"])
+    sheet.append([
+        "Exact amount", "1", "each", "99999999999999.99", "99999999999999.99",
+        "EUR", "NET"
+    ])
+    workbook.save(source)
+
+    [legacy] = await ExcelFileParser().parse_budget(source)
+    assert isinstance(legacy["total"], float)
+
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    [row] = result.rows
+    assert row.quantity == Decimal("1")
+    assert row.unit_price == Decimal("99999999999999.99")
+    assert row.amount == Decimal("99999999999999.99")
+    assert row.numeric_provenance == (
+        ("quantity", "'1'"),
+        ("unit price", "'99999999999999.99'"),
+        ("total", "'99999999999999.99'"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_immutable_budget_evidence_handles_es_decimal_source_text(
+    tmp_path: Path,
+) -> None:
+    """Spanish decimal separators must not be rounded through binary floats."""
+    source = tmp_path / "es-budget.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Item", "Quantity", "Unit", "Unit Price", "Total", "Currency", "Tax Basis"])
+    sheet.append(["Concrete", "1.234,50", "m3", "12,30 EUR", "15.184,35 EUR", "EUR", "NET"])
+    workbook.save(source)
+
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    [row] = result.rows
+    assert (row.quantity, row.unit_price, row.amount) == (
+        Decimal("1234.50"), Decimal("12.30"), Decimal("15184.35")
+    )
+
+
+@pytest.mark.parametrize("formula_column", ["unit price", "total"])
+@pytest.mark.asyncio
+async def test_rejects_unverified_formula_cells_even_if_workbook_is_hash_verified(
+    tmp_path: Path, formula_column: str
+) -> None:
+    """Hash pins bytes, but does not prove a formula was evaluated or its cache is fresh."""
+    source = tmp_path / "formula.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Item", "Quantity", "Unit", "Unit Price", "Total", "Currency", "Tax Basis"])
+    sheet.append(["Concrete", 12, "m3", 100, 1200, "EUR", "NET"])
+    sheet.cell(row=2, column=4 if formula_column == "unit price" else 5).value = "=B2*4"
+    workbook.save(source)
+
+    with pytest.raises(ExcelParsingError, match="Unverified formula-derived budget amount"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=_document(), revision=_revision(source), source_path=source,
+            existing_row_identities=frozenset(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_redelivery_of_retired_wbs_row_skips_new_authority_check(
+    tmp_path: Path,
+) -> None:
+    """Previously ingested immutable rows need not relink a retired WBS node."""
+    source = tmp_path / "budget.xlsx"
+    _budget_xlsx(source)
+
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_DeniedApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset({(REVISION, "Budget 2026!2")}),
+    )
+    assert result.rows == ()
+    assert result.assessment_reason == "no_verified_budget_rows"
 
 
 @pytest.mark.asyncio
