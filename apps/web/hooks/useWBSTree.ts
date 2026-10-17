@@ -9,6 +9,12 @@
  * IR-4: the in-memory WBS write routes this hook used to call were a second,
  * unread implementation of the same resource and are no longer served, so the
  * hook exposes no create/update/delete/move operations.
+ *
+ * PC-7a (#672/#688): the contract also carries `coverage` and the single-resolver
+ * `authority` block (PC-2a.3 / ADR-029). Both were previously dropped on the floor;
+ * they are now passed through unchanged so the page can show the real WBS authority
+ * state (`NO_WBS` / `LEGACY_UNGOVERNED` / `DRAFT_ONLY` / `APPROVED_BASELINE`) instead
+ * of silently implying every WBS is governed.
  */
 
 import { useState, useCallback, useMemo } from "react";
@@ -16,7 +22,11 @@ import {
   useGetProjectWbsApiV1ProjectsProjectIdWbsGet,
   getGetProjectWbsApiV1ProjectsProjectIdWbsGetQueryKey,
 } from "@/lib/api/generated/projects/projects";
-import type { ProjectWBSNode } from "@/lib/api/generated/models";
+import type {
+  ProjectWBSAuthority,
+  ProjectWBSCoverage,
+  ProjectWBSNode,
+} from "@/lib/api/generated/models";
 
 export interface WBSTreeItem {
   id: string;
@@ -41,6 +51,16 @@ interface UseWBSTreeReturn {
   items: WBSTreeItem[];
   /** Every WBS item of the project (not only roots); null until loaded. */
   totalItems: number | null;
+  /** Evidence coverage over every WBS item of the project; null until loaded. */
+  coverage: ProjectWBSCoverage | null;
+  /**
+   * WBS authority from the single resolver (PC-2a.3 / ADR-029); null until loaded.
+   * Never treat `planned*`/`actual*`/`budget*` on `WBSTreeItem` as approved
+   * schedule/cost authority regardless of this state -- the backend contract
+   * never grants that (`dates_schedule_authority`/`budget_cost_authority` are
+   * always false).
+   */
+  authority: ProjectWBSAuthority | null;
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
@@ -115,6 +135,8 @@ export function useWBSTree({
   return {
     items,
     totalItems: data?.total_items ?? null,
+    coverage: data?.coverage ?? null,
+    authority: data?.authority ?? null,
     isLoading,
     isError,
     error: error as Error | null,
