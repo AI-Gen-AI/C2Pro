@@ -257,6 +257,17 @@ class ExcelFileParser:
                 unit_price: float | Decimal | None
                 total: float | Decimal | None
                 if include_evidence:
+                    # The column currency is the only authoritative row
+                    # denomination. A numeric cell's optional currency symbol
+                    # must agree with it; stripping it first could turn $100
+                    # into seemingly verified EUR 100, or hide EUR 100 USD.
+                    row_currency = row_data.get("currency")
+                    for monetary_field in ("unit price", "total"):
+                        self._require_budget_currency_consistency(
+                            row_data.get(monetary_field),
+                            row_currency,
+                            locator=f"{sheet.title}!{row_index} ({monetary_field})",
+                        )
                     # Evidence MUST use original cell values, not the lossy
                     # float-normalization used by the legacy analysis parser.
                     quantity = self._coerce_budget_decimal(row_data.get("quantity"))
@@ -473,6 +484,32 @@ class ExcelFileParser:
             match = cls._match_canonical(header_norm, aliases)
             canonical.append(match if match is not None else header_norm)
         return canonical
+
+    @staticmethod
+    def _require_budget_currency_consistency(
+        value: Any, currency: Any, *, locator: str
+    ) -> None:
+        """Reject a source monetary marker inconsistent with its row currency.
+
+        The XLSX SHA proves original bytes, not conversion rates or currency
+        semantics. Fail closed rather than deleting currency prefixes blindly.
+        """
+        if not isinstance(value, str):
+            return
+        tokens = re.findall(
+            r"(?<![A-Za-z])(?:EUR|USD|GBP)(?![A-Za-z])|[€$£]",
+            value,
+            flags=re.I,
+        )
+        if not tokens:
+            return
+        codes = {"€": "EUR", "$": "USD", "£": "GBP"}
+        identified = [codes.get(token, token.upper()) for token in tokens]
+        declared = str(currency).strip().upper() if currency is not None else ""
+        if not declared or any(token != declared for token in identified):
+            raise ExcelParsingError(
+                f"Budget currency marker conflicts with row currency at {locator}"
+            )
 
     @staticmethod
     def _coerce_budget_decimal(value: Any) -> Decimal | None:
