@@ -107,6 +107,10 @@ class ExcelFileParser:
                 else None
             )
             formula_sheet = formula_workbook.active if formula_workbook else None
+            if include_evidence and formula_sheet is None:
+                raise ExcelParsingError(
+                    "Formula workbook unavailable for verified schedule evidence"
+                )
 
             header_row_index, headers = self._find_schedule_headers(sheet, include_evidence=include_evidence)
             if header_row_index is None:
@@ -126,7 +130,6 @@ class ExcelFileParser:
                     # cached formula evaluation. Reject formulas in ALL consumed
                     # evidence fields before checking for an apparently blank row:
                     # data_only=True can return None for every formula cell.
-                    assert formula_sheet is not None
                     evidence_columns = {
                         "task", "start date", "end date", "duration", "wbs",
                         "predecessors", "activity id", "milestone id", "wbs node id",
