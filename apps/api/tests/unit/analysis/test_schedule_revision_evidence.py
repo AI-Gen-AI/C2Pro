@@ -311,6 +311,49 @@ async def test_formula_date_rejected_even_when_source_hash_is_valid(tmp_path: Pa
         ).execute(document=_document(), revision=_revision(path), source_path=path)
 
 
+
+@pytest.mark.parametrize(
+    "formula_column", [1, 2, 3, 4, 5, 6, 7, 8, 9]
+)
+@pytest.mark.asyncio
+async def test_schedule_evidence_rejects_formulas_in_every_consumed_field(
+    tmp_path: Path, formula_column: int,
+) -> None:
+    """Verified XLSX bytes cannot attest cached task/ID/WBS/dependency values."""
+    path = tmp_path / "schedule-all-fields.xlsx"
+    _xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    workbook.active.cell(row=2, column=formula_column).value = '="unverified"'
+    workbook.save(path)
+    workbook.close()
+
+    authority = _Approved()
+    with pytest.raises(ExcelParsingError, match="Unverified schedule"):
+        await ExtractScheduleRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=authority,
+        ).execute(document=_document(), revision=_revision(path), source_path=path)
+    assert authority.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_schedule_evidence_does_not_skip_formula_only_source_rows(
+    tmp_path: Path,
+) -> None:
+    """Formula without a cached result must fail closed, not vanish as a blank row."""
+    path = tmp_path / "formula-blank-cache.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Task", "Start Date", "End Date"])
+    sheet.append(['="hidden task"', None, None])
+    workbook.save(path)
+    workbook.close()
+
+    with pytest.raises(ExcelParsingError, match="Unverified schedule source formula"):
+        await ExtractScheduleRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_Approved(),
+        ).execute(document=_document(), revision=_revision(path), source_path=path)
+
+
 def test_ambiguous_dates_and_timezone_are_never_inferred() -> None:
     from datetime import timedelta, timezone
 
