@@ -8,6 +8,8 @@ baseline by the shared transactional WBS authority gate.
 
 from __future__ import annotations
 
+import asyncio
+
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
@@ -91,7 +93,7 @@ class ExtractScheduleRevisionEvidenceUseCase:
             raise InvalidScheduleEvidenceError("document does not match immutable revision")
 
         # Hash BEFORE parsing; no fallback to mutable current document bytes.
-        verify_revision_file_hash(source_path, revision.blob_hash)
+        await asyncio.to_thread(verify_revision_file_hash, source_path, revision.blob_hash)
         parsed = await self.parser.parse_schedule(source_path, include_evidence=True)
 
         # Duplicated source IDs must not silently become two authoritative
