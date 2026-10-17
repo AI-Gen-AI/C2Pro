@@ -92,13 +92,7 @@ export function PdfEvidenceViewer({
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (activeHighlightId) {
-      setActiveId(activeHighlightId);
-    }
-  }, [activeHighlightId]);
-
-  useEffect(() => {
+   useEffect(() => {
     if (fileUrl !== currentFileUrl) {
       setCurrentFileUrl(fileUrl);
       setStatePage(1);
@@ -138,6 +132,18 @@ export function PdfEvidenceViewer({
     }
     return [];
   }, [currentFileUrl, currentHighlights, isDemo]);
+
+  // A source deep link may be pinned to a PDF page other than page 1.
+  // Resolve ONLY a source highlight belonging to this exact file's current
+  // evidence list. Do not infer a page from unknown/document-fallback links.
+  // PDFViewer tracks changes to initialPage and navigates its rendered Page.
+  useEffect(() => {
+    if (!activeHighlightId || currentFileUrl !== fileUrl) return;
+    const cited = highlights.find((item) => item.id === activeHighlightId);
+    if (!cited || !Number.isSafeInteger(cited.page) || cited.page < 1) return;
+    setActiveId(cited.id);
+    setStatePage(cited.page);
+  }, [activeHighlightId, currentFileUrl, fileUrl, highlights]);
 
   const handleEvidenceClick = (clauseId: string) => {
     const match = activeHighlights.find((item) => item.clauseId === clauseId);
