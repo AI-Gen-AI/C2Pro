@@ -12,10 +12,12 @@ Regression checks verifying:
 
 from __future__ import annotations
 
+from io import BytesIO
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile
 
 from src.analysis.domain.coherence_derivation import (
     CoherenceDerivationInput,
@@ -34,6 +36,7 @@ from src.coherence.application.dtos.coherence_v2_dtos import (
 from src.documents.application.upload_document_use_case import (
     STRUCTURED_DOCUMENT_TYPES,
     STRUCTURED_DOCX_ERROR,
+    UploadDocumentUseCase,
 )
 from src.documents.domain.clause_revision_binding import (
     clause_revision_id,
@@ -124,17 +127,31 @@ class TestUploadPolicyStructuredDocumentRejection:
         assert DocumentType.BUDGET in STRUCTURED_DOCUMENT_TYPES
         assert DocumentType.SCHEDULE in STRUCTURED_DOCUMENT_TYPES
 
-    def test_upload_policy_rejects_docx_for_structured_types(self) -> None:
-        """Structured types reject .docx with HTTP 400 and structured error detail."""
+    @pytest.mark.asyncio
+    async def test_upload_policy_rejects_docx_for_structured_types(self) -> None:
+        """Invoke the REAL upload application gate; do not manufacture an HTTPException."""
+        project_repo = Mock()
+        use_case = UploadDocumentUseCase(
+            document_repository=Mock(),
+            storage_service=Mock(),
+            project_repository=project_repo,
+        )
         for doc_type in (DocumentType.BUDGET, DocumentType.SCHEDULE):
-            file_extension = ".docx"
-            if file_extension == ".docx" and doc_type in STRUCTURED_DOCUMENT_TYPES:
-                exc = HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=STRUCTURED_DOCX_ERROR,
-                )
-                assert exc.status_code == 400
-                assert exc.detail == "budget/schedule require .xlsx/.bc3"
+            file = UploadFile(filename=f"{doc_type.value}.docx", file=BytesIO(b"test"))
+            try:
+                with pytest.raises(HTTPException) as result:
+                    await use_case.execute(
+                        project_id=uuid4(),
+                        file=file,
+                        document_type=doc_type,
+                        user_id=uuid4(),
+                        tenant_id=uuid4(),
+                    )
+                assert result.value.status_code == 400
+                assert result.value.detail == STRUCTURED_DOCX_ERROR
+            finally:
+                await file.close()
+        project_repo.exists_by_id.assert_not_called()
 
     def test_upload_policy_format_whitelisting(self) -> None:
         """Upload policy allows valid extensions and rejects foreign media types."""
