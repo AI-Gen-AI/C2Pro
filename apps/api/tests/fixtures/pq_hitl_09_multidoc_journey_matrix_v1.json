@@ -20,8 +20,9 @@
       "family_id": "DOC-FAM-02",
       "canonical_name": "budget_boq",
       "document_type": "budget",
-      "supported_extensions": [".xlsx", ".bc3"],
-      "rejected_extensions": [".docx", ".pdf", ".bin"],
+      "supported_extensions": [".xlsx", ".bc3", ".pdf"],
+      "rejected_extensions": [".docx", ".bin"],
+      "format_qualification": "PDF is accepted as a source document by the upload gate; this does not establish structured budget row extraction from PDF.",
       "target_dimensions": ["BUDGET"],
       "locator_type": "SHEET_AND_ROW_ID",
       "sample_source": "Item 03.01 Earthworks excavation m3 1250 45.00 EUR 56250.00 EUR"
