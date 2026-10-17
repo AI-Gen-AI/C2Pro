@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { env } from "@/config/env";
 import { resolveHighlightStyle } from "@/components/features/evidence/highlight-style";
 import { createWatermarkToken } from "@/components/features/evidence/watermark-token";
@@ -58,6 +58,7 @@ export function PdfEvidenceViewer({
   const [isPdfReady, setIsPdfReady] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(activeHighlightId);
   const [statePage, setStatePage] = useState(1);
+  const lastExternalCitationRef = useRef<string | null>(null);
   const [currentFileUrl, setCurrentFileUrl] = useState(fileUrl);
   const [currentHighlights, setCurrentHighlights] =
     useState<PdfHighlight[]>(highlights);
@@ -97,6 +98,7 @@ export function PdfEvidenceViewer({
       setCurrentFileUrl(fileUrl);
       setStatePage(1);
       setActiveId(null);
+      lastExternalCitationRef.current = null;
       setCurrentHighlights(highlights);
     }
   }, [fileUrl, highlights]);
@@ -143,18 +145,20 @@ export function PdfEvidenceViewer({
       ? highlights.find((item) => item.id === activeHighlightId)
       : undefined;
     if (!cited || !Number.isSafeInteger(cited.page) || cited.page < 1) {
-      // From an exact-page citation to document fallback, remove the stale
-      // active source/page. Do not reset manual page navigation when there
-      // was no selected source highlight in the first place.
-      if (activeId !== null) {
+      // Only clear a PRIOR external deep-link selection. Do not clear an
+      // internally clicked clause when the parent has never supplied an
+      // activeHighlightId (S3-01 clickable alert regression).
+      if (lastExternalCitationRef.current !== null) {
+        lastExternalCitationRef.current = null;
         setActiveId(null);
         setStatePage(1);
       }
       return;
     }
+    lastExternalCitationRef.current = cited.id;
     setActiveId(cited.id);
     setStatePage(cited.page);
-  }, [activeHighlightId, activeId, currentFileUrl, fileUrl, highlights]);
+  }, [activeHighlightId, currentFileUrl, fileUrl, highlights]);
 
   const handleEvidenceClick = (clauseId: string) => {
     const match = activeHighlights.find((item) => item.clauseId === clauseId);
