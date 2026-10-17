@@ -24,7 +24,7 @@ from typing import Any, Callable
 import yaml
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-WORK_ID = re.compile(r"C2PRO-DEV-[0-9]{2}")  # same shape as the verifier; always fullmatch
+WORK_ID = re.compile(r"(?:C2PRO-DEV-[0-9]{2}|PC-3|PC-7a)")  # registered DEV or bounded PC, fullmatch
 WORKER_ID = re.compile(r"[a-z0-9_]+")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 ALLOWED_FILE_STATUS = {"added", "modified", "removed", "renamed", "copied", "changed"}
@@ -618,6 +618,7 @@ def build_trusted_context(
     implementation_subject = {
         "repository_id": repository["id"], "pr_number": pr["number"],
         "head_sha": pr["head_sha"], "base_sha": pr["base_sha"],
+        "merge_base_sha": pr["merge_base_sha"],
     }
     if pr.get("head_ref") is not None:
         implementation_subject["head_ref"] = pr["head_ref"]
