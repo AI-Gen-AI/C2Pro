@@ -83,7 +83,7 @@ def _subject(subject: dict[str, Any]) -> tuple[str, str, str]:
     return base, head, head_ref
 
 
-def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -> dict[str, Any] | None:
+def _resolve_dev_work_implementation(repo_root: Path, subject: dict[str, Any]) -> dict[str, Any] | None:
     """Return trusted implementation evidence for one exact PR subject, or None.
 
     None means the protected base has no effective work matching this branch.
@@ -166,6 +166,46 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
         "evidence_ref": (
             f"protected-base:{base_sha}:work:{work['work_id']}:"
             f"baseline:{baseline}:{receipt}:head:{head_sha}"
+        ),
+    }
+
+
+
+def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -> dict[str, Any] | None:
+    """Resolve DEV or PC independently from protected-base records only.
+
+    PC is *not* placed into the DEV hot queue. A Product branch needs its
+    own canonical registered WORK and orchestrator observation on the
+    protected base. Neither record is created by this verifier.
+    """
+    from scripts.development.product_work_identity import (
+        PC_TASKS, ProductWorkError, matching_pc_assignment,
+    )
+
+    base_sha, head_sha, head_ref = _subject(subject)
+    if head_ref not in {rule["branch"] for rule in PC_TASKS.values()}:
+        return _resolve_dev_work_implementation(repo_root, subject)
+
+    merge_base = subject.get("merge_base_sha")
+    if not isinstance(merge_base, str) or not _SHA40.fullmatch(merge_base):
+        raise ProvenanceError("Project Controls PR merge-base is unverified")
+    try:
+        work = matching_pc_assignment(repo_root, head_ref, merge_base)
+    except ProductWorkError as exc:
+        raise ProvenanceError(f"Project Controls WORK provenance invalid: {exc}") from exc
+    if work is None:
+        return None
+    return {
+        "work_id": work["work_id"],
+        "worker_id": work["assigned_to"],
+        "verified": True,
+        # Verified = protected-base control-plane assignment provenance only.
+        # Live VPS presence, independent principal review, CI, merge and Product
+        # acceptance remain separately gated; this does not attest a CLI call.
+        "evidence_ref": (
+            f"protected-base:{base_sha}:product-work:{work['work_id']}:"
+            f"baseline:{work['base_sha']}:"
+            f"{work['workspace_receipt']}:head:{head_sha}"
         ),
     }
 
