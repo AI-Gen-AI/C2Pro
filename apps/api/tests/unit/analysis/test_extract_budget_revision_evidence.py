@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -76,6 +78,29 @@ class _ApprovedScopeService:
         assert node_ids == {WBS_NODE}
         return BASELINE
 
+
+
+
+@pytest.mark.parametrize("include_evidence", [False, True])
+@pytest.mark.asyncio
+async def test_budget_workbooks_are_parsed_off_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, include_evidence: bool,
+) -> None:
+    path = tmp_path / "threaded-budget.xlsx"
+    _budget_xlsx(path)
+    original_open = openpyxl.load_workbook
+    caller = threading.current_thread()
+    calls: list[threading.Thread] = []
+
+    def _record_open(*args: object, **kwargs: object):
+        calls.append(threading.current_thread())
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(openpyxl, "load_workbook", _record_open)
+    result = await ExcelFileParser().parse_budget(path, include_evidence=include_evidence)
+    assert len(result) == 1
+    assert len(calls) == (2 if include_evidence else 1)
+    assert all(worker is not caller for worker in calls)
 
 
 @pytest.mark.asyncio
