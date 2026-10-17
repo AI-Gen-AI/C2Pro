@@ -8,6 +8,9 @@ on:
     paths:
       - "scripts/development/verify_review_receipts.py"
       - "scripts/development/review_attestation/**"
+      - "scripts/development/product_work_identity.py"
+      - ".c2pro/schemas/product-work-envelope.schema.yaml"
+      - "tests/development/test_dev14_pc_product_work.py"
       - "tests/development/test_review_receipts.py"
       - "tests/development/test_review_attestation_adapter.py"
       - "tests/development/test_base_work_implementation_verifier.py"
@@ -48,6 +51,7 @@ jobs:
           PYTHONPATH=. pytest --confcutdir=tests/development \
                  tests/development/test_review_receipts.py \
                  tests/development/test_review_attestation_adapter.py \
-                 tests/development/test_base_work_implementation_verifier.py -q
+                 tests/development/test_base_work_implementation_verifier.py \
+                 tests/development/test_dev14_pc_product_work.py -q
           python scripts/development/validate_c2pro_control.py
           python scripts/development/validate_github_actions_storage_policy.py
