@@ -204,6 +204,24 @@ class ExcelFileParser:
                     f"{', '.join(expected_headers)}. Accepted aliases: {accepted_aliases}"
                 )
 
+            if include_evidence:
+                # A canonical evidence field must have ONE unambiguous source
+                # column. Dict construction would otherwise silently drop one
+                # of two columns (e.g. Total Net / Total Gross).
+                consumed = {
+                    "item", "quantity", "unit price", "total", "unit",
+                    "currency", "tax basis", "wbs node id",
+                }
+                evidence_headers = [h for h in headers if h in consumed]
+                duplicate_headers = {
+                    h for h in evidence_headers if evidence_headers.count(h) > 1
+                }
+                if duplicate_headers:
+                    raise ExcelParsingError(
+                        "Duplicate canonical budget evidence columns: "
+                        + ", ".join(sorted(duplicate_headers))
+                    )
+
             budget_data: BudgetRows = BudgetRows()
             for row_index, row in enumerate(
                 sheet.iter_rows(min_row=header_row_index + 1, values_only=True),
@@ -474,32 +492,57 @@ class ExcelFileParser:
                 return None
         if not isinstance(value, str):
             return None
-        cleaned = re.sub(r"[^0-9,.\\-]", "", value.strip())
-        if cleaned in {"", "-", ".", ","}:
+        source = value.strip()
+        if not source:
             return None
-        if "," in cleaned and "." in cleaned:
-            normalized = (
-                cleaned.replace(".", "").replace(",", ".")
-                if cleaned.rfind(",") > cleaned.rfind(".")
-                else cleaned.replace(",", "")
-            )
-        elif "," in cleaned:
-            left, right = cleaned.rsplit(",", 1)
-            # No source locale is attested. A single comma with three or more
-            # following digits could mean decimal or thousands grouping:
-            # 0,125 must NEVER silently become 125.
-            if cleaned.count(",") == 1 and len(right) >= 3:
-                raise ExcelParsingError(
-                    "Ambiguous single-comma decimal in verified budget evidence"
-                )
-            if cleaned.count(",") > 1:
-                if re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3}){2,}", cleaned) is None:
-                    raise ExcelParsingError("Ambiguous budget number grouping")
-                normalized = cleaned.replace(",", "")
+        # Accept ONLY explicit currency labels, not arbitrary text. Deleting
+        # unsupported characters silently turned "1e3" into "13".
+        source = re.sub(r"\\s*(?:EUR|USD|GBP|€|\\$|£)\\s*$", "", source, flags=re.I).strip()
+        source = re.sub(r"^(?:EUR|USD|GBP|€|\\$|£)\\s*", "", source, flags=re.I).strip()
+        accounting_negative = source.startswith("(") and source.endswith(")")
+        if accounting_negative:
+            source = source[1:-1].strip()
+        if not re.fullmatch(r"-?[0-9]+(?:[.,][0-9]+)*", source):
+            raise ExcelParsingError("Unsupported verified budget numeric syntax")
+        if accounting_negative and source.startswith("-"):
+            raise ExcelParsingError("Ambiguous accounting negative")
+        if "," in source and "." in source:
+            # Both separators require explicit thousands grouping to
+            # disambiguate the decimal separator.
+            if re.fullmatch(r"-?[0-9]{1,3}(?:\\.[0-9]{3})+,[0-9]{1,}", source):
+                normalized = source.replace(".", "").replace(",", ".")
+            elif re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3})+\\.[0-9]{1,}", source):
+                normalized = source.replace(",", "")
             else:
-                normalized = f"{left}.{right}"
+                raise ExcelParsingError("Ambiguous mixed budget numeric separators")
+        elif "," in source:
+            if source.count(",") > 1:
+                if not re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3}){2,}", source):
+                    raise ExcelParsingError("Ambiguous budget number grouping")
+                normalized = source.replace(",", "")
+            else:
+                _, fractional = source.split(",", 1)
+                if len(fractional) >= 3:
+                    raise ExcelParsingError(
+                        "Ambiguous single-comma decimal in verified budget evidence"
+                    )
+                normalized = source.replace(",", ".")
+        elif "." in source:
+            if source.count(".") > 1:
+                if not re.fullmatch(r"-?[0-9]{1,3}(?:\\.[0-9]{3}){2,}", source):
+                    raise ExcelParsingError("Ambiguous budget number grouping")
+                normalized = source.replace(".", "")
+            else:
+                _, fractional = source.split(".", 1)
+                if len(fractional) == 3:
+                    raise ExcelParsingError(
+                        "Ambiguous single-dot decimal in verified budget evidence"
+                    )
+                normalized = source
         else:
-            normalized = cleaned
+            normalized = source
+        if accounting_negative:
+            normalized = "-" + normalized
         try:
             decimal = Decimal(normalized)
             return decimal if decimal.is_finite() else None
