@@ -131,6 +131,12 @@ class ExtractBudgetRevisionEvidenceUseCase:
 def _require_matching_budget_revision(document: Document, revision: DocumentRevision) -> None:
     if document.document_type is not DocumentType.BUDGET:
         raise InvalidBudgetRowEvidenceError("document is not a budget")
+    # Select supported format from the immutable revision, never from mutable
+    # current document metadata after a format-changing reupload.
+    if Path(revision.blob_key).suffix.lower() != ".xlsx":
+        raise InvalidBudgetRowEvidenceError(
+            "selected source revision is not a supported XLSX budget"
+        )
     if (
         document.id != revision.document_id
         or document.tenant_id != revision.tenant_id
