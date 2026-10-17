@@ -50,7 +50,7 @@ def _case(root: Path, task: str = "PC-3", *, status: str = "assigned") -> tuple[
         "worker_id": rule["worker"], "branch": rule["branch"],
         "base_sha": EXEC_BASE, "observed_head_sha": EXEC_BASE,
         "observed_by": "orchestrator", "clean": True,
-        "workspace_path": "/synthetic/isolated/" + task,
+        "workspace_path": rule["workspace_path"],
         "observed_at": "2026-10-17T09:00:00+02:00",
     }
     observation_path = root / receipt
@@ -153,6 +153,9 @@ def test_invalid_pc_work_fails_closed(tmp_path: Path, change: dict) -> None:
     {"observed_by": "codex"},
     {"clean": False},
     {"workspace_path": "../fake"},
+    {"workspace_path": "/srv/aigen/dev/worktrees/c2pro-acc01-pc7a-wbs-ui-20261017"},
+    {"workspace_path": "/srv/aigen/dev/worktrees/c2pro-acc01-pc3-budget-evidence-20261017-copy"},
+    {"workspace_path": "/synthetic/isolated/PC-3"},
     {"workspace_path": "/tmp/../unsafe"},
     {"observed_at": ""},
     {"fabricated_signature": "no"},
@@ -223,6 +226,30 @@ def test_cross_fork_or_missing_pr_identity_is_rejected_before_attestor(
     assert invoked == []
 
 
+
+@pytest.mark.parametrize("task", ["PC-3", "PC-7a"])
+def test_registered_workspace_path_matches_trusted_candidate_but_not_authority(
+    tmp_path: Path, task: str,
+) -> None:
+    """A validated broker lookup must target exactly the registered worktree."""
+    _, receipt_path = _case(tmp_path, task)
+    from scripts.development.product_work_identity import read_pc_workspace_observation
+    observation = read_pc_workspace_observation(tmp_path, task)
+    assert observation["workspace_path"] == PC_TASKS[task]["workspace_path"]
+    assert resolve_base_work_implementation(tmp_path, _subject(task)) is None
+    # Changed paths are rejected before a mock external verifier is ever called.
+    record = yaml.safe_load(receipt_path.read_text(encoding="utf-8"))
+    record["workspace_path"] += "-spoof"
+    _write(receipt_path, record)
+    invoked = []
+    with pytest.raises(ProvenanceError, match="Project Controls WORK provenance invalid"):
+        resolve_base_work_implementation(
+            tmp_path, _subject(task),
+            workspace_attestation_verifier=lambda req: (invoked.append(req), True)[1],
+        )
+    assert not invoked
+
+
 def test_authenticated_subject_passes_complete_pr_identity_to_attestor(
     tmp_path: Path,
 ) -> None:
@@ -240,6 +267,10 @@ def test_authenticated_subject_passes_complete_pr_identity_to_attestor(
     )
     assert received[0]["pr_number"] == 321
     assert received[0]["pr_head_sha"] == HEAD
+    assert received[0]["workspace_path"] == PC_TASKS["PC-3"]["workspace_path"]
+    assert received[0]["workspace_observed_head_sha"] == EXEC_BASE
+    assert received[0]["workspace_observed_clean"] is True
+    assert received[0]["workspace_observed_at"] == "2026-10-17T09:00:00+02:00"
 
 
 def test_unknown_pc_id_never_falls_back_to_dev_work(tmp_path: Path) -> None:
