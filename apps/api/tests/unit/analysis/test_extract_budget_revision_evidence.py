@@ -523,6 +523,60 @@ async def test_budget_numeric_evidence_ignores_text_only_format_section(
     assert result.rows[0].unit_price == Decimal("100")
 
 
+@pytest.mark.parametrize(
+    "number_format",
+    ['"JPY" #,##0.00', 'JPY #,##0.00', '"INR" #,##0.00', '"KRW" #,##0.00'],
+)
+@pytest.mark.asyncio
+async def test_budget_evidence_rejects_unsupported_iso_currency_format(
+    tmp_path: Path, number_format: str,
+) -> None:
+    source = tmp_path / "unsupported-iso-format.xlsx"
+    _budget_xlsx(source)
+    workbook = openpyxl.load_workbook(source)
+    workbook.active.cell(row=2, column=4).number_format = number_format
+    workbook.save(source)
+    workbook.close()
+
+    with pytest.raises(ExcelParsingError, match="Unsupported budget currency format"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=_document(), revision=_revision(source), source_path=source,
+            existing_row_identities=frozenset(),
+        )
+
+
+@pytest.mark.parametrize(
+    "number_format",
+    [
+        '"EUR" #,##0.00',
+        '[RED]"EUR" #,##0.00',
+        '€#,##0.00;€-#,##0.00;€0.00;"JPY"@',
+        '0.00"pcs"',
+    ],
+)
+@pytest.mark.asyncio
+async def test_budget_evidence_keeps_valid_currency_and_format_metadata(
+    tmp_path: Path, number_format: str,
+) -> None:
+    source = tmp_path / "valid-format-labels.xlsx"
+    _budget_xlsx(source)
+    workbook = openpyxl.load_workbook(source)
+    workbook.active.cell(row=2, column=4).number_format = number_format
+    workbook.save(source)
+    workbook.close()
+
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].currency == "EUR"
+
+
 @pytest.mark.asyncio
 async def test_budget_currency_rejects_unsupported_symbol_in_numeric_format_section(
     tmp_path: Path,
