@@ -344,24 +344,25 @@ async def test_budget_evidence_accepts_matching_explicit_currency_markers(
 
 
 @pytest.mark.parametrize(
-    ("column", "number_format"),
+    ("column", "number_format", "currency"),
     [
-        (4, '$#,##0.00'),
-        (5, '[$USD-409]#,##0.00'),
-        (4, '[$€-407]#,##0.00'),
-        (5, '"£"#,##0.00'),
-        (4, '[$JPY-409]#,##0.00'),
+        (4, '$#,##0.00', "EUR"),
+        (5, '[$USD-409]#,##0.00', "EUR"),
+        (4, '[$€-407]#,##0.00', "USD"),
+        (5, '"£"#,##0.00', "EUR"),
+        (4, '[$JPY-409]#,##0.00', "EUR"),
     ],
 )
 @pytest.mark.asyncio
 async def test_budget_evidence_rejects_conflicting_numeric_cell_currency_formats(
-    tmp_path: Path, column: int, number_format: str,
+    tmp_path: Path, column: int, number_format: str, currency: str,
 ) -> None:
     """A numeric Excel value can carry a conflicting currency in its number format."""
     path = tmp_path / "format-currency-conflict.xlsx"
     _budget_xlsx(path)
     workbook = openpyxl.load_workbook(path)
     workbook.active.cell(row=2, column=column).number_format = number_format
+    workbook.active.cell(row=2, column=6).value = currency
     workbook.save(path)
     workbook.close()
     with pytest.raises(ExcelParsingError, match="currency (marker conflicts|format marker)"):
