@@ -19,6 +19,8 @@ DEV_QUEUE = Path(".c2pro/control/work-queue.yaml")
 DELIVERY_SPEC = Path("docs/product/pq-hitl-2026-01-delivery-spec-v1.md")
 DEV_ISSUES = {"C2PRO-DEV-14": 991}
 DEV_SDD = {"C2PRO-DEV-14": "docs/architecture/development/c2pro-dev14-task-first-traceability-sdd-v1.md"}
+# Existing Project Controls issue #672; no new Product WBS or issue is created.
+from scripts.development.product_work_identity import PC_TASKS, PC_SDD, validate_pc_work, ProductWorkError
 DEV14_CHANGED_PATHS = (
     "scripts/development/", "tests/development/", ".c2pro/schemas/",
     ".c2pro/product-work/", "docs/architecture/development/", ".github/workflows/",
@@ -152,6 +154,14 @@ def load_registry(root: Path = ROOT, base_sha: str | None = None) -> dict[str, d
             registry[dev_id] = {"issue": DEV_ISSUES[dev_id],
                                 "source": DEV_QUEUE.as_posix(), "sdd_path": DEV_SDD[dev_id],
                                 "acceptance_ids": ids}
+    # Project Controls is an existing P1 product lane, not a PQ-HITL task.
+    # This registry identifies exactly the two owner-approved ACC-01 slices.
+    for pc_id, rule in PC_TASKS.items():
+        read_approved_source(root, PC_SDD, base_sha)
+        registry[pc_id] = {
+            "issue": rule["parent_issue"], "source": PC_SDD,
+            "sdd_path": PC_SDD, "acceptance_ids": {pc_id},
+        }
     return registry
 
 
@@ -235,6 +245,8 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
             if not acceptance or not set(acceptance).issubset(canonical["acceptance_ids"]):
                 raise TraceError("acceptance_ids not in approved Product task spec")
             if execution_mode == "OWNER_SUPERVISED":
+                if task in PC_TASKS:
+                    raise TraceError("Project Controls implementation requires real AGENT_WORK provenance")
                 # This is a Task-to-PR mapping, NOT a provider call or WORK receipt.
                 # Human review and existing CI remain the execution/merge gates.
                 continue
@@ -243,7 +255,7 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
             if not isinstance(wid, str) or not isinstance(work_ref, str):
                 raise TraceError("WORK envelope missing for implementation")
             work = safe_yaml(read_approved_source(root, work_ref, base_sha))
-            if not work_ref.startswith(".c2pro/product-work/"):
+            if work_ref != f".c2pro/product-work/{task}.yaml":
                 raise TraceError("WORK must be canonical product-work envelope")
             if work.get("schema") != "c2pro-product-work-envelope-v1":
                 raise TraceError("invalid PRODUCT WORK schema")
@@ -253,7 +265,16 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
                 raise TraceError("WORK/Task parent mismatch")
             if not re.fullmatch(r"[0-9a-f]{40}", str(work.get("base_sha", ""))) or not isinstance(work.get("branch"), str):
                 raise TraceError("WORK branch/base SHA missing")
-            if base_sha and work["base_sha"] != base_sha:
+            if task in PC_TASKS:
+                try:
+                    # Validates registered worker, receipt, scope and exact PC identity.
+                    validate_pc_work(root, task, work=work)
+                except ProductWorkError as exc:
+                    raise TraceError(f"Project Controls WORK invalid: {exc}") from exc
+                # Pre-PR protected-base authority must exist, but its embedded
+                # execution baseline is older than the containing base commit.
+                # Exact merge-base binding is enforced by Review Attestation.
+            elif base_sha and work["base_sha"] != base_sha:
                 raise TraceError("WORK base_sha differs from actual PR base")
             if head_branch and work["branch"] != head_branch:
                 raise TraceError("WORK branch differs from actual PR head")
