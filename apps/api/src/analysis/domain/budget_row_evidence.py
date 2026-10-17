@@ -68,6 +68,7 @@ class BudgetRowEvidence:
     tax_basis: str
     wbs_baseline_id: UUID | None
     wbs_node_id: UUID | None
+    numeric_provenance: tuple[tuple[str, str], ...] = ()
 
     @property
     def identity(self) -> tuple[UUID, str]:
@@ -106,6 +107,7 @@ def bind_verified_budget_row(
     approved_wbs_scope: ApprovedWBSScope | None,
     wbs_node_id: UUID | None,
     existing_row_identities: Collection[tuple[UUID, str]],
+    numeric_provenance: tuple[tuple[str, str], ...] = (),
 ) -> BudgetRowEvidence:
     """Build evidence only after source and WBS authority were independently read.
 
@@ -157,6 +159,7 @@ def bind_verified_budget_row(
         tax_basis=tax_basis,
         wbs_baseline_id=baseline_id,
         wbs_node_id=wbs_node_id,
+        numeric_provenance=numeric_provenance,
     )
 
 
