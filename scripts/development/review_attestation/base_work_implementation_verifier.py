@@ -178,9 +178,17 @@ def resolve_base_work_implementation(repo_root: Path, subject: dict[str, Any]) -
     own canonical registered WORK and orchestrator observation on the
     protected base. Neither record is created by this verifier.
     """
-    from scripts.development.product_work_identity import (
-        PC_TASKS, ProductWorkError, matching_pc_assignment,
-    )
+    try:
+        from scripts.development.product_work_identity import (
+            PC_TASKS, ProductWorkError, matching_pc_assignment,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name != "scripts":
+            raise
+        # Loaded by the AUDIT_ONLY CLI through importlib without repo-root PYTHONPATH.
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from product_work_identity import PC_TASKS, ProductWorkError, matching_pc_assignment
 
     base_sha, head_sha, head_ref = _subject(subject)
     if head_ref not in {rule["branch"] for rule in PC_TASKS.values()}:
