@@ -151,6 +151,69 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
     expect(screen.queryByTitle(/pdf document viewer/i)).not.toBeInTheDocument();
   });
 
+  it("refreshes and removes citations when evidence arrives on the same revision URL", async () => {
+    const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+    const fileUrl = "/api/documents/doc-a/download?revision_id=rev-a";
+    const onHighlightClick = vi.fn();
+    const { rerender } = render(
+      <PdfEvidenceViewer
+        fileUrl={fileUrl}
+        highlights={[]}
+        activeHighlightId={null}
+        onHighlightClick={onHighlightClick}
+      />,
+    );
+    await screen.findByTestId("react-pdf-viewer-proxy");
+    expect(screen.queryByTestId("highlight-late")).not.toBeInTheDocument();
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl={fileUrl}
+        highlights={[
+          { id: "late", clauseId: "5.2", page: 4, text: "Delayed verified quote", severity: "high" },
+        ]}
+        activeHighlightId={null}
+        onHighlightClick={onHighlightClick}
+      />,
+    );
+    const late = screen.getByTestId("highlight-late");
+    expect(late).toHaveTextContent("Delayed verified quote");
+    late.click();
+    expect(onHighlightClick).toHaveBeenCalledWith("late");
+    await waitFor(() => {
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "4");
+    });
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl={fileUrl}
+        highlights={[
+          { id: "replacement", clauseId: "6.1", page: 2, text: "Updated source quote", severity: "low" },
+        ]}
+        activeHighlightId="replacement"
+        onHighlightClick={onHighlightClick}
+      />,
+    );
+    expect(screen.queryByTestId("highlight-late")).not.toBeInTheDocument();
+    expect(screen.getByTestId("highlight-replacement")).toHaveTextContent("Updated source quote");
+    await waitFor(() => {
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "2");
+    });
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl={fileUrl}
+        highlights={[]}
+        activeHighlightId={null}
+        onHighlightClick={onHighlightClick}
+      />,
+    );
+    expect(screen.queryByTestId("highlight-replacement")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "1");
+    });
+  });
+
   it("opens a revision-bound clause on its verified PDF page, not page 1", async () => {
     const PdfEvidenceViewer = await loadPdfEvidenceViewer();
     render(
