@@ -703,7 +703,9 @@ def test_1011_only_an_injected_trusted_verifier_can_supply_implementation_eviden
 
     ctx = build_trusted_context(_trivial_snapshot(), implementation_verifier=trusted_verifier)
     assert ctx["implementation_evidence"] == _trusted_evidence()
-    assert seen == [{"repository_id": 1, "pr_number": 7, "head_sha": HEAD, "base_sha": BASE, "merge_base_sha": "c" * 40}]
+    assert seen == [{"repository_id": 1, "repository_full_name": "example-org/synthetic-repo",
+                     "pr_number": 7, "head_sha": HEAD, "base_sha": BASE,
+                     "merge_base_sha": "c" * 40}]
 
 
 @pytest.mark.parametrize("returned", [
@@ -861,3 +863,37 @@ def test_1023_workflow_collects_trusted_head_ref_and_adapter_autowires_base_reso
     assert "head_ref: pr.head.ref" in workflow
     assert "build_base_work_implementation_verifier" in adapter
     assert "authorizes_merge" in adapter
+
+
+def test_dev14_head_repo_trusted_subject_is_exact_and_missing_pair_fails() -> None:
+    snapshot = _trivial_snapshot()
+    snapshot["pr"]["head_ref"] = "feat/acc01-pc3-budget-evidence-20261017"
+    snapshot["pr"]["head_repository_id"] = 1
+    snapshot["pr"]["head_repository_full_name"] = "example-org/synthetic-repo"
+    seen = []
+    build_trusted_context(snapshot, implementation_verifier=lambda s: (seen.append(s), _trusted_evidence())[1])
+    assert seen[0]["repository_id"] == seen[0]["head_repository_id"] == 1
+    assert seen[0]["repository_full_name"] == seen[0]["head_repository_full_name"]
+    assert seen[0]["pr_number"] == 7
+    assert seen[0]["head_sha"] == HEAD
+
+    for key in ("head_repository_id", "head_repository_full_name"):
+        defective = copy.deepcopy(snapshot)
+        del defective["pr"][key]
+        with pytest.raises(EvidenceIncomplete, match="head repository"):
+            build_trusted_context(defective)
+
+    for key, invalid in (("head_repository_id", True), ("head_repository_id", "1"),
+                         ("head_repository_full_name", ""), ("head_repository_full_name", "other")):
+        defective = copy.deepcopy(snapshot)
+        defective["pr"][key] = invalid
+        with pytest.raises(EvidenceIncomplete, match="head repository"):
+            build_trusted_context(defective)
+
+
+def test_dev14_protected_collector_observes_head_repo_identity() -> None:
+    source = _WORKFLOW.read_text(encoding="utf-8")
+    assert "head_repository_id: headRepositoryId" in source
+    assert "head_repository_full_name: headRepositoryFullName" in source
+    assert "finalPr.head.repo.id !== headRepositoryId" in source
+    assert "finalPr.head.repo.full_name !== headRepositoryFullName" in source
