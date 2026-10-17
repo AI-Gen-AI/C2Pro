@@ -51,6 +51,7 @@ jobs:
             validation/product/test_build_p0b_prod_qualification_bundle_paths.py \
             validation/product/test_prod_synthetic_workflow_contract.py \
             validation/product/test_prod_p0c_workflow_contract.py \
-            validation/product/test_verify_prod_deployment_identity.py
+            validation/product/test_verify_prod_deployment_identity.py \
+            validation/product/test_pq_hitl_09_synthetic_journey_harness.py
       - name: Validate committed product qualification evidence bundles
         run: python validation/product/validate_qualification_evidence.py

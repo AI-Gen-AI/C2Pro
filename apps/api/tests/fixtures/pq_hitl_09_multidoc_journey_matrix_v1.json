@@ -1,0 +1,155 @@
+{
+  "schema": "c2pro-pq-hitl-09-multidoc-journey-matrix/v1",
+  "task_id": "PQ-HITL-09",
+  "issue": 945,
+  "programme": "PQ-HITL-2026-01",
+  "board_issue": 1049,
+  "status": "SPECIFICATION_MATRIX_NOT_LIVE_UAT",
+  "document_families": [
+    {
+      "family_id": "DOC-FAM-01",
+      "canonical_name": "contract",
+      "document_type": "contract",
+      "supported_extensions": [".pdf", ".docx"],
+      "rejected_extensions": [".bin", ".exe"],
+      "target_dimensions": ["LEGAL", "SCOPE"],
+      "locator_type": "CHAR_SPAN_AND_CLAUSE",
+      "sample_source": "5.2 Defective work shall be rectified at the Contractor's cost within fourteen (14) days of written notice."
+    },
+    {
+      "family_id": "DOC-FAM-02",
+      "canonical_name": "budget_boq",
+      "document_type": "budget",
+      "supported_extensions": [".xlsx", ".bc3"],
+      "rejected_extensions": [".docx", ".pdf", ".bin"],
+      "target_dimensions": ["BUDGET"],
+      "locator_type": "SHEET_AND_ROW_ID",
+      "sample_source": "Item 03.01 Earthworks excavation m3 1250 45.00 EUR 56250.00 EUR"
+    },
+    {
+      "family_id": "DOC-FAM-03",
+      "canonical_name": "schedule_gantt",
+      "document_type": "schedule",
+      "supported_extensions": [".xlsx", ".bc3"],
+      "rejected_extensions": [".docx", ".bin"],
+      "target_dimensions": ["TIME"],
+      "locator_type": "ACTIVITY_AND_MILESTONE_ID",
+      "sample_source": "ACT-102 Foundation Concrete Pour Duration 14d Predecessor ACT-101"
+    },
+    {
+      "family_id": "DOC-FAM-04",
+      "canonical_name": "technical_spec",
+      "document_type": "technical_spec",
+      "supported_extensions": [".pdf", ".docx"],
+      "rejected_extensions": [".bin"],
+      "target_dimensions": ["TECHNICAL", "QUALITY"],
+      "locator_type": "SECTION_AND_REQUIREMENT_ID",
+      "sample_source": "Section 4.1.2 Concrete compressive strength shall exceed 35 MPa at 28 days."
+    }
+  ],
+  "scenarios": [
+    {
+      "step_id": "S1",
+      "title": "Clerk auth, tenant isolation and project scoping",
+      "description": "Multi-tenant boundary specification: users from Tenant A cannot observe or query Tenant B resources.",
+      "dimension_coverage": "ALL",
+      "invariants": [
+        "TENANT_ISOLATION_404_ON_CROSS_ACCESS",
+        "NO_CREDENTIAL_OR_TOKEN_LEAKAGE"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S2",
+      "title": "4-document concurrent upload and revision persistence",
+      "description": "Ingest Contract, BoQ, Schedule, Technical Spec under pinned revision IDs with strict format enforcement.",
+      "dimension_coverage": ["LEGAL", "SCOPE", "BUDGET", "TIME", "TECHNICAL", "QUALITY"],
+      "invariants": [
+        "CONTENT_ADDRESSED_REVISION_HASH",
+        "REJECT_DOCX_ON_STRUCTURED_BUDGET",
+        "REJECT_DOCX_ON_STRUCTURED_SCHEDULE",
+        "REJECT_UNSUPPORTED_EXTENSIONS_415"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S3",
+      "title": "Health 6-dimension vector, honest nulls and Coherence Score",
+      "description": "Assess evidence coverage for 6 dimensions; unmeasured dimensions remain null/UNKNOWN; calculate 0-100 score only with valid coverage.",
+      "dimension_coverage": ["SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"],
+      "invariants": [
+        "HONEST_NULL_ON_UNMEASURED_DIMENSION",
+        "NO_FABRICATED_GREEN_OR_ZERO",
+        "SCORE_AND_CRITICAL_ALERT_COEXISTENCE"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S4",
+      "title": "Source evidence deep links and WBS linkage",
+      "description": "Trace each finding and alert to verified source revision, span/row/activity, and link to WBS node when applicable.",
+      "dimension_coverage": ["LEGAL", "BUDGET", "TIME", "TECHNICAL"],
+      "invariants": [
+        "NO_FABRICATED_BBOX_OR_PAGE",
+        "FAIL_CLOSED_ON_UNVERIFIED_LOCATOR",
+        "DEGRADE_TO_DOCUMENT_FALLBACK_IF_SPAN_UNAVAILABLE"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S5",
+      "title": "Granular HITL ledger and atomic candidate settlement",
+      "description": "Item-by-item human review preserves immutable candidate; final acceptance is a separate atomic human act.",
+      "dimension_coverage": "ALL",
+      "invariants": [
+        "PROPOSED_NEVER_SILENTLY_TRUSTED",
+        "IMMUTABLE_FINDING_LEDGER_AUDIT",
+        "OPTIMISTIC_CONCURRENCY_FENCE_GUARD"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S6",
+      "title": "P0c What Changed and P0d Current State temporal parity",
+      "description": "Compare Revision A vs Revision B without hallucinating deltas; Health updates only on reliable events.",
+      "dimension_coverage": "ALL",
+      "invariants": [
+        "EXACT_DELTA_A9_B7_NO_HALLUCINATION",
+        "CURRENT_STATE_DERIVED_FROM_ACTIVE_REVISION_ONLY"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S7",
+      "title": "One approved WBS, Budget, Schedule and interdocument coherence",
+      "description": "WBS approved baseline references Budget and Schedule; detect cross-doc discrepancies; NOT_ASSESSED on non-comparable values.",
+      "dimension_coverage": ["SCOPE", "BUDGET", "TIME"],
+      "invariants": [
+        "ONE_CANONICAL_WBS_HIERARCHY",
+        "BUDGET_AND_SCHEDULE_REFERENCE_WBS_NOT_REPLACE_IT",
+        "NOT_ASSESSED_ON_DIFFERENT_CURRENCY_OR_TAX"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    },
+    {
+      "step_id": "S8",
+      "title": "Session persistence, relogin, cross-tenant denial and runtime SHAs",
+      "description": "Ensure state, scores, decisions survive logout/relogin; verify runtime deployment SHAs.",
+      "dimension_coverage": "ALL",
+      "invariants": [
+        "PERSISTENCE_ACROSS_SESSION_CYCLES",
+        "CROSS_TENANT_STRICT_DENIAL",
+        "RUNTIME_SHA_VERIFICATION_FAIL_CLOSED"
+      ],
+      "specification_status": "SPECIFIED_IN_SCHEMA",
+      "live_uat_status": "NOT_VERIFIED"
+    }
+  ]
+}
