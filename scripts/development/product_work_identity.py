@@ -85,7 +85,10 @@ def work_path(task_id: str) -> str:
     return f".c2pro/product-work/{task_id}.yaml"
 
 
-def validate_pc_work(root: Path, task_id: str, *, work: dict[str, Any] | None = None) -> dict[str, Any]:
+def validate_pc_work(
+    root: Path, task_id: str, *, work: dict[str, Any] | None = None,
+    observation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Validate bounded PC identity and workspace observation in the same trusted checkout.
 
     This does not establish that the VPS workspace is *currently* clean/running.
@@ -134,7 +137,12 @@ def validate_pc_work(root: Path, task_id: str, *, work: dict[str, Any] | None = 
     receipt_ref = f".c2pro/product-work/receipts/{task_id}.yaml"
     if work.get("workspace_receipt") != receipt_ref:
         raise ProductWorkError("Project Controls WORK receipt is not a canonical protected-base reference")
-    observation = _read(root, receipt_ref)
+    # PR-head files are never authority: callers collecting a trusted Git base
+    # must supply the observation from that *same base* as the WORK record.
+    if observation is None:
+        observation = _read(root, receipt_ref)
+    if not isinstance(observation, dict):
+        raise ProductWorkError("trusted Product WORK workspace observation is malformed")
     expected = {
         "schema": "c2pro-workspace-observation-v1",
         "work_id": task_id, "task_id": task_id,
