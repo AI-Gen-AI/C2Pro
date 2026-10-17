@@ -7,6 +7,7 @@ using the openpyxl library, encapsulating external library details.
 
 import re
 import unicodedata
+from decimal import Decimal, InvalidOperation
 from numbers import Number
 from pathlib import Path
 from typing import Any, cast
@@ -181,6 +182,15 @@ class ExcelFileParser:
         try:
             workbook = openpyxl.load_workbook(file_path, data_only=True)
             sheet = workbook.active
+            # In evidence mode, inspect the formula-bearing cells separately.
+            # Cached values are NOT proof that Excel recalculated a formula for
+            # these immutable bytes. Never record stale cache as trusted amounts.
+            formula_workbook = (
+                openpyxl.load_workbook(file_path, data_only=False)
+                if include_evidence
+                else None
+            )
+            formula_sheet = formula_workbook.active if formula_workbook else None
 
             header_row_index, headers = self._find_budget_headers(sheet)
             if header_row_index is None:
@@ -206,9 +216,32 @@ class ExcelFileParser:
                 if stated_total is not None:
                     budget_data.stated_total = stated_total
                     continue
-                quantity = self._coerce_budget_number(row_data.get("quantity"))
-                unit_price = self._coerce_budget_number(row_data.get("unit price"))
-                total = self._coerce_budget_number(row_data.get("total"))
+                quantity: float | Decimal | None
+                unit_price: float | Decimal | None
+                total: float | Decimal | None
+                if include_evidence:
+                    # Without a trusted formula evaluator and recalculation receipt,
+                    # even a populated Excel cache cannot attest the source amount.
+                    assert formula_sheet is not None
+                    for column_index, column_name in enumerate(headers, start=1):
+                        if column_name not in ("quantity", "unit price", "total"):
+                            continue
+                        raw_cell = formula_sheet.cell(row=row_index, column=column_index)
+                        if raw_cell.data_type == "f":
+                            raise ExcelParsingError(
+                                "Unverified formula-derived budget amount at "
+                                f"{sheet.title}!{row_index} ({column_name}); "
+                                "verified numeric evidence requires literal cells"
+                            )
+                    # Evidence MUST use original cell values, not the lossy
+                    # float-normalization used by the legacy analysis parser.
+                    quantity = self._coerce_budget_decimal(row_data.get("quantity"))
+                    unit_price = self._coerce_budget_decimal(row_data.get("unit price"))
+                    total = self._coerce_budget_decimal(row_data.get("total"))
+                else:
+                    quantity = self._coerce_budget_number(row_data.get("quantity"))
+                    unit_price = self._coerce_budget_number(row_data.get("unit price"))
+                    total = self._coerce_budget_number(row_data.get("total"))
                 # Skip structural chapter/section subtotal rows. In a hierarchical
                 # budget (presupuesto por capítulos) chapters carry a rolled-up total
                 # with no quantity or unit price; emitting them as line items would
@@ -260,6 +293,9 @@ class ExcelFileParser:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
                 workbook_to_close.close()
+            formula_to_close = locals().get("formula_workbook")
+            if formula_to_close is not None and hasattr(formula_to_close, "close"):
+                formula_to_close.close()
 
     @staticmethod
     def _budget_header_aliases() -> dict[str, set[str]]:
@@ -413,6 +449,48 @@ class ExcelFileParser:
             match = cls._match_canonical(header_norm, aliases)
             canonical.append(match if match is not None else header_norm)
         return canonical
+
+    @staticmethod
+    def _coerce_budget_decimal(value: Any) -> Decimal | None:
+        """Parse a source cell as Decimal without any intermediate float conversion.
+
+        Applies the established ES/EN separator heuristic while retaining all
+        decimal digits from text cells; an XLSX binary-float cell has only the
+        precision already encoded by the original workbook.
+        """
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float, Decimal)):
+            try:
+                decimal = Decimal(str(value))
+                return decimal if decimal.is_finite() else None
+            except InvalidOperation:
+                return None
+        if not isinstance(value, str):
+            return None
+        cleaned = re.sub(r"[^0-9,.\\-]", "", value.strip())
+        if cleaned in {"", "-", ".", ","}:
+            return None
+        if "," in cleaned and "." in cleaned:
+            normalized = (
+                cleaned.replace(".", "").replace(",", ".")
+                if cleaned.rfind(",") > cleaned.rfind(".")
+                else cleaned.replace(",", "")
+            )
+        elif "," in cleaned:
+            left, right = cleaned.rsplit(",", 1)
+            normalized = (
+                f"{left.replace(',', '')}.{right}"
+                if len(right) in {1, 2}
+                else cleaned.replace(",", "")
+            )
+        else:
+            normalized = cleaned
+        try:
+            decimal = Decimal(normalized)
+            return decimal if decimal.is_finite() else None
+        except InvalidOperation:
+            return None
 
     @staticmethod
     def _coerce_budget_number(value: Any) -> float | None:
