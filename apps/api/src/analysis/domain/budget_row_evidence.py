@@ -110,8 +110,9 @@ def bind_verified_budget_row(
     """Build evidence only after source and WBS authority were independently read.
 
     The caller's tenant is checked against the revision rather than trusted as
-    metadata.  ``verified_locators`` must be derived from the parsed immutable
-    document revision; arbitrary client-supplied locators are rejected.
+    metadata. ``verified_locators`` proves only that a locator was observed in
+    the immutable revision; the adapter must separately attest every parsed
+    numeric and monetary value from that same source row.
     """
     if actor_tenant_id != document_revision.tenant_id:
         raise InvalidBudgetRowEvidenceError("tenant does not own document revision")
@@ -178,7 +179,9 @@ def assess_budget_comparability(
             reason="mixed_budget_evidence_lineage",
         )
 
-    semantics = {(row.currency, row.unit, row.tax_basis) for row in rows}
+    # Units govern quantity/unit-price operations, never aggregation of already
+    # established monetary line amounts. No FX or tax conversion is implicit.
+    semantics = {(row.currency, row.tax_basis) for row in rows}
     if len(semantics) != 1:
         return BudgetComparabilityAssessment(
             state=BudgetAssessmentState.NOT_ASSESSED,

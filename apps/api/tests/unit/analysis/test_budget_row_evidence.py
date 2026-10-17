@@ -125,7 +125,6 @@ def test_rejects_wbs_mapping_without_an_approved_baseline() -> None:
     ("field", "replacement"),
     [
         ("currency", "USD"),
-        ("unit", "kg"),
         ("tax_basis", "GROSS"),
     ],
 )
@@ -151,6 +150,23 @@ def test_incompatible_rows_are_not_assessed_as_zero_or_green(
     )
     assert coherence_assessment == {"BUDGET": False}
     assert coherence_reasons == {"BUDGET": "incompatible_budget_row_semantics"}
+
+
+def test_mixed_physical_units_with_same_money_basis_are_ready_only_for_money_comparison() -> None:
+    first = _bind()
+    second = _bind(source_locator="sheet=Budget;row=14", verified_locators=frozenset({LOCATOR, "sheet=Budget;row=14"}), unit="kg")
+    assessment = assess_budget_comparability((first, second))
+    assert assessment.state is BudgetAssessmentState.READY_FOR_COMPARISON
+
+
+@pytest.mark.parametrize("scope", [
+    ApprovedWBSScope(tenant_id=uuid4(), project_id=PROJECT_ID, baseline_id=BASELINE_ID, node_ids=frozenset({WBS_NODE_ID})),
+    ApprovedWBSScope(tenant_id=TENANT_ID, project_id=uuid4(), baseline_id=BASELINE_ID, node_ids=frozenset({WBS_NODE_ID})),
+    ApprovedWBSScope(tenant_id=TENANT_ID, project_id=PROJECT_ID, baseline_id=BASELINE_ID, node_ids=frozenset({uuid4()})),
+])
+def test_rejects_wbs_scope_not_authoritative_for_the_revision(scope: ApprovedWBSScope) -> None:
+    with pytest.raises(UnapprovedWBSMappingError):
+        _bind(approved_wbs_scope=scope)
 
 
 def test_verified_rows_without_a_contractual_comparison_stay_not_assessed() -> None:
