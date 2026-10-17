@@ -271,9 +271,13 @@ def validate_claims(meta: dict[str, Any], registry: dict[str, dict[str, Any]],
             if not re.fullmatch(r"[0-9a-f]{40}", str(work.get("base_sha", ""))) or not isinstance(work.get("branch"), str):
                 raise TraceError("WORK branch/base SHA missing")
             if task in PC_TASKS:
+                # Work and observation MUST be collected from the same immutable
+                # pre-PR base. Reading a receipt from the untrusted PR checkout
+                # would allow its author to substitute a forged observation.
+                observation_ref = f".c2pro/product-work/receipts/{task}.yaml"
+                observation = safe_yaml(read_approved_source(root, observation_ref, base_sha))
                 try:
-                    # Validates registered worker, receipt, scope and exact PC identity.
-                    validate_pc_work(root, task, work=work)
+                    validate_pc_work(root, task, work=work, observation=observation)
                 except ProductWorkError as exc:
                     raise TraceError(f"Project Controls WORK invalid: {exc}") from exc
                 # Pre-PR protected-base authority must exist, but its embedded
