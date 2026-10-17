@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
@@ -12,6 +13,10 @@ import pytest
 
 from src.analysis.application.extract_budget_revision_evidence_use_case import (
     ExtractBudgetRevisionEvidenceUseCase,
+)
+from src.analysis.domain.budget_row_evidence import (
+    InvalidBudgetRowEvidenceError,
+    UnapprovedWBSMappingError,
 )
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
@@ -154,3 +159,57 @@ async def test_redelivery_skips_an_already_recorded_revision_locator(tmp_path: P
 
     assert result.rows == ()
     assert result.assessment_reason == "no_verified_budget_rows"
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("document_type", DocumentType.CONTRACT),
+        ("id", UUID("77777777-7777-7777-7777-777777777777")),
+        ("tenant_id", UUID("88888888-8888-8888-8888-888888888888")),
+        ("project_id", UUID("99999999-9999-9999-9999-999999999999")),
+    ],
+)
+@pytest.mark.asyncio
+async def test_rejects_wrong_budget_document_identity_before_parsing(
+    tmp_path: Path, field_name: str, invalid_value: object
+) -> None:
+    """Cross-document, cross-tenant and cross-project revision substitution fail closed."""
+    source = tmp_path / "budget.xlsx"
+    _budget_xlsx(source)
+    mismatched_document = replace(_document(), **{field_name: invalid_value})
+
+    with pytest.raises(InvalidBudgetRowEvidenceError):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=mismatched_document,
+            revision=_revision(source),
+            source_path=source,
+            existing_row_identities=frozenset(),
+        )
+
+
+class _DeniedApprovedScopeService:
+    async def require(
+        self, *, tenant_id: UUID, project_id: UUID, node_ids: set[UUID]
+    ) -> UUID:
+        """Represent the authoritative WBS gate denying an unapproved node."""
+        raise UnapprovedWBSMappingError("WBS baseline/node not approved")
+
+
+@pytest.mark.asyncio
+async def test_denied_wbs_scope_is_propagated_without_emitting_budget_rows(
+    tmp_path: Path,
+) -> None:
+    """A denied WBS mapping must not be downgraded into an unscoped budget row."""
+    source = tmp_path / "budget.xlsx"
+    _budget_xlsx(source)
+
+    with pytest.raises(UnapprovedWBSMappingError, match="not approved"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_DeniedApprovedScopeService()
+        ).execute(
+            document=_document(),
+            revision=_revision(source),
+            source_path=source,
+            existing_row_identities=frozenset(),
+        )
