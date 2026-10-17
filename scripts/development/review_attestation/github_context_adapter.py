@@ -115,6 +115,13 @@ def _validate_subject(
     head = _sha(pr.get("head_sha"), "pr head")
     base = _sha(pr.get("base_sha"), "pr base")
     _sha(pr.get("merge_base_sha"), "merge base")
+    # Collected by the trusted GitHub API workflow, not inferred from head_ref.
+    if "head_repository_id" in pr or "head_repository_full_name" in pr:
+        if not _is_int(pr.get("head_repository_id")) or pr["head_repository_id"] < 1:
+            _fail("PR head repository ID is invalid")
+        head_repo_name = pr.get("head_repository_full_name")
+        if not isinstance(head_repo_name, str) or "/" not in head_repo_name or head_repo_name != head_repo_name.strip():
+            _fail("PR head repository full_name is invalid")
     head_ref = pr.get("head_ref")
     if head_ref is not None and (
         not isinstance(head_ref, str)
@@ -622,6 +629,9 @@ def build_trusted_context(
     }
     if pr.get("head_ref") is not None:
         implementation_subject["head_ref"] = pr["head_ref"]
+    if "head_repository_id" in pr:
+        implementation_subject["head_repository_id"] = pr["head_repository_id"]
+        implementation_subject["head_repository_full_name"] = pr["head_repository_full_name"]
     implementation = _trusted_implementation_evidence(
         implementation_verifier, implementation_subject
     )
