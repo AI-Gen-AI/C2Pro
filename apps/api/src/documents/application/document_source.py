@@ -55,6 +55,18 @@ def verify_revision_file_hash(file_path: Path, expected_hash: str) -> None:
         raise RevisionSourceError(REVISION_HASH_MISMATCH)
 
 
+def read_verified_revision_file(file_path: Path, expected_hash: str) -> bytes:
+    """Read and hash ONE byte snapshot, never returning unverified file content.
+
+    Call this from a worker thread. Consumers must parse the returned bytes
+    rather than reopening the mutable source path after verification.
+    """
+    source_bytes = file_path.read_bytes()
+    if hashlib.sha256(source_bytes).hexdigest() != expected_hash:
+        raise RevisionSourceError(REVISION_HASH_MISMATCH)
+    return source_bytes
+
+
 async def fetch_source_file(
     *,
     storage: IStorageService,
@@ -74,6 +86,7 @@ __all__ = [
     "REVISION_NOT_FOUND",
     "RevisionSourceError",
     "fetch_source_file",
+    "read_verified_revision_file",
     "resolve_source_revision",
     "verify_revision_file_hash",
 ]
