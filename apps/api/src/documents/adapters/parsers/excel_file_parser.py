@@ -6,9 +6,9 @@ using the openpyxl library, encapsulating external library details.
 """
 
 import asyncio
-from io import BytesIO
 import re
 import unicodedata
+from io import BytesIO
 from numbers import Number
 from pathlib import Path
 from typing import Any, cast
