@@ -184,6 +184,7 @@ def resolve_base_work_implementation(
     try:
         from scripts.development.product_work_identity import (
             PC_TASKS, ProductWorkError, matching_pc_assignment,
+            read_pc_workspace_observation, validate_pc_work,
         )
     except ModuleNotFoundError as exc:
         if exc.name != "scripts":
@@ -191,7 +192,10 @@ def resolve_base_work_implementation(
         # Loaded by the AUDIT_ONLY CLI through importlib without repo-root PYTHONPATH.
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-        from product_work_identity import PC_TASKS, ProductWorkError, matching_pc_assignment
+        from product_work_identity import (
+            PC_TASKS, ProductWorkError, matching_pc_assignment,
+            read_pc_workspace_observation, validate_pc_work,
+        )
 
     base_sha, head_sha, head_ref = _subject(subject)
     if head_ref not in {rule["branch"] for rule in PC_TASKS.values()}:
@@ -228,6 +232,14 @@ def resolve_base_work_implementation(
     if workspace_attestation_verifier is None:
         return None
     try:
+        # These are UNTRUSTED claims from the immutable protected-base record,
+        # not issuer authentication. Re-check against the verified WORK before
+        # giving the candidate fields to a separately trusted attestor.
+        observation = read_pc_workspace_observation(repo_root, work["work_id"])
+        validate_pc_work(repo_root, work["work_id"], work=work, observation=observation)
+    except ProductWorkError as exc:
+        raise ProvenanceError("Project Controls workspace observation invalid") from exc
+    try:
         result = workspace_attestation_verifier({
             "repository_id": base_repo_id,
             "repository_full_name": base_repo_name,
@@ -240,6 +252,10 @@ def resolve_base_work_implementation(
             "base_sha": work["base_sha"],
             "branch": work["branch"],
             "workspace_receipt": work["workspace_receipt"],
+            "workspace_path": observation["workspace_path"],
+            "workspace_observed_at": observation["observed_at"],
+            "workspace_observed_head_sha": observation["observed_head_sha"],
+            "workspace_observed_clean": observation["clean"],
             "pr_base_sha": base_sha,
             "pr_head_sha": head_sha,
             "pr_merge_base_sha": merge_base,
