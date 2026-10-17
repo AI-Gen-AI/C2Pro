@@ -64,7 +64,7 @@ class ExtractBudgetRevisionEvidenceUseCase:
     ) -> BudgetRevisionEvidenceResult:
         _require_matching_budget_revision(document, revision)
         verify_revision_file_hash(source_path, revision.blob_hash)
-        parsed_rows = await self.parser.parse_budget(source_path)
+        parsed_rows = await self.parser.parse_budget(source_path, include_evidence=True)
         verified_locators = {str(row["source_locator"]) for row in parsed_rows}
         wbs_by_locator = {
             str(row["source_locator"]): UUID(str(row["wbs_node_id"]))
