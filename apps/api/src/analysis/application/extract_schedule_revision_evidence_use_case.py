@@ -9,7 +9,6 @@ baseline by the shared transactional WBS authority gate.
 from __future__ import annotations
 
 import asyncio
-
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
