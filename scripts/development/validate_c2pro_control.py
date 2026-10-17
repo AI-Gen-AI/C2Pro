@@ -267,7 +267,8 @@ def validate_product_envelopes() -> None:
             raise ValueError(f"{path.name}: noncanonical Product WORK path/identity")
         if task in PC_TASKS:
             try:
-                validate_pc_work(ROOT, task, work=work)
+                # Re-read protected record with duplicate-key rejection.
+                validate_pc_work(ROOT, task)
             except ProductWorkError as exc:
                 raise ValueError(f"{path.name}: {exc}") from exc
             continue
