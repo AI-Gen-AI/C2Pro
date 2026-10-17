@@ -1,10 +1,12 @@
 # PR-B #1011. AUDIT_ONLY trusted review-attestation context collection.
+# TEMPORARY PAUSE (DEV-14/#991, 2026-10-17): suppress automatic PR runs while
+# the verified Product WORK attestor is unavailable. Not a required status check.
+# Restore pull_request_target below when authentic provenance can be collected.
 # This workflow intentionally never checks out or executes pull-request head code.
 name: C2Pro Review Attestation Audit
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,7 +22,7 @@ concurrency:
 jobs:
   audit:
     name: Review Attestation Audit
-    if: github.event.pull_request.base.repo.full_name == github.repository
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.base.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
