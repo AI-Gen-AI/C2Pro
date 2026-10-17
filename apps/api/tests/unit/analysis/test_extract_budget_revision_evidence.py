@@ -215,6 +215,50 @@ async def test_rejects_unverified_formula_cells_even_if_workbook_is_hash_verifie
         )
 
 
+@pytest.mark.parametrize(
+    "formula_column", [1, 3, 6, 7, 8]
+)
+@pytest.mark.asyncio
+async def test_rejects_cached_formulas_in_any_evidence_bearing_budget_field(
+    tmp_path: Path, formula_column: int,
+) -> None:
+    """Hash-pinned but stale formula cells cannot attest WBS, amount or labels."""
+    path = tmp_path / "formula-all-fields.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    workbook.active.cell(row=2, column=formula_column).value = '="stale"'
+    workbook.save(path)
+    workbook.close()
+    with pytest.raises(ExcelParsingError, match="Unverified formula-derived budget evidence"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=_document(), revision=_revision(path), source_path=path,
+            existing_row_identities=frozenset(),
+        )
+
+
+@pytest.mark.parametrize("amount", ["0,125", "1,234", "25,1234"])
+@pytest.mark.asyncio
+async def test_rejects_ambiguous_single_comma_decimal_source_text(
+    tmp_path: Path, amount: str,
+) -> None:
+    """Unknown locale must not silently magnify financial values by 1000x."""
+    path = tmp_path / "budget-ambiguous.xlsx"
+    _budget_xlsx(path)
+    workbook = openpyxl.load_workbook(path)
+    workbook.active.cell(row=2, column=2).value = amount
+    workbook.save(path)
+    workbook.close()
+    with pytest.raises(ExcelParsingError, match="Ambiguous single-comma decimal"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=_document(), revision=_revision(path), source_path=path,
+            existing_row_identities=frozenset(),
+        )
+
+
 @pytest.mark.asyncio
 async def test_redelivery_of_retired_wbs_row_skips_new_authority_check(
     tmp_path: Path,
