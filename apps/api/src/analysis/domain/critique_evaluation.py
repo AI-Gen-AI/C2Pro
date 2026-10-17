@@ -7,6 +7,7 @@ Refers to TASK-IMPL-010.3.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from src.core.json_types import JsonDict
@@ -16,7 +17,7 @@ from src.core.json_types import JsonDict
 class CritiqueEvaluationResult:
     """Immutable result of critique evaluation."""
 
-    confidence: float
+    confidence: float | None
     retry_count: int
     human_approval_required: bool
     critique_notes: str
@@ -36,28 +37,31 @@ class CritiqueEvaluationService:
         self.confidence_threshold = confidence_threshold
         self.max_retries = max_retries
 
-    def calculate_confidence(self, items: list[JsonDict]) -> float:
-        """Calculate average confidence from extracted items.
+    def calculate_confidence(self, items: list[JsonDict]) -> float | None:
+        """Return an aggregate only if every item has a valid measured confidence.
 
-        Returns 0.0 for empty list, 0.9 for items without confidence field.
+        An incomplete, empty, non-finite or out-of-range set is UNKNOWN.
+        Never infer 90% from missing evidence or average the assessed subset.
         """
         if not items:
-            return 0.0
-        confidences = [
-            confidence
-            for item in items
-            if isinstance(confidence := item.get("confidence"), int | float)
-        ]
-        if not confidences:
-            return 0.9
-        return float(sum(confidences) / len(confidences))
+            return None
+        confidences: list[float] = []
+        for item in items:
+            raw = item.get("confidence")
+            if isinstance(raw, bool) or not isinstance(raw, int | float):
+                return None
+            value = float(raw)
+            if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                return None
+            confidences.append(value)
+        return sum(confidences) / len(confidences)
 
     def evaluate_critique(
         self,
         *,
         critique_status: str,
         critique_notes: str,
-        confidence: float,
+        confidence: float | None,
         retry_count: int,
         skip_hitl: bool = False,
     ) -> CritiqueEvaluationResult:
@@ -79,7 +83,7 @@ class CritiqueEvaluationService:
         # OK clears notes
 
         human_approval_required = False if skip_hitl else (
-            confidence < self.confidence_threshold
+            confidence is None or confidence < self.confidence_threshold
             or (normalized_status == "RETRY" and new_retry_count >= self.max_retries)
         )
 

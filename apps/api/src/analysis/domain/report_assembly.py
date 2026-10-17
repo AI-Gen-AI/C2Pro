@@ -26,7 +26,7 @@ class ReportInput:
     bom_items: list[dict[str, Any]]
     coherence_score: int | float | None
     coherence_score_version: str | None
-    confidence_score: float
+    confidence_score: float | None
     citation_validation_passed: bool
     pii_redactions: list[dict[str, Any]]
     raci_matrix: list[dict[str, Any]]
