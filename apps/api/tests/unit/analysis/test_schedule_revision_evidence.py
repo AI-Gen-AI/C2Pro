@@ -124,7 +124,14 @@ async def test_schedule_legacy_parser_unchanged_and_source_evidence_opt_in(tmp_p
     assert evidence[0]["source_activity_id"] == "ACT-01"
     assert evidence[0]["wbs_node_id"] == str(NODE)
     assert evidence[2]["source_milestone_id"] == "M-1"
-    assert {key: evidence[0][key] for key in legacy[0]} == legacy[0]
+    # Legacy accidentally resolves the WBS Node ID column as generic "wbs"
+    # when evidence aliases are off. Evidence mode must retain the explicit
+    # source WBS *code* separately from the approved node UUID.
+    assert legacy[0]["wbs"] == str(NODE)
+    assert evidence[0]["wbs"] == "1.2"
+    assert {key: evidence[0][key] for key in legacy[0] if key != "wbs"} == {
+        key: value for key, value in legacy[0].items() if key != "wbs"
+    }
 
 
 @pytest.mark.asyncio
