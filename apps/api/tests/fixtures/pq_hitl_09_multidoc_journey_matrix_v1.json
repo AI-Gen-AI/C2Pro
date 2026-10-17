@@ -31,8 +31,9 @@
       "family_id": "DOC-FAM-03",
       "canonical_name": "schedule_gantt",
       "document_type": "schedule",
-      "supported_extensions": [".xlsx", ".bc3"],
+      "supported_extensions": [".xlsx", ".bc3", ".pdf"],
       "rejected_extensions": [".docx", ".bin"],
+      "format_qualification": "PDF is accepted as a schedule source by the upload gate, not as a verified structured Gantt activity extraction.",
       "target_dimensions": ["TIME"],
       "locator_type": "ACTIVITY_AND_MILESTONE_ID",
       "sample_source": "ACT-102 Foundation Concrete Pour Duration 14d Predecessor ACT-101"
