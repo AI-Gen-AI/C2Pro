@@ -136,6 +136,34 @@ async def test_schedule_evidence_rejects_missing_formula_workbook(
     assert opened_formula_view
 
 
+@pytest.mark.asyncio
+async def test_schedule_revision_hash_validation_runs_off_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hashing still verifies immutable bytes, but cannot block other coroutines."""
+    from src.analysis.application import extract_schedule_revision_evidence_use_case as module
+
+    source = tmp_path / "hash-worker-schedule.xlsx"
+    _xlsx(source)
+    original_verify = module.verify_revision_file_hash
+    hashing_threads: list[threading.Thread] = []
+    caller_thread = threading.current_thread()
+
+    def _record_hash(source_path: Path, blob_hash: str) -> None:
+        hashing_threads.append(threading.current_thread())
+        original_verify(source_path, blob_hash)
+
+    monkeypatch.setattr(module, "verify_revision_file_hash", _record_hash)
+    result = await ExtractScheduleRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_Approved(),
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+    )
+    assert len(result.rows) == 3
+    assert len(hashing_threads) == 1
+    assert hashing_threads[0] is not caller_thread
+
+
 @pytest.mark.parametrize("include_evidence", [False, True])
 @pytest.mark.asyncio
 async def test_schedule_openpyxl_lifecycle_runs_off_event_loop(
