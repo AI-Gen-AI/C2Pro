@@ -76,6 +76,31 @@ class _ApprovedScopeService:
         return BASELINE
 
 
+
+@pytest.mark.asyncio
+async def test_budget_parser_legacy_shape_is_stable_with_opt_in_source_evidence(
+    tmp_path: Path,
+) -> None:
+    """Existing analysis/BOM readers retain their original budget row fields."""
+    source = tmp_path / "budget.xlsx"
+    _budget_xlsx(source)
+    parser = ExcelFileParser()
+
+    [legacy] = await parser.parse_budget(source)
+    [evidenced] = await parser.parse_budget(source, include_evidence=True)
+
+    assert set(legacy) == {
+        "item", "quantity", "unit_price", "total", "unit", "category"
+    }
+    assert evidenced["source_locator"] == "Budget 2026!2"
+    assert evidenced["numeric_provenance"] == {
+        "quantity": "12", "unit price": "100", "total": "1200"
+    }
+    assert evidenced["currency"] == "EUR"
+    assert evidenced["tax_basis"] == "NET"
+    assert evidenced["wbs_node_id"] == str(WBS_NODE)
+    assert {key: evidenced[key] for key in legacy} == legacy
+
 @pytest.mark.asyncio
 async def test_extracts_a_real_xlsx_row_with_locator_provenance_and_approved_wbs(
     tmp_path: Path,
