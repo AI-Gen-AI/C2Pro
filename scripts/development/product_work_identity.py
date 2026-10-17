@@ -21,12 +21,21 @@ PC_TASKS = {
         "worker": "codex",
         "branch": "feat/acc01-pc3-budget-evidence-20261017",
         "scope_prefix": "apps/api/",
+        "allowed_scope": (
+            "apps/api/src/analysis/**", "apps/api/src/coherence/**",
+            "apps/api/tests/unit/analysis/**", "apps/api/tests/unit/coherence/**",
+        ),
     },
     "PC-7a": {
         "parent_issue": 672,
         "worker": "claude_code",
         "branch": "feat/acc01-pc7a-wbs-ui-20261017",
         "scope_prefix": "apps/web/",
+        "allowed_scope": (
+            "apps/web/hooks/useWBSTree.ts",
+            "apps/web/hooks/useWBSTree.test.ts",
+            "apps/web/app/(app)/projects/[id]/wbs/**",
+        ),
     },
 }
 PC_SDD = "docs/product/01-project-controls-priority-1-addendum.md"
@@ -105,8 +114,8 @@ def validate_pc_work(root: Path, task_id: str, *, work: dict[str, Any] | None = 
         raise ProductWorkError("Project Controls WORK branch/base mismatch")
     scope, forbidden = work.get("scope"), work.get("forbidden_paths")
     if (not isinstance(scope, list) or not scope
-            or any(not isinstance(p, str) or not p.startswith(rule["scope_prefix"])
-                   or ".." in Path(p).parts or p.startswith("/") for p in scope)
+            or any(not isinstance(p, str) or p not in rule["allowed_scope"]
+                   for p in scope)
             or not isinstance(forbidden, list)
             or any(not isinstance(p, str) or ".." in Path(p).parts for p in forbidden)):
         raise ProductWorkError("Project Controls WORK scope malformed or outside owned lane")
