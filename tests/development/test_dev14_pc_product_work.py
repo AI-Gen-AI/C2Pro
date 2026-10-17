@@ -258,3 +258,63 @@ def test_project_controls_registry_does_not_create_new_wbs_or_dev_task() -> None
         assert registry[task]["acceptance_ids"] == {task}
         assert registry[task]["sdd_path"] == PC_SDD
     assert "C2PRO-DEV-14" in registry
+
+
+def test_task_trace_consumes_receipt_from_protected_base_not_pr_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A PR author cannot supply a good receipt by editing the checkout."""
+    from scripts.development import validate_task_trace as trace
+
+    work_file, receipt_file = _case(tmp_path)
+    base_work = work_file.read_text(encoding="utf-8")
+    base_receipt = receipt_file.read_text(encoding="utf-8")
+    trusted_receipt_ref = ".c2pro/product-work/receipts/PC-3.yaml"
+    sources = {
+        PC_SDD: (tmp_path / PC_SDD).read_text(encoding="utf-8"),
+        work_path("PC-3"): base_work,
+        trusted_receipt_ref: base_receipt,
+    }
+
+    def from_approved_base(root: Path, rel: str, sha: str | None) -> str:
+        assert root == tmp_path and sha == PROTECTED_BASE
+        if rel not in sources:
+            raise trace.TraceError(f"source absent from approved base: {rel}")
+        return sources[rel]
+
+    monkeypatch.setattr(trace, "read_approved_source", from_approved_base)
+    claim = {
+        "task_id": "PC-3", "parent_issue": 672, "sdd_path": PC_SDD,
+        "acceptance_ids": ["PC-3"], "execution_work_id": "PC-3",
+        "work_envelope_path": work_path("PC-3"),
+        "workspace_evidence_ref": trusted_receipt_ref,
+    }
+    metadata = {
+        "schema": "c2pro-pr-task-trace-v1", "primary_task": "PC-3",
+        "task_claims": [claim], "effect_claim": "IMPLEMENTATION_ONLY",
+        "execution_mode": "AGENT_WORK",
+    }
+    registry = {
+        "PC-3": {"issue": 672, "sdd_path": PC_SDD, "acceptance_ids": {"PC-3"}}
+    }
+    changed = ["apps/api/src/analysis/budget.py"]
+    branch = PC_TASKS["PC-3"]["branch"]
+
+    # An author-modified HEAD observation MUST NOT influence the trusted base.
+    forged_head = yaml.safe_load(base_receipt)
+    forged_head["worker_id"] = "claude_code"
+    _write(receipt_file, forged_head)
+    trace.validate_claims(metadata, registry, tmp_path, PROTECTED_BASE, changed, branch)
+
+    # Conversely, a forged observation in the trusted lookup must fail closed,
+    # even while the local HEAD observation would appear valid.
+    _write(receipt_file, yaml.safe_load(base_receipt))
+    forged_base = dict(yaml.safe_load(base_receipt), worker_id="claude_code")
+    sources[trusted_receipt_ref] = yaml.safe_dump(forged_base)
+    with pytest.raises(trace.TraceError, match="Project Controls WORK invalid"):
+        trace.validate_claims(metadata, registry, tmp_path, PROTECTED_BASE, changed, branch)
+
+    # No protected-base receipt: never fallback to the PR checkout.
+    del sources[trusted_receipt_ref]
+    with pytest.raises(trace.TraceError, match="source absent from approved base"):
+        trace.validate_claims(metadata, registry, tmp_path, PROTECTED_BASE, changed, branch)
