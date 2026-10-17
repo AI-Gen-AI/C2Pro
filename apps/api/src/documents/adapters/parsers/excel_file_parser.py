@@ -5,6 +5,7 @@ This adapter provides functionality to parse schedule and budget data from Excel
 using the openpyxl library, encapsulating external library details.
 """
 
+import asyncio
 import re
 import unicodedata
 from numbers import Number
@@ -69,6 +70,14 @@ class ExcelFileParser:
     """
 
     async def parse_schedule(
+        self, file_path: Path, *, include_evidence: bool = False
+    ) -> list[dict[str, Any]]:
+        """Run the synchronous XLSX lifecycle off the asyncio event loop."""
+        return await asyncio.to_thread(
+            self._parse_schedule_sync, file_path, include_evidence=include_evidence
+        )
+
+    def _parse_schedule_sync(
         self, file_path: Path, *, include_evidence: bool = False
     ) -> list[dict[str, Any]]:
         """
