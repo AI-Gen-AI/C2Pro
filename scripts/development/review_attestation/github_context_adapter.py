@@ -623,7 +623,8 @@ def build_trusted_context(
     if claimed is not None and not isinstance(claimed, dict):
         _fail("implementation_evidence must be a mapping or null")
     implementation_subject = {
-        "repository_id": repository["id"], "pr_number": pr["number"],
+        "repository_id": repository["id"], "repository_full_name": repository["full_name"],
+        "pr_number": pr["number"],
         "head_sha": pr["head_sha"], "base_sha": pr["base_sha"],
         "merge_base_sha": pr["merge_base_sha"],
     }
