@@ -156,7 +156,9 @@ class ExcelFileParser:
 
         return None, []
 
-    async def parse_budget(self, file_path: Path) -> list[dict[str, Any]]:
+    async def parse_budget(
+        self, file_path: Path, *, include_evidence: bool = False
+    ) -> list[dict[str, Any]]:
         """
         Parses budget data from a standard Excel file format.
 
@@ -165,6 +167,10 @@ class ExcelFileParser:
 
         Args:
             file_path: The path to the Excel file (.xlsx).
+            include_evidence: Include revision-local source locators and raw numeric
+                cell provenance for the verified BudgetRowEvidence extraction case.
+                False preserves the original budget parser row schema for existing
+                consumers; this flag does not itself verify source revision hashes.
 
         Returns:
             A list of dictionaries, where each dictionary represents a budget line item.
@@ -216,26 +222,30 @@ class ExcelFileParser:
                     if unit_raw is not None and str(unit_raw).strip()
                     else None
                 )
-                budget_data.append(
-                    {
-                        "item": row_data.get("item"),
-                        "quantity": quantity,
-                        "unit_price": unit_price,
-                        "total": total,
-                        "unit": unit_value,
-                        "category": self._infer_budget_category(
-                            row_data.get("item"), unit_value
-                        ),
-                        "currency": row_data.get("currency"),
-                        "tax_basis": row_data.get("tax basis"),
-                        "wbs_node_id": row_data.get("wbs node id"),
-                        "source_locator": f"{sheet.title}!{row_index}",
-                        "numeric_provenance": {
-                            field: repr(row_data.get(field))
-                            for field in ("quantity", "unit price", "total")
-                        },
-                    }
-                )
+                budget_row = {
+                    "item": row_data.get("item"),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "total": total,
+                    "unit": unit_value,
+                    "category": self._infer_budget_category(
+                        row_data.get("item"), unit_value
+                    ),
+                }
+                if include_evidence:
+                    budget_row.update(
+                        {
+                            "currency": row_data.get("currency"),
+                            "tax_basis": row_data.get("tax basis"),
+                            "wbs_node_id": row_data.get("wbs node id"),
+                            "source_locator": f"{sheet.title}!{row_index}",
+                            "numeric_provenance": {
+                                field: repr(row_data.get(field))
+                                for field in ("quantity", "unit price", "total")
+                            },
+                        }
+                    )
+                budget_data.append(budget_row)
             return budget_data
 
         except ExcelParsingError:
