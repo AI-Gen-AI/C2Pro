@@ -534,10 +534,12 @@ class ExcelFileParser:
 
     @staticmethod
     def _budget_numeric_format_sections(value: Any, number_format: str) -> str:
-        """Discard only Excel's fourth, text-only format section for numeric cells.
+        """Select the applicable numeric Excel format section by value sign.
 
-        Split at actual section delimiters, not semicolons inside quoted
-        literals, escaped sequences or bracket directives.
+        Excel permits [positive;negative;zero;text] sections (or shorter
+        variants). Currency markers from an inapplicable numeric section must
+        not be used to attest or reject the actual displayed denomination.
+        Split only at real semicolons, not within quotes, escapes or brackets.
         """
         if not isinstance(value, (int, float, Decimal)):
             return number_format
@@ -568,7 +570,13 @@ class ExcelFileParser:
             else:
                 current.append(char)
         sections.append("".join(current))
-        return ";".join(sections[:3]) if len(sections) == 4 else number_format
+        if len(sections) > 4:
+            return number_format
+        if value < 0 and len(sections) >= 2:
+            return sections[1]
+        if value == 0 and len(sections) >= 3:
+            return sections[2]
+        return sections[0]
 
     @staticmethod
     def _require_budget_currency_consistency(
