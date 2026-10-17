@@ -227,6 +227,50 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
     });
   });
 
+  it("clears a previously cited page when the same revision falls back to the document", async () => {
+    const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+    const highlights = [
+      { id: "verified-clause", clauseId: "5.2", page: 3, text: "source", severity: "high" as const },
+    ];
+    const { rerender } = render(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={highlights}
+        activeHighlightId="verified-clause"
+        onHighlightClick={() => {}}
+      />,
+    );
+    await screen.findByTestId("react-pdf-viewer-proxy");
+    await waitFor(() =>
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "3"),
+    );
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={highlights}
+        activeHighlightId={null}
+        onHighlightClick={() => {}}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "1");
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-active-highlight", "none");
+    });
+
+    rerender(
+      <PdfEvidenceViewer
+        fileUrl="/api/documents/doc-a/download?revision_id=rev-a"
+        highlights={highlights}
+        activeHighlightId="unknown-clause"
+        onHighlightClick={() => {}}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "1"),
+    );
+  });
+
   it("never guesses a PDF page for unknown or document-fallback source links", async () => {
     const PdfEvidenceViewer = await loadPdfEvidenceViewer();
     const { rerender } = render(
