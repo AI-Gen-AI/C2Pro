@@ -206,7 +206,7 @@ async def test_rejects_unverified_formula_cells_even_if_workbook_is_hash_verifie
     sheet.cell(row=2, column=4 if formula_column == "unit price" else 5).value = "=B2*4"
     workbook.save(source)
 
-    with pytest.raises(ExcelParsingError, match="Unverified formula-derived budget amount"):
+    with pytest.raises(ExcelParsingError, match="Unverified formula-derived budget evidence"):
         await ExtractBudgetRevisionEvidenceUseCase(
             parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
         ).execute(
