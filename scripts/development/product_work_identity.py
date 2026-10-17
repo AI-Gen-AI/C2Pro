@@ -34,7 +34,7 @@ PC_TASKS = {
         "allowed_scope": (
             "apps/web/hooks/useWBSTree.ts",
             "apps/web/hooks/useWBSTree.test.ts",
-            "apps/web/app/(app)/projects/[id]/wbs/**",
+            "apps/web/app/(app)/projects/[[]id[]]/wbs/**",
         ),
     },
 }
