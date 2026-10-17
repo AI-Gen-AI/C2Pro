@@ -6,6 +6,7 @@ using the openpyxl library, encapsulating external library details.
 """
 
 import asyncio
+from io import BytesIO
 import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
@@ -159,15 +160,18 @@ class ExcelFileParser:
         return None, []
 
     async def parse_budget(
-        self, file_path: Path, *, include_evidence: bool = False
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
     ) -> list[dict[str, Any]]:
         """Run synchronous openpyxl parsing and resource cleanup off the event loop."""
         return await asyncio.to_thread(
-            self._parse_budget_sync, file_path, include_evidence=include_evidence
+            self._parse_budget_sync, file_path, include_evidence=include_evidence,
+            source_bytes=source_bytes,
         )
 
     def _parse_budget_sync(
-        self, file_path: Path, *, include_evidence: bool = False
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
     ) -> list[dict[str, Any]]:
         """
         Parses budget data from a standard Excel file format.
@@ -189,13 +193,21 @@ class ExcelFileParser:
             ExcelParsingError: If the file cannot be opened or does not match the expected format.
         """
         try:
-            workbook = openpyxl.load_workbook(file_path, data_only=True)
+            if source_bytes is not None and not include_evidence:
+                raise ExcelParsingError("Source byte snapshot requires evidence mode")
+            workbook = openpyxl.load_workbook(
+                BytesIO(source_bytes) if source_bytes is not None else file_path,
+                data_only=True,
+            )
             sheet = workbook.active
             # In evidence mode, inspect the formula-bearing cells separately.
             # Cached values are NOT proof that Excel recalculated a formula for
             # these immutable bytes. Never record stale cache as trusted amounts.
             formula_workbook = (
-                openpyxl.load_workbook(file_path, data_only=False)
+                openpyxl.load_workbook(
+                    BytesIO(source_bytes) if source_bytes is not None else file_path,
+                    data_only=False,
+                )
                 if include_evidence
                 else None
             )
@@ -222,6 +234,18 @@ class ExcelFileParser:
                     "Missing one or more required headers: "
                     f"{', '.join(expected_headers)}. Accepted aliases: {accepted_aliases}"
                 )
+
+            if include_evidence:
+                # Cached formula-derived header labels must never determine
+                # evidence column authority, even if all row cells are literal.
+                for column_index in range(1, len(headers) + 1):
+                    if evidence_formula_sheet.cell(
+                        row=header_row_index, column=column_index
+                    ).data_type == "f":
+                        raise ExcelParsingError(
+                            "Unverified formula-derived budget header at "
+                            f"{sheet.title}!{header_row_index} column {column_index}"
+                        )
 
             if include_evidence:
                 # A canonical evidence field must have ONE unambiguous source
