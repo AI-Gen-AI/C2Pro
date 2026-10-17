@@ -703,7 +703,7 @@ def test_1011_only_an_injected_trusted_verifier_can_supply_implementation_eviden
 
     ctx = build_trusted_context(_trivial_snapshot(), implementation_verifier=trusted_verifier)
     assert ctx["implementation_evidence"] == _trusted_evidence()
-    assert seen == [{"repository_id": 1, "pr_number": 7, "head_sha": HEAD, "base_sha": BASE}]
+    assert seen == [{"repository_id": 1, "pr_number": 7, "head_sha": HEAD, "base_sha": BASE, "merge_base_sha": "c" * 40}]
 
 
 @pytest.mark.parametrize("returned", [
