@@ -224,12 +224,17 @@ export function PdfEvidenceViewer({
         />
       ) : null}
 
-      <button type="button" onClick={() => handleEvidenceClick("c-101")}>
-        View Evidence c-101
-      </button>
-      <button type="button" onClick={handleSwitchDocument}>
-        Document B
-      </button>
+      {/* These are synthetic walkthrough actions, NEVER real document evidence. */}
+      {isDemo ? (
+        <>
+          <button type="button" onClick={() => handleEvidenceClick("c-101")}>
+            View Evidence c-101
+          </button>
+          <button type="button" onClick={handleSwitchDocument}>
+            Document B
+          </button>
+        </>
+      ) : null}
 
       <div data-testid="pdf-page-state">Page: {statePage}</div>
       <div data-testid="highlight-list">
