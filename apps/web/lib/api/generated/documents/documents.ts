@@ -64,6 +64,7 @@ import type {
   DocumentRelationshipExplanationResponse,
   DocumentResponse,
   DocumentUploadResponse,
+  DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   GetDocumentEndpointApiV1DocumentsDocumentIdGetParams,
   GetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGetParams,
   HTTPValidationError,
@@ -71,6 +72,7 @@ import type {
   RagAnswerResponse,
   RagQuestionRequest,
   ReprocessDocumentEndpointApiV1ProjectsProjectIdDocumentsDocumentIdReprocessPostParams,
+  RevisionStatus,
 } from "../models";
 
 import { orvalApiClient } from "../../client";
@@ -938,6 +940,248 @@ export const useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete = <
   );
 };
 /**
+ * @summary Inspect a document's immutable revision trust states
+ */
+export const listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet =
+  (documentId: string, signal?: AbortSignal) => {
+    return orvalApiClient<RevisionStatus[]>({
+      url: `/api/v1/documents/${documentId}/revisions`,
+      method: "GET",
+      signal,
+    });
+  };
+
+export const getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryKey =
+  (documentId: string) => {
+    return [`/api/v1/documents/${documentId}/revisions`] as const;
+  };
+
+export const getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryKey(
+        documentId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+        >
+      >
+    > = ({ signal }) =>
+      listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet(
+        documentId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: documentId !== null && documentId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type ListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+      >
+    >
+  >;
+export type ListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryError =
+  void | HTTPValidationError;
+
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Inspect a document's immutable revision trust states
+ */
+
+export function useListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListDocumentRevisionStatusesEndpointApiV1DocumentsDocumentIdRevisionsGetQueryOptions(
+      documentId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+/**
  * @summary Get persisted evidence history for a document
  */
 export const getDocumentHistoryEndpointApiV1DocumentsDocumentIdHistoryGet = (
@@ -1692,18 +1936,26 @@ export function useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGe
  */
 export const downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet = (
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   signal?: AbortSignal,
 ) => {
   return orvalApiClient<unknown>({
     url: `/api/v1/documents/${documentId}/download`,
     method: "GET",
+    params,
     signal,
   });
 };
 
 export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey =
-  (documentId: string) => {
-    return [`/api/v1/documents/${documentId}/download`] as const;
+  (
+    documentId: string,
+    params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
+  ) => {
+    return [
+      `/api/v1/documents/${documentId}/download`,
+      ...(params ? [params] : []),
+    ] as const;
   };
 
 export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions =
@@ -1716,6 +1968,7 @@ export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQuery
     TError = void | HTTPValidationError,
   >(
     documentId: string,
+    params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
     options?: {
       query?: Partial<
         UseQueryOptions<
@@ -1736,6 +1989,7 @@ export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQuery
       queryOptions?.queryKey ??
       getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryKey(
         documentId,
+        params,
       );
 
     const queryFn: QueryFunction<
@@ -1747,6 +2001,7 @@ export const getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQuery
     > = ({ signal }) =>
       downloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet(
         documentId,
+        params,
         signal,
       );
 
@@ -1786,6 +2041,9 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params:
+    | undefined
+    | DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options: {
     query: Partial<
       UseQueryOptions<
@@ -1828,6 +2086,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -1870,6 +2129,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -1900,6 +2160,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   TError = void | HTTPValidationError,
 >(
   documentId: string,
+  params?: DownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetParams,
   options?: {
     query?: Partial<
       UseQueryOptions<
@@ -1920,6 +2181,7 @@ export function useDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGet<
   const queryOptions =
     getDownloadDocumentEndpointApiV1DocumentsDocumentIdDownloadGetQueryOptions(
       documentId,
+      params,
       options,
     );
 

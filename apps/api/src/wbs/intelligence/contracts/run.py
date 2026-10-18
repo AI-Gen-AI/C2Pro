@@ -6,7 +6,9 @@ binds everything that determines a result and nothing volatile: the same request
 completed run of the same tenant; any different evidence, profile, model, template or target is a
 new run; a human "re-run" adds a nonce because model output is not deterministic. A DETERMINISTIC
 run has no model and no prompt template: its key binds ``model: null`` and the engine version
-(``orchestration_version``) instead -- model provenance is never fabricated.
+(``orchestration_version``) instead -- model provenance is never fabricated. An AI run that executes
+under configurable limits also binds its versioned ``execution_config_digest`` (different limits =
+a new run); the field is absent from the key body when not given, so existing keys never move.
 
 Run STATUS (persistence lifecycle) and run OUTCOME (the result vocabulary) are kept separate.
 """
@@ -124,6 +126,7 @@ def idempotency_key(
     proposal_contract_version: str = PROPOSAL_CONTRACT_VERSION,
     qualification_vocab_version: str = QUALIFICATION_VOCAB_VERSION,
     rerun_nonce: str | None = None,
+    execution_config_digest: str | None = None,
 ) -> str:
     """The tenant-scoped key of one deterministic run request (no timestamps, no volatile input)."""
     templates = sorted(
@@ -145,6 +148,8 @@ def idempotency_key(
         "orchestration_version": orchestration_version,
         "rerun_nonce": rerun_nonce,
     }
+    if execution_config_digest is not None:
+        body["execution_config_digest"] = execution_config_digest
     return "sha256:" + hashlib.sha256(canonical_json(body)).hexdigest()
 
 

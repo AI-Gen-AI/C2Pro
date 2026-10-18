@@ -78,4 +78,7 @@ properties:
         uniqueItems: true
         items: {type: string, minLength: 1}
       selected: {type: [string, 'null']}
+  workspace_receipt:
+    type: [string, 'null']
+    minLength: 1
   timeout_resource_policy: {type: string, minLength: 1}

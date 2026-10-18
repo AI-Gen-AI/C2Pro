@@ -23,6 +23,8 @@ SCHEMAS = ROOT / ".c2pro" / "schemas"
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 OPEN_STATES = {"ready", "in_progress", "blocked", "awaiting_review", "awaiting_owner"}
+ACTIVE_QUEUE_STATES = {"in_progress", "awaiting_review", "awaiting_owner"}
+CONTROL_STATUSES = {"transition", "active", "reconciled_idle", "suspended"}
 CANONICAL_ROLES = {
     "orchestrator",
     "implementation_lead",
@@ -48,6 +50,7 @@ REQUIRED_SCHEMAS = {
     "current.schema.yaml": "c2pro-current-v1",
     "work-queue.schema.yaml": "c2pro-work-queue-v1",
     "work-envelope.schema.yaml": "c2pro-work-envelope-v1",
+    "product-work-envelope.schema.yaml": "c2pro-product-work-envelope-v1",
     "handoff.schema.yaml": "c2pro-handoff-v1",
     "evidence-reference.schema.yaml": "c2pro-evidence-reference-v1",
     "role.schema.yaml": "c2pro-role-v1",
@@ -100,6 +103,23 @@ def validate_current() -> dict[str, Any]:
     current = load_yaml(CONTROL / "current.yaml")
     require(current.get("schema") == "c2pro-current-v1", "current.yaml: schema mismatch")
     require(current.get("schema_version") == 1, "current.yaml: schema_version must be 1")
+    status = current.get("control_status")
+    require(status in CONTROL_STATUSES, "current.yaml: invalid control_status")
+    active_work = current.get("active_work")
+    require(
+        isinstance(active_work, list) and all(isinstance(work_id, str) and work_id for work_id in active_work),
+        "current.yaml: active_work must be a list of work ids",
+    )
+    active_campaign = current.get("active_campaign")
+    if status == "reconciled_idle":
+        require(active_work == [], "current.yaml: reconciled_idle cannot have active_work")
+        require(active_campaign is None, "current.yaml: reconciled_idle cannot have active_campaign")
+    elif status == "active":
+        require(bool(active_work), "current.yaml: active status requires active_work")
+        require(
+            isinstance(active_campaign, str) and bool(active_campaign.strip()),
+            "current.yaml: active status requires active_campaign",
+        )
     sha = current.get("baseline", {}).get("main_sha")
     require(isinstance(sha, str) and bool(SHA_RE.fullmatch(sha)), "current.yaml: baseline.main_sha must be an exact SHA")
     require(current.get("history", {}).get("completed_work_in_hot_state") is False, "current.yaml: completed history is forbidden in hot state")
@@ -125,6 +145,7 @@ def validate_queue(current: dict[str, Any]) -> dict[str, Any]:
     items = queue.get("items")
     require(isinstance(items, list), "work-queue.yaml: items must be a list")
     ids: set[str] = set()
+    statuses: dict[str, str] = {}
     for item in items:
         require(isinstance(item, dict), "work-queue.yaml: every item must be a mapping")
         work_id = item.get("work_id")
@@ -132,12 +153,22 @@ def validate_queue(current: dict[str, Any]) -> dict[str, Any]:
         require(isinstance(work_id, str) and work_id not in ids, f"work-queue.yaml: duplicate/invalid work_id {work_id!r}")
         ids.add(work_id)
         require(status in OPEN_STATES, f"work-queue.yaml: historical/completed status forbidden for {work_id}: {status!r}")
+        statuses[work_id] = status
         require(item.get("role") in CANONICAL_ROLES, f"work-queue.yaml: unknown canonical role for {work_id}")
         ref = item.get("work_ref")
         if ref is not None:
             require((ROOT / ref).is_file(), f"work-queue.yaml: missing work_ref for {work_id}: {ref}")
     active = current.get("active_work", [])
     require(set(active).issubset(ids), "current.yaml: active_work must exist in work queue")
+    if current.get("control_status") == "reconciled_idle":
+        hot = sorted(work_id for work_id, status in statuses.items() if status in ACTIVE_QUEUE_STATES)
+        require(not hot, f"work-queue.yaml: reconciled_idle cannot keep effective active work: {hot}")
+    elif current.get("control_status") == "active":
+        for work_id in active:
+            require(
+                statuses.get(work_id) in ACTIVE_QUEUE_STATES,
+                f"work-queue.yaml: active work {work_id} must be in an effective queue state",
+            )
     return queue
 
 
@@ -177,12 +208,59 @@ def validate_work_envelope(current: dict[str, Any], queue: dict[str, Any]) -> No
         require(set(principals).issubset(PRINCIPAL_WORKERS), f"{ref}: unknown principal worker eligibility")
         require(set(subordinates).issubset(SUBORDINATE_WORKERS), f"{ref}: unknown subordinate worker eligibility")
         selected = selection.get("selected")
+        workspace_receipt = work.get("workspace_receipt")
         if selected is not None:
             require(selected in principals or selected in subordinates, f"{ref}: selected worker must be eligible")
+            require(
+                isinstance(workspace_receipt, str)
+                and bool(workspace_receipt.strip())
+                and workspace_receipt == workspace_receipt.strip()
+                and "\n" not in workspace_receipt
+                and "\r" not in workspace_receipt,
+                f"{ref}: selected worker requires a valid workspace_receipt",
+            )
+        elif workspace_receipt is not None:
+            require(False, f"{ref}: workspace_receipt requires an explicit selected worker")
+        if work["work_id"] in current.get("active_work", []):
+            require(selected is not None, f"{ref}: active work requires a selected worker")
         require(work.get("review_policy") in {"optional", "independent_principal", "principal_and_challenger"}, f"{ref}: invalid review policy")
         require(bool(work.get("scope")), f"{ref}: scope must not be empty")
         require(bool(work.get("acceptance_criteria")), f"{ref}: acceptance criteria must not be empty")
         require(bool(work.get("required_tests")), f"{ref}: required tests must not be empty")
+
+
+def validate_product_envelopes() -> None:
+    """Validate optional Product WORK receipts without activating execution authority.
+
+    A DEV-queue entry never stands in for a Product task. Product assignments
+    must be explicit and grounded in the existing Product MASTER and delivery SDD.
+    """
+    import jsonschema
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location("c2pro_task_trace", ROOT / "scripts" / "development" / "validate_task_trace.py")
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    load_registry = module.load_registry
+
+    registry = load_registry(ROOT)
+    schema = load_yaml(SCHEMAS / "product-work-envelope.schema.yaml")
+    for path in sorted((ROOT / ".c2pro" / "product-work").glob("*.yaml")):
+        work = load_yaml(path)
+        try:
+            jsonschema.Draft202012Validator(schema).validate(work)
+        except jsonschema.ValidationError as exc:
+            raise ValueError(f"{path.name}: Product WORK schema invalid: {exc.message}") from exc
+        task = work["task_id"]
+        if task not in registry or not task.startswith("PQ-HITL-"):
+            raise ValueError(f"{path.name}: unknown Product Task")
+        if work["work_id"] != task or work["parent_issue"] != registry[task]["issue"]:
+            raise ValueError(f"{path.name}: wrong Product Task/issue")
+        if not set(work["acceptance_ids"]).issubset(registry[task]["acceptance_ids"]):
+            raise ValueError(f"{path.name}: acceptance not in canonical delivery specification")
+        if work["status"] == "assigned" and (not work["assigned_to"] or not work["workspace_receipt"]):
+            raise ValueError(f"{path.name}: assigned Product WORK lacks worker/workspace evidence")
 
 
 def validate_role_profiles() -> dict[str, dict[str, Any]]:
@@ -377,6 +455,7 @@ def validate() -> int:
     current = validate_current()
     queue = validate_queue(current)
     validate_work_envelope(current, queue)
+    validate_product_envelopes()
     profiles = validate_role_profiles()
     routing = validate_routing(profiles)
     validate_review_policy()

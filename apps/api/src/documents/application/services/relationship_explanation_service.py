@@ -120,8 +120,9 @@ class EvidenceRelationshipExplanationService:
         )
 
         summary = (
-            f"This document connects {len(document.clauses)} extracted clauses "
-            f"to {len(alerts)} active alerts."
+            f"This evidence view connects {len(document.clauses)} currently visible clauses "
+            f"to {len(alerts)} linked alerts. "
+            "Other document revisions and pending-review extractions may exist."
         )
         strongest_cluster = (
             f"The strongest relationship cluster centers on {(strongest_clause.title or strongest_clause.clause_code).lower()}."
@@ -129,10 +130,13 @@ class EvidenceRelationshipExplanationService:
             else "No clause cluster is available yet."
         )
         review_priority = (
-            f"Review priority is elevated because {critical_count} alert"
-            f"{'' if critical_count == 1 else 's'} are critical."
+            f"Linked alert priority is elevated: {critical_count} critical alert"
+            f"{'' if critical_count == 1 else 's'} present."
             if critical_count > 0
-            else "Review priority is moderate because there are no critical alerts in the current graph."
+            else (
+                "Review priority not assessed. No critical linked alerts is not "
+                "evidence that this contract has low or moderate risk."
+            )
         )
         latest_signal = (
             f"Most recent signal: {latest_alert.title.lower()}."

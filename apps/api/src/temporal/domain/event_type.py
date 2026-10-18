@@ -37,6 +37,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # a terminal state; a human decided one item (an applied item names the DRAFT it went into).
         "wbs.intelligence.run_completed",
         "wbs.intelligence.item_decided",
+        # PC-2b.4 (#923): model-call usage of one intelligence run, attributed to tenant, project and
+        # run -- counts only, never prompts, evidence or output (offline runs are marked synthetic).
+        "wbs.intelligence.run_usage",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

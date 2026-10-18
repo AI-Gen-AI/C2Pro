@@ -1,0 +1,309 @@
+# PR-B #1011. AUDIT_ONLY trusted review-attestation context collection.
+# TEMPORARY PAUSE (DEV-14/#991, 2026-10-17): suppress automatic PR runs while
+# the verified Product WORK attestor is unavailable. Not a required status check.
+# Restore pull_request_target below when authentic provenance can be collected.
+# This workflow intentionally never checks out or executes pull-request head code.
+name: C2Pro Review Attestation Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+  actions: read
+  attestations: read
+
+concurrency:
+  group: review-attestation-audit-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Review Attestation Audit
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.base.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted base only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup trusted Python environment
+        uses: ./.github/actions/setup-python-backend
+        with:
+          install-system-deps: "false"
+
+      - name: Collect exhaustive GitHub evidence from API
+        id: collect
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const eventPr = context.payload.pull_request;
+            if (!eventPr) throw new Error('pull_request_target payload missing pull request');
+            if (eventPr.base.repo.full_name !== process.env.EXPECTED_REPOSITORY) {
+              throw new Error('base repository mismatch');
+            }
+            if (String(eventPr.number) !== String(process.env.EXPECTED_PR_NUMBER)) {
+              throw new Error('pull request number mismatch');
+            }
+            if (eventPr.head.sha !== process.env.EXPECTED_HEAD_SHA || eventPr.base.sha !== process.env.TRUSTED_BASE_SHA) {
+              throw new Error('event SHA binding mismatch');
+            }
+
+            const repoInfo = await github.rest.repos.get({owner, repo});
+            const freshPrResponse = await github.rest.pulls.get({
+              owner, repo, pull_number: eventPr.number
+            });
+            const pr = freshPrResponse.data;
+            if (pr.head.sha !== process.env.EXPECTED_HEAD_SHA || pr.base.sha !== process.env.TRUSTED_BASE_SHA) {
+              throw new Error('pull request moved before trusted collection');
+            }
+            if (pr.base.repo.full_name !== repoInfo.data.full_name || pr.base.repo.id !== repoInfo.data.id) {
+              throw new Error('fresh pull request base repository mismatch');
+            }
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: pr.base.sha + '...' + pr.head.sha
+            });
+            const mergeBase = comparison.data.merge_base_commit && comparison.data.merge_base_commit.sha;
+            if (!mergeBase) throw new Error('merge base unavailable');
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            if (files.length !== pr.changed_files) {
+              throw new Error('changed-file pagination incomplete');
+            }
+
+            const treeResponse = await github.rest.git.getTree({
+              owner, repo, tree_sha: pr.head.sha, recursive: '1'
+            });
+            if (treeResponse.data.truncated) {
+              throw new Error('head tree truncated; modes/blob identities incomplete');
+            }
+            const tree = new Map();
+            for (const item of treeResponse.data.tree || []) {
+              if (item.path) tree.set(item.path, item);
+            }
+            const changedFiles = files.map((f) => {
+              if (f.status === 'removed') {
+                return {
+                  path: f.filename,
+                  previous_path: f.previous_filename || null,
+                  status: f.status,
+                  mode: null,
+                  blob_sha: null
+                };
+              }
+              const item = tree.get(f.filename);
+              if (!item || !item.sha || !item.mode) {
+                throw new Error('head tree missing changed path ' + f.filename);
+              }
+              return {
+                path: f.filename,
+                previous_path: f.previous_filename || null,
+                status: f.status,
+                mode: item.mode,
+                blob_sha: item.sha
+              };
+            });
+
+            const allReviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            const exactHeadReviews = allReviews.filter((r) => r.commit_id === pr.head.sha);
+            const t1 = [];
+            const receipts = [];
+            const receiptJsonRe = /<!--\s*c2pro-review-receipt-json\s*([\s\S]*?)-->/m;
+            const digestRe = /<!--\s*c2pro-review-receipt-sha256:([0-9a-f]{64})\s*-->/m;
+            for (const r of exactHeadReviews) {
+              const app = r.performed_via_github_app;
+              if (!app) continue;
+              const body = r.body || '';
+              const receiptMatch = body.match(receiptJsonRe);
+              const digestMatch = body.match(digestRe);
+              if (!receiptMatch && !digestMatch) continue;
+              if (!receiptMatch || !digestMatch) {
+                throw new Error('App review has partial C2Pro receipt markers: ' + r.id);
+              }
+              let receipt;
+              try { receipt = JSON.parse(receiptMatch[1]); }
+              catch (_) { throw new Error('App review receipt JSON is invalid: ' + r.id); }
+              const row = {
+                source: 'T1',
+                review_id: r.id,
+                user_id: r.user && r.user.id,
+                app_id: app.id,
+                commit_id: r.commit_id,
+                state: r.state,
+                pr_number: pr.number,
+                repository_id: repoInfo.data.id,
+                receipt,
+                body_receipt_digest: 'sha256:' + digestMatch[1],
+                identity_verified: Number.isInteger(r.user && r.user.id) && Number.isInteger(app.id)
+              };
+              t1.push(row);
+              receipts.push(receipt);
+            }
+
+            const rawChecks = await github.paginate(github.rest.checks.listForRef, {
+              owner, repo, ref: pr.head.sha, per_page: 100, filter: 'all'
+            });
+            const checkRunInventory = rawChecks.map((c) => ({
+              id: c.id,
+              name: c.name,
+              app_id: c.app && c.app.id,
+              head_sha: c.head_sha,
+              conclusion: c.conclusion
+            }));
+            const checks = [];
+            const workflowBlobCache = new Map();
+            for (const c of rawChecks) {
+              if (!c.app || c.app.id !== 15368) continue;
+              const match = String(c.details_url || '').match(/\/actions\/runs\/(\d+)/);
+              if (!match) throw new Error('GitHub Actions check lacks run identity: ' + c.id);
+              const run = await github.rest.actions.getWorkflowRun({
+                owner, repo, run_id: Number(match[1])
+              });
+              if (run.data.head_sha !== pr.head.sha) {
+                throw new Error('workflow run head does not match PR head: ' + c.id);
+              }
+              if (!c.check_suite || run.data.check_suite_id !== c.check_suite.id) {
+                throw new Error('workflow run/check-suite mismatch: ' + c.id);
+              }
+              if (!run.data.repository || run.data.repository.id !== repoInfo.data.id) {
+                throw new Error('workflow run repository mismatch: ' + c.id);
+              }
+              if (run.data.head_repository && run.data.head_repository.id !== repoInfo.data.id) {
+                throw new Error('workflow run head repository mismatch: ' + c.id);
+              }
+              const workflowPath = run.data.path;
+              if (!workflowPath) throw new Error('workflow path unavailable for check: ' + c.id);
+              const cacheKey = workflowPath + '@' + run.data.head_sha;
+              let workflowSha = workflowBlobCache.get(cacheKey);
+              if (!workflowSha) {
+                const wf = await github.rest.repos.getContent({
+                  owner, repo, path: workflowPath, ref: run.data.head_sha
+                });
+                if (Array.isArray(wf.data) || !wf.data.sha) {
+                  throw new Error('executed workflow blob unavailable: ' + workflowPath);
+                }
+                workflowSha = wf.data.sha;
+                workflowBlobCache.set(cacheKey, workflowSha);
+              }
+              checks.push({
+                id: c.id,
+                name: c.name,
+                app_id: c.app.id,
+                head_sha: c.head_sha,
+                conclusion: c.conclusion,
+                workflow_path: workflowPath,
+                workflow_sha: workflowSha
+              });
+            }
+
+            const ledger = JSON.parse(fs.readFileSync(
+              'scripts/development/review_attestation/consumed-receipts.audit.json', 'utf8'
+            ));
+            if (ledger._mode !== 'AUDIT_ONLY' || typeof ledger.consumed !== 'object') {
+              throw new Error('audit consumption ledger malformed');
+            }
+
+            const finalPrResponse = await github.rest.pulls.get({
+              owner, repo, pull_number: pr.number
+            });
+            const finalPr = finalPrResponse.data;
+            if (
+              finalPr.head.sha !== pr.head.sha ||
+              finalPr.base.sha !== pr.base.sha ||
+              finalPr.changed_files !== pr.changed_files
+            ) {
+              throw new Error('pull request moved during trusted collection');
+            }
+
+            const snapshot = {
+              collection: {
+                trusted_base_sha: pr.base.sha,
+                collector_source: 'protected_base',
+                pr_head_executed: false,
+                expected_repository: process.env.EXPECTED_REPOSITORY,
+                expected_pr_number: Number(process.env.EXPECTED_PR_NUMBER),
+                expected_head_sha: process.env.EXPECTED_HEAD_SHA,
+                changed_files_complete: true,
+                reviews_complete: true,
+                check_runs_complete: true,
+                consumed_complete: false,
+                attestations_complete: true
+              },
+              repository: {id: repoInfo.data.id, full_name: repoInfo.data.full_name},
+              pr: {
+                number: pr.number,
+                author_user_id: pr.user.id,
+                head_ref: pr.head.ref,
+                head_sha: pr.head.sha,
+                base_sha: pr.base.sha,
+                merge_base_sha: mergeBase,
+                changed_files_count: pr.changed_files
+              },
+              changed_files: changedFiles,
+              effective_risk_class: 'high_blast_radius',
+              implementation_evidence: null,
+              reviews: t1,
+              t2_reviews: [],
+              attestations: {},
+              check_run_inventory: checkRunInventory,
+              check_runs: checks,
+              consumed: ledger.consumed,
+              review_inventory: exactHeadReviews.map((r) => ({
+                review_id: r.id,
+                user_id: r.user && r.user.id,
+                app_id: r.performed_via_github_app && r.performed_via_github_app.id,
+                commit_id: r.commit_id,
+                state: r.state
+              }))
+            };
+            fs.writeFileSync('/tmp/c2pro-review-snapshot.json', JSON.stringify(snapshot, null, 2));
+            fs.writeFileSync('/tmp/c2pro-review-receipts.json', JSON.stringify(receipts, null, 2));
+            core.setOutput('snapshot_digest', require('crypto').createHash('sha256')
+              .update(JSON.stringify(snapshot)).digest('hex'));
+
+      - name: Run AUDIT_ONLY verifier
+        shell: bash
+        run: |
+          python scripts/development/review_attestation/github_context_adapter.py \
+            --snapshot /tmp/c2pro-review-snapshot.json \
+            --receipts /tmp/c2pro-review-receipts.json \
+            --policy scripts/development/review_attestation/audit-policy.yaml \
+            --output /tmp/c2pro-review-audit.json
+          python - <<'PY'
+          import json
+          report = json.load(open("/tmp/c2pro-review-audit.json", encoding="utf-8"))
+          assert report["mode"] == "AUDIT_ONLY"
+          assert report["authorizes_merge"] is False
+          # An audit observation only: this job succeeding means the audit ran, never that a review approved.
+          print("AUTHORIZES_MERGE=false")
+          print("C2PRO_REVIEW_ATTESTATION_AUDIT_OBSERVATION="
+                + ("EVIDENCE_WOULD_SATISFY_GATE" if report["gate_satisfied"] else "EVIDENCE_INSUFFICIENT"))
+          print("IMPLEMENTATION_EVIDENCE_SOURCE=" + report["implementation_evidence_source"])
+          for violation in report["violations"]:
+              print(f"{violation['code']}: {violation['detail']}")
+          PY
+
+      - name: Assert workflow did not obtain write authority
+        shell: bash
+        run: |
+          test "${{ github.event_name }}" = "pull_request_target"
+          test "${{ github.event.pull_request.base.sha }}" = "$(git rev-parse HEAD)"
+          git diff --exit-code

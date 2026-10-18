@@ -177,6 +177,35 @@ describe('ReviewItemCard - graph-gated HITL review', () => {
   });
 });
 
+
+describe('ReviewItemCard - progressive disclosure of unverified AI critique', () => {
+  it('groups numbered critique notes without inventing proof or individual approval', async () => {
+    const notes = [
+      '1. MISSING CLAUSE REFERENCES: Clause 5.2 needs traceability.',
+      '2. DEFECT RECTIFICATION: The source states Contractor cost within fourteen (14) days.',
+    ].join('\n\n');
+    render(
+      <ReviewItemCard
+        item={{
+          ...graphGatedItem,
+          item_data: { ...graphGatedItem.item_data, critique_notes: notes },
+        }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/2 unverified AI critique observations/i)).toBeInTheDocument();
+    expect(screen.getByText(/MISSING CLAUSE REFERENCES/i)).toBeInTheDocument();
+    expect(screen.getByText(/DEFECT RECTIFICATION/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Verified findings$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Approve full analysis/i)).toBeInTheDocument();
+    expect(screen.getByText(/original source evidence/i)).toBeInTheDocument();
+  });
+});
+
 // C2PRO #714: decisions are offered only for the exact bound candidate, and an
 // ESCALATED review is still awaiting a (senior) human decision.
 describe('ReviewItemCard #714 decision readiness', () => {
@@ -229,4 +258,70 @@ describe('ReviewItemCard #714 decision readiness', () => {
     expect(screen.getByTestId('approve-doc-456')).toBeEnabled();
     expect(screen.getByTestId('reject-doc-456')).toBeEnabled();
   });
+});
+
+describe('PQ-HITL-06 review item source navigation', () => {
+  it('renders independent source links only when document, revision and clause IDs exist', () => {
+    render(
+      <ReviewItemCard
+        item={{ ...item, item_data: {
+          ...item.item_data,
+          source_references: [
+            { document_id: 'doc-123', revision_id: 'rev-a', clause_id: 'clause-52', clause_code: '5.2' },
+            { document_id: 'doc-123', revision_id: 'rev-a', clause_id: 'clause-13', clause_code: '1.3' },
+          ],
+        } }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Inspect cited clause §5.2' })).toHaveAttribute(
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-52',
+    );
+    expect(screen.getByRole('link', { name: 'Inspect cited clause §1.3' })).toHaveAttribute(
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-13',
+    );
+    expect(screen.getByRole('link', { name: 'View evidence' })).toBeInTheDocument();
+  });
+
+  it('preserves three distinct multi-document §6.1/§6.3/§6.4 source addresses', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    render(
+      <ReviewItemCard
+        item={{ ...item, item_data: {
+          ...item.item_data,
+          critique_notes: 'An unverified critique of §6.1 and §6.4.',
+          source_references: [
+            { document_id: 'doc-a', revision_id: 'rev-a', clause_id: 'a-61', clause_code: '6.1' },
+            { document_id: 'doc-a', revision_id: 'rev-a', clause_id: 'a-63', clause_code: '6.3' },
+            { document_id: 'doc-b', revision_id: 'rev-b', clause_id: 'b-64', clause_code: '6.4' },
+            { document_id: 'doc-a', revision_id: 'rev-a', clause_id: 'a-61', clause_code: '6.1' },
+            { document_id: 'doc-b', revision_id: 'rev-b', clause_code: '6.2' },
+            { document_id: 'doc-b', clause_id: 'forged-65', clause_code: '6.5' },
+          ],
+        } }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={onApprove}
+        onReject={onReject}
+      />,
+    );
+
+    const sourceLinks = screen.getAllByRole('link', { name: /^Inspect cited clause §/ });
+    expect(sourceLinks).toHaveLength(3);
+    expect(sourceLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-61',
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-63',
+      '/projects/project-1/evidence?documentId=doc-b&revisionId=rev-b&highlightId=b-64',
+    ]);
+    // A source link locates a clause; it never turns the prose into a
+    // verified finding or executes an HITL decision on navigation.
+    expect(screen.queryByRole('link', { name: /§6\.5/ })).not.toBeInTheDocument();
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(onReject).not.toHaveBeenCalled();
+  });
+
 });

@@ -15,6 +15,8 @@ interface EvidenceWorkspaceProps {
   splitView: boolean;
   selectedDocument: DocumentInfo | null;
   selectedDocumentId: string | null;
+  selectedRevisionId?: string | null;
+  readOnlyRevision?: boolean;
   highlights: PdfHighlight[];
   activeHighlightId: string | null;
   activePanelTab: EvidencePanelTab;
@@ -69,6 +71,8 @@ export function EvidenceWorkspace({
   splitView,
   selectedDocument,
   selectedDocumentId,
+  selectedRevisionId,
+  readOnlyRevision = false,
   highlights,
   activeHighlightId,
   activePanelTab,
@@ -106,6 +110,7 @@ export function EvidenceWorkspace({
         <EvidenceViewerPanel
           selectedDocument={selectedDocument}
           selectedDocumentId={selectedDocumentId}
+          selectedRevisionId={selectedRevisionId}
           highlights={highlights}
           activeHighlightId={activeHighlightId}
           onHighlightClick={onHighlightClick}
@@ -115,6 +120,14 @@ export function EvidenceWorkspace({
       <ResizableHandle withHandle />
 
       <ResizablePanel defaultSize={splitView ? 50 : 30} minSize={20}>
+        {readOnlyRevision ? (
+          <div className="m-6 rounded-lg border border-border/70 bg-muted/30 p-5 text-sm"
+               data-testid="historical-evidence-read-only">
+            Historical source inspection is read-only. Current-revision alerts,
+            entity overlays and approval actions are hidden to avoid mixing evidence
+            from different document versions.
+          </div>
+        ) : (
         <EvidenceInspectorPanel
           activePanelTab={activePanelTab}
           onActivePanelTabChange={onActivePanelTabChange}
@@ -142,6 +155,7 @@ export function EvidenceWorkspace({
           onReviewAlert={onReviewAlert}
           onResolveAlert={onResolveAlert}
         />
+        )}
       </ResizablePanel>
     </ResizablePanelGroup>
   );

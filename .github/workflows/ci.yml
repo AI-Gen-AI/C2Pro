@@ -77,6 +77,9 @@ jobs:
             migrations:
               - "apps/api/alembic/**"
               - "supabase/migrations/**"
+              # Security regression for the migrated HITL downgrade guard
+              # must run against REAL PostgreSQL, never quietly skip.
+              - "apps/api/tests/integration/product_control/test_hitl_downgrade_rls_guard_pg.py"
             backend_docker:
               - "apps/api/**"
               - ".github/workflows/ci.yml"
@@ -911,7 +914,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true'
+    # Revision/browser acceptance crosses API boundaries: backend-only PRs must not skip it.
+    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
@@ -984,6 +988,8 @@ jobs:
           from src.documents.adapters.persistence.models import DocumentORM
           from src.projects.adapters.persistence.models import ProjectORM
           from tests.e2e_seed.seed_wedge import PROJECT_ID, TENANT_ID, USER_ID, seed_wedge_e2e
+          from tests.e2e_seed.seed_pq_hitl_03_1 import seed_pq_hitl_03_1
+          from tests.e2e_seed.qualify_pq_hitl_03_1 import qualify_pq_hitl_03_1
 
 
           async def main() -> None:
@@ -1005,6 +1011,12 @@ jobs:
               try:
                   async with get_raw_session() as db:
                       await seed_wedge_e2e(db)
+                      await seed_pq_hitl_03_1(db)
+                      # Repeat in disposable PostgreSQL: idempotency is observable in CI.
+                      await seed_pq_hitl_03_1(db)
+                      # Real PostgreSQL savepoint regressions: partial retry and
+                      # fail-closed collisions for revisions, artifacts and clauses.
+                      await qualify_pq_hitl_03_1(db)
                       user = await db.get(User, USER_ID)
                       if user is None:
                           raise RuntimeError("FRT-192 seed user was not created")
@@ -1103,10 +1115,20 @@ jobs:
         run: |
           ./node_modules/.bin/playwright test src/tests/e2e/coherence-v1.spec.ts --project=chromium
           ./node_modules/.bin/playwright test src/tests/e2e/journeys/journey-3-wedge.spec.ts --grep '@real-backend' --project=chromium
+          ./node_modules/.bin/playwright test src/tests/e2e/pq-hitl-03.1-revision-readonly.spec.ts --project=pq-hitl-03.1-revision-readonly
 
       - name: Skip E2E smoke tests when full-stack harness is unavailable
         if: ${{ vars.RUN_FULL_E2E != 'true' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || env.CLERK_SECRET_KEY == '' }}
         run: echo "::notice::E2E smoke skipped — the coherence-v1/journey-3-wedge specs need the seeded backend and Clerk secret key in CI (FRT-192). Set repo variable RUN_FULL_E2E=true to make this gate blocking."
+
+      - name: Upload PQ-HITL-03.1 sanitized QA screenshots
+        if: ${{ success() && vars.RUN_FULL_E2E == 'true' && env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && env.CLERK_SECRET_KEY != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pq-hitl-03-1-qa-screenshots
+          path: apps/web/test-results/**/pq-hitl-031-rev-*.png
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload Playwright report on failure
         if: failure()

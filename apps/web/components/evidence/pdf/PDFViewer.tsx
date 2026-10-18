@@ -115,15 +115,20 @@ export function PDFViewer({
     [file, httpHeaders],
   );
 
-  // Reset to initial page when file changes
+  // Revision-pinned deep links update the page, but must NOT put an
+  // already-loaded document back into 'loading' while its file is unchanged.
   useEffect(() => {
     setPageNumber(initialPage);
+  }, [file, initialPage]);
+
+  // Only a new PDF file or initial zoom configuration resets load state.
+  useEffect(() => {
     setScale(initialScale);
     setRotation(0);
     setLoading(true);
     setError(null);
     setPageDimensions(null);
-  }, [file, initialPage, initialScale]);
+  }, [file, initialScale]);
 
   useEffect(() => {
     if (!activeHighlightId) return;

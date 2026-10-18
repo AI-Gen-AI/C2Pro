@@ -11,6 +11,8 @@ behind (logged for cleanup) instead of a live document without bytes.
 from uuid import UUID
 
 import structlog
+from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.get_document_use_case import GetDocumentUseCase  # Reuse use case
@@ -19,6 +21,8 @@ from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.storage_service import IStorageService
 
 logger = structlog.get_logger()
+
+WBS_IMPORT_SOURCE_FK = "fk_wbs_import_sources_revision"
 
 
 class DeleteDocumentUseCase:
@@ -39,8 +43,18 @@ class DeleteDocumentUseCase:
         scoped_tenant_id = require_tenant_id(tenant_id)
         document = await self.get_document_use_case.execute(document_id, user_id, scoped_tenant_id)
 
-        await self.document_repository.delete(scoped_tenant_id, document_id)
-        await self.document_repository.commit()
+        try:
+            await self.document_repository.delete(scoped_tenant_id, document_id)
+            await self.document_repository.commit()
+        except IntegrityError as exc:
+            # PC-2b.3: a WBS source parsed into an import is provenance history (the import, and any
+            # IMPORT_REVIEW change set built from it, must never lose its source). Nothing is removed.
+            if WBS_IMPORT_SOURCE_FK not in str(exc.orig):
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This WBS source document has WBS imports: it is provenance history and cannot be deleted.",
+            ) from exc
 
         prefix = document_object_prefix(scoped_tenant_id, document.project_id, document.id)
         try:

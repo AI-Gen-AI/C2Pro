@@ -48,6 +48,7 @@ export default defineConfig({
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
+        /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
       ],
       use: {
         ...devices["Desktop Chrome"],
@@ -140,6 +141,27 @@ export default defineConfig({
         manualOnly: true,
         description:
           "Real Clerk production auth + synthetic tenant/org binding without product mutation",
+      },
+    },
+    {
+      // PQ-HITL-03 / #939: existing qualified production Clerk principal,
+      // pre-existing bounded synthetic project/document, GET/UI only.
+      // Explicitly selected by protected production qualification workflow.
+      name: "prod-pq-hitl-03-readonly",
+      testMatch: [
+        /(^|[\\/])prod-acceptance[\\/]939-production-revision-readonly\.spec\.ts$/,
+      ],
+      use: {
+        ...devices["Desktop Chrome"],
+        trace: "off",
+        screenshot: "off",
+        video: "off",
+      },
+      metadata: {
+        suite: "PQ-HITL-03-PROD-READONLY",
+        type: "production-qualification-readonly",
+        manualOnly: true,
+        description: "Deployed real Clerk A9/B7 read-only Evidence Viewer and re-login",
       },
     },
     {
@@ -264,6 +286,18 @@ export default defineConfig({
         priority: "p1",
         task: "TASK-FRT-166",
         description: "Document Analysis Pipeline Journey",
+      },
+    },
+    {
+      name: "pq-hitl-03.1-revision-readonly",
+      testMatch: /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "PQ-HITL-03.1",
+        type: "e2e",
+        priority: "p0",
+        description: "Read-only revision evidence, A=9/B=7, unresolved trusted current",
       },
     },
   ],

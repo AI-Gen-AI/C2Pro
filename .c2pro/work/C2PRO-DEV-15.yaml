@@ -1,31 +1,35 @@
 schema: c2pro-work-envelope-v1
 schema_version: 1
 work_id: C2PRO-DEV-15
-campaign_id: REPO-HYGIENE-CORE-AI-20261005
+campaign_id: CORE-AI-ASSURANCE-W311-INVENTORY-REPRO-20261014
 role: implementation_lead
 base_sha: 852429c35852ff09048d7a6ca7f8c1b0a61f8c38
-branch: chore/c2pro-dev-15-repository-hygiene-wave1
+branch: docs/dev15-wave311-tracing-inventory-repro-20261014
 risk_class: normal
 scope:
-  - reconcile repository-hygiene debt against current main and active product lanes
-  - fix internally inconsistent root package metadata without publishing a package
-  - remove only debris proven unreferenced by current repository paths
-  - eliminate confirmed UTF-8 mojibake from touched live source
-  - progressively bring high-value src/core/ai modules under meaningful coverage in later waves
-  - preserve active P0c Temporal WBS Alerts Coherence Risk and Procurement work without overlap
+  - reproduce the Wave 3.11 source-only tracing and exporter inventory represented by unmerged PR 963 under a verifiable protected-base DEV15 worker assignment
+  - independently re-read current main rather than copying PR 963 as authority and record any divergence from its historical inventory
+  - inventory direct LangSmith SDK construction runtime decorator feedback dataset create upload delete update baseline RunTree prompt hub publisher and related export paths
+  - inspect .env.example README Makefile docker-compose evaluation CI and manual scripts for implicit tracing or export activation paths
+  - record an exact current-source path inventory in docs/audits/C2PRO_DEV15_W311_TRACE_EXPORT_INVENTORY_20261014.md
+  - prepare a synthetic no-network RED matrix for W311-A1 and later packages without implementing those remediations in this inventory work
+  - preserve local PromptManager AI-Gen MW-06 MR and Product authority boundaries with zero unapproved cloud export
 out_of_scope:
-  - product lifecycle promotion or Product Control mutation
-  - P0c or P0d production qualification
-  - Temporal WBS Alerts Coherence Risk or Procurement functional changes
-  - broad architectural refactor or bounded-context consolidation
-  - mass deletion without reference evidence
-  - aggregate coverage threshold jumps unsupported by meaningful tests
+  - production source runtime environment deployment or credential changes
+  - any real customer document prompt response PII secret or contract data sent to external telemetry
+  - any remote LangSmith dataset trace feedback RunTree hub or evaluation write
+  - implementing W311-A1 default-off changes or any later W311 remediation in this inventory branch
+  - LangGraph business graph behavior changes
+  - product lifecycle promotion Product Control mutation or product-domain feature work
+  - worker changes to .c2pro/control/current.yaml active work active campaign baseline routing review policy or workspace policy
+  - reopening historical issue 849 or treating PR 963 metadata as worker identity
 allowed_tools:
   - github_repository_read
-  - scoped_repository_write
   - github_ci_read
-  - focused_python_tests
-  - repository_reference_search
+  - code_reference_search
+  - focused_local_tests_with_synthetic_data
+  - scoped_repository_write_for_audit_evidence_only
+  - independent_code_review
 forbidden_paths:
   - validation/product/**
   - docs/product/**
@@ -35,30 +39,40 @@ forbidden_paths:
   - apps/api/src/wbs/**
   - apps/api/src/coherence/**
   - apps/api/src/alerts/**
+  - apps/api/src/analysis/**
+  - apps/api/src/documents/**
+  - apps/api/src/procurement/**
+  - .github/workflows/**
 acceptance_criteria:
-  - root manifest no longer advertises nonexistent index.js or ISC licensing
-  - root JavaScript test command invokes the real frontend full-test surface
-  - README proprietary badge no longer links to a nonexistent LICENSE file
-  - confirmed mojibake is absent from touched live backend entrypoint
-  - apps/api/test.py is removed only after repository-wide reference search proves no active consumer
-  - referenced dev.py and requirements-sprint1.txt are preserved
-  - CI remains green and no active product PR is modified
-  - later Core AI coverage work removes exclusions only with failure-path and contract tests
+  - issue 958 remains the open DEV15 parent authority and historical issue 849 remains closed
+  - current main is independently inventoried and PR 963 is used only as a comparison target not execution identity or authority
+  - all direct LangSmith LangChain tracing exporter feedback dataset RunTree and prompt hub source paths relevant to Wave 3.11 are recorded with exact file references
+  - standard bootstrap paths .env.example README Makefile and docker-compose are included in the inventory
+  - any divergence from PR 963 historical findings is explicitly recorded
+  - synthetic no-network RED cases are testable and honest about current exposures without remote calls
+  - no production external exporter product runtime or credential is used enabled or mutated
+  - replacement inventory PR exact-head CI green with independent principal review and zero unresolved blocking findings
+  - current.yaml and Product Control remain untouched by the implementation worker
 required_tests:
-  - C2PRO-DEV-15 Wave1 repository hygiene contract tests
-  - backend unit suite for touched CI-guard tests
-  - backend lint
+  - pytest apps/api/tests/unit/core/ai/test_langsmith_client.py -q
+  - pytest apps/api/tests/unit/core/observability/test_langsmith_decorator.py -q
+  - python scripts/development/validate_c2pro_control.py
   - canonical GitHub CI required gates
 evidence_required:
-  - exact_base_sha
-  - issue_849_scope
-  - repository_reference_search_results
+  - historical_issue_849_closed
+  - open_issue_958
+  - protected_base_worker_assignment
+  - exact_workspace_receipt
+  - exact_current_source_path_inventory
+  - comparison_against_unmerged_pr_963
+  - no_network_canary_evidence
+  - independently_reviewed_replacement_inventory_pr
   - exact_head_ci
-  - independent_review
 review_policy: independent_principal
 worker_selection:
-  preferred: null
+  preferred: codex
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
-  selected: null
-timeout_resource_policy: bounded_repository_hygiene_no_production_mutation
+  selected: codex
+workspace_receipt: workspace:/srv/c2pro/workspaces/codex@945c97a8ca3b319e8ae8e20a404e3f6091e06431#docs/dev15-wave311-tracing-inventory-repro-20261014
+timeout_resource_policy: bounded_inventory_reproduction_and_synthetic_tests_only_no_remote_export_or_prod_mutation

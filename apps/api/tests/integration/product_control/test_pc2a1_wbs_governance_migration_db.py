@@ -226,12 +226,16 @@ def _normalize(rows: Any) -> set[tuple[str, ...]]:
 
 
 async def test_migrated_schema_matches_the_orm_schema(db: AsyncSession) -> None:
-    """The create_all schema used by the integration suites enforces the migrated invariants."""
+    """The create_all schema used by the integration suites enforces the migrated invariants.
+
+    The ORM mirrors the migrated HEAD: later revisions extend these tables (PC-2b.3 adds the
+    IMPORT_REVIEW source link to ``wbs_change_sets``), so the comparison is against head.
+    """
     orm_rows = (await db.execute(text(_SCHEMA_QUERY.replace("$1::text[]", ":tables")), {"tables": list(TABLES)})).all()
     orm_live = (await db.execute(text(_LIVE_COLUMNS_QUERY))).all()
     await _recreate_scratch_database()
     try:
-        _alembic("upgrade", PC2A1)
+        _alembic("upgrade", "head")
         conn = await _connect()
         try:
             migrated_rows = await conn.fetch(_SCHEMA_QUERY, list(TABLES))

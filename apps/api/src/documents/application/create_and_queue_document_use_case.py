@@ -10,6 +10,7 @@ from fastapi import HTTPException, UploadFile, status
 from src.config import settings  # Keep settings for validation for now
 from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
+from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.document_repository import IDocumentRepository
 
 STRUCTURED_DOCUMENT_TYPES = {DocumentType.BUDGET, DocumentType.SCHEDULE}
@@ -50,6 +51,9 @@ class CreateAndQueueDocumentUseCase:
             )
 
         file_extension = os.path.splitext(filename)[1].lower()
+        if is_analysis_excluded(document_type):
+            # PC-2b.3: this path queues ingestion; a WBS source is never ingested.
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=WBS_ANALYSIS_EXCLUDED_DETAIL)
         if file_extension not in settings.allowed_document_types:
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

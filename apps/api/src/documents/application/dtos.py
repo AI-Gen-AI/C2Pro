@@ -238,6 +238,7 @@ class DocumentListResponse(BaseModel):
 class DocumentDetailResponse(DocumentResponse):
     """Detailed document response."""
     clauses: list[JsonDict] | None = None
+    revision_id: UUID | None = None
 
 
 class EvidenceHistoryEventResponse(BaseModel):

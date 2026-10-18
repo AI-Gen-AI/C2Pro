@@ -39,6 +39,9 @@ class DocumentType(StrEnum):
     SPECIFICATION = "specification"
     TECHNICAL_SPEC = "technical_spec"
     OTHER = "other"
+    # PC-2b.3 (#922): an EXTERNAL WBS source file (input only). Never canonical WBS, never a
+    # baseline, never analysed: it is parsed only by the deterministic WBS import parser.
+    WBS = "wbs"
 
 class ClauseType(StrEnum):
     """Types of contractual clauses."""

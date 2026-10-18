@@ -1,0 +1,38 @@
+name: C2Pro Task Trace Audit
+
+# Non-blocking adoption. No write permissions, no Product Control mutations.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c2pro-task-trace-audit-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  trace-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without write credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install read-only parser
+        run: python -m pip install --disable-pip-version-check "pyyaml==6.0.3"
+      - name: Audit Task / SDD / WORK references without enforcement
+        if: github.event_name == 'pull_request'
+        run: python scripts/development/validate_task_trace.py --event "$GITHUB_EVENT_PATH" --mode audit
+      - name: Manual audit notice
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "PR event is required for PR trace audit; no enforcement."

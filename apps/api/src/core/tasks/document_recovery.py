@@ -35,6 +35,7 @@ from src.core.processing_authority import ProcessingStage
 from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.documents.domain.models import DocumentStatus
+from src.documents.domain.upload_policy import is_analysis_excluded
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
 
 logger = structlog.get_logger()
@@ -62,6 +63,7 @@ _CLAIM_SQL = text(
     SELECT d.id,
            d.tenant_id,
            d.upload_status::text AS upload_status,
+           d.document_type::text AS document_type,
            d.document_metadata,
            d.version,
            (
@@ -309,6 +311,9 @@ async def _sweep_async(
                 rag_outcome=str(rag_outcome) if rag_outcome is not None else None,
             )
 
+            if is_analysis_excluded(str(row.document_type) if row.document_type is not None else None):
+                # PC-2b.3: a WBS source is never ingestion or analysis work.
+                action = RecoveryAction.SKIP
             if action is RecoveryAction.SKIP:
                 if bool(row.hitl_pending):
                     skipped_hitl += 1

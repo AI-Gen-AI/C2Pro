@@ -12,6 +12,7 @@ from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.document_source import fetch_source_file, resolve_source_revision
 from src.documents.domain.models import DocumentStatus
+from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
 from src.documents.ports.file_parser_service import IFileParserService
@@ -138,6 +139,9 @@ class ParseDocumentUseCase:
         document = await self.document_repository.get_by_id(scoped_tenant_id, document_id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found or access denied.")
+        if is_analysis_excluded(document.document_type):
+            # PC-2b.3: a WBS source is parsed only by the deterministic WBS importer.
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=WBS_ANALYSIS_EXCLUDED_DETAIL)
 
         # 2. Mark document as PARSING
         await self.document_repository.update_status(

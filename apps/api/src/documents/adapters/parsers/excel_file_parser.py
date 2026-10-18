@@ -5,8 +5,11 @@ This adapter provides functionality to parse schedule and budget data from Excel
 using the openpyxl library, encapsulating external library details.
 """
 
+import asyncio
 import re
 import unicodedata
+from decimal import Decimal, InvalidOperation
+from io import BytesIO
 from numbers import Number
 from pathlib import Path
 from typing import Any, cast
@@ -68,7 +71,20 @@ class ExcelFileParser:
     Encapsulates the logic specific to the Excel format and `openpyxl` library.
     """
 
-    async def parse_schedule(self, file_path: Path) -> list[dict[str, Any]]:
+    async def parse_schedule(
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
+    ) -> list[dict[str, Any]]:
+        """Run the synchronous XLSX lifecycle off the asyncio event loop."""
+        return await asyncio.to_thread(
+            self._parse_schedule_sync, file_path, include_evidence=include_evidence,
+            source_bytes=source_bytes,
+        )
+
+    def _parse_schedule_sync(
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
+    ) -> list[dict[str, Any]]:
         """
         Parses schedule data from a standard Excel file format.
 
@@ -77,6 +93,9 @@ class ExcelFileParser:
 
         Args:
             file_path: The path to the Excel file (.xlsx).
+            include_evidence: Opt in to source-row identity and explicit ID columns.
+                Default output stays byte-for-byte compatible with legacy callers.
+                The caller must separately verify the immutable revision SHA-256.
 
         Returns:
             A list of dictionaries, where each dictionary represents a schedule task.
@@ -85,31 +104,96 @@ class ExcelFileParser:
             ExcelParsingError: If the file cannot be opened or does not match the expected format.
         """
         try:
-            workbook = openpyxl.load_workbook(file_path, data_only=True)
+            if source_bytes is not None and not include_evidence:
+                raise ExcelParsingError("Source byte snapshot requires evidence mode")
+            workbook = openpyxl.load_workbook(
+                BytesIO(source_bytes) if source_bytes is not None else file_path,
+                data_only=True,
+            )
             sheet = workbook.active
+            formula_workbook = (
+                openpyxl.load_workbook(
+                    BytesIO(source_bytes) if source_bytes is not None else file_path,
+                    data_only=False,
+                )
+                if include_evidence
+                else None
+            )
+            formula_sheet = formula_workbook.active if formula_workbook else None
+            if include_evidence and formula_sheet is None:
+                raise ExcelParsingError(
+                    "Formula workbook unavailable for verified schedule evidence"
+                )
+            # Evidence mode fails closed above; keep the workbook used for
+            # cell inspection non-optional for static type checking. The
+            # legacy path never consults this evidence-only sheet.
+            evidence_formula_sheet = (
+                formula_sheet if formula_sheet is not None else sheet
+            )
 
-            header_row_index, headers = self._find_schedule_headers(sheet)
+            header_row_index, headers = self._find_schedule_headers(sheet, include_evidence=include_evidence)
             if header_row_index is None:
                 expected_headers = ["task/actividad", "start date/inicio", "end date/fin"]
                 raise ExcelParsingError(
                     f"Missing one or more required headers: {', '.join(expected_headers)}"
                 )
 
+            if include_evidence:
+                # Cached formula-derived header labels must never determine
+                # evidence column authority, even if all row cells are literal.
+                for column_index in range(1, len(headers) + 1):
+                    if evidence_formula_sheet.cell(
+                        row=header_row_index, column=column_index
+                    ).data_type == "f":
+                        raise ExcelParsingError(
+                            "Unverified formula-derived schedule header at "
+                            f"{sheet.title}!{header_row_index} column {column_index}"
+                        )
+
             schedule_data = []
-            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+            for row_index, row in enumerate(
+                sheet.iter_rows(min_row=header_row_index + 1, values_only=True),
+                start=header_row_index + 1,
+            ):
                 row_data = dict(zip(headers, row, strict=False))
-                # Filter out empty rows
-                if any(row_data.values()):
-                    schedule_data.append(
-                        {
-                            "task": row_data.get("task"),
-                            "start_date": row_data.get("start date"),
-                            "end_date": row_data.get("end date"),
-                            "duration": row_data.get("duration"),
-                            "wbs": row_data.get("wbs"),
-                            "predecessors": row_data.get("predecessors"),
-                        }
-                    )
+                if include_evidence:
+                    # The immutable source SHA proves cell bytes, not Excel's
+                    # cached formula evaluation. Reject formulas in ALL consumed
+                    # evidence fields before checking for an apparently blank row:
+                    # data_only=True can return None for every formula cell.
+                    evidence_columns = {
+                        "task", "start date", "end date", "duration", "wbs",
+                        "predecessors", "activity id", "milestone id", "wbs node id",
+                    }
+                    for column_index, name in enumerate(headers, start=1):
+                        if name not in evidence_columns:
+                            continue
+                        if evidence_formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                            category = (
+                                "date" if name in {"start date", "end date"} else "source"
+                            )
+                            raise ExcelParsingError(
+                                f"Unverified schedule {category} formula at "
+                                f"{sheet.title}!{row_index} ({name})"
+                            )
+                if not any(row_data.values()):
+                    continue
+                schedule_row = {
+                    "task": row_data.get("task"),
+                    "start_date": row_data.get("start date"),
+                    "end_date": row_data.get("end date"),
+                    "duration": row_data.get("duration"),
+                    "wbs": row_data.get("wbs"),
+                    "predecessors": row_data.get("predecessors"),
+                }
+                if include_evidence:
+                    schedule_row.update({
+                        "source_locator": f"{sheet.title}!{row_index}",
+                        "source_activity_id": row_data.get("activity id"),
+                        "source_milestone_id": row_data.get("milestone id"),
+                        "wbs_node_id": row_data.get("wbs node id"),
+                    })
+                schedule_data.append(schedule_row)
             return schedule_data
 
         except ExcelParsingError:
@@ -124,10 +208,13 @@ class ExcelFileParser:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
                 workbook_to_close.close()
+            formula_to_close = locals().get("formula_workbook")
+            if formula_to_close is not None and hasattr(formula_to_close, "close"):
+                formula_to_close.close()
 
     @staticmethod
-    def _schedule_header_aliases() -> dict[str, set[str]]:
-        return {
+    def _schedule_header_aliases(*, include_evidence: bool = False) -> dict[str, set[str]]:
+        aliases = {
             "task": {"task", "actividad", "tarea", "activity"},
             "start date": {"start date", "inicio", "comienzo", "fecha inicio"},
             "end date": {"end date", "fin", "termino", "fecha fin"},
@@ -135,10 +222,20 @@ class ExcelFileParser:
             "wbs": {"wbs"},
             "predecessors": {"predecessors", "predecesoras"},
         }
+        if include_evidence:
+            # The extra ID aliases must NOT alter legacy header resolution.
+            aliases.update({
+                "activity id": {"activity id", "id actividad", "activity code"},
+                "milestone id": {"milestone id", "id hito"},
+                "wbs node id": {"wbs node id", "id nodo wbs", "id wbs"},
+            })
+        return aliases
 
     @classmethod
-    def _find_schedule_headers(cls, sheet: Any) -> tuple[int | None, list[str]]:
-        aliases = cls._schedule_header_aliases()
+    def _find_schedule_headers(
+        cls, sheet: Any, *, include_evidence: bool = False
+    ) -> tuple[int | None, list[str]]:
+        aliases = cls._schedule_header_aliases(include_evidence=include_evidence)
         required = {"task", "start date", "end date"}
 
         for row_index, row in enumerate(sheet.iter_rows(values_only=True), start=1):
@@ -156,7 +253,20 @@ class ExcelFileParser:
 
         return None, []
 
-    async def parse_budget(self, file_path: Path) -> list[dict[str, Any]]:
+    async def parse_budget(
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
+    ) -> list[dict[str, Any]]:
+        """Run synchronous openpyxl parsing and resource cleanup off the event loop."""
+        return await asyncio.to_thread(
+            self._parse_budget_sync, file_path, include_evidence=include_evidence,
+            source_bytes=source_bytes,
+        )
+
+    def _parse_budget_sync(
+        self, file_path: Path, *, include_evidence: bool = False,
+        source_bytes: bytes | None = None
+    ) -> list[dict[str, Any]]:
         """
         Parses budget data from a standard Excel file format.
 
@@ -165,6 +275,10 @@ class ExcelFileParser:
 
         Args:
             file_path: The path to the Excel file (.xlsx).
+            include_evidence: Include revision-local source locators and raw numeric
+                cell provenance for the verified BudgetRowEvidence extraction case.
+                False preserves the original budget parser row schema for existing
+                consumers; this flag does not itself verify source revision hashes.
 
         Returns:
             A list of dictionaries, where each dictionary represents a budget line item.
@@ -173,8 +287,35 @@ class ExcelFileParser:
             ExcelParsingError: If the file cannot be opened or does not match the expected format.
         """
         try:
-            workbook = openpyxl.load_workbook(file_path, data_only=True)
+            if source_bytes is not None and not include_evidence:
+                raise ExcelParsingError("Source byte snapshot requires evidence mode")
+            workbook = openpyxl.load_workbook(
+                BytesIO(source_bytes) if source_bytes is not None else file_path,
+                data_only=True,
+            )
             sheet = workbook.active
+            # In evidence mode, inspect the formula-bearing cells separately.
+            # Cached values are NOT proof that Excel recalculated a formula for
+            # these immutable bytes. Never record stale cache as trusted amounts.
+            formula_workbook = (
+                openpyxl.load_workbook(
+                    BytesIO(source_bytes) if source_bytes is not None else file_path,
+                    data_only=False,
+                )
+                if include_evidence
+                else None
+            )
+            formula_sheet = formula_workbook.active if formula_workbook else None
+            if include_evidence and formula_sheet is None:
+                raise ExcelParsingError(
+                    "Formula workbook unavailable for verified budget evidence"
+                )
+            # Evidence mode fails closed above; keep the workbook used for
+            # cell inspection non-optional for static type checking. The
+            # legacy path never consults this evidence-only sheet.
+            evidence_formula_sheet = (
+                formula_sheet if formula_sheet is not None else sheet
+            )
 
             header_row_index, headers = self._find_budget_headers(sheet)
             if header_row_index is None:
@@ -188,18 +329,95 @@ class ExcelFileParser:
                     f"{', '.join(expected_headers)}. Accepted aliases: {accepted_aliases}"
                 )
 
+            if include_evidence:
+                # Cached formula-derived header labels must never determine
+                # evidence column authority, even if all row cells are literal.
+                for column_index in range(1, len(headers) + 1):
+                    if evidence_formula_sheet.cell(
+                        row=header_row_index, column=column_index
+                    ).data_type == "f":
+                        raise ExcelParsingError(
+                            "Unverified formula-derived budget header at "
+                            f"{sheet.title}!{header_row_index} column {column_index}"
+                        )
+
+            if include_evidence:
+                # A canonical evidence field must have ONE unambiguous source
+                # column. Dict construction would otherwise silently drop one
+                # of two columns (e.g. Total Net / Total Gross).
+                consumed = {
+                    "item", "quantity", "unit price", "total", "unit",
+                    "currency", "tax basis", "wbs node id",
+                }
+                evidence_headers = [h for h in headers if h in consumed]
+                duplicate_headers = {
+                    h for h in evidence_headers if evidence_headers.count(h) > 1
+                }
+                if duplicate_headers:
+                    raise ExcelParsingError(
+                        "Duplicate canonical budget evidence columns: "
+                        + ", ".join(sorted(duplicate_headers))
+                    )
+
             budget_data: BudgetRows = BudgetRows()
-            for row in sheet.iter_rows(min_row=header_row_index + 1, values_only=True):
+            for row_index, row in enumerate(
+                sheet.iter_rows(min_row=header_row_index + 1, values_only=True),
+                start=header_row_index + 1,
+            ):
                 row_data = dict(zip(headers, row, strict=False))
+                if include_evidence:
+                    # A verified source hash attests bytes, NOT formula evaluation.
+                    # Inspect all consumed evidence fields, not only numeric cells.
+                    # Check before empty-row/subtotal skips: cached formulas may be
+                    # None under data_only=True and otherwise vanish silently.
+                    evidence_columns = {
+                        "item", "quantity", "unit price", "total", "unit",
+                        "currency", "tax basis", "wbs node id",
+                    }
+                    for column_index, column_name in enumerate(headers, start=1):
+                        if column_name not in evidence_columns:
+                            continue
+                        if evidence_formula_sheet.cell(row=row_index, column=column_index).data_type == "f":
+                            raise ExcelParsingError(
+                                "Unverified formula-derived budget evidence at "
+                                f"{sheet.title}!{row_index} ({column_name}); "
+                                "source formula requires separately attested evaluation"
+                            )
                 if not any(row_data.values()):
                     continue
                 stated_total = self._extract_declared_total(row_data)
                 if stated_total is not None:
                     budget_data.stated_total = stated_total
                     continue
-                quantity = self._coerce_budget_number(row_data.get("quantity"))
-                unit_price = self._coerce_budget_number(row_data.get("unit price"))
-                total = self._coerce_budget_number(row_data.get("total"))
+                quantity: float | Decimal | None
+                unit_price: float | Decimal | None
+                total: float | Decimal | None
+                if include_evidence:
+                    # The column currency is the only authoritative row
+                    # denomination. A numeric cell's optional currency symbol
+                    # must agree with it; stripping it first could turn $100
+                    # into seemingly verified EUR 100, or hide EUR 100 USD.
+                    row_currency = row_data.get("currency")
+                    for monetary_field in ("unit price", "total"):
+                        column_index = headers.index(monetary_field) + 1
+                        number_format = evidence_formula_sheet.cell(
+                            row=row_index, column=column_index
+                        ).number_format
+                        self._require_budget_currency_consistency(
+                            row_data.get(monetary_field),
+                            row_currency,
+                            locator=f"{sheet.title}!{row_index} ({monetary_field})",
+                            number_format=number_format,
+                        )
+                    # Evidence MUST use original cell values, not the lossy
+                    # float-normalization used by the legacy analysis parser.
+                    quantity = self._coerce_budget_decimal(row_data.get("quantity"))
+                    unit_price = self._coerce_budget_decimal(row_data.get("unit price"))
+                    total = self._coerce_budget_decimal(row_data.get("total"))
+                else:
+                    quantity = self._coerce_budget_number(row_data.get("quantity"))
+                    unit_price = self._coerce_budget_number(row_data.get("unit price"))
+                    total = self._coerce_budget_number(row_data.get("total"))
                 # Skip structural chapter/section subtotal rows. In a hierarchical
                 # budget (presupuesto por capítulos) chapters carry a rolled-up total
                 # with no quantity or unit price; emitting them as line items would
@@ -213,18 +431,30 @@ class ExcelFileParser:
                     if unit_raw is not None and str(unit_raw).strip()
                     else None
                 )
-                budget_data.append(
-                    {
-                        "item": row_data.get("item"),
-                        "quantity": quantity,
-                        "unit_price": unit_price,
-                        "total": total,
-                        "unit": unit_value,
-                        "category": self._infer_budget_category(
-                            row_data.get("item"), unit_value
-                        ),
-                    }
-                )
+                budget_row = {
+                    "item": row_data.get("item"),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "total": total,
+                    "unit": unit_value,
+                    "category": self._infer_budget_category(
+                        row_data.get("item"), unit_value
+                    ),
+                }
+                if include_evidence:
+                    budget_row.update(
+                        {
+                            "currency": row_data.get("currency"),
+                            "tax_basis": row_data.get("tax basis"),
+                            "wbs_node_id": row_data.get("wbs node id"),
+                            "source_locator": f"{sheet.title}!{row_index}",
+                            "numeric_provenance": {
+                                field: repr(row_data.get(field))
+                                for field in ("quantity", "unit price", "total")
+                            },
+                        }
+                    )
+                budget_data.append(budget_row)
             return budget_data
 
         except ExcelParsingError:
@@ -239,6 +469,9 @@ class ExcelFileParser:
             workbook_to_close = locals().get("workbook")
             if workbook_to_close is not None and hasattr(workbook_to_close, "close"):
                 workbook_to_close.close()
+            formula_to_close = locals().get("formula_workbook")
+            if formula_to_close is not None and hasattr(formula_to_close, "close"):
+                formula_to_close.close()
 
     @staticmethod
     def _budget_header_aliases() -> dict[str, set[str]]:
@@ -295,6 +528,9 @@ class ExcelFileParser:
                 "medida",
                 "unidad de medida",
             },
+            "currency": {"currency", "moneda", "divisa"},
+            "tax basis": {"tax basis", "base fiscal", "impuestos", "tax"},
+            "wbs node id": {"wbs node id", "wbs id", "id wbs"},
         }
 
     @classmethod
@@ -389,6 +625,191 @@ class ExcelFileParser:
             match = cls._match_canonical(header_norm, aliases)
             canonical.append(match if match is not None else header_norm)
         return canonical
+
+    @staticmethod
+    def _budget_numeric_format_sections(value: Any, number_format: str) -> str:
+        """Select the applicable numeric Excel format section by value sign.
+
+        Excel permits [positive;negative;zero;text] sections (or shorter
+        variants). Currency markers from an inapplicable numeric section must
+        not be used to attest or reject the actual displayed denomination.
+        Split only at real semicolons, not within quotes, escapes or brackets.
+        """
+        if not isinstance(value, (int, float, Decimal)):
+            return number_format
+        sections: list[str] = []
+        current: list[str] = []
+        quoted = False
+        escaped = False
+        bracket_depth = 0
+        for char in number_format:
+            if escaped:
+                current.append(char)
+                escaped = False
+            elif char == "\\" and not quoted:
+                current.append(char)
+                escaped = True
+            elif char == '"':
+                current.append(char)
+                quoted = not quoted
+            elif char == "[" and not quoted:
+                current.append(char)
+                bracket_depth += 1
+            elif char == "]" and not quoted and bracket_depth:
+                current.append(char)
+                bracket_depth -= 1
+            elif char == ";" and not quoted and not bracket_depth:
+                sections.append("".join(current))
+                current = []
+            else:
+                current.append(char)
+        sections.append("".join(current))
+        if len(sections) > 4:
+            return number_format
+        if value < 0 and len(sections) >= 2:
+            return sections[1]
+        if value == 0 and len(sections) >= 3:
+            return sections[2]
+        return sections[0]
+
+    @staticmethod
+    def _require_budget_currency_consistency(
+        value: Any, currency: Any, *, locator: str, number_format: str = ""
+    ) -> None:
+        """Reject conflicting currency markers in both source text and XLSX formats.
+
+        A source SHA authenticates Excel number formats as well as stored values.
+        Generic locale codes (such as [$-409]) are not currency denominations.
+        """
+        number_format = ExcelFileParser._budget_numeric_format_sections(
+            value, number_format
+        )
+        currency_pattern = r"(?<![A-Za-z])(?:EUR|USD|GBP)(?![A-Za-z])|[€$£]"
+        markers = re.findall(
+            currency_pattern, value if isinstance(value, str) else "", flags=re.I
+        )
+        # Localized currency formats include the currency marker inside a
+        # bracket directive. Locale-only directives contain no currency marker.
+        for directive in re.findall(r"\[\$([^\]]*)\]", number_format):
+            symbol = directive.split("-", 1)[0].strip()
+            if symbol:
+                found = re.findall(currency_pattern, symbol, flags=re.I)
+                if not found:
+                    raise ExcelParsingError(
+                        f"Unsupported budget currency format marker at {locator}"
+                    )
+                markers.extend(found)
+        remaining_format = re.sub(r"\[\$[^\]]*\]", "", number_format)
+        # A quoted or literal uppercase three-letter monetary label must not
+        # silently change the declared EUR/USD/GBP denomination. Fail closed
+        # on ambiguous unsupported labels, including "JPY" and "INR".
+        # Bracket directives ([Red], [>=100]) are Excel metadata, not units.
+        format_literals = re.sub(r"\[[^\]]*\]", "", remaining_format)
+        # Excel formats may spell an ISO label as escaped literal letters
+        # (\J\P\Y) or adjacent quoted spans ("J""P""Y").
+        format_literals = re.sub(r"\\([A-Z])", r"\1", format_literals)
+        format_literals = format_literals.replace('""', "")
+        iso_labels = re.findall(
+            r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])", format_literals
+        )
+        if any(code not in {"EUR", "USD", "GBP"} for code in iso_labels):
+            raise ExcelParsingError(
+                f"Unsupported budget currency format marker at {locator}"
+            )
+        # Unicode currency symbols outside our supported EUR/USD/GBP scope
+        # must never be mistaken for a currency-free numeric format.
+        if any(
+            unicodedata.category(char) == "Sc" and char not in "€$£"
+            for char in number_format
+        ):
+            raise ExcelParsingError(
+                f"Unsupported budget currency format marker at {locator}"
+            )
+        markers.extend(re.findall(currency_pattern, remaining_format, flags=re.I))
+        if not markers:
+            return
+        codes = {"€": "EUR", "$": "USD", "£": "GBP"}
+        identified = [codes.get(token, token.upper()) for token in markers]
+        declared = str(currency).strip().upper() if currency is not None else ""
+        if not declared or any(token != declared for token in identified):
+            raise ExcelParsingError(
+                f"Budget currency marker conflicts with row currency at {locator}"
+            )
+
+    @staticmethod
+    def _coerce_budget_decimal(value: Any) -> Decimal | None:
+        """Parse a source cell as Decimal without any intermediate float conversion.
+
+        Applies the established ES/EN separator heuristic while retaining all
+        decimal digits from text cells; an XLSX binary-float cell has only the
+        precision already encoded by the original workbook.
+        """
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float, Decimal)):
+            try:
+                decimal = Decimal(str(value))
+                return decimal if decimal.is_finite() else None
+            except InvalidOperation:
+                return None
+        if not isinstance(value, str):
+            return None
+        source = value.strip()
+        if not source:
+            return None
+        # Accept ONLY explicit currency labels, not arbitrary text. Deleting
+        # unsupported characters silently turned "1e3" into "13".
+        source = re.sub(r"\s*(?:EUR|USD|GBP|€|\$|£)\s*$", "", source, flags=re.I).strip()
+        source = re.sub(r"^(?:EUR|USD|GBP|€|\$|£)\s*", "", source, flags=re.I).strip()
+        accounting_negative = source.startswith("(") and source.endswith(")")
+        if accounting_negative:
+            source = source[1:-1].strip()
+        if not re.fullmatch(r"-?[0-9]+(?:[.,][0-9]+)*", source):
+            raise ExcelParsingError("Unsupported verified budget numeric syntax")
+        if accounting_negative and source.startswith("-"):
+            raise ExcelParsingError("Ambiguous accounting negative")
+        if "," in source and "." in source:
+            # Both separators require explicit thousands grouping to
+            # disambiguate the decimal separator.
+            if re.fullmatch(r"-?[0-9]{1,3}(?:\.[0-9]{3})+,[0-9]{1,}", source):
+                normalized = source.replace(".", "").replace(",", ".")
+            elif re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{1,}", source):
+                normalized = source.replace(",", "")
+            else:
+                raise ExcelParsingError("Ambiguous mixed budget numeric separators")
+        elif "," in source:
+            if source.count(",") > 1:
+                if not re.fullmatch(r"-?[0-9]{1,3}(?:,[0-9]{3}){2,}", source):
+                    raise ExcelParsingError("Ambiguous budget number grouping")
+                normalized = source.replace(",", "")
+            else:
+                _, fractional = source.split(",", 1)
+                if len(fractional) >= 3:
+                    raise ExcelParsingError(
+                        "Ambiguous single-comma decimal in verified budget evidence"
+                    )
+                normalized = source.replace(",", ".")
+        elif "." in source:
+            if source.count(".") > 1:
+                if not re.fullmatch(r"-?[0-9]{1,3}(?:\.[0-9]{3}){2,}", source):
+                    raise ExcelParsingError("Ambiguous budget number grouping")
+                normalized = source.replace(".", "")
+            else:
+                _, fractional = source.split(".", 1)
+                if len(fractional) == 3:
+                    raise ExcelParsingError(
+                        "Ambiguous single-dot decimal in verified budget evidence"
+                    )
+                normalized = source
+        else:
+            normalized = source
+        if accounting_negative:
+            normalized = "-" + normalized
+        try:
+            decimal = Decimal(normalized)
+            return decimal if decimal.is_finite() else None
+        except InvalidOperation:
+            return None
 
     @staticmethod
     def _coerce_budget_number(value: Any) -> float | None:

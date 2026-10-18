@@ -5,18 +5,162 @@
  * IR-4: read-only view of the authoritative project WBS (procurement WBS store).
  * No create/edit/move actions are offered because no served endpoint persists them.
  *
+ * PC-7a (#672/#688): shows the real WBS authority state from the single resolver
+ * (PC-2a.3 / ADR-029) -- NO_WBS / DRAFT_ONLY / LEGACY_UNGOVERNED / APPROVED_BASELINE --
+ * instead of silently implying every WBS is an approved baseline. Dates and budget on
+ * the rows below are never approved schedule/cost authority, in every state.
+ *
+ * PC-7b (#672, board #1049): adds a live project-alerts panel (real
+ * `GET /alerts/projects/{project_id}`, via `useProjectAlerts`) with an honest count
+ * -- never implied before the fetch resolves -- and source-linked navigation using
+ * only a real, persisted `source_clause_id`. No clause id is ever invented here.
+ *
  * Test Suite ID: TASK-1427
  */
 
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { env } from "@/config/env";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronDown, Expand, Loader2 } from "lucide-react";
 import { useWBSTree, type WBSTreeItem } from "@/hooks/useWBSTree";
+import { useProjectAlerts } from "@/hooks/useProjectAlerts";
+import type { ProjectWBSAuthority } from "@/lib/api/generated/models";
+
+const ALERT_SEVERITY_CLASSES: Record<string, string> = {
+  critical: "border-red-200 bg-red-50 text-red-900",
+  high: "border-orange-200 bg-orange-50 text-orange-900",
+  medium: "border-amber-200 bg-amber-50 text-amber-900",
+  low: "border-muted bg-muted/50 text-muted-foreground",
+};
+
+function WBSAlertsPanel({ projectId }: { projectId: string }) {
+  const { alerts, loading, error } = useProjectAlerts(projectId);
+
+  if (loading) {
+    return (
+      <Card data-testid="wbs-alerts-panel">
+        <CardContent className="py-4 text-sm text-muted-foreground">
+          Loading project alerts…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card data-testid="wbs-alerts-panel">
+        <CardContent className="py-4 text-sm text-red-800" data-testid="wbs-alerts-error">
+          Failed to load project alerts: {error.message}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card data-testid="wbs-alerts-panel">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Project Alerts</CardTitle>
+        <span className="text-sm text-muted-foreground" data-testid="wbs-alerts-count">
+          {alerts.length === 1 ? "1 alert" : `${alerts.length} alerts`}
+        </span>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {alerts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No alerts recorded for this project.</p>
+        ) : (
+          alerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`rounded-lg border p-2 text-sm ${
+                ALERT_SEVERITY_CLASSES[alert.severity] ?? ALERT_SEVERITY_CLASSES.low
+              }`}
+              data-testid={`wbs-alert-${alert.id}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span>{alert.title}</span>
+                {alert.clauseId ? (
+                  alert.addressableClauseId && alert.sourceDocumentId ? (
+                    <Link
+                      href={
+                        `/projects/${encodeURIComponent(projectId)}/evidence` +
+                        `?documentId=${encodeURIComponent(alert.sourceDocumentId)}` +
+                        `&highlightId=${encodeURIComponent(alert.addressableClauseId)}`
+                      }
+                      className="shrink-0 font-mono text-xs underline"
+                      aria-label={`View evidence for ${alert.addressableClauseId}`}
+                      data-testid={`wbs-alert-${alert.id}-evidence-link`}
+                    >
+                      {alert.clauseId}
+                    </Link>
+                  ) : (
+                    // A clause was reported by the detector but is not yet
+                    // persisted/addressable -- shown for context, never linked.
+                    <span
+                      className="shrink-0 font-mono text-xs opacity-70"
+                      data-testid={`wbs-alert-${alert.id}-clause`}
+                    >
+                      {alert.clauseId}
+                    </span>
+                  )
+                ) : null}
+              </div>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const AUTHORITY_BANNER_CLASSES: Record<string, string> = {
+  APPROVED_BASELINE: "border-green-200 bg-green-50 text-green-900",
+  DRAFT_ONLY: "border-blue-200 bg-blue-50 text-blue-900",
+  LEGACY_UNGOVERNED: "border-amber-200 bg-amber-50 text-amber-900",
+  NO_WBS: "border-muted bg-muted/50 text-muted-foreground",
+};
+
+function WBSAuthorityBanner({ authority }: { authority: ProjectWBSAuthority }) {
+  const bannerClasses =
+    AUTHORITY_BANNER_CLASSES[authority.display_state] ?? AUTHORITY_BANNER_CLASSES.NO_WBS;
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ${bannerClasses}`}
+      data-testid="wbs-authority-banner"
+      data-authority-state={authority.display_state}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-medium" data-testid="wbs-authority-label">
+            {authority.scope_label}
+          </p>
+          {authority.display_state === "APPROVED_BASELINE" && authority.applied_at ? (
+            <p className="text-xs opacity-80" data-testid="wbs-authority-applied-at">
+              Approved {authority.applied_at.slice(0, 10)}
+            </p>
+          ) : null}
+        </div>
+        {authority.draft_exists && authority.display_state !== "DRAFT_ONLY" ? (
+          <span
+            className="rounded border px-2 py-0.5 text-xs"
+            data-testid="wbs-authority-draft-pending"
+          >
+            Open WBS change set
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 text-xs opacity-80" data-testid="wbs-authority-disclaimer">
+        Dates and budget below are informational only -- not approved schedule or cost
+        authority.
+      </p>
+    </div>
+  );
+}
 
 function labelItemType(itemType: string | null | undefined): string | null {
   if (!itemType) return null;
@@ -124,6 +268,8 @@ export default function ProjectWBSPage() {
   const {
     items,
     totalItems,
+    coverage,
+    authority,
     isLoading,
     isError,
     error,
@@ -168,6 +314,23 @@ export default function ProjectWBSPage() {
           Expand All
         </Button>
       </div>
+
+      {authority ? <WBSAuthorityBanner authority={authority} /> : null}
+
+      {coverage ? (
+        <p className="text-sm text-muted-foreground" data-testid="wbs-coverage-summary">
+          {coverage.total_items === 1 ? "1 item" : `${coverage.total_items} items`} total ·{" "}
+          {coverage.items_with_budget} with budget · {coverage.items_with_dates} with dates
+          {coverage.approved_scope_items ? (
+            <> · {coverage.approved_scope_items} in the approved baseline</>
+          ) : null}
+          {coverage.unapproved_legacy_items ? (
+            <> · {coverage.unapproved_legacy_items} unapproved legacy</>
+          ) : null}
+        </p>
+      ) : null}
+
+      <WBSAlertsPanel projectId={projectId} />
 
       <Card data-testid="wbs-tree">
         <CardHeader className="flex flex-row items-center justify-between">

@@ -169,8 +169,11 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     # PC-2b.2: the intelligence router stores runs / items / human decisions -- never WBS rows -- and
     # applies a human's selection only into an existing DRAFT through the governed commands.
     intelligence = "src.wbs.adapters.http.intelligence_router"
+    # PC-2b.3: the import router stores immutable WBS import sources -- never WBS rows -- and creates an
+    # IMPORT_REVIEW DRAFT only through the governed commands, on an explicit human action.
+    imports = "src.wbs.adapters.http.import_router"
     allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance,
-                        governed, profiles, intelligence}
+                        governed, profiles, intelligence, imports}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -187,6 +190,21 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     intelligence_routes = {path for (_, path), module in wbs_routes.items() if module == intelligence}
     assert intelligence_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-intelligence/runs")
                                        for path in intelligence_routes)
+    import_routes = {path for (_, path), module in wbs_routes.items() if module == imports}
+    assert import_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-imports") for path in import_routes)
+
+
+def test_wbs_import_never_writes_wbs_except_through_the_governed_draft_commands() -> None:
+    """PC-2b.3: an import writes no WBS rows; its DRAFT is built only by the governed ADD commands."""
+    import src.wbs.adapters.http.import_router as router
+    import src.wbs.imports.service as service
+
+    source = Path(service.__file__).read_text(encoding="utf-8") + Path(router.__file__).read_text(encoding="utf-8")
+    assert "governed.execute_add_sequence(" in source and "governed.create_change_set(" in source
+    for forbidden in ("WBSNodeORM", "apply_governed_tree", "insert(WBSChangeSetNodeORM", "update(WBSChangeSetNodeORM",
+                      "INSERT INTO wbs_", "UPDATE wbs_", ".submit(", ".approve(", ".reject(", "WBSBaselineORM(",
+                      "WBSChangeSetNodeORM("):
+        assert forbidden not in source, forbidden
 
 
 def test_wbs_intelligence_never_writes_wbs_except_through_the_governed_draft_commands() -> None:

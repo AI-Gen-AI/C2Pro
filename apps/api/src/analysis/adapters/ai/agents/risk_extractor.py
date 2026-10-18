@@ -42,6 +42,7 @@ class RiskExtractionCandidate(BaseModel):
     mitigation_suggestion: str | None = None
     source_quote: str | None = None
     source_text_snippet: str | None = None
+    clause_ref: str | None = None  # explicit document clause code, NOT an evidence verdict
     risk_score: int = 0
     immediate_alert: bool = False
 
@@ -112,6 +113,7 @@ def _coerce_risk(item: dict[str, Any]) -> RiskExtractionCandidate | None:
         mitigation_suggestion=mitigation,
         source_quote=source_quote,
         source_text_snippet=source_text_snippet,
+        clause_ref=_clean_text(item.get("clause_ref")),
     )
 
 
