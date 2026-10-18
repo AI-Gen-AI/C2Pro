@@ -4,6 +4,7 @@
  * Clerk identity and existing A/B document. Never creates or changes data,
  * never makes HITL decisions and never promotes trust.
  */
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -17,6 +18,7 @@ import {
   requireProductionApiOrigin,
   requireProductionOrigin,
 } from "./support/prod-preflight";
+import { classifyNonReadRequest } from "./support/prod-nonread-boundary";
 
 const PROJECT_ID = "e7c6031f-cd9e-4642-a5ea-35a0207ceaeb";
 const DOCUMENT_ID = "9769cb1f-cef7-4832-a1aa-de916448bb43";
@@ -52,6 +54,20 @@ function nonReadCategory(
   return `${method}:${host}:${route}:${nextActionPresent}`;
 }
 
+function evidenceFingerprint(
+  clausesA: string[],
+  clausesB: string[],
+): string {
+  // Preserve revision identity, ordered clause position, and A/B partition.
+  // No protected text or digest is ever logged or written to artifacts.
+  return createHash("sha256")
+    .update(JSON.stringify({
+      revisionA: { id: REV_A_ID, clauses: clausesA },
+      revisionB: { id: REV_B_ID, clauses: clausesB },
+    }))
+    .digest("hex");
+}
+
 type ObservedRevisionPanel = {
   apiOrigin: string;
   // This exact revision endpoint yielded HTTP 200 with real Clerk auth.
@@ -59,6 +75,8 @@ type ObservedRevisionPanel = {
   revisionPath: string;
   // Only held in test process memory; never included in output or exceptions.
   protectedClauseText: string[];
+  protectedClauseTextA: string[];
+  protectedClauseTextB: string[];
 };
 
 async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
@@ -125,6 +143,8 @@ async function assertRevisionPanel(page: Page): Promise<ObservedRevisionPanel> {
     apiOrigin: liveApiOrigin,
     revisionPath: new URL(authorizedHistory.url()).pathname,
     protectedClauseText: [...clauseTextA, ...clauseTextB],
+    protectedClauseTextA: clauseTextA,
+    protectedClauseTextB: clauseTextB,
   };
 }
 
@@ -135,15 +155,21 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   requireExactSyntheticTarget();
 
   // Observe the entire qualification lifecycle, including login/logout.
-  // Clerk's own cross-origin session requests are excluded; product/API
-  // writes on the approved C2Pro frontend/backend are forbidden.
+  // Until independently attributed, neither Clerk-provider nor unknown-origin
+  // non-reads prove they lack product side effects. Watch the browser CONTEXT
+  // (including service-worker requests), not only a single page.
   let observedProductWriteRequests = 0;
+  // A Next-Action header only identifies framework transport; it does NOT
+  // attribute an opaque action ID to Clerk or establish no business writes.
+  // Strictly count every first-party non-read, including login and logout,
+  // until independent deployed action/side-effect evidence exists.
   // Never record URL strings, query parameters, opaque Next action IDs,
   // request bodies, headers or protected document identifiers. Category only.
   const observedNonReadCategories = new Map<string, number>();
-  page.on("request", (request) => {
+  page.context().on("request", (request) => {
     const method = request.method().toUpperCase();
-    if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
+    const disposition = classifyNonReadRequest(method, request.url());
+    if (disposition === "read") return;
     let url: URL;
     try {
       url = new URL(request.url());
@@ -164,7 +190,6 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
     // Include server actions/form POSTs outside /api/ as well.
     // Clerk's separate account/auth hosts are not among these app origins.
     if (validHost) {
-      observedProductWriteRequests += 1;
       const originCategory =
         url.hostname === "c2pro-production.up.railway.app"
           ? "railway"
@@ -191,11 +216,31 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
         category,
         (observedNonReadCategories.get(category) ?? 0) + 1,
       );
+
+      // No first-party POST, including a Server Action on /sign-in or a
+      // synthetic evidence page, can be exempted by URL, header or phase.
+      // Keep the test FAIL-CLOSED until exact deployed Clerk provenance and
+      // comprehensive no-write effects are independently established.
+      observedProductWriteRequests += 1;
+    } else {
+      // An arbitrary cross-origin endpoint can receive a business write.
+      // Never exempt it merely because the hostname is not first-party.
+      // Categorize only: do not log the provider hostname, URL or payload.
+      const category = nonReadCategory(method, "unknown_origin", "external_nonread", false);
+      observedNonReadCategories.set(
+        category,
+        (observedNonReadCategories.get(category) ?? 0) + 1,
+      );
+      observedProductWriteRequests += 1;
     }
   });
 
   await signInSyntheticProductionUser(page);
   const authorized = await assertRevisionPanel(page);
+  const initialEvidenceFingerprint = evidenceFingerprint(
+    authorized.protectedClauseTextA,
+    authorized.protectedClauseTextB,
+  );
   const provenApiOrigin = authorized.apiOrigin;
 
   await signOutThroughUi(page);
@@ -358,11 +403,21 @@ test("existing A9/B7 remains revision-scoped after real production relogin", asy
   await page.waitForTimeout(61_000);
 
   await signInSyntheticProductionUser(page);
-  expect((await assertRevisionPanel(page)).apiOrigin).toBe(provenApiOrigin);
+  const secondAuthorized = await assertRevisionPanel(page);
+  expect(secondAuthorized.apiOrigin).toBe(provenApiOrigin);
+  expect(
+    evidenceFingerprint(
+      secondAuthorized.protectedClauseTextA,
+      secondAuthorized.protectedClauseTextB,
+    ) === initialEvidenceFingerprint,
+    "PQ939_REVISION_CONTENT_FINGERPRINT_CHANGED",
+  ).toBe(true);
   await signOutThroughUi(page);
+
   // Emit ONLY bounded and deterministic request categories on failure.
-  // Each recorded non-read request still makes qualification FAIL; diagnostics
-  // cannot turn a browser POST/server action into an authorized product write.
+  // ALL non-read requests make qualification FAIL, including opaque
+  // Next-Action POSTs and external provider writes. Neither the status,
+  // URL nor lifecycle phase identifies an executed action's side effects.
   const nonReadCategories = [...observedNonReadCategories.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([category, count]) => `${category}:${count}`)
