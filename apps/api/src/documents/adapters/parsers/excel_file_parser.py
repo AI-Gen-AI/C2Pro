@@ -627,6 +627,39 @@ class ExcelFileParser:
         return canonical
 
     @staticmethod
+    def _budget_has_conditional_number_format(number_format: str) -> bool:
+        """Detect actual Excel numeric conditions, not quoted/escaped text.
+
+        A conditional section such as [>=100] can override the usual
+        positive/negative/zero ordering. We do not interpret this in verified
+        evidence mode: fail closed instead of attesting the wrong currency.
+        The legacy budget parser never calls this evidence-only guard.
+        """
+        quoted = False
+        escaped = False
+        directive: list[str] | None = None
+        for char in number_format:
+            if escaped:
+                if directive is not None:
+                    directive.append(char)
+                escaped = False
+            elif char == "\\" and not quoted:
+                escaped = True
+            elif char == '"':
+                quoted = not quoted
+            elif quoted:
+                continue
+            elif char == "[":
+                directive = []
+            elif char == "]" and directive is not None:
+                if re.match(r"^\\s*(?:>=|<=|>|<|=)", "".join(directive)):
+                    return True
+                directive = None
+            elif directive is not None:
+                directive.append(char)
+        return False
+
+    @staticmethod
     def _budget_numeric_format_sections(value: Any, number_format: str) -> str:
         """Select the applicable numeric Excel format section by value sign.
 
@@ -681,6 +714,10 @@ class ExcelFileParser:
         A source SHA authenticates Excel number formats as well as stored values.
         Generic locale codes (such as [$-409]) are not currency denominations.
         """
+        if ExcelFileParser._budget_has_conditional_number_format(number_format):
+            raise ExcelParsingError(
+                f"Conditional Excel number format unsupported for budget evidence at {locator}"
+            )
         number_format = ExcelFileParser._budget_numeric_format_sections(
             value, number_format
         )
