@@ -199,10 +199,6 @@ async def test_red_critique_concern_cannot_auto_approve_even_if_quote_exists() -
     assert result.human_approval_required or result.retry_count > 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="RED PQ-HITL-02.2/#953: absent risk confidence defaults to invented 0.9",
-)
 def test_red_missing_per_risk_confidence_must_not_default_to_point_nine() -> None:
     """TS-PQ-HITL-09-GOLDEN-001: confidence must be independently measured/UNKNOWN."""
     confidence = CritiqueEvaluationService().calculate_confidence([
