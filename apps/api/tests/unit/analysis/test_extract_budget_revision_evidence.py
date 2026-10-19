@@ -682,6 +682,66 @@ async def test_budget_evidence_rejects_unsupported_iso_currency_format(
         '0.00"pcs"',
     ],
 )
+@pytest.mark.parametrize(
+    ("unit_price", "conditioned_format"),
+    [
+        (50, '[>=100]"USD"0;"EUR"0'),
+        (50, '[>=100]"EUR"0;"USD"0'),
+        (-5, '[<=-10]"EUR"0;"USD"0'),
+        (50, '[>1]0;0'),
+    ],
+)
+@pytest.mark.asyncio
+async def test_budget_conditioned_numeric_format_fails_closed_in_evidence_mode(
+    tmp_path: Path, unit_price: int, conditioned_format: str,
+) -> None:
+    """Excel conditions change displayed currency; a sign-only rule cannot attest it."""
+    source = tmp_path / "conditional-currency.xlsx"
+    _budget_xlsx(source)
+    workbook = openpyxl.load_workbook(source)
+    workbook.active.cell(row=2, column=4).value = unit_price
+    workbook.active.cell(row=2, column=4).number_format = conditioned_format
+    workbook.active.cell(row=2, column=5).value = unit_price * 12
+    workbook.save(source)
+    workbook.close()
+
+    # The old parser must remain usable for legacy, non-attested analysis.
+    legacy_rows = await ExcelFileParser().parse_budget(source, include_evidence=False)
+    assert len(legacy_rows) == 1
+
+    with pytest.raises(ExcelParsingError, match="Conditional Excel number format"):
+        await ExtractBudgetRevisionEvidenceUseCase(
+            parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+        ).execute(
+            document=_document(), revision=_revision(source), source_path=source,
+            existing_row_identities=frozenset(),
+        )
+
+
+@pytest.mark.parametrize(
+    "literal_format",
+    ['"[>=100]" "EUR"0', r'\\[>=100\\] "EUR"0'],
+)
+@pytest.mark.asyncio
+async def test_quoted_or_escaped_condition_text_is_not_excel_conditional_directive(
+    tmp_path: Path, literal_format: str,
+) -> None:
+    source = tmp_path / "literal-brackets.xlsx"
+    _budget_xlsx(source)
+    workbook = openpyxl.load_workbook(source)
+    workbook.active.cell(row=2, column=4).number_format = literal_format
+    workbook.save(source)
+    workbook.close()
+    result = await ExtractBudgetRevisionEvidenceUseCase(
+        parser=ExcelFileParser(), approved_scope_service=_ApprovedScopeService()
+    ).execute(
+        document=_document(), revision=_revision(source), source_path=source,
+        existing_row_identities=frozenset(),
+    )
+    assert len(result.rows) == 1
+    assert result.rows[0].currency == "EUR"
+
+
 @pytest.mark.asyncio
 async def test_budget_evidence_keeps_valid_currency_and_format_metadata(
     tmp_path: Path, number_format: str,
