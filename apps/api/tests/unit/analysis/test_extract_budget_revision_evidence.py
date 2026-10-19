@@ -720,7 +720,7 @@ async def test_budget_conditioned_numeric_format_fails_closed_in_evidence_mode(
 
 @pytest.mark.parametrize(
     "literal_format",
-    ['"[>=100]" "EUR"0', r'\\[>=100\\] "EUR"0'],
+    ['"[>=100]" "EUR"0', r'\[>=100\] "EUR"0'],
 )
 @pytest.mark.asyncio
 async def test_quoted_or_escaped_condition_text_is_not_excel_conditional_directive(
