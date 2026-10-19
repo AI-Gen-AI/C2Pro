@@ -652,7 +652,7 @@ class ExcelFileParser:
             elif char == "[":
                 directive = []
             elif char == "]" and directive is not None:
-                if re.match(r"^\\s*(?:>=|<=|>|<|=)", "".join(directive)):
+                if re.match(r"^\s*(?:>=|<=|>|<|=)", "".join(directive)):
                     return True
                 directive = None
             elif directive is not None:
