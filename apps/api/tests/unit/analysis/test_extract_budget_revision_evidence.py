@@ -674,15 +674,6 @@ async def test_budget_evidence_rejects_unsupported_iso_currency_format(
 
 
 @pytest.mark.parametrize(
-    "number_format",
-    [
-        '"EUR" #,##0.00',
-        '[RED]"EUR" #,##0.00',
-        '€#,##0.00;€-#,##0.00;€0.00;"JPY"@',
-        '0.00"pcs"',
-    ],
-)
-@pytest.mark.parametrize(
     ("unit_price", "conditioned_format"),
     [
         (50, '[>=100]"USD"0;"EUR"0'),
@@ -742,6 +733,15 @@ async def test_quoted_or_escaped_condition_text_is_not_excel_conditional_directi
     assert result.rows[0].currency == "EUR"
 
 
+@pytest.mark.parametrize(
+    "number_format",
+    [
+        '"EUR" #,##0.00',
+        '[RED]"EUR" #,##0.00',
+        '€#,##0.00;€-#,##0.00;€0.00;"JPY"@',
+        '0.00"pcs"',
+    ],
+)
 @pytest.mark.asyncio
 async def test_budget_evidence_keeps_valid_currency_and_format_metadata(
     tmp_path: Path, number_format: str,
