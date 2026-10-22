@@ -28,16 +28,21 @@ export function redBacklogProblem(report) {
   return executed.length ? null : "no red-backlog test executed.";
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const file = process.argv[2];
+/** CLI entry: returns the process exit code for the report at file. */
+export function main(file, log = console.log) {
   const report =
     file && fs.existsSync(file) && fs.statSync(file).size > 0
       ? JSON.parse(fs.readFileSync(file, "utf8"))
       : null;
   const problem = redBacklogProblem(report);
   if (problem) {
-    console.log(`::error::RED backlog NOT EXECUTED: ${problem}`);
-    process.exit(1);
+    log(`::error::RED backlog NOT EXECUTED: ${problem}`);
+    return 1;
   }
-  console.log("RED backlog executed.");
+  log("RED backlog executed.");
+  return 0;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = main(process.argv[2]);
 }

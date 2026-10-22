@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { redBacklogProblem } from "../../../../scripts/playwright-red-backlog-ran.mjs";
+import { main, redBacklogProblem } from "../../../../scripts/playwright-red-backlog-ran.mjs";
 
 describe("TASK-QA-336 nightly full E2E lane", () => {
   it("[TASK-QA-336-RED-01] runs the local Playwright binary with the Chromium project", () => {
@@ -91,6 +91,21 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     ).toMatch(/no red-backlog test executed/);
     // No report.
     expect(redBacklogProblem(null)).toMatch(/no Playwright results/);
+  });
+
+  it("[TASK-QA-336-RED-08] RED inventory CLI returns the job exit code", () => {
+    const lines: string[] = [];
+    const log = (line: string) => lines.push(line);
+    const fixture = resolve(__dirname, "fixtures", "red-backlog-report.json");
+
+    expect(main(fixture, log)).toBe(0);
+    expect(main(resolve(__dirname, "fixtures", "missing-report.json"), log)).toBe(1);
+    expect(main(undefined, log)).toBe(1);
+    expect(lines).toEqual([
+      "RED backlog executed.",
+      "::error::RED backlog NOT EXECUTED: no Playwright results were produced.",
+      "::error::RED backlog NOT EXECUTED: no Playwright results were produced.",
+    ]);
   });
 
   it("[TASK-QA-336-RED-02] gates the seeded Chromium smoke lane behind RUN_FULL_E2E", () => {

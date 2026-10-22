@@ -1,0 +1,12 @@
+{
+  "suites": [
+    {
+      "title": "setup",
+      "specs": [{ "tests": [{ "projectName": "setup", "status": "expected", "results": [{ "status": "passed" }] }] }]
+    },
+    {
+      "title": "S3-01-pdf-highlighting.spec.ts",
+      "specs": [{ "tests": [{ "projectName": "red-backlog", "status": "unexpected", "results": [{ "status": "failed" }] }] }]
+    }
+  ]
+}
