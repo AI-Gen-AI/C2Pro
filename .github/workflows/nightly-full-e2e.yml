@@ -15,12 +15,13 @@ permissions:
 
 jobs:
   full-playwright-suite:
-    name: Full Playwright suite (non-blocking)
+    # Scheduled, so it never blocks a PR. The run's status must be the suite's
+    # real result: continue-on-error made a failing suite report success.
+    # No API backend is started here (NEXT_PUBLIC_API_URL points at an unused
+    # port), so backend-dependent specs fail; it is not acceptance evidence.
+    name: Full Playwright suite (frontend + Clerk, no backend)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # The full suite is observability-only until its data-dependent specs are
-    # deterministic. Keep failures visible without blocking unrelated work.
-    continue-on-error: true
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
@@ -42,11 +43,48 @@ jobs:
       - name: Run full Playwright suite
         if: ${{ env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
         working-directory: apps/web
-        run: ./node_modules/.bin/playwright test --project=chromium
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/nightly-results.json
+        run: ./node_modules/.bin/playwright test --project=chromium --reporter=list,json
 
-      - name: Skip full Playwright suite when Clerk credentials are unavailable
+      # A suite that never ran is not a pass.
+      - name: Fail when Clerk credentials are unavailable
         if: ${{ env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || (env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '') }}
-        run: echo "::notice::Skipping Clerk-backed full E2E tests because a matching NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY or CLERK_TESTING_TOKEN are required."
+        run: |
+          echo "::error::Full E2E NOT EXECUTED: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY or CLERK_TESTING_TOKEN are required."
+          exit 1
+
+      - name: Summarize suite result
+        if: always()
+        working-directory: apps/web
+        run: |
+          node - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require("fs");
+          const file = "playwright-report/nightly-results.json";
+          console.log("## Nightly Full E2E (frontend + Clerk, no backend)\n");
+          if (!fs.existsSync(file)) {
+            console.log("**NOT EXECUTED**: no Playwright results were produced.");
+            process.exit(0);
+          }
+          const { stats, suites = [] } = JSON.parse(fs.readFileSync(file, "utf8"));
+          console.log("| passed | failed | flaky | skipped |\n|---:|---:|---:|---:|");
+          console.log(`| ${stats.expected} | ${stats.unexpected} | ${stats.flaky} | ${stats.skipped} |\n`);
+          const failed = [];
+          const walk = (suite, path) => {
+            for (const spec of suite.specs || []) {
+              if (spec.tests.some((t) => t.status === "unexpected")) {
+                failed.push(`${spec.file}: ${[...path, spec.title].join(" › ")}`);
+              }
+            }
+            for (const child of suite.suites || []) walk(child, [...path, child.title]);
+          };
+          suites.forEach((s) => walk(s, []));
+          if (failed.length) {
+            console.log(`<details><summary>${failed.length} failing specs</summary>\n`);
+            failed.forEach((f) => console.log(`- ${f}`));
+            console.log("\n</details>");
+          }
+          EOF
 
       - name: Upload Playwright diagnostics
         if: always()
