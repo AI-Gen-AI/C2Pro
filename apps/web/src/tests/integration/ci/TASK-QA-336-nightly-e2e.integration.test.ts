@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { redBacklogProblem } from "../../../../scripts/playwright-red-backlog-ran.mjs";
+
 describe("TASK-QA-336 nightly full E2E lane", () => {
   it("[TASK-QA-336-RED-01] runs the local Playwright binary with the Chromium project", () => {
     const workflowPath = resolve(process.cwd(), "..", "..", ".github", "workflows", "nightly-full-e2e.yml");
@@ -65,22 +67,7 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     );
   });
 
-  it("[TASK-QA-336-RED-07] RED inventory check fails closed on setup failure or no execution", async () => {
-    const { execFileSync } = await import("node:child_process");
-    const { mkdtempSync, writeFileSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const dir = mkdtempSync(join(tmpdir(), "red-backlog-"));
-    const run = (report: unknown) => {
-      const file = join(dir, `${Math.random()}.json`);
-      if (report !== undefined) writeFileSync(file, JSON.stringify(report));
-      try {
-        execFileSync("node", ["scripts/playwright-red-backlog-ran.mjs", file], { stdio: "pipe" });
-        return 0;
-      } catch (error) {
-        return (error as { status: number }).status;
-      }
-    };
+  it("[TASK-QA-336-RED-07] RED inventory check fails closed on setup failure or no execution", () => {
     const test = (projectName: string, status: string, resultStatus?: string) => ({
       projectName,
       status,
@@ -89,13 +76,21 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     const report = (...tests: unknown[]) => ({ suites: [{ specs: [{ tests }] }] });
 
     // RED failures are expected: the inventory counts.
-    expect(run(report(test("setup", "expected", "passed"), test("red-backlog", "unexpected", "failed")))).toBe(0);
+    expect(
+      redBacklogProblem(
+        report(test("setup", "expected", "passed"), test("red-backlog", "unexpected", "failed")),
+      ),
+    ).toBeNull();
     // The auth setup failed: nothing RED really ran.
-    expect(run(report(test("setup", "unexpected", "failed"), test("red-backlog", "skipped")))).toBe(1);
+    expect(
+      redBacklogProblem(report(test("setup", "unexpected", "failed"), test("red-backlog", "skipped"))),
+    ).toMatch(/auth setup failed/);
     // No red-backlog test executed at all.
-    expect(run(report(test("setup", "expected", "passed"), test("red-backlog", "skipped")))).toBe(1);
+    expect(
+      redBacklogProblem(report(test("setup", "expected", "passed"), test("red-backlog", "skipped"))),
+    ).toMatch(/no red-backlog test executed/);
     // No report.
-    expect(run(undefined)).toBe(1);
+    expect(redBacklogProblem(null)).toMatch(/no Playwright results/);
   });
 
   it("[TASK-QA-336-RED-02] gates the seeded Chromium smoke lane behind RUN_FULL_E2E", () => {
