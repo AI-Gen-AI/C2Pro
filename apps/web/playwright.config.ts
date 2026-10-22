@@ -1,11 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Intentionally RED (TDD) specs for features that are not built yet: the S3
-// "<id> RED - ..." specs and the RED-phase setup/review journeys. They are a
-// backlog, never acceptance evidence, so they run only in "red-backlog".
+// "<id> RED - ..." specs and the review journey declared "Phase: RED". They
+// are a backlog, never acceptance evidence, so they run only in "red-backlog".
+// Journey 1 declares "Phase: GREEN" (P0) and stays executable.
 const redBacklogSpecs = [
   /(^|[\\/])S3-\d+-[^\\/]*\.spec\.ts$/,
-  /(^|[\\/])journeys[\\/]journey-[12]-[^\\/]*\.spec\.ts$/,
+  /(^|[\\/])journeys[\\/]journey-2-review\.spec\.ts$/,
 ];
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";

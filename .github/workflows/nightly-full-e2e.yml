@@ -228,9 +228,8 @@ jobs:
           SUMMARY_LIST_PASSING: "1"
         run: node scripts/playwright-summary.mjs playwright-report/red-backlog-results.json "RED backlog (expected failures, not acceptance)" >> "$GITHUB_STEP_SUMMARY"
 
+      # Expected RED failures are fine; a failed auth setup or a run where no
+      # RED spec executed is not an inventory and fails the job.
       - name: Fail when the RED backlog did not run
-        run: |
-          if [ ! -s apps/web/playwright-report/red-backlog-results.json ]; then
-            echo "::error::RED backlog NOT EXECUTED: no Playwright results were produced."
-            exit 1
-          fi
+        working-directory: apps/web
+        run: node scripts/playwright-red-backlog-ran.mjs playwright-report/red-backlog-results.json
