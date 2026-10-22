@@ -14,14 +14,179 @@ permissions:
   contents: read
 
 jobs:
-  full-playwright-suite:
-    # Scheduled, so it never blocks a PR. The run's status must be the suite's
-    # real result: continue-on-error made a failing suite report success.
-    # No API backend is started here (NEXT_PUBLIC_API_URL points at an unused
-    # port), so backend-dependent specs fail; it is not acceptance evidence.
-    name: Full Playwright suite (frontend + Clerk, no backend)
+  executable-suite:
+    # Scheduled, so it never blocks a PR. Its status is the suite's real result.
+    # Runs every "chromium" spec (the intentionally RED backlog is excluded in
+    # playwright.config.ts) against a real local backend started exactly as the
+    # P0b Acceptance Journey lane does: PostgreSQL + Redis, migrations, the Clerk
+    # E2E Organization fixture, seeded auth tenancy, a Celery worker and the API.
+    # Inference is deterministic at the provider boundary only (C2PRO_AI_MOCK).
+    name: Executable Playwright suite (real local backend)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      STORAGE_PROVIDER: local
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      C2PRO_AI_MOCK: "1"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      CORS_ORIGINS: '["http://localhost:3100"]'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate ephemeral test JWT secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+
+      # A suite that never ran is not a pass.
+      - name: Verify Clerk prerequisites
+        run: |
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo "::error::Nightly E2E NOT EXECUTED: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY are required."
+            exit 1
+          fi
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap infrastructure (PostgreSQL + Redis)
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      # Fails closed unless the Clerk credentials are a development/test instance.
+      - name: Reconcile dedicated Clerk E2E Organization fixture
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+      - name: Seed deterministic E2E auth tenancy
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+
+          from src.core.database import close_db, get_raw_session, init_db
+          from tests.e2e_seed.seed_wedge import seed_e2e_auth_tenancy
+
+
+          async def main() -> None:
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      ids = await seed_e2e_auth_tenancy(db)
+                  print(f"seeded tenant={ids['tenant_id']} user={ids['user_id']}")
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
+      - name: Verify Clerk <-> local tenant linkage
+        working-directory: apps/api
+        run: python scripts/verify_e2e_tenant_link.py
+
+      - name: Start Celery worker (document_parsing)
+        working-directory: apps/api
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker \
+            --loglevel=info --queues=document_parsing --concurrency=2 \
+            > "$RUNNER_TEMP/c2pro-nightly-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-nightly-worker.pid"
+          sleep 10
+          if ! kill -0 "$(cat "$RUNNER_TEMP/c2pro-nightly-worker.pid")"; then
+            cat "$RUNNER_TEMP/c2pro-nightly-worker.log"
+            echo "::error::Celery worker failed to start."
+            exit 1
+          fi
+
+      # The fixture step wrote the instance JWKS; serve it locally so the API can
+      # verify Clerk JWTs without a hard-coded Clerk host.
+      - name: Start backend API
+        working-directory: apps/api
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-nightly-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-nightly-jwks.pid"
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+            python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
+            > "$RUNNER_TEMP/c2pro-nightly-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-nightly-api.pid"
+          for _ in {1..45}; do
+            if curl --fail --silent http://localhost:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/c2pro-nightly-api.log"
+          exit 1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run executable Playwright suite
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/nightly-results.json
+        run: ./node_modules/.bin/playwright test --project=chromium --reporter=list,json
+
+      - name: Summarize suite result
+        if: always()
+        working-directory: apps/web
+        run: node scripts/playwright-summary.cjs playwright-report/nightly-results.json "Nightly executable E2E (real local backend)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-full-e2e-diagnostics
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+            ${{ runner.temp }}/c2pro-nightly-api.log
+            ${{ runner.temp }}/c2pro-nightly-worker.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: |
+          for name in worker api jwks; do
+            if [ -f "$RUNNER_TEMP/c2pro-nightly-$name.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/c2pro-nightly-$name.pid")" || true
+            fi
+          done
+          docker compose -f docker-compose.test.yml down -v || true
+
+  red-backlog:
+    # Intentionally RED TDD specs for features not built yet (the "red-backlog"
+    # Playwright project). Their failures are expected and are NOT acceptance
+    # results, so they cannot turn the executable suite red, and this job never
+    # reports them as passing acceptance. It fails only when they could not run.
+    # A RED spec that now passes is listed so it can be promoted.
+    name: RED backlog inventory (expected failures, not acceptance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
@@ -33,6 +198,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Verify Clerk prerequisites
+        run: |
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || { [ -z "${CLERK_SECRET_KEY:-}" ] && [ -z "${CLERK_TESTING_TOKEN:-}" ]; }; then
+            echo "::error::RED backlog NOT EXECUTED: Clerk credentials are required."
+            exit 1
+          fi
+
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
 
@@ -40,59 +212,25 @@ jobs:
         working-directory: apps/web
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
-      - name: Run full Playwright suite
-        if: ${{ env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '') }}
+      - name: Run RED backlog specs
         working-directory: apps/web
         env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/nightly-results.json
-        run: ./node_modules/.bin/playwright test --project=chromium --reporter=list,json
-
-      # A suite that never ran is not a pass.
-      - name: Fail when Clerk credentials are unavailable
-        if: ${{ env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY == '' || (env.CLERK_SECRET_KEY == '' && env.CLERK_TESTING_TOKEN == '') }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/red-backlog-results.json
         run: |
-          echo "::error::Full E2E NOT EXECUTED: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY or CLERK_TESTING_TOKEN are required."
-          exit 1
+          set +e
+          ./node_modules/.bin/playwright test --project=red-backlog --reporter=list,json
+          echo "::notice::RED backlog exit status $? (failures are expected; see the summary)."
 
-      - name: Summarize suite result
+      - name: Summarize RED backlog
         if: always()
         working-directory: apps/web
-        run: |
-          node - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          const fs = require("fs");
-          const file = "playwright-report/nightly-results.json";
-          console.log("## Nightly Full E2E (frontend + Clerk, no backend)\n");
-          if (!fs.existsSync(file)) {
-            console.log("**NOT EXECUTED**: no Playwright results were produced.");
-            process.exit(0);
-          }
-          const { stats, suites = [] } = JSON.parse(fs.readFileSync(file, "utf8"));
-          console.log("| passed | failed | flaky | skipped |\n|---:|---:|---:|---:|");
-          console.log(`| ${stats.expected} | ${stats.unexpected} | ${stats.flaky} | ${stats.skipped} |\n`);
-          const failed = [];
-          const walk = (suite, path) => {
-            for (const spec of suite.specs || []) {
-              if (spec.tests.some((t) => t.status === "unexpected")) {
-                failed.push(`${spec.file}: ${[...path, spec.title].join(" › ")}`);
-              }
-            }
-            for (const child of suite.suites || []) walk(child, [...path, child.title]);
-          };
-          suites.forEach((s) => walk(s, []));
-          if (failed.length) {
-            console.log(`<details><summary>${failed.length} failing specs</summary>\n`);
-            failed.forEach((f) => console.log(`- ${f}`));
-            console.log("\n</details>");
-          }
-          EOF
+        env:
+          SUMMARY_LIST_PASSING: "1"
+        run: node scripts/playwright-summary.cjs playwright-report/red-backlog-results.json "RED backlog (expected failures, not acceptance)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Playwright diagnostics
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: nightly-full-e2e-diagnostics
-          path: |
-            apps/web/playwright-report/
-            apps/web/test-results/
-          if-no-files-found: warn
-          retention-days: 3
+      - name: Fail when the RED backlog did not run
+        run: |
+          if [ ! -s apps/web/playwright-report/red-backlog-results.json ]; then
+            echo "::error::RED backlog NOT EXECUTED: no Playwright results were produced."
+            exit 1
+          fi

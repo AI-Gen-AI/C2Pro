@@ -1,5 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Intentionally RED (TDD) specs for features that are not built yet: the S3
+// "<id> RED - ..." specs and the RED-phase setup/review journeys. They are a
+// backlog, never acceptance evidence, so they run only in "red-backlog".
+const redBacklogSpecs = [
+  /(^|[\\/])S3-\d+-[^\\/]*\.spec\.ts$/,
+  /(^|[\\/])journeys[\\/]journey-[12]-[^\\/]*\.spec\.ts$/,
+];
+
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
 const useManagedWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 const useProductionWebServer = process.env.PLAYWRIGHT_WEBSERVER_MODE === "production";
@@ -49,12 +57,25 @@ export default defineConfig({
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
+        ...redBacklogSpecs,
+        // Owned by "visual-regression": its baselines are named for that project.
+        /core-pages\.visual\.spec\.ts$/,
       ],
       use: {
         ...devices["Desktop Chrome"],
         storageState: "playwright/.auth/user.json",
       },
       dependencies: ["setup"],
+    },
+    {
+      name: "red-backlog",
+      testMatch: redBacklogSpecs,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
+      metadata: { phase: "red", type: "e2e", description: "Unbuilt-feature TDD backlog; not acceptance" },
     },
     {
       // PJ-01 First Real User Journey. Like P0b: NO storageState — the journey performs the
