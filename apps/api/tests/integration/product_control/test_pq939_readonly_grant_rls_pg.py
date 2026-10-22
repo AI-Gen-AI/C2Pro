@@ -222,14 +222,21 @@ async def test_migration_refuses_role_inherited_by_another_rls_subject_role() ->
                     "NULLIF(current_setting('app.current_tenant', true), '')::uuid))"
                 )
 
-            # NOINHERIT membership grants no privileges: still allowed.
-            await conn.execute(f"GRANT {role} TO {member}")
+            # NOINHERIT membership grants no privileges: still allowed. PG16+
+            # fixes a membership's INHERIT option at GRANT time (from the
+            # member's attribute), so set NOINHERIT before granting.
             await conn.execute(f"ALTER ROLE {member} NOINHERIT")
+            await conn.execute(f"GRANT {role} TO {member}")
             await conn.execute("SAVEPOINT noinherit")
             await conn.execute(_fixture_sql(m.GRANT_SQL, schema, role))
             await conn.execute("ROLLBACK TO SAVEPOINT noinherit")
 
-            await conn.execute(f"ALTER ROLE {member} INHERIT")
+            if await conn.fetchval(
+                "SELECT current_setting('server_version_num')::int >= 160000"
+            ):
+                await conn.execute(f"GRANT {role} TO {member} WITH INHERIT TRUE")
+            else:
+                await conn.execute(f"ALTER ROLE {member} INHERIT")
             with pytest.raises(
                 asyncpg.RaiseError, match="PQ939_READONLY_ROLE_MEMBERSHIP_GUARD_FAILED"
             ):
