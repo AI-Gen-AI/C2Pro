@@ -96,10 +96,10 @@ def _mark_risk_extraction_honest_failure(
     *,
     reason: str,
     exc: Exception | None = None,
-    previous_confidence: float | None = None,
 ) -> ProjectState:
-    if previous_confidence is not None:
-        state["confidence_score"] = previous_confidence
+    # No risk was measured on this attempt. Neither a synthetic score nor a
+    # value left by an earlier attempt or by the tool describes zero risks.
+    state["confidence_score"] = None
     state["extracted_risks"] = []
     error_type = type(exc).__name__ if exc is not None else None
     error_detail = _tool_error_detail(exc) if exc is not None else None
@@ -284,12 +284,10 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
-    previous_confidence = state.get("confidence_score", 0.0)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         _mark_risk_extraction_honest_failure(
             state,
             reason="AI risk extraction unavailable in mock mode — no risks extracted",
-            previous_confidence=previous_confidence,
         )
         _append_risk_extraction_summary(state)
         return state
@@ -312,14 +310,12 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             state,
             reason="AI risk extraction failed/empty — no risks extracted",
             exc=exc,
-            previous_confidence=previous_confidence,
         )
         state["node_results"] = [*state.get("node_results", []), node_result]
         _append_risk_extraction_summary(state)
         return state
 
     if not updated_state.get("extracted_risks"):
-        updated_state["confidence_score"] = 0.25
         _mark_risk_extraction_honest_failure(
             updated_state,
             reason="AI risk extraction failed/empty — no risks extracted",
@@ -508,10 +504,13 @@ async def critique_node(state: ProjectState) -> ProjectState:
             confidence=result.confidence,
         ),
     ]
+    confidence_label = (
+        "not assessed" if result.confidence is None else f"{result.confidence:.2f}"
+    )
     state["messages"].append(
         AIMessage(
             content=(
-                f"Critique status={result.status} confidence={result.confidence:.2f} "
+                f"Critique status={result.status} confidence={confidence_label} "
                 f"retry_count={result.retry_count}"
             )
         )
@@ -602,11 +601,13 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             # that requirement back into an automatic approval. This happens
             # legitimately when critique retries are exhausted even if the
             # extractor's aggregate confidence remains high (#792).
+            assessed_confidence = state.get("confidence_score")
             impact = (
                 ImpactLevel.HIGH
                 if (
                     bool(state.get("human_approval_required"))
-                    or state.get("confidence_score", 0) < 0.5
+                    or assessed_confidence is None
+                    or assessed_confidence < 0.5
                 )
                 else ImpactLevel.MEDIUM
             )
@@ -683,7 +684,8 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
                     item_type=doc_type,
-                    confidence=state.get("confidence_score", 0.0),
+                    # Database column is NOT NULL; sentinel zero is not assessed confidence.
+                    confidence=(assessed_confidence if assessed_confidence is not None else 0.0),
                     impact_level=impact,
                     item_data={
                         "project_id": state["project_id"],
@@ -691,6 +693,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "doc_type": doc_type,
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
+                        "confidence_assessed": assessed_confidence is not None,
                         "critique_notes": state.get("critique_notes", ""),
                         "source_references": source_references,
                         "thread_id": state.get("thread_id"),

@@ -337,7 +337,8 @@ class TestRiskExtractorMockBranch:
         )
 
         assert result["extracted_risks"] == []
-        assert result["confidence_score"] == pytest.approx(0.2)
+        # No risk was measured: a prior value must not pose as this extraction's confidence.
+        assert result["confidence_score"] is None
         assert any(
             "mock mode" in message.content.lower()
             and "no risks extracted" in message.content.lower()
@@ -1089,7 +1090,8 @@ class TestExtractorAIToolDelegation:
         )
 
         assert result["extracted_risks"] == []
-        assert result["confidence_score"] == pytest.approx(0.25)
+        # Empty extraction is unmeasured, never a synthetic 0.25.
+        assert result["confidence_score"] is None
         assert "no risks extracted" in result["critique_notes"].lower()
 
     @pytest.mark.asyncio
@@ -1120,7 +1122,8 @@ class TestExtractorAIToolDelegation:
         )
 
         assert result["extracted_risks"] == []
-        assert result["confidence_score"] == pytest.approx(0.33)
+        # A failed extraction measured nothing; the prior 0.33 is obsolete.
+        assert result["confidence_score"] is None
         assert any(
             "RuntimeError" in message.content
             and "JSON parse failed" in message.content
@@ -1158,7 +1161,8 @@ class TestExtractorAIToolDelegation:
         )
 
         assert result["extracted_risks"] == []
-        assert result["confidence_score"] == pytest.approx(0.25)
+        # Neither the tool-reported 0.7 nor the prior 0.25 describes zero risks.
+        assert result["confidence_score"] is None
         assert any(
             message.content == "N4 risk_extractor: input_doc_chars=9 risks_emitted=0"
             for message in result["messages"]
@@ -1167,6 +1171,63 @@ class TestExtractorAIToolDelegation:
             "AI risk extraction failed/empty" in message.content
             for message in result["messages"]
         )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["mock", "exception", "empty"])
+    async def test_risk_extractor_never_carries_stale_high_confidence(
+        self, monkeypatch, path
+    ) -> None:
+        """PQ-HITL-02 negative: an earlier attempt's 0.95 must not certify an unmeasured retry."""
+        import sys
+        import types
+
+        from src.analysis.adapters.graph import nodes
+
+        if path == "mock":
+            monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        else:
+            monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+
+            async def _tool(state):
+                await asyncio.sleep(0)
+                if path == "exception":
+                    raise RuntimeError("upstream model timeout")
+                state["extracted_risks"] = []
+                state["confidence_score"] = 0.9
+                return state
+
+            fake_mod = types.ModuleType("src.core.ai.tools")
+            fake_mod.get_tool = lambda name, *, version: _tool
+            monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake_mod)
+
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="real text", confidence_score=0.95, retry_count=1)
+        )
+
+        assert result["extracted_risks"] == []
+        assert result["confidence_score"] is None
+        assert result["confidence_score"] != pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_risk_extractor_unmeasured_failure_routes_to_hitl_not_auto_ok(
+        self, monkeypatch
+    ) -> None:
+        """PQ-HITL-02 negative: failed N4 + OK critique must still require a human."""
+        from src.analysis.adapters.graph import nodes
+        from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
+
+        monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="real text", confidence_score=0.95)
+        )
+        evaluation = CritiqueEvaluationService().evaluate_critique(
+            critique_status="OK",
+            critique_notes="",
+            confidence=result["confidence_score"],
+            retry_count=0,
+        )
+        assert evaluation.confidence is None
+        assert evaluation.human_approval_required is True
 
     @pytest.mark.asyncio
     async def test_wbs_extractor_uses_tool_registry(self, monkeypatch) -> None:
