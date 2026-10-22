@@ -19,6 +19,7 @@ SELECT m.rolname AS member, m.rolsuper, m.rolbypassrls,
  WHERE am.roleid = 'c2pro_prod_acceptance_ro'::regrole;
 
 \echo '== 3. relations the role can read, and whether a RESTRICTIVE read policy binds it'
+\echo '   (the anchor table itself is excluded: the role must read its own binding)'
 SELECT n.nspname, c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
        has_table_privilege('c2pro_prod_acceptance_ro', c.oid, 'SELECT') AS table_select,
        EXISTS (SELECT 1 FROM pg_policy p
@@ -27,6 +28,7 @@ SELECT n.nspname, c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
                   AND 'c2pro_prod_acceptance_ro'::regrole = ANY (p.polroles)) AS bound
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+   AND NOT (n.nspname = 'c2pro_security' AND c.relname = 'acceptance_tenant_binding')
    AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
    AND (has_table_privilege('c2pro_prod_acceptance_ro', c.oid, 'SELECT')
         OR has_any_column_privilege('c2pro_prod_acceptance_ro', c.oid, 'SELECT'))
