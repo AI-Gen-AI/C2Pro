@@ -461,6 +461,32 @@ class TestDocumentDownload:
         assert response.headers["content-type"] == "application/pdf"
         assert "contract.pdf" in response.headers["content-disposition"]
 
+    def test_revision_pinned_download_passes_exact_uuid_to_authorized_use_case(
+        self, client, app, tmp_path, sample_document,
+    ):
+        from src.documents.adapters.http.router import get_download_use_case
+
+        revision_id = uuid4()
+        path = tmp_path / "revision.pdf"
+        path.write_bytes(b"%PDF-1.4 immutable revision")
+        use_case = MagicMock()
+        use_case.execute = AsyncMock(return_value=(path, "application/pdf"))
+        app.dependency_overrides[get_download_use_case] = lambda: use_case
+
+        response = client.get(
+            f"/documents/{sample_document.id}/download?revision_id={revision_id}"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert use_case.execute.await_args.kwargs == {"revision_id": revision_id}
+
+    def test_malformed_pinned_revision_id_is_rejected(
+        self, client, sample_document,
+    ):
+        response = client.get(
+            f"/documents/{sample_document.id}/download?revision_id=not-a-uuid"
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
     def test_doc_http_009_download_document(self, client):
         """
         🔴 RED: DOC-HTTP-009 - Test downloading a document

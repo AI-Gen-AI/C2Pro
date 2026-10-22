@@ -470,19 +470,101 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     return data
 
 
-# A new clause starts at a numbered header ("28.-", "28.1.-", "1.-"), a section
-# keyword (CLÁUSULA / ESTIPULACIÓN / ARTÍCULO / CLAUSE / ARTICLE / SECTION), or an
-# ordinal word (PRIMERA … DÉCIMA). Anchored at line start to avoid mid-sentence
-# matches. Used to split a contract into clause-sized chunks instead of sentences.
-_CLAUSE_BOUNDARY = re.compile(
-    r"(?m)^\s*(?:"
-    r"\d{1,3}(?:\.\d{1,3}){0,6}\s*\.\s*[-–]"
-    r"|(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION)\w*"
-    r"|(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA)\b"
-    r")",
+# A numbered heading is only a source locator when its structure supplies
+# evidence of a heading. A title-cased currency phrase ("5 Million Dollars")
+# is not such evidence, even if it has two title-cased words. Ambiguous numeric
+# prose remains AUTO-NNN and cannot be used for verified N4->N13 navigation.
+#
+# Explicit "5.2.-" and "SECTION 5.2" are handled independently by the
+# hard-heading recognizer. For otherwise unmarked inline headings, accept
+# only conventional contractual section titles; unknown titles fail closed.
+_INLINE_CONTRACT_TITLES = re.compile(
+    r"^(?:"
+    r"General[ \t]+Conditions"
+    r"|Payment[ \t]+(?:Terms|Conditions)"
+    r"|Termination[ \t]+Rights"
+    r"|Penalty[ \t]+Cap"
+    r"|Scope[ \t]+of[ \t]+(?:Work|Works|Services)"
+    r"|Definitions(?=[ \t]+(?-i:[a-z]))"
+    r"|Notice(?=[ \t]+(?-i:[a-z]))"
+    r"|Payment(?=[ \t]+(?-i:[a-z]))"
+    r"|Penalty(?=[ \t]+(?-i:[a-z]))"
+    r")(?![A-Za-zÁÉÍÓÚÜÑáéíóúüñ])",
     re.IGNORECASE,
 )
+# A standalone line can be a genuine one-word section heading ("1. Scope\n")
+# even when the body begins on the next line. Still require an identifiable
+# contractual title, not any capitalized currency/unit.
+_STANDALONE_CONTRACT_TITLES = {
+    "scope", "payment", "definitions", "notice", "notices", "liability",
+    "warranty", "insurance", "price", "termination", "penalties",
+    "delivery", "acceptance", "quality", "confidentiality", "duration",
+}
 
+def _bounded_numeric_heading(line: str) -> tuple[str, str] | None:
+    """Parse at most seven 1-3 digit components without regex backtracking."""
+    cursor = 0
+    end_code = 0
+    length = len(line)
+
+    for component in range(7):
+        start = cursor
+        while cursor < length and line[cursor].isdecimal() and cursor - start < 3:
+            cursor += 1
+        if cursor == start or (cursor < length and line[cursor].isdecimal()):
+            return None
+        end_code = cursor
+        if cursor + 1 < length and line[cursor] == "." and line[cursor + 1].isdecimal():
+            if component == 6:
+                return None
+            cursor += 1
+            continue
+        break
+
+    if cursor < length and line[cursor] == ".":
+        cursor += 1
+    if cursor >= length or line[cursor] not in " \t":
+        return None
+    while cursor < length and line[cursor] in " \t":
+        cursor += 1
+    if cursor == length:
+        return None
+    return line[:end_code], line[cursor:]
+
+
+_PUNCTUATED_SECTION_TITLE = re.compile(
+    r"^(?P<title>[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ-]*)"
+    r"[.:][ \t]+(?=[A-ZÁÉÍÓÚÜÑ])"
+)
+_NUMERIC_LINE_START = re.compile(r"(?m)^[ \t]*(?=\d)")
+_CLAUSE_BOUNDARY = re.compile(
+    r"(?m)^[ \t]*(?:"
+    r"\d{1,3}(?:\.\d{1,3}){0,6}[ \t]*\.[ \t]*[-–]"
+    r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION))\w*"
+    r"|(?i:(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA))\b"
+    r")"
+)
+
+
+def _soft_source_heading_code(line: str) -> str | None:
+    """Parse only recognizably structured unmarked numeric section headings.
+
+    Unknown title-cased text is not source identity. The same predicate gates
+    both span segmentation and persisted clause-code assignment.
+    """
+    candidate = _bounded_numeric_heading(line.strip())
+    if candidate is None:
+        return None
+    code, title = candidate
+    title = title.strip()
+    if title.casefold().rstrip(".:") in _STANDALONE_CONTRACT_TITLES:
+        return code
+    punctuated = _PUNCTUATED_SECTION_TITLE.match(title)
+    if punctuated and punctuated.group("title").casefold() in _STANDALONE_CONTRACT_TITLES:
+        return code
+    if _INLINE_CONTRACT_TITLES.match(title):
+        return code
+    return None
 
 def _trimmed_clause_span(
     parsed_text: str,
@@ -503,11 +585,21 @@ def _split_contract_clause_spans(
     parsed_text: str,
 ) -> list[tuple[str, int, int]]:
     """Split contract text while preserving exact source offsets."""
-    boundaries = [match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)]
+    # Hard structural markers and soft recognizable titles share one source
+    # identity predicate. Purely numeric prose must not split clause bodies.
+    boundaries = {match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)}
+    for candidate in _NUMERIC_LINE_START.finditer(parsed_text):
+        line_end = parsed_text.find("\n", candidate.end())
+        first_line = parsed_text[
+            candidate.end():line_end if line_end != -1 else len(parsed_text)
+        ]
+        if _soft_source_heading_code(first_line) is not None:
+            boundaries.add(candidate.start())
+    ordered_boundaries = sorted(boundaries)
     spans: list[tuple[int, int]] = []
 
-    if boundaries:
-        cut_points = ([0] if boundaries[0] > 0 else []) + boundaries + [len(parsed_text)]
+    if ordered_boundaries:
+        cut_points = ([0] if ordered_boundaries[0] > 0 else []) + ordered_boundaries + [len(parsed_text)]
         spans = [
             (cut_points[index], cut_points[index + 1])
             for index in range(len(cut_points) - 1)
@@ -531,6 +623,35 @@ def _split_contract_into_clauses(parsed_text: str) -> list[str]:
     """Compatibility text-only view over the exact clause-span splitter."""
     return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
 
+
+def _explicit_source_clause_heading_code(segment: str) -> str | None:
+    """Only preserve an actual leading numbered clause heading.
+
+    Do not mine internal mentions such as "under clause 5.2", derive IDs from
+    model prose, or treat quantity-prefixed paragraphs as clause evidence.
+    Header numbering remains a locator, not substantive claim support.
+    """
+    heading = segment.split("\n", 1)[0].strip()
+    # 1.- or 5.2.- or 5.2. - source heading with a separator.
+    separated = re.match(
+        r"^(\d{1,3}(?:\.\d{1,3}){0,6})\s*\.\s*[-–](?=\s|$)",
+        heading,
+    )
+    if separated:
+        return separated.group(1)
+    # A keyword-labeled source header ('Clause 5.2', 'Artículo 6.3').
+    labelled = re.match(
+        r"^(?:CLAUSE|SECTION|ARTICLE|CL[ÁA]USULA|ART[ÍI]CULO)[ \t]+"
+        r"(\d{1,3}(?:\.\d{1,3}){0,6})(?=\b|\.)",
+        heading,
+        re.IGNORECASE,
+    )
+    if labelled:
+        return labelled.group(1)
+
+    # Avoid a second looser interpretation: a span recognized by the
+    # splitter must be the same span eligible for an exact source code.
+    return _soft_source_heading_code(heading)
 
 def _extract_contract_clauses(
     *,
@@ -631,7 +752,9 @@ def _extract_contract_clauses(
                 project_id=project_id,
                 tenant_id=tenant_id,
                 document_id=document_id,
-                clause_code=f"AUTO-{index:03d}",
+                # Numeric source headers survive ingestion for N4→N13 exact
+                # persisted-code matching; prose/unlabeled spans keep AUTO.
+                clause_code=_explicit_source_clause_heading_code(segment) or f"AUTO-{index:03d}",
                 clause_type=clause_type,
                 title=segment[:80],
                 full_text=segment,

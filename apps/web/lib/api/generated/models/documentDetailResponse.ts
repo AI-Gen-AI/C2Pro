@@ -62,4 +62,5 @@ export interface DocumentDetailResponse {
   version?: number;
   file_hash?: string | null;
   clauses?: DocumentDetailResponseClauses;
+  revision_id?: string | null;
 }

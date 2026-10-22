@@ -2052,6 +2052,25 @@
               "format": "uuid",
               "title": "Document Id"
             }
+          },
+          {
+            "name": "revision_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Download this exact immutable, hash-verified revision (read-only).",
+              "title": "Revision Id"
+            },
+            "description": "Download this exact immutable, hash-verified revision (read-only)."
           }
         ],
         "responses": {
@@ -8146,7 +8165,14 @@
             "title": "Doc Type"
           },
           "confidence_score": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Confidence Score"
           },
           "critique_notes": {
@@ -10476,6 +10502,18 @@
               }
             ],
             "title": "Clauses"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
           }
         },
         "type": "object",

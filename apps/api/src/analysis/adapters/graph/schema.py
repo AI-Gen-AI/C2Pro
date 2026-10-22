@@ -26,7 +26,7 @@ class ProjectState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     extracted_risks: list[Risk]
     extracted_wbs: list[Task]
-    confidence_score: float
+    confidence_score: float | None
     critique_notes: str
     human_feedback: str
     retry_count: int

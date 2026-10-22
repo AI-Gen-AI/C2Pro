@@ -32,6 +32,10 @@ from src.analysis.adapters.graph.nodes_extended import (
 from src.analysis.adapters.graph.review_lineage import (
     claim_review_lineage_for_current_attempt,
 )
+from src.analysis.adapters.graph.review_source_references import (
+    grounded_review_source_references,
+    review_risk_clause_codes,
+)
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.application.classify_document_use_case import (
     ClassifyDocumentCommand,
@@ -51,6 +55,9 @@ from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.core.database import get_session_with_tenant
 from src.core.processing_authority import fence_current
+from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+    SqlAlchemyDocumentRepository,
+)
 from src.shared_kernel.enums import AlertSeverity
 from src.temporal.application.project_snapshot_trigger import (
     record_project_event_and_enqueue_snapshot,
@@ -89,10 +96,10 @@ def _mark_risk_extraction_honest_failure(
     *,
     reason: str,
     exc: Exception | None = None,
-    previous_confidence: float | None = None,
 ) -> ProjectState:
-    if previous_confidence is not None:
-        state["confidence_score"] = previous_confidence
+    # No risk was measured on this attempt. Neither a synthetic score nor a
+    # value left by an earlier attempt or by the tool describes zero risks.
+    state["confidence_score"] = None
     state["extracted_risks"] = []
     error_type = type(exc).__name__ if exc is not None else None
     error_detail = _tool_error_detail(exc) if exc is not None else None
@@ -277,12 +284,10 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
-    previous_confidence = state.get("confidence_score", 0.0)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         _mark_risk_extraction_honest_failure(
             state,
             reason="AI risk extraction unavailable in mock mode — no risks extracted",
-            previous_confidence=previous_confidence,
         )
         _append_risk_extraction_summary(state)
         return state
@@ -305,14 +310,12 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             state,
             reason="AI risk extraction failed/empty — no risks extracted",
             exc=exc,
-            previous_confidence=previous_confidence,
         )
         state["node_results"] = [*state.get("node_results", []), node_result]
         _append_risk_extraction_summary(state)
         return state
 
     if not updated_state.get("extracted_risks"):
-        updated_state["confidence_score"] = 0.25
         _mark_risk_extraction_honest_failure(
             updated_state,
             reason="AI risk extraction failed/empty — no risks extracted",
@@ -501,10 +504,13 @@ async def critique_node(state: ProjectState) -> ProjectState:
             confidence=result.confidence,
         ),
     ]
+    confidence_label = (
+        "not assessed" if result.confidence is None else f"{result.confidence:.2f}"
+    )
     state["messages"].append(
         AIMessage(
             content=(
-                f"Critique status={result.status} confidence={result.confidence:.2f} "
+                f"Critique status={result.status} confidence={confidence_label} "
                 f"retry_count={result.retry_count}"
             )
         )
@@ -595,11 +601,13 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
             # that requirement back into an automatic approval. This happens
             # legitimately when critique retries are exhausted even if the
             # extractor's aggregate confidence remains high (#792).
+            assessed_confidence = state.get("confidence_score")
             impact = (
                 ImpactLevel.HIGH
                 if (
                     bool(state.get("human_approval_required"))
-                    or state.get("confidence_score", 0) < 0.5
+                    or assessed_confidence is None
+                    or assessed_confidence < 0.5
                 )
                 else ImpactLevel.MEDIUM
             )
@@ -641,10 +649,43 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                     if impact == ImpactLevel.HIGH
                     else "This analysis requires human confirmation before it can complete."
                 )
+                # Derive navigation only from structured N4 risk clause_ref
+                # codes that match immutable rows physically bound to this
+                # tenant/project/document/revision. N12 critique prose has NO
+                # authoritative clause IDs; never synthesize links from it.
+                source_references: list[dict[str, str]] = []
+                risk_codes = review_risk_clause_codes(state.get("extracted_risks"))
+                revision_id = state.get("document_revision_id")
+                if risk_codes and revision_id:
+                    try:
+                        pinned_revision = UUID(revision_id)
+                        pinned_document = UUID(state["document_id"])
+                        pinned_project = UUID(state["project_id"])
+                        repo = SqlAlchemyDocumentRepository(session)
+                        persisted = await repo.list_clauses_bound_to_revision(
+                            UUID(tenant_id), pinned_document, pinned_revision
+                        )
+                        source_references = grounded_review_source_references(
+                            tenant_id=UUID(tenant_id),
+                            project_id=pinned_project,
+                            document_id=pinned_document,
+                            revision_id=pinned_revision,
+                            clause_codes=risk_codes,
+                            persisted_clauses=persisted,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        # A lookup error must not upgrade a risky critique to
+                        # evidence; review still proceeds with document fallback.
+                        logger.warning(
+                            "hitl_source_reference_unavailable",
+                            reason=type(exc).__name__,
+                            document_id=state.get("document_id"),
+                        )
                 review_status = await service.route_for_review(
                     item_id=UUID(state["document_id"]),
                     item_type=doc_type,
-                    confidence=state.get("confidence_score", 0.0),
+                    # Database column is NOT NULL; sentinel zero is not assessed confidence.
+                    confidence=(assessed_confidence if assessed_confidence is not None else 0.0),
                     impact_level=impact,
                     item_data={
                         "project_id": state["project_id"],
@@ -652,7 +693,9 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "doc_type": doc_type,
                         "document_filename": state.get("document_filename"),
                         "retry_count": state.get("retry_count", 0),
+                        "confidence_assessed": assessed_confidence is not None,
                         "critique_notes": state.get("critique_notes", ""),
+                        "source_references": source_references,
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}

@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { env } from "@/config/env";
 import { resolveHighlightStyle } from "@/components/features/evidence/highlight-style";
 import { createWatermarkToken } from "@/components/features/evidence/watermark-token";
@@ -58,6 +58,7 @@ export function PdfEvidenceViewer({
   const [isPdfReady, setIsPdfReady] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(activeHighlightId);
   const [statePage, setStatePage] = useState(1);
+  const lastExternalCitationRef = useRef<string | null>(null);
   const [currentFileUrl, setCurrentFileUrl] = useState(fileUrl);
   const [currentHighlights, setCurrentHighlights] =
     useState<PdfHighlight[]>(highlights);
@@ -92,17 +93,12 @@ export function PdfEvidenceViewer({
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (activeHighlightId) {
-      setActiveId(activeHighlightId);
-    }
-  }, [activeHighlightId]);
-
-  useEffect(() => {
+   useEffect(() => {
     if (fileUrl !== currentFileUrl) {
       setCurrentFileUrl(fileUrl);
       setStatePage(1);
       setActiveId(null);
+      lastExternalCitationRef.current = null;
       setCurrentHighlights(highlights);
     }
   }, [fileUrl, highlights]);
@@ -121,8 +117,14 @@ export function PdfEvidenceViewer({
   }, [isDemo, watermark]);
 
   const activeHighlights = useMemo(() => {
-    if (currentHighlights.length > 0) {
-      return currentHighlights;
+    // Production citations may arrive after the PDF mounts or change while
+    // the revision URL remains identical. Use the latest parent evidence for
+    // the exact URL; retain the local list only for the demo-only document B
+    // switch. Never display stale citations from a previous prop snapshot.
+    const evidenceForFile =
+      currentFileUrl === fileUrl ? highlights : currentHighlights;
+    if (evidenceForFile.length > 0) {
+      return evidenceForFile;
     }
     // Only allow demo fallback in demo mode
     if (isDemo && currentFileUrl.includes("doc-b")) {
@@ -137,7 +139,46 @@ export function PdfEvidenceViewer({
       ];
     }
     return [];
-  }, [currentFileUrl, currentHighlights, isDemo]);
+  }, [currentFileUrl, currentHighlights, fileUrl, highlights, isDemo]);
+
+  // A source deep link may be pinned to a PDF page other than page 1.
+  // Resolve ONLY a source highlight belonging to this exact file's current
+  // evidence list. Do not infer a page from unknown/document-fallback links.
+  // PDFViewer tracks changes to initialPage and navigates its rendered Page.
+  useEffect(() => {
+    if (currentFileUrl !== fileUrl) return;
+    const cited = activeHighlightId
+      ? highlights.find((item) => item.id === activeHighlightId)
+      : undefined;
+    if (!cited || !Number.isSafeInteger(cited.page) || cited.page < 1) {
+      // Only clear a PRIOR external deep-link selection. Do not clear an
+      // internally clicked clause when the parent has never supplied an
+      // activeHighlightId (S3-01 clickable alert regression).
+      if (lastExternalCitationRef.current !== null) {
+        lastExternalCitationRef.current = null;
+        setActiveId(null);
+        setStatePage(1);
+      }
+      return;
+    }
+    lastExternalCitationRef.current = cited.id;
+    setActiveId(cited.id);
+    setStatePage(cited.page);
+  }, [activeHighlightId, currentFileUrl, fileUrl, highlights]);
+
+  // A locally clicked citation (no parent activeHighlightId) must not outlive
+  // its evidence: when the same revision URL's highlights are replaced or
+  // cleared without it, drop the selection and its page. A citation that is
+  // still present keeps its selection, and a resolvable parent citation is
+  // owned by the deep-link effect above.
+  useEffect(() => {
+    if (currentFileUrl !== fileUrl || activeId === null) return;
+    const ids = new Set(highlights.map((item) => item.id));
+    if (ids.has(activeId)) return;
+    if (activeHighlightId !== null && ids.has(activeHighlightId)) return;
+    setActiveId(null);
+    setStatePage(1);
+  }, [activeHighlightId, activeId, currentFileUrl, fileUrl, highlights]);
 
   const handleEvidenceClick = (clauseId: string) => {
     const match = activeHighlights.find((item) => item.clauseId === clauseId);
@@ -197,12 +238,17 @@ export function PdfEvidenceViewer({
         />
       ) : null}
 
-      <button type="button" onClick={() => handleEvidenceClick("c-101")}>
-        View Evidence c-101
-      </button>
-      <button type="button" onClick={handleSwitchDocument}>
-        Document B
-      </button>
+      {/* These are synthetic walkthrough actions, NEVER real document evidence. */}
+      {isDemo ? (
+        <>
+          <button type="button" onClick={() => handleEvidenceClick("c-101")}>
+            View Evidence c-101
+          </button>
+          <button type="button" onClick={handleSwitchDocument}>
+            Document B
+          </button>
+        </>
+      ) : null}
 
       <div data-testid="pdf-page-state">Page: {statePage}</div>
       <div data-testid="highlight-list">

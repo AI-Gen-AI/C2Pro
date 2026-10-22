@@ -19,7 +19,7 @@ describe("alerts hooks contract alignment", () => {
     getMock.mockReset();
   });
 
-  it("useProjectAlerts unwraps backend list response items", async () => {
+  it("useProjectAlerts unwraps backend list response items from the real alerts route", async () => {
     getMock.mockResolvedValueOnce({
       data: {
         items: [
@@ -39,14 +39,16 @@ describe("alerts hooks contract alignment", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(getMock).toHaveBeenCalledWith("/projects/proj-1/alerts");
+    // PC-7b: GET /alerts/projects/{project_id} is the real, served route
+    // (src/alerts/adapters/http/router.py); no clause id is fabricated when the
+    // backend did not resolve one.
+    expect(getMock).toHaveBeenCalledWith("/alerts/projects/proj-1");
     expect(result.current.alerts).toEqual([
       {
         id: "a-1",
         title: "Missing permit",
         severity: "high",
         status: "pending",
-        clauseId: "clause-a-1",
         assignee: "legal.reviewer",
       },
     ]);

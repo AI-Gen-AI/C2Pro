@@ -2,10 +2,11 @@
 
 TS-UT-CI-IDENT-001
 
-Ingestion assigns synthetic positional codes (``AUTO-001``...). Those codes are
-processing artifacts, not identity evidence: before PR-C1 a single clause
-inserted near the top of V2 shifted every later code and the L1 diff reported a
-cascade of fabricated ``modified`` changes at confidence 1.0 with no review.
+Unnumbered spans receive synthetic positional codes (``AUTO-001``...), which are
+processing artifacts, not identity evidence. Explicitly numbered source headings
+retain their source codes, but those numbers must not cause false continuity if
+a revision inserts or renumbers clauses. Before PR-C1, positional code shifts
+could fabricate ``modified`` changes at confidence 1.0 without review.
 
 These tests pin the fail-closed identity policy:
 
@@ -142,8 +143,9 @@ def test_b_p0_repro_insertion_does_not_cascade_fabricated_modifications() -> Non
         ]
     )
     old, new = _extract(v1, R1), _extract(v2, R2)
-    # The extractor still assigns positional codes; identity must not use them.
-    assert [clause.clause_code for clause in new][:2] == ["AUTO-001", "AUTO-002"]
+    # PQ-HITL-06 preserves exact source heading numbers, including a newly
+    # inserted "2. Insurance"; this is location evidence, not stable identity.
+    assert [clause.clause_code for clause in new][:2] == ["1", "2"]
 
     changeset = _diff(old, new)
 
