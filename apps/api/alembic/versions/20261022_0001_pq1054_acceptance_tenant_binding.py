@@ -44,6 +44,9 @@ TENANT_RELATIONS: dict[str, str] = {
     "document_processing_operations": "tenant_document",
 }
 
+# CREATE POLICY takes an ACCESS EXCLUSIVE lock on each of the twelve tables:
+# fail fast instead of queueing live traffic behind a long-running read.
+LOCK_TIMEOUT_SQL = "SET LOCAL lock_timeout = '5s'"
 CREATE_SCHEMA_SQL = "CREATE SCHEMA IF NOT EXISTS c2pro_security"
 REVOKE_SCHEMA_SQL = "REVOKE ALL ON SCHEMA c2pro_security FROM PUBLIC"
 CREATE_ANCHOR_SQL = """CREATE TABLE IF NOT EXISTS c2pro_security.acceptance_tenant_binding (
@@ -225,6 +228,42 @@ BEGIN
     IF offenders IS NOT NULL THEN
         RAISE EXCEPTION 'PQ1054_UNBOUND_READABLE_RELATIONS: %', offenders;
     END IF;
+
+    -- RLS never binds a SECURITY DEFINER function: it reads with its owner's
+    -- rights. The role must not be able to call one outside the catalog.
+    SELECT string_agg(
+               format('%I.%I(%s)', ns.nspname, p.proname,
+                      pg_catalog.pg_get_function_identity_arguments(p.oid)),
+               ', ')
+      INTO offenders
+      FROM pg_catalog.pg_proc AS p
+      JOIN pg_catalog.pg_namespace AS ns ON ns.oid = p.pronamespace
+     WHERE p.prosecdef
+       AND ns.nspname NOT IN ('pg_catalog', 'information_schema')
+       AND pg_catalog.has_function_privilege(role_oid, p.oid, 'EXECUTE')
+       AND pg_catalog.has_schema_privilege(role_oid, ns.oid, 'USAGE');
+    IF offenders IS NOT NULL THEN
+        RAISE EXCEPTION 'PQ1054_SECURITY_DEFINER_EXECUTABLE: %', offenders;
+    END IF;
+
+    -- The post-condition holds only for relations that exist today. A default
+    -- privilege granting SELECT to the role (directly, via PUBLIC or an
+    -- inherited role) would make every future table readable unbound.
+    SELECT string_agg(
+               DISTINCT format('%s:%s', coalesce(ns.nspname, '*'),
+                               pg_catalog.pg_get_userbyid(d.defaclrole)),
+               ', ')
+      INTO offenders
+      FROM pg_catalog.pg_default_acl AS d
+      LEFT JOIN pg_catalog.pg_namespace AS ns ON ns.oid = d.defaclnamespace
+     CROSS JOIN LATERAL pg_catalog.aclexplode(d.defaclacl) AS acl
+     WHERE d.defaclobjtype = 'r'
+       AND acl.privilege_type = 'SELECT'
+       AND (acl.grantee = 0
+            OR pg_catalog.pg_has_role(role_oid, acl.grantee, 'USAGE'));
+    IF offenders IS NOT NULL THEN
+        RAISE EXCEPTION 'PQ1054_DEFAULT_PRIVILEGES_WIDEN_ROLE: %', offenders;
+    END IF;
 END
 $pq1054$
 """
@@ -266,6 +305,7 @@ DROP_ANCHOR_SQL = "DROP TABLE IF EXISTS c2pro_security.acceptance_tenant_binding
 DROP_SCHEMA_SQL = "DROP SCHEMA IF EXISTS c2pro_security"
 
 UPGRADE_STATEMENTS: tuple[str, ...] = (
+    LOCK_TIMEOUT_SQL,
     CREATE_SCHEMA_SQL,
     REVOKE_SCHEMA_SQL,
     CREATE_ANCHOR_SQL,

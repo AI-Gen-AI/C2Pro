@@ -38,13 +38,32 @@ SELECT n.nspname, c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
 SELECT n.nspname, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
  WHERE c.relowner = 'c2pro_prod_acceptance_ro'::regrole;
 
-\echo '== 5. SECURITY DEFINER functions the role may execute (review: RLS does not bind these)'
-SELECT n.nspname, p.proname, pg_get_userbyid(p.proowner) AS owner
+\echo '== 5. SECURITY DEFINER functions the role may call (expect none: aborts the migration)'
+SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args,
+       pg_get_userbyid(p.proowner) AS owner
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
  WHERE p.prosecdef
    AND n.nspname NOT IN ('pg_catalog', 'information_schema')
    AND has_function_privilege('c2pro_prod_acceptance_ro', p.oid, 'EXECUTE')
+   AND has_schema_privilege('c2pro_prod_acceptance_ro', n.oid, 'USAGE')
  ORDER BY 1, 2;
+
+\echo '== 5b. roles whose privileges the role inherits (their grants count as its own)'
+SELECT g.rolname AS inherited_role
+  FROM pg_roles g
+ WHERE g.rolname <> 'c2pro_prod_acceptance_ro'
+   AND pg_has_role('c2pro_prod_acceptance_ro', g.oid, 'USAGE')
+ ORDER BY 1;
+
+\echo '== 5c. default privileges granting future tables to the role (expect none: aborts the migration)'
+SELECT coalesce(n.nspname, '*') AS schema, pg_get_userbyid(d.defaclrole) AS creator,
+       CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee
+  FROM pg_default_acl d
+  LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
+ CROSS JOIN LATERAL aclexplode(d.defaclacl) a
+ WHERE d.defaclobjtype = 'r' AND a.privilege_type = 'SELECT'
+   AND (a.grantee = 0 OR pg_has_role('c2pro_prod_acceptance_ro', a.grantee, 'USAGE'))
+ ORDER BY 1, 2, 3;
 
 \echo '== 6. anchor row (expect exactly one, matching the expected tenant and approved project)'
 SELECT count(*) AS anchor_rows,

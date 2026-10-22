@@ -401,6 +401,47 @@ async def test_post_condition_rejects_unbound_readable_relations() -> None:
     await _in_rolled_back_fixture(body)
 
 
+async def test_security_definer_executable_by_role_aborts_migration() -> None:
+    async def body(conn, fx: Fixture) -> None:
+        # Runs with its owner's rights: RLS on tenants never applies inside it.
+        await conn.execute(
+            f"CREATE FUNCTION {fx.schema}.leak_tenants() RETURNS bigint "
+            f"LANGUAGE sql SECURITY DEFINER AS $$ SELECT count(*) FROM {fx.schema}.tenants $$"
+        )
+        await conn.execute(f"REVOKE ALL ON FUNCTION {fx.schema}.leak_tenants() FROM PUBLIC")
+        await fx.run(conn, M1053.UPGRADE_STATEMENTS)
+        # Not executable by the role: the binding applies.
+        await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+        await fx.run(conn, M1054.DOWNGRADE_STATEMENTS)
+        await conn.execute(f"GRANT EXECUTE ON FUNCTION {fx.schema}.leak_tenants() TO {fx.role}")
+        with pytest.raises(asyncpg.PostgresError, match="PQ1054_SECURITY_DEFINER_EXECUTABLE"):
+            async with conn.transaction():
+                await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+
+    await _in_rolled_back_fixture(body)
+
+
+@pytest.mark.parametrize("via_inherited_role", [False, True])
+async def test_default_privileges_reaching_role_abort_migration(via_inherited_role: bool) -> None:
+    async def body(conn, fx: Fixture) -> None:
+        grantee = fx.role
+        if via_inherited_role:
+            grantee = f"{fx.role}_grp"
+            await conn.execute(f"CREATE ROLE {grantee} NOLOGIN")
+            await conn.execute(f"GRANT {grantee} TO {fx.role}")
+        # Every table the app role creates later would be readable unbound.
+        await conn.execute(
+            f"ALTER DEFAULT PRIVILEGES FOR ROLE {fx.app} IN SCHEMA {fx.schema} "
+            f"GRANT SELECT ON TABLES TO {grantee}"
+        )
+        await fx.run(conn, M1053.UPGRADE_STATEMENTS)
+        with pytest.raises(asyncpg.PostgresError, match="PQ1054_DEFAULT_PRIVILEGES_WIDEN_ROLE"):
+            async with conn.transaction():
+                await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+
+    await _in_rolled_back_fixture(body)
+
+
 async def test_role_owning_a_relation_aborts_migration() -> None:
     async def body(conn, fx: Fixture) -> None:
         await conn.execute(f"CREATE TABLE {fx.schema}.owned (id int)")
