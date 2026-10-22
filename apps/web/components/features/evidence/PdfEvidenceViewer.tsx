@@ -166,6 +166,20 @@ export function PdfEvidenceViewer({
     setStatePage(cited.page);
   }, [activeHighlightId, currentFileUrl, fileUrl, highlights]);
 
+  // A locally clicked citation (no parent activeHighlightId) must not outlive
+  // its evidence: when the same revision URL's highlights are replaced or
+  // cleared without it, drop the selection and its page. A citation that is
+  // still present keeps its selection, and a resolvable parent citation is
+  // owned by the deep-link effect above.
+  useEffect(() => {
+    if (currentFileUrl !== fileUrl || activeId === null) return;
+    const ids = new Set(highlights.map((item) => item.id));
+    if (ids.has(activeId)) return;
+    if (activeHighlightId !== null && ids.has(activeHighlightId)) return;
+    setActiveId(null);
+    setStatePage(1);
+  }, [activeHighlightId, activeId, currentFileUrl, fileUrl, highlights]);
+
   const handleEvidenceClick = (clauseId: string) => {
     const match = activeHighlights.find((item) => item.clauseId === clauseId);
     if (!match) return;

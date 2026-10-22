@@ -4,6 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@/src/tests/test-utils";
+import type { PdfHighlight } from "@/components/features/evidence/PdfEvidenceViewer";
 
 vi.mock("@/components/evidence/pdf/PDFViewer", () => ({
   PDFViewer: ({
@@ -286,6 +287,83 @@ describe("S3-01 RED - PdfEvidenceViewer", () => {
     expect(screen.queryByTestId("highlight-replacement")).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "1");
+    });
+  });
+
+  describe("local selection without parent activeHighlightId on the same revision URL", () => {
+    const fileUrl = "/api/documents/doc-a/download?revision_id=rev-a";
+    const clicked: PdfHighlight = {
+      id: "clicked",
+      clauseId: "5.2",
+      page: 4,
+      text: "Clicked verified quote",
+      severity: "high",
+    };
+
+    async function renderAndClick() {
+      const PdfEvidenceViewer = await loadPdfEvidenceViewer();
+      const onHighlightClick = vi.fn();
+      const view = (highlights: PdfHighlight[]) => (
+        <PdfEvidenceViewer
+          fileUrl={fileUrl}
+          highlights={highlights}
+          activeHighlightId={null}
+          onHighlightClick={onHighlightClick}
+        />
+      );
+      const { rerender } = render(view([clicked]));
+      await screen.findByTestId("react-pdf-viewer-proxy");
+      screen.getByTestId("highlight-clicked").click();
+      await waitFor(() => {
+        expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "4");
+      });
+      expect(screen.getByTestId("highlight-clicked")).toHaveAttribute("data-active", "true");
+      expect(onHighlightClick).toHaveBeenCalledWith("clicked");
+      return { rerender: (highlights: PdfHighlight[]) => rerender(view(highlights)) };
+    }
+
+    it("click then replace: drops the removed citation's selection and page", async () => {
+      const { rerender } = await renderAndClick();
+
+      rerender([
+        { id: "replacement", clauseId: "6.1", page: 2, text: "Replacement quote", severity: "low" },
+      ]);
+
+      expect(screen.queryByTestId("highlight-clicked")).not.toBeInTheDocument();
+      expect(screen.getByTestId("highlight-replacement")).toHaveAttribute("data-active", "false");
+      await waitFor(() => {
+        expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "1");
+      });
+      expect(screen.getByTestId("pdf-page-state")).toHaveTextContent("Page: 1");
+    });
+
+    it("click then clear: resets to page 1 and never resurrects the stale selection", async () => {
+      const { rerender } = await renderAndClick();
+
+      rerender([]);
+
+      expect(screen.queryByTestId("highlight-clicked")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "1");
+      });
+
+      // The same citation id arriving again is new evidence, not the old click.
+      rerender([clicked]);
+      expect(screen.getByTestId("highlight-clicked")).toHaveAttribute("data-active", "false");
+      expect(screen.getByTestId("pdf-page-state")).toHaveTextContent("Page: 1");
+    });
+
+    it("replace that retains the clicked citation keeps its selection and page", async () => {
+      const { rerender } = await renderAndClick();
+
+      rerender([
+        clicked,
+        { id: "added", clauseId: "7.4", page: 9, text: "Added quote", severity: "medium" },
+      ]);
+
+      expect(screen.getByTestId("highlight-clicked")).toHaveAttribute("data-active", "true");
+      expect(screen.getByTestId("highlight-added")).toHaveAttribute("data-active", "false");
+      expect(screen.getByTestId("react-pdf-viewer-proxy")).toHaveAttribute("data-page", "4");
     });
   });
 
