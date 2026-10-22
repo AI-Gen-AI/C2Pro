@@ -1,6 +1,7 @@
 /**
  * Test Suite ID: TASK-QA-336
- * Ensures the non-blocking nightly lane executes only the Chromium project.
+ * Ensures the non-blocking nightly lane runs the executable Chromium project on a
+ * real local backend and keeps the intentionally RED backlog separate.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -12,8 +13,51 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     const workflow = readFileSync(workflowPath, "utf8");
 
     expect(workflow).toContain("run: ./node_modules/.bin/playwright test --project=chromium");
-    expect(workflow).toContain("env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' && (env.CLERK_SECRET_KEY != '' || env.CLERK_TESTING_TOKEN != '')");
     expect(workflow).not.toContain("pk_test_Y2xlcmsubW9jay5sb2NhbCQ");
+    expect(workflow).not.toContain("continue-on-error");
+    // Missing Clerk credentials fail the run as NOT EXECUTED, never a green skip.
+    const executable = workflow.slice(
+      workflow.indexOf("executable-suite:"),
+      workflow.indexOf("red-backlog:"),
+    );
+    expect(executable).toContain("Nightly E2E NOT EXECUTED");
+    expect(executable).toContain("exit 1");
+  });
+
+  it("[TASK-QA-336-RED-05] runs the executable suite against a real local backend", () => {
+    const workflowPath = resolve(process.cwd(), "..", "..", ".github", "workflows", "nightly-full-e2e.yml");
+    const workflow = readFileSync(workflowPath, "utf8");
+    const executable = workflow.slice(
+      workflow.indexOf("executable-suite:"),
+      workflow.indexOf("red-backlog:"),
+    );
+
+    const steps = [
+      "bootstrap_test_infra.py --start-services --require-redis --recreate-db",
+      "provision_clerk_e2e_fixture.py",
+      "seed_e2e_auth_tenancy",
+      "verify_e2e_tenant_link.py",
+      "celery -A src.core.tasks.celery_app worker",
+      "uvicorn src.main:app",
+      "playwright test --project=chromium",
+    ];
+    const positions = steps.map((step) => executable.indexOf(step));
+    positions.forEach((position) => expect(position).toBeGreaterThan(-1));
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it("[TASK-QA-336-RED-06] keeps intentionally RED specs out of the executable suite", () => {
+    const config = readFileSync(resolve(process.cwd(), "playwright.config.ts"), "utf8");
+    const workflow = readFileSync(
+      resolve(process.cwd(), "..", "..", ".github", "workflows", "nightly-full-e2e.yml"),
+      "utf8",
+    );
+
+    expect(config).toContain('name: "red-backlog"');
+    expect(config).toContain("...redBacklogSpecs,");
+    expect(workflow).toContain("playwright test --project=red-backlog");
+    // The RED inventory fails only when it could not run at all.
+    expect(workflow).toContain("RED backlog NOT EXECUTED: no Playwright results were produced.");
   });
 
   it("[TASK-QA-336-RED-02] gates the seeded Chromium smoke lane behind RUN_FULL_E2E", () => {

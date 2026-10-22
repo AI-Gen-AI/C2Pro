@@ -1,7 +1,7 @@
 // Markdown summary of a Playwright JSON report for $GITHUB_STEP_SUMMARY.
-// Usage: node scripts/playwright-summary.cjs <results.json> "<title>"
+// Usage: node scripts/playwright-summary.mjs <results.json> "<title>"
 // Prints NOT EXECUTED when the report is missing; never alters the exit status.
-const fs = require("fs");
+import fs from "node:fs";
 
 const [file, title] = process.argv.slice(2);
 console.log(`## ${title}\n`);

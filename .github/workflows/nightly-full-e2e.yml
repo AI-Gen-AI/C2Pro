@@ -153,7 +153,7 @@ jobs:
       - name: Summarize suite result
         if: always()
         working-directory: apps/web
-        run: node scripts/playwright-summary.cjs playwright-report/nightly-results.json "Nightly executable E2E (real local backend)" >> "$GITHUB_STEP_SUMMARY"
+        run: node scripts/playwright-summary.mjs playwright-report/nightly-results.json "Nightly executable E2E (real local backend)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Playwright diagnostics
         if: always()
@@ -226,7 +226,7 @@ jobs:
         working-directory: apps/web
         env:
           SUMMARY_LIST_PASSING: "1"
-        run: node scripts/playwright-summary.cjs playwright-report/red-backlog-results.json "RED backlog (expected failures, not acceptance)" >> "$GITHUB_STEP_SUMMARY"
+        run: node scripts/playwright-summary.mjs playwright-report/red-backlog-results.json "RED backlog (expected failures, not acceptance)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail when the RED backlog did not run
         run: |
