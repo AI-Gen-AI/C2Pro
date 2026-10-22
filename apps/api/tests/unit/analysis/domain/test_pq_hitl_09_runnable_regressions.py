@@ -105,16 +105,12 @@ class TestRegressionNoFabricatedScoreOrAbsence:
         assert result.legal_compliant is None
         assert result.quality_standard_met is None
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="RED PQ-HITL-02.2/#953: absent risk confidence must return None/NOT_ASSESSED, not invented 0.9",
-    )
     def test_red_missing_per_risk_confidence_must_not_default_to_point_nine(self) -> None:
         """PQ-HITL-02.2 target invariant (Codex finding 3): absent confidence must yield None, not 0.9."""
         service = CritiqueEvaluationService()
         items_with_no_confidence = [{"title": "Unmeasured Risk A"}, {"title": "Unmeasured Risk B"}]
 
-        # Target behavior: must be None. Fails on main (strict XFAIL) because main returns 0.9.
+        # Unassessed extraction confidence remains UNKNOWN, never a synthetic 0.9.
         observed_conf = service.calculate_confidence(items_with_no_confidence)
         assert observed_conf is None
 

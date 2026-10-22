@@ -8165,7 +8165,14 @@
             "title": "Doc Type"
           },
           "confidence_score": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Confidence Score"
           },
           "critique_notes": {

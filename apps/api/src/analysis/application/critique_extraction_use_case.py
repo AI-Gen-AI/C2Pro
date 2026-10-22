@@ -33,7 +33,7 @@ class CritiqueExtractionCommand:
 class CritiqueExtractionResult:
     status: str               # "OK" | "RETRY"
     notes_raw: str            # the critique note as returned by the LLM
-    confidence: float
+    confidence: float | None
     retry_count: int
     human_approval_required: bool
     critique_notes: str       # possibly cleared by evaluation (OK → "")

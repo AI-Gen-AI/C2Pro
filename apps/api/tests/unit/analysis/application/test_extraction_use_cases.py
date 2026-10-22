@@ -106,6 +106,21 @@ class TestCritiqueExtractionUseCase:
         assert res.confidence == pytest.approx(0.925)
 
     @pytest.mark.asyncio
+    async def test_missing_all_risk_confidence_is_not_fabricated_as_90_percent(self) -> None:
+        ai = _FakeAI(payload={"status": "OK", "notes": ""})
+        result = await CritiqueExtractionUseCase(ai=ai).execute(
+            CritiqueExtractionCommand(
+                extracted_risks=[{"title": "Clause 5.2", "confidence": None}],
+                extracted_wbs=[],
+                doc_type="contract",
+                retry_count=0,
+            )
+        )
+        assert result.confidence is None
+        assert result.human_approval_required is True
+
+
+    @pytest.mark.asyncio
     async def test_retry_increments_and_preserves_notes(self) -> None:
         ai = _FakeAI(payload={"status": "RETRY", "notes": "please redo"})
         uc = CritiqueExtractionUseCase(ai=ai)

@@ -289,7 +289,7 @@ class AnalyzeResponse(BaseModel):
     wbs: list[dict[str, Any]]
     human_approval_required: bool
     doc_type: str
-    confidence_score: float
+    confidence_score: float | None
     critique_notes: str
     retry_count: int
     messages: list[str]
