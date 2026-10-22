@@ -204,6 +204,8 @@ async def test_compiled_workflow_accepts_contract_validated_dict_payloads_with_r
             score_version = "coherence-v1"
             score_reason = "seeded_risk_signals"
             score_missing_dimensions: list[str] = []
+            # Mirrors the real result's default (src/coherence/graph/graph.py).
+            finding_signals: list[object] = []
 
         return _Result()
 
