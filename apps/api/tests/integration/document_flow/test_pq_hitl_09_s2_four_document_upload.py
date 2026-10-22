@@ -120,6 +120,11 @@ async def test_four_families_persist_content_addressed_genesis_revisions(
         assert expected in genesis.blob_key
         assert (genesis.project_id, genesis.tenant_id) == (project_id, test_user.tenant_id)
         assert await worker.file_exists(genesis.blob_key)
+        # A content-addressed key alone does not prove persisted object integrity.
+        stored_path = await worker.download_object(genesis.blob_key)
+        stored_bytes = stored_path.read_bytes()
+        assert stored_bytes == data
+        assert hashlib.sha256(stored_bytes).hexdigest() == genesis.blob_hash
 
         ingested = [
             event for event in await events.list_for_revision(
