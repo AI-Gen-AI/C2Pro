@@ -15,9 +15,9 @@ Coverage:
     retry_count > 2 → save_to_db
 
 - _average_confidence:
-    empty items list → 0.0
-    items exist but no valid confidence values → 0.9
-    items with numeric confidence values → arithmetic mean
+    empty items list → None (unknown)
+    any missing/invalid confidence value → None (never a synthetic 0.9)
+    all items with valid numeric confidence → arithmetic mean
 
 - DOC_TYPES constant: expected members present
 """
@@ -263,27 +263,27 @@ class TestAverageConfidence:
     """Unit tests for the _average_confidence helper function."""
 
     @pytest.mark.red_phase
-    def test_empty_items_list_returns_0_0(self) -> None:
-        """Empty items list → 0.0 (no items, no confidences)."""
-        assert _average_confidence([]) == pytest.approx(0.0)
+    def test_empty_items_list_returns_none(self) -> None:
+        """Empty items list → None (no items, nothing was assessed)."""
+        assert _average_confidence([]) is None
 
     @pytest.mark.red_phase
-    def test_items_with_no_confidence_key_returns_0_9(self) -> None:
-        """Items present but none have a 'confidence' key → fallback 0.9."""
+    def test_items_with_no_confidence_key_returns_none(self) -> None:
+        """Items present but none have a 'confidence' key → unknown, not 0.9."""
         items = [{"title": "Risk A"}, {"title": "Risk B"}]
-        assert _average_confidence(items) == pytest.approx(0.9)
+        assert _average_confidence(items) is None
 
     @pytest.mark.red_phase
-    def test_items_with_none_confidence_returns_0_9(self) -> None:
-        """Items with None as confidence value → not a numeric type → fallback 0.9."""
+    def test_items_with_none_confidence_returns_none(self) -> None:
+        """Items with None as confidence value → unknown, not 0.9."""
         items = [{"confidence": None}, {"confidence": None}]
-        assert _average_confidence(items) == pytest.approx(0.9)
+        assert _average_confidence(items) is None
 
     @pytest.mark.red_phase
-    def test_items_with_string_confidence_returns_0_9(self) -> None:
-        """Items with non-numeric string confidence values → fallback 0.9."""
+    def test_items_with_string_confidence_returns_none(self) -> None:
+        """Items with non-numeric string confidence values → unknown, not 0.9."""
         items = [{"confidence": "high"}, {"confidence": "medium"}]
-        assert _average_confidence(items) == pytest.approx(0.9)
+        assert _average_confidence(items) is None
 
     @pytest.mark.red_phase
     def test_single_item_with_confidence_returns_that_value(self) -> None:
@@ -311,17 +311,15 @@ class TestAverageConfidence:
         assert _average_confidence(items) == pytest.approx(0.5)
 
     @pytest.mark.red_phase
-    def test_mixed_valid_and_invalid_confidence_uses_only_valid(self) -> None:
-        """Only numeric confidence entries contribute to the mean; others are ignored."""
+    def test_mixed_valid_and_invalid_confidence_is_unknown(self) -> None:
+        """A partial average is not evidence of full coverage → unknown."""
         items = [
             {"confidence": 0.8},
             {"confidence": "bad"},
             {"confidence": 0.6},
             {"title": "no conf key"},
         ]
-        # Only 0.8 and 0.6 are valid numeric confidences
-        expected = (0.8 + 0.6) / 2
-        assert _average_confidence(items) == pytest.approx(expected)
+        assert _average_confidence(items) is None
 
     @pytest.mark.red_phase
     def test_all_confidence_values_at_zero_returns_zero(self) -> None:
