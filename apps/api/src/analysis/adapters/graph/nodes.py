@@ -96,10 +96,10 @@ def _mark_risk_extraction_honest_failure(
     *,
     reason: str,
     exc: Exception | None = None,
-    previous_confidence: float | None = None,
 ) -> ProjectState:
-    if previous_confidence is not None:
-        state["confidence_score"] = previous_confidence
+    # No risk was measured on this attempt. Neither a synthetic score nor a
+    # value left by an earlier attempt or by the tool describes zero risks.
+    state["confidence_score"] = None
     state["extracted_risks"] = []
     error_type = type(exc).__name__ if exc is not None else None
     error_detail = _tool_error_detail(exc) if exc is not None else None
@@ -284,12 +284,10 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
-    previous_confidence = state.get("confidence_score", 0.0)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         _mark_risk_extraction_honest_failure(
             state,
             reason="AI risk extraction unavailable in mock mode — no risks extracted",
-            previous_confidence=previous_confidence,
         )
         _append_risk_extraction_summary(state)
         return state
@@ -312,14 +310,12 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             state,
             reason="AI risk extraction failed/empty — no risks extracted",
             exc=exc,
-            previous_confidence=previous_confidence,
         )
         state["node_results"] = [*state.get("node_results", []), node_result]
         _append_risk_extraction_summary(state)
         return state
 
     if not updated_state.get("extracted_risks"):
-        updated_state["confidence_score"] = 0.25
         _mark_risk_extraction_honest_failure(
             updated_state,
             reason="AI risk extraction failed/empty — no risks extracted",
