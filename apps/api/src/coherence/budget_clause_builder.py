@@ -63,6 +63,41 @@ _STATED_TOTAL_SQL = text("""
     LIMIT 1
 """)
 
+# Denominations stated alongside each side's total. Contract currencies count
+# only when the clause names them explicitly (ingestion's EUR default does not).
+_BUDGET_CURRENCIES_SQL = text("""
+    SELECT d.document_metadata->'stated_total_currencies' AS currencies
+    FROM documents d
+    JOIN projects p ON d.project_id = p.id
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND p.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'budget'
+      AND d.document_metadata ? 'stated_total'
+    ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
+    LIMIT 1
+""")
+
+_CONTRACT_CURRENCIES_SQL = text(f"""
+    SELECT array_agg(DISTINCT upper(btrim(c.extracted_entities->>'currency')))
+    FROM clauses c
+    JOIN documents d ON c.document_id = d.id
+    JOIN projects p ON d.project_id = p.id
+    CROSS JOIN LATERAL {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND p.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'contract'
+      AND c.extracted_entities ? 'total_amount'
+      AND c.extracted_entities->>'currency_source' = 'explicit'
+      AND length(btrim(coalesce(c.extracted_entities->>'currency', ''))) > 0
+      AND {clause_in_current_scope("c", "cur")}
+""")
+
+
+def _currency_list(value: Any) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return sorted({v.strip().upper() for v in value if isinstance(v, str) and v.strip()})
+
 
 async def build_budget_clauses(
     db: AsyncSession,
@@ -102,6 +137,18 @@ async def build_budget_clauses(
     contract_total = await load_contract_total(db, project_id, tenant_id)
     if contract_total is not None:
         data["contract_total"] = contract_total
+        # Each side keeps its own denomination: one shared "currency" key on this
+        # single clause could never reveal a EUR contract vs a USD budget.
+        budget_currencies = _currency_list(
+            (await db.execute(_BUDGET_CURRENCIES_SQL, params)).scalar_one_or_none()
+        )
+        contract_currencies = _currency_list(
+            (await db.execute(_CONTRACT_CURRENCIES_SQL, params)).scalar_one_or_none()
+        )
+        if budget_currencies:
+            data["budget_currencies"] = budget_currencies
+        if contract_currencies:
+            data["contract_currencies"] = contract_currencies
     return [
         Clause(
             id=f"budget-reconciliation-{project_id}",

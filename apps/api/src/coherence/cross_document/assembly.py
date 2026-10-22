@@ -13,7 +13,7 @@ Refers to Suite ID: TS-UA-COH-XDOC-ASSEMBLY-001.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from src.coherence.cross_document.comparators import assess_numeric_comparators
 from src.coherence.cross_document.inputs import ProjectCrossDocInputs
@@ -31,6 +31,17 @@ def _currency(value: object) -> str | None:
         return None
     code = value.strip()
     return _CURRENCY_SYMBOLS.get(code, code.upper())
+
+
+def _side_currencies(
+    data: Mapping[str, object], key: str, clause_currency: str | None
+) -> set[str]:
+    """One side's denominations: its own key (a clause carrying both totals,
+    like the budget reconciliation clause) or else the clause's currency."""
+    stated = data.get(key)
+    if isinstance(stated, list | tuple):
+        return {code for code in map(_currency, stated) if code}
+    return {clause_currency} if clause_currency else set()
 
 
 def _num(value: object) -> float | None:
@@ -65,14 +76,12 @@ def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInput
             contract_total = _num(data.get("total_amount"))
         if contract_total is not None:
             contract_totals.append(contract_total)
-            if clause_currency:
-                contract_currencies.add(clause_currency)
+            contract_currencies |= _side_currencies(data, "contract_currencies", clause_currency)
 
         stated_total = _num(data.get("stated_total"))
         if stated_total is not None:
             budget_totals.append(stated_total)
-            if clause_currency:
-                budget_currencies.add(clause_currency)
+            budget_currencies |= _side_currencies(data, "budget_currencies", clause_currency)
 
         items = data.get("budget_items")
         if isinstance(items, list):

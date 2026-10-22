@@ -649,6 +649,27 @@ class TestExcelParser:
             }
         ]
         assert result.stated_total == 654_144_805.0
+        assert result.currencies == set()
+
+    @pytest.mark.asyncio
+    async def test_excel_parser_parse_budget_records_stated_currencies(self, tmp_path):
+        """S7: the declared total keeps its denomination; line rows are unchanged."""
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook_path = self._write_workbook(
+            tmp_path,
+            [
+                ["Concepto", "Cantidad", "Precio unitario", "Importe total", "Moneda"],
+                ["Capitulo 01", 1, 100.0, 100.0, "usd"],
+                ["TOTAL PRESUPUESTO", None, None, 100.0, "USD"],
+            ],
+        )
+
+        result = await ExcelFileParser().parse_budget(workbook_path)
+
+        assert result.stated_total == 100.0
+        assert result.currencies == {"USD"}
+        assert "currency" not in result[0]
 
     @pytest.mark.asyncio
     async def test_excel_parser_parse_budget_missing_headers_lists_aliases(self, tmp_path):
