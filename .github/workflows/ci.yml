@@ -229,6 +229,18 @@ jobs:
             --tb=short \
             --junit-xml=apps/api/root-core-unit-results.xml
 
+      # tests/analysis/ (graph routing, critique, LLM fallback) was collected by
+      # no job, so stale assertions there could not fail CI. Separate process:
+      # these suites patch module state that leaks into tests/unit when mixed.
+      - name: Run analysis graph tests
+        working-directory: apps/api
+        run: |
+          python -m pytest \
+            tests/analysis/ \
+            -m "not integration" \
+            --tb=short \
+            --junit-xml=analysis-test-results.xml
+
       - name: Upload unit test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -238,6 +250,7 @@ jobs:
             apps/api/unit-test-results.xml
             apps/api/root-core-unit-results.xml
             apps/api/s5-core-ai-gates.xml
+            apps/api/analysis-test-results.xml
           retention-days: 3
 
       - name: Upload unit coverage report
