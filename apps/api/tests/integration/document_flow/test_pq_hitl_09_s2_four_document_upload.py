@@ -154,6 +154,26 @@ async def test_four_families_persist_content_addressed_genesis_revisions(
     assert await revisions.list_lineage(again.id, uuid4()) == []
 
 
+async def test_tampered_persisted_object_digest_is_detected(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Negative fixture: altered stored bytes must not match the recorded revision."""
+    project_id = await _project(db, test_user.tenant_id)
+    document_type, filename, original = FAMILIES[0]
+    document = await _upload(
+        db, worker, test_user, project_id, document_type, filename, original
+    )
+    revisions = SqlAlchemyDocumentRevisionRepository(db)
+    genesis = (await revisions.list_lineage(document.id, test_user.tenant_id))[0]
+    stored_path = await worker.download_object(genesis.blob_key)
+    assert hashlib.sha256(stored_path.read_bytes()).hexdigest() == genesis.blob_hash
+
+    stored_path.write_bytes(original + b"tampered")
+    retrieved = (await worker.download_object(genesis.blob_key)).read_bytes()
+    assert retrieved != original
+    assert hashlib.sha256(retrieved).hexdigest() != genesis.blob_hash
+
+
 @pytest.mark.parametrize("document_type", [DocumentType.BUDGET, DocumentType.SCHEDULE])
 async def test_docx_on_structured_family_is_rejected_and_nothing_persists(
     db: AsyncSession, worker: Any, test_user: Any, document_type: DocumentType
