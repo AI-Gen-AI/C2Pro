@@ -578,7 +578,7 @@ async def test_concurrent_double_approve_executes_downstream_once(
         try:
             return ("response", await approve_from_independent_request())
         except ValueError as exc:
-            if "already being resumed by another request" not in str(exc):
+            if str(exc) != f"Review item {review.item_id} is already being resumed by another request":
                 raise
             return ("lease_held", None)
 
