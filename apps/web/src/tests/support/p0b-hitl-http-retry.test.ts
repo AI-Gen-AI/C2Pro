@@ -79,6 +79,12 @@ describe("P0b exact-row HTTP approval retry (same driver as Playwright)", () => 
     expect(s.counts().confirmed).toBe(0);
   });
 
+  it("shared deadline stops retry when there is no time for the delay", async () => {
+    const s = scripted([response(400, { detail: NOT_READY })]);
+    await expect(approveWithHttpResponse(s.port, ITEM, ROW, 1_000)).rejects.toThrow("P0B_HITL_APPROVAL_TIMEOUT");
+    expect(s.calls).toEqual([ROW]);
+  });
+
   it("expired shared deadline never submits", async () => {
     const s = scripted([]);
     await expect(approveWithHttpResponse(s.port, ITEM, ROW, 0)).rejects.toThrow("P0B_HITL_APPROVAL_TIMEOUT");
