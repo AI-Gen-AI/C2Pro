@@ -722,3 +722,52 @@ async def test_rag_readiness_never_borrows_another_revisions_chunks(
     # V2's embedding "failed": nothing stamped V2 exists, V1's chunks are retained.
     assert await count(v1) == 1
     assert await count(v2) == 0
+
+
+async def test_budget_reconciliation_clause_carries_each_side_currency(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    """S7 on real PostgreSQL: only the trusted contract's explicit currency and
+    the budget's stated currencies reach the live reconciliation clause."""
+    from src.coherence.budget_clause_builder import build_budget_clauses
+    from src.coherence.cross_document import cross_document_signals
+
+    world = await _World(db, tmp_path).setup()
+    contract = await world.upload()
+    [v1] = await world.lineage(contract)
+    await world.persist(
+        contract,
+        v1,
+        world.clause(contract, V1_TEXT, entities={
+            "total_amount": 1000, "currency": "EUR", "currency_source": "explicit",
+        }),
+        world.clause(contract, V1_TEXT + " guessed", code="AUTO-002", entities={
+            "total_amount": 900, "currency": "INR", "currency_source": "default",
+        }),
+    )
+    await world.trust(contract, v1)
+    v2 = await world.reupload(contract)
+    await world.persist(
+        contract, v2, world.clause(contract, V2_TEXT, entities={
+            "total_amount": 5000, "currency": "GBP", "currency_source": "explicit",
+        })
+    )
+    await world.propose(contract, v2)
+    await db.execute(
+        text("INSERT INTO documents (id, tenant_id, project_id, document_type, filename, "
+             "upload_status, version, storage_encrypted, document_metadata, created_at, "
+             "updated_at) VALUES (:id, :tid, :pid, 'budget', 'budget.xlsx', "
+             "'parsed_pending_analysis', 1, true, CAST(:meta AS jsonb), now(), now())"),
+        {"id": uuid4(), "tid": world.tenant, "pid": world.project,
+         "meta": '{"stated_total": 1100.0, "stated_total_currencies": ["USD"]}'},
+    )
+    await db.commit()
+
+    [clause] = await build_budget_clauses(db, world.project, world.tenant)
+
+    assert clause.data["contract_total"] == 1000.0
+    # The proposed V2 (GBP) and the defaulted guess (INR) are not evidence.
+    assert clause.data["contract_currencies"] == ["EUR"]
+    assert clause.data["budget_currencies"] == ["USD"]
+    # EUR contract vs USD budget: no false negative-margin or gap signal.
+    assert cross_document_signals([clause]) == []

@@ -32,7 +32,8 @@ class _Result:
 
 
 class _Session:
-    """Answers the stated-total query first, then the contract-total query."""
+    """Answers, in order: stated total, contract total, budget currencies,
+    contract currencies. Unscripted queries find nothing."""
 
     def __init__(self, results: list[_Result]) -> None:
         self._results = results
@@ -40,7 +41,46 @@ class _Session:
 
     async def execute(self, _stmt: object, params: dict[str, object]) -> _Result:
         self.params.append(params)
-        return self._results.pop(0)
+        return self._results.pop(0) if self._results else _Result([])
+
+
+@pytest.mark.asyncio
+async def test_each_side_keeps_its_denomination_and_mismatch_is_not_assessed() -> None:
+    """A EUR contract and a USD budget on the live reconciliation clause."""
+    from src.coherence.cross_document import (
+        assemble_cross_doc_inputs,
+        assess_numeric_comparators,
+        cross_document_signals,
+    )
+
+    session = _Session([
+        _Result([Decimal("310.00")]),
+        _Result([Decimal("280.00")]),
+        _Result([["usd"]]),
+        _Result([["EUR"]]),
+    ])
+    [clause] = await build_budget_clauses(session, uuid4(), uuid4())  # type: ignore[arg-type]
+
+    assert clause.data["budget_currencies"] == ["USD"]
+    assert clause.data["contract_currencies"] == ["EUR"]
+    assert cross_document_signals([clause]) == []
+    assessment = assess_numeric_comparators(assemble_cross_doc_inputs([clause]))
+    assert {n.reason for n in assessment.not_assessed} == {"CURRENCY_MISMATCH"}
+
+
+@pytest.mark.asyncio
+async def test_same_denomination_on_both_sides_still_flags_negative_margin() -> None:
+    from src.coherence.cross_document import RULE_BUDGET_EXCEEDS_CONTRACT, cross_document_signals
+
+    session = _Session([
+        _Result([Decimal("310.00")]),
+        _Result([Decimal("280.00")]),
+        _Result([["EUR"]]),
+        _Result([["EUR"]]),
+    ])
+    [clause] = await build_budget_clauses(session, uuid4(), uuid4())  # type: ignore[arg-type]
+
+    assert {s.rule_id for s in cross_document_signals([clause])} == {RULE_BUDGET_EXCEEDS_CONTRACT}
 
 
 @pytest.mark.asyncio

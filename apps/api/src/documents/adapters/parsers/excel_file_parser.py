@@ -35,6 +35,9 @@ class BudgetRows(list[dict[str, Any]]):
     ) -> None:
         super().__init__(rows or [])
         self.stated_total = stated_total
+        # Denominations stated in the Currency column (lines and declared total),
+        # so a stated total is never compared across currencies without one.
+        self.currencies: set[str] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +388,9 @@ class ExcelFileParser:
                             )
                 if not any(row_data.values()):
                     continue
+                row_currency_label = row_data.get("currency")
+                if isinstance(row_currency_label, str) and row_currency_label.strip():
+                    budget_data.currencies.add(row_currency_label.strip().upper())
                 stated_total = self._extract_declared_total(row_data)
                 if stated_total is not None:
                     budget_data.stated_total = stated_total
@@ -627,6 +633,74 @@ class ExcelFileParser:
         return canonical
 
     @staticmethod
+    def _budget_has_conditional_number_format(number_format: str) -> bool:
+        """Detect actual Excel numeric conditions, not quoted/escaped text.
+
+        A conditional section such as [>=100] can override the usual
+        positive/negative/zero ordering. We do not interpret this in verified
+        evidence mode: fail closed instead of attesting the wrong currency.
+        The legacy budget parser never calls this evidence-only guard.
+        """
+        quoted = False
+        escaped = False
+        directive: list[str] | None = None
+        for char in number_format:
+            if escaped:
+                if directive is not None:
+                    directive.append(char)
+                escaped = False
+            elif char in "_*" and not quoted and directive is None:
+                # _x (spacer) and *x (fill) consume x: _" is never a quote.
+                escaped = True
+            elif char == "\\" and not quoted:
+                escaped = True
+            elif char == '"':
+                quoted = not quoted
+            elif quoted:
+                continue
+            elif char == "[":
+                directive = []
+            elif char == "]" and directive is not None:
+                if re.match(r"^\s*(?:>=|<=|>|<|=)", "".join(directive)):
+                    return True
+                directive = None
+            elif directive is not None:
+                directive.append(char)
+        return False
+
+    @staticmethod
+    def _budget_format_displayed_text(number_format: str) -> str:
+        """Return the literal text an Excel format section displays.
+
+        Bracket directives ([Red], [>=100]) are Excel metadata, not units, but
+        only when unquoted and unescaped: "[JPY]" and \\[JPY] display JPY.
+        Escaped letters (\\J\\P\\Y) and adjacent quoted spans ("J""P""Y") are
+        joined; _x is a spacer that displays nothing and *x fills with x.
+        """
+        displayed: list[str] = []
+        quoted = False
+        in_directive = False
+        pending = ""
+        for char in number_format:
+            if pending:
+                if pending != "_":
+                    displayed.append(char)
+                pending = ""
+            elif char == '"':
+                quoted = not quoted
+            elif quoted:
+                displayed.append(char)
+            elif in_directive:
+                in_directive = char != "]"
+            elif char in "\\_*":
+                pending = char
+            elif char == "[":
+                in_directive = True
+            else:
+                displayed.append(char)
+        return "".join(displayed)
+
+    @staticmethod
     def _budget_numeric_format_sections(value: Any, number_format: str) -> str:
         """Select the applicable numeric Excel format section by value sign.
 
@@ -646,7 +720,10 @@ class ExcelFileParser:
             if escaped:
                 current.append(char)
                 escaped = False
-            elif char == "\\" and not quoted:
+            elif not quoted and (
+                char == "\\" or (char in "_*" and not bracket_depth)
+            ):
+                # \x escapes x; _x (spacer) and *x (fill) consume x as well.
                 current.append(char)
                 escaped = True
             elif char == '"':
@@ -681,6 +758,10 @@ class ExcelFileParser:
         A source SHA authenticates Excel number formats as well as stored values.
         Generic locale codes (such as [$-409]) are not currency denominations.
         """
+        if ExcelFileParser._budget_has_conditional_number_format(number_format):
+            raise ExcelParsingError(
+                f"Conditional Excel number format unsupported for budget evidence at {locator}"
+            )
         number_format = ExcelFileParser._budget_numeric_format_sections(
             value, number_format
         )
@@ -703,12 +784,9 @@ class ExcelFileParser:
         # A quoted or literal uppercase three-letter monetary label must not
         # silently change the declared EUR/USD/GBP denomination. Fail closed
         # on ambiguous unsupported labels, including "JPY" and "INR".
-        # Bracket directives ([Red], [>=100]) are Excel metadata, not units.
-        format_literals = re.sub(r"\[[^\]]*\]", "", remaining_format)
-        # Excel formats may spell an ISO label as escaped literal letters
-        # (\J\P\Y) or adjacent quoted spans ("J""P""Y").
-        format_literals = re.sub(r"\\([A-Z])", r"\1", format_literals)
-        format_literals = format_literals.replace('""', "")
+        format_literals = ExcelFileParser._budget_format_displayed_text(
+            remaining_format
+        )
         iso_labels = re.findall(
             r"(?<![A-Za-z])[A-Z]{3}(?![A-Za-z])", format_literals
         )

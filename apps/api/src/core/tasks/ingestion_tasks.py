@@ -337,6 +337,30 @@ def _detect_contract_currency(text: str) -> str:
     return "EUR"
 
 
+_EXPLICIT_CURRENCY_MARKERS = (
+    ("INR", re.compile(r"(?i:₹|\bINR\b|\brupees?\b|\bcrores?\b|\blakhs?\b)|\bRs\.?\s*\d")),
+    ("EUR", re.compile(r"(?i:€|\bEUR\b|\beuros?\b)")),
+    ("USD", re.compile(r"(?i:US\$|\bUSD\b|\bU\.S\. dollars?\b)")),
+    ("GBP", re.compile(r"(?i:£|\bGBP\b|\bpounds? sterling\b)")),
+)
+
+
+def _contract_currency_evidence(text: str, parsed_text: str) -> tuple[str, str]:
+    """Currency of a contract amount and whether the source states it.
+
+    "explicit" only when the clause (or else the whole document) names exactly
+    one currency. Otherwise the legacy EUR/INR guess is kept but marked
+    "ambiguous" or "default", so it is never used as denomination evidence.
+    """
+    for source in (text, parsed_text):
+        found = {code for code, marker in _EXPLICIT_CURRENCY_MARKERS if marker.search(source)}
+        if len(found) == 1:
+            return found.pop(), "explicit"
+        if found:
+            return _detect_contract_currency(f"{text} {parsed_text}"), "ambiguous"
+    return _detect_contract_currency(f"{text} {parsed_text}"), "default"
+
+
 def _extract_percentage(text: str) -> float | None:
     match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
     if not match:
@@ -435,7 +459,9 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
         or _extract_numeric_money(parsed_text)
     )
     if amount is not None:
-        data["currency"] = _detect_contract_currency(f"{text} {parsed_text}")
+        data["currency"], data["currency_source"] = _contract_currency_evidence(
+            text, parsed_text
+        )
         data["planned"] = amount
         data["total_amount"] = amount
 

@@ -26,6 +26,8 @@ from src.coherence.cross_document.comparators import (
     RULE_RISK_EXCEEDS_CONTINGENCY,
     RULE_SCHEDULE_OVERRUNS_DEADLINE,
     RULE_WBS_VS_BUDGET,
+    CrossDocAssessment,
+    assess_numeric_comparators,
     bom_vs_budget_total,
     budget_exceeds_contract,
     compare_values,
@@ -35,7 +37,7 @@ from src.coherence.cross_document.comparators import (
     schedule_overruns_deadline,
     wbs_vs_budget_total,
 )
-from src.coherence.cross_document.findings import CrossDocFinding
+from src.coherence.cross_document.findings import CrossDocFinding, CrossDocNotAssessed
 from src.coherence.cross_document.identity import (
     RULE_PROJECT_IDENTITY_MISMATCH,
     project_identity_mismatch,
@@ -51,9 +53,12 @@ __all__ = [
     "RULE_RISK_EXCEEDS_CONTINGENCY",
     "RULE_SCHEDULE_OVERRUNS_DEADLINE",
     "RULE_WBS_VS_BUDGET",
+    "CrossDocAssessment",
     "CrossDocFinding",
+    "CrossDocNotAssessed",
     "ProjectCrossDocInputs",
     "assemble_cross_doc_inputs",
+    "assess_numeric_comparators",
     "bom_vs_budget_total",
     "budget_exceeds_contract",
     "compare_values",
