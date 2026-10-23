@@ -108,7 +108,13 @@ def _next_after_critique_v2(state: ProjectState) -> Literal[
             critique_notes=state.get("critique_notes", "") or "",
             retry_count=int(state.get("retry_count", 0)),
             doc_type=state.get("doc_type") or "",
-            skip_hitl=_skip_hitl_requested(),
+            # UNKNOWN/N12 is fail-closed even in mock/test mode. A
+            # synthetic extraction must never route around a required
+            # human decision and leave a terminal, non-resumable checkpoint.
+            skip_hitl=(
+                _skip_hitl_requested()
+                and not bool(state.get("human_approval_required"))
+            ),
         ),
     )
 
