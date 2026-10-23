@@ -228,8 +228,11 @@ class TestCritiqueNodeThinDelegation:
             raising=False,
         )
 
-        result = await nodes.critique_node(_make_state(extracted_risks=[]))
+        result = await nodes.critique_node(
+            _make_state(extracted_risks=[], confidence_score=0.99)
+        )
 
+        assert result["confidence_score"] is None
         node_result = result["node_results"][-1]
         assert node_result.node == "critique"
         assert node_result.status is NodeStatus.FAILED
@@ -248,9 +251,13 @@ class TestCritiqueNodeThinDelegation:
             raise AssertionError("get_ai_service called in mock mode")
         monkeypatch.setattr(nodes, "get_ai_service", _explode, raising=False)
 
-        result = await nodes.critique_node(_make_state())
-        assert result["confidence_score"] == pytest.approx(0.95)
-        assert result["human_approval_required"] is False
+        result = await nodes.critique_node(_make_state(confidence_score=0.99))
+        assert result["confidence_score"] is None
+        assert result["human_approval_required"] is True
+        node_result = result["node_results"][-1]
+        assert node_result.node == "critique"
+        assert node_result.confidence is None
+        assert node_result.data["human_approval_required"] is True
 
 
 # ── N4/N5 deterministic helper shims ────────────────────────────────────────

@@ -440,10 +440,11 @@ async def _apply_temporal_review_gate(state: ProjectState) -> None:
 async def critique_node(state: ProjectState) -> ProjectState:
     """N12 — Delegates critique + evaluation to CritiqueExtractionUseCase."""
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
-        state["confidence_score"] = 0.95  # Mock confidence
+        # Mock output is not a measured assessment and must not bypass HITL.
+        state["confidence_score"] = None
         state["retry_count"] = 0
-        state["critique_notes"] = "Mock critique: Extraction quality is good."
-        state["human_approval_required"] = False
+        state["critique_notes"] = "Mock critique: not assessed; human review required."
+        state["human_approval_required"] = True
         await _apply_temporal_review_gate(state)
         state["node_results"] = [
             *state.get("node_results", []),
@@ -457,7 +458,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 confidence=state["confidence_score"],
             ),
         ]
-        state["messages"].append(AIMessage(content="Critique mock mode: passed."))
+        state["messages"].append(AIMessage(content="Critique mock mode: not assessed; human review required."))
         return state
 
     use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
@@ -479,6 +480,8 @@ async def critique_node(state: ProjectState) -> ProjectState:
         )
     # N12 isolates critique service failures and routes to HITL for review.
     except Exception as exc:  # noqa: BLE001
+        # An earlier attempt cannot supply confidence after critique fails.
+        state["confidence_score"] = None
         node_result = _failed_node_result("critique", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["human_approval_required"] = True
