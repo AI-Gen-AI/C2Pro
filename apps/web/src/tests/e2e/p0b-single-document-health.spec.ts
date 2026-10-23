@@ -105,35 +105,26 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
+  const alert = dialog.getByRole("alert");
   const deadline = Date.now() + 120_000;
+  const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i;
   for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
+    // Start one request, then observe only the outcome of this submission.
+    // The UI clears the previous actionError when the request begins.
     await confirm.click();
-    const outcome = await Promise.race([
-      dialog.waitFor({ state: "hidden", timeout: Math.max(1, deadline - Date.now()) }).then(() => "closed" as const),
-      dialog.getByRole("alert").waitFor({ state: "visible", timeout: Math.max(1, deadline - Date.now()) }).then(() => "error" as const),
-    ]);
-    if (outcome === "closed") return;
-    const message = await dialog.getByRole("alert").innerText();
-    if (!/candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i.test(message) || Date.now() + 2_000 >= deadline) {
+    await expect.poll(async () => {
+      if (!(await dialog.isVisible())) return "closed";
+      if (await confirm.isDisabled()) return "pending";
+      return (await alert.isVisible()) ? "error" : "pending";
+    }, { timeout: Math.max(1, deadline - Date.now()), intervals: [100, 250, 500] }).not.toBe("pending");
+    if (!(await dialog.isVisible())) return;
+    const message = await alert.innerText();
+    if (!transient.test(message) || Date.now() + 2_000 >= deadline) {
       throw new Error(`P0B_HITL_APPROVAL_FAILED: ${message}`);
     }
-    // Avoid racing the next approval attempt against the previous attempt's
-    // still-visible error alert: Promise.race would otherwise immediately
-    // classify that stale alert as a fresh failure before the request settles.
-    // The UI clears actionError only when the next submit begins. Waiting for
-    // the old alert to hide before clicking again would deadlock this retry.
     await page.waitForTimeout(2_000);
-    await confirm.click();
-    await expect(dialog.getByRole("alert")).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
-    const retryOutcome = await Promise.race([
-      dialog.waitFor({ state: "hidden", timeout: Math.max(1, deadline - Date.now()) }).then(() => "closed" as const),
-      dialog.getByRole("alert").waitFor({ state: "visible", timeout: Math.max(1, deadline - Date.now()) }).then(() => "error" as const),
-    ]);
-    if (retryOutcome === "closed") return;
-    const retryMessage = await dialog.getByRole("alert").innerText();
-    if (!/candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i.test(retryMessage) || Date.now() + 2_000 >= deadline) {
-      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${retryMessage}`);
-    }
   }
 }
 
