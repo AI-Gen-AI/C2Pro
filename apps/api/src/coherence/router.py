@@ -1577,14 +1577,34 @@ async def get_coherence_dashboard(
     elif project.coherence_score is not None:
         global_score = float(project.coherence_score)
 
-    # alert_count follows the same source priority as the score (see docstring):
-    # a completed Analysis first, then the latest /evaluate CoherenceResult, else
-    # the alerts table count computed above. Without this fallback an evaluate-only
-    # project (no analysis pipeline run) always reported alert_count = 0.
-    if latest_analysis and latest_analysis.alerts_count is not None:
-        alert_count = latest_analysis.alerts_count
-    elif coherence_result is not None and coherence_result.alerts is not None:
-        alert_count = len(coherence_result.alerts)
+    # alert_count follows the MOST RECENT source, not a fixed priority: a
+    # completed Analysis, or the latest /evaluate CoherenceResult, else the
+    # alerts table count computed above. A fixed "Analysis first" rule let an
+    # older Analysis (alerts_count = 0) mask the alerts produced by a newer
+    # /evaluate, so the dashboard said 0 while the Alerts page listed them.
+    analysis_count = latest_analysis.alerts_count if latest_analysis is not None else None
+    analysis_at = (
+        (latest_analysis.updated_at or latest_analysis.completed_at)
+        if latest_analysis is not None
+        else None
+    )
+    result_count = (
+        len(coherence_result.alerts)
+        if coherence_result is not None and coherence_result.alerts is not None
+        else None
+    )
+    result_at = coherence_result.calculated_at if coherence_result is not None else None
+    if analysis_count is not None and result_count is not None:
+        result_is_newer = (
+            analysis_at is not None
+            and result_at is not None
+            and result_at.replace(tzinfo=None) > analysis_at.replace(tzinfo=None)
+        )
+        alert_count = result_count if result_is_newer else analysis_count
+    elif analysis_count is not None:
+        alert_count = analysis_count
+    elif result_count is not None:
+        alert_count = result_count
 
     # Calculate last_updated timestamp
     candidates = [

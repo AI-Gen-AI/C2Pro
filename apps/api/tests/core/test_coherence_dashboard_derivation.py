@@ -184,6 +184,76 @@ async def test_dashboard_alert_count_falls_back_to_coherence_result_alerts(
 
 
 @pytest.mark.asyncio
+async def test_dashboard_alert_count_uses_newer_evaluate_over_older_analysis(
+    db, test_tenant
+) -> None:
+    """An /evaluate run AFTER the analysis must not be masked by the analysis' alerts_count.
+
+    Real flow: the contract analysis finishes with alerts_count = 0 (and no score), the
+    user approves it, then coherence is evaluated over the contract/budget/schedule
+    triplet and raises 2 alerts. The Alerts page lists them; the dashboard must agree.
+    """
+    evaluated_at = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="Dashboard Newer Evaluate Project",
+        description=None,
+        code="COH-NEWER-EVAL",
+        project_type="construction",
+        status="active",
+        estimated_budget=1000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=None,
+        last_analysis_at=None,
+        metadata_json={},
+    )
+    db.add(project)
+    await db.flush()
+    db.add(
+        CoherenceResultORM(
+            project_id=project.id,
+            tenant_id=test_tenant.id,
+            global_score=60,
+            category_scores={
+                "SCOPE": 80, "BUDGET": 40, "QUALITY": 58, "TECHNICAL": 80, "LEGAL": 80, "TIME": 59,
+            },
+            category_details=[],
+            alerts=[
+                {"rule_id": "DET-CRS-CONBUD", "severity": "high", "category": "BUDGET", "message": "m1"},
+                {"rule_id": "DET-CRS-NEGMARGIN", "severity": "critical", "category": "BUDGET", "message": "m2"},
+            ],
+            is_gaming_detected=False,
+            gaming_violations=[],
+            penalty_points=0,
+            calculated_at=evaluated_at,
+        )
+    )
+    older = Analysis(
+        id=uuid4(),
+        project_id=project.id,
+        tenant_id=test_tenant.id,
+        analysis_type=AnalysisType.COHERENCE,
+        status=AnalysisStatus.COMPLETED,
+        result_json={"source": "analysis"},
+        coherence_score=None,
+        coherence_breakdown=None,
+        alerts_count=0,
+        completed_at=evaluated_at - timedelta(minutes=10),
+    )
+    older.updated_at = evaluated_at - timedelta(minutes=10)
+    db.add(older)
+    await db.commit()
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score == 60
+    assert response.alert_count == 2
+
+
+@pytest.mark.asyncio
 async def test_dashboard_tolerates_malformed_analysis_breakdown_payloads(
     db, test_tenant
 ) -> None:
