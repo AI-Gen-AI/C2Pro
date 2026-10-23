@@ -128,7 +128,7 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
       const [response] = await Promise.all([
         page.waitForResponse(
           (candidate) => candidate.request().method() === "POST" &&
-            new URL(candidate.url()).pathname.replace(/\\/$/, "") ===
+            new URL(candidate.url()).pathname.replace(/\/$/, "") ===
               `/api/hitl/queue/${encodeURIComponent(rowId)}/approve`,
           { timeout: remaining },
         ),
