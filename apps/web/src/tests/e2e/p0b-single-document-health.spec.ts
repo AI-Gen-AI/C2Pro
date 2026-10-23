@@ -119,7 +119,7 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
-  const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i;
+  const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate|is not ready for a decision/i;
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
