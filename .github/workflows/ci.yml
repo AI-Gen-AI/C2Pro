@@ -1687,6 +1687,7 @@ jobs:
           RESULT_BACKEND_COVERAGE: ${{ needs.backend-coverage.result }}
           RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
           RESULT_P0B_ACCEPTANCE: ${{ needs.p0b-acceptance.result }}
+          RESULT_P0B_REAL_HITL: ${{ needs.p0b-real-hitl.result }}
         run: |
           set -euo pipefail
 
@@ -1711,6 +1712,7 @@ jobs:
             "frontend-e2e-smoke:$RESULT_FRONTEND_E2E"
             "frontend-build:$RESULT_FRONTEND_BUILD"
             "p0b-acceptance:$RESULT_P0B_ACCEPTANCE"
+            "p0b-real-hitl:$RESULT_P0B_REAL_HITL"
           )
           ADVISORY_JOBS=()
 
