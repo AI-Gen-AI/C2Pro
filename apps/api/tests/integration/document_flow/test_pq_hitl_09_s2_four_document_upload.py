@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -155,7 +156,7 @@ async def test_four_families_persist_content_addressed_genesis_revisions(
 
 
 async def test_tampered_persisted_object_digest_is_detected(
-    db: AsyncSession, worker: Any, test_user: Any
+    db: AsyncSession, worker: Any, test_user: Any, tmp_path: Path
 ) -> None:
     """Negative fixture: altered stored bytes must not match the recorded revision."""
     project_id = await _project(db, test_user.tenant_id)
@@ -168,10 +169,14 @@ async def test_tampered_persisted_object_digest_is_detected(
     stored_path = await worker.download_object(genesis.blob_key)
     assert hashlib.sha256(stored_path.read_bytes()).hexdigest() == genesis.blob_hash
 
-    stored_path.write_bytes(original + b"tampered")
-    retrieved = (await worker.download_object(genesis.blob_key)).read_bytes()
+    # Tamper only with an isolated copy; never mutate the persisted fixture object.
+    tampered_copy = tmp_path / "tampered-copy"
+    tampered_copy.write_bytes(stored_path.read_bytes() + b"tampered")
+    retrieved = tampered_copy.read_bytes()
     assert retrieved != original
     assert hashlib.sha256(retrieved).hexdigest() != genesis.blob_hash
+    assert stored_path.read_bytes() == original
+    assert hashlib.sha256(stored_path.read_bytes()).hexdigest() == genesis.blob_hash
 
 
 @pytest.mark.parametrize("family_index", range(len(FAMILIES)))
