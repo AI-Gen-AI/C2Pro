@@ -264,6 +264,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
+  // First-compiled routes (documents, coherence, evidence, review, report) under the dev server.
+  test.setTimeout(120_000);
   await installWedgeRoutes(page);
 
   await gotoStable(page, `/projects/${projectId}/documents`);
@@ -306,9 +308,23 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   // and the audit report: far beyond the 30 s default. An explicit budget keeps
   // a genuine failure a locator failure instead of a masked global timeout.
   test.setTimeout(180_000);
+  const documentsListResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      response.url().includes(`/projects/${liveProjectId}/documents`),
+    { timeout: 60_000 },
+  );
   await gotoStable(page, `/projects/${liveProjectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
-  await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
+  // Surface what the backend actually answered when the seeded names are not rendered.
+  const listed = await documentsListResponse.then(
+    async (response) => `${response.status()} ${(await response.text()).slice(0, 600)}`,
+    () => "no documents list response observed",
+  );
+  await expect(
+    page.getByText("baseline-contract.pdf"),
+    `documents list answered: ${listed}`,
+  ).toBeVisible();
   await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
   await expect(page.getByText("approved-schedule.xlsx")).toBeVisible();
 

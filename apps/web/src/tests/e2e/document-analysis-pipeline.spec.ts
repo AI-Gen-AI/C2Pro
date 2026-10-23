@@ -154,7 +154,8 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     // Should show some detail view (dialog, drawer, or page)
     const detailView = page.locator(
-      "[role='dialog'], [data-testid='alert-detail'], [data-testid='alert-drawer']"
+      // The Next.js dev error overlay is also a role=dialog; it is not alert detail.
+      "[role='dialog']:not([data-nextjs-dialog]), [data-testid='alert-detail'], [data-testid='alert-drawer']"
     );
 
     // If the click opened a detail view, verify severity is shown
