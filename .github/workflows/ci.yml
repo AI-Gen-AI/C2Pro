@@ -1223,6 +1223,10 @@ jobs:
       # Deterministic inference at the provider boundary ONLY. RAG chunking,
       # chunk persistence, the graph, DB, Redis and the browser stay real.
       C2PRO_AI_MOCK: "1"
+      # The mock critique reports "not assessed" and always requires the real
+      # human-review pause (no flag can skip a required approval). Keep the
+      # operator override explicitly off in this acceptance lane.
+      C2PRO_SKIP_HITL: "0"
       C2PRO_EMBEDDINGS_MOCK: "1"
       # Browser calls must go through the Next.js proxy so the Clerk bearer token
       # reaches the local backend without a cross-origin preflight.
@@ -1491,6 +1495,28 @@ jobs:
           print(f"P0b real HITL: tests={tests}, skipped={skipped}, failures={failures}")
           if tests != 11 or skipped or failures:
               raise SystemExit("Real HITL gate must execute exactly 11 tests without skip/failure")
+          PY
+
+      - name: P0b takeover fork differential on real PostgreSQL (required)
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          # fencing_token > 1 with source_checkpoint_id == restored.checkpoint_id:
+          # the takeover resumes an aupdate_state fork. Proves the resume is
+          # consumed, analysis_id matches the persisted row, graph.completed is
+          # emitted once and a repeated approval never re-runs the graph.
+          python -m pytest \
+            tests/modules/integration/test_p0b_checkpoint_fork_differential.py \
+            -v --tb=short \
+            --junit-xml=p0b-takeover-differential.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("p0b-takeover-differential.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+          counts = tuple(sum(int(s.get(key, 0)) for s in suites) for key in ("tests", "skipped", "failures", "errors"))
+          print("P0b takeover differential:", counts)
+          if counts != (1, 0, 0, 0):
+              raise SystemExit("Takeover differential must execute exactly 1 test without skip/failure")
           PY
 
 

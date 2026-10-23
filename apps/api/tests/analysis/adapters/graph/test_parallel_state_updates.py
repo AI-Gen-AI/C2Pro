@@ -37,6 +37,30 @@ def _base_state() -> dict[str, object]:
     }
 
 
+def _install_assessed_critique(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Model a MEASURED, high-confidence N12 critique (a genuine non-HITL scenario).
+
+    Under ``C2PRO_AI_MOCK=1`` the real ``critique_node`` reports "not assessed"
+    (UNKNOWN) and fail-closes into ``human_interrupt``; that is covered by the
+    routing tests. These compiled-graph tests exercise the post-critique
+    fan-out/join, so they substitute a critique that actually assessed the
+    extraction. The mandatory-review gate is not bypassed: no flag is used,
+    the critique itself reports that approval is not required.
+    """
+    import src.analysis.adapters.graph.workflow as workflow_module
+
+    async def assessed_critique(_state: dict[str, object]) -> dict[str, object]:
+        return {
+            "confidence_score": 0.95,
+            "retry_count": 0,
+            "critique_notes": "",
+            "human_approval_required": False,
+            "messages": [],
+        }
+
+    monkeypatch.setattr(workflow_module, "critique_node", assessed_critique)
+
+
 @pytest.mark.asyncio
 async def test_parallel_branches_return_only_branch_local_updates(monkeypatch: pytest.MonkeyPatch) -> None:
     """TS-UA-ANA-GRAPH-001 - Parallel branches must not rewrite shared identity keys."""
@@ -277,6 +301,7 @@ async def test_compiled_workflow_accepts_contract_validated_dict_payloads_with_r
     monkeypatch.setattr(workflow_module, "pii_anonymizer_node", passthrough_pii)
     monkeypatch.setattr(workflow_module, "knowledge_graph_builder_node", stub_knowledge_graph)
 
+    _install_assessed_critique(monkeypatch)
     app = compile_workflow(checkpointer=None, persist_diagram=False)
     result = await app.ainvoke(
         {
@@ -409,6 +434,7 @@ async def test_compiled_workflow_merges_node_results_with_tenant(
     monkeypatch.setattr(workflow_module, "knowledge_graph_builder_node", stub_knowledge_graph)
     monkeypatch.setattr(workflow_module, "save_to_db_node", no_save)
 
+    _install_assessed_critique(monkeypatch)
     app = compile_workflow(checkpointer=None, persist_diagram=False)
     result = await app.ainvoke(
         {

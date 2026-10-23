@@ -31,6 +31,7 @@ describe("TASK-024 RED - cross-browser coverage", () => {
     const spec = readFileSync(specPath, "utf8");
     expect(spec).toContain("TASK-024");
     expect(spec).toContain('await page.goto("/",');
-    expect(spec).toContain("view live demo");
+    expect(spec).toContain("ver demo ilustrativa");
+    expect(spec).toContain("Customer QA Scenario");
   });
 });

@@ -231,6 +231,60 @@ describe('ReviewPage', () => {
     expect(mockShowToast).toHaveBeenCalledWith('Approval failed');
   });
 
+  // P0b #1090: the generated Axios client reports a generic HTTP 400 in
+  // error.message; the actionable checkpoint status is in response.data.detail.
+  it('shows the checkpoint-not-ready detail and permits an explicit retry that succeeds', async () => {
+    setupMock();
+    const transient = Object.assign(new Error('Request failed with status code 400'), {
+      response: { status: 400, data: { detail: 'Candidate not ready: checkpoint pending' } },
+    });
+    mockApproveMutate.mockRejectedValueOnce(transient).mockResolvedValueOnce({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Candidate not ready: checkpoint pending');
+    expect(mockShowToast).toHaveBeenCalledWith('Candidate not ready: checkpoint pending');
+    expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /confirm approve/i })).not.toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    await waitFor(() => expect(mockApproveMutate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Approve Review Item')).not.toBeInTheDocument());
+  });
+
+  it('surfaces an unrelated HTTP 400 detail without auto-retrying or marking approved', async () => {
+    setupMock();
+    const denied = Object.assign(new Error('Request failed with status code 400'), {
+      response: { status: 400, data: { detail: 'Approval denied: tenant mismatch' } },
+    });
+    mockApproveMutate.mockRejectedValue(denied);
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Approval denied: tenant mismatch');
+    expect(mockShowToast).toHaveBeenCalledWith('Approval denied: tenant mismatch');
+    expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Approve Review Item')).toBeInTheDocument();
+    expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the Axios message when response detail is not a nonempty string', async () => {
+    setupMock();
+    const malformed = Object.assign(new Error('Request failed with status code 400'), {
+      response: { status: 400, data: { detail: { code: 'INVALID' } } },
+    });
+    mockApproveMutate.mockRejectedValue(malformed);
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Request failed with status code 400');
+    expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+    expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
   it('opens reject dialog and requires reason', async () => {
     setupMock();
     mockRejectMutate.mockResolvedValue({});

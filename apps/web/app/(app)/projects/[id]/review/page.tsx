@@ -66,6 +66,17 @@ function decisionKey(item: ReviewItemResponse): string {
 }
 
 function errorMessage(error: unknown, fallback: string): string {
+  // Axios surfaces HTTP status in error.message, while the API's precise
+  // fail-closed reason is in response.data.detail. Preserve that reason so a
+  // reviewer can distinguish a not-yet-bound checkpoint from other 400s.
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { data?: unknown } }).response;
+    const data = response?.data;
+    if (data && typeof data === 'object' && 'detail' in data) {
+      const detail = (data as { detail?: unknown }).detail;
+      if (typeof detail === 'string' && detail.trim()) return detail;
+    }
+  }
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
     : fallback;

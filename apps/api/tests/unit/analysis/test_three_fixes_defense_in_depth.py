@@ -181,10 +181,9 @@ class TestDeterministicFallbackQuality:
 
 
 class TestSkipHitlEnvVar:
-    """The conditional edge must route past human_interrupt when
-    ``C2PRO_SKIP_HITL=1`` so coherence_scorer + save_to_db actually run."""
+    """A mandatory human decision cannot be bypassed by environment flags."""
 
-    def test_skip_hitl_env_preserves_retry_routing(
+    def test_skip_hitl_env_preserves_mandatory_review(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Lazy import to pick up the monkeypatched env at module level.
@@ -200,9 +199,8 @@ class TestSkipHitlEnvVar:
             "doc_type": "contract",
         }
         next_step = _next_after_critique_v2(state)  # type: ignore[arg-type]
-        # skip_hitl bypasses only the human_interrupt pause; it must not
-        # suppress automated retry routing when retry conditions are present.
-        assert next_step == "risk_extractor"
+        # A required human decision takes precedence over automated retries.
+        assert next_step == "human_interrupt"
 
     def test_default_still_routes_to_human_interrupt(
         self, monkeypatch: pytest.MonkeyPatch
@@ -221,7 +219,7 @@ class TestSkipHitlEnvVar:
         next_step = _next_after_critique_v2(state)  # type: ignore[arg-type]
         assert next_step == "human_interrupt"
 
-    def test_ai_mock_env_also_skips_hitl(
+    def test_ai_mock_env_preserves_mandatory_review(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
@@ -236,4 +234,19 @@ class TestSkipHitlEnvVar:
             "doc_type": "contract",
         }
         next_step = _next_after_critique_v2(state)  # type: ignore[arg-type]
-        assert next_step == "stakeholder_extractor"
+        assert next_step == "human_interrupt"
+
+    def test_non_required_review_keeps_normal_routing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.workflow import _next_after_critique_v2
+
+        monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
+        state = {
+            "human_approval_required": False,
+            "critique_notes": "",
+            "retry_count": 0,
+            "doc_type": "contract",
+        }
+        assert _next_after_critique_v2(state) == "stakeholder_extractor"  # type: ignore[arg-type]

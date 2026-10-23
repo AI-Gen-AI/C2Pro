@@ -186,11 +186,11 @@ class TestNextAfterCritique:
         doc_type: str,
         expected: str,
     ) -> None:
-        """skip_hitl bypasses only HITL; automated retries still route by doc_type."""
+        """When approval is not required, skip mode preserves retry routing."""
         monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
         state = _make_state(
-            human_approval_required=True,
+            human_approval_required=False,
             critique_notes="retry extraction",
             retry_count=1,
             doc_type=doc_type,
@@ -377,3 +377,21 @@ class TestDocTypes:
     def test_doc_types_does_not_contain_report(self) -> None:
         """'report' is not a recognised document type."""
         assert "report" not in DOC_TYPES
+
+
+def test_unknown_requires_real_hitl_even_with_mock_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock extraction cannot skip the mandatory N12 human interrupt."""
+    monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+    monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    state = _make_state(human_approval_required=True, confidence_score=None)
+    assert _next_after_critique(state) == "human_interrupt"
+
+
+def test_unknown_requires_real_hitl_even_with_skip_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit skip flag cannot bypass a fail-closed UNKNOWN decision."""
+    monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+    monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    state = _make_state(human_approval_required=True, confidence_score=None)
+    assert _next_after_critique(state) == "human_interrupt"

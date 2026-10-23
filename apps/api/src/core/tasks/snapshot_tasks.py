@@ -41,6 +41,14 @@ _SOURCE_EVENT_LOCK_SQL = text(
     """
 )
 
+_PROJECT_SNAPSHOT_LOCK_SQL = text(
+    """
+    SELECT pg_advisory_xact_lock(
+        hashtextextended('project_snapshot_project:' || cast(:project_id as text), 0)
+    )
+    """
+)
+
 _HITL_GRAPH_COMPLETION_CURRENCY_SQL = text(
     """
     SELECT
@@ -173,6 +181,17 @@ async def _write_project_snapshot_async(
                         "status": "skipped_stale_hitl_lineage",
                         "snapshot_id": "",
                     }
+            # Per-project ordering boundary. Snapshots of one project are a
+            # totally ordered read model ("latest" wins): a writer stamps
+            # captured_at and reads its prior snapshot inside write_snapshot,
+            # so two writers for different source events (graph.completed and
+            # hitl.correction after an approval) must not interleave. Without
+            # this a correction snapshot could read a prior that does not yet
+            # hold the resolved single-document assessment, commit first and
+            # still win latest() with a null assessment. Always taken AFTER
+            # the source-event lock (fixed order => no lock cycle); held until
+            # this transaction commits, so the next writer sees our snapshot.
+            await session.execute(_PROJECT_SNAPSHOT_LOCK_SQL, {"project_id": str(project_id)})
             snapshot = await SnapshotWriter(
                 project_state_repository=SqlAlchemyProjectStateRepository(session),
                 snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
