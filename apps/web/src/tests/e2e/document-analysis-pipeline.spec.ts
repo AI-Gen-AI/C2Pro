@@ -130,7 +130,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     // One of these should be visible
     await expect(
-      heading.or(alertsList.first()).or(emptyState)
+      heading.or(alertsList.first()).or(emptyState).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 

@@ -204,6 +204,23 @@ async function waitForAuthenticatedSession(page: Page) {
   await projectsResponse;
 }
 
+/**
+ * goto() that survives a navigation still in flight from the previous step
+ * (`net::ERR_ABORTED`): the Next.js app can issue a client-side redirect right
+ * after /projects settles. Only that abort is retried; any other failure surfaces.
+ */
+async function gotoStable(page: Page, url: string) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(url);
+      return;
+    } catch (error) {
+      if (!/ERR_ABORTED/.test(String(error)) || attempt === 2) throw error;
+      await page.waitForLoadState("domcontentloaded");
+    }
+  }
+}
+
 async function getSessionSubject(page: Page): Promise<string | null> {
   // The Next.js app can still be navigating (RSC redirect, Clerk hydration) right
   // after goto(); evaluating in a document that is being replaced throws
@@ -249,7 +266,7 @@ test.beforeEach(async ({ page }) => {
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await installWedgeRoutes(page);
 
-  await page.goto(`/projects/${projectId}/documents`);
+  await gotoStable(page, `/projects/${projectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
   await expect(page.getByText(/triplet complete/i)).toBeVisible();
   await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
@@ -285,7 +302,11 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 });
 
 test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
-  await page.goto(`/projects/${liveProjectId}/documents`);
+  // Five real routes (first-time Next.js compilation in CI), a real HITL approval
+  // and the audit report: far beyond the 30 s default. An explicit budget keeps
+  // a genuine failure a locator failure instead of a masked global timeout.
+  test.setTimeout(180_000);
+  await gotoStable(page, `/projects/${liveProjectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
   await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
   await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
