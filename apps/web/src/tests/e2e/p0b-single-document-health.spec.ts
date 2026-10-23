@@ -64,7 +64,7 @@ interface P0bDocumentRecord {
   review_item_id?: string | null;
 }
 
-async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string): Promise<P0bDocumentRecord> {
+async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string, requireAnalyzed = false): Promise<P0bDocumentRecord> {
   const deadline = Date.now() + ANALYSIS_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const responsePromise = page.waitForResponse(
@@ -78,9 +78,15 @@ async function waitForDocumentTerminal(page: Page, projectId: string, documentId
       { items?: P0bDocumentRecord[] } | P0bDocumentRecord[];
     const records = Array.isArray(payload) ? payload : payload.items ?? [];
     const document = records.find((item) => item.id === documentId);
-    if (!document) throw new Error("P0B_UPLOADED_DOCUMENT_NOT_LISTED");
+    if (!document) {
+      await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+      continue;
+    }
     const state = String(document.lifecycle_status ?? "").toLowerCase();
-    if (["analyzed", "review_required", "failed_retryable", "needs_changes", "error"].includes(state)) {
+    if (["failed_retryable", "needs_changes", "error"].includes(state)) {
+      throw new Error(`P0B_DOCUMENT_TERMINAL_FAILURE:${state}`);
+    }
+    if (state === "analyzed" || (!requireAnalyzed && state === "review_required")) {
       return document;
     }
     await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
@@ -254,7 +260,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       expect(terminal.review_count, "exactly one pending review is required").toBe(1);
       expect(terminal.review_item_id, "review must be addressable").toBeTruthy();
       await approveP0bReview(page, projectId!, terminal.review_item_id!);
-      terminal = await waitForDocumentTerminal(page, projectId!, documentId!);
+      terminal = await waitForDocumentTerminal(page, projectId!, documentId!, true);
     }
     expect(terminal.lifecycle_status, "HITL resume must complete analysis").toBe("analyzed");
 
