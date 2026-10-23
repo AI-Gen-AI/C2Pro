@@ -312,6 +312,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     const journeyDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
     let terminal = await waitForDocumentTerminal(page, projectId!, documentId!, journeyDeadline);
     expect(terminal.lifecycle_status, "P0b must exercise real HITL; analyzed without review is a bypass").toBe("review_required");
+    console.info("P0B_HITL_GATE_OBSERVED", JSON.stringify({ documentId, reviewItemId: terminal.review_item_id, reviewCount: terminal.review_count }));
     if (terminal.lifecycle_status === "review_required") {
       expect(terminal.review_count, "exactly one pending review is required").toBe(1);
       expect(terminal.review_item_id, "review must be addressable").toBeTruthy();
