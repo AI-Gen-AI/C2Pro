@@ -5,8 +5,8 @@
 \set ON_ERROR_STOP on
 \if :{?expected_tenant}
 \else
-  \echo 'PQ1054_EXPECTED_TENANT_REQUIRED'
-  \quit 3
+  -- \quit takes no exit status (it exits 0): fail through ON_ERROR_STOP instead.
+  DO $required$ BEGIN RAISE EXCEPTION 'PQ1054_EXPECTED_TENANT_REQUIRED'; END $required$;
 \endif
 BEGIN READ ONLY;
 -- Store the psql-provided UUID in a transaction-local setting without printing it.
