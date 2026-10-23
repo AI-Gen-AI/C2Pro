@@ -120,8 +120,20 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
     // Avoid racing the next approval attempt against the previous attempt's
     // still-visible error alert: Promise.race would otherwise immediately
     // classify that stale alert as a fresh failure before the request settles.
-    await expect(dialog.getByRole("alert")).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
+    // The UI clears actionError only when the next submit begins. Waiting for
+    // the old alert to hide before clicking again would deadlock this retry.
     await page.waitForTimeout(2_000);
+    await confirm.click();
+    await expect(dialog.getByRole("alert")).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
+    const retryOutcome = await Promise.race([
+      dialog.waitFor({ state: "hidden", timeout: Math.max(1, deadline - Date.now()) }).then(() => "closed" as const),
+      dialog.getByRole("alert").waitFor({ state: "visible", timeout: Math.max(1, deadline - Date.now()) }).then(() => "error" as const),
+    ]);
+    if (retryOutcome === "closed") return;
+    const retryMessage = await dialog.getByRole("alert").innerText();
+    if (!/candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i.test(retryMessage) || Date.now() + 2_000 >= deadline) {
+      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${retryMessage}`);
+    }
   }
 }
 
