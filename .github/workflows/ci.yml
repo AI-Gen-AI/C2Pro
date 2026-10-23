@@ -566,6 +566,30 @@ jobs:
       - name: Bootstrap test infrastructure
         run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
+      - name: PQ1054 real PostgreSQL and psql regression (no skips)
+        working-directory: apps/api
+        env:
+          C2PRO_MIGRATED_TEST_DSN: postgresql://postgres:postgres@localhost:5433/c2pro_test
+        run: |
+          set -euo pipefail
+          command -v psql
+          python -m pytest \
+            tests/integration/product_control/test_pq1054_acceptance_tenant_binding_pg.py \
+            tests/integration/product_control/test_pq1054_preflight_postflight_psql.py \
+            -q -ra --tb=short --junit-xml=pq1054-pg-results.xml \
+            -o strict_markers=true
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("pq1054-pg-results.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+          tests = sum(int(s.get("tests", 0)) for s in suites)
+          skipped = sum(int(s.get("skipped", 0)) for s in suites)
+          failures = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
+          print(f"PQ1054 postgres evidence: tests={tests}, skipped={skipped}, failures={failures}")
+          if tests < 2 or skipped or failures:
+              raise SystemExit("PQ1054 real-PostgreSQL gate failed or skipped")
+          PY
+
       - name: Run integration tests
         working-directory: apps/api
         run: python -m pytest tests/integration/ --tb=short --junit-xml=integration-test-results.xml
