@@ -161,6 +161,43 @@ async def test_parse_document_persists_budget_stated_total(
 
 
 @pytest.mark.asyncio
+async def test_parse_document_persists_budget_currencies_with_stated_total(
+    use_case,
+    mock_repository,
+    mock_storage,
+    mock_parser,
+    sample_document,
+):
+    """S7: the stated total keeps the denominations its source states."""
+    budget_document = Document(
+        id=sample_document.id,
+        project_id=sample_document.project_id,
+        tenant_id=sample_document.tenant_id,
+        document_type=DocumentType.BUDGET,
+        filename="budget.xlsx",
+        upload_status=DocumentStatus.UPLOADED,
+        file_format=".xlsx",
+    )
+    budget_rows = _BudgetRows([{"item": "Capitulo 01", "quantity": 1, "total": 100.0}])
+    budget_rows.currencies = {"USD"}
+    mock_repository.get_by_id = AsyncMock(return_value=budget_document)
+    mock_repository.update_status = AsyncMock()
+    mock_repository.commit = AsyncMock()
+    mock_storage.download_file = AsyncMock(return_value=Path("/tmp/budget.xlsx"))
+    mock_parser.parse_document_file = AsyncMock(
+        return_value={"file_format": ".xlsx", "budget": budget_rows}
+    )
+
+    await use_case.execute(budget_document.tenant_id, budget_document.id, uuid4())
+
+    mock_repository.update_metadata.assert_awaited_with(
+        budget_document.tenant_id,
+        budget_document.id,
+        {"stated_total": 654_144_805.0, "stated_total_currencies": ["USD"]},
+    )
+
+
+@pytest.mark.asyncio
 async def test_parse_document_handles_not_found(use_case, mock_repository):
     mock_repository.get_by_id = AsyncMock(return_value=None)
 

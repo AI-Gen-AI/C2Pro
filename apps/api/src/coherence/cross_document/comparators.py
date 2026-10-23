@@ -11,9 +11,10 @@ Refers to Suite ID: TS-UD-COH-XDOC-COMPARATORS-001.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import date
 
-from src.coherence.cross_document.findings import CrossDocFinding
+from src.coherence.cross_document.findings import CrossDocFinding, CrossDocNotAssessed
 from src.coherence.cross_document.inputs import ProjectCrossDocInputs
 from src.coherence.models import CoherenceCategory
 
@@ -36,6 +37,36 @@ RULE_SCHEDULE_OVERRUNS_DEADLINE = "DET-CRS-SCHDEAD"  # schedule end AFTER the co
 # Directional and margin-threshold-independent: a budget BELOW contract is a normal
 # margin, but a budget ABOVE it cannot be funded by the contract → always an incoherence.
 _NEGATIVE_MARGIN_TOLERANCE = 0.01
+
+
+def _currency_not_assessed(
+    rule_id: str,
+    left_key: str,
+    left: frozenset[str],
+    right_key: str,
+    right: frozenset[str],
+) -> CrossDocNotAssessed | None:
+    """NOT_ASSESSED when two money values do not share one known denomination.
+
+    An unstated denomination on a side is not evidence of a mismatch, so the
+    comparison proceeds; stated different or mixed denominations stop it.
+    """
+    if len(left) > 1 or len(right) > 1:
+        reason = "MIXED_CURRENCY"
+    elif left and right and left != right:
+        reason = "CURRENCY_MISMATCH"
+    else:
+        return None
+    return CrossDocNotAssessed(
+        rule_id=rule_id,
+        reason=reason,
+        left_key=left_key,
+        right_key=right_key,
+        detail=(
+            f"{left_key} in {', '.join(sorted(left)) or 'unstated'} vs {right_key} in "
+            f"{', '.join(sorted(right)) or 'unstated'}: no FX basis to compare totals"
+        ),
+    )
 
 
 def compare_values(
@@ -82,8 +113,18 @@ def compare_values(
 
 def contract_vs_budget_total(
     inputs: ProjectCrossDocInputs, *, tolerance: float = DEFAULT_TOLERANCE
-) -> CrossDocFinding | None:
+) -> CrossDocFinding | CrossDocNotAssessed | None:
     """Contract price ↔ stated budget total (the €1.6M-vs-€1.2M case)."""
+    if inputs.contract_total is not None and inputs.budget_total is not None:
+        skipped = _currency_not_assessed(
+            RULE_CONTRACT_VS_BUDGET,
+            "contract_total",
+            inputs.contract_currencies,
+            "budget_total",
+            inputs.budget_currencies,
+        )
+        if skipped is not None:
+            return skipped
     return compare_values(
         "contract_total",
         inputs.contract_total,
@@ -125,7 +166,9 @@ def bom_vs_budget_total(
     )
 
 
-def budget_exceeds_contract(inputs: ProjectCrossDocInputs) -> CrossDocFinding | None:
+def budget_exceeds_contract(
+    inputs: ProjectCrossDocInputs,
+) -> CrossDocFinding | CrossDocNotAssessed | None:
     """Budget total ABOVE contract total = negative margin — always an incoherence.
 
     A budget below the contract is a normal margin; a budget that EXCEEDS the contract
@@ -136,6 +179,15 @@ def budget_exceeds_contract(inputs: ProjectCrossDocInputs) -> CrossDocFinding | 
     budget = inputs.budget_total
     if contract is None or budget is None or contract <= 0.0:
         return None
+    skipped = _currency_not_assessed(
+        RULE_BUDGET_EXCEEDS_CONTRACT,
+        "budget_total",
+        inputs.budget_currencies,
+        "contract_total",
+        inputs.contract_currencies,
+    )
+    if skipped is not None:
+        return skipped
     overrun = (budget - contract) / contract
     if overrun <= _NEGATIVE_MARGIN_TOLERANCE:
         return None
@@ -222,24 +274,41 @@ def schedule_overruns_deadline(inputs: ProjectCrossDocInputs) -> CrossDocFinding
     )
 
 
+@dataclass(frozen=True)
+class CrossDocAssessment:
+    """Material findings plus the comparisons that were NOT_ASSESSED, and why."""
+
+    findings: list[CrossDocFinding] = field(default_factory=list)
+    not_assessed: list[CrossDocNotAssessed] = field(default_factory=list)
+
+
+def assess_numeric_comparators(
+    inputs: ProjectCrossDocInputs, *, tolerance: float = DEFAULT_TOLERANCE
+) -> CrossDocAssessment:
+    """Run every numeric cross-document comparator and keep each outcome."""
+    outcomes = [
+        comparator(inputs, tolerance=tolerance)
+        for comparator in (contract_vs_budget_total, wbs_vs_budget_total, bom_vs_budget_total)
+    ]
+    outcomes += [
+        directional(inputs)
+        for directional in (
+            budget_exceeds_contract,
+            risk_exceeds_contingency,
+            schedule_overruns_deadline,
+        )
+    ]
+    return CrossDocAssessment(
+        findings=[o for o in outcomes if isinstance(o, CrossDocFinding)],
+        not_assessed=[o for o in outcomes if isinstance(o, CrossDocNotAssessed)],
+    )
+
+
 def run_numeric_comparators(
     inputs: ProjectCrossDocInputs, *, tolerance: float = DEFAULT_TOLERANCE
 ) -> list[CrossDocFinding]:
     """Run every numeric cross-document comparator; return only material findings."""
-    findings: list[CrossDocFinding] = []
-    for comparator in (contract_vs_budget_total, wbs_vs_budget_total, bom_vs_budget_total):
-        finding = comparator(inputs, tolerance=tolerance)
-        if finding is not None:
-            findings.append(finding)
-    for directional in (
-        budget_exceeds_contract,
-        risk_exceeds_contingency,
-        schedule_overruns_deadline,
-    ):
-        finding = directional(inputs)
-        if finding is not None:
-            findings.append(finding)
-    return findings
+    return assess_numeric_comparators(inputs, tolerance=tolerance).findings
 
 
 __all__ = [
@@ -250,6 +319,8 @@ __all__ = [
     "RULE_RISK_EXCEEDS_CONTINGENCY",
     "RULE_SCHEDULE_OVERRUNS_DEADLINE",
     "RULE_WBS_VS_BUDGET",
+    "CrossDocAssessment",
+    "assess_numeric_comparators",
     "bom_vs_budget_total",
     "budget_exceeds_contract",
     "compare_values",

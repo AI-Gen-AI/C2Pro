@@ -23,6 +23,17 @@ import { test, expect, type Page } from "@playwright/test";
 /** Demo project ID used across the test suite (no auth required). */
 const DEMO_PROJECT_ID = "proj_demo_001";
 
+// apiClient owns the "/api" prefix and strips a generated "/api/v1", so the
+// browser calls "/api/<path>" (the Next proxy adds /v1 for the backend).
+// Match both spellings so a mock can never silently miss the real request.
+function apiRoute(path: string): RegExp {
+  const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`/api(?:/v1)?${escaped}(?:[?#]|$)`);
+}
+
+// The page also offers per-slot "Upload contract|schedule|budget" buttons.
+const UPLOAD_DOCUMENT_BUTTON = { name: /^upload document$/i } as const;
+
 /**
  * Navigate to the demo project's documents page.
  * Demo routes bypass Clerk auth, making them suitable for E2E.
@@ -52,7 +63,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     await expect(page.getByTestId("documents-page")).toBeVisible();
 
     // Should have an upload action available
-    const uploadButton = page.getByRole("button", { name: /upload/i });
+    const uploadButton = page.getByRole("button", UPLOAD_DOCUMENT_BUTTON);
     await expect(uploadButton).toBeVisible();
   });
 
@@ -60,7 +71,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     await goToProjectDocuments(page);
 
     // Click the upload button
-    await page.getByRole("button", { name: /upload/i }).click();
+    await page.getByRole("button", UPLOAD_DOCUMENT_BUTTON).click();
 
     // Upload dialog should appear
     const dialog = page.getByRole("dialog");
@@ -76,19 +87,22 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
   test("DAP-003: Document status transitions after upload", async ({ page }) => {
     await goToProjectDocuments(page);
 
-    // Count documents before (may be 0 or pre-existing demo data)
-    const initialRows = await page.locator("table tbody tr, [data-testid^='document-row']").count();
+    // Count documents before (may be 0 or pre-existing demo data). Only real
+    // document rows: the loading and empty-state placeholders are table rows too.
+    await expect(page.getByText("Loading documents...")).toHaveCount(0, { timeout: 15_000 });
+    const initialRows = await page.locator("[data-testid^='document-row-']").count();
 
     // If there are existing documents, verify at least one shows a status badge
     if (initialRows > 0) {
-      const statusBadge = page.locator(
-        '[class*="badge"], [data-testid*="status"]'
-      ).first();
+      const statusBadge = page.getByTestId("document-status-badge").first();
       await expect(statusBadge).toBeVisible();
 
-      // Status should be one of the known values
+      // Status should be one of the known lifecycle labels (#712)
       const text = await statusBadge.textContent();
-      const validStatuses = ["Uploaded", "Processing", "Parsed", "Analysis pending", "Analyzed", "Error"];
+      const validStatuses = [
+        "Uploaded", "Processing", "Parsed", "Analysis pending", "Review required",
+        "Analyzed", "Needs changes", "Retry needed", "Error",
+      ];
       const hasValidStatus = validStatuses.some(
         (s) => text?.toLowerCase().includes(s.toLowerCase())
       );
@@ -384,7 +398,7 @@ test.describe("TS-E2E-DAP-002: HITL Review Flow", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("TS-E2E-712: Truthful document / HITL lifecycle states", () => {
-  const DOCUMENTS_ROUTE = `**/api/v1/projects/${DEMO_PROJECT_ID}/documents*`;
+  const DOCUMENTS_ROUTE = apiRoute(`/projects/${DEMO_PROJECT_ID}/documents`);
 
   function documentsResponse(item: Record<string, unknown>) {
     return {
@@ -576,7 +590,7 @@ test.describe("TS-E2E-DAP-003: Error Scenarios", () => {
     await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 15_000 });
 
     // Open upload dialog
-    await page.getByRole("button", { name: /upload/i }).click();
+    await page.getByRole("button", UPLOAD_DOCUMENT_BUTTON).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 5_000 });
 
@@ -599,9 +613,8 @@ test.describe("TS-E2E-DAP-003: Error Scenarios", () => {
 
   test("ERR-002: Network error shows user-friendly message", async ({ page }) => {
     // Intercept API calls to simulate network failure
-    await page.route("**/api/v1/**", (route) =>
-      route.abort("connectionrefused")
-    );
+    const anyApi = /\/api(?:\/v1)?\//;
+    await page.route(anyApi, (route) => route.abort("connectionrefused"));
 
     await page.goto(`/projects/${DEMO_PROJECT_ID}/documents`);
 
@@ -613,7 +626,7 @@ test.describe("TS-E2E-DAP-003: Error Scenarios", () => {
     expect(bodyText).not.toContain("Unhandled Runtime Error");
 
     // Unroute to restore normal behavior
-    await page.unroute("**/api/v1/**");
+    await page.unroute(anyApi);
   });
 });
 

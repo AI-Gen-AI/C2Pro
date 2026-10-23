@@ -26,7 +26,11 @@ class ProjectCrossDocInputs:
     max_risk_exposure: float | None = None  # largest identified risk value (from risk analysis)
     contract_deadline: str | None = None  # ISO date the contract requires completion by
     schedule_end: str | None = None  # ISO date the schedule actually ends
-    currency: str | None = None  # reserved for a future FX-mismatch guard
+    currency: str | None = None  # first denomination seen (informational)
+    # Normalized ISO codes seen with each side's money. Comparing totals across
+    # different (or mixed) denominations is NOT_ASSESSED: there is no FX basis.
+    contract_currencies: frozenset[str] = frozenset()
+    budget_currencies: frozenset[str] = frozenset()
 
 
 __all__ = ["ProjectCrossDocInputs"]

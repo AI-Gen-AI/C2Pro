@@ -77,3 +77,34 @@ def test_build_contract_clause_data_largest_labeled_amount_wins() -> None:
 
     assert data["total_amount"] == 628_624_801.0
     assert data["currency"] == "INR"
+
+
+@pytest.mark.parametrize(
+    ("text", "currency", "source"),
+    [
+        ("The Contract Price shall be EUR 5,250,000 for the works.", "EUR", "explicit"),
+        ("The Contract Price shall be USD 5,250,000 for the works.", "USD", "explicit"),
+        ("The Contract Price shall be £5,250,000 for the works.", "GBP", "explicit"),
+        ("The Contract Price is INR 628,624,801 only.", "INR", "explicit"),
+        # No stated currency: the legacy EUR guess is kept but never evidence.
+        ("The Contract Price shall be 5,250,000 for the works.", "EUR", "default"),
+        # Two currencies named: not evidence of either.
+        ("The Contract Price shall be EUR 5,250,000 or USD 5,700,000.", "EUR", "ambiguous"),
+    ],
+)
+def test_contract_currency_is_evidence_only_when_the_source_names_it(
+    text: str, currency: str, source: str
+) -> None:
+    """S7: only an explicitly stated contract currency can block a comparison."""
+    data = _build_contract_clause_data(text, text)
+
+    assert data["total_amount"] > 0
+    assert (data["currency"], data["currency_source"]) == (currency, source)
+
+
+def test_working_hours_are_not_read_as_rupees() -> None:
+    text = "The Contract Price shall be EUR 5,250,000. Working hours 8 per day."
+
+    data = _build_contract_clause_data(text, text)
+
+    assert (data["currency"], data["currency_source"]) == ("EUR", "explicit")

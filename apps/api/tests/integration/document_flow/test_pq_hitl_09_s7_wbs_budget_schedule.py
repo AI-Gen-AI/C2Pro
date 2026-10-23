@@ -12,11 +12,10 @@ Invariants exercised:
   is added, renumbered, relinked or sourced from either document.
 
 NOT_ASSESSED_ON_DIFFERENT_CURRENCY_OR_TAX is covered within one budget revision
-by tests/unit/analysis/test_budget_row_evidence.py. Across documents it is NOT
-implemented: the contract/budget comparators in
-src/coherence/cross_document/comparators.py compare bare totals and
-ProjectCrossDocInputs.currency is "reserved for a future FX-mismatch guard".
-That gap is reported, not asserted here. Matrix live_uat_status stays NOT_VERIFIED.
+by tests/unit/analysis/test_budget_row_evidence.py, and across documents (contract
+vs budget totals in different or mixed currencies) by
+tests/coherence/test_cross_document_currency.py. Cross-document TAX basis is not
+compared by any comparator. Matrix live_uat_status stays NOT_VERIFIED.
 """
 
 from __future__ import annotations

@@ -60,8 +60,14 @@ const VERSION_PAYLOAD = {
 const DRIFT_PAYLOAD = {
   timeframe: "30d",
   window_start: "2026-03-22T00:00:00Z",
+  // DriftDetector flags points beyond 1.5 population std devs. With only three
+  // points no value can exceed sqrt(2) std devs, so a stable baseline precedes
+  // the two outliers (the latency spike and the feedback drop).
   series: [
-    { bucket: "2026-04-20T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 410, avg_feedback_score: 0.92, feedback_count: 12 },
+    { bucket: "2026-04-16T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 410, avg_feedback_score: 0.92, feedback_count: 12 },
+    { bucket: "2026-04-17T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 400, avg_feedback_score: 0.91, feedback_count: 12 },
+    { bucket: "2026-04-18T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 420, avg_feedback_score: 0.93, feedback_count: 12 },
+    { bucket: "2026-04-20T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 415, avg_feedback_score: 0.92, feedback_count: 12 },
     { bucket: "2026-04-21T00:00:00Z", operation: "coherence", run_count: 50, avg_latency_ms: 1200, avg_feedback_score: 0.92, feedback_count: 5 },
     { bucket: "2026-04-22T00:00:00Z", operation: "extraction", run_count: 80, avg_latency_ms: 300, avg_feedback_score: 0.45, feedback_count: 20 },
   ],
@@ -105,7 +111,7 @@ const USAGE_METRICS_PAYLOAD = {
 
 test.describe("TASK-AI-029 AI analytics dashboard", () => {
   test("renders CostDashboard, VersionMonitor, DriftDetector, and UsageMetricsTable using mocked analytics APIs", async ({ page }) => {
-    await page.route("**/api/v1/ai/analytics/**", async (route) => {
+    await page.route(/\/api(?:\/v1)?\/ai\/analytics\//, async (route) => {
       const url = route.request().url();
       if (url.includes("/cost")) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(COST_PAYLOAD) });
@@ -132,31 +138,34 @@ test.describe("TASK-AI-029 AI analytics dashboard", () => {
 
     await expect(page.getByRole("heading", { name: "Cost Dashboard" })).toBeVisible();
     await expect(page.getByText("Total Cost:")).toContainText("$12.3456");
-    await expect(page.locator("svg")).toHaveCount(1);
+    // Version Monitor and Usage Metrics share labels (Version, Latency, Cost):
+    // assert each panel within its own section.
+    const panel = (name: string) =>
+      page.getByRole("heading", { name }).locator("xpath=ancestor::section[1]");
 
-    await expect(page.getByRole("heading", { name: "Version Monitor" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "v2026.04.20" })).toBeVisible();
+    // The one cost chart: the app shell renders its own icon svgs.
+    await expect(panel("Cost Dashboard").locator("svg")).toHaveCount(1);
+
+    const versionMonitor = panel("Version Monitor");
+    await expect(versionMonitor.getByRole("cell", { name: "v2026.04.20" })).toBeVisible();
     await expect(page.getByLabel("From:")).toBeVisible();
     await expect(page.getByLabel("To:")).toBeVisible();
 
-    await expect(page.getByRole("heading", { name: "Drift Detector" })).toBeVisible();
-    await expect(page.getByText("Feedback score dropped by 11.4%")).toBeVisible();
-    await expect(page.getByText("!")).toHaveCount(2);
+    const driftDetector = panel("Drift Detector");
+    await expect(driftDetector.getByText("Feedback score dropped by 11.4%")).toBeVisible();
+    await expect(driftDetector.getByText("!", { exact: true })).toHaveCount(2);
 
-    await expect(page.getByRole("heading", { name: "Usage Metrics" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Export CSV" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "View Trace" })).toBeVisible();
+    const usageMetrics = panel("Usage Metrics");
+    await expect(usageMetrics.getByRole("button", { name: "Export CSV" })).toBeVisible();
+    await expect(usageMetrics.getByRole("link", { name: "View Trace" })).toBeVisible();
 
-    await expect(page.getByRole("columnheader", { name: /Timestamp/ })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: /Model/ })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: /Tokens/ })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: /Cost/ })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: /Latency/ })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: /Trace/ })).toBeVisible();
+    for (const column of [/Timestamp/, /Model/, /Tokens/, /Cost/, /Latency/, /Trace/]) {
+      await expect(usageMetrics.getByRole("columnheader", { name: column })).toBeVisible();
+    }
   });
 
   test("UsageMetricsTable sorting works correctly", async ({ page }) => {
-    await page.route("**/api/v1/ai/analytics/**", async (route) => {
+    await page.route(/\/api(?:\/v1)?\/ai\/analytics\//, async (route) => {
       const url = route.request().url();
       if (url.includes("/usage-metrics")) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(USAGE_METRICS_PAYLOAD) });
@@ -182,12 +191,15 @@ test.describe("TASK-AI-029 AI analytics dashboard", () => {
     const modelHeader = page.getByRole("columnheader", { name: /Model/ });
     await expect(modelHeader).toBeVisible();
 
+    // A new sort column starts ascending; clicking it again flips to descending.
+    await modelHeader.click();
+    await expect(page.getByRole("columnheader", { name: /Model/ })).toContainText("↑");
     await modelHeader.click();
     await expect(page.getByRole("columnheader", { name: /Model/ })).toContainText("↓");
   });
 
   test("trace_url deep-link opens in new tab", async ({ page }) => {
-    await page.route("**/api/v1/ai/analytics/**", async (route) => {
+    await page.route(/\/api(?:\/v1)?\/ai\/analytics\//, async (route) => {
       const url = route.request().url();
       if (url.includes("/usage-metrics")) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(USAGE_METRICS_PAYLOAD) });

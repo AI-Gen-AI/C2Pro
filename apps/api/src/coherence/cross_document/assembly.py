@@ -12,12 +12,36 @@ Refers to Suite ID: TS-UA-COH-XDOC-ASSEMBLY-001.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+import logging
+from collections.abc import Iterable, Mapping
 
-from src.coherence.cross_document.comparators import run_numeric_comparators
+from src.coherence.cross_document.comparators import assess_numeric_comparators
 from src.coherence.cross_document.inputs import ProjectCrossDocInputs
 from src.coherence.cross_document.signal_adapter import to_finding_signal
 from src.coherence.models import Clause, FindingSignal
+
+logger = logging.getLogger(__name__)
+
+_CURRENCY_SYMBOLS = {"€": "EUR", "$": "USD", "£": "GBP"}
+
+
+def _currency(value: object) -> str | None:
+    """Normalize a stated denomination ("€", " eur ") to an ISO code, else None."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    code = value.strip()
+    return _CURRENCY_SYMBOLS.get(code, code.upper())
+
+
+def _side_currencies(
+    data: Mapping[str, object], key: str, clause_currency: str | None
+) -> set[str]:
+    """One side's denominations: its own key (a clause carrying both totals,
+    like the budget reconciliation clause) or else the clause's currency."""
+    stated = data.get(key)
+    if isinstance(stated, list | tuple):
+        return {code for code in map(_currency, stated) if code}
+    return {clause_currency} if clause_currency else set()
 
 
 def _num(value: object) -> float | None:
@@ -40,19 +64,24 @@ def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInput
     leaf_sum = 0.0
     leaf_seen = False
     currency: str | None = None
+    contract_currencies: set[str] = set()
+    budget_currencies: set[str] = set()
 
     for clause in clauses:
         data = getattr(clause, "data", None) or {}
+        clause_currency = _currency(data.get("currency"))
 
         contract_total = _num(data.get("contract_total"))
         if contract_total is None:
             contract_total = _num(data.get("total_amount"))
         if contract_total is not None:
             contract_totals.append(contract_total)
+            contract_currencies |= _side_currencies(data, "contract_currencies", clause_currency)
 
         stated_total = _num(data.get("stated_total"))
         if stated_total is not None:
             budget_totals.append(stated_total)
+            budget_currencies |= _side_currencies(data, "budget_currencies", clause_currency)
 
         items = data.get("budget_items")
         if isinstance(items, list):
@@ -62,6 +91,9 @@ def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInput
                     if amount is not None:
                         leaf_sum += amount
                         leaf_seen = True
+                        item_currency = _currency(item.get("currency")) or clause_currency
+                        if item_currency:
+                            budget_currencies.add(item_currency)
 
         if currency is None and isinstance(data.get("currency"), str):
             currency = data["currency"]
@@ -71,13 +103,23 @@ def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInput
         budget_total=max(budget_totals) if budget_totals else None,
         budget_leaf_sum=leaf_sum if leaf_seen else None,
         currency=currency,
+        contract_currencies=frozenset(contract_currencies),
+        budget_currencies=frozenset(budget_currencies),
     )
 
 
 def cross_document_signals(clauses: Iterable[Clause]) -> list[FindingSignal]:
-    """Assemble inputs, run the numeric comparators, and adapt findings to signals."""
-    inputs = assemble_cross_doc_inputs(clauses)
-    return [to_finding_signal(finding) for finding in run_numeric_comparators(inputs)]
+    """Assemble inputs, run the numeric comparators, and adapt findings to signals.
+
+    NOT_ASSESSED comparisons produce no signal: they are logged with their reason.
+    """
+    assessment = assess_numeric_comparators(assemble_cross_doc_inputs(clauses))
+    for skipped in assessment.not_assessed:
+        logger.info(
+            "cross-document %s NOT_ASSESSED (%s): %s",
+            skipped.rule_id, skipped.reason, skipped.detail,
+        )
+    return [to_finding_signal(finding) for finding in assessment.findings]
 
 
 __all__ = ["assemble_cross_doc_inputs", "cross_document_signals"]
