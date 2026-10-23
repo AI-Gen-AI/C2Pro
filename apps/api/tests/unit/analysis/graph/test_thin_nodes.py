@@ -809,13 +809,13 @@ class TestCritiqueRouter:
 
         assert _next_after_critique_v2(_make_state()) == "stakeholder_extractor"
 
-    def test_mock_mode_skips_hitl(self, monkeypatch) -> None:
+    def test_mock_mode_preserves_required_hitl(self, monkeypatch) -> None:
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
         monkeypatch.setenv("C2PRO_AI_MOCK", "1")
         assert (
             _next_after_critique_v2(_make_state(human_approval_required=True))
-            == "stakeholder_extractor"
+            == "human_interrupt"
         )
 
 
