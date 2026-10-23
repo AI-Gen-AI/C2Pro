@@ -105,25 +105,34 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
-  const alert = dialog.getByRole("alert");
   const deadline = Date.now() + 120_000;
   const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i;
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
-    // Start one request, then observe only the outcome of this submission.
-    // The UI clears the previous actionError when the request begins.
+
+    // Bind each click to its own HTTP response. Watching the alert instead can
+    // accidentally consume the previous attempt's still-visible error, or miss
+    // a fast failure between DOM polls. The real backend is never mocked here.
+    const approvalResponse = page.waitForResponse(
+      (response) => response.request().method() === "POST" &&
+        /\\/api\\/v1\\/hitl\\/queue\\/[^/]+\\/approve\\/?$/.test(new URL(response.url()).pathname),
+      { timeout: Math.max(1, deadline - Date.now()) },
+    );
     await confirm.click();
-    await expect.poll(async () => {
-      if (!(await dialog.isVisible())) return "closed";
-      if (await confirm.isDisabled()) return "pending";
-      return (await alert.isVisible()) ? "error" : "pending";
-    }, { timeout: Math.max(1, deadline - Date.now()), intervals: [100, 250, 500] }).not.toBe("pending");
-    if (!(await dialog.isVisible())) return;
-    const message = await alert.innerText();
-    if (!transient.test(message) || Date.now() + 2_000 >= deadline) {
-      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${message}`);
+    const response = await approvalResponse;
+    if (response.ok()) {
+      await expect(dialog).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
+      return;
     }
+
+    const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
+    const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status()}`;
+    if (response.status() !== 400 || !transient.test(detail) || Date.now() + 2_000 >= deadline) {
+      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${detail}`);
+    }
+    // A retry is permitted only after React has finished the failed request.
+    await expect(confirm).toBeEnabled({ timeout: Math.max(1, deadline - Date.now()) });
     await page.waitForTimeout(2_000);
   }
 }
