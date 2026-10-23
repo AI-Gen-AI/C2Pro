@@ -13,7 +13,7 @@ test.describe("TS-E2E-J1-001: first project setup", () => {
   test("creates a project through the current three-step wizard", async ({ page }) => {
     await establishAuthenticatedSession(page);
     await page.goto("/projects/new");
-    await expect(page).toHaveURL(/\\/projects\\?create=1/);
+    await expect(page).toHaveURL(/\/projects\\?create=1/);
 
     const wizard = page.getByRole("dialog", { name: "Create project" });
     await expect(wizard).toBeVisible();
@@ -35,7 +35,7 @@ test.describe("TS-E2E-J1-001: first project setup", () => {
     await expect(wizard.getByTestId("review-currency")).toHaveText("EUR");
     await wizard.getByRole("button", { name: "Create project", exact: true }).click();
 
-    await expect(page).toHaveURL(/\\/projects\\/[^/?#]+$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/projects\/[^/?#]+$/, { timeout: 30_000 });
     await expect(wizard).not.toBeVisible();
   });
 });
