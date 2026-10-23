@@ -584,11 +584,16 @@ async def test_concurrent_double_approve_executes_downstream_once(
 
     results = await asyncio.gather(classified_approval(), classified_approval())
     assert len(results) == 2
+    # Both requests may return "resumed" when the loser observes the already
+    # finalized approval and follows the idempotent replay path. The durable
+    # downstream effects, not response count, prove single execution.
     assert sum(kind == "response" and value.status == "resumed"
-               for kind, value in results) == 1, results
-    assert sum(kind == "lease_held" or
-               (kind == "response" and value.status == ReviewStatus.APPROVED.value)
-               for kind, value in results) == 1, results
+               for kind, value in results) >= 1, results
+    assert all(
+        kind == "lease_held"
+        or (kind == "response" and value.status in ("resumed", ReviewStatus.APPROVED.value))
+        for kind, value in results
+    ), results
     assert len(_DOWNSTREAM_RUNS) == 1, (
         f"N17 must execute exactly once under concurrency, got {_DOWNSTREAM_RUNS}"
     )
