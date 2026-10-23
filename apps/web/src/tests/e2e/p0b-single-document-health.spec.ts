@@ -1,3 +1,4 @@
+import { isRetryableCandidateNotReady } from "../support/p0b-hitl-response";
 /**
  * TS-E2E-P0B-HEALTH-001 — canonical P0b single-document Health journey.
  *
@@ -119,7 +120,6 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
-  const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate|is not ready for a decision/i;
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
@@ -150,7 +150,7 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
 
     const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
     const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status()}`;
-    if (response.status() !== 400 || !transient.test(detail) || Date.now() + 2_000 >= deadline) {
+    if (!isRetryableCandidateNotReady(response.status(), detail) || Date.now() + 2_000 >= deadline) {
       throw new Error(`P0B_HITL_APPROVAL_FAILED: ${detail}`);
     }
     // A retry is permitted only after React has finished the failed request.
