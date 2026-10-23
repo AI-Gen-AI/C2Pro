@@ -571,14 +571,24 @@ async def test_concurrent_double_approve_executes_downstream_once(
             )
             return await use_case.execute(review_id=review.item_id, request=req)
 
-    # Exceptions propagate: a losing request may be refused or return an
-    # idempotent response, but a SQLAlchemy session error cannot satisfy this.
-    results = await asyncio.gather(
-        approve_from_independent_request(),
-        approve_from_independent_request(),
-    )
+    # A concurrent loser is EXPECTED to receive the domain's explicit
+    # already-claimed refusal while the winner owns the durable lease.
+    # Only that precise refusal is allowed; all other exceptions fail.
+    async def classified_approval():
+        try:
+            return ("response", await approve_from_independent_request())
+        except ValueError as exc:
+            if "already being resumed by another request" not in str(exc):
+                raise
+            return ("lease_held", None)
+
+    results = await asyncio.gather(classified_approval(), classified_approval())
     assert len(results) == 2
-    assert sum(r.status == "resumed" for r in results) == 1, results
+    assert sum(kind == "response" and value.status == "resumed"
+               for kind, value in results) == 1, results
+    assert sum(kind == "lease_held" or
+               (kind == "response" and value.status == ReviewStatus.APPROVED.value)
+               for kind, value in results) == 1, results
     assert len(_DOWNSTREAM_RUNS) == 1, (
         f"N17 must execute exactly once under concurrency, got {_DOWNSTREAM_RUNS}"
     )
