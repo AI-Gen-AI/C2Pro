@@ -419,22 +419,30 @@ async def test_post_condition_rejects_a_restrictive_policy_that_is_not_the_bindi
     await _in_rolled_back_fixture(body)
 
 
-async def test_role_that_can_set_role_into_a_parent_aborts_migration() -> None:
+@pytest.mark.parametrize("parent_right", ["select", "owner"])
+async def test_role_that_can_set_role_into_a_parent_aborts_migration(parent_right: str) -> None:
     async def body(conn, fx: Fixture) -> None:
         parent = f"{fx.role}_grp"
         await conn.execute(f"CREATE ROLE {parent} NOLOGIN")
         await conn.execute(f"GRANT USAGE ON SCHEMA {fx.schema} TO {parent}")
-        await conn.execute(f"GRANT SELECT ON {fx.schema}.tenants TO {parent}")
+        if parent_right == "select":
+            # As the parent, the policies bound TO the acceptance role do not
+            # apply and the caller-set tenant GUC alone decides.
+            await conn.execute(f"GRANT SELECT ON {fx.schema}.tenants TO {parent}")
+            probe, guc = f"SELECT count(*) FROM {fx.schema}.tenants WHERE id = $1", str(TENANT_B)
+        else:
+            # An owner bypasses RLS that is not FORCEd: every tenant, no GUC.
+            await conn.execute(f"ALTER TABLE {fx.schema}.document_artifacts OWNER TO {parent}")
+            probe, guc = (
+                f"SELECT count(*) FROM {fx.schema}.document_artifacts WHERE tenant_id = $1", ""
+            )
         await conn.execute(f"GRANT {parent} TO {fx.role}")
-        # The attack: as the parent, the policies bound TO the acceptance role
-        # do not apply and the caller-set tenant GUC alone decides.
+        # The attack, reproduced before the migration.
         async with conn.transaction():
             await conn.execute(f"SET LOCAL ROLE {fx.role}")
             await conn.execute(f"SET LOCAL ROLE {parent}")
-            await conn.execute("SELECT set_config('app.current_tenant', $1, true)", str(TENANT_B))
-            assert await conn.fetchval(
-                f"SELECT count(*) FROM {fx.schema}.tenants WHERE id = $1", TENANT_B
-            ) == 1
+            await conn.execute("SELECT set_config('app.current_tenant', $1, true)", guc)
+            assert await conn.fetchval(probe, TENANT_B) == 1
             await conn.execute("RESET ROLE")
         await fx.run(conn, M1053.UPGRADE_STATEMENTS)
         with pytest.raises(
