@@ -112,6 +112,19 @@ BEGIN
         RAISE EXCEPTION 'PQ1054_READONLY_ROLE_MEMBERSHIP_GUARD_FAILED';
     END IF;
 
+    -- The other direction: after SET ROLE to a role this login belongs to,
+    -- the policies bound TO this role no longer apply and the caller-set
+    -- tenant GUC alone decides. Refuse every such parent role, whether its
+    -- privileges are inherited or reachable only with SET ROLE.
+    SELECT string_agg(parent.rolname, ', ' ORDER BY parent.rolname)
+      INTO offenders
+      FROM pg_catalog.pg_roles AS parent
+     WHERE parent.oid <> role_oid
+       AND pg_catalog.pg_has_role(role_oid, parent.oid, 'MEMBER');
+    IF offenders IS NOT NULL THEN
+        RAISE EXCEPTION 'PQ1054_READONLY_ROLE_PARENT_ROLE_GUARD_FAILED: %', offenders;
+    END IF;
+
     -- An owner bypasses non-FORCE RLS entirely.
     IF EXISTS (
         SELECT 1 FROM pg_catalog.pg_class WHERE relowner = role_oid
@@ -203,9 +216,12 @@ BEGIN
     END LOOP;
 
     -- Post-condition: every relation the role can read, by table or column
-    -- grant and directly or by inheritance, must be RLS-protected with a
-    -- RESTRICTIVE read policy for this role. Definer-rights views,
-    -- materialized views and foreign tables bypass the caller's RLS.
+    -- grant and directly or by inheritance, must be one of the approved
+    -- relations under its approved RESTRICTIVE read policy for this role:
+    -- this binding on the 12 tenant relations, #1053's project pin on the 9
+    -- project-only tables. Any other restrictive policy (USING (true), say)
+    -- binds nothing. Definer-rights views, materialized views and foreign
+    -- tables bypass the caller's RLS.
     SELECT string_agg(format('%I.%I', ns.nspname, c.relname), ', ')
       INTO offenders
       FROM pg_catalog.pg_class AS c
@@ -224,7 +240,24 @@ BEGIN
                  WHERE p.polrelid = c.oid
                    AND NOT p.polpermissive
                    AND p.polcmd IN ('r', '*')
-                   AND role_oid = ANY (p.polroles)));
+                   AND role_oid = ANY (p.polroles)
+                   AND ns.nspname = 'public'
+                   AND ((p.polname = 'pq1054_acceptance_tenant_bound'
+                         AND c.relname = ANY (ARRAY[
+                             'tenants', 'projects', 'documents',
+                             'document_revisions', 'document_artifacts',
+                             'clauses', 'project_events', 'analyses',
+                             'document_chunks', 'project_snapshots',
+                             'review_items', 'document_processing_operations'
+                         ]::name[]))
+                        OR (p.polname = 'pq939_acceptance_project_readonly'
+                            AND c.relname = ANY (ARRAY[
+                                'extractions', 'procurement_bom_items',
+                                'procurement_budget_items',
+                                'procurement_wbs_items', 'bom_revisions',
+                                'knowledge_graph_edges', 'knowledge_graph_nodes',
+                                'procurement_plan_snapshots', 'stakeholder_alerts'
+                            ]::name[])))));
     IF offenders IS NOT NULL THEN
         RAISE EXCEPTION 'PQ1054_UNBOUND_READABLE_RELATIONS: %', offenders;
     END IF;

@@ -17,14 +17,18 @@ SELECT m.rolname AS member, m.rolsuper, m.rolbypassrls,
   JOIN pg_roles m ON m.oid = am.member
  WHERE am.roleid = 'c2pro_prod_acceptance_ro'::regrole;
 
-\echo '== 3. relations the role can read, and whether a RESTRICTIVE read policy binds it'
+\echo '== 3. relations the role can read, and whether its approved RESTRICTIVE read policy binds it'
 \echo '   (the anchor table itself is excluded: the role must read its own binding)'
+\echo '   bound = pq1054_acceptance_tenant_bound (12 tenant relations) or'
+\echo '           pq939_acceptance_project_readonly (9 project-only tables); any other relation aborts'
 SELECT n.nspname, c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
        has_table_privilege('c2pro_prod_acceptance_ro', c.oid, 'SELECT') AS table_select,
        EXISTS (SELECT 1 FROM pg_policy p
                 WHERE p.polrelid = c.oid AND NOT p.polpermissive
                   AND p.polcmd IN ('r', '*')
-                  AND 'c2pro_prod_acceptance_ro'::regrole = ANY (p.polroles)) AS bound
+                  AND 'c2pro_prod_acceptance_ro'::regrole = ANY (p.polroles)
+                  AND p.polname IN ('pq1054_acceptance_tenant_bound',
+                                    'pq939_acceptance_project_readonly')) AS bound
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
    AND NOT (n.nspname = 'c2pro_security' AND c.relname = 'acceptance_tenant_binding')
@@ -47,11 +51,13 @@ SELECT n.nspname, p.proname, pg_get_function_identity_arguments(p.oid) AS args,
    AND has_schema_privilege('c2pro_prod_acceptance_ro', n.oid, 'USAGE')
  ORDER BY 1, 2;
 
-\echo '== 5b. roles whose privileges the role inherits (their grants count as its own)'
-SELECT g.rolname AS inherited_role
+\echo '== 5b. roles the role is a member of (expect none: aborts the migration)'
+\echo '   inherited or reachable with SET ROLE, either way the policies bound TO the role stop applying'
+SELECT g.rolname AS parent_role,
+       pg_has_role('c2pro_prod_acceptance_ro', g.oid, 'USAGE') AS inherits_privileges
   FROM pg_roles g
  WHERE g.rolname <> 'c2pro_prod_acceptance_ro'
-   AND pg_has_role('c2pro_prod_acceptance_ro', g.oid, 'USAGE')
+   AND pg_has_role('c2pro_prod_acceptance_ro', g.oid, 'MEMBER')
  ORDER BY 1;
 
 \echo '== 5c. default privileges granting future tables to the role (expect none: aborts the migration)'

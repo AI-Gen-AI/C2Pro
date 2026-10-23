@@ -401,6 +401,51 @@ async def test_post_condition_rejects_unbound_readable_relations() -> None:
     await _in_rolled_back_fixture(body)
 
 
+async def test_post_condition_rejects_a_restrictive_policy_that_is_not_the_binding() -> None:
+    async def body(conn, fx: Fixture) -> None:
+        s, r = fx.schema, fx.role
+        await conn.execute(f"CREATE TABLE {s}.drift_table (tenant_id uuid)")
+        await conn.execute(f"ALTER TABLE {s}.drift_table ENABLE ROW LEVEL SECURITY")
+        await conn.execute(f"GRANT SELECT ON {s}.drift_table TO {r}")
+        # Restrictive and scoped to the role, but binds nothing.
+        await conn.execute(
+            f"CREATE POLICY lax ON {s}.drift_table AS RESTRICTIVE FOR SELECT TO {r} USING (true)"
+        )
+        await fx.run(conn, M1053.UPGRADE_STATEMENTS)
+        with pytest.raises(asyncpg.PostgresError, match="UNBOUND_READABLE_RELATIONS.*drift_table"):
+            async with conn.transaction():
+                await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+
+    await _in_rolled_back_fixture(body)
+
+
+async def test_role_that_can_set_role_into_a_parent_aborts_migration() -> None:
+    async def body(conn, fx: Fixture) -> None:
+        parent = f"{fx.role}_grp"
+        await conn.execute(f"CREATE ROLE {parent} NOLOGIN")
+        await conn.execute(f"GRANT USAGE ON SCHEMA {fx.schema} TO {parent}")
+        await conn.execute(f"GRANT SELECT ON {fx.schema}.tenants TO {parent}")
+        await conn.execute(f"GRANT {parent} TO {fx.role}")
+        # The attack: as the parent, the policies bound TO the acceptance role
+        # do not apply and the caller-set tenant GUC alone decides.
+        async with conn.transaction():
+            await conn.execute(f"SET LOCAL ROLE {fx.role}")
+            await conn.execute(f"SET LOCAL ROLE {parent}")
+            await conn.execute("SELECT set_config('app.current_tenant', $1, true)", str(TENANT_B))
+            assert await conn.fetchval(
+                f"SELECT count(*) FROM {fx.schema}.tenants WHERE id = $1", TENANT_B
+            ) == 1
+            await conn.execute("RESET ROLE")
+        await fx.run(conn, M1053.UPGRADE_STATEMENTS)
+        with pytest.raises(
+            asyncpg.PostgresError, match=f"PQ1054_READONLY_ROLE_PARENT_ROLE_GUARD_FAILED: {parent}"
+        ):
+            async with conn.transaction():
+                await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+
+    await _in_rolled_back_fixture(body)
+
+
 async def test_security_definer_executable_by_role_aborts_migration() -> None:
     async def body(conn, fx: Fixture) -> None:
         # Runs with its owner's rights: RLS on tenants never applies inside it.
@@ -421,14 +466,12 @@ async def test_security_definer_executable_by_role_aborts_migration() -> None:
     await _in_rolled_back_fixture(body)
 
 
-@pytest.mark.parametrize("via_inherited_role", [False, True])
-async def test_default_privileges_reaching_role_abort_migration(via_inherited_role: bool) -> None:
+@pytest.mark.parametrize("via_public", [False, True])
+async def test_default_privileges_reaching_role_abort_migration(via_public: bool) -> None:
     async def body(conn, fx: Fixture) -> None:
-        grantee = fx.role
-        if via_inherited_role:
-            grantee = f"{fx.role}_grp"
-            await conn.execute(f"CREATE ROLE {grantee} NOLOGIN")
-            await conn.execute(f"GRANT {grantee} TO {fx.role}")
+        # A parent role is refused outright (PARENT_ROLE_GUARD), so the
+        # indirect path left is a default privilege granted to PUBLIC.
+        grantee = "PUBLIC" if via_public else fx.role
         # Every table the app role creates later would be readable unbound.
         await conn.execute(
             f"ALTER DEFAULT PRIVILEGES FOR ROLE {fx.app} IN SCHEMA {fx.schema} "
