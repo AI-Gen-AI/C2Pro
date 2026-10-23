@@ -5,7 +5,7 @@ isolation remains a separate integration acceptance requirement.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -43,7 +43,7 @@ def _approved():
     return resolve_authority(
         current_baseline=BaselineRef(
             baseline_id=uuid4(), baseline_no=1, tree_digest="sha256:" + "a" * 64,
-            applied_at=datetime.now(timezone.utc),
+            applied_at=datetime.now(UTC),
         ),
         live_node_count=1, open_change_sets=0,
     )
