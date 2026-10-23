@@ -12,7 +12,9 @@ from tests.modules.integration.test_p0b_true_langgraph_resume_hotfix import (
     _seed,
     real_saver,  # noqa: F401 - pytest fixture re-export
 )
+
 pytestmark = pytest.mark.asyncio
+
 
 async def test_aupdate_state_fork_loses_interrupt_but_original_preserves_it(
     real_saver, db: AsyncSession, test_user: User
@@ -34,8 +36,14 @@ async def test_aupdate_state_fork_loses_interrupt_but_original_preserves_it(
 
     fork_cfg = await app.aupdate_state(
         original.config,
-        {"resume_provenance": {"operation_id": str(uuid.uuid4()), "attempt_id": str(uuid.uuid4()),
-                               "fencing_token": 1, "decision_revision": 1}},
+        {
+            "resume_provenance": {
+                "operation_id": str(uuid.uuid4()),
+                "attempt_id": str(uuid.uuid4()),
+                "fencing_token": 1,
+                "decision_revision": 1,
+            }
+        },
     )
     fork = await app.aget_state(fork_cfg)
     assert fork.config["configurable"]["thread_id"] == thread_id
