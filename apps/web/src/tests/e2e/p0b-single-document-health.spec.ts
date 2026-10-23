@@ -194,6 +194,77 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       );
     }
 
+    // HITL is an expected, durable pause in the real N1-N17 graph. This
+    // test's dedicated Clerk E2E identity acts as the reviewer; never invent
+    // a reviewer name or bypass the authenticated API.
+    type ReviewRow = {
+      item_id: string;
+      row_id: string | null;
+      current_status: string;
+      item_type: string;
+      resumable: boolean;
+      decision_ready: boolean;
+    };
+    const hitlRequest = async (endpoint: string, method = "GET", body?: unknown) =>
+      page.evaluate(
+        async ({ endpoint, method, body }) => {
+          const token = await window.Clerk?.session?.getToken();
+          const tenantId = window.Clerk?.organization?.publicMetadata?.tenant_id;
+          if (!token || typeof tenantId !== "string") {
+            throw new Error("P0b HITL test requires an active Clerk token and tenant");
+          }
+          const response = await fetch(`/api/hitl/${endpoint}`, {
+            method,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "X-Tenant-ID": tenantId,
+              "Content-Type": "application/json",
+            },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          });
+          if (!response.ok) throw new Error(`P0b HITL ${method} ${endpoint}: HTTP ${response.status}`);
+          return response.json();
+        },
+        { endpoint, method, body },
+      );
+
+    // The graph may finish without HITL or legitimately pause for a review.
+    // Never force an approval on a document that completed autonomously.
+    const reviewDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+    let pendingReview: ReviewRow | undefined;
+    let vector = await loadHealthVector(page, projectId!);
+    while (!vector.single_document_coverage && Date.now() < reviewDeadline) {
+      const queue = (await hitlRequest(
+        `queue?project_id=${encodeURIComponent(projectId!)}`,
+      )) as { items: ReviewRow[] };
+      pendingReview = queue.items.find(
+        (item) =>
+          item.item_type === "analysis_critique" &&
+          item.resumable &&
+          item.decision_ready &&
+          ["PENDING_REVIEW_REQUIRED", "PENDING_REVIEW_CONDITIONAL", "ESCALATED"].includes(
+            item.current_status,
+          ),
+      );
+      if (pendingReview) break;
+      await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+      vector = await loadHealthVector(page, projectId!);
+    }
+
+    if (pendingReview) {
+      expect(pendingReview.row_id, "review must be pinned to an exact persisted row").toBeTruthy();
+      // Pending approval cannot masquerade as an evaluated Health snapshot.
+      const pendingHealth = await loadHealthVector(page, projectId!);
+      expect(pendingHealth.single_document_coverage).toBeNull();
+      const approved = (await hitlRequest(
+        `queue/${pendingReview.item_id}/approve`,
+        "POST",
+        { row_id: pendingReview.row_id },
+      )) as ReviewRow;
+      expect(approved.current_status).toBe("APPROVED");
+      vector = await loadHealthVector(page, projectId!);
+    }
+
     // --- 6. Wait for the async pipeline to actually LAND.
     //
     //        A 200 from /health is NOT a completion signal: the endpoint answers
@@ -203,7 +274,6 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     //        timing luck. SingleDocumentHealth fetches once with no refetch
     //        interval, so poll the way a waiting user does: reload until the
     //        assessment exists, bounded, then fail loudly if it never does.
-    let vector = await loadHealthVector(page, projectId!);
     const analysisDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
     while (!vector.single_document_coverage && Date.now() < analysisDeadline) {
       await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
