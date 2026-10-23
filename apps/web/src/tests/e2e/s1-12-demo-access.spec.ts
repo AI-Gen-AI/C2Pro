@@ -9,11 +9,11 @@ test.describe("S1-12 E2E demo access", () => {
     });
   });
 
-  test("navigates from landing to live demo", async ({ page }) => {
+  test("navigates from landing to illustrative demo", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.getByRole("link", { name: "View Live Demo" }).click();
+    await page.getByRole("link", { name: "Ver demo ilustrativa" }).click();
 
-    await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Customer QA Scenario" })).toBeVisible({
       timeout: 20_000,
     });
   });
