@@ -56,7 +56,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: Form accepts and validates all inputs
      */
     // Navigate to project creation
-    await page.goto("http://localhost:3000/projects/new");
+    await page.goto("/projects/new");
 
     // Fill project name
     await page.fill(
@@ -101,7 +101,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: Document uploaded and processed
      */
     // Navigate to contract upload step
-    await page.goto("http://localhost:3000/projects/new?step=contract");
+    await page.goto("/projects/new?step=contract");
 
     // Upload contract file
     const fileInput = page.locator('[data-testid="contract-file-input"]');
@@ -134,7 +134,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: Extracted clauses displayed in preview
      */
     // Navigate to clause review step (simulating extraction complete)
-    await page.goto("http://localhost:3000/projects/new?step=clauses");
+    await page.goto("/projects/new?step=clauses");
 
     // Should show extracted clauses section
     await expect(
@@ -170,7 +170,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: Can modify extracted clauses
      */
     // Navigate to clause review step
-    await page.goto("http://localhost:3000/projects/new?step=clauses");
+    await page.goto("/projects/new?step=clauses");
 
     // Click edit on first scope clause
     await page.click(
@@ -229,7 +229,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: WBS items created automatically
      */
     // Navigate to WBS generation step
-    await page.goto("http://localhost:3000/projects/new?step=wbs");
+    await page.goto("/projects/new?step=wbs");
 
     // Should show WBS generation preview
     await expect(
@@ -269,7 +269,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: Project created, redirected to dashboard
      */
     // Navigate to final review step
-    await page.goto("http://localhost:3000/projects/new?step=review");
+    await page.goto("/projects/new?step=review");
 
     // Should show project summary
     await expect(page.locator('[data-testid="project-summary"]')).toBeVisible();
@@ -311,7 +311,7 @@ test.describe("TS-E2E-J1-001: First-Time Project Setup Journey", () => {
      * Expected: Tour modal appears after project creation
      */
     // Complete project creation first
-    await page.goto("http://localhost:3000/projects/new?step=review");
+    await page.goto("/projects/new?step=review");
     await page.click('[data-testid="create-project-button"]');
     await page.waitForURL(/\/projects\/[^/?#]+$/, { timeout: 30000 });
 
