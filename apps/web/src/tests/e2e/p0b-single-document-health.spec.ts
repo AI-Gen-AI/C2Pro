@@ -37,6 +37,7 @@ import {
   establishAuthenticatedSession,
   observeAuth,
 } from "./support/p0b-auth";
+import { approveWithCandidateRetry } from "../support/p0b-hitl-approval";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CONTRACT_FIXTURE = path.join(HERE, "test-data", "sample-contract.pdf");
@@ -102,30 +103,27 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   const dialog = page.getByRole("dialog", { name: /approve review item/i });
   await expect(dialog).toBeVisible();
   // The review row may become visible before LangGraph has durably bound its
-  // resumable checkpoint. Retry only that explicitly transient failure; all
-  // other approval failures remain fail-closed and surface immediately.
+  // resumable checkpoint. Only an explicit CandidateNotReadyError is retried
+  // (one click per attempt, bounded by one global deadline); every other
+  // approval failure stays fail-closed. See support/p0b-hitl-approval.ts.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
   const alert = dialog.getByRole("alert");
-  const deadline = Date.now() + 120_000;
-  const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i;
-  for (;;) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
-    // Start one request, then observe only the outcome of this submission.
-    // The UI clears the previous actionError when the request begins.
-    await confirm.click();
-    await expect.poll(async () => {
-      if (!(await dialog.isVisible())) return "closed";
-      if (await confirm.isDisabled()) return "pending";
-      return (await alert.isVisible()) ? "error" : "pending";
-    }, { timeout: Math.max(1, deadline - Date.now()), intervals: [100, 250, 500] }).not.toBe("pending");
-    if (!(await dialog.isVisible())) return;
-    const message = await alert.innerText();
-    if (!transient.test(message) || Date.now() + 2_000 >= deadline) {
-      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${message}`);
-    }
-    await page.waitForTimeout(2_000);
-  }
+  await approveWithCandidateRetry(
+    {
+      clickConfirm: () => confirm.click(),
+      snapshot: async () => {
+        const dialogVisible = await dialog.isVisible();
+        if (!dialogVisible) return { dialogVisible, confirmDisabled: false, alertText: null };
+        return {
+          dialogVisible,
+          confirmDisabled: await confirm.isDisabled(),
+          alertText: (await alert.isVisible()) ? await alert.innerText() : null,
+        };
+      },
+    },
+    { now: () => Date.now(), sleep: (ms) => page.waitForTimeout(ms) },
+    { deadlineMs: 120_000 },
+  );
 }
 
 /** The serialized health vector, as far as this journey inspects it. */
