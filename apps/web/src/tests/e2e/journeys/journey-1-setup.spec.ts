@@ -5,13 +5,13 @@
  * and no assertions for retired contract/clauses/WBS creation steps.
  */
 import { expect, test } from "@playwright/test";
-import { establishAuthenticatedSession } from "../support/p0b-auth";
+import { openProjects } from "../support/p0b-auth";
 
 const projectName = `Journey 1 Acceptance ${Date.now()}`;
 
 test.describe("TS-E2E-J1-001: first project setup", () => {
   test("creates a project through the current three-step wizard", async ({ page }) => {
-    await establishAuthenticatedSession(page);
+    // The chromium project depends on auth.setup.ts and restores its Clerk session.\n    // Re-signing into an already active session fails with Clerk "already signed in".\n    await openProjects(page);
     await page.goto("/projects/new");
     await expect(page).toHaveURL(/\/projects\\?create=1/);
 
