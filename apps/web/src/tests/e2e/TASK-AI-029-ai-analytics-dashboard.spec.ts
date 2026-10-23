@@ -60,8 +60,14 @@ const VERSION_PAYLOAD = {
 const DRIFT_PAYLOAD = {
   timeframe: "30d",
   window_start: "2026-03-22T00:00:00Z",
+  // DriftDetector flags points beyond 1.5 population std devs. With only three
+  // points no value can exceed sqrt(2) std devs, so a stable baseline precedes
+  // the two outliers (the latency spike and the feedback drop).
   series: [
-    { bucket: "2026-04-20T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 410, avg_feedback_score: 0.92, feedback_count: 12 },
+    { bucket: "2026-04-16T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 410, avg_feedback_score: 0.92, feedback_count: 12 },
+    { bucket: "2026-04-17T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 400, avg_feedback_score: 0.91, feedback_count: 12 },
+    { bucket: "2026-04-18T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 420, avg_feedback_score: 0.93, feedback_count: 12 },
+    { bucket: "2026-04-20T00:00:00Z", operation: "coherence", run_count: 100, avg_latency_ms: 415, avg_feedback_score: 0.92, feedback_count: 12 },
     { bucket: "2026-04-21T00:00:00Z", operation: "coherence", run_count: 50, avg_latency_ms: 1200, avg_feedback_score: 0.92, feedback_count: 5 },
     { bucket: "2026-04-22T00:00:00Z", operation: "extraction", run_count: 80, avg_latency_ms: 300, avg_feedback_score: 0.45, feedback_count: 20 },
   ],
