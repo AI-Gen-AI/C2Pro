@@ -57,6 +57,48 @@ async function loadHealthVector(page: Page, projectId: string): Promise<HealthVe
   return (await responsePromise).json() as Promise<HealthVector>;
 }
 
+interface P0bDocumentRecord {
+  id: string;
+  lifecycle_status?: string | null;
+  review_count?: number | null;
+  review_item_id?: string | null;
+}
+
+async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string): Promise<P0bDocumentRecord> {
+  const deadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const responsePromise = page.waitForResponse(
+      (response) => response.request().method() === "GET" &&
+        /\\/projects\\/[0-9a-f-]{36}\\/documents\\/?(?:\\?.*)?$/.test(response.url()) &&
+        response.status() === 200,
+      { timeout: 60_000 },
+    );
+    await page.goto(`/projects/${projectId}/documents`);
+    const payload = await (await responsePromise).json() as
+      { items?: P0bDocumentRecord[] } | P0bDocumentRecord[];
+    const records = Array.isArray(payload) ? payload : payload.items ?? [];
+    const document = records.find((item) => item.id === documentId);
+    if (!document) throw new Error("P0B_UPLOADED_DOCUMENT_NOT_LISTED");
+    const state = String(document.lifecycle_status ?? "").toLowerCase();
+    if (["analyzed", "review_required", "failed_retryable", "needs_changes", "error"].includes(state)) {
+      return document;
+    }
+    await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+  }
+  throw new Error("P0B_DOCUMENT_TERMINAL_TIMEOUT");
+}
+
+async function approveP0bReview(page: Page, projectId: string, reviewItemId: string): Promise<void> {
+  await page.goto(`/projects/${projectId}/review?itemId=${encodeURIComponent(reviewItemId)}`);
+  const card = page.getByTestId(`review-item-${reviewItemId}`);
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.getByTestId(`approve-${reviewItemId}`).click();
+  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /confirm approve/i }).click();
+  await expect(dialog).toBeHidden({ timeout: 120_000 });
+}
+
 /** The serialized health vector, as far as this journey inspects it. */
 interface HealthVector {
   single_document_coverage?: { assessments?: CategoryAssessment[] } | null;
@@ -175,7 +217,18 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     await expect(uploadButton, "the staged file must be uploadable").toBeEnabled({
       timeout: 15_000,
     });
+    const uploadAccepted = page.waitForResponse(
+      (response) => response.request().method() === "POST" &&
+        /\\/projects\\/[0-9a-f-]{36}\\/documents\\/?(?:\\?.*)?$/.test(response.url()),
+      { timeout: 120_000 },
+    );
     await uploadButton.click();
+    const uploadResponse = await uploadAccepted;
+    expect(uploadResponse.ok(), "P0b upload must be accepted").toBe(true);
+    const uploaded = await uploadResponse.json() as { id?: string; document_id?: string; task_id?: string };
+    const documentId = uploaded.id ?? uploaded.document_id;
+    expect(documentId, "upload must return an addressable document id").toMatch(/^[0-9a-f-]{36}$/);
+    expect(uploaded.task_id, "upload must enqueue real async processing").toBeTruthy();
 
     //     Prove the upload was ACCEPTED before waiting minutes on analysis.
     //     DocumentUploadDropzone closes the dialog only from onUploadComplete,
@@ -193,6 +246,17 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
           `resolve. The surface reported:\n${reason}`,
       );
     }
+
+    // N12 mock confidence is UNKNOWN, so the real graph may pause for HITL.
+    // Resume only the exact review linked to this uploaded document.
+    let terminal = await waitForDocumentTerminal(page, projectId!, documentId!);
+    if (terminal.lifecycle_status === "review_required") {
+      expect(terminal.review_count, "exactly one pending review is required").toBe(1);
+      expect(terminal.review_item_id, "review must be addressable").toBeTruthy();
+      await approveP0bReview(page, projectId!, terminal.review_item_id!);
+      terminal = await waitForDocumentTerminal(page, projectId!, documentId!);
+    }
+    expect(terminal.lifecycle_status, "HITL resume must complete analysis").toBe("analyzed");
 
     // --- 6. Wait for the async pipeline to actually LAND.
     //
