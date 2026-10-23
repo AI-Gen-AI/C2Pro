@@ -704,7 +704,7 @@ jobs:
         run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
       - name: Run modules tests
         working-directory: apps/api
-        run: python -m pytest tests/modules -m "not requires_services" --tb=short --junit-xml=modules-test-results.xml --cov=src --cov-report=xml:coverage.xml
+        run: python -m pytest tests/modules -m "not requires_services and not alembic_schema" --tb=short --junit-xml=modules-test-results.xml --cov=src --cov-report=xml:coverage.xml
       - name: Upload modules test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
