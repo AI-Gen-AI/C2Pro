@@ -779,3 +779,39 @@ async def test_cross_tenant_cannot_resume(
     await db.refresh(refreshed)
     assert refreshed.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
     assert _DOWNSTREAM_RUNS == []
+
+
+async def test_fork_preserves_real_human_interrupt_task(
+    real_saver, db: AsyncSession, test_user: User
+) -> None:
+    """Differential: a provenance fork must preserve the resumable N13 task.
+
+    Use the same real production node, LangGraph and PostgreSQL saver as the
+    green original-checkpoint resume tests; no mock of aupdate_state.
+    """
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed(db, tenant)
+    thread_id = register(f"document:{document.id}:fork-differential")
+    app = _build_real_graph(saver)
+    cfg, original_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
+    original = await app.aget_state({"configurable": {"thread_id": thread_id, "checkpoint_id": original_id}})
+    assert original.next == ("human_interrupt",), (original.next, original.tasks)
+    assert any(task.interrupts for task in original.tasks)
+
+    fork_cfg = await app.aupdate_state(
+        original.config,
+        {"resume_provenance": {"operation_id": str(uuid4()), "attempt_id": str(uuid4()),
+                               "fencing_token": 1, "decision_revision": 1}},
+    )
+    fork = await app.aget_state(fork_cfg)
+    assert fork.config["configurable"]["thread_id"] == thread_id
+    assert fork.config["configurable"]["checkpoint_id"] != original_id
+    assert fork.next == original.next, (
+        f"FORK_LOST_INTERRUPTED_TASK: original.next={original.next}, "
+        f"fork.next={fork.next}, original.tasks={original.tasks}, fork.tasks={fork.tasks}, "
+        f"fork.metadata={fork.metadata}"
+    )
+    assert any(task.interrupts for task in fork.tasks), (
+        f"FORK_LOST_INTERRUPT: fork.next={fork.next}, tasks={fork.tasks}"
+    )
