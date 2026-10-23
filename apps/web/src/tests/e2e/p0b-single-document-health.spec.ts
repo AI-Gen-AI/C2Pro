@@ -228,9 +228,12 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
         { endpoint, method, body },
       );
 
+    // The graph may finish without HITL or legitimately pause for a review.
+    // Never force an approval on a document that completed autonomously.
     const reviewDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
     let pendingReview: ReviewRow | undefined;
-    while (Date.now() < reviewDeadline) {
+    let vector = await loadHealthVector(page, projectId!);
+    while (!vector.single_document_coverage && Date.now() < reviewDeadline) {
       const queue = (await hitlRequest(
         `queue?project_id=${encodeURIComponent(projectId!)}`,
       )) as { items: ReviewRow[] };
@@ -245,20 +248,22 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       );
       if (pendingReview) break;
       await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+      vector = await loadHealthVector(page, projectId!);
     }
-    expect(pendingReview, "real graph must produce a decision-ready HITL review").toBeTruthy();
-    expect(pendingReview!.row_id, "review must be pinned to an exact persisted row").toBeTruthy();
 
-    // A pending review is not an approved assessment. Prove the honest-null
-    // boundary before an explicit E2E reviewer decision.
-    const pendingHealth = await loadHealthVector(page, projectId!);
-    expect(pendingHealth.single_document_coverage).toBeNull();
-    const approved = (await hitlRequest(
-      `queue/${pendingReview!.item_id}/approve`,
-      "POST",
-      { row_id: pendingReview!.row_id },
-    )) as ReviewRow;
-    expect(approved.current_status).toBe("APPROVED");
+    if (pendingReview) {
+      expect(pendingReview.row_id, "review must be pinned to an exact persisted row").toBeTruthy();
+      // Pending approval cannot masquerade as an evaluated Health snapshot.
+      const pendingHealth = await loadHealthVector(page, projectId!);
+      expect(pendingHealth.single_document_coverage).toBeNull();
+      const approved = (await hitlRequest(
+        `queue/${pendingReview.item_id}/approve`,
+        "POST",
+        { row_id: pendingReview.row_id },
+      )) as ReviewRow;
+      expect(approved.current_status).toBe("APPROVED");
+      vector = await loadHealthVector(page, projectId!);
+    }
 
     // --- 6. Wait for the async pipeline to actually LAND.
     //
@@ -269,7 +274,6 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     //        timing luck. SingleDocumentHealth fetches once with no refetch
     //        interval, so poll the way a waiting user does: reload until the
     //        assessment exists, bounded, then fail loudly if it never does.
-    let vector = await loadHealthVector(page, projectId!);
     const analysisDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
     while (!vector.single_document_coverage && Date.now() < analysisDeadline) {
       await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
