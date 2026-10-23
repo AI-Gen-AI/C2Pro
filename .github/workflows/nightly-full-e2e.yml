@@ -40,6 +40,8 @@ jobs:
       C2PRO_EMBEDDINGS_MOCK: "1"
       NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      # /ai-analytics (TASK-AI-029) redirects to /dashboard unless enabled.
+      NEXT_PUBLIC_FEATURE_INTERNAL_DASHBOARDS: "true"
       BACKEND_URL: http://localhost:8000
       PLAYWRIGHT_BASE_URL: http://localhost:3100
       CORS_ORIGINS: '["http://localhost:3100"]'
