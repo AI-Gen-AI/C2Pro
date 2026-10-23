@@ -443,7 +443,9 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["confidence_score"] = 0.95  # Mock confidence
         state["retry_count"] = 0
         state["critique_notes"] = "Mock critique: Extraction quality is good."
-        state["human_approval_required"] = False
+        # P0b acceptance must exercise a genuine checkpointed human review.
+        # This test-only fixture changes the mock critique decision, not graph routing.
+        state["human_approval_required"] = os.getenv("C2PRO_MOCK_CRITIQUE_REQUIRE_HITL", "0") == "1"
         await _apply_temporal_review_gate(state)
         state["node_results"] = [
             *state.get("node_results", []),
