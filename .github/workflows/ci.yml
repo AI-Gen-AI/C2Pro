@@ -1470,6 +1470,29 @@ jobs:
           PY
 
 
+      - name: P0b migrated Alembic schema compatibility (required)
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          # The preceding suite reconstructs the ORM schema. Restore a fresh
+          # Alembic migration before running a marked compatibility case.
+          cd ../..
+          C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --require-redis --recreate-db
+          cd apps/api
+          python -m pytest \
+            tests/modules/integration/test_p0b_true_langgraph_resume_hotfix.py::test_command_resume_consumes_interrupt_and_runs_downstream_once \
+            -m alembic_schema -v --tb=short \
+            --junit-xml=p0b-alembic-schema.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("p0b-alembic-schema.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+          counts = tuple(sum(int(s.get(key, 0)) for s in suites) for key in ("tests", "skipped", "failures", "errors"))
+          print("P0b Alembic schema gate:", counts)
+          if counts != (1, 0, 0, 0):
+              raise SystemExit("Alembic schema compatibility gate must pass one unskipped test")
+          PY
+
       - name: Cleanup dedicated database
         if: always()
         run: docker compose -f docker-compose.test.yml down -v || true
