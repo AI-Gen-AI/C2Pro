@@ -781,10 +781,10 @@ async def test_cross_tenant_cannot_resume(
     assert _DOWNSTREAM_RUNS == []
 
 
-async def test_fork_preserves_real_human_interrupt_task(
+async def test_aupdate_state_fork_loses_interrupt_but_original_preserves_it(
     real_saver, db: AsyncSession, test_user: User
 ) -> None:
-    """Differential: a provenance fork must preserve the resumable N13 task.
+    """Differential: aupdate_state loses the interrupt; original preserves it.
 
     Use the same real production node, LangGraph and PostgreSQL saver as the
     green original-checkpoint resume tests; no mock of aupdate_state.
@@ -812,6 +812,8 @@ async def test_fork_preserves_real_human_interrupt_task(
         f"fork.next={fork.next}, original.tasks={original.tasks}, fork.tasks={fork.tasks}, "
         f"fork.metadata={fork.metadata}"
     )
-    assert any(task.interrupts for task in fork.tasks), (
-        f"FORK_LOST_INTERRUPT: fork.next={fork.next}, tasks={fork.tasks}"
+    assert not any(task.interrupts for task in fork.tasks), (
+        f"LANGGRAPH_FORK_BEHAVIOR_CHANGED: fork.next={fork.next}, tasks={fork.tasks}"
     )
+    original_again = await app.aget_state(original.config)
+    assert any(task.interrupts for task in original_again.tasks)
