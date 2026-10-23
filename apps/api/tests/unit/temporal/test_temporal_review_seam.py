@@ -277,7 +277,7 @@ async def test_temporal_review_forces_the_canonical_gate(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_clean_revision_leaves_the_gate_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_clean_revision_does_not_override_mock_hitl_requirement(monkeypatch: pytest.MonkeyPatch) -> None:
     import src.temporal.adapters.temporal_review_gate as gate
     from src.analysis.adapters.graph.nodes import critique_node
 
@@ -289,7 +289,7 @@ async def test_clean_revision_leaves_the_gate_unchanged(monkeypatch: pytest.Monk
 
     state = await critique_node(_graph_state(document_revision_id=str(uuid4())))
 
-    assert state["human_approval_required"] is False
+    assert state["human_approval_required"] is True\n    assert state["confidence_score"] is None
 
 
 @pytest.mark.asyncio
@@ -310,7 +310,7 @@ async def test_seam_lookup_failure_fails_closed(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_run_without_a_pinned_revision_does_not_query_the_seam(
+async def test_unpinned_mock_does_not_query_seam_but_still_requires_hitl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import src.temporal.adapters.temporal_review_gate as gate
@@ -324,7 +324,7 @@ async def test_run_without_a_pinned_revision_does_not_query_the_seam(
 
     state = await critique_node(_graph_state())
 
-    assert state["human_approval_required"] is False
+    assert state["human_approval_required"] is True\n    assert state["confidence_score"] is None
 
 
 def test_gated_completion_persists_a_proposed_candidate_even_under_skip_hitl() -> None:
