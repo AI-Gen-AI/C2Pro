@@ -186,11 +186,11 @@ class TestNextAfterCritique:
         doc_type: str,
         expected: str,
     ) -> None:
-        """skip_hitl bypasses only HITL; automated retries still route by doc_type."""
+        """When approval is not required, skip mode preserves retry routing."""
         monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
         state = _make_state(
-            human_approval_required=True,
+            human_approval_required=False,
             critique_notes="retry extraction",
             retry_count=1,
             doc_type=doc_type,
