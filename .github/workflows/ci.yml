@@ -1201,6 +1201,7 @@ jobs:
       C2PRO_AI_MOCK: "1"
       # Explicitly retain the real human-review pause in this acceptance lane.
       C2PRO_SKIP_HITL: "0"
+      C2PRO_MOCK_CRITIQUE_REQUIRE_HITL: "1"
       C2PRO_EMBEDDINGS_MOCK: "1"
       # Browser calls must go through the Next.js proxy so the Clerk bearer token
       # reaches the local backend without a cross-origin preflight.
