@@ -1,9 +1,11 @@
 """Real PostgreSQL differential for LangGraph HITL checkpoint fork semantics."""
+
 import uuid
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.core.auth.models import User, Tenant
+
+from src.core.auth.models import Tenant, User
 from tests.modules.integration.test_p0b_true_langgraph_resume_hotfix import (
     _build_real_graph,
     _run_to_interrupt,
