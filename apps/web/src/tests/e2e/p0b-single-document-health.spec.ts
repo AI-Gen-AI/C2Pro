@@ -120,9 +120,12 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
+  let approvalPosts = 0;
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
+    if (approvalPosts >= 2) throw new Error("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
+    approvalPosts += 1;
 
     // Bind each click to its own HTTP response. Watching the alert instead can
     // accidentally consume the previous attempt's still-visible error, or miss
@@ -150,9 +153,11 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
 
     const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
     const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status()}`;
-    if (!isRetryableCandidateNotReady(response.status(), detail) || Date.now() + 2_000 >= deadline) {
+    if (!isRetryableCandidateNotReady(response.status(), detail)) {
       throw new Error(`P0B_HITL_APPROVAL_FAILED: ${detail}`);
     }
+    if (approvalPosts >= 2) throw new Error("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
+    if (Date.now() + 2_000 >= deadline) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
     // A retry is permitted only after React has finished the failed request.
     await expect(confirm).toBeEnabled({ timeout: Math.max(1, deadline - Date.now()) });
     await page.waitForTimeout(2_000);
