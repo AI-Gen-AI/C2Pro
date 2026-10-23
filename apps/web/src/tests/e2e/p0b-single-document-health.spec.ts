@@ -1,4 +1,4 @@
-import { isRetryableCandidateNotReady } from "../support/p0b-hitl-response";
+import { approveWithHttpResponse } from "../support/p0b-hitl-http-retry";
 /**
  * TS-E2E-P0B-HEALTH-001 — canonical P0b single-document Health journey.
  *
@@ -120,48 +120,30 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
-  let approvalPosts = 0;
-  for (;;) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
-    if (approvalPosts >= 2) throw new Error("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
-    approvalPosts += 1;
-
-    // Bind each click to its own HTTP response. Watching the alert instead can
-    // accidentally consume the previous attempt's still-visible error, or miss
-    // a fast failure between DOM polls. The real backend is never mocked here.
-    const [response] = await Promise.all([
-      page.waitForResponse(
-        (candidate) => candidate.request().method() === "POST" &&
-          new URL(candidate.url()).pathname.replace(/\/$/, "") ===
-            `/api/hitl/queue/${encodeURIComponent(reviewRowId)}/approve`,
-        { timeout: remaining },
-      ),
-      confirm.click({ timeout: remaining }),
-    ]);
-    if (response.ok()) {
-      const approved = await response.json().catch(() => null) as {
-        item_id?: string; row_id?: string | null; current_status?: string;
-      } | null;
-      if (approved?.item_id !== reviewItemId || approved?.row_id !== reviewRowId ||
-          approved?.current_status !== "APPROVED") {
-        throw new Error("P0B_HITL_APPROVAL_RESPONSE_MISMATCH");
-      }
-      await expect(dialog).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
-      return;
-    }
-
-    const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
-    const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status()}`;
-    if (!isRetryableCandidateNotReady(response.status(), detail)) {
-      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${detail}`);
-    }
-    if (approvalPosts >= 2) throw new Error("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
-    if (Date.now() + 2_000 >= deadline) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
-    // A retry is permitted only after React has finished the failed request.
-    await expect(confirm).toBeEnabled({ timeout: Math.max(1, deadline - Date.now()) });
-    await page.waitForTimeout(2_000);
-  }
+  await approveWithHttpResponse({
+    now: () => Date.now(),
+    submitOnce: async (rowId, remaining) => {
+      // Install the exact-row response waiter BEFORE the click; never consume
+      // an unrelated review's HTTP response or a stale visual alert.
+      const [response] = await Promise.all([
+        page.waitForResponse(
+          (candidate) => candidate.request().method() === "POST" &&
+            new URL(candidate.url()).pathname.replace(/\/$/, "") ===
+              `/api/hitl/queue/${encodeURIComponent(rowId)}/approve`,
+          { timeout: remaining },
+        ),
+        confirm.click({ timeout: remaining }),
+      ]);
+      return response;
+    },
+    waitUntilReady: async (remaining) => {
+      await expect(confirm).toBeEnabled({ timeout: remaining });
+    },
+    delay: (ms) => page.waitForTimeout(ms),
+    confirmed: async (remaining) => {
+      await expect(dialog).toBeHidden({ timeout: remaining });
+    },
+  }, reviewItemId, reviewRowId, deadline);
 }
 
 /** The serialized health vector, as far as this journey inspects it. */
