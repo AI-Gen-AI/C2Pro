@@ -69,7 +69,7 @@ async function waitForDocumentTerminal(page: Page, projectId: string, documentId
   while (Date.now() < deadline) {
     const responsePromise = page.waitForResponse(
       (response) => response.request().method() === "GET" &&
-        new URL(response.url()).pathname.replace(/\/$/, "").endsWith(`/projects/${projectId}/documents`) &&
+        (["/api/projects/", "/api/v1/projects/"].some((prefix) => new URL(response.url()).pathname.replace(/\/$/, "") === `${prefix}${projectId}/documents`) && (response.headers()["content-type"] ?? "").includes("application/json")) &&
         response.status() === 200,
       { timeout: 60_000 },
     );
@@ -225,7 +225,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     });
     const uploadAccepted = page.waitForResponse(
       (response) => response.request().method() === "POST" &&
-        new URL(response.url()).pathname.replace(/\/$/, "").endsWith(`/projects/${projectId}/documents`),
+        (["/api/projects/", "/api/v1/projects/"].some((prefix) => new URL(response.url()).pathname.replace(/\/$/, "") === `${prefix}${projectId}/documents`) && (response.headers()["content-type"] ?? "").includes("application/json")),
       { timeout: 120_000 },
     );
     await uploadButton.click();
