@@ -87,19 +87,22 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
   test("DAP-003: Document status transitions after upload", async ({ page }) => {
     await goToProjectDocuments(page);
 
-    // Count documents before (may be 0 or pre-existing demo data)
-    const initialRows = await page.locator("table tbody tr, [data-testid^='document-row']").count();
+    // Count documents before (may be 0 or pre-existing demo data). Only real
+    // document rows: the loading and empty-state placeholders are table rows too.
+    await expect(page.getByText("Loading documents...")).toHaveCount(0, { timeout: 15_000 });
+    const initialRows = await page.locator("[data-testid^='document-row-']").count();
 
     // If there are existing documents, verify at least one shows a status badge
     if (initialRows > 0) {
-      const statusBadge = page.locator(
-        '[class*="badge"], [data-testid*="status"]'
-      ).first();
+      const statusBadge = page.getByTestId("document-status-badge").first();
       await expect(statusBadge).toBeVisible();
 
-      // Status should be one of the known values
+      // Status should be one of the known lifecycle labels (#712)
       const text = await statusBadge.textContent();
-      const validStatuses = ["Uploaded", "Processing", "Parsed", "Analysis pending", "Analyzed", "Error"];
+      const validStatuses = [
+        "Uploaded", "Processing", "Parsed", "Analysis pending", "Review required",
+        "Analyzed", "Needs changes", "Retry needed", "Error",
+      ];
       const hasValidStatus = validStatuses.some(
         (s) => text?.toLowerCase().includes(s.toLowerCase())
       );
