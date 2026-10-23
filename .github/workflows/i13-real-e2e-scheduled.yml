@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload scheduled I13 junit report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: i13-scheduled-real-e2e-junit
           path: apps/api/i13-scheduled-real-e2e-results.xml
@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload scheduled I13 diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: i13-scheduled-real-e2e-diagnostics
           path: apps/api/ci-artifacts/
@@ -134,7 +134,7 @@ jobs:
 
       - name: Upload I13 release summary
         if: always() && github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: i13-release-summary
           path: apps/api/release-evidence/i13-release-summary.txt
