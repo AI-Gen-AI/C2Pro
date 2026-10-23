@@ -67,7 +67,14 @@ describe("P0b exact-row HTTP approval retry (same driver as Playwright)", () => 
 
   it("repeated transient responses stop at shared deadline", async () => {
     const s = scripted([response(400, { detail: NOT_READY }), response(400, { detail: NOT_READY })]);
-    await expect(approveWithHttpResponse(s.port, ITEM, ROW, 3_000)).rejects.toThrow("P0B_HITL_APPROVAL_TIMEOUT");
+    await expect(approveWithHttpResponse(s.port, ITEM, ROW, 3_000)).rejects.toThrow("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
+    expect(s.calls).toEqual([ROW, ROW]);
+    expect(s.counts().confirmed).toBe(0);
+  });
+
+  it("no third POST even when the global deadline has minutes remaining", async () => {
+    const s = scripted([response(400, { detail: NOT_READY }), response(400, { detail: NOT_READY })]);
+    await expect(approveWithHttpResponse(s.port, ITEM, ROW, 240_000)).rejects.toThrow("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
     expect(s.calls).toEqual([ROW, ROW]);
     expect(s.counts().confirmed).toBe(0);
   });
