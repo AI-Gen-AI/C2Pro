@@ -256,6 +256,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     // N12 mock confidence is UNKNOWN, so the real graph may pause for HITL.
     // Resume only the exact review linked to this uploaded document.
     let terminal = await waitForDocumentTerminal(page, projectId!, documentId!);
+    expect(terminal.lifecycle_status, "P0b must exercise real HITL; analyzed without review is a bypass").toBe("review_required");
     if (terminal.lifecycle_status === "review_required") {
       expect(terminal.review_count, "exactly one pending review is required").toBe(1);
       expect(terminal.review_item_id, "review must be addressable").toBeTruthy();
