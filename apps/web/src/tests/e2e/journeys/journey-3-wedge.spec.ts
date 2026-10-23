@@ -2,7 +2,6 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const liveProjectId = "00000000-0000-0000-0000-00000000c303";
@@ -11,7 +10,7 @@ const projectName = "Wedge Gate Pilot";
 const liveContractId = "00000000-0000-0000-0000-00000000d401";
 const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";
 const liveReviewRowId = "00000000-0000-0000-0000-00000000f701";
-const clerkE2eUserId = "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
+const clerkE2eUserId = process.env.CLERK_E2E_USER_ID ?? "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
 
 const documents = [
   {
@@ -206,42 +205,45 @@ async function waitForAuthenticatedSession(page: Page) {
 }
 
 async function getSessionSubject(page: Page): Promise<string | null> {
-  return page.evaluate(async () => {
-    const token = await window.Clerk?.session?.getToken();
-    if (!token) return null;
+  // The Next.js app can still be navigating (RSC redirect, Clerk hydration) right
+  // after goto(); evaluating in a document that is being replaced throws
+  // "Execution context was destroyed". Retry until a stable document answers.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded");
+      await page.waitForFunction(() => window.Clerk?.loaded === true, undefined, {
+        timeout: 30_000,
+      });
+      return await page.evaluate(async () => {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return null;
 
-    const payload = token.split(".")[1];
-    if (!payload) return null;
+        const payload = token.split(".")[1];
+        if (!payload) return null;
 
-    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const subject = (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
-    return typeof subject === "string" ? subject : null;
-  });
+        const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+        const subject = (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
+        return typeof subject === "string" ? subject : null;
+      });
+    } catch (error) {
+      lastError = error;
+      if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
+      await page.waitForTimeout(500);
+    }
+  }
+  throw lastError;
 }
 
+// The chromium project restores the authenticated Clerk session produced by
+// auth.setup.ts. Signing out and signing in again here only raced that session
+// (and required a credential literal in the repository), so assert the restored
+// identity instead.
 test.beforeEach(async ({ page }) => {
-  await setupClerkTestingToken({ page });
-  await page.goto("/");
-  await page.waitForFunction(() => window.Clerk?.loaded === true);
-
-  if (await getSessionSubject(page)) {
-    await page.evaluate(async () => window.Clerk?.signOut());
-    await page.waitForFunction(() => window.Clerk?.session === null);
-  }
-
-  await clerk.signIn({
-    page,
-    signInParams: {
-      strategy: "password",
-      identifier: "testuser@c2pro.com",
-      password: "Testpasword123",
-    },
-  });
+  await waitForAuthenticatedSession(page);
 
   const sessionSubject = await getSessionSubject(page);
   expect(sessionSubject).toBe(clerkE2eUserId);
-
-  await waitForAuthenticatedSession(page);
 });
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {

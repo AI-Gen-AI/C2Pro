@@ -43,8 +43,16 @@ async function goToProjectDocuments(page: Page) {
   await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * The alerts API is project-scoped and answers 404 for a project that does not
+ * exist, so the alerts tests target the deterministic FRT-192 wedge project
+ * (seeded with one alert by tests/e2e_seed/seed_wedge.py), not the fictional
+ * demo id above.
+ */
+const SEEDED_ALERTS_PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
+
 async function goToProjectAlerts(page: Page) {
-  await page.goto(`/projects/${DEMO_PROJECT_ID}/alerts`);
+  await page.goto(`/projects/${SEEDED_ALERTS_PROJECT_ID}/alerts`);
   // Wait for page to stabilize
   await page.waitForLoadState("networkidle");
 }

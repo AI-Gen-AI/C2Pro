@@ -79,22 +79,25 @@ jobs:
       - name: Reconcile dedicated Clerk E2E Organization fixture
         run: python apps/api/scripts/provision_clerk_e2e_fixture.py
 
-      - name: Seed deterministic E2E auth tenancy
+      - name: Seed deterministic E2E auth tenancy and FRT-192 wedge
         working-directory: apps/api
         run: |
           python - <<'PY'
           import asyncio
 
           from src.core.database import close_db, get_raw_session, init_db
-          from tests.e2e_seed.seed_wedge import seed_e2e_auth_tenancy
+          from tests.e2e_seed.seed_wedge import seed_wedge_e2e
 
 
           async def main() -> None:
               await init_db()
               try:
                   async with get_raw_session() as db:
-                      ids = await seed_e2e_auth_tenancy(db)
-                  print(f"seeded tenant={ids['tenant_id']} user={ids['user_id']}")
+                      ids = await seed_wedge_e2e(db)
+                  print(
+                      f"seeded tenant={ids['tenant_id']} user={ids['user_id']} "
+                      f"project={ids['project_id']}"
+                  )
               finally:
                   await close_db()
 
