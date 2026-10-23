@@ -105,7 +105,7 @@ const USAGE_METRICS_PAYLOAD = {
 
 test.describe("TASK-AI-029 AI analytics dashboard", () => {
   test("renders CostDashboard, VersionMonitor, DriftDetector, and UsageMetricsTable using mocked analytics APIs", async ({ page }) => {
-    await page.route("**/api/v1/ai/analytics/**", async (route) => {
+    await page.route(/\/api(?:\/v1)?\/ai\/analytics\//, async (route) => {
       const url = route.request().url();
       if (url.includes("/cost")) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(COST_PAYLOAD) });
@@ -156,7 +156,7 @@ test.describe("TASK-AI-029 AI analytics dashboard", () => {
   });
 
   test("UsageMetricsTable sorting works correctly", async ({ page }) => {
-    await page.route("**/api/v1/ai/analytics/**", async (route) => {
+    await page.route(/\/api(?:\/v1)?\/ai\/analytics\//, async (route) => {
       const url = route.request().url();
       if (url.includes("/usage-metrics")) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(USAGE_METRICS_PAYLOAD) });
@@ -187,7 +187,7 @@ test.describe("TASK-AI-029 AI analytics dashboard", () => {
   });
 
   test("trace_url deep-link opens in new tab", async ({ page }) => {
-    await page.route("**/api/v1/ai/analytics/**", async (route) => {
+    await page.route(/\/api(?:\/v1)?\/ai\/analytics\//, async (route) => {
       const url = route.request().url();
       if (url.includes("/usage-metrics")) {
         await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(USAGE_METRICS_PAYLOAD) });
