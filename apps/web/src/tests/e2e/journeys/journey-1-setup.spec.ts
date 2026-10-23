@@ -13,7 +13,7 @@ test.describe("TS-E2E-J1-001: first project setup", () => {
   test("creates a project through the current three-step wizard", async ({ page }) => {
     // The chromium project depends on auth.setup.ts and restores its Clerk session.\n    // Re-signing into an already active session fails with Clerk "already signed in".\n    await openProjects(page);
     await page.goto("/projects/new");
-    await expect(page).toHaveURL(/\/projects\\?create=1/);
+    await expect(page).toHaveURL(/\/projects\?create=1/);
 
     const wizard = page.getByRole("dialog", { name: "Create project" });
     await expect(wizard).toBeVisible();
