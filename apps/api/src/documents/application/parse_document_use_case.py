@@ -116,6 +116,14 @@ def _extract_budget_stated_total(parsed_payload: JsonDict) -> float | int | None
     return None
 
 
+def _extract_budget_currencies(parsed_payload: JsonDict) -> list[str]:
+    """Denominations the budget source states, so its total keeps its currency."""
+    currencies = getattr(parsed_payload.get("budget"), "currencies", None)
+    if not isinstance(currencies, set | frozenset | list | tuple):
+        return []
+    return sorted({c for c in currencies if isinstance(c, str) and c})
+
+
 class ParseDocumentUseCase:
     def __init__(
         self,
@@ -199,6 +207,11 @@ class ParseDocumentUseCase:
             stated_total = _extract_budget_stated_total(parsed_payload)
             if stated_total is not None:
                 metadata["stated_total"] = stated_total
+                currencies = _extract_budget_currencies(parsed_payload)
+                if currencies:
+                    metadata["stated_total_currencies"] = currencies
+                else:
+                    metadata.pop("stated_total_currencies", None)
             await self.document_repository.update_metadata(
                 scoped_tenant_id, document_id, metadata
             )

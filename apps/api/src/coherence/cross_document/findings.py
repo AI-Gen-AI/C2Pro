@@ -35,4 +35,19 @@ class CrossDocFinding:
         return {self.left_key: self.left_value, self.right_key: self.right_value}
 
 
-__all__ = ["CrossDocFinding"]
+@dataclass(frozen=True)
+class CrossDocNotAssessed:
+    """A comparison that was deliberately not made, with the reason why.
+
+    Not a finding: it carries no values to score and never becomes a signal.
+    """
+
+    rule_id: str
+    reason: str  # "CURRENCY_MISMATCH" | "MIXED_CURRENCY"
+    left_key: str
+    right_key: str
+    detail: str
+    state: str = "NOT_ASSESSED"
+
+
+__all__ = ["CrossDocFinding", "CrossDocNotAssessed"]

@@ -35,6 +35,9 @@ class BudgetRows(list[dict[str, Any]]):
     ) -> None:
         super().__init__(rows or [])
         self.stated_total = stated_total
+        # Denominations stated in the Currency column (lines and declared total),
+        # so a stated total is never compared across currencies without one.
+        self.currencies: set[str] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +388,9 @@ class ExcelFileParser:
                             )
                 if not any(row_data.values()):
                     continue
+                row_currency_label = row_data.get("currency")
+                if isinstance(row_currency_label, str) and row_currency_label.strip():
+                    budget_data.currencies.add(row_currency_label.strip().upper())
                 stated_total = self._extract_declared_total(row_data)
                 if stated_total is not None:
                     budget_data.stated_total = stated_total
