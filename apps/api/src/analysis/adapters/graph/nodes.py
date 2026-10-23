@@ -443,7 +443,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
         # Mock output is not a measured assessment and must not bypass HITL.
         state["confidence_score"] = None
         state["retry_count"] = 0
-        state["critique_notes"] = "Mock critique: Extraction quality is good."
+        state["critique_notes"] = "Mock critique: not assessed; human review required."
         state["human_approval_required"] = True
         await _apply_temporal_review_gate(state)
         state["node_results"] = [
@@ -458,7 +458,7 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 confidence=state["confidence_score"],
             ),
         ]
-        state["messages"].append(AIMessage(content="Critique mock mode: passed."))
+        state["messages"].append(AIMessage(content="Critique mock mode: not assessed; human review required."))
         return state
 
     use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
