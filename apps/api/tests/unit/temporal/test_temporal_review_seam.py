@@ -289,7 +289,8 @@ async def test_clean_revision_does_not_override_mock_hitl_requirement(monkeypatc
 
     state = await critique_node(_graph_state(document_revision_id=str(uuid4())))
 
-    assert state["human_approval_required"] is True\n    assert state["confidence_score"] is None
+    assert state["human_approval_required"] is True
+    assert state["confidence_score"] is None
 
 
 @pytest.mark.asyncio
@@ -324,7 +325,8 @@ async def test_unpinned_mock_does_not_query_seam_but_still_requires_hitl(
 
     state = await critique_node(_graph_state())
 
-    assert state["human_approval_required"] is True\n    assert state["confidence_score"] is None
+    assert state["human_approval_required"] is True
+    assert state["confidence_score"] is None
 
 
 def test_gated_completion_persists_a_proposed_candidate_even_under_skip_hitl() -> None:
