@@ -1,8 +1,7 @@
--- #1054 read-only preflight/verification for c2pro_prod_acceptance_ro.
--- Run with psql as an owner-level role; it reads only catalogs and the anchor.
+-- #1054 PRE-MIGRATION catalog preflight for c2pro_prod_acceptance_ro.
+-- Run with psql as an owner-level role BEFORE migration. No anchor table is required.
 -- Prints no row data and never prints the protected tenant id:
---   psql "$DSN" -v expected_tenant="$PROD_ACCEPTANCE_EXPECTED_TENANT_ID" \
---        -f apps/api/scripts/pq1054_acceptance_role_preflight.sql
+--   psql "$DSN" -f apps/api/scripts/pq1054_acceptance_role_preflight.sql
 \set ON_ERROR_STOP on
 BEGIN READ ONLY;
 
@@ -64,13 +63,5 @@ SELECT coalesce(n.nspname, '*') AS schema, pg_get_userbyid(d.defaclrole) AS crea
  WHERE d.defaclobjtype = 'r' AND a.privilege_type = 'SELECT'
    AND (a.grantee = 0 OR pg_has_role('c2pro_prod_acceptance_ro', a.grantee, 'USAGE'))
  ORDER BY 1, 2, 3;
-
-\echo '== 6. anchor row (expect exactly one, matching the expected tenant and approved project)'
-SELECT count(*) AS anchor_rows,
-       bool_and(tenant_id::text = :'expected_tenant') AS tenant_matches,
-       bool_and(project_id = 'e7c6031f-cd9e-4642-a5ea-35a0207ceaeb'::uuid) AS project_matches,
-       bool_and(EXISTS (SELECT 1 FROM public.projects p
-                         WHERE p.id = b.project_id AND p.tenant_id = b.tenant_id)) AS project_in_tenant
-  FROM c2pro_security.acceptance_tenant_binding b;
 
 ROLLBACK;
