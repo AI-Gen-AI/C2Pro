@@ -1022,6 +1022,24 @@ class ResumeWorkflowUseCase:
                     fencing_token=ownership.fencing_token,
                 )
 
+                # Observe the exact resumable task, not just the checkpoint
+                # existence. Log only scheduler metadata, never state values.
+                snapshot_reader = getattr(graph_app, "aget_state", None)
+                if snapshot_reader is not None:
+                    snapshot = await snapshot_reader(resume_config)
+                    logger.info(
+                        "hitl_resume_snapshot_before",
+                        review_id=str(review_id),
+                        checkpoint_id=((getattr(snapshot, "config", None) or {}).get("configurable") or {}).get("checkpoint_id"),
+                        thread_id=((getattr(snapshot, "config", None) or {}).get("configurable") or {}).get("thread_id"),
+                        next_nodes=list(getattr(snapshot, "next", ()) or ()),
+                        tasks=[
+                            {"name": getattr(t, "name", None),
+                             "interrupt_count": len(getattr(t, "interrupts", ()) or ())}
+                            for t in (getattr(snapshot, "tasks", ()) or ())
+                        ],
+                    )
+
                 # Command(resume=...) is the supported interrupt-resume
                 # primitive for langgraph 1.2.10 (verified empirically).
                 # The attempt's provenance rides along so every
