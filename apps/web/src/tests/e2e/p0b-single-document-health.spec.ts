@@ -1,3 +1,4 @@
+import { isRetryableCandidateNotReady } from "../support/p0b-hitl-response";
 /**
  * TS-E2E-P0B-HEALTH-001 — canonical P0b single-document Health journey.
  *
@@ -55,6 +56,107 @@ async function loadHealthVector(page: Page, projectId: string): Promise<HealthVe
   );
   await page.goto(`/projects/${projectId}/analysis`);
   return (await responsePromise).json() as Promise<HealthVector>;
+}
+
+interface P0bDocumentRecord {
+  id: string;
+  lifecycle_status?: string | null;
+  review_count?: number | null;
+  review_item_id?: string | null;
+}
+
+async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string, deadline: number, requireAnalyzed = false): Promise<P0bDocumentRecord> {
+  while (Date.now() < deadline) {
+    const responsePromise = page.waitForResponse(
+      (response) => response.request().method() === "GET" &&
+        (["/api/projects/", "/api/v1/projects/"].some((prefix) => new URL(response.url()).pathname.replace(/\/$/, "") === `${prefix}${projectId}/documents`) && (response.headers()["content-type"] ?? "").includes("application/json")) &&
+        response.status() === 200,
+      { timeout: 60_000 },
+    );
+    await page.goto(`/projects/${projectId}/documents`);
+    const payload = await (await responsePromise).json() as
+      { items?: P0bDocumentRecord[] } | P0bDocumentRecord[];
+    const records = Array.isArray(payload) ? payload : payload.items ?? [];
+    const document = records.find((item) => item.id === documentId);
+    if (!document) {
+      await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+      continue;
+    }
+    const state = String(document.lifecycle_status ?? "").toLowerCase();
+    if (["failed_retryable", "needs_changes", "error"].includes(state)) {
+      throw new Error(`P0B_DOCUMENT_TERMINAL_FAILURE:${state}`);
+    }
+    if (state === "analyzed" || (!requireAnalyzed && state === "review_required")) {
+      return document;
+    }
+    await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
+  }
+  throw new Error("P0B_DOCUMENT_TERMINAL_TIMEOUT");
+}
+
+async function approveP0bReview(page: Page, projectId: string, reviewItemId: string, deadline: number): Promise<void> {
+  // Documents expose the business item_id; the review UI submits the immutable
+  // row_id. Read the actual queue response so the HTTP waiter targets that row.
+  const queueResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === "GET" && response.status() === 200 &&
+      new URL(response.url()).pathname.replace(/\/$/, "") === "/api/hitl/queue",
+    { timeout: 30_000 },
+  );
+  await page.goto(`/projects/${projectId}/review?itemId=${encodeURIComponent(reviewItemId)}`);
+  const queue = await (await queueResponsePromise).json() as {
+    items?: Array<{ item_id: string; row_id?: string | null }>;
+  };
+  const matchingRows = (queue.items ?? []).filter((item) => item.item_id === reviewItemId);
+  if (matchingRows.length !== 1 || !matchingRows[0].row_id) {
+    throw new Error("P0B_HITL_EXACT_REVIEW_ROW_UNAVAILABLE");
+  }
+  const reviewRowId = matchingRows[0].row_id;
+  const card = page.getByTestId(`review-item-${reviewItemId}`);
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.getByTestId(`approve-${reviewItemId}`).click();
+  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  await expect(dialog).toBeVisible();
+  // The review row may become visible before LangGraph has durably bound its
+  // resumable checkpoint. Retry only that explicitly transient failure; all
+  // other approval failures remain fail-closed and surface immediately.
+  const confirm = dialog.getByRole("button", { name: /confirm approve/i });
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
+
+    // Bind each click to its own HTTP response. Watching the alert instead can
+    // accidentally consume the previous attempt's still-visible error, or miss
+    // a fast failure between DOM polls. The real backend is never mocked here.
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (candidate) => candidate.request().method() === "POST" &&
+          new URL(candidate.url()).pathname.replace(/\/$/, "") ===
+            `/api/hitl/queue/${encodeURIComponent(reviewRowId)}/approve`,
+        { timeout: remaining },
+      ),
+      confirm.click({ timeout: remaining }),
+    ]);
+    if (response.ok()) {
+      const approved = await response.json().catch(() => null) as {
+        item_id?: string; row_id?: string | null; current_status?: string;
+      } | null;
+      if (approved?.item_id !== reviewItemId || approved?.row_id !== reviewRowId ||
+          approved?.current_status !== "APPROVED") {
+        throw new Error("P0B_HITL_APPROVAL_RESPONSE_MISMATCH");
+      }
+      await expect(dialog).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
+      return;
+    }
+
+    const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
+    const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status()}`;
+    if (!isRetryableCandidateNotReady(response.status(), detail) || Date.now() + 2_000 >= deadline) {
+      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${detail}`);
+    }
+    // A retry is permitted only after React has finished the failed request.
+    await expect(confirm).toBeEnabled({ timeout: Math.max(1, deadline - Date.now()) });
+    await page.waitForTimeout(2_000);
+  }
 }
 
 /** The serialized health vector, as far as this journey inspects it. */
@@ -116,7 +218,7 @@ function collectConsoleErrors(page: Page): string[] {
 }
 
 test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
-  test.describe.configure({ mode: "serial", timeout: ANALYSIS_TIMEOUT_MS + 120_000 });
+  test.describe.configure({ mode: "serial", timeout: ANALYSIS_TIMEOUT_MS * 3 + 180_000 });
 
   test("upload one contract and see honest, evidence-backed Health", async ({
     baseURL,
@@ -175,7 +277,18 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     await expect(uploadButton, "the staged file must be uploadable").toBeEnabled({
       timeout: 15_000,
     });
+    const uploadAccepted = page.waitForResponse(
+      (response) => response.request().method() === "POST" &&
+        (["/api/projects/", "/api/v1/projects/"].some((prefix) => new URL(response.url()).pathname.replace(/\/$/, "") === `${prefix}${projectId}/documents`) && (response.headers()["content-type"] ?? "").includes("application/json")),
+      { timeout: 120_000 },
+    );
     await uploadButton.click();
+    const uploadResponse = await uploadAccepted;
+    expect(uploadResponse.ok(), "P0b upload must be accepted").toBe(true);
+    const uploaded = await uploadResponse.json() as { id?: string; document_id?: string; task_id?: string };
+    const documentId = uploaded.id ?? uploaded.document_id;
+    expect(documentId, "upload must return an addressable document id").toMatch(/^[0-9a-f-]{36}$/);
+    expect(uploaded.task_id, "upload must enqueue real async processing").toBeTruthy();
 
     //     Prove the upload was ACCEPTED before waiting minutes on analysis.
     //     DocumentUploadDropzone closes the dialog only from onUploadComplete,
@@ -194,6 +307,20 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       );
     }
 
+    // N12 mock confidence is UNKNOWN, so the real graph may pause for HITL.
+    // Resume only the exact review linked to this uploaded document.
+    const journeyDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+    let terminal = await waitForDocumentTerminal(page, projectId!, documentId!, journeyDeadline);
+    expect(terminal.lifecycle_status, "P0b must exercise real HITL; analyzed without review is a bypass").toBe("review_required");
+    console.info("P0B_HITL_GATE_OBSERVED", JSON.stringify({ documentId, reviewItemId: terminal.review_item_id, reviewCount: terminal.review_count }));
+    if (terminal.lifecycle_status === "review_required") {
+      expect(terminal.review_count, "exactly one pending review is required").toBe(1);
+      expect(terminal.review_item_id, "review must be addressable").toBeTruthy();
+      await approveP0bReview(page, projectId!, terminal.review_item_id!, journeyDeadline);
+      terminal = await waitForDocumentTerminal(page, projectId!, documentId!, journeyDeadline, true);
+    }
+    expect(terminal.lifecycle_status, "HITL resume must complete analysis").toBe("analyzed");
+
     // --- 6. Wait for the async pipeline to actually LAND.
     //
     //        A 200 from /health is NOT a completion signal: the endpoint answers
@@ -204,10 +331,24 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     //        interval, so poll the way a waiting user does: reload until the
     //        assessment exists, bounded, then fail loudly if it never does.
     let vector = await loadHealthVector(page, projectId!);
-    const analysisDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
-    while (!vector.single_document_coverage && Date.now() < analysisDeadline) {
+    while (!vector.single_document_coverage && Date.now() < journeyDeadline) {
       await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
       vector = await loadHealthVector(page, projectId!);
+    }
+
+    // Preserve terminal lifecycle and review identity when the downstream Health
+    // projection is absent. This is diagnostic only: the assertion below still
+    // fails closed at the original 240-second deadline.
+    if (!vector.single_document_coverage) {
+      console.error("P0B_HEALTH_MISSING_DIAGNOSTIC", JSON.stringify({
+        projectId,
+        documentId,
+        lifecycleStatus: terminal.lifecycle_status,
+        reviewCount: terminal.review_count,
+        reviewItemId: terminal.review_item_id,
+        healthGranularity: vector.single_document_evidence_granularity ?? null,
+        healthDimensions: vector.dimensions?.length ?? null,
+      }));
     }
 
     // --- 7. /health = 200 with the real single-document payload.
