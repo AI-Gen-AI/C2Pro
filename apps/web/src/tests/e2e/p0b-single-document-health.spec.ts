@@ -337,6 +337,21 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
       vector = await loadHealthVector(page, projectId!);
     }
 
+    // Preserve terminal lifecycle and review identity when the downstream Health
+    // projection is absent. This is diagnostic only: the assertion below still
+    // fails closed at the original 240-second deadline.
+    if (!vector.single_document_coverage) {
+      console.error("P0B_HEALTH_MISSING_DIAGNOSTIC", JSON.stringify({
+        projectId,
+        documentId,
+        lifecycleStatus: terminal.lifecycle_status,
+        reviewCount: terminal.review_count,
+        reviewItemId: terminal.review_item_id,
+        healthGranularity: vector.single_document_evidence_granularity ?? null,
+        healthDimensions: vector.dimensions?.length ?? null,
+      }));
+    }
+
     // --- 7. /health = 200 with the real single-document payload.
     expect(
       vector.single_document_coverage,
