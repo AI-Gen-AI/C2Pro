@@ -23,10 +23,13 @@ export async function approveWithHttpResponse(
   deadline: number,
   retryDelayMs = 2_000,
 ): Promise<void> {
+  let attempts = 0;
   for (;;) {
     const remaining = deadline - port.now();
     if (remaining <= 0) throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
 
+    if (attempts >= 2) throw new Error("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
+    attempts += 1;
     const response = await port.submitOnce(rowId, remaining);
     if (response.ok()) {
       const approved = await response.json().catch(() => null) as {
@@ -44,6 +47,9 @@ export async function approveWithHttpResponse(
     const detail = typeof payload?.detail === "string" ? payload.detail : `HTTP ${response.status()}`;
     if (!isRetryableCandidateNotReady(response.status(), detail)) {
       throw new Error(`P0B_HITL_APPROVAL_FAILED: ${detail}`);
+    }
+    if (attempts >= 2) {
+      throw new Error("P0B_HITL_APPROVAL_RETRY_EXHAUSTED");
     }
     if (port.now() + retryDelayMs >= deadline) {
       throw new Error("P0B_HITL_APPROVAL_TIMEOUT");
