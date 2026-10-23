@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -120,6 +121,11 @@ async def test_four_families_persist_content_addressed_genesis_revisions(
         assert expected in genesis.blob_key
         assert (genesis.project_id, genesis.tenant_id) == (project_id, test_user.tenant_id)
         assert await worker.file_exists(genesis.blob_key)
+        # A content-addressed key alone does not prove persisted object integrity.
+        stored_path = await worker.download_object(genesis.blob_key)
+        stored_bytes = stored_path.read_bytes()
+        assert stored_bytes == data
+        assert hashlib.sha256(stored_bytes).hexdigest() == genesis.blob_hash
 
         ingested = [
             event for event in await events.list_for_revision(
@@ -147,6 +153,51 @@ async def test_four_families_persist_content_addressed_genesis_revisions(
 
     # Another tenant can never read this lineage.
     assert await revisions.list_lineage(again.id, uuid4()) == []
+
+
+async def test_tampered_persisted_object_digest_is_detected(
+    db: AsyncSession, worker: Any, test_user: Any, tmp_path: Path
+) -> None:
+    """Negative fixture: altered stored bytes must not match the recorded revision."""
+    project_id = await _project(db, test_user.tenant_id)
+    document_type, filename, original = FAMILIES[0]
+    document = await _upload(
+        db, worker, test_user, project_id, document_type, filename, original
+    )
+    revisions = SqlAlchemyDocumentRevisionRepository(db)
+    genesis = (await revisions.list_lineage(document.id, test_user.tenant_id))[0]
+    stored_path = await worker.download_object(genesis.blob_key)
+    assert hashlib.sha256(stored_path.read_bytes()).hexdigest() == genesis.blob_hash
+
+    # Tamper only with an isolated copy; never mutate the persisted fixture object.
+    tampered_copy = tmp_path / "tampered-copy"
+    tampered_copy.write_bytes(stored_path.read_bytes() + b"tampered")
+    retrieved = tampered_copy.read_bytes()
+    assert retrieved != original
+    assert hashlib.sha256(retrieved).hexdigest() != genesis.blob_hash
+    assert stored_path.read_bytes() == original
+    assert hashlib.sha256(stored_path.read_bytes()).hexdigest() == genesis.blob_hash
+
+
+@pytest.mark.parametrize("family_index", range(len(FAMILIES)))
+async def test_each_family_revision_is_tenant_scoped_and_source_bytes_roundtrip(
+    db: AsyncSession, worker: Any, test_user: Any, family_index: int
+) -> None:
+    """Negative tenant lookup + positive immutable source verification for every family."""
+    document_type, filename, data = FAMILIES[family_index]
+    project_id = await _project(db, test_user.tenant_id)
+    document = await _upload(
+        db, worker, test_user, project_id, document_type, filename, data
+    )
+    revisions = SqlAlchemyDocumentRevisionRepository(db)
+    [revision] = await revisions.list_lineage(document.id, test_user.tenant_id)
+    assert await revisions.list_lineage(document.id, uuid4()) == []
+    assert (revision.tenant_id, revision.project_id) == (
+        test_user.tenant_id, project_id
+    )
+    persisted = (await worker.download_object(revision.blob_key)).read_bytes()
+    assert persisted == data
+    assert hashlib.sha256(persisted).hexdigest() == revision.blob_hash
 
 
 @pytest.mark.parametrize("document_type", [DocumentType.BUDGET, DocumentType.SCHEDULE])
