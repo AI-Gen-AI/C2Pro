@@ -122,9 +122,10 @@ def _skip_hitl_requested() -> bool:
     routing point so a mis-set environment variable can never take effect
     there (fail closed: the run pauses for a real human decision).
     """
-    requested = (
-        os.getenv("C2PRO_SKIP_HITL", "0") == "1" or os.getenv("C2PRO_AI_MOCK", "0") == "1"
-    )
+    # An explicit zero opts this lane out of the legacy AI-mock shortcut;
+    # provider mocking remains enabled without bypassing the review gate.
+    override = os.getenv("C2PRO_SKIP_HITL")
+    requested = (override == "1") if override is not None else (os.getenv("C2PRO_AI_MOCK", "0") == "1")
     if requested and os.getenv("ENVIRONMENT", "").strip().lower() == "production":
         logger.error("hitl_skip_refused_in_production")
         return False
