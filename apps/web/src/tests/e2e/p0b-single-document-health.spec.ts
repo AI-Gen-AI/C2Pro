@@ -117,6 +117,10 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
     if (!/candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i.test(message) || Date.now() + 2_000 >= deadline) {
       throw new Error(`P0B_HITL_APPROVAL_FAILED: ${message}`);
     }
+    // Avoid racing the next approval attempt against the previous attempt's
+    // still-visible error alert: Promise.race would otherwise immediately
+    // classify that stale alert as a fresh failure before the request settles.
+    await expect(dialog.getByRole("alert")).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
     await page.waitForTimeout(2_000);
   }
 }
