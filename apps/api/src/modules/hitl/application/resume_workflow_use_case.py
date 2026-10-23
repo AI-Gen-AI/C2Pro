@@ -506,11 +506,26 @@ class ResumeWorkflowUseCase:
             config["configurable"] = configurable
             return config
 
-        # Otherwise this attempt starts from the immutable interrupt
-        # checkpoint -- via a FORK, never the checkpoint itself. See
-        # _fork_for_attempt: re-resuming a checkpoint replays the FIRST
-        # attempt's resume payload.
+        # A first, never-resumed attempt must use the original interrupted
+        # checkpoint. LangGraph's aupdate_state() rebuilds the scheduled
+        # human_interrupt task without its interrupt payload; a subsequent
+        # Command(resume=...) then silently does no downstream work. Only
+        # use the original when the fencing token proves this is the first
+        # attempt. Superseded attempts must NOT reuse it: prior __resume__
+        # writes can replay stale provenance. The takeover path remains
+        # independently fenced and is subject to its own recovery tests.
         base: dict[str, Any] = restored.config
+        if ownership.fencing_token == 1 and (
+            not ownership.source_checkpoint_id
+            or ownership.source_checkpoint_id == restored.checkpoint_id
+        ):
+            logger.info(
+                "hitl_resume_first_attempt_original_interrupt",
+                operation_id=str(ownership.operation_id),
+                attempt_id=str(ownership.attempt_id),
+                checkpoint_id=restored.checkpoint_id,
+            )
+            return base
         return await self._fork_for_attempt(
             graph_app=graph_app, base=base, ownership=ownership
         )
