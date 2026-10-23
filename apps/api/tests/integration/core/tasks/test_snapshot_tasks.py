@@ -209,7 +209,12 @@ async def test_source_event_snapshot_takes_transaction_lock_before_writer(monkey
 
     assert result["status"] == "ok"
     assert observed["lock_seen_before_writer"] is True
-    assert sum("pg_advisory_xact_lock" in statement for statement in session.executed) == 1
+    # Two transaction-level locks, always in the same order (no lock cycle):
+    # the per-source-event idempotency lock, then the per-project ordering lock.
+    locks = [s for s in session.executed if "pg_advisory_xact_lock" in s]
+    assert len(locks) == 2
+    assert "'project_snapshot:'" in locks[0]
+    assert "'project_snapshot_project:'" in locks[1]
     assert session.commits == 1
 
 
