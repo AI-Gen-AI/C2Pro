@@ -6,8 +6,8 @@ makes test_engine bypass reset_public_schema/Base.metadata.create_all.
 import pytest
 
 from tests.modules.integration.test_p0b_true_langgraph_resume_hotfix import (
-    real_saver,
     test_command_resume_consumes_interrupt_and_runs_downstream_once as _real_resume,
+    real_saver as real_saver,  # noqa: F401 - pytest discovers the re-exported fixture
 )
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.alembic_schema]
