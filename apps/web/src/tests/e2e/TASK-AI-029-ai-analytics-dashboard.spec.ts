@@ -132,7 +132,11 @@ test.describe("TASK-AI-029 AI analytics dashboard", () => {
 
     await expect(page.getByRole("heading", { name: "Cost Dashboard" })).toBeVisible();
     await expect(page.getByText("Total Cost:")).toContainText("$12.3456");
-    await expect(page.locator("svg")).toHaveCount(1);
+    // The one cost chart: the app shell renders its own icon svgs.
+    const costDashboard = page
+      .getByRole("heading", { name: "Cost Dashboard" })
+      .locator("xpath=ancestor::section[1]");
+    await expect(costDashboard.locator("svg")).toHaveCount(1);
 
     await expect(page.getByRole("heading", { name: "Version Monitor" })).toBeVisible();
     await expect(page.getByRole("cell", { name: "v2026.04.20" })).toBeVisible();
@@ -182,6 +186,9 @@ test.describe("TASK-AI-029 AI analytics dashboard", () => {
     const modelHeader = page.getByRole("columnheader", { name: /Model/ });
     await expect(modelHeader).toBeVisible();
 
+    // A new sort column starts ascending; clicking it again flips to descending.
+    await modelHeader.click();
+    await expect(page.getByRole("columnheader", { name: /Model/ })).toContainText("↑");
     await modelHeader.click();
     await expect(page.getByRole("columnheader", { name: /Model/ })).toContainText("↓");
   });
