@@ -95,7 +95,22 @@ async function waitForDocumentTerminal(page: Page, projectId: string, documentId
 }
 
 async function approveP0bReview(page: Page, projectId: string, reviewItemId: string): Promise<void> {
+  // Documents expose the business item_id; the review UI submits the immutable
+  // row_id. Read the actual queue response so the HTTP waiter targets that row.
+  const queueResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === "GET" && response.status() === 200 &&
+      new URL(response.url()).pathname.replace(/\/$/, "") === "/api/hitl/queue",
+    { timeout: 30_000 },
+  );
   await page.goto(`/projects/${projectId}/review?itemId=${encodeURIComponent(reviewItemId)}`);
+  const queue = await (await queueResponsePromise).json() as {
+    items?: Array<{ item_id: string; row_id?: string | null }>;
+  };
+  const matchingRows = (queue.items ?? []).filter((item) => item.item_id === reviewItemId);
+  if (matchingRows.length !== 1 || !matchingRows[0].row_id) {
+    throw new Error("P0B_HITL_EXACT_REVIEW_ROW_UNAVAILABLE");
+  }
+  const reviewRowId = matchingRows[0].row_id;
   const card = page.getByTestId(`review-item-${reviewItemId}`);
   await expect(card).toBeVisible({ timeout: 30_000 });
   await card.getByTestId(`approve-${reviewItemId}`).click();
@@ -114,15 +129,23 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
     // Bind each click to its own HTTP response. Watching the alert instead can
     // accidentally consume the previous attempt's still-visible error, or miss
     // a fast failure between DOM polls. The real backend is never mocked here.
-    const approvalResponse = page.waitForResponse(
-      (response) => response.request().method() === "POST" &&
-        new URL(response.url()).pathname.replace(/\/$/, "") ===
-          `/api/hitl/queue/${encodeURIComponent(reviewItemId)}/approve`,
-      { timeout: Math.max(1, deadline - Date.now()) },
-    );
-    await confirm.click();
-    const response = await approvalResponse;
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (candidate) => candidate.request().method() === "POST" &&
+          new URL(candidate.url()).pathname.replace(/\/$/, "") ===
+            `/api/hitl/queue/${encodeURIComponent(reviewRowId)}/approve`,
+        { timeout: remaining },
+      ),
+      confirm.click({ timeout: remaining }),
+    ]);
     if (response.ok()) {
+      const approved = await response.json().catch(() => null) as {
+        item_id?: string; row_id?: string | null; current_status?: string;
+      } | null;
+      if (approved?.item_id !== reviewItemId || approved?.row_id !== reviewRowId ||
+          approved?.current_status !== "APPROVED") {
+        throw new Error("P0B_HITL_APPROVAL_RESPONSE_MISMATCH");
+      }
       await expect(dialog).toBeHidden({ timeout: Math.max(1, deadline - Date.now()) });
       return;
     }
