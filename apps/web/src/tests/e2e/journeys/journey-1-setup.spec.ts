@@ -35,7 +35,7 @@ test.describe("TS-E2E-J1-001: first project setup", () => {
     await expect(wizard.getByTestId("review-currency")).toHaveText("EUR");
     await wizard.getByRole("button", { name: "Create project", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/projects\/[^/?#]+$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/projects\/[^/?#]+\/documents(?:[?#].*)?$/, { timeout: 30_000 });
     await expect(wizard).not.toBeVisible();
   });
 });
