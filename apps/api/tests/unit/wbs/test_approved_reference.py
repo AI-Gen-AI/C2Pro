@@ -1,7 +1,6 @@
 """D1 negative tests for strict approved WBS reference resolution."""
 from __future__ import annotations
 
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -40,13 +39,11 @@ async def test_explicit_approved_reference_returns_all_original_identities() -> 
     )
     assert (result.tenant_id, result.project_id, result.baseline_id, result.node_id) == tuple(ids)
     assert result.code == "1.1"
-    assert session.statement is not None
+    compiled = session.statement.compile()\n    values = set(compiled.params.values())\n    assert all(identity in values for identity in ids)\n    assert "human" in values
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", ["missing", "draft", "foreign_tenant", "foreign_project", "other_baseline"])
-async def test_unresolvable_reference_fails_closed(case: str) -> None:
-    # The fake represents an empty DB result for each rejected identity.
+async def test_unresolvable_reference_fails_closed() -> None:
     # DB-backed isolation and approved-baseline tests are still required.
     session = _Session(None)
     with pytest.raises(UnapprovedWBSReference, match="approved baseline"):
