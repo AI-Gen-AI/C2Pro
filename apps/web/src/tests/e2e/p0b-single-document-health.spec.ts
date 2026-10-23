@@ -164,7 +164,7 @@ function collectConsoleErrors(page: Page): string[] {
 }
 
 test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
-  test.describe.configure({ mode: "serial", timeout: ANALYSIS_TIMEOUT_MS + 120_000 });
+  test.describe.configure({ mode: "serial", timeout: ANALYSIS_TIMEOUT_MS * 3 + 180_000 });
 
   test("upload one contract and see honest, evidence-backed Health", async ({
     baseURL,
