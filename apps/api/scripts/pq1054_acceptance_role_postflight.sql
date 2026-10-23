@@ -10,7 +10,7 @@
 \endif
 BEGIN READ ONLY;
 -- Store the psql-provided UUID in a transaction-local setting without printing it.
-SELECT pg_catalog.set_config('c2pro.expected_tenant', :'expected_tenant', true) AS secret \gset
+SELECT pg_catalog.set_config('c2pro.expected_tenant', :'expected_tenant', true) \g /dev/null
 DO $pq1054_postflight$
 DECLARE
     n bigint;
