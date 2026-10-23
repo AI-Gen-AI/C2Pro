@@ -101,8 +101,24 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   await card.getByTestId(`approve-${reviewItemId}`).click();
   const dialog = page.getByRole("dialog", { name: /approve review item/i });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: /confirm approve/i }).click();
-  await expect(dialog).toBeHidden({ timeout: 120_000 });
+  // The review row may become visible before LangGraph has durably bound its
+  // resumable checkpoint. Retry only that explicitly transient failure; all
+  // other approval failures remain fail-closed and surface immediately.
+  const confirm = dialog.getByRole("button", { name: /confirm approve/i });
+  const deadline = Date.now() + 120_000;
+  for (;;) {
+    await confirm.click();
+    const outcome = await Promise.race([
+      dialog.waitFor({ state: "hidden", timeout: Math.max(1, deadline - Date.now()) }).then(() => "closed" as const),
+      dialog.getByRole("alert").waitFor({ state: "visible", timeout: Math.max(1, deadline - Date.now()) }).then(() => "error" as const),
+    ]);
+    if (outcome === "closed") return;
+    const message = await dialog.getByRole("alert").innerText();
+    if (!/candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i.test(message) || Date.now() + 2_000 >= deadline) {
+      throw new Error(`P0B_HITL_APPROVAL_FAILED: ${message}`);
+    }
+    await page.waitForTimeout(2_000);
+  }
 }
 
 /** The serialized health vector, as far as this journey inspects it. */
