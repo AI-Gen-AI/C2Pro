@@ -506,14 +506,18 @@ class ResumeWorkflowUseCase:
             config["configurable"] = configurable
             return config
 
-        # A first, never-resumed attempt must use the original interrupted
-        # checkpoint. LangGraph's aupdate_state() rebuilds the scheduled
-        # human_interrupt task without its interrupt payload; a subsequent
-        # Command(resume=...) then silently does no downstream work. Only
-        # use the original when the fencing token proves this is the first
-        # attempt. Superseded attempts must NOT reuse it: prior __resume__
-        # writes can replay stale provenance. The takeover path remains
-        # independently fenced and is subject to its own recovery tests.
+        # A first, never-resumed attempt (fencing_token == 1) has no prior
+        # ``__resume__`` write to replay, so it resumes the original interrupt
+        # checkpoint directly and needs no isolating fork. Superseded attempts
+        # (fencing_token > 1) must NOT reuse it: prior ``__resume__`` writes
+        # can replay stale provenance, so they resume from their own fork.
+        #
+        # NOTE: LangGraph reports a fork's pending task WITHOUT its interrupt
+        # payload (``tasks[].interrupts == ()``), but ``Command(resume=...)``
+        # on the fork IS consumed and runs N13 -> N17. This is proven against
+        # the real graph and PostgreSQL saver in
+        # tests/modules/integration/test_p0b_checkpoint_fork_differential.py,
+        # including the source_checkpoint_id == restored.checkpoint_id case.
         base: dict[str, Any] = restored.config
         if ownership.fencing_token == 1 and (
             not ownership.source_checkpoint_id
@@ -529,6 +533,34 @@ class ResumeWorkflowUseCase:
         return await self._fork_for_attempt(
             graph_app=graph_app, base=base, ownership=ownership
         )
+
+    @staticmethod
+    async def _log_resume_snapshot(
+        graph_app: Any, resume_config: dict[str, Any], review_id: UUID
+    ) -> None:
+        """Best-effort scheduler metadata of the checkpoint about to be resumed."""
+        snapshot_reader = getattr(graph_app, "aget_state", None)
+        if snapshot_reader is None:
+            return
+        try:
+            snapshot = await snapshot_reader(resume_config)
+            configurable = (getattr(snapshot, "config", None) or {}).get("configurable") or {}
+            logger.info(
+                "hitl_resume_snapshot_before",
+                review_id=str(review_id),
+                checkpoint_id=configurable.get("checkpoint_id"),
+                thread_id=configurable.get("thread_id"),
+                next_nodes=list(getattr(snapshot, "next", ()) or ()),
+                tasks=[
+                    {
+                        "name": getattr(t, "name", None),
+                        "interrupt_count": len(getattr(t, "interrupts", ()) or ()),
+                    }
+                    for t in (getattr(snapshot, "tasks", ()) or ())
+                ],
+            )
+        except Exception:  # noqa: BLE001 - observability must not affect the resume
+            logger.warning("hitl_resume_snapshot_unavailable", exc_info=True)
 
     async def _fork_for_attempt(
         self, *, graph_app: Any, base: dict[str, Any], ownership: Ownership
@@ -1024,29 +1056,8 @@ class ResumeWorkflowUseCase:
 
                 # Observe the exact resumable task, not just the checkpoint
                 # existence. Log only scheduler metadata, never state values.
-                snapshot_reader = getattr(graph_app, "aget_state", None)
-                if snapshot_reader is not None:
-                    snapshot = await snapshot_reader(resume_config)
-                    logger.info(
-                        "hitl_resume_snapshot_before",
-                        review_id=str(review_id),
-                        checkpoint_id=(
-                            ((getattr(snapshot, "config", None) or {}).get("configurable") or {})
-                            .get("checkpoint_id")
-                        ),
-                        thread_id=(
-                            ((getattr(snapshot, "config", None) or {}).get("configurable") or {})
-                            .get("thread_id")
-                        ),
-                        next_nodes=list(getattr(snapshot, "next", ()) or ()),
-                        tasks=[
-                            {
-                                "name": getattr(t, "name", None),
-                                "interrupt_count": len(getattr(t, "interrupts", ()) or ()),
-                            }
-                            for t in (getattr(snapshot, "tasks", ()) or ())
-                        ],
-                    )
+                # Diagnostic only: it must never fail (or fence out) a resume.
+                await self._log_resume_snapshot(graph_app, resume_config, review_id)
 
                 # Command(resume=...) is the supported interrupt-resume
                 # primitive for langgraph 1.2.10 (verified empirically).
