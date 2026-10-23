@@ -10,7 +10,7 @@ from tests.modules.integration.test_p0b_true_langgraph_resume_hotfix import (
     _build_real_graph,
     _run_to_interrupt,
     _seed,
-    real_saver,  # noqa: F401 - pytest fixture re-export
+    real_saver,
 )
 
 pytestmark = pytest.mark.asyncio
