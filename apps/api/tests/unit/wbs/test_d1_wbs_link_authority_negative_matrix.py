@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 
 from src.wbs.adapters.persistence import link_authority as gate
-from src.wbs.domain.governance import resolve_authority, BaselineRef
+from src.wbs.domain.governance import BaselineRef, resolve_authority
 
 
 class _Rows:
