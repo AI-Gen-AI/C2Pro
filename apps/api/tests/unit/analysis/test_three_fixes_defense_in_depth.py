@@ -235,3 +235,18 @@ class TestSkipHitlEnvVar:
         }
         next_step = _next_after_critique_v2(state)  # type: ignore[arg-type]
         assert next_step == "human_interrupt"
+
+    def test_non_required_review_keeps_normal_routing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.analysis.adapters.graph.workflow import _next_after_critique_v2
+
+        monkeypatch.setenv("C2PRO_AI_MOCK", "1")
+        monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
+        state = {
+            "human_approval_required": False,
+            "critique_notes": "",
+            "retry_count": 0,
+            "doc_type": "contract",
+        }
+        assert _next_after_critique_v2(state) == "stakeholder_extractor"  # type: ignore[arg-type]
