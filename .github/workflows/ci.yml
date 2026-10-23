@@ -1375,6 +1375,12 @@ jobs:
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test src/tests/e2e/p0b-single-document-health.spec.ts --project=p0b-acceptance
 
+      # Browser-only assertions would have passed in production. This proves the
+      # chain underneath actually ran.
+      - name: Verify P0b persistence chain
+        working-directory: apps/api
+        run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
+
       # Deterministic HITL acceptance: unlike the browser journey, this
       # forces a REAL N13 interrupt and Command(resume) against Postgres.
       # An all-skipped pytest exit 0 is NOT evidence: fail closed on skips.
@@ -1394,15 +1400,9 @@ jobs:
           skipped = sum(int(s.get("skipped", 0)) for s in suites)
           failures = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
           print(f"P0b real HITL: tests={tests}, skipped={skipped}, failures={failures}")
-          if tests == 0 or skipped or failures:
-              raise SystemExit("Real HITL gate must execute all tests without skip/failure")
+          if tests != 11 or skipped or failures:
+              raise SystemExit("Real HITL gate must execute exactly 11 tests without skip/failure")
           PY
-
-      # Browser-only assertions would have passed in production. This proves the
-      # chain underneath actually ran.
-      - name: Verify P0b persistence chain
-        working-directory: apps/api
-        run: python scripts/verify_p0b_journey.py --project-id-file ../web/playwright/.p0b/project-id.txt
 
       # Diagnostic only -- never gates. When the journey fails, this says WHICH
       # link of the chain is missing (document / clauses / chunks / analysis /
