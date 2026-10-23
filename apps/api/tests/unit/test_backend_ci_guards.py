@@ -554,7 +554,7 @@ def test_core_coherence_and_modules_jobs_are_required_gates_in_ci_workflow() -> 
     for job_name, suite in (
         ("backend-core", "tests/core"),
         ("backend-coherence", "tests/coherence"),
-        ("backend-modules", 'tests/modules -m "not requires_services"'),
+        ("backend-modules", 'tests/modules -m "not requires_services and not alembic_schema"'),
     ):
         assert job_name in jobs
         assert jobs[job_name]["needs"] == "detect-changes"
