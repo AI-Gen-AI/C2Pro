@@ -532,10 +532,12 @@ async def test_red_unguarded_concurrent_resume_duplicates_downstream(
 
 
 async def test_concurrent_double_approve_executes_downstream_once(
-    real_saver, db: AsyncSession, test_user: User, claim_session_factory
+    real_saver, db: AsyncSession, test_user: User, test_session_factory
 ) -> None:
-    """The reproduced race: without the DB claim, both callers resumed and
-    N17 ran twice (verified against the real graph before the fix).
+    """Two independent HTTP-like requests must contend on the durable DB claim.
+
+    Each caller has a separate SQLAlchemy session, repository, use case and
+    claim transaction. A session-concurrency exception is never a PASS.
     """
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
@@ -552,17 +554,31 @@ async def test_concurrent_double_approve_executes_downstream_once(
     review.review_metadata = {**(review.review_metadata or {}), "tenant_id": str(tenant.id)}
     await db.commit()
 
-    use_case = _use_case(db, tenant, saver, app, claim_session_factory)
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def independent_claim_session(_tenant_id: UUID):
+        async with test_session_factory() as claim_db:
+            yield claim_db
+            await claim_db.commit()
+
     req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R")
 
-    results = await asyncio.gather(
-        use_case.execute(review_id=review.item_id, request=req),
-        use_case.execute(review_id=review.item_id, request=req),
-        return_exceptions=True,
-    )
+    async def approve_from_independent_request():
+        async with test_session_factory() as request_db:
+            use_case = _use_case(
+                request_db, tenant, saver, app, independent_claim_session
+            )
+            return await use_case.execute(review_id=review.item_id, request=req)
 
-    succeeded = [r for r in results if not isinstance(r, Exception)]
-    assert len(succeeded) >= 1, f"at least one approve must succeed: {results}"
+    # Exceptions propagate: a losing request may be refused or return an
+    # idempotent response, but a SQLAlchemy session error cannot satisfy this.
+    results = await asyncio.gather(
+        approve_from_independent_request(),
+        approve_from_independent_request(),
+    )
+    assert len(results) == 2
+    assert sum(r.status == "resumed" for r in results) == 1, results
     assert len(_DOWNSTREAM_RUNS) == 1, (
         f"N17 must execute exactly once under concurrency, got {_DOWNSTREAM_RUNS}"
     )
