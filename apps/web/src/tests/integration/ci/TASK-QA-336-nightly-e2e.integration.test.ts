@@ -7,7 +7,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { main, redBacklogProblem } from "../../../../scripts/playwright-red-backlog-ran.mjs";
+import {
+  main,
+  redBacklogProblem,
+  REPORT_PATH,
+} from "../../../../scripts/playwright-red-backlog-check.mjs";
 
 describe("TASK-QA-336 nightly full E2E lane", () => {
   it("[TASK-QA-336-RED-01] runs the local Playwright binary with the Chromium project", () => {
@@ -62,9 +66,9 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     expect(config).not.toMatch(/journey-\[12\]|journey-1-setup/);
     // Expected RED failures are tolerated; a failed setup or zero executed
     // RED tests fail the inventory.
-    expect(workflow).toContain(
-      "node scripts/playwright-red-backlog-ran.mjs playwright-report/red-backlog-results.json",
-    );
+    // The check reads the fixed report path the run step writes, never an argument.
+    expect(workflow).toContain("run: node scripts/playwright-red-backlog-ran.mjs\n");
+    expect(workflow).toContain(`PLAYWRIGHT_JSON_OUTPUT_FILE: ${REPORT_PATH}`);
   });
 
   it("[TASK-QA-336-RED-07] RED inventory check fails closed on setup failure or no execution", () => {
@@ -100,10 +104,8 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
 
     expect(main(fixture, log)).toBe(0);
     expect(main(resolve(__dirname, "fixtures", "missing-report.json"), log)).toBe(1);
-    expect(main(undefined, log)).toBe(1);
     expect(lines).toEqual([
       "RED backlog executed.",
-      "::error::RED backlog NOT EXECUTED: no Playwright results were produced.",
       "::error::RED backlog NOT EXECUTED: no Playwright results were produced.",
     ]);
   });

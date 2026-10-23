@@ -232,4 +232,4 @@ jobs:
       # RED spec executed is not an inventory and fails the job.
       - name: Fail when the RED backlog did not run
         working-directory: apps/web
-        run: node scripts/playwright-red-backlog-ran.mjs playwright-report/red-backlog-results.json
+        run: node scripts/playwright-red-backlog-ran.mjs
