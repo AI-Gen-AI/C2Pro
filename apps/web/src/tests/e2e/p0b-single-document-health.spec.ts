@@ -64,8 +64,7 @@ interface P0bDocumentRecord {
   review_item_id?: string | null;
 }
 
-async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string, requireAnalyzed = false): Promise<P0bDocumentRecord> {
-  const deadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string, deadline: number, requireAnalyzed = false): Promise<P0bDocumentRecord> {
   while (Date.now() < deadline) {
     const responsePromise = page.waitForResponse(
       (response) => response.request().method() === "GET" &&
@@ -94,7 +93,7 @@ async function waitForDocumentTerminal(page: Page, projectId: string, documentId
   throw new Error("P0B_DOCUMENT_TERMINAL_TIMEOUT");
 }
 
-async function approveP0bReview(page: Page, projectId: string, reviewItemId: string): Promise<void> {
+async function approveP0bReview(page: Page, projectId: string, reviewItemId: string, deadline: number): Promise<void> {
   // Documents expose the business item_id; the review UI submits the immutable
   // row_id. Read the actual queue response so the HTTP waiter targets that row.
   const queueResponsePromise = page.waitForResponse(
@@ -120,7 +119,6 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   // resumable checkpoint. Retry only that explicitly transient failure; all
   // other approval failures remain fail-closed and surface immediately.
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
-  const deadline = Date.now() + 120_000;
   const transient = /candidate.{0,30}not.{0,20}ready|not.{0,20}ready.{0,30}candidate/i;
   for (;;) {
     const remaining = deadline - Date.now();
@@ -311,13 +309,14 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
 
     // N12 mock confidence is UNKNOWN, so the real graph may pause for HITL.
     // Resume only the exact review linked to this uploaded document.
-    let terminal = await waitForDocumentTerminal(page, projectId!, documentId!);
+    const journeyDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+    let terminal = await waitForDocumentTerminal(page, projectId!, documentId!, journeyDeadline);
     expect(terminal.lifecycle_status, "P0b must exercise real HITL; analyzed without review is a bypass").toBe("review_required");
     if (terminal.lifecycle_status === "review_required") {
       expect(terminal.review_count, "exactly one pending review is required").toBe(1);
       expect(terminal.review_item_id, "review must be addressable").toBeTruthy();
-      await approveP0bReview(page, projectId!, terminal.review_item_id!);
-      terminal = await waitForDocumentTerminal(page, projectId!, documentId!, true);
+      await approveP0bReview(page, projectId!, terminal.review_item_id!, journeyDeadline);
+      terminal = await waitForDocumentTerminal(page, projectId!, documentId!, journeyDeadline, true);
     }
     expect(terminal.lifecycle_status, "HITL resume must complete analysis").toBe("analyzed");
 
@@ -331,8 +330,7 @@ test.describe("TS-E2E-P0B-HEALTH-001: single-document Health journey", () => {
     //        interval, so poll the way a waiting user does: reload until the
     //        assessment exists, bounded, then fail loudly if it never does.
     let vector = await loadHealthVector(page, projectId!);
-    const analysisDeadline = Date.now() + ANALYSIS_TIMEOUT_MS;
-    while (!vector.single_document_coverage && Date.now() < analysisDeadline) {
+    while (!vector.single_document_coverage && Date.now() < journeyDeadline) {
       await page.waitForTimeout(HEALTH_POLL_INTERVAL_MS);
       vector = await loadHealthVector(page, projectId!);
     }
