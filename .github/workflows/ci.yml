@@ -1480,7 +1480,7 @@ jobs:
           C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --require-redis --recreate-db
           cd apps/api
           python -m pytest \
-            tests/modules/integration/test_p0b_true_langgraph_resume_hotfix.py::test_command_resume_consumes_interrupt_and_runs_downstream_once \
+            tests/modules/integration/test_p0b_alembic_schema_gate.py \
             -m alembic_schema -v --tb=short \
             --junit-xml=p0b-alembic-schema.xml
           python - <<'PY'
