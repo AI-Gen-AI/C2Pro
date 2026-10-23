@@ -116,7 +116,7 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
     // a fast failure between DOM polls. The real backend is never mocked here.
     const approvalResponse = page.waitForResponse(
       (response) => response.request().method() === "POST" &&
-        /\/api\/v1\/hitl\/queue\/[^/]+\/approve\/?$/.test(new URL(response.url()).pathname),
+        /\/api\/hitl\/queue\/[^/]+\/approve\/?$/.test(new URL(response.url()).pathname),
       { timeout: Math.max(1, deadline - Date.now()) },
     );
     await confirm.click();
