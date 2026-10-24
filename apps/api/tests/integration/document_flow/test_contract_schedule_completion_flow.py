@@ -366,6 +366,18 @@ async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
     assert "Sheet!4" in row.alert_metadata["detection_evidence"]["claim"]  # the XLSX row is named in the evidence
     assert str(contract_doc.id) in row.affected_entities["documents"]
 
+    # A repeated scoreless evaluation must update the same durable finding, not
+    # create a second alert or fabricate a numeric score.
+    repeated = await _evaluate(db, test_user, project_id)
+    assert repeated.overall_score is None
+    alert_rows = (
+        await db.execute(
+            text("SELECT count(*) FROM alerts WHERE project_id = :p AND rule_id = :r"),
+            {"p": project_id, "r": PROVISIONAL_RULE},
+        )
+    ).scalar_one()
+    assert alert_rows == 1
+
 
 async def test_a_schedule_of_another_project_never_feeds_this_projects_comparison(
     db: AsyncSession, worker: Any, test_user: Any
