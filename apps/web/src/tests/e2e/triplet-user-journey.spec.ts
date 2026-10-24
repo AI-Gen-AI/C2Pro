@@ -65,6 +65,76 @@ async function expectDocumentState(page: Page, filename: string, state: RegExp):
   ).toHaveText(state, { timeout: DOCUMENT_BUDGET_MS });
 }
 
+type PolledDocument = {
+  id?: string;
+  filename?: string;
+  status?: string | null;
+  lifecycle_status?: string | null;
+  status_detail?: string | null;
+};
+
+/** Remember the latest documents-list answer the APP itself received (no extra requests). */
+function trackDocumentsList(page: Page, projectId: string): () => PolledDocument[] {
+  let latest: PolledDocument[] = [];
+  const listPath = new RegExp(`/projects/${projectId}/documents/?$`);
+  page.on("response", async (response) => {
+    if (response.request().method() !== "GET" || !response.ok()) return;
+    if (!listPath.test(new URL(response.url()).pathname)) return;
+    try {
+      const body = (await response.json()) as { items?: PolledDocument[] } | PolledDocument[];
+      latest = Array.isArray(body) ? body : (body.items ?? []);
+    } catch {
+      // not a JSON list: leave the previous answer
+    }
+  });
+  return () => latest;
+}
+
+/**
+ * The contract's state AFTER the human approval. Distinguishes two different defects:
+ * - it becomes "Analyzed" only after a manual reload  → the page does not self-update (UX finding);
+ * - it never becomes "Analyzed", even after reloads    → the approval did not settle (hard failure,
+ *   reported with the backend's own answer).
+ */
+async function expectApprovedDocumentSettled(
+  page: Page,
+  filename: string,
+  latestList: () => PolledDocument[],
+): Promise<void> {
+  const badge = () => documentRow(page, filename).getByTestId("document-status-badge");
+  const analysed = /analy[sz]ed/i;
+  try {
+    await expect(badge()).toHaveText(analysed, { timeout: 120_000 });
+    return;
+  } catch {
+    test.info().annotations.push({
+      type: "finding",
+      description: `DOCUMENT_STATE_STALE_WITHOUT_RELOAD: ${filename} still read "${await badge()
+        .innerText()
+        .catch(() => "?")}" 120 s after the approval`,
+    });
+  }
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    await page.reload();
+    await page.getByTestId("documents-page").waitFor({ state: "visible", timeout: 30_000 });
+    const text = await badge().innerText({ timeout: 10_000 }).catch(() => "");
+    if (analysed.test(text)) {
+      test.info().annotations.push({
+        type: "finding",
+        description: `DOCUMENT_NEEDS_RELOAD: ${filename} is Analyzed on the server but the page did not show it without a reload`,
+      });
+      return;
+    }
+    await page.waitForTimeout(8_000);
+  }
+  const mine = latestList().find((item) => item.filename === filename);
+  throw new Error(
+    `TRIPLET_APPROVAL_NOT_SETTLED: ${filename} never became Analyzed after the approval. ` +
+      `Backend list answer: ${JSON.stringify(mine ?? latestList().map((i) => i.filename))}`,
+  );
+}
+
 async function createProjectThroughWizard(page: Page): Promise<string> {
   await openProjects(page);
   await page.goto("/projects/new");
@@ -108,6 +178,8 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     const projectId = await test.step("create the project through the wizard", () =>
       createProjectThroughWizard(page));
 
+    const latestDocuments = trackDocumentsList(page, projectId);
+
     // 2 ── uploads the contract and waits for it, without reloading
     const contract = await test.step("upload the contract", () =>
       uploadDocumentThroughUi(page, recorder, {
@@ -150,13 +222,18 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
       await page.getByRole("button", { name: /confirm approve/i }).click();
       const response = await approved;
-      expect(response.status(), "the approval must be accepted").toBeLessThan(300);
+      const approvalBody = (await response.text().catch(() => "")).slice(0, 400);
+      test.info().annotations.push({
+        type: "hitl-approval",
+        description: `HTTP ${response.status()} ${approvalBody}`,
+      });
+      expect(response.status(), `the approval must be accepted: ${approvalBody}`).toBeLessThan(300);
       recorder.record("hitlApprovalStatus", response.status());
     });
 
     await test.step("the approved contract finishes analysis and persists", async () => {
       await openProjectTab(page, projectId, "documents");
-      await expectDocumentState(page, "triplet-contract.pdf", /analy[sz]ed/i);
+      await expectApprovedDocumentSettled(page, "triplet-contract.pdf", latestDocuments);
     });
 
     // 4 ── uploads the budget and the schedule
