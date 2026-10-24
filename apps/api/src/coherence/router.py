@@ -1582,23 +1582,28 @@ async def get_coherence_dashboard(
     # alerts table count computed above. A fixed "Analysis first" rule let an
     # older Analysis (alerts_count = 0) mask the alerts produced by a newer
     # /evaluate, so the dashboard said 0 while the Alerts page listed them.
+    # Timestamps are compared as UTC (naive values are UTC by contract). A source
+    # without a usable timestamp never displaces the other one, and unknown counts
+    # are never read as zero: an /evaluate with insufficient evidence that reported no
+    # alerts says nothing about the alerts an earlier Analysis found.
     analysis_count = latest_analysis.alerts_count if latest_analysis is not None else None
-    analysis_at = (
+    analysis_at = _normalize_utc_datetime(
         (latest_analysis.updated_at or latest_analysis.completed_at)
         if latest_analysis is not None
         else None
     )
-    result_count = (
-        len(coherence_result.alerts)
-        if coherence_result is not None and coherence_result.alerts is not None
-        else None
+    result_count: int | None = None
+    if coherence_result is not None and coherence_result.alerts is not None:
+        result_alerts = len(coherence_result.alerts)
+        evidence_insufficient = (coherence_result.score_reason or "").startswith("insufficient")
+        if result_alerts > 0 or not evidence_insufficient:
+            result_count = result_alerts
+    result_at = _normalize_utc_datetime(
+        coherence_result.calculated_at if coherence_result is not None else None
     )
-    result_at = coherence_result.calculated_at if coherence_result is not None else None
     if analysis_count is not None and result_count is not None:
         result_is_newer = (
-            analysis_at is not None
-            and result_at is not None
-            and result_at.replace(tzinfo=None) > analysis_at.replace(tzinfo=None)
+            analysis_at is not None and result_at is not None and result_at > analysis_at
         )
         alert_count = result_count if result_is_newer else analysis_count
     elif analysis_count is not None:
