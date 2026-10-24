@@ -203,7 +203,7 @@ def test_two_contract_clauses_with_different_completion_dates_are_not_assessed()
     inputs = assemble_cross_doc_inputs(clauses, schedule_planned_finish=SCHEDULE_FINISH)
     outcome = schedule_overruns_deadline(inputs)
     assert isinstance(outcome, CrossDocNotAssessed)
-    assert "conflicting_contract_completion_dates" in outcome.detail
+    assert "conflicting_or_ambiguous_contract_completion_dates" in outcome.detail
     assert cross_document_signals(clauses, schedule_planned_finish=SCHEDULE_FINISH) == []
 
 
@@ -279,17 +279,71 @@ def test_a_clause_stating_the_completion_date_yields_a_completion_deadline(
     "text",
     [
         "El plazo de ejecución será de 18 meses desde la firma.",  # a duration, not a date
-        "La fecha de finalización será el 30/06/2027.",  # DD/MM is ambiguous
         "Hito 2: la fecha de finalización de la cimentación es el 2027-01-31.",  # milestone
         "Partial completion date: 2027-01-31.",  # partial
         "El inicio de los trabajos es el 2027-01-31 y la fecha de finalización el 2027-12-31.",
-        "La fecha de finalización será el 2027-06-30 o el 2027-07-15.",  # two dates, one sentence
         "La reunión será el 2027-06-30.",  # a date, but not a completion
         "La fecha de finalización se fijará de común acuerdo.",  # no date
     ],
 )
-def test_text_that_does_not_state_one_completion_date_yields_none(text: str) -> None:
+def test_text_that_does_not_state_a_completion_date_yields_none(text: str) -> None:
     assert _extract_contract_completion_deadline(text) is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "text",
+    [
+        "La fecha de finalización será el 30/06/2027.",  # DD/MM vs MM/DD: locale not stated
+        "Completion date: 2027-06-30T23:30:00-05:00.",  # a timestamp, not a calendar date
+        "Completion date: 2027-06-30 23:30.",  # a time rides along
+        "Completion date: 2027-13-40.",  # impossible date
+        "La fecha de finalización será el 2027-06-30 o el 2027-07-15.",  # two dates, one sentence
+        "The completion date is 2027-06-30. The contractual completion date is revised to "
+        "2027-12-31.",  # two statements in one clause
+        "The completion date is 2027-06-30. The practical completion date is 30/09/2027.",
+    ],
+)
+def test_an_ambiguous_completion_statement_is_returned_as_ambiguous_never_resolved(
+    text: str,
+) -> None:
+    statement = _extract_contract_completion_deadline(text)
+    assert statement is not None
+    assert statement["ambiguous"] is True
+    assert "date" not in statement
+
+
+@pytest.mark.unit
+def test_the_same_date_stated_twice_in_one_clause_is_one_deadline() -> None:
+    text = "La fecha de finalización será el 2027-06-30. La fecha de terminación es el 30 de junio de 2027."
+    assert _extract_contract_completion_deadline(text) == {
+        "date": "2027-06-30",
+        "kind": DATE_KIND_CONTRACT_COMPLETION,
+        "basis": "stated_in_clause_text",
+    }
+
+
+@pytest.mark.unit
+def test_an_ambiguous_clause_makes_the_assembled_deadline_not_assessed() -> None:
+    clause = Clause(
+        id="clause-17",
+        text="Contract clause",
+        data={
+            "document_id": DOC_C,
+            "evidence_location": {"revision_id": REV_C},
+            "completion_deadline": {
+                "kind": DATE_KIND_CONTRACT_COMPLETION,
+                "ambiguous": True,
+                "dates": ["2027-06-30", "2027-12-31"],
+            },
+        },
+    )
+    outcome = schedule_overruns_deadline(
+        assemble_cross_doc_inputs([clause], schedule_planned_finish=SCHEDULE_FINISH)
+    )
+    assert isinstance(outcome, CrossDocNotAssessed)
+    assert outcome.reason == "DATE_NOT_ASSESSED"
+    assert cross_document_signals([clause], schedule_planned_finish=SCHEDULE_FINISH) == []
 
 
 # ── schedule-side summary ────────────────────────────────────────────────────
