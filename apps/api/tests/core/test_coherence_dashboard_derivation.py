@@ -124,7 +124,9 @@ async def test_dashboard_uses_analysis_updated_at_and_falls_back_to_coherence_re
 
     assert response.coherence_score == 61
     assert response.sub_scores["TECHNICAL"] == 63
-    assert response.alert_count == 4
+    # The score is the evaluate's, so the count is the evaluate's too (its alert list is empty): the
+    # newer, unscored Analysis' 4 alerts belong to a generation that has no score to show.
+    assert response.alert_count == 0
     assert response.last_updated.isoformat().startswith(
         analysis.updated_at.replace(tzinfo=None).isoformat()
     )
@@ -263,6 +265,7 @@ async def _seed_alert_count_sources(
     evaluate_alerts: int,
     evaluate_score: int,
     evaluate_reason: str | None = None,
+    analysis_score: float | None = None,
 ) -> ProjectORM:
     """One completed Analysis and one /evaluate result, ``analysis_age`` apart
     (positive = the Analysis is older than the evaluate)."""
@@ -310,7 +313,7 @@ async def _seed_alert_count_sources(
         analysis_type=AnalysisType.COHERENCE,
         status=AnalysisStatus.COMPLETED,
         result_json={"source": "analysis"},
-        coherence_score=None,
+        coherence_score=analysis_score,
         coherence_breakdown=None,
         alerts_count=analysis_alerts_count,
         completed_at=evaluated_at - analysis_age,
@@ -330,6 +333,7 @@ async def test_dashboard_alert_count_keeps_newer_analysis_over_older_evaluate(
         test_tenant,
         code="COH-NEWER-ANALYSIS",
         analysis_alerts_count=5,
+        analysis_score=90,
         analysis_age=timedelta(minutes=-10),
         evaluate_alerts=2,
         evaluate_score=60,
@@ -379,6 +383,63 @@ async def test_dashboard_alert_count_assessed_empty_evaluate_is_a_real_zero(
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert response.alert_count == 0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_never_mixes_an_old_scored_analysis_with_a_newer_evaluates_alerts(
+    db, test_tenant
+) -> None:
+    """Old Analysis: score 90, 0 alerts. Newer evaluate: score 60, 2 alerts. One generation only."""
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-NO-MIX-NEW-EVAL",
+        analysis_alerts_count=0,
+        analysis_score=90,
+        analysis_age=timedelta(minutes=10),
+        evaluate_alerts=2,
+        evaluate_score=60,
+    )
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert (response.coherence_score, response.alert_count) == (60, 2)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_keeps_a_newer_scored_analysis_whole(db, test_tenant) -> None:
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-NO-MIX-NEW-ANALYSIS",
+        analysis_alerts_count=0,
+        analysis_score=90,
+        analysis_age=timedelta(minutes=-10),
+        evaluate_alerts=2,
+        evaluate_score=60,
+    )
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert (response.coherence_score, response.alert_count) == (90, 0)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_equal_timestamps_keep_the_analysis_generation(db, test_tenant) -> None:
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-NO-MIX-TIE",
+        analysis_alerts_count=1,
+        analysis_score=90,
+        analysis_age=timedelta(0),
+        evaluate_alerts=2,
+        evaluate_score=60,
+    )
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert (response.coherence_score, response.alert_count) == (90, 1)
 
 
 @pytest.mark.asyncio

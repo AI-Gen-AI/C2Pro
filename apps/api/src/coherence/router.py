@@ -1564,52 +1564,72 @@ async def get_coherence_dashboard(
     )
     latest_alert_at = latest_alert_at_result.scalar()
 
-    # Determine global score and breakdown
-    sub_scores = _empty_sub_scores()
-    global_score: float | None = None
-
-    if latest_analysis and latest_analysis.coherence_score is not None:
-        global_score = latest_analysis.coherence_score
-        sub_scores = _normalized_sub_scores(latest_analysis.coherence_breakdown)
-    elif coherence_result:
-        global_score = coherence_result.global_score
-        sub_scores = _normalized_sub_scores(coherence_result.category_scores)
-    elif project.coherence_score is not None:
-        global_score = float(project.coherence_score)
-
-    # alert_count follows the MOST RECENT source, not a fixed priority: a
-    # completed Analysis, or the latest /evaluate CoherenceResult, else the
-    # alerts table count computed above. A fixed "Analysis first" rule let an
-    # older Analysis (alerts_count = 0) mask the alerts produced by a newer
-    # /evaluate, so the dashboard said 0 while the Alerts page listed them.
-    # Timestamps are compared as UTC (naive values are UTC by contract). A source
-    # without a usable timestamp never displaces the other one, and unknown counts
-    # are never read as zero: an /evaluate with insufficient evidence that reported no
-    # alerts says nothing about the alerts an earlier Analysis found.
-    analysis_count = latest_analysis.alerts_count if latest_analysis is not None else None
+    # The dashboard shows ONE generation of the project's Coherence: the score, its sub-scores and the
+    # alert count come from the same snapshot (a completed Analysis or the latest /coherence/evaluate
+    # CoherenceResult). Mixing them showed "score 90" (an old Analysis) beside "2 alerts" (a newer
+    # evaluate that scored 60). Timestamps are compared as UTC (naive values are UTC by contract); a
+    # snapshot without a usable timestamp never displaces the other (Analysis stays the tie-break).
     analysis_at = _normalize_utc_datetime(
         (latest_analysis.updated_at or latest_analysis.completed_at)
         if latest_analysis is not None
         else None
     )
+    result_at = _normalize_utc_datetime(
+        coherence_result.calculated_at if coherence_result is not None else None
+    )
+    analysis_scored = latest_analysis is not None and latest_analysis.coherence_score is not None
+    # A persisted result carries a numeric score only when the evidence supported one; one marked as
+    # insufficient evidence has no score to show and is never the snapshot.
+    result_scored = coherence_result is not None and not (
+        coherence_result.score_reason or ""
+    ).startswith("insufficient")
+    snapshot: str | None = None
+    if analysis_scored and result_scored:
+        result_is_newer = (
+            analysis_at is not None and result_at is not None and result_at > analysis_at
+        )
+        snapshot = "result" if result_is_newer else "analysis"
+    elif analysis_scored:
+        snapshot = "analysis"
+    elif result_scored:
+        snapshot = "result"
+
+    sub_scores = _empty_sub_scores()
+    global_score: float | None = None
+    if snapshot == "analysis" and latest_analysis is not None:
+        global_score = latest_analysis.coherence_score
+        sub_scores = _normalized_sub_scores(latest_analysis.coherence_breakdown)
+    elif snapshot == "result" and coherence_result is not None:
+        global_score = coherence_result.global_score
+        sub_scores = _normalized_sub_scores(coherence_result.category_scores)
+    elif project.coherence_score is not None:
+        global_score = float(project.coherence_score)
+
+    # Counts are never read as zero when unknown: an Analysis count is a stored integer, a result's
+    # count is its alert list; an /evaluate with insufficient evidence that reported no alerts says
+    # nothing about the alerts an earlier Analysis found.
+    analysis_count = latest_analysis.alerts_count if latest_analysis is not None else None
     result_count: int | None = None
     if coherence_result is not None and coherence_result.alerts is not None:
         result_alerts = len(coherence_result.alerts)
         evidence_insufficient = (coherence_result.score_reason or "").startswith("insufficient")
         if result_alerts > 0 or not evidence_insufficient:
             result_count = result_alerts
-    result_at = _normalize_utc_datetime(
-        coherence_result.calculated_at if coherence_result is not None else None
-    )
-    if analysis_count is not None and result_count is not None:
-        result_is_newer = (
-            analysis_at is not None and result_at is not None and result_at > analysis_at
-        )
-        alert_count = result_count if result_is_newer else analysis_count
-    elif analysis_count is not None:
+    if snapshot == "analysis" and analysis_count is not None:
         alert_count = analysis_count
-    elif result_count is not None:
+    elif snapshot == "result" and result_count is not None:
         alert_count = result_count
+    elif snapshot is None:
+        # No scored snapshot: report the most recent source that knows its count.
+        if analysis_count is not None and result_count is not None:
+            result_is_newer = (
+                analysis_at is not None and result_at is not None and result_at > analysis_at
+            )
+            alert_count = result_count if result_is_newer else analysis_count
+        elif analysis_count is not None:
+            alert_count = analysis_count
+        elif result_count is not None:
+            alert_count = result_count
 
     # Calculate last_updated timestamp
     candidates = [
