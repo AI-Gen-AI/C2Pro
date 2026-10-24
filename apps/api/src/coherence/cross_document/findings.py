@@ -10,7 +10,9 @@ Refers to Suite ID: TS-UD-COH-XDOC-FINDING-001.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any
 
 from src.coherence.models import CoherenceCategory
 
@@ -29,6 +31,10 @@ class CrossDocFinding:
     direction: str  # "exceeds" | "below"
     materiality_ratio: float  # |delta| / max(|left|, |right|)
     summary: str
+    # Optional traceability for findings built from sourced evidence (dates): the clause the
+    # alert should point at, and the expected/observed sources (document, revision, locator).
+    source_clause_id: str | None = None
+    evidence: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def compared_values(self) -> dict[str, float]:
@@ -43,7 +49,9 @@ class CrossDocNotAssessed:
     """
 
     rule_id: str
-    reason: str  # "CURRENCY_MISMATCH" | "MIXED_CURRENCY"
+    # "CURRENCY_MISMATCH" | "MIXED_CURRENCY" | "DATE_KIND_NOT_COMPARABLE" | "UNSOURCED_DATE"
+    # | "AMBIGUOUS_DATE" | "DATE_NOT_ASSESSED"
+    reason: str
     left_key: str
     right_key: str
     detail: str

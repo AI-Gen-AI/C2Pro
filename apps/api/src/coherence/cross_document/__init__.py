@@ -42,10 +42,18 @@ from src.coherence.cross_document.identity import (
     RULE_PROJECT_IDENTITY_MISMATCH,
     project_identity_mismatch,
 )
-from src.coherence.cross_document.inputs import ProjectCrossDocInputs
+from src.coherence.cross_document.inputs import (
+    DATE_KIND_CONTRACT_COMPLETION,
+    DATE_KIND_SCHEDULE_FINISH,
+    DatedSource,
+    ProjectCrossDocInputs,
+)
 from src.coherence.cross_document.signal_adapter import to_finding_signal
 
 __all__ = [
+    "DATE_KIND_CONTRACT_COMPLETION",
+    "DATE_KIND_SCHEDULE_FINISH",
+    "DatedSource",
     "RULE_BOM_VS_BUDGET",
     "RULE_BUDGET_EXCEEDS_CONTRACT",
     "RULE_CONTRACT_VS_BUDGET",
