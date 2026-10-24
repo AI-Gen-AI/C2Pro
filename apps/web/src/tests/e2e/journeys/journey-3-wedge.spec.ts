@@ -350,8 +350,11 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
   await gotoStable(page, `/projects/${liveProjectId}/report?mode=audit`);
-  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
-  await expect(page.getByText("HITL decisions")).toBeVisible();
-  await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
+  // The audit report composes five API reads on a route the dev server compiles on first
+  // visit: give it an explicit, bounded budget (the default 5 s failed intermittently).
+  const reportReady = { timeout: 30_000 };
+  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible(reportReady);
+  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible(reportReady);
+  await expect(page.getByText("HITL decisions")).toBeVisible(reportReady);
+  await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled(reportReady);
 });
