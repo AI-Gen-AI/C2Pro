@@ -2,7 +2,6 @@
  * Test Suite ID: TS-E2E-WEDGE-003
  * Coverage: E2E-W1..W5 Level-1 wedge journey.
  */
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const liveProjectId = "00000000-0000-0000-0000-00000000c303";
@@ -11,7 +10,7 @@ const projectName = "Wedge Gate Pilot";
 const liveContractId = "00000000-0000-0000-0000-00000000d401";
 const liveReviewItemId = "00000000-0000-0000-0000-00000000f601";
 const liveReviewRowId = "00000000-0000-0000-0000-00000000f701";
-const clerkE2eUserId = "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
+const clerkE2eUserId = process.env.CLERK_E2E_USER_ID ?? "user_3H0l5NCcPYLnfWokjdm2D8m3iGR";
 
 const documents = [
   {
@@ -201,53 +200,75 @@ async function waitForAuthenticatedSession(page: Page) {
       response.status() === 200,
   );
 
-  await page.goto("/projects");
+  await gotoStable(page, "/projects");
   await projectsResponse;
 }
 
-async function getSessionSubject(page: Page): Promise<string | null> {
-  return page.evaluate(async () => {
-    const token = await window.Clerk?.session?.getToken();
-    if (!token) return null;
-
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-
-    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const subject = (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
-    return typeof subject === "string" ? subject : null;
-  });
+/**
+ * goto() that survives a navigation still in flight from the previous step
+ * (`net::ERR_ABORTED`): the Next.js app can issue a client-side redirect right
+ * after /projects settles. Only that abort is retried; any other failure surfaces.
+ */
+async function gotoStable(page: Page, url: string) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(url);
+      return;
+    } catch (error) {
+      if (!/ERR_ABORTED/.test(String(error)) || attempt === 2) throw error;
+      await page.waitForLoadState("domcontentloaded");
+    }
+  }
 }
 
-test.beforeEach(async ({ page }) => {
-  await setupClerkTestingToken({ page });
-  await page.goto("/");
-  await page.waitForFunction(() => window.Clerk?.loaded === true);
+async function getSessionSubject(page: Page): Promise<string | null> {
+  // The Next.js app can still be navigating (RSC redirect, Clerk hydration) right
+  // after goto(); evaluating in a document that is being replaced throws
+  // "Execution context was destroyed". Retry until a stable document answers.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await page.waitForLoadState("domcontentloaded");
+      await page.waitForFunction(() => window.Clerk?.loaded === true, undefined, {
+        timeout: 30_000,
+      });
+      return await page.evaluate(async () => {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return null;
 
-  if (await getSessionSubject(page)) {
-    await page.evaluate(async () => window.Clerk?.signOut());
-    await page.waitForFunction(() => window.Clerk?.session === null);
+        const payload = token.split(".")[1];
+        if (!payload) return null;
+
+        const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+        const subject = (JSON.parse(atob(normalizedPayload)) as { sub?: unknown }).sub;
+        return typeof subject === "string" ? subject : null;
+      });
+    } catch (error) {
+      lastError = error;
+      if (!/Execution context was destroyed|navigation/i.test(String(error))) throw error;
+      await page.waitForTimeout(500);
+    }
   }
+  throw lastError;
+}
 
-  await clerk.signIn({
-    page,
-    signInParams: {
-      strategy: "password",
-      identifier: "testuser@c2pro.com",
-      password: "Testpasword123",
-    },
-  });
+// The chromium project restores the authenticated Clerk session produced by
+// auth.setup.ts. Signing out and signing in again here only raced that session
+// (and required a credential literal in the repository), so assert the restored
+// identity instead.
+test.beforeEach(async ({ page }) => {
+  await waitForAuthenticatedSession(page);
 
   const sessionSubject = await getSessionSubject(page);
   expect(sessionSubject).toBe(clerkE2eUserId);
-
-  await waitForAuthenticatedSession(page);
 });
 
 test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
+  // First-compiled routes (documents, coherence, evidence, review, report) under the dev server.
+  test.setTimeout(120_000);
   await installWedgeRoutes(page);
 
-  await page.goto(`/projects/${projectId}/documents`);
+  await gotoStable(page, `/projects/${projectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
   await expect(page.getByText(/triplet complete/i)).toBeVisible();
   await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
@@ -256,17 +277,17 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   await page.getByRole("button", { name: /evaluate coherence/i }).click();
 
-  await page.goto(`/projects/${projectId}/coherence?cohV1Scenario=full-triplet`);
+  await gotoStable(page, `/projects/${projectId}/coherence?cohV1Scenario=full-triplet`);
   await expect(page.getByRole("heading", { name: "Coherence Dashboard" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Coherence Score: 82/100, Good" })).toBeVisible();
 
-  await page.goto(`/projects/${projectId}/documents`);
+  await gotoStable(page, `/projects/${projectId}/documents`);
   await expect(page.getByRole("link", { name: "baseline-contract.pdf" })).toHaveAttribute(
     "href",
     `/projects/${projectId}/evidence?documentId=doc-contract`,
   );
 
-  await page.goto(`/projects/${projectId}/review`);
+  await gotoStable(page, `/projects/${projectId}/review`);
   await expect(page.getByTestId("review-page")).toBeVisible();
   await expect(page.getByText(/budget deviation has supporting evidence/i)).toBeVisible();
   await page.getByTestId("approve-review-wedge-1").click();
@@ -276,16 +297,34 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
-  await page.goto(`/projects/${projectId}/report?mode=audit`);
+  await gotoStable(page, `/projects/${projectId}/report?mode=audit`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
 
 test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
-  await page.goto(`/projects/${liveProjectId}/documents`);
+  // Five real routes (first-time Next.js compilation in CI), a real HITL approval
+  // and the audit report: far beyond the 30 s default. An explicit budget keeps
+  // a genuine failure a locator failure instead of a masked global timeout.
+  test.setTimeout(180_000);
+  const documentsListResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      response.url().includes(`/projects/${liveProjectId}/documents`),
+    { timeout: 60_000 },
+  );
+  await gotoStable(page, `/projects/${liveProjectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
-  await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
+  // Surface what the backend actually answered when the seeded names are not rendered.
+  const listed = await documentsListResponse.then(
+    async (response) => `${response.status()} ${(await response.text()).slice(0, 600)}`,
+    () => "no documents list response observed",
+  );
+  await expect(
+    page.getByText("baseline-contract.pdf"),
+    `documents list answered: ${listed}`,
+  ).toBeVisible();
   await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
   await expect(page.getByText("approved-schedule.xlsx")).toBeVisible();
 
@@ -294,7 +333,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
     `/projects/${liveProjectId}/evidence?documentId=${liveContractId}`,
   );
 
-  await page.goto(`/projects/${liveProjectId}/review`);
+  await gotoStable(page, `/projects/${liveProjectId}/review`);
   await expect(page.getByTestId("review-page")).toBeVisible();
   await expect(page.getByTestId(`review-item-${liveReviewItemId}`)).toBeVisible();
 
@@ -310,9 +349,12 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
-  await page.goto(`/projects/${liveProjectId}/report?mode=audit`);
-  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
-  await expect(page.getByText("HITL decisions")).toBeVisible();
-  await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
+  await gotoStable(page, `/projects/${liveProjectId}/report?mode=audit`);
+  // The audit report composes five API reads on a route the dev server compiles on first
+  // visit: give it an explicit, bounded budget (the default 5 s failed intermittently).
+  const reportReady = { timeout: 30_000 };
+  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible(reportReady);
+  await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible(reportReady);
+  await expect(page.getByText("HITL decisions")).toBeVisible(reportReady);
+  await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled(reportReady);
 });

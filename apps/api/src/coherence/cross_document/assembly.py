@@ -16,7 +16,12 @@ import logging
 from collections.abc import Iterable, Mapping
 
 from src.coherence.cross_document.comparators import assess_numeric_comparators
-from src.coherence.cross_document.inputs import ProjectCrossDocInputs
+from src.coherence.cross_document.inputs import (
+    DATE_KIND_CONTRACT_COMPLETION,
+    DATE_KIND_SCHEDULE_FINISH,
+    DatedSource,
+    ProjectCrossDocInputs,
+)
 from src.coherence.cross_document.signal_adapter import to_finding_signal
 from src.coherence.models import Clause, FindingSignal
 
@@ -52,8 +57,83 @@ def _num(value: object) -> float | None:
     return None
 
 
-def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInputs:
+def _revision_id(data: Mapping[str, object]) -> str | None:
+    location = data.get("evidence_location")
+    if isinstance(location, Mapping):
+        revision = location.get("revision_id")
+        if isinstance(revision, str) and revision:
+            return revision
+    return None
+
+
+def _contract_completion(
+    candidates: list[tuple[Clause, Mapping[str, object]]],
+) -> DatedSource | None:
+    """The contractual completion deadline, from clauses that state it explicitly.
+
+    Two clauses stating different dates, or any clause whose completion statement is itself
+    ambiguous (several dates, a time, a locale-dependent numeric date), make the deadline
+    ambiguous: the source is kept with its reason (so the comparison is reported NOT_ASSESSED)
+    rather than picking one of them.
+    """
+    sources: dict[str, DatedSource] = {}
+    ambiguous = False
+    for clause, declared in candidates:
+        if declared.get("ambiguous") is True:
+            ambiguous = True
+            continue
+        value = declared.get("date")
+        if not isinstance(value, str) or not value:
+            continue
+        data = getattr(clause, "data", None) or {}
+        document_id = data.get("document_id")
+        sources.setdefault(
+            value,
+            DatedSource(
+                kind=str(declared.get("kind") or DATE_KIND_CONTRACT_COMPLETION),
+                value=value,
+                document_id=str(document_id) if document_id else None,
+                revision_id=_revision_id(data),
+                locator=clause.id,
+            ),
+        )
+    if not sources and not ambiguous:
+        return None
+    if ambiguous or len(sources) > 1:
+        return DatedSource(
+            kind=DATE_KIND_CONTRACT_COMPLETION,
+            reason="conflicting_or_ambiguous_contract_completion_dates",
+        )
+    return next(iter(sources.values()))
+
+
+def _schedule_finish(declared: Mapping[str, object] | None) -> DatedSource | None:
+    if not declared:
+        return None
+    value = declared.get("date")
+    document_id = declared.get("document_id")
+    revision_id = declared.get("revision_id")
+    locator = declared.get("source_locator")
+    return DatedSource(
+        kind=DATE_KIND_SCHEDULE_FINISH,
+        value=value if isinstance(value, str) and value else None,
+        document_id=str(document_id) if document_id else None,
+        revision_id=str(revision_id) if revision_id else None,
+        locator=str(locator) if locator else None,
+        reason=str(declared.get("reason") or "") or None,
+    )
+
+
+def assemble_cross_doc_inputs(
+    clauses: Iterable[Clause],
+    *,
+    schedule_planned_finish: Mapping[str, object] | None = None,
+) -> ProjectCrossDocInputs:
     """Build `ProjectCrossDocInputs` from the totals carried in clause data.
+
+    ``schedule_planned_finish`` is the project-level schedule source (the current schedule
+    revision's observed planned finish with its document/revision/row identity); it is not
+    clause evidence, so it is passed beside the clauses, like the project name.
 
     Contract/budget totals are taken as the maximum seen (the project-level figure
     dominates individual line totals). Absent values stay None so the comparators
@@ -66,10 +146,15 @@ def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInput
     currency: str | None = None
     contract_currencies: set[str] = set()
     budget_currencies: set[str] = set()
+    completion_candidates: list[tuple[Clause, Mapping[str, object]]] = []
 
     for clause in clauses:
         data = getattr(clause, "data", None) or {}
         clause_currency = _currency(data.get("currency"))
+
+        declared_completion = data.get("completion_deadline")
+        if isinstance(declared_completion, Mapping):
+            completion_candidates.append((clause, declared_completion))
 
         contract_total = _num(data.get("contract_total"))
         if contract_total is None:
@@ -105,15 +190,23 @@ def assemble_cross_doc_inputs(clauses: Iterable[Clause]) -> ProjectCrossDocInput
         currency=currency,
         contract_currencies=frozenset(contract_currencies),
         budget_currencies=frozenset(budget_currencies),
+        contract_completion=_contract_completion(completion_candidates),
+        schedule_finish=_schedule_finish(schedule_planned_finish),
     )
 
 
-def cross_document_signals(clauses: Iterable[Clause]) -> list[FindingSignal]:
+def cross_document_signals(
+    clauses: Iterable[Clause],
+    *,
+    schedule_planned_finish: Mapping[str, object] | None = None,
+) -> list[FindingSignal]:
     """Assemble inputs, run the numeric comparators, and adapt findings to signals.
 
     NOT_ASSESSED comparisons produce no signal: they are logged with their reason.
     """
-    assessment = assess_numeric_comparators(assemble_cross_doc_inputs(clauses))
+    assessment = assess_numeric_comparators(
+        assemble_cross_doc_inputs(clauses, schedule_planned_finish=schedule_planned_finish)
+    )
     for skipped in assessment.not_assessed:
         logger.info(
             "cross-document %s NOT_ASSESSED (%s): %s",

@@ -59,7 +59,7 @@ from .graph.graph import evaluate_coherence_async
 from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
-from .schedule_clause_builder import build_schedule_clauses
+from .schedule_clause_builder import build_schedule_clauses, load_schedule_planned_finish
 from .scoring import ScoringService
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
@@ -1066,6 +1066,17 @@ async def evaluate_project_coherence(
                 select(ProjectORM.name).where(ProjectORM.id == payload.project_id)
             )
 
+    # The schedule's observed planned finish (with its document/revision/row identity) for the
+    # contract-completion comparator. Best-effort: a failure leaves the comparison absent.
+    schedule_planned_finish: dict[str, Any] | None = None
+    if payload.project_id:
+        try:
+            schedule_planned_finish = await load_schedule_planned_finish(
+                db, payload.project_id, current_user.tenant_id
+            )
+        except Exception:
+            logger.warning("coherence_schedule_planned_finish_load_failed", exc_info=True)
+
     # Create evaluation config
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
@@ -1074,6 +1085,7 @@ async def evaluate_project_coherence(
         tenant_id=str(current_user.tenant_id),
         project_id=str(payload.project_id) if payload.project_id else None,
         project_name=project_name,
+        schedule_planned_finish=schedule_planned_finish,
     )
 
     # Evaluate using LangGraph subgraph
@@ -1577,14 +1589,39 @@ async def get_coherence_dashboard(
     elif project.coherence_score is not None:
         global_score = float(project.coherence_score)
 
-    # alert_count follows the same source priority as the score (see docstring):
-    # a completed Analysis first, then the latest /evaluate CoherenceResult, else
-    # the alerts table count computed above. Without this fallback an evaluate-only
-    # project (no analysis pipeline run) always reported alert_count = 0.
-    if latest_analysis and latest_analysis.alerts_count is not None:
-        alert_count = latest_analysis.alerts_count
-    elif coherence_result is not None and coherence_result.alerts is not None:
-        alert_count = len(coherence_result.alerts)
+    # alert_count follows the MOST RECENT source, not a fixed priority: a
+    # completed Analysis, or the latest /evaluate CoherenceResult, else the
+    # alerts table count computed above. A fixed "Analysis first" rule let an
+    # older Analysis (alerts_count = 0) mask the alerts produced by a newer
+    # /evaluate, so the dashboard said 0 while the Alerts page listed them.
+    # Timestamps are compared as UTC (naive values are UTC by contract). A source
+    # without a usable timestamp never displaces the other one, and unknown counts
+    # are never read as zero: an /evaluate with insufficient evidence that reported no
+    # alerts says nothing about the alerts an earlier Analysis found.
+    analysis_count = latest_analysis.alerts_count if latest_analysis is not None else None
+    analysis_at = _normalize_utc_datetime(
+        (latest_analysis.updated_at or latest_analysis.completed_at)
+        if latest_analysis is not None
+        else None
+    )
+    result_count: int | None = None
+    if coherence_result is not None and coherence_result.alerts is not None:
+        result_alerts = len(coherence_result.alerts)
+        evidence_insufficient = (coherence_result.score_reason or "").startswith("insufficient")
+        if result_alerts > 0 or not evidence_insufficient:
+            result_count = result_alerts
+    result_at = _normalize_utc_datetime(
+        coherence_result.calculated_at if coherence_result is not None else None
+    )
+    if analysis_count is not None and result_count is not None:
+        result_is_newer = (
+            analysis_at is not None and result_at is not None and result_at > analysis_at
+        )
+        alert_count = result_count if result_is_newer else analysis_count
+    elif analysis_count is not None:
+        alert_count = analysis_count
+    elif result_count is not None:
+        alert_count = result_count
 
     # Calculate last_updated timestamp
     candidates = [
