@@ -343,6 +343,13 @@ async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
 
     # Do NOT call the internal mirror directly: persistence is part of the API flow.
     # Read after /evaluate's transaction boundary, not from an uncommitted fixture.
+    scored_rows = (
+        await db.execute(
+            text("SELECT count(*) FROM coherence_results WHERE project_id = :p"),
+            {"p": project_id},
+        )
+    ).scalar_one()
+    assert scored_rows == 0, "scoreless findings must not fabricate a scored snapshot"
 
     row = (
         await db.execute(
