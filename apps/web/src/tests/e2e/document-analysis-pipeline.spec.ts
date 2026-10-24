@@ -260,11 +260,10 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     if ((await alertsTab.count()) > 0) {
       await alertsTab.first().click();
-      await page.waitForLoadState("networkidle");
-
-      // Should now be on alerts page
-      const url = page.url();
-      expect(url).toContain("alerts");
+      // The destination is the contract of this test; "networkidle" never settles on a page that
+      // keeps polling (it timed out the whole test in Nightly 123), so wait for the URL itself.
+      await page.waitForURL(/alerts/, { timeout: 30_000 });
+      expect(page.url()).toContain("alerts");
     }
 
     // Navigate back to documents
@@ -274,10 +273,8 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     if ((await docsTab.count()) > 0) {
       await docsTab.first().click();
-      await page.waitForLoadState("networkidle");
-
-      const url = page.url();
-      expect(url).toContain("documents");
+      await page.waitForURL(/documents/, { timeout: 30_000 });
+      expect(page.url()).toContain("documents");
     }
   });
 
