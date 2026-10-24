@@ -56,6 +56,10 @@ from src.documents.application.document_source import (
     fetch_source_file,
     resolve_source_revision,
 )
+from src.documents.application.parse_document_use_case import (
+    _extract_budget_currencies,
+    _extract_budget_stated_total,
+)
 from src.documents.application.revision_clauses import persist_revision_clauses
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
@@ -1692,6 +1696,24 @@ async def _ingest_owned(
     # never belong in document metadata. Recorded so an operator (or a
     # retry) can tell "nothing to embed" from "provider misconfigured".
     metadata["rag_ingestion_outcome"] = rag_result.outcome.value
+    if document.document_type == DocumentType.BUDGET:
+        # The declared budget total (and its denominations) is what coherence
+        # reconciles against the contract total (DET-CRS-CONBUD / NEGMARGIN).
+        # Only the manual /parse endpoint used to record it, so a normally
+        # uploaded budget never reached those rules. Mirror that persistence
+        # here, and never let a previous revision's total outlive a new
+        # revision that declares none.
+        stated_total = _extract_budget_stated_total(parsed_payload)
+        if stated_total is not None:
+            metadata["stated_total"] = stated_total
+            currencies = _extract_budget_currencies(parsed_payload)
+            if currencies:
+                metadata["stated_total_currencies"] = currencies
+            else:
+                metadata.pop("stated_total_currencies", None)
+        else:
+            metadata.pop("stated_total", None)
+            metadata.pop("stated_total_currencies", None)
     if parsed_text:
         metadata["parsed_text"] = parsed_text
         # C3a: parsed_text is overwritten per ingestion; the stamp lets readers serve
