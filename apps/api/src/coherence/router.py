@@ -59,7 +59,7 @@ from .graph.graph import evaluate_coherence_async
 from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
-from .schedule_clause_builder import build_schedule_clauses
+from .schedule_clause_builder import build_schedule_clauses, load_schedule_planned_finish
 from .scoring import ScoringService
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
@@ -1066,6 +1066,17 @@ async def evaluate_project_coherence(
                 select(ProjectORM.name).where(ProjectORM.id == payload.project_id)
             )
 
+    # The schedule's observed planned finish (with its document/revision/row identity) for the
+    # contract-completion comparator. Best-effort: a failure leaves the comparison absent.
+    schedule_planned_finish: dict[str, Any] | None = None
+    if payload.project_id:
+        try:
+            schedule_planned_finish = await load_schedule_planned_finish(
+                db, payload.project_id, current_user.tenant_id
+            )
+        except Exception:
+            logger.warning("coherence_schedule_planned_finish_load_failed", exc_info=True)
+
     # Create evaluation config
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
@@ -1074,6 +1085,7 @@ async def evaluate_project_coherence(
         tenant_id=str(current_user.tenant_id),
         project_id=str(payload.project_id) if payload.project_id else None,
         project_name=project_name,
+        schedule_planned_finish=schedule_planned_finish,
     )
 
     # Evaluate using LangGraph subgraph
