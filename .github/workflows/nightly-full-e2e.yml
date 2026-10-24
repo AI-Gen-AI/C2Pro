@@ -155,6 +155,20 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/nightly-results.json
         run: ./node_modules/.bin/playwright test --project=chromium --reporter=list,json
 
+      # TS-E2E-TRIPLET-001: the long three-document journey has its own step so its result is
+      # never mixed into the suite above. AI is mocked here (C2PRO_AI_MOCK=1) and the spec says so.
+      - name: Run triplet user journey (real backend, mock AI)
+        if: always()
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/triplet-results.json
+        run: ./node_modules/.bin/playwright test --project=triplet-journey --reporter=list,json
+
+      - name: Summarize triplet journey result
+        if: always()
+        working-directory: apps/web
+        run: node scripts/playwright-summary.mjs playwright-report/triplet-results.json "Triplet user journey (real backend, mock AI)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summarize suite result
         if: always()
         working-directory: apps/web
