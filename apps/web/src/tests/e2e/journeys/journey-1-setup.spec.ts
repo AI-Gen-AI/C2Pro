@@ -8,6 +8,8 @@ import { expect, test } from "@playwright/test";
 import { openProjects } from "../support/p0b-auth";
 
 const projectName = `Journey 1 Acceptance ${Date.now()}`;
+// The backend enforces project-code uniqueness across persistent acceptance runs.
+const projectCode = `J1${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
 test.describe("TS-E2E-J1-001: first project setup", () => {
   test("creates a project through the current three-step wizard", async ({ page }) => {
@@ -21,7 +23,7 @@ test.describe("TS-E2E-J1-001: first project setup", () => {
     await expect(wizard).toBeVisible();
     await expect(wizard).toContainText("Step 1 of 3");
     await wizard.getByTestId("project-name-input").fill(projectName);
-    await wizard.getByTestId("project-code-input").fill("JOURNEY1");
+    await wizard.getByTestId("project-code-input").fill(projectCode);
     await wizard.getByTestId("project-type-select").selectOption("building");
     await wizard.getByRole("button", { name: "Next step" }).click();
 

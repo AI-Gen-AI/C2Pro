@@ -43,8 +43,16 @@ async function goToProjectDocuments(page: Page) {
   await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * The alerts API is project-scoped and answers 404 for a project that does not
+ * exist, so the alerts tests target the deterministic FRT-192 wedge project
+ * (seeded with one alert by tests/e2e_seed/seed_wedge.py), not the fictional
+ * demo id above.
+ */
+const SEEDED_ALERTS_PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
+
 async function goToProjectAlerts(page: Page) {
-  await page.goto(`/projects/${DEMO_PROJECT_ID}/alerts`);
+  await page.goto(`/projects/${SEEDED_ALERTS_PROJECT_ID}/alerts`);
   // Wait for page to stabilize
   await page.waitForLoadState("networkidle");
 }
@@ -122,7 +130,7 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     // One of these should be visible
     await expect(
-      heading.or(alertsList.first()).or(emptyState)
+      heading.or(alertsList.first()).or(emptyState).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 
@@ -141,25 +149,21 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
       return;
     }
 
-    // Click first alert to view detail
-    await alertItems.first().click();
+    // The review center is a table: the severity and the description are columns of the alert
+    // row itself, and activating the row opens an ACTION dialog (resolve / approve / reject)
+    // that names the same alert. There is no separate detail view, so assert both surfaces.
+    // The Next.js dev error overlay is also a role=dialog; it is never accepted as the dialog.
+    const row = alertItems.first();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(/critical|high|medium|low/i);
+    await expect(row).toContainText(/\S{3,}/);
 
-    // Should show some detail view (dialog, drawer, or page)
-    const detailView = page.locator(
-      "[role='dialog'], [data-testid='alert-detail'], [data-testid='alert-drawer']"
-    );
-
-    // If the click opened a detail view, verify severity is shown
-    const detailCount = await detailView.count();
-    if (detailCount > 0) {
-      await expect(detailView.first()).toBeVisible();
-
-      // Severity should be displayed somewhere
-      const severityText = page.getByText(
-        /critical|high|medium|low|info/i
-      );
-      await expect(severityText.first()).toBeVisible();
-    }
+    await row.click();
+    const dialog = page.locator("[role='dialog']:not([data-nextjs-dialog])").first();
+    await expect(dialog).toBeVisible();
+    const alertTitle = (await dialog.getByTestId("alert-modal-context").innerText()).trim();
+    expect(alertTitle.length).toBeGreaterThan(2);
+    await expect(row).toContainText(alertTitle);
   });
 
   test("DAP-006: Alert approve/reject buttons are accessible", async ({ page }) => {
