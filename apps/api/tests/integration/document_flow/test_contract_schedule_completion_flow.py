@@ -333,24 +333,16 @@ async def test_the_provisional_advisory_does_not_move_the_score_or_the_scoring_s
 async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
     db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
-    """Persistence of the advisory through the real alert mirror (a score is not needed to test it)."""
-    from src.coherence.router import (
-        _mirror_coherence_alerts_to_alerts_table,
-        get_clauses_from_rag,
-    )
-
+    """A scoreless /evaluate itself must commit the provisional advisory to Alerts."""
     project_id, contract_doc, *_ = await _scenario(
         db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
     )
     result = await _evaluate(db, test_user, project_id)
+    assert result.overall_score is None, "this regression must exercise the score-withheld path"
     [advisory] = _schdead(result)
-    clauses = await get_clauses_from_rag(db, project_id, test_user.tenant_id)
 
-    await _mirror_coherence_alerts_to_alerts_table(
-        db=db, project_id=project_id, tenant_id=test_user.tenant_id,
-        alerts=[advisory], clauses=clauses,
-    )
-    await db.commit()
+    # Do NOT call the internal mirror directly: persistence is part of the API flow.
+    # Read after /evaluate's transaction boundary, not from an uncommitted fixture.
 
     row = (
         await db.execute(
