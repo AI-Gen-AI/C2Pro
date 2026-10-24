@@ -50,6 +50,10 @@ async function goToProjectDocuments(page: Page) {
  * demo id above.
  */
 const SEEDED_ALERTS_PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
+// The alert tests/e2e_seed/seed_wedge.py creates (severity MEDIUM, status OPEN -> shown as "pending").
+const SEEDED_ALERT_TITLE = "Budget deviation has supporting evidence";
+const SEEDED_ALERT_SEVERITY = "medium";
+const SEEDED_ALERT_STATUS = "pending";
 
 async function goToProjectAlerts(page: Page) {
   await page.goto(`/projects/${SEEDED_ALERTS_PROJECT_ID}/alerts`);
@@ -134,36 +138,26 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("DAP-005: Alert detail shows severity and description", async ({ page }) => {
+  test("DAP-005: the seeded alert shows its title, severity and status in the alerts table", async ({
+    page,
+  }) => {
     await goToProjectAlerts(page);
-    await page.waitForLoadState("networkidle");
 
-    // Find alert rows or cards
-    const alertItems = page.locator(
-      "table tbody tr, [data-testid^='alert-'], [role='row']"
-    );
-    const count = await alertItems.count();
-
-    if (count === 0) {
-      test.skip(true, "TASK-QA-336: demo project has no seeded alerts");
-      return;
-    }
-
-    // The review center is a table: the severity and the description are columns of the alert
-    // row itself, and activating the row opens an ACTION dialog (resolve / approve / reject)
-    // that names the same alert. There is no separate detail view, so assert both surfaces.
-    // The Next.js dev error overlay is also a role=dialog; it is never accepted as the dialog.
-    const row = alertItems.first();
-    await expect(row).toBeVisible();
-    await expect(row).toContainText(/critical|high|medium|low/i);
-    await expect(row).toContainText(/\S{3,}/);
-
-    await row.click();
-    const dialog = page.locator("[role='dialog']:not([data-nextjs-dialog])").first();
-    await expect(dialog).toBeVisible();
-    const alertTitle = (await dialog.getByTestId("alert-modal-context").innerText()).trim();
-    expect(alertTitle.length).toBeGreaterThan(2);
-    await expect(row).toContainText(alertTitle);
+    // The review center presents an alert as a TABLE ROW (Title | Severity | Status | Clause |
+    // Evidence | Assignee | Actions); there is no detail view, and activating the row would open an
+    // action dialog, not a detail. Select the seeded alert by its title (tests/e2e_seed/seed_wedge.py)
+    // and check each column that carries a fact about it. A missing seeded alert is a failure:
+    // it must not be skipped as "no alerts".
+    const row = page.getByRole("row").filter({ hasText: SEEDED_ALERT_TITLE });
+    await expect(row, "the seeded alert is listed exactly once").toHaveCount(1, { timeout: 30_000 });
+    const cells = row.getByRole("cell");
+    await expect(cells.nth(0)).toHaveText(SEEDED_ALERT_TITLE);
+    await expect(cells.nth(1)).toHaveText(SEEDED_ALERT_SEVERITY);
+    await expect(cells.nth(2)).toHaveText(SEEDED_ALERT_STATUS);
+    // Clause and Evidence always render something: a link / text, or an explicit dash. An empty
+    // cell would be a rendering fault.
+    await expect(cells.nth(3)).not.toBeEmpty();
+    await expect(cells.nth(4)).not.toBeEmpty();
   });
 
   test("DAP-006: Alert approve/reject buttons are accessible", async ({ page }) => {
