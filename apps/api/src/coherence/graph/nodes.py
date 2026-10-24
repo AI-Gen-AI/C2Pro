@@ -964,7 +964,12 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
     # Project-level cross-document comparators (assembled totals; no clause pairs
     # needed) — ADR-023 Phase 1b. Contract↔Budget / WBS↔Budget / BOM↔Budget.
     try:
-        signals.extend(cross_document_signals(state.clauses))
+        signals.extend(
+            cross_document_signals(
+                state.clauses,
+                schedule_planned_finish=state.config.schedule_planned_finish,
+            )
+        )
     except (AttributeError, TypeError, ValueError) as e:
         error_msg = f"Cross-document comparator failed: {e}"
         logger.warning(error_msg)

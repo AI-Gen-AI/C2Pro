@@ -130,6 +130,10 @@ class EvaluationConfig:
     project_id: str | None = None
     # Project name/identity — enables the project-identity (LOC-MISMATCH) comparator.
     project_name: str | None = None
+    # The current schedule revision's observed planned finish (document/revision/row identity),
+    # for the contract-completion vs schedule-finish comparator. Project-level source, not clause
+    # evidence: it never counts as TIME coverage by itself.
+    schedule_planned_finish: dict[str, Any] | None = None
 
 
 # =============================================================================
