@@ -152,23 +152,17 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
     // Click first alert to view detail
     await alertItems.first().click();
 
-    // Should show some detail view (dialog, drawer, or page)
+    // The review center renders the selected alert inline (there is no dialog or
+    // drawer), so the severity and the description must be shown for the alert on
+    // whatever surface presents it. The Next.js dev error overlay is also a
+    // role=dialog; it is never accepted as "detail".
     const detailView = page.locator(
-      // The Next.js dev error overlay is also a role=dialog; it is not alert detail.
       "[role='dialog']:not([data-nextjs-dialog]), [data-testid='alert-detail'], [data-testid='alert-drawer']"
     );
-
-    // If the click opened a detail view, verify severity is shown
-    const detailCount = await detailView.count();
-    if (detailCount > 0) {
-      await expect(detailView.first()).toBeVisible();
-
-      // Severity should be displayed somewhere
-      const severityText = page.getByText(
-        /critical|high|medium|low|info/i
-      );
-      await expect(severityText.first()).toBeVisible();
-    }
+    const surface = (await detailView.count()) > 0 ? detailView.first() : alertItems.first();
+    await expect(surface).toBeVisible();
+    await expect(surface).toContainText(/critical|high|medium|low|info/i);
+    await expect(surface).toContainText(/\S{3,}/);
   });
 
   test("DAP-006: Alert approve/reject buttons are accessible", async ({ page }) => {
