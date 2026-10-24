@@ -42,7 +42,7 @@ describe("S2-09 - DocumentUploadDropzone", () => {
 
     expect(
       await screen.findByText(
-        /unsupported file type: \.exe\. allowed: pdf, xlsx, bc3/i,
+        /unsupported file type: \.exe\. allowed: pdf, docx, xlsx, bc3/i,
       ),
     ).toBeInTheDocument();
     expect(uploadDocumentMock).not.toHaveBeenCalled();
@@ -69,6 +69,60 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     expect(screen.getByLabelText(/document type for budget\.xlsx/i)).toHaveTextContent("Budget");
     expect(screen.getByLabelText(/document type for schedule\.bc3/i)).toHaveTextContent("Budget");
     expect(uploadDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("stages and uploads a DOCX contract supported by the backend", async () => {
+    uploadDocumentMock.mockResolvedValue({ id: "doc-docx", task_id: "task-docx" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toHaveAttribute("accept", ".pdf,.docx,.xlsx,.bc3");
+    fireEvent.change(input, {
+      target: {
+        files: [createFile(
+          "contract.docx",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )],
+      },
+    });
+
+    expect(await screen.findByText("contract.docx")).toBeInTheDocument();
+    expect(screen.getByLabelText(/document type for contract\.docx/i)).toHaveTextContent("Contract");
+    fireEvent.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(
+        "proj_docx",
+        expect.objectContaining({ name: "contract.docx" }),
+        "contract",
+        { token: "fresh-token-123" },
+      );
+    });
+  });
+
+  it("refuses DOCX as a structured schedule before any upload request", async () => {
+    const user = userEvent.setup();
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile(
+          "schedule.docx",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )],
+      },
+    });
+
+    const type = await screen.findByLabelText(/document type for schedule\.docx/i);
+    await user.click(type);
+    await user.click(await screen.findByRole("option", { name: "Schedule" }));
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    expect(await screen.findByText(/DOCX cannot be uploaded as schedule/i)).toBeInTheDocument();
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
+    expect(getTokenMock).not.toHaveBeenCalled();
   });
 
   it("uses the provided default document type when a checklist CTA opens upload", async () => {
