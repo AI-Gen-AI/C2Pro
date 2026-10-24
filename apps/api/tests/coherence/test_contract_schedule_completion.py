@@ -14,20 +14,27 @@ from uuid import uuid4
 import pytest
 
 from src.coherence.cross_document import (
+    BASIS_APPROVED_BASELINE,
+    BASIS_SOURCE_OBSERVED,
     DATE_KIND_CONTRACT_COMPLETION,
     DATE_KIND_SCHEDULE_FINISH,
     CrossDocFinding,
     CrossDocNotAssessed,
+    CrossDocProvisional,
     DatedSource,
     ProjectCrossDocInputs,
     assemble_cross_doc_inputs,
+    cross_document_assessment,
     cross_document_signals,
     schedule_overruns_deadline,
 )
 from src.coherence.cross_document.comparators import assess_numeric_comparators
 from src.coherence.models import Clause
 from src.core.tasks.ingestion_tasks import _extract_contract_completion_deadline
-from src.documents.application.schedule_planned_finish import summarize_schedule_planned_finish
+from src.documents.application.schedule_planned_finish import (
+    SCHEDULE_FINISH_BASIS,
+    summarize_schedule_planned_finish,
+)
 
 DOC_C, REV_C, DOC_S, REV_S = (str(uuid4()) for _ in range(4))
 
@@ -50,6 +57,7 @@ def _schedule(value: str | None = "2027-09-30", **overrides: object) -> DatedSou
         "document_id": DOC_S,
         "revision_id": REV_S,
         "locator": "Plan!42",
+        "basis": BASIS_SOURCE_OBSERVED,
     }
     return DatedSource(**{**base, **overrides})  # type: ignore[arg-type]
 
@@ -62,27 +70,52 @@ def _inputs(contract: DatedSource | None, schedule: DatedSource | None) -> Proje
 
 
 @pytest.mark.unit
-def test_schedule_after_contract_completion_is_a_sourced_time_finding() -> None:
-    finding = schedule_overruns_deadline(_inputs(_contract(), _schedule()))
+def test_an_observed_schedule_after_the_completion_date_is_a_provisional_deviation_not_a_finding() -> None:
+    outcome = schedule_overruns_deadline(_inputs(_contract(), _schedule()))
 
-    assert isinstance(finding, CrossDocFinding)
-    assert (finding.rule_id, finding.category) == ("DET-CRS-SCHDEAD", "TIME")
-    assert finding.delta == (date(2027, 9, 30) - date(2027, 6, 30)).days
-    assert finding.source_clause_id == "clause-17"
-    assert finding.evidence["expected"] == {
+    assert isinstance(outcome, CrossDocProvisional)
+    assert not isinstance(outcome, CrossDocFinding)  # never a scoring finding
+    assert (outcome.rule_id, outcome.category, outcome.state) == (
+        "DET-CRS-SCHDEAD", "TIME", "PROVISIONAL",
+    )
+    assert outcome.reason == "SCHEDULE_NOT_APPROVED_BASELINE"
+    assert outcome.delta == (date(2027, 9, 30) - date(2027, 6, 30)).days
+    assert outcome.source_clause_id == "clause-17"
+    # The observation and both sources are preserved exactly.
+    assert outcome.evidence["expected"] == {
         "kind": DATE_KIND_CONTRACT_COMPLETION,
         "date": "2027-06-30",
         "document_id": DOC_C,
         "revision_id": REV_C,
         "clause_id": "clause-17",
     }
-    assert finding.evidence["observed"] == {
+    assert outcome.evidence["observed"] == {
         "kind": DATE_KIND_SCHEDULE_FINISH,
         "date": "2027-09-30",
         "document_id": DOC_S,
         "revision_id": REV_S,
         "source_locator": "Plan!42",
+        "basis": BASIS_SOURCE_OBSERVED,
     }
+
+
+@pytest.mark.unit
+def test_only_an_approved_baseline_schedule_date_confirms_the_breach() -> None:
+    outcome = schedule_overruns_deadline(
+        _inputs(_contract(), _schedule(basis=BASIS_APPROVED_BASELINE))
+    )
+
+    assert isinstance(outcome, CrossDocFinding)
+    assert (outcome.rule_id, outcome.category) == ("DET-CRS-SCHDEAD", "TIME")
+    assert outcome.source_clause_id == "clause-17"
+
+
+@pytest.mark.unit
+def test_a_schedule_date_without_a_declared_basis_is_never_confirmed() -> None:
+    assert isinstance(
+        schedule_overruns_deadline(_inputs(_contract(), _schedule(basis=None))),
+        CrossDocProvisional,
+    )
 
 
 @pytest.mark.unit
@@ -177,20 +210,37 @@ SCHEDULE_FINISH = {
     "revision_id": REV_S,
     "date": "2027-09-30",
     "source_locator": "Plan!42",
+    "basis": BASIS_SOURCE_OBSERVED,
 }
 
 
 @pytest.mark.unit
-def test_assembly_builds_both_sources_with_identity_and_flags_the_overrun() -> None:
+def test_assembly_builds_both_sources_with_identity_and_reports_a_provisional_deviation() -> None:
     clauses = [_contract_clause("clause-17", "2027-06-30")]
 
     inputs = assemble_cross_doc_inputs(clauses, schedule_planned_finish=SCHEDULE_FINISH)
     assert inputs.contract_completion == _contract()
     assert inputs.schedule_finish == _schedule()
 
-    [signal] = cross_document_signals(clauses, schedule_planned_finish=SCHEDULE_FINISH)
-    assert (signal.rule_id, signal.category) == ("DET-CRS-SCHDEAD", "TIME")
-    assert signal.clause_id == "clause-17"  # the alert points at the contract clause
+    # No scoring signal: a submitted schedule is an observation, not an approved baseline.
+    assert cross_document_signals(clauses, schedule_planned_finish=SCHEDULE_FINISH) == []
+    [provisional] = cross_document_assessment(
+        clauses, schedule_planned_finish=SCHEDULE_FINISH
+    ).provisional
+    assert provisional.source_clause_id == "clause-17"  # the alert points at the contract clause
+    assert provisional.evidence["observed"]["source_locator"] == "Plan!42"
+
+
+@pytest.mark.unit
+def test_an_approved_baseline_schedule_still_produces_a_scoring_signal() -> None:
+    clauses = [_contract_clause("clause-17", "2027-06-30")]
+    approved = {**SCHEDULE_FINISH, "basis": BASIS_APPROVED_BASELINE}
+
+    [signal] = cross_document_signals(clauses, schedule_planned_finish=approved)
+
+    assert (signal.rule_id, signal.category, signal.clause_id) == (
+        "DET-CRS-SCHDEAD", "TIME", "clause-17",
+    )
     assert signal.raw_data["evidence"]["observed"]["source_locator"] == "Plan!42"
 
 
@@ -382,3 +432,8 @@ def test_no_observable_row_records_a_reason_and_no_date() -> None:
     assert summary["reason"] == "no_row_with_unambiguous_start_and_end"
     empty = summarize_schedule_planned_finish([], document_id=uuid4(), revision_id=uuid4())
     assert empty["reason"] == "no_schedule_rows"
+
+
+@pytest.mark.unit
+def test_the_worker_basis_is_the_one_the_comparator_refuses_to_confirm() -> None:
+    assert SCHEDULE_FINISH_BASIS == BASIS_SOURCE_OBSERVED != BASIS_APPROVED_BASELINE

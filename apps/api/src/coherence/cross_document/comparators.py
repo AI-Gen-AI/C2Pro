@@ -14,8 +14,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from src.coherence.cross_document.findings import CrossDocFinding, CrossDocNotAssessed
+from src.coherence.cross_document.findings import (
+    CrossDocFinding,
+    CrossDocNotAssessed,
+    CrossDocProvisional,
+)
 from src.coherence.cross_document.inputs import (
+    BASIS_APPROVED_BASELINE,
     DATE_KIND_CONTRACT_COMPLETION,
     DATE_KIND_SCHEDULE_FINISH,
     DatedSource,
@@ -285,14 +290,17 @@ def _sourced_dates_not_assessed(
 
 def schedule_overruns_deadline(
     inputs: ProjectCrossDocInputs,
-) -> CrossDocFinding | CrossDocNotAssessed | None:
+) -> CrossDocFinding | CrossDocProvisional | CrossDocNotAssessed | None:
     """Schedule planned finish AFTER the contractual completion deadline (TIME).
 
     Sourced path (production): ``contract_completion`` vs ``schedule_finish``. Absent side =
     nothing to compare (None). Both present but not comparable / not sourced / not calendar
-    exact = NOT_ASSESSED with the reason; a finding is only emitted for two sourced, comparable,
-    unambiguous dates whose order is violated. The finding carries both sources as expected
-    (contract) / observed (schedule) evidence and points its alert at the contract clause.
+    exact = NOT_ASSESSED with the reason. Two sourced, comparable, unambiguous dates whose order is
+    violated are a PROVISIONAL deviation unless the schedule date comes from an approved temporal
+    baseline: a submitted schedule's stated finish proves what the file says, not that the contract
+    is breached. Only an approved-baseline schedule date yields a confirmed (scoring) finding. Both
+    carry the sources as expected (contract) / observed (schedule) evidence and point at the contract
+    clause.
 
     Calibration path: bare ``contract_deadline`` / ``schedule_end`` strings (no identity) keep
     their original semantics for the golden corpus; production assembly never fills them.
@@ -312,7 +320,7 @@ def schedule_overruns_deadline(
             return _date_not_assessed(
                 "AMBIGUOUS_DATE", "a date is not an unambiguous ISO calendar date"
             )
-        return _overrun_finding(
+        overrun = _overrun_finding(
             deadline,
             end,
             source_clause_id=contract.locator,
@@ -330,8 +338,23 @@ def schedule_overruns_deadline(
                     "document_id": schedule.document_id,
                     "revision_id": schedule.revision_id,
                     "source_locator": schedule.locator,
+                    "basis": schedule.basis,
                 },
             },
+        )
+        if overrun is None or schedule.basis == BASIS_APPROVED_BASELINE:
+            return overrun
+        return CrossDocProvisional(
+            rule_id=overrun.rule_id,
+            category=overrun.category,
+            left_key=overrun.left_key,
+            left_value=overrun.left_value,
+            right_key=overrun.right_key,
+            right_value=overrun.right_value,
+            delta=overrun.delta,
+            summary=overrun.summary,
+            source_clause_id=overrun.source_clause_id,
+            evidence=overrun.evidence,
         )
 
     deadline_iso = inputs.contract_deadline
@@ -381,13 +404,14 @@ class CrossDocAssessment:
 
     findings: list[CrossDocFinding] = field(default_factory=list)
     not_assessed: list[CrossDocNotAssessed] = field(default_factory=list)
+    provisional: list[CrossDocProvisional] = field(default_factory=list)
 
 
 def assess_numeric_comparators(
     inputs: ProjectCrossDocInputs, *, tolerance: float = DEFAULT_TOLERANCE
 ) -> CrossDocAssessment:
     """Run every numeric cross-document comparator and keep each outcome."""
-    outcomes = [
+    outcomes: list[CrossDocFinding | CrossDocNotAssessed | CrossDocProvisional | None] = [
         comparator(inputs, tolerance=tolerance)
         for comparator in (contract_vs_budget_total, wbs_vs_budget_total, bom_vs_budget_total)
     ]
@@ -402,6 +426,7 @@ def assess_numeric_comparators(
     return CrossDocAssessment(
         findings=[o for o in outcomes if isinstance(o, CrossDocFinding)],
         not_assessed=[o for o in outcomes if isinstance(o, CrossDocNotAssessed)],
+        provisional=[o for o in outcomes if isinstance(o, CrossDocProvisional)],
     )
 
 

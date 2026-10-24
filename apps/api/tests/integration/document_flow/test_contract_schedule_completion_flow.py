@@ -49,6 +49,7 @@ from src.temporal.application import project_snapshot_trigger
 pytestmark = pytest.mark.asyncio
 
 RULE = "DET-CRS-SCHDEAD"
+PROVISIONAL_RULE = "ADV-SCHDEAD-PROVISIONAL"
 COMPLETION_CLAUSE = "La fecha de finalización de las obras será el 30 de junio de 2027."
 DURATION_CLAUSE = "El plazo de ejecución de las obras será de dieciocho meses desde la firma."
 PRICE_CLAUSE = "El precio del contrato asciende a 1.000.000 euros."
@@ -228,7 +229,7 @@ async def _scenario(
 async def _evaluate(db: AsyncSession, user: Any, project_id: UUID) -> Any:
     return await evaluate_project_coherence(
         payload=CoherenceEvaluateRequest(project_id=project_id),
-        include_diagnostics=False,
+        include_diagnostics=True,
         db=db,
         current_user=user,
         flags_service=None,
@@ -236,7 +237,10 @@ async def _evaluate(db: AsyncSession, user: Any, project_id: UUID) -> Any:
 
 
 def _schdead(result: Any) -> list[Any]:
-    return [alert for alert in result.alerts if alert.rule_id == RULE]
+    """The provisional advisory (the only SCHDEAD-related alert a submitted schedule can raise)."""
+    assert not [a for a in result.alerts if a.rule_id == RULE], "never a confirmed SCHDEAD alert"
+    assert not [s for s in result.finding_signals if s.rule_id == RULE], "never a scoring signal"
+    return [alert for alert in result.alerts if alert.rule_id == PROVISIONAL_RULE]
 
 
 # ── the worker records the observation, with identity ───────────────────────
@@ -275,7 +279,7 @@ async def test_ambiguous_schedule_dates_record_a_reason_and_no_date(
 # ── evaluate: finding, no finding, NOT_ASSESSED ─────────────────────────────
 
 
-async def test_late_schedule_raises_a_time_alert_pointing_at_the_contract_clause(
+async def test_late_schedule_raises_a_provisional_advisory_pointing_at_the_contract_clause(
     db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
     project_id, contract_doc, contract_rev, schedule_doc, schedule_rev = await _scenario(
@@ -285,10 +289,16 @@ async def test_late_schedule_raises_a_time_alert_pointing_at_the_contract_clause
     result = await _evaluate(db, test_user, project_id)
 
     [alert] = _schdead(result)
-    # TIME in the rule vocabulary; the alert boundary speaks the canonical SCHEDULE taxonomy.
-    assert str(alert.category).upper() == "SCHEDULE"
-    assert alert.severity in {"high", "critical"}
-    assert "2027-09-30" in alert.message or "2027-09-30" in str(alert.evidence)
+    assert str(alert.category).lower() == "schedule"
+    assert str(alert.severity).lower() == "medium"  # a risk to look at, not a confirmed breach
+    assert "not a confirmed breach" in alert.message
+    assert "not an approved temporal baseline" in alert.message
+    assert "2027-09-30" in alert.message and "2027-06-30" in alert.message
+    # Both sources are named: the contract clause (link) and the schedule document/revision/row.
+    claim = alert.evidence.claim
+    assert str(schedule_doc.id) in claim
+    assert str(schedule_rev.revision_id) in claim
+    assert "Sheet!4" in claim
     clause_text = (
         await db.execute(
             text("SELECT full_text, document_id::text AS document_id FROM clauses WHERE id = :c"),
@@ -297,6 +307,83 @@ async def test_late_schedule_raises_a_time_alert_pointing_at_the_contract_clause
     ).one()
     assert "30 de junio de 2027" in clause_text.full_text
     assert clause_text.document_id == str(contract_doc.id)
+
+
+async def test_the_provisional_advisory_does_not_move_the_score_or_the_scoring_signals(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Same contract, same documents: the late schedule adds an advisory but not one scoring signal."""
+    late_project, *_ = await _scenario(
+        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
+    )
+    ontime_project, *_ = await _scenario(
+        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=ON_TIME_SCHEDULE
+    )
+
+    late = await _evaluate(db, test_user, late_project)
+    ontime = await _evaluate(db, test_user, ontime_project)
+
+    assert _schdead(late) != [] and _schdead(ontime) == []
+    assert late.overall_score == ontime.overall_score
+    assert sorted(s.rule_id for s in late.finding_signals) == sorted(
+        s.rule_id for s in ontime.finding_signals
+    )
+
+
+async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Persistence of the advisory through the real alert mirror (a score is not needed to test it)."""
+    from src.coherence.router import (
+        _mirror_coherence_alerts_to_alerts_table,
+        get_clauses_from_rag,
+    )
+
+    project_id, contract_doc, *_ = await _scenario(
+        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
+    )
+    result = await _evaluate(db, test_user, project_id)
+    [advisory] = _schdead(result)
+    clauses = await get_clauses_from_rag(db, project_id, test_user.tenant_id)
+
+    await _mirror_coherence_alerts_to_alerts_table(
+        db=db, project_id=project_id, tenant_id=test_user.tenant_id,
+        alerts=[advisory], clauses=clauses,
+    )
+    await db.commit()
+
+    row = (
+        await db.execute(
+            text("SELECT category::text AS category, severity::text AS severity, "
+                 "source_clause_id::text AS clause, alert_metadata, affected_entities "
+                 "FROM alerts WHERE project_id = :p AND rule_id = :r"),
+            {"p": project_id, "r": PROVISIONAL_RULE},
+        )
+    ).one()
+    assert row.category.upper() == "TIME"  # canonical persisted taxonomy for schedule/time alerts
+    assert row.severity.lower() == "medium"
+    assert row.clause == advisory.evidence.source_clause_id  # navigation to the contract clause
+    assert row.alert_metadata["detection_evidence"]["source_document_id"] == str(contract_doc.id)
+    assert "Sheet!4" in row.alert_metadata["detection_evidence"]["claim"]  # the XLSX row is named in the evidence
+    assert str(contract_doc.id) in row.affected_entities["documents"]
+
+
+async def test_a_schedule_of_another_project_never_feeds_this_projects_comparison(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    project_id = await _project(db, test_user.tenant_id)
+    await _upload_and_ingest(
+        db, worker, test_user, project_id, filename="contract.docx",
+        content=_docx([PRICE_CLAUSE, COMPLETION_CLAUSE]), document_type=DocumentType.CONTRACT,
+    )
+    other_project = await _project(db, test_user.tenant_id)
+    await _upload_and_ingest(
+        db, worker, test_user, other_project, filename="schedule.xlsx",
+        content=_xlsx(LATE_SCHEDULE), document_type=DocumentType.SCHEDULE,
+    )
+
+    assert await load_schedule_planned_finish(db, project_id, test_user.tenant_id) is None
+    assert _schdead(await _evaluate(db, test_user, project_id)) == []
 
 
 async def test_on_time_schedule_raises_no_alert(

@@ -244,6 +244,10 @@ class CoherenceGraphState:
     # when other valid evidence covers it, and the limitation is reported beside it (PC-2a.3).
     evidence_limitations: dict[str, str] = field(default_factory=dict)
 
+    # Cross-document deviations backed only by an observation (e.g. a submitted schedule that is not an
+    # approved baseline). Never scored; format_output shows them as provisional advisories.
+    provisional_cross_findings: list[Any] = field(default_factory=list)
+
     # Scoring output
     all_signals: list[FindingSignal] = field(default_factory=list)
     score: float | None = None

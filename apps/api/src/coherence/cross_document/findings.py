@@ -58,4 +58,27 @@ class CrossDocNotAssessed:
     state: str = "NOT_ASSESSED"
 
 
-__all__ = ["CrossDocFinding", "CrossDocNotAssessed"]
+@dataclass(frozen=True)
+class CrossDocProvisional:
+    """A possible deviation whose evidence is an observation, not an approved baseline.
+
+    The dates and their sources are preserved exactly, but this is NOT a confirmed breach: it never
+    becomes a scoring signal (no 1.0 confidence, no TRUSTED Coherence Score input). It is shown as a
+    provisional risk with its evidence and an honest state.
+    """
+
+    rule_id: str
+    category: CoherenceCategory
+    left_key: str
+    left_value: float
+    right_key: str
+    right_value: float
+    delta: float
+    summary: str
+    source_clause_id: str | None
+    evidence: Mapping[str, Any]
+    reason: str = "SCHEDULE_NOT_APPROVED_BASELINE"
+    state: str = "PROVISIONAL"
+
+
+__all__ = ["CrossDocFinding", "CrossDocNotAssessed", "CrossDocProvisional"]
