@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from src.coherence.cross_document.assembly import (
     assemble_cross_doc_inputs,
+    cross_document_assessment,
     cross_document_signals,
 )
 from src.coherence.cross_document.comparators import (
@@ -37,12 +38,18 @@ from src.coherence.cross_document.comparators import (
     schedule_overruns_deadline,
     wbs_vs_budget_total,
 )
-from src.coherence.cross_document.findings import CrossDocFinding, CrossDocNotAssessed
+from src.coherence.cross_document.findings import (
+    CrossDocFinding,
+    CrossDocNotAssessed,
+    CrossDocProvisional,
+)
 from src.coherence.cross_document.identity import (
     RULE_PROJECT_IDENTITY_MISMATCH,
     project_identity_mismatch,
 )
 from src.coherence.cross_document.inputs import (
+    BASIS_APPROVED_BASELINE,
+    BASIS_SOURCE_OBSERVED,
     DATE_KIND_CONTRACT_COMPLETION,
     DATE_KIND_SCHEDULE_FINISH,
     DatedSource,
@@ -51,6 +58,10 @@ from src.coherence.cross_document.inputs import (
 from src.coherence.cross_document.signal_adapter import to_finding_signal
 
 __all__ = [
+    "BASIS_APPROVED_BASELINE",
+    "BASIS_SOURCE_OBSERVED",
+    "CrossDocProvisional",
+    "cross_document_assessment",
     "DATE_KIND_CONTRACT_COMPLETION",
     "DATE_KIND_SCHEDULE_FINISH",
     "DatedSource",

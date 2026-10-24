@@ -32,6 +32,7 @@ import { uploadDocumentThroughUi } from "./support/pj01/upload";
 const FIXTURE_DIR = path.join(process.cwd(), "src", "tests", "e2e", "test-data", "triplet");
 const manifest = JSON.parse(readFileSync(path.join(FIXTURE_DIR, "triplet.manifest.json"), "utf8")) as {
   expected_rules: string[];
+  expected_provisional: string[];
   contract: { completion_deadline: string };
 };
 const fixture = (name: string): string => path.join(FIXTURE_DIR, name);
@@ -277,6 +278,12 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       for (const rule of manifest.expected_rules) {
         expect(rules, `${rule} must be raised by the triplet`).toContain(rule);
       }
+      // A schedule date read from a submitted file is an observation, not an approved baseline: it
+      // is shown as a PROVISIONAL advisory and must never appear as a confirmed breach.
+      for (const rule of manifest.expected_provisional) {
+        expect(rules, `${rule} must be shown as a provisional risk`).toContain(rule);
+      }
+      expect(rules, "a submitted schedule never confirms a breach").not.toContain("DET-CRS-SCHDEAD");
       // Three document families are not the four of PQ-HITL-09: with no technical specification
       // the coherence score is honestly WITHHELD. A withheld score must say why (AUDIT_INCOMPLETE);
       // a null score without a reason would be a hidden failure.
@@ -303,7 +310,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
             "ALERTS_NOT_PERSISTED: the evaluation raised the discrepancies but the Alerts table does not list them",
           timeout: 30_000,
         })
-        .toBeGreaterThanOrEqual(manifest.expected_rules.length)
+        .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length)
         .catch((error: unknown) => {
           expect.soft(false, String(error)).toBe(true);
         });
@@ -334,7 +341,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         await reopened.goto(`/projects/${projectId}/alerts`);
         await expect
           .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 30_000 })
-          .toBeGreaterThanOrEqual(manifest.expected_rules.length)
+          .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length)
           .catch((error: unknown) => {
             expect.soft(false, `ALERTS_NOT_PERSISTED (fresh context): ${String(error)}`).toBe(true);
           });

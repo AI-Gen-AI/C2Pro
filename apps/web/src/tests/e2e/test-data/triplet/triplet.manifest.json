@@ -22,8 +22,11 @@
   },
   "expected_rules": [
     "DET-CRS-CONBUD",
-    "DET-CRS-NEGMARGIN",
-    "DET-CRS-SCHDEAD"
+    "DET-CRS-NEGMARGIN"
   ],
-  "upload_ui_note": "The upload dialog accepts .pdf/.xlsx/.bc3 only (no .docx), so the contract fixture is a PDF"
+  "upload_ui_note": "The upload dialog accepts .pdf/.xlsx/.bc3 only (no .docx), so the contract fixture is a PDF",
+  "expected_provisional": [
+    "ADV-SCHDEAD-PROVISIONAL"
+  ],
+  "note_schedule": "The schedule finish is a source observation (not an approved baseline): it raises a provisional advisory, never a confirmed DET-CRS-SCHDEAD finding"
 }

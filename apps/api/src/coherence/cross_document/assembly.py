@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Mapping
 
-from src.coherence.cross_document.comparators import assess_numeric_comparators
+from src.coherence.cross_document.comparators import CrossDocAssessment, assess_numeric_comparators
 from src.coherence.cross_document.inputs import (
     DATE_KIND_CONTRACT_COMPLETION,
     DATE_KIND_SCHEDULE_FINISH,
@@ -121,6 +121,7 @@ def _schedule_finish(declared: Mapping[str, object] | None) -> DatedSource | Non
         revision_id=str(revision_id) if revision_id else None,
         locator=str(locator) if locator else None,
         reason=str(declared.get("reason") or "") or None,
+        basis=str(declared.get("basis") or "") or None,
     )
 
 
@@ -195,14 +196,16 @@ def assemble_cross_doc_inputs(
     )
 
 
-def cross_document_signals(
+def cross_document_assessment(
     clauses: Iterable[Clause],
     *,
     schedule_planned_finish: Mapping[str, object] | None = None,
-) -> list[FindingSignal]:
-    """Assemble inputs, run the numeric comparators, and adapt findings to signals.
+) -> CrossDocAssessment:
+    """Assemble inputs and run every numeric comparator, keeping each outcome.
 
-    NOT_ASSESSED comparisons produce no signal: they are logged with their reason.
+    Confirmed findings become scoring signals; NOT_ASSESSED comparisons are logged with their
+    reason; PROVISIONAL deviations (an observation that is not an approved baseline) are returned
+    for display as an honest advisory and never scored.
     """
     assessment = assess_numeric_comparators(
         assemble_cross_doc_inputs(clauses, schedule_planned_finish=schedule_planned_finish)
@@ -212,7 +215,19 @@ def cross_document_signals(
             "cross-document %s NOT_ASSESSED (%s): %s",
             skipped.rule_id, skipped.reason, skipped.detail,
         )
+    return assessment
+
+
+def cross_document_signals(
+    clauses: Iterable[Clause],
+    *,
+    schedule_planned_finish: Mapping[str, object] | None = None,
+) -> list[FindingSignal]:
+    """Scoring signals of the confirmed cross-document findings (provisional ones are not signals)."""
+    assessment = cross_document_assessment(
+        clauses, schedule_planned_finish=schedule_planned_finish
+    )
     return [to_finding_signal(finding) for finding in assessment.findings]
 
 
-__all__ = ["assemble_cross_doc_inputs", "cross_document_signals"]
+__all__ = ["assemble_cross_doc_inputs", "cross_document_assessment", "cross_document_signals"]

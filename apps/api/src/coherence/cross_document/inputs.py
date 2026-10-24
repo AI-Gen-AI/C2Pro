@@ -18,6 +18,11 @@ from dataclasses import dataclass
 DATE_KIND_CONTRACT_COMPLETION = "CONTRACT_COMPLETION_DEADLINE"
 DATE_KIND_SCHEDULE_FINISH = "SCHEDULE_PLANNED_FINISH"
 
+# What a date is worth. A date read from a submitted schedule proves what the file says, not that the
+# schedule is an approved temporal baseline; only an approved baseline can confirm a breach.
+BASIS_SOURCE_OBSERVED = "SOURCE_OBSERVED_NOT_APPROVED_BASELINE"
+BASIS_APPROVED_BASELINE = "APPROVED_BASELINE"
+
 
 @dataclass(frozen=True)
 class DatedSource:
@@ -34,6 +39,7 @@ class DatedSource:
     revision_id: str | None = None
     locator: str | None = None
     reason: str | None = None  # why value is None (NOT_ASSESSED)
+    basis: str | None = None  # BASIS_* for a schedule date; None when the kind needs none
 
 
 @dataclass(frozen=True)
@@ -62,6 +68,8 @@ class ProjectCrossDocInputs:
 
 
 __all__ = [
+    "BASIS_APPROVED_BASELINE",
+    "BASIS_SOURCE_OBSERVED",
     "DATE_KIND_CONTRACT_COMPLETION",
     "DATE_KIND_SCHEDULE_FINISH",
     "DatedSource",
