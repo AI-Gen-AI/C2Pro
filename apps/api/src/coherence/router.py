@@ -770,6 +770,7 @@ async def _mirror_coherence_alerts_to_alerts_table(
     tenant_id: UUID,
     alerts: Sequence[Any],
     clauses: Sequence[Clause] = (),
+    auto_resolve: bool = True,
 ) -> _CoherenceAlertReconciliation:
     """Reconcile findings and return the durable disposition truth for this transaction.
 
@@ -801,7 +802,7 @@ async def _mirror_coherence_alerts_to_alerts_table(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
-        auto_resolve=True,
+        auto_resolve=auto_resolve,
         commit=False,
     )
     finding_keys = tuple(service.finding_key(payload) for payload in payloads)
@@ -1106,15 +1107,23 @@ async def evaluate_project_coherence(
     # B1-09: durable human disposition is part of the scoring input authority.
     # Reconcile first (same transaction), then re-score the complete FindingSignals.
     # A validated false positive is excluded; ACKNOWLEDGED/accepted variance remains.
-    if payload.project_id and enriched_result.overall_score is not None:
+    # An incomplete audit may still surface evidence-backed findings. Preserve those
+    # in the Alert ledger without inventing a score or auto-resolving older findings
+    # that cannot be reassessed from the incomplete evidence.
+    if payload.project_id and (
+        enriched_result.overall_score is not None or enriched_result.alerts
+    ):
         reconciliation = await _mirror_coherence_alerts_to_alerts_table(
             db=db,
             project_id=payload.project_id,
             tenant_id=current_user.tenant_id,
             alerts=enriched_result.alerts,
             clauses=clauses,
+            auto_resolve=enriched_result.overall_score is not None,
         )
-        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+        if enriched_result.overall_score is not None and isinstance(
+            reconciliation, _CoherenceAlertReconciliation
+        ):
             enriched_result = _apply_disposition_aware_rescore(
                 enriched_result,
                 reconciliation,
@@ -1210,6 +1219,11 @@ async def evaluate_project_coherence(
         )
         # Alert lifecycle was reconciled before scoring with commit=False.
         # This one commit makes the disposition-aware score and Alert state durable together.
+        await db.commit()
+    elif payload.project_id and reconciliation is not None:
+        # A scoreless evaluation can still contain actionable findings. Persist the
+        # alert ledger without creating a fake CoherenceResult or changing trusted
+        # score authority. auto_resolve=False preserves older human dispositions.
         await db.commit()
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
