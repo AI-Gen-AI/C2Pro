@@ -277,22 +277,36 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       for (const rule of manifest.expected_rules) {
         expect(rules, `${rule} must be raised by the triplet`).toContain(rule);
       }
-      expect(
-        evaluated.overall_score,
-        "a score exists only when the evidence supports it; an unassessed score would hide alerts",
-      ).not.toBeNull();
+      // Three document families are not the four of PQ-HITL-09: with no technical specification
+      // the coherence score is honestly WITHHELD. A withheld score must say why (AUDIT_INCOMPLETE);
+      // a null score without a reason would be a hidden failure.
+      if (evaluated.overall_score === null || evaluated.overall_score === undefined) {
+        expect(rules, "a withheld score must be explained by AUDIT_INCOMPLETE").toContain("AUDIT_INCOMPLETE");
+        test.info().annotations.push({
+          type: "finding",
+          description: "SCORE_WITHHELD_AUDIT_INCOMPLETE: no coherence score for contract + budget + schedule",
+        });
+      }
       recorder.record("evaluatedRules", [...rules]);
     });
 
     // 6 ── sees Alerts, Health and Evidence
     await test.step("Alerts lists the discrepancies", async () => {
       await openProjectTab(page, projectId, "alerts");
+      // SOFT on purpose: /coherence/evaluate raises the discrepancies but only persists them to
+      // the Alerts table when a score exists, so with the score withheld this page is empty.
+      // That is a product gap the journey must keep reporting (red), not hide, while the
+      // remaining steps still run.
       await expect
         .poll(async () => page.locator("table tbody tr").count(), {
-          message: "the Alerts table lists the raised alerts",
-          timeout: 60_000,
+          message:
+            "ALERTS_NOT_PERSISTED: the evaluation raised the discrepancies but the Alerts table does not list them",
+          timeout: 30_000,
         })
-        .toBeGreaterThanOrEqual(manifest.expected_rules.length);
+        .toBeGreaterThanOrEqual(manifest.expected_rules.length)
+        .catch((error: unknown) => {
+          expect.soft(false, String(error)).toBe(true);
+        });
     });
 
     await test.step("Health is reachable and honest (no error state)", async () => {
@@ -319,8 +333,11 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         const reopened = await fresh.newPage();
         await reopened.goto(`/projects/${projectId}/alerts`);
         await expect
-          .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 60_000 })
-          .toBeGreaterThanOrEqual(manifest.expected_rules.length);
+          .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 30_000 })
+          .toBeGreaterThanOrEqual(manifest.expected_rules.length)
+          .catch((error: unknown) => {
+            expect.soft(false, `ALERTS_NOT_PERSISTED (fresh context): ${String(error)}`).toBe(true);
+          });
         await reopened.goto(`/projects/${projectId}/documents`);
         for (const name of ["triplet-contract.pdf", "triplet-budget.xlsx", "triplet-schedule.xlsx"]) {
           await expect(documentRow(reopened, name)).toHaveCount(1);
