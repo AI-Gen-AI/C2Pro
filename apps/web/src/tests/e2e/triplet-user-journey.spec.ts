@@ -37,6 +37,28 @@ const manifest = JSON.parse(readFileSync(path.join(FIXTURE_DIR, "triplet.manifes
 };
 const fixture = (name: string): string => path.join(FIXTURE_DIR, name);
 
+// The authentic PQ-HITL-09 / ACC-01 (#1049) matrix: step ids and titles come from it, never from this
+// test. Every step stays NOT_VERIFIED for UAT; this journey only reports how much of each step it
+// actually exercised.
+const MATRIX_PATH = path.resolve(
+  process.cwd(),
+  "..",
+  "api",
+  "tests",
+  "fixtures",
+  "pq_hitl_09_multidoc_journey_matrix_v1.json",
+);
+const matrixSteps = (
+  JSON.parse(readFileSync(MATRIX_PATH, "utf8")) as { scenarios: { step_id: string; title: string }[] }
+).scenarios;
+type StepCoverage = { state: "PARTIAL" | "NOT_EXERCISED"; note: string };
+const coverage: Record<string, StepCoverage> = Object.fromEntries(
+  matrixSteps.map((step) => [step.step_id, { state: "NOT_EXERCISED", note: "not part of this journey" } as StepCoverage]),
+);
+const markStep = (stepId: string, state: StepCoverage["state"], note: string): void => {
+  coverage[stepId] = { state, note };
+};
+
 const AI_IS_MOCKED = process.env.C2PRO_AI_MOCK === "1";
 const runTag = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
 const projectName = `Triplet Journey ${runTag}`;
@@ -179,7 +201,43 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     const projectId = await test.step("create the project through the wizard", () =>
       createProjectThroughWizard(page));
 
+    markStep(
+      "S1",
+      "PARTIAL",
+      "project created through the UI under a RESTORED session (not a Clerk login); tenant isolation not exercised here",
+    );
+
     const latestDocuments = trackDocumentsList(page, projectId);
+
+    await test.step("S2: an unsupported file type is refused by the upload dialog and nothing is sent", async () => {
+      const uploadPosts: string[] = [];
+      const onRequest = (request: { method(): string; url(): string }): void => {
+        if (
+          request.method() === "POST" &&
+          new RegExp(`/projects/${projectId}/documents/?$`).test(new URL(request.url()).pathname)
+        ) {
+          uploadPosts.push(request.url());
+        }
+      };
+      page.on("request", onRequest);
+      await page.getByRole("button", { name: /upload document/i }).click();
+      const surface = page.getByTestId("document-upload-surface");
+      await expect(surface).toBeVisible({ timeout: 15_000 });
+      await page.setInputFiles('input[type="file"]', {
+        name: "payload.bin",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from("not a project document"),
+      });
+      await expect(surface.getByText(/unsupported file type: \.bin/i)).toBeVisible({ timeout: 15_000 });
+      page.off("request", onRequest);
+      expect(uploadPosts, "a refused file must never reach the backend").toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(surface).toBeHidden({ timeout: 15_000 });
+      test.info().annotations.push({
+        type: "s2-scope",
+        description: "UI gate only: the backend 415 for unsupported extensions is not exercised by this journey",
+      });
+    });
 
     // 2 ── uploads the contract and waits for it, without reloading
     const contract = await test.step("upload the contract", () =>
@@ -235,6 +293,11 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     await test.step("the approved contract finishes analysis and persists", async () => {
       await openProjectTab(page, projectId, "documents");
       await expectApprovedDocumentSettled(page, "triplet-contract.pdf", latestDocuments);
+      markStep(
+        "S5",
+        "PARTIAL",
+        "one review item approved by a human through the UI; ledger immutability and the optimistic-concurrency fence are not asserted here",
+      );
     });
 
     // 4 ── uploads the budget and the schedule
@@ -253,6 +316,11 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     await test.step("budget and schedule finish processing", async () => {
       await expectDocumentState(page, "triplet-budget.xlsx", /analy[sz]ed|parsed/i);
       await expectDocumentState(page, "triplet-schedule.xlsx", /analy[sz]ed|parsed/i);
+      markStep(
+        "S2",
+        "PARTIAL",
+        "contract, budget and schedule uploaded through the UI; no technical_spec family, no pinned revision hash check, UI gate only for rejection",
+      );
     });
 
     // 5 ── evaluates Coherence
@@ -295,6 +363,11 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         });
       }
       recorder.record("evaluatedRules", [...rules]);
+      markStep(
+        "S3",
+        "PARTIAL",
+        `evaluation ran on three families; score ${evaluated.overall_score ?? "withheld (AUDIT_INCOMPLETE)"}; the six-dimension Health vector is not asserted dimension by dimension`,
+      );
     });
 
     // 6 ── sees Alerts, Health and Evidence
@@ -314,6 +387,22 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         .catch((error: unknown) => {
           expect.soft(false, String(error)).toBe(true);
         });
+
+      // S4: an alert must lead to its source. Only the clause link exists today (the XLSX row is named in
+      // the evidence text, not linked), so this checks the clause -> evidence navigation.
+      const evidenceLink = page.getByRole("link", { name: /^view evidence for /i }).first();
+      if ((await evidenceLink.count()) === 0) {
+        markStep("S4", "NOT_EXERCISED", "no alert row with an evidence link (ALERTS_NOT_PERSISTED)");
+        return;
+      }
+      await evidenceLink.click();
+      await page.waitForURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=`), { timeout: 30_000 });
+      await expect(page.getByText(/could not load|failed to load/i)).toHaveCount(0);
+      markStep(
+        "S4",
+        "PARTIAL",
+        "alert -> contract clause evidence page; the schedule row is not a first-class link and no WBS linkage is asserted",
+      );
     });
 
     await test.step("Health is reachable and honest (no error state)", async () => {
@@ -349,9 +438,33 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         for (const name of ["triplet-contract.pdf", "triplet-budget.xlsx", "triplet-schedule.xlsx"]) {
           await expect(documentRow(reopened, name)).toHaveCount(1);
         }
+        markStep(
+          "S8",
+          "PARTIAL",
+          "state survives a fresh browser context restored from the saved session; no Clerk relogin, no cross-tenant denial (see pj01-tenant-isolation), no runtime SHA check",
+        );
       } finally {
         await fresh.close();
       }
+    });
+
+    // The authentic matrix steps and how much of each this journey exercised. Nothing here is a UAT
+    // result: every step stays NOT_VERIFIED until a real, non-mocked run is reviewed.
+    await test.step("report PQ-HITL-09 step coverage (not a UAT result)", () => {
+      markStep("S6", "NOT_EXERCISED", "no revision B, no What Changed / Current State comparison");
+      markStep(
+        "S7",
+        "NOT_EXERCISED",
+        "cross-document rules run, but there is no approved canonical WBS in this journey",
+      );
+      for (const step of matrixSteps) {
+        const entry = coverage[step.step_id];
+        test.info().annotations.push({
+          type: `pq-hitl-09:${step.step_id}`,
+          description: `${entry.state} — ${step.title} — ${entry.note}`,
+        });
+      }
+      recorder.record("pqHitl09Coverage", coverage);
     });
   });
 });
