@@ -15,7 +15,7 @@ import { uploadDocument } from "@/lib/api";
 import type { DocumentType } from "@/lib/api/generated/models";
 import { formatFileSize } from "@/types/document";
 
-const ALLOWED_EXTENSIONS = new Set(["pdf", "xlsx", "bc3"]);
+const ALLOWED_EXTENSIONS = new Set(["pdf", "docx", "xlsx", "bc3"]);
 const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "contract", label: "Contract" },
   { value: "budget", label: "Budget" },
@@ -45,7 +45,7 @@ function getExtension(fileName: string): string {
 
 function defaultDocumentTypeForFile(fileName: string): DocumentType {
   const extension = getExtension(fileName);
-  if (extension === "pdf") {
+  if (extension === "pdf" || extension === "docx") {
     return "contract";
   }
   if (extension === "xlsx" || extension === "bc3") {
@@ -104,7 +104,7 @@ export function DocumentUploadDropzone({
     const invalid = files.find((file) => !ALLOWED_EXTENSIONS.has(getExtension(file.name)));
     if (invalid) {
       const ext = getExtension(invalid.name) || "unknown";
-      setMessage(`Unsupported file type: .${ext}. Allowed: PDF, XLSX, BC3`);
+      setMessage(`Unsupported file type: .${ext}. Allowed: PDF, DOCX, XLSX, BC3`);
       return;
     }
 
@@ -133,6 +133,20 @@ export function DocumentUploadDropzone({
   const uploadStagedFiles = async (): Promise<void> => {
     if (stagedUploads.length === 0) {
       setMessage("No files selected");
+      return;
+    }
+
+    // Match the backend upload gate: DOCX is a textual source, never a structured
+    // budget or schedule. Validate the whole batch BEFORE sending any request.
+    const incompatibleDocx = stagedUploads.find(
+      ({ file, documentType }) =>
+        getExtension(file.name) === "docx" &&
+        (documentType === "budget" || documentType === "schedule"),
+    );
+    if (incompatibleDocx) {
+      setMessage(
+        `DOCX cannot be uploaded as ${incompatibleDocx.documentType}. Choose Contract or Specification, or provide XLSX/BC3 for structured data.`,
+      );
       return;
     }
 
@@ -237,7 +251,7 @@ export function DocumentUploadDropzone({
               Upload contracts, schedules, budgets, or BC3 files for this project.
             </p>
             <p className="mt-4 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground/70">
-              PDF · XLSX · BC3
+              PDF · DOCX · XLSX · BC3
             </p>
           </>
         )}
@@ -335,7 +349,7 @@ export function DocumentUploadDropzone({
         ref={inputRef}
         type="file"
         multiple
-        accept=".pdf,.xlsx,.bc3"
+        accept=".pdf,.docx,.xlsx,.bc3"
         className="sr-only"
         disabled={uploading}
         onChange={(event) => {
