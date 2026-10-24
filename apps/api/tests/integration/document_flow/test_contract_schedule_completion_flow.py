@@ -377,7 +377,7 @@ async def test_the_triplet_fixture_files_raise_the_budget_and_schedule_alerts(
     project_id = await _project(db, test_user.tenant_id)
     _, schedule_rev = (None, None)
     for filename, document_type in (
-        ("triplet-contract.docx", DocumentType.CONTRACT),
+        ("triplet-contract.pdf", DocumentType.CONTRACT),
         ("triplet-budget.xlsx", DocumentType.BUDGET),
         ("triplet-schedule.xlsx", DocumentType.SCHEDULE),
     ):

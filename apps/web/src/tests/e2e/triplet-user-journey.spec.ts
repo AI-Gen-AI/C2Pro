@@ -5,8 +5,10 @@
  *   schedule → evaluate Coherence → Alerts / Health / Evidence → persistence
  *
  * WHAT IS REAL: the browser, the Next.js app, the FastAPI backend, PostgreSQL, the Celery
- * worker, the real .docx/.xlsx fixture files (test-data/triplet) and every request between
- * them. Nothing is route-mocked.
+ * worker, the real .pdf/.xlsx fixture files (test-data/triplet) and every request between
+ * them. Nothing is route-mocked. The contract fixture is a PDF because the upload dialog accepts
+ * only .pdf/.xlsx/.bc3 (a .docx contract, which the backend and the PQ-HITL-09 matrix accept, cannot
+ * be uploaded from the UI).
  *
  * WHAT IS NOT: the AI. This suite runs with C2PRO_AI_MOCK=1 / C2PRO_EMBEDDINGS_MOCK=1, so the
  * contract analysis returns "not assessed" and the human approval is REQUIRED, never skipped.
@@ -110,14 +112,14 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     const contract = await test.step("upload the contract", () =>
       uploadDocumentThroughUi(page, recorder, {
         projectId,
-        filePath: fixture("triplet-contract.docx"),
+        filePath: fixture("triplet-contract.pdf"),
         documentType: "contract",
       }));
 
     // 3 ── the contract needs a human decision (the HITL gate must not be bypassed)
     await test.step("the contract waits for human review", async () => {
-      await expectDocumentState(page, "triplet-contract.docx", /review required|analy[sz]ed/i);
-      const badge = await documentRow(page, "triplet-contract.docx")
+      await expectDocumentState(page, "triplet-contract.pdf", /review required|analy[sz]ed/i);
+      const badge = await documentRow(page, "triplet-contract.pdf")
         .getByTestId("document-status-badge")
         .innerText();
       if (AI_IS_MOCKED) {
@@ -129,7 +131,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     });
 
     await test.step("approve the contract in the review queue (HITL)", async () => {
-      const cta = documentRow(page, "triplet-contract.docx").getByTestId("document-review-cta");
+      const cta = documentRow(page, "triplet-contract.pdf").getByTestId("document-review-cta");
       if ((await cta.count()) === 0) {
         // Real AI may analyse without a review; with the mock this branch is a failure above.
         return;
@@ -154,7 +156,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
 
     await test.step("the approved contract finishes analysis and persists", async () => {
       await openProjectTab(page, projectId, "documents");
-      await expectDocumentState(page, "triplet-contract.docx", /analy[sz]ed/i);
+      await expectDocumentState(page, "triplet-contract.pdf", /analy[sz]ed/i);
     });
 
     // 4 ── uploads the budget and the schedule
@@ -226,7 +228,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
 
     await test.step("Evidence opens the contract the completion date came from", async () => {
       await openProjectTab(page, projectId, "documents");
-      await documentRow(page, "triplet-contract.docx").getByRole("link").first().click();
+      await documentRow(page, "triplet-contract.pdf").getByRole("link").first().click();
       await page.waitForURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=${contract.documentId}`), {
         timeout: 30_000,
       });
@@ -243,7 +245,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
           .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 60_000 })
           .toBeGreaterThanOrEqual(manifest.expected_rules.length);
         await reopened.goto(`/projects/${projectId}/documents`);
-        for (const name of ["triplet-contract.docx", "triplet-budget.xlsx", "triplet-schedule.xlsx"]) {
+        for (const name of ["triplet-contract.pdf", "triplet-budget.xlsx", "triplet-schedule.xlsx"]) {
           await expect(documentRow(reopened, name)).toHaveCount(1);
         }
       } finally {
