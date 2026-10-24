@@ -71,11 +71,17 @@ def _contract_completion(
 ) -> DatedSource | None:
     """The contractual completion deadline, from clauses that state it explicitly.
 
-    Two clauses stating different dates make the deadline ambiguous: the source is kept
-    (so the comparison is reported NOT_ASSESSED) rather than picking one of them.
+    Two clauses stating different dates, or any clause whose completion statement is itself
+    ambiguous (several dates, a time, a locale-dependent numeric date), make the deadline
+    ambiguous: the source is kept with its reason (so the comparison is reported NOT_ASSESSED)
+    rather than picking one of them.
     """
     sources: dict[str, DatedSource] = {}
+    ambiguous = False
     for clause, declared in candidates:
+        if declared.get("ambiguous") is True:
+            ambiguous = True
+            continue
         value = declared.get("date")
         if not isinstance(value, str) or not value:
             continue
@@ -91,12 +97,12 @@ def _contract_completion(
                 locator=clause.id,
             ),
         )
-    if not sources:
+    if not sources and not ambiguous:
         return None
-    if len(sources) > 1:
+    if ambiguous or len(sources) > 1:
         return DatedSource(
             kind=DATE_KIND_CONTRACT_COMPLETION,
-            reason="conflicting_contract_completion_dates",
+            reason="conflicting_or_ambiguous_contract_completion_dates",
         )
     return next(iter(sources.values()))
 

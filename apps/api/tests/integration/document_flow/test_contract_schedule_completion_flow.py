@@ -324,6 +324,21 @@ async def test_contract_with_only_a_duration_is_not_assessed_not_flagged(
     assert _schdead(await _evaluate(db, test_user, project_id)) == []
 
 
+async def test_a_contract_stating_two_completion_dates_is_not_assessed_not_flagged(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """The first date must never win: a revised completion date in the same clause is a conflict."""
+    conflicting = (
+        "The completion date is 2027-06-30. The contractual completion date is revised to "
+        "2027-12-31."
+    )
+    project_id, *_ = await _scenario(
+        db, worker, test_user, contract=[PRICE_CLAUSE, conflicting], schedule=LATE_SCHEDULE
+    )
+
+    assert _schdead(await _evaluate(db, test_user, project_id)) == []
+
+
 async def test_schedule_with_ambiguous_dates_is_not_assessed_not_flagged(
     db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
