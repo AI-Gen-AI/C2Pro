@@ -149,20 +149,21 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
       return;
     }
 
-    // Click first alert to view detail
-    await alertItems.first().click();
+    // The review center is a table: the severity and the description are columns of the alert
+    // row itself, and activating the row opens an ACTION dialog (resolve / approve / reject)
+    // that names the same alert. There is no separate detail view, so assert both surfaces.
+    // The Next.js dev error overlay is also a role=dialog; it is never accepted as the dialog.
+    const row = alertItems.first();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(/critical|high|medium|low/i);
+    await expect(row).toContainText(/\S{3,}/);
 
-    // The review center renders the selected alert inline (there is no dialog or
-    // drawer), so the severity and the description must be shown for the alert on
-    // whatever surface presents it. The Next.js dev error overlay is also a
-    // role=dialog; it is never accepted as "detail".
-    const detailView = page.locator(
-      "[role='dialog']:not([data-nextjs-dialog]), [data-testid='alert-detail'], [data-testid='alert-drawer']"
-    );
-    const surface = (await detailView.count()) > 0 ? detailView.first() : alertItems.first();
-    await expect(surface).toBeVisible();
-    await expect(surface).toContainText(/critical|high|medium|low|info/i);
-    await expect(surface).toContainText(/\S{3,}/);
+    await row.click();
+    const dialog = page.locator("[role='dialog']:not([data-nextjs-dialog])").first();
+    await expect(dialog).toBeVisible();
+    const alertTitle = (await dialog.getByTestId("alert-modal-context").innerText()).trim();
+    expect(alertTitle.length).toBeGreaterThan(2);
+    await expect(row).toContainText(alertTitle);
   });
 
   test("DAP-006: Alert approve/reject buttons are accessible", async ({ page }) => {

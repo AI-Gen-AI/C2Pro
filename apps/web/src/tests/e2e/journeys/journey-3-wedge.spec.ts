@@ -200,7 +200,7 @@ async function waitForAuthenticatedSession(page: Page) {
       response.status() === 200,
   );
 
-  await page.goto("/projects");
+  await gotoStable(page, "/projects");
   await projectsResponse;
 }
 
@@ -277,17 +277,17 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   await page.getByRole("button", { name: /evaluate coherence/i }).click();
 
-  await page.goto(`/projects/${projectId}/coherence?cohV1Scenario=full-triplet`);
+  await gotoStable(page, `/projects/${projectId}/coherence?cohV1Scenario=full-triplet`);
   await expect(page.getByRole("heading", { name: "Coherence Dashboard" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Coherence Score: 82/100, Good" })).toBeVisible();
 
-  await page.goto(`/projects/${projectId}/documents`);
+  await gotoStable(page, `/projects/${projectId}/documents`);
   await expect(page.getByRole("link", { name: "baseline-contract.pdf" })).toHaveAttribute(
     "href",
     `/projects/${projectId}/evidence?documentId=doc-contract`,
   );
 
-  await page.goto(`/projects/${projectId}/review`);
+  await gotoStable(page, `/projects/${projectId}/review`);
   await expect(page.getByTestId("review-page")).toBeVisible();
   await expect(page.getByText(/budget deviation has supporting evidence/i)).toBeVisible();
   await page.getByTestId("approve-review-wedge-1").click();
@@ -297,7 +297,7 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
-  await page.goto(`/projects/${projectId}/report?mode=audit`);
+  await gotoStable(page, `/projects/${projectId}/report?mode=audit`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
@@ -333,7 +333,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
     `/projects/${liveProjectId}/evidence?documentId=${liveContractId}`,
   );
 
-  await page.goto(`/projects/${liveProjectId}/review`);
+  await gotoStable(page, `/projects/${liveProjectId}/review`);
   await expect(page.getByTestId("review-page")).toBeVisible();
   await expect(page.getByTestId(`review-item-${liveReviewItemId}`)).toBeVisible();
 
@@ -349,7 +349,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
-  await page.goto(`/projects/${liveProjectId}/report?mode=audit`);
+  await gotoStable(page, `/projects/${liveProjectId}/report?mode=audit`);
   await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByText("HITL decisions")).toBeVisible();
