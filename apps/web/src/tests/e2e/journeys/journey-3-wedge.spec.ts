@@ -272,6 +272,32 @@ async function getSessionSubject(page: Page): Promise<string | null> {
 // auth.setup.ts. Signing out and signing in again here only raced that session
 // (and required a credential literal in the repository), so assert the restored
 // identity instead.
+// The Nightly serves the app with the dev server, which compiles each route on its first request:
+// that cold compile (not the product) is what raced the 5 s locators in the first test to touch a
+// route (Nightly 40171480641, 40173221009, 40174646724). Compile every route this journey visits
+// once, up front, in a throw-away context. Warm-up is not an assertion: a failing warm-up request
+// is ignored here and the journey's own assertions still decide.
+test.beforeAll(async ({ browser }) => {
+  test.setTimeout(240_000);
+  const context = await browser.newContext({ storageState: "playwright/.auth/user.json" });
+  try {
+    const page = await context.newPage();
+    for (const route of [
+      "documents",
+      "coherence?cohV1Scenario=full-triplet",
+      "evidence",
+      "review",
+      "report?mode=audit",
+    ]) {
+      await page
+        .goto(`/projects/${liveProjectId}/${route}`, { waitUntil: "load", timeout: 90_000 })
+        .catch(() => undefined);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test.beforeEach(async ({ page }) => {
   await waitForAuthenticatedSession(page);
 
