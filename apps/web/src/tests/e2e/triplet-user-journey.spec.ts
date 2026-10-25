@@ -25,7 +25,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { openProjects } from "./support/p0b-auth";
+import { openProjects, requireExpectedOrganization, signInWithClerk } from "./support/p0b-auth";
 import { readProjectTabs } from "./support/pj01/health";
 import { Pj01RunRecorder } from "./support/pj01/run-recorder";
 import { uploadDocumentThroughUi } from "./support/pj01/upload";
@@ -183,10 +183,25 @@ async function createProjectThroughWizard(page: Page): Promise<string> {
 
 type EvaluatedAlert = { rule_id?: string; severity?: string; message?: string };
 
+/** Another tenant's project, seeded for the isolation step (tests/e2e_seed/seed_wedge.py). */
+const FOREIGN_PROJECT_ID = "00000000-0000-0000-0000-00000000c304";
+const FOREIGN_PROJECT_NAME = "Foreign Tenant Confidential Project";
+
+/** Sign out the way a user does: the header's user menu. */
+async function signOutThroughUi(page: Page): Promise<void> {
+  const userButton = page.getByRole("button", { name: /user menu/i });
+  await expect(userButton).toBeVisible({ timeout: 30_000 });
+  await userButton.click();
+  const signOut = page.getByRole("menuitem", { name: /sign out/i });
+  await expect(signOut).toBeVisible({ timeout: 15_000 });
+  await signOut.click();
+  await page.waitForURL(/\/sign-in/, { timeout: 30_000 });
+}
+
 test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → coherence → persistence", () => {
   test(`AI ${AI_IS_MOCKED ? "MOCKED" : "NOT mocked"}: the triplet raises budget and schedule alerts`, async ({
-    page,
     browser,
+    baseURL,
   }) => {
     test.setTimeout(900_000);
     test.info().annotations.push({
@@ -198,6 +213,21 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     const recorder = Pj01RunRecorder.fromEnv();
     recorder.record("aiMocked", AI_IS_MOCKED);
 
+    // S1: a brand-new browser context with NO restored session. The user signs in live through Clerk
+    // (the documented @clerk/testing flow: a sign-in ticket minted by the Clerk backend API for the
+    // configured E2E identity, consumed by the real Clerk client) and the Organization/tenant is
+    // proven before anything else happens. It is not the hosted sign-in form.
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+    await test.step("S1: sign in live with Clerk (no restored session)", async () => {
+      await signInWithClerk(page);
+      await requireExpectedOrganization(page);
+      await openProjects(page);
+      const userId = await page.evaluate(() => window.Clerk?.user?.id ?? null);
+      expect(userId, "a live Clerk session must exist").toBeTruthy();
+      recorder.record("clerkUserId", userId);
+    });
+
     // 1 ── a user creates a project
     const projectId = await test.step("create the project through the wizard", () =>
       createProjectThroughWizard(page));
@@ -205,7 +235,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     markStep(
       "S1",
       "PARTIAL",
-      "project created through the UI under a RESTORED session (not a Clerk login); tenant isolation not exercised here",
+      "live Clerk session (sign-in ticket for the E2E identity, Organization/tenant proven) and project created through the UI; not the hosted sign-in form",
     );
 
     const latestDocuments = trackDocumentsList(page, projectId);
@@ -428,34 +458,84 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       await expect(page.getByText(/could not load|failed to load/i)).toHaveCount(0);
     });
 
-    // 7 ── persistence: a brand-new browser context restored from the saved session
-    await test.step("the state persists in a fresh browser context", async () => {
-      const fresh = await browser.newContext({ storageState: "playwright/.auth/user.json" });
-      try {
-        const reopened = await fresh.newPage();
-        await reopened.goto(`/projects/${projectId}/alerts`);
-        await expect
-          .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 30_000 })
-          .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length);
-        await reopened.goto(`/projects/${projectId}/documents`);
-        await expect(reopened.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
-        // A new context compiles/loads the route cold and the rows render after the list request:
-        // wait for the list the app requested, then require every document, exactly once.
-        for (const name of ["triplet-contract.docx", "triplet-budget.xlsx", "triplet-schedule.xlsx", "triplet-specification.docx"]) {
-          await expect(
-            documentRow(reopened, name),
-            `${name} must be listed once in a fresh context (documents page rendered, row missing)`,
-          ).toHaveCount(1, { timeout: 30_000 });
-        }
-        markStep(
-          "S8",
-          "PARTIAL",
-          "state survives a fresh browser context restored from the saved session; no Clerk relogin, no cross-tenant denial (see pj01-tenant-isolation), no runtime SHA check",
-        );
-      } finally {
-        await fresh.close();
-      }
+    // 7 ── a human decision on a persisted alert, then S8: sign out, denial, sign in again, isolation
+    const decided = await test.step("a person approves one persisted alert", async () => {
+      await openProjectTab(page, projectId, "alerts");
+      const firstRow = page.locator("table tbody tr").first();
+      await expect(firstRow).toBeVisible({ timeout: 30_000 });
+      const title = (await firstRow.locator("td").first().innerText()).trim();
+      await firstRow.getByRole("button", { name: /^approve /i }).click();
+      const dialog = page.getByRole("dialog", { name: /approve alert/i });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("checkbox").check();
+      const answered = page.waitForResponse(
+        (response) => response.request().method() !== "GET" && /alerts/.test(new URL(response.url()).pathname),
+        { timeout: 60_000 },
+      );
+      await dialog.getByRole("button", { name: /confirm approve/i }).click();
+      expect((await answered).status(), "the alert decision must be accepted").toBeLessThan(300);
+      await expect(
+        page.locator("table tbody tr").filter({ hasText: title }).first().locator("td").nth(2),
+      ).toHaveText(/approved/i, { timeout: 30_000 });
+      return title;
     });
+
+    await test.step("S8: signed out, the project is denied and shows no data", async () => {
+      await signOutThroughUi(page);
+      await page.goto(`/projects/${projectId}/documents`);
+      await expect(page).toHaveURL(/sign-in/, { timeout: 30_000 });
+      await expect(page.getByText("triplet-contract.docx")).toHaveCount(0);
+    });
+
+    await test.step("S8: signing in again restores the same project, documents, alerts and decision", async () => {
+      await signInWithClerk(page);
+      await requireExpectedOrganization(page);
+      await page.goto(`/projects/${projectId}/documents`);
+      await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
+      for (const name of ["triplet-contract.docx", "triplet-budget.xlsx", "triplet-schedule.xlsx", "triplet-specification.docx"]) {
+        await expect(
+          documentRow(page, name),
+          `${name} must be listed once after signing in again (documents page rendered, row missing)`,
+        ).toHaveCount(1, { timeout: 30_000 });
+      }
+      await page.goto(`/projects/${projectId}/alerts`);
+      await expect
+        .poll(async () => page.locator("table tbody tr").count(), { timeout: 30_000 })
+        .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length);
+      await expect(
+        page.locator("table tbody tr").filter({ hasText: decided }).first().locator("td").nth(2),
+        "the human decision must survive logout and login",
+      ).toHaveText(/approved/i, { timeout: 30_000 });
+    });
+
+    await test.step("S8: another tenant's project is denied, with no data and no 2xx", async () => {
+      const statuses: { url: string; status: number }[] = [];
+      page.on("response", (response) => {
+        const url = new URL(response.url());
+        if (url.pathname.includes(FOREIGN_PROJECT_ID)) statuses.push({ url: url.pathname, status: response.status() });
+      });
+      await page.goto(`/projects/${FOREIGN_PROJECT_ID}/documents`);
+      await expect(page.getByTestId("documents-page").or(page.getByText(/not found|no access|unavailable/i)).first())
+        .toBeVisible({ timeout: 30_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(3_000); // let the page's own requests settle before reading them
+      await expect(page.getByText(FOREIGN_PROJECT_NAME)).toHaveCount(0);
+      // Every API request the page made for the foreign project must be a denial, never a 2xx.
+      const apiCalls = statuses.filter((entry) => entry.url.startsWith("/api/"));
+      expect(apiCalls.length, "the page must have asked the API about the foreign project").toBeGreaterThan(0);
+      expect(
+        apiCalls.filter((entry) => ![401, 403, 404].includes(entry.status)),
+        `the API must deny every request for another tenant's project: ${JSON.stringify(apiCalls)}`,
+      ).toEqual([]);
+      recorder.record("foreignProjectRequests", statuses);
+      markStep(
+        "S8",
+        "PARTIAL",
+        "UI sign-out, denial while signed out, live Clerk sign-in again, same project/documents/alerts and the human decision persisted, another tenant's project denied (one direction: the E2E user cannot see it; no second Clerk identity); no runtime SHA check",
+      );
+    });
+
+    await context.close();
 
     // The authentic matrix steps and how much of each this journey exercised. Nothing here is a UAT
     // result: every step stays NOT_VERIFIED until a real, non-mocked run is reviewed.
