@@ -15,13 +15,13 @@ from fastapi import UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.tasks import ingestion_tasks
 from src.coherence.router import (
     _get_parsed_text_fallback_clauses,
     _get_persisted_clause_candidates,
     _get_rag_chunk_clauses,
     get_clauses_from_rag,
 )
+from src.core.tasks import ingestion_tasks
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
