@@ -34,7 +34,10 @@ def test_two_real_sections_preserve_literal_source_offsets_and_revision() -> Non
         assert clause.revision_id == revision
         assert clause.clause_type == ClauseType.OTHER
         assert clause.extraction_confidence is None
-        assert clause.extracted_entities["technical_requirement"]["verification_status"] == "unverified"
+        assert (
+            clause.extracted_entities["technical_requirement"]["verification_status"]
+            == "unverified"
+        )
         assert clause.extracted_entities["evidence_location"] == {
             "revision_id": str(revision),
             "page_number": None,
@@ -66,7 +69,10 @@ def test_no_fabricated_evidence_from_heading_only_or_unstructured_prose() -> Non
         "The supplier shall comply with section 5.2 according to standards.",
         revision_id=revision,
     ) == []
-    assert _extract("Section 3.1 The applicable definition is provided.", revision_id=revision) == []
+    assert (
+        _extract("Section 3.1 The applicable definition is provided.", revision_id=revision)
+        == []
+    )
 
 
 def test_unpinned_source_produces_no_canonical_technical_clauses() -> None:
@@ -85,7 +91,10 @@ def test_document_source_is_not_claimed_to_be_human_approved() -> None:
     clause = clauses[0]
     assert clause.manually_verified is False
     assert clause.verified_at is None
-    assert clause.extracted_entities["technical_requirement"]["verification_status"] == "unverified"
+    assert (
+        clause.extracted_entities["technical_requirement"]["verification_status"]
+        == "unverified"
+    )
 
 
 def test_large_section_preserves_the_qualifying_obligation_and_exact_offsets() -> None:
