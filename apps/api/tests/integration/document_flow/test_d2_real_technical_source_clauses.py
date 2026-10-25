@@ -196,12 +196,13 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
     assert len(technical_candidates) == 2
     assert {clause.text for clause in technical_candidates} == set(SOURCE_SECTIONS)
     assert {
-        str(clause.data.get("revision_id")) for clause in technical_candidates
+        str(clause.data["evidence_location"]["revision_id"])
+        for clause in technical_candidates
     } == {str(revision.revision_id)}
     assert all(
-        clause.data.get("extraction_confidence") is None
+        clause.data["technical_requirement"]["verification_status"] == "unverified"
         for clause in technical_candidates
-    ), "trusted source text alone cannot invent technical confidence"
+    ), "source publication must not imply human technical verification"
 
     # Trusting a source for citation never settles technical compliance.
     assert await db.scalar(
