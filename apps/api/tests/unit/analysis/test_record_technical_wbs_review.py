@@ -16,7 +16,6 @@ import docx
 import pytest
 
 from src.analysis.application import record_technical_wbs_review as target
-from src.analysis.domain.technical_wbs_link_candidate import TechnicalWBSLinkCandidate
 from src.temporal.domain.current_revision import CurrentRevision, CurrentRevisionStatus
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_event import ProjectEvent
@@ -179,23 +178,6 @@ def _patch(monkeypatch, session, *, revision_status=CurrentRevisionStatus.TRUSTE
     monkeypatch.setattr(target, "SqlAlchemyDocumentRevisionRepository", _RevisionReader)
     monkeypatch.setattr(target, "SqlAlchemyCurrentRevisionResolver", _CurrentReader)
     monkeypatch.setattr(target, "SqlAlchemyProjectEventRepository", _EventWriter)
-    monkeypatch.setattr(
-        target,
-        "preview_technical_wbs_link",
-        lambda **_kwargs: TechnicalWBSLinkCandidate(
-            tenant_id=TENANT,
-            project_id=PROJECT,
-            technical_document_id=DOC,
-            technical_revision_id=REV,
-            source_blob_hash="a" * 64,
-            source_clause_id=CLAUSE,
-            source_section="4.1.2",
-            source_start_offset=0,
-            source_end_offset=len(SOURCE),
-            proposed_wbs_baseline_id=BASE,
-            proposed_wbs_node_id=NODE,
-        ),
-    )
 
 
 async def _review(session, **overrides):
@@ -374,5 +356,48 @@ async def test_audit_uses_postgres_compatible_naive_utc(monkeypatch) -> None:
     _patch(monkeypatch, session)
     await _review(session)
     assert len(EVENTS) == 1
+    assert EVENTS[0].occurred_at.tzinfo is None
+    assert EVENTS[0].created_at.tzinfo is None
+
+
+@pytest.mark.asyncio
+async def test_missing_active_trusted_artifact_refuses_without_audit(monkeypatch) -> None:
+    EVENTS.clear()
+    session = _Session(trust_ok=False)
+    _patch(monkeypatch, session)
+    with pytest.raises(target.TechnicalMappingReviewError, match="active trusted artifact"):
+        await _review(session)
+    assert not EVENTS
+
+
+@pytest.mark.asyncio
+async def test_real_section_locator_rejects_forged_heading_even_if_metadata_agrees(
+    monkeypatch,
+) -> None:
+    EVENTS.clear()
+    session = _Session()
+    _patch(monkeypatch, session)
+    original = _Clause.extracted_entities
+    original_code = _Clause.clause_code
+    try:
+        _Clause.clause_code = "9.9"
+        _Clause.extracted_entities = {
+            "technical_requirement": {"source_section": "9.9", "verification_status": "unverified"},
+            "evidence_location": {"revision_id": str(REV)},
+        }
+        with pytest.raises(ValueError, match="source heading"):
+            await _review(session)
+    finally:
+        _Clause.clause_code = original_code
+        _Clause.extracted_entities = original
+    assert not EVENTS
+
+
+@pytest.mark.asyncio
+async def test_review_event_timestamps_are_naive_utc_for_postgresql(monkeypatch) -> None:
+    EVENTS.clear()
+    session = _Session()
+    _patch(monkeypatch, session)
+    await _review(session)
     assert EVENTS[0].occurred_at.tzinfo is None
     assert EVENTS[0].created_at.tzinfo is None
