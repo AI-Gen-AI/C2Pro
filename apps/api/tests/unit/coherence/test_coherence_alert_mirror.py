@@ -362,6 +362,8 @@ async def test_historical_revision_clause_is_not_promoted_to_current_evidence() 
 
     payload = service.process_violations.await_args.kwargs["violations"][0]
     assert payload.source_clause_id is None
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
     assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(
         stale_clause_id
     )
@@ -419,9 +421,8 @@ async def test_uuid_looking_external_locator_is_not_used_as_clause_foreign_key()
     assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(
         external_locator
     )
-    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
-        document_id
-    )
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
 
 
 @pytest.mark.asyncio
@@ -467,7 +468,8 @@ async def test_mirror_keeps_unresolvable_locator_as_text_but_not_fake_uuid_fk() 
     assert payload.category == "SCOPE"
     assert payload.source_clause_id is None
     assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == "parsed_deadbeef"
-    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == "doc-fallback"
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
 
 
 @pytest.mark.asyncio
