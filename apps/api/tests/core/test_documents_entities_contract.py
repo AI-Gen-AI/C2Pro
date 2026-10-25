@@ -103,3 +103,7 @@ async def test_document_entities_route_returns_clause_derived_entities(
     assert measured["metadata"]["evidence_location"]["bbox"] == [0.1, 0.2, 0.5, 0.08]
     assert unknown["confidence"] is None, "unknown cannot become 100% certainty"
     assert unknown["page"] is None
+    assert unknown["metadata"]["technical_requirement"] == {
+        "source_section": "4.1.2",
+        "verification_status": "unverified",
+    }
