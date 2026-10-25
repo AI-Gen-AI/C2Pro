@@ -401,6 +401,53 @@ async def test_post_condition_rejects_unbound_readable_relations() -> None:
     await _in_rolled_back_fixture(body)
 
 
+async def test_post_condition_requires_effective_schema_usage() -> None:
+    async def body(conn, fx: Fixture) -> None:
+        # A Supabase-style extension view may grant SELECT to PUBLIC without
+        # granting USAGE on its schema. That is not effective read access.
+        hidden_schema = f"{fx.schema}_hidden"
+        await conn.execute(f"CREATE SCHEMA {hidden_schema}")
+        await conn.execute(
+            f"CREATE VIEW {hidden_schema}.stats_view AS SELECT id FROM {fx.schema}.projects"
+        )
+        await conn.execute(f"GRANT SELECT ON {hidden_schema}.stats_view TO PUBLIC")
+        assert not await conn.fetchval(
+            "SELECT has_schema_privilege($1, $2, 'USAGE')", fx.role, hidden_schema
+        )
+        await fx.run(conn, M1053.UPGRADE_STATEMENTS)
+        await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+        await fx.run(conn, M1054.DOWNGRADE_STATEMENTS)
+        # With both rights, this is a genuinely readable unbound view: DENY.
+        await conn.execute(f"GRANT USAGE ON SCHEMA {hidden_schema} TO {fx.role}")
+        with pytest.raises(asyncpg.PostgresError, match="UNBOUND_READABLE_RELATIONS.*stats_view"):
+            async with conn.transaction():
+                await fx.run(conn, M1054.UPGRADE_STATEMENTS)
+
+    await _in_rolled_back_fixture(body)
+
+
+async def test_revoke_public_execute_preserves_named_application_grants() -> None:
+    async def body(conn, fx: Fixture) -> None:
+        app_function = f"{fx.schema}.is_project_member(uuid)"
+        await conn.execute(
+            f"CREATE FUNCTION {fx.schema}.is_project_member(uuid) RETURNS boolean "
+            "LANGUAGE sql SECURITY DEFINER AS $ SELECT false $"
+        )
+        await conn.execute(f"GRANT EXECUTE ON FUNCTION {app_function} TO {fx.app}")
+        assert await conn.fetchval(
+            "SELECT has_function_privilege($1, $2, 'EXECUTE')", fx.role, app_function
+        )
+        await fx.upgrade(conn)
+        assert not await conn.fetchval(
+            "SELECT has_function_privilege($1, $2, 'EXECUTE')", fx.role, app_function
+        )
+        assert await conn.fetchval(
+            "SELECT has_function_privilege($1, $2, 'EXECUTE')", fx.app, app_function
+        )
+
+    await _in_rolled_back_fixture(body)
+
+
 async def test_post_condition_rejects_a_restrictive_policy_that_is_not_the_binding() -> None:
     async def body(conn, fx: Fixture) -> None:
         s, r = fx.schema, fx.role
