@@ -5954,6 +5954,72 @@
       }
     },
     "/api/v1/projects/{project_id}/technical-wbs/reviews": {
+      "get": {
+        "tags": ["Technical WBS review"],
+        "summary": "List the current reviewer's historical, audit-only Technical WBS decisions",
+        "operationId": "list_technical_wbs_reviews_api_v1_projects__project_id__technical_wbs_reviews_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TechnicalWBSReviewHistoryEntry"
+                  },
+                  "type": "array",
+                  "title": "Response List Technical Wbs Reviews Api V1 Projects  Project Id  Technical Wbs Reviews Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["Technical WBS review"],
         "summary": "Record Technical Wbs Review",
@@ -16099,6 +16165,94 @@
         "type": "string",
         "enum": ["CONFIRMED_FOR_REVIEW", "REJECTED"],
         "title": "TechnicalMappingDecision"
+      },
+      "TechnicalWBSReviewHistoryEntry": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/TechnicalMappingDecision"
+          },
+          "technical_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Document Id"
+          },
+          "technical_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Revision Id"
+          },
+          "source_clause_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Clause Id"
+          },
+          "source_section": {
+            "type": "string",
+            "title": "Source Section"
+          },
+          "proposed_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Baseline Id"
+          },
+          "proposed_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Node Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "state": {
+            "type": "string",
+            "const": "HISTORICAL_AUDIT_ONLY",
+            "title": "State",
+            "default": "HISTORICAL_AUDIT_ONLY"
+          },
+          "authority": {
+            "type": "string",
+            "const": "AUDIT_ONLY_NOT_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "AUDIT_ONLY_NOT_CANONICAL_LINK"
+          },
+          "technical_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Technical Assessment",
+            "default": "NOT_ASSESSED"
+          },
+          "approved_canonical_link": {
+            "type": "boolean",
+            "const": false,
+            "title": "Approved Canonical Link",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "occurred_at",
+          "decision",
+          "technical_document_id",
+          "technical_revision_id",
+          "source_clause_id",
+          "source_section",
+          "proposed_wbs_baseline_id",
+          "proposed_wbs_node_id",
+          "reason"
+        ],
+        "title": "TechnicalWBSReviewHistoryEntry"
       },
       "TechnicalWBSReviewRequest": {
         "properties": {
