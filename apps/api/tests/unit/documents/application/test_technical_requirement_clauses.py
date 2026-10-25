@@ -131,3 +131,38 @@ def test_heading_with_terminal_dot_has_full_source_code() -> None:
     source = "Section 4.1.2.\r\nSteel must comply with B500S."
     [clause] = _extract(source, revision_id=revision)
     assert clause.clause_code == "4.1.2"
+
+
+def test_unsupported_heading_still_terminates_preceding_section() -> None:
+    """An obligation below an unsupported heading never belongs to Section 9."""
+    revision = uuid4()
+    source = (
+        "Section 9 General background only.\r\n"
+        "Section 1.2.3.4.5.6.7.8\r\n"
+        "Concrete shall exceed 35 MPa."
+    )
+    assert _extract(source, revision_id=revision) == []
+
+
+def test_unsupported_heading_between_supported_sections_preserves_true_identity() -> None:
+    revision = uuid4()
+    source = (
+        "Section 4.1.2 The steel shall comply with B500S.\n"
+        "Section 1.2.3.4.5.6.7.8\n"
+        "Concrete shall exceed 35 MPa.\n"
+        "Apartado 4.2 El cemento deberá cumplir la normativa vigente."
+    )
+    clauses = _extract(source, revision_id=revision)
+    assert [c.clause_code for c in clauses] == ["4.1.2", "4.2"]
+    assert "Concrete shall exceed 35 MPa" not in clauses[0].full_text
+    assert all(c.full_text in source for c in clauses)
+
+
+def test_overlong_code_still_ends_preceding_source_section() -> None:
+    revision = uuid4()
+    source = (
+        "Section 9 Background information for all disciplines.\n"
+        "Sección 1234.2\n"
+        "The concrete must comply with B500S."
+    )
+    assert _extract(source, revision_id=revision) == []
