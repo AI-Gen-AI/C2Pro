@@ -282,3 +282,113 @@ async def test_real_pg_service_denies_stale_and_foreign_without_event(
             await session.rollback()
     async with test_session_factory() as verify:
         assert await _events(verify, w) == []
+
+
+async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_denials(
+    db: AsyncSession, test_session_factory, tmp_path: Path
+) -> None:
+    """HTTP -> application service -> Postgres, with ONLY Clerk auth overridden.
+
+    This is a real ASGI and transaction integration; the principal comes from
+    a persisted Clerk-linked user but there is NO live JWT or browser login.
+    """
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from src.analysis.adapters.http.technical_wbs_review_router import (
+        get_technical_wbs_review_service,
+        router,
+    )
+    from src.core.auth.dependencies import get_current_user
+
+    w = await _world(db, tmp_path)
+    reviewer = await db.get(User, w["actor"])
+    assert reviewer is not None
+    assert reviewer.clerk_user_id and not reviewer.is_verified
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: reviewer
+
+    async def real_review_service():
+        async with test_session_factory() as session:
+            try:
+                yield RecordTechnicalWBSReviewService(session, w["reader"])
+                await session.commit()
+            except BaseException:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_technical_wbs_review_service] = real_review_service
+    endpoint = f"/api/v1/projects/{w['project']}/technical-wbs/reviews"
+    body = {
+        "clause_id": str(w["clause"]),
+        "expected_revision_id": str(w["revision"]),
+        "expected_blob_hash": w["digest"],
+        "expected_wbs_baseline_id": str(w["baseline"]),
+        "proposed_wbs_node_id": str(w["node"]),
+        "decision": "CONFIRMED_FOR_REVIEW",
+        "idempotency_key": "s7-http-postgres-event-retry",
+        "reason": "Confirmed exact technical section for WBS review",
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        accepted = await client.post(endpoint, json=body)
+        assert accepted.status_code == 201, accepted.text
+        receipt = accepted.json()
+        assert receipt["replayed"] is False
+        assert receipt["authority"] == "AUDIT_ONLY_NOT_CANONICAL_LINK"
+        assert receipt["technical_assessment"] == "NOT_ASSESSED"
+        assert receipt["approved_canonical_link"] is False
+        assert receipt["technical_revision_id"] == str(w["revision"])
+        assert receipt["proposed_wbs_baseline_id"] == str(w["baseline"])
+
+    # A distinct DB transaction, not the injected request session, confirms
+    # durable authority, actor and exact provenance after the HTTP returns.
+    async with test_session_factory() as observer:
+        [event] = await _events(observer, w)
+        assert str(event.event_id) == receipt["event_id"]
+        assert event.actor == f"user:{w['actor']}"
+        assert event.payload["source_blob_hash"] == w["digest"]
+        assert event.payload["source_clause_id"] == str(w["clause"])
+        assert event.payload["reason"] == body["reason"]
+
+    # A new ASGI client emulates a new request/session, NOT Clerk relogin.
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        replay = await client.post(endpoint, json=body)
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["replayed"] is True
+        assert replay.json()["event_id"] == receipt["event_id"]
+
+        contradictory = await client.post(endpoint, json={**body, "decision": "REJECTED"})
+        assert contradictory.status_code == 409, contradictory.text
+
+        forged = await client.post(endpoint, json={**body, "approved_canonical_link": True})
+        assert forged.status_code == 422, forged.text
+
+        foreign_project = await client.post(
+            f"/api/v1/projects/{uuid4()}/technical-wbs/reviews", json=body
+        )
+        assert foreign_project.status_code == 404, foreign_project.text
+
+        stale_hash = await client.post(
+            endpoint, json={**body, "expected_blob_hash": "f" * 64}
+        )
+        assert stale_hash.status_code == 409, stale_hash.text
+
+    # An unrelated tenant principal must not learn if the first project exists.
+    foreign_reviewer = User(
+        id=uuid4(),
+        tenant_id=uuid4(),
+        email=f"foreign-s7-{uuid4().hex}@example.invalid",
+        clerk_user_id=f"clerk-foreign-s7-{uuid4().hex}",
+        is_active=True,
+        is_verified=False,
+    )
+    app.dependency_overrides[get_current_user] = lambda: foreign_reviewer
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        foreign = await client.post(endpoint, json=body)
+        assert foreign.status_code == 404, foreign.text
+
+    async with test_session_factory() as observer:
+        assert len(await _events(observer, w)) == 1
