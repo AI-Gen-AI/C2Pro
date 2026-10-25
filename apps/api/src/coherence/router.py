@@ -1674,6 +1674,16 @@ async def get_coherence_dashboard(
     ]
     last_updated = max(normalized_candidates, default=datetime.now(UTC))
 
+    # Score metadata describes the score that is shown. It comes from the selected /evaluate result,
+    # or from the latest result when no score is shown at all (it then says why: withheld, which
+    # dimensions are missing). Never from a result other than the one the score belongs to: an
+    # Analysis or a Project baseline score has no such metadata, so it is reported as unknown.
+    metadata_source = (
+        coherence_result
+        if snapshot == "result" or (snapshot is None and global_score is None)
+        else None
+    )
+
     summary = DashboardSummary(
         project_id=str(project_id),
         tenant_id=str(tenant_id),
@@ -1684,10 +1694,10 @@ async def get_coherence_dashboard(
         alert_count=alert_count,
         document_count=document_count,
         methodology_version="3.0",
-        score_version=coherence_result.score_version if coherence_result else None,
-        score_reason=coherence_result.score_reason if coherence_result else None,
+        score_version=metadata_source.score_version if metadata_source else None,
+        score_reason=metadata_source.score_reason if metadata_source else None,
         score_missing_dimensions=(
-            coherence_result.score_missing_dimensions if coherence_result else None
+            metadata_source.score_missing_dimensions if metadata_source else None
         ),
         last_updated=last_updated,
         categories_v2=None,

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text as sa_text
 
 from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.domain.enums import AnalysisStatus, AnalysisType
@@ -266,6 +267,8 @@ async def _seed_alert_count_sources(
     evaluate_score: int,
     evaluate_reason: str | None = None,
     analysis_score: float | None = None,
+    evaluate_version: str | None = None,
+    evaluate_missing: list[str] | None = None,
 ) -> ProjectORM:
     """One completed Analysis and one /evaluate result, ``analysis_age`` apart
     (positive = the Analysis is older than the evaluate)."""
@@ -294,6 +297,8 @@ async def _seed_alert_count_sources(
             tenant_id=tenant.id,
             global_score=evaluate_score,
             score_reason=evaluate_reason,
+            score_version=evaluate_version,
+            score_missing_dimensions=evaluate_missing,
             category_scores={},
             category_details=[],
             alerts=[
@@ -404,6 +409,104 @@ async def test_dashboard_never_mixes_an_old_scored_analysis_with_a_newer_evaluat
     response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
 
     assert (response.coherence_score, response.alert_count) == (60, 2)
+
+
+def _score_metadata(response) -> tuple:
+    return (response.score_version, response.score_reason, response.score_missing_dimensions)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_never_labels_a_scored_analysis_with_an_older_evaluates_metadata(
+    db, test_tenant
+) -> None:
+    """Analysis 90 is shown; the older insufficient-evidence evaluate must not label that score."""
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-META-ANALYSIS",
+        analysis_alerts_count=0,
+        analysis_score=90,
+        analysis_age=timedelta(minutes=-10),
+        evaluate_alerts=2,
+        evaluate_score=0,
+        evaluate_reason="insufficient_evidence",
+        evaluate_version="coherence-v1",
+        evaluate_missing=["TECHNICAL"],
+    )
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score == 90
+    assert _score_metadata(response) == (None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_labels_the_evaluate_score_with_its_own_metadata(db, test_tenant) -> None:
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-META-EVALUATE",
+        analysis_alerts_count=0,
+        analysis_score=90,
+        analysis_age=timedelta(minutes=10),
+        evaluate_alerts=2,
+        evaluate_score=60,
+        evaluate_reason="scored",
+        evaluate_version="coherence-v1",
+        evaluate_missing=[],
+    )
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score == 60
+    assert _score_metadata(response) == ("coherence-v1", "scored", [])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_without_a_scored_snapshot_keeps_the_withheld_reason(db, test_tenant) -> None:
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-META-WITHHELD",
+        analysis_alerts_count=None,
+        analysis_age=timedelta(minutes=10),
+        evaluate_alerts=2,
+        evaluate_score=0,
+        evaluate_reason="insufficient_evidence",
+        evaluate_version="coherence-v1",
+        evaluate_missing=["TECHNICAL"],
+    )
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score is None
+    assert _score_metadata(response) == ("coherence-v1", "insufficient_evidence", ["TECHNICAL"])
+
+
+@pytest.mark.asyncio
+async def test_dashboard_baseline_score_is_not_labelled_by_a_rejected_evaluate(db, test_tenant) -> None:
+    project = await _seed_alert_count_sources(
+        db,
+        test_tenant,
+        code="COH-META-BASELINE",
+        analysis_alerts_count=None,
+        analysis_age=timedelta(minutes=10),
+        evaluate_alerts=2,
+        evaluate_score=0,
+        evaluate_reason="insufficient_evidence",
+        evaluate_version="coherence-v1",
+        evaluate_missing=["TECHNICAL"],
+    )
+    await db.execute(
+        sa_text("UPDATE projects SET coherence_score = 70 WHERE id = :p"),
+        {"p": project.id},
+    )
+    await db.commit()
+
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score == 70
+    assert _score_metadata(response) == (None, None, None)
 
 
 @pytest.mark.asyncio

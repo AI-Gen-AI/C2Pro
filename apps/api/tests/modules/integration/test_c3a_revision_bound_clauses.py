@@ -19,6 +19,7 @@ legacy identity fails closed; tenants and documents are isolated.
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from io import BytesIO
@@ -753,13 +754,25 @@ async def test_budget_reconciliation_clause_carries_each_side_currency(
         })
     )
     await world.propose(contract, v2)
+    budget_id = uuid4()
+    budget_revision = uuid4()
     await db.execute(
         text("INSERT INTO documents (id, tenant_id, project_id, document_type, filename, "
              "upload_status, version, storage_encrypted, document_metadata, created_at, "
              "updated_at) VALUES (:id, :tid, :pid, 'budget', 'budget.xlsx', "
              "'parsed_pending_analysis', 1, true, CAST(:meta AS jsonb), now(), now())"),
-        {"id": uuid4(), "tid": world.tenant, "pid": world.project,
-         "meta": '{"stated_total": 1100.0, "stated_total_currencies": ["USD"]}'},
+        {"id": budget_id, "tid": world.tenant, "pid": world.project,
+         "meta": json.dumps({"stated_total_by_revision": {str(budget_revision): {
+             "revision_id": str(budget_revision), "total": 1100.0, "currencies": ["USD"],
+         }}})},
+    )
+    # The budget's single revision (no competing revision): the declaration binds to it.
+    await db.execute(
+        text("INSERT INTO document_revisions (revision_id, document_id, project_id, tenant_id, "
+             "rev_no, blob_hash, blob_key, valid_from, created_at) "
+             "VALUES (:r, :d, :p, :t, 1, :h, 'k', now(), now())"),
+        {"r": budget_revision, "d": budget_id, "p": world.project, "t": world.tenant,
+         "h": "0" * 64},
     )
     await db.commit()
 

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.domain.budget_line_availability import STRUCTURED_BUDGET_SOURCE_UNAVAILABLE
 from src.coherence.models import Clause
+from src.documents.application.budget_stated_total import STATED_TOTAL_BY_REVISION_KEY
 from src.temporal.adapters.persistence.current_revision_sql import (
     clause_in_current_scope,
     current_revision_lateral,
@@ -51,32 +52,31 @@ async def load_contract_total(db: AsyncSession, project_id: UUID, tenant_id: UUI
     return _as_float(result.scalar_one_or_none())
 
 
-_STATED_TOTAL_SQL = text("""
-    SELECT (d.document_metadata->>'stated_total')::numeric AS amt
+# The budget's declared total AND its denominations, from ONE row: the entry the worker recorded
+# for the budget document's trusted-current revision (C3a authority, the same predicate the
+# contract totals use). A proposed or rejected re-upload, a revision without a verifiable stamp and
+# a document whose current revision declares no total all yield no row: UNKNOWN, never the latest
+# ingested figure and never an older revision's.
+_BUDGET_DECLARATION_SQL = text(f"""
+    SELECT (e.entry->>'total')::numeric AS amt,
+           e.entry->'currencies' AS currencies
     FROM documents d
-    JOIN projects p ON d.project_id = p.id
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    CROSS JOIN LATERAL (
+        SELECT d.document_metadata->'{STATED_TOTAL_BY_REVISION_KEY}'->(cur.revision_id::text) AS entry
+    ) AS e
     WHERE d.project_id = CAST(:project_id AS uuid)
-      AND p.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
       AND d.document_type::text = 'budget'
-      AND d.document_metadata ? 'stated_total'
+      AND cur.resolved
+      AND e.entry->>'revision_id' = cur.revision_id::text
+      AND jsonb_typeof(e.entry->'total') = 'number'
     ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
     LIMIT 1
 """)
 
 # Denominations stated alongside each side's total. Contract currencies count
 # only when the clause names them explicitly (ingestion's EUR default does not).
-_BUDGET_CURRENCIES_SQL = text("""
-    SELECT d.document_metadata->'stated_total_currencies' AS currencies
-    FROM documents d
-    JOIN projects p ON d.project_id = p.id
-    WHERE d.project_id = CAST(:project_id AS uuid)
-      AND p.tenant_id = CAST(:tenant_id AS uuid)
-      AND d.document_type::text = 'budget'
-      AND d.document_metadata ? 'stated_total'
-    ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
-    LIMIT 1
-""")
-
 _CONTRACT_CURRENCIES_SQL = text(f"""
     SELECT array_agg(DISTINCT upper(btrim(c.extracted_entities->>'currency')))
     FROM clauses c
@@ -118,7 +118,8 @@ async def build_budget_clauses(
     total, not a line set; no line item is derived from it.
     """
     params = {"project_id": str(project_id), "tenant_id": str(tenant_id)}
-    stated_total = _as_float((await db.execute(_STATED_TOTAL_SQL, params)).scalar_one_or_none())
+    declaration = (await db.execute(_BUDGET_DECLARATION_SQL, params)).first()
+    stated_total = _as_float(declaration[0]) if declaration is not None else None
     if stated_total is None:
         return []
 
@@ -139,9 +140,7 @@ async def build_budget_clauses(
         data["contract_total"] = contract_total
         # Each side keeps its own denomination: one shared "currency" key on this
         # single clause could never reveal a EUR contract vs a USD budget.
-        budget_currencies = _currency_list(
-            (await db.execute(_BUDGET_CURRENCIES_SQL, params)).scalar_one_or_none()
-        )
+        budget_currencies = _currency_list(declaration[1] if declaration is not None else None)
         contract_currencies = _currency_list(
             (await db.execute(_CONTRACT_CURRENCIES_SQL, params)).scalar_one_or_none()
         )

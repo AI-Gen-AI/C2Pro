@@ -10,8 +10,9 @@ from fastapi import HTTPException, status
 
 from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
+from src.documents.application.budget_stated_total import record_revision_stated_total
 from src.documents.application.document_source import fetch_source_file, resolve_source_revision
-from src.documents.domain.models import DocumentStatus
+from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.document_repository import IDocumentRepository
 from src.documents.ports.entity_extraction_service import IEntityExtractionService
@@ -204,14 +205,19 @@ class ParseDocumentUseCase:
                     metadata["parsed_text_revision_id"] = str(revision.revision_id)
                 else:
                     metadata.pop("parsed_text_revision_id", None)
-            stated_total = _extract_budget_stated_total(parsed_payload)
-            if stated_total is not None:
-                metadata["stated_total"] = stated_total
-                currencies = _extract_budget_currencies(parsed_payload)
-                if currencies:
-                    metadata["stated_total_currencies"] = currencies
-                else:
-                    metadata.pop("stated_total_currencies", None)
+            if document.document_type == DocumentType.BUDGET:
+                stated_total = _extract_budget_stated_total(parsed_payload)
+                record_revision_stated_total(
+                    metadata,
+                    revision_id=revision.revision_id if revision is not None else None,
+                    blob_hash=revision.blob_hash if revision is not None else None,
+                    total=stated_total,
+                    currencies=(
+                        _extract_budget_currencies(parsed_payload)
+                        if stated_total is not None
+                        else None
+                    ),
+                )
             await self.document_repository.update_metadata(
                 scoped_tenant_id, document_id, metadata
             )
