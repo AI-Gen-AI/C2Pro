@@ -21,8 +21,9 @@ import {
   classifyBackendDocument,
   classifyUiDocumentLabel,
   extractStatusLabel,
-  isTerminalStage,
+  isSettledStage,
   type PolledDocument,
+  type Settlement,
 } from "../../../pj01/status-model";
 import type { Pj01RunRecorder } from "./run-recorder";
 
@@ -37,12 +38,21 @@ export interface ProcessingObservation {
 export async function observeProcessingWithoutReload(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string; budgetMs?: number; sampleEveryMs?: number; labelGraceMs?: number },
+  options: {
+    projectId: string;
+    documentId: string;
+    budgetMs?: number;
+    sampleEveryMs?: number;
+    labelGraceMs?: number;
+    /** Where this wait ends: the analysis finished (default) or it reached a human-review gate. */
+    settlement?: Settlement;
+  },
 ): Promise<ProcessingObservation> {
   const { projectId, documentId } = options;
   const budgetMs = options.budgetMs ?? ANALYSIS_BUDGET_MS;
   const sampleEveryMs = options.sampleEveryMs ?? 2_000;
   const labelGraceMs = options.labelGraceMs ?? 12_000;
+  const settlement = options.settlement ?? "analyzed";
 
   const started = Date.now();
   const clock = (): number => Date.now() - started;
@@ -79,11 +89,13 @@ export async function observeProcessingWithoutReload(
         uiSamples.push({ atMs: clock(), label });
       }
 
-      const terminal = polls.find((poll) => isTerminalStage(poll.stage));
+      const terminal = polls.find((poll) => isSettledStage(poll.stage, settlement));
       if (terminal) {
         const latest = classifyUiDocumentLabel(uiSamples.at(-1)?.label ?? "");
         const settled =
-          (terminal.stage === "analyzed" && latest === "success") || (terminal.stage === "error" && latest === "error");
+          (terminal.stage === "analyzed" && latest === "success") ||
+          (terminal.stage === "error" && latest === "error") ||
+          (terminal.stage === "review_required" && latest === "needs_review");
         if (settled || clock() - terminal.atMs > labelGraceMs + sampleEveryMs) break;
       }
       await page.waitForTimeout(sampleEveryMs);
@@ -98,9 +110,9 @@ export async function observeProcessingWithoutReload(
     deadlineMs: budgetMs,
     polls,
     uiSamples,
-    timedOut: !polls.some((poll) => isTerminalStage(poll.stage)),
+    timedOut: !polls.some((poll) => isSettledStage(poll.stage, settlement)),
   };
-  const evaluation = evaluateProcessingTimeline(timeline, { labelGraceMs });
+  const evaluation = evaluateProcessingTimeline(timeline, { labelGraceMs, settlement });
 
   recorder.record("processing", {
     outcome: evaluation.outcome,
@@ -108,7 +120,8 @@ export async function observeProcessingWithoutReload(
     uiSamples: uiSamples.length,
     backendStages: [...new Set(polls.map((poll) => poll.stage))],
     uiLabels: [...new Set(uiSamples.map((sample) => sample.label))],
-    msToTerminal: polls.find((poll) => isTerminalStage(poll.stage))?.atMs ?? null,
+    settlement,
+    msToTerminal: polls.find((poll) => isSettledStage(poll.stage, settlement))?.atMs ?? null,
     reloads,
   });
   for (const violation of evaluation.violations) {

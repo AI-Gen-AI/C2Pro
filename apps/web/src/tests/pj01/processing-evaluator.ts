@@ -12,8 +12,9 @@
  */
 import {
   classifyUiDocumentLabel,
-  isTerminalStage,
+  isSettledStage,
   type BackendDocumentStage,
+  type Settlement,
   type UiDocumentState,
 } from "./status-model";
 
@@ -43,6 +44,12 @@ export interface ProcessingOptions {
   maxPollGapMs?: number;
   /** How long a label may lag behind a backend transition before it counts as stale. */
   labelGraceMs?: number;
+  /**
+   * Where the wait is expected to end. `analyzed` (default) is the end of the pipeline;
+   * `review_required` also accepts the durable "waiting for a human decision" state, which is where
+   * an unattended wait must stop when the analysis needs HITL approval.
+   */
+  settlement?: Settlement;
 }
 
 export type ProcessingViolationCode =
@@ -60,7 +67,7 @@ export interface ProcessingViolation {
 }
 
 export interface ProcessingEvaluation {
-  outcome: "analyzed" | "error" | "timeout" | "incomplete";
+  outcome: "analyzed" | "error" | "review_required" | "timeout" | "incomplete";
   violations: ProcessingViolation[];
 }
 
@@ -73,6 +80,7 @@ export function evaluateProcessingTimeline(
 ): ProcessingEvaluation {
   const maxPollGapMs = options.maxPollGapMs ?? DEFAULT_MAX_POLL_GAP_MS;
   const labelGraceMs = options.labelGraceMs ?? DEFAULT_LABEL_GRACE_MS;
+  const settlement = options.settlement ?? "analyzed";
   const polls = [...timeline.polls].sort((a, b) => a.atMs - b.atMs);
   const uiSamples = [...timeline.uiSamples].sort((a, b) => a.atMs - b.atMs);
 
@@ -81,9 +89,9 @@ export function evaluateProcessingTimeline(
     if (!violations.some((violation) => violation.code === code)) violations.push({ code, atMs, detail });
   };
 
-  const terminal = polls.find((poll) => isTerminalStage(poll.stage));
+  const terminal = polls.find((poll) => isSettledStage(poll.stage, settlement));
   const outcome: ProcessingEvaluation["outcome"] = terminal
-    ? (terminal.stage as "analyzed" | "error")
+    ? (terminal.stage as "analyzed" | "error" | "review_required")
     : timeline.timedOut
       ? "timeout"
       : "incomplete";
@@ -118,6 +126,13 @@ export function evaluateProcessingTimeline(
           "MANUAL_REFRESH_REQUIRED",
           sample.atMs,
           `analysis completed at ${terminal.atMs}ms but the UI still showed "${sample.label}"`,
+        );
+      }
+      if (terminal.stage === "review_required" && uiState !== "needs_review") {
+        report(
+          "MANUAL_REFRESH_REQUIRED",
+          sample.atMs,
+          `the analysis waited for a human decision from ${terminal.atMs}ms but the UI still showed "${sample.label}"`,
         );
       }
       if (terminal.stage === "error" && uiState !== "error") {

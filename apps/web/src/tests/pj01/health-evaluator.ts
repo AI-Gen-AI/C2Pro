@@ -20,6 +20,7 @@ export interface CategoryAssessmentPayload {
 
 /** `GET /api/v1/projects/{id}/health`, as far as PJ-01 reads it. */
 export interface HealthVectorPayload {
+  computed_at?: string | null;
   single_document_coverage?: { document_id?: string | null; assessments?: CategoryAssessmentPayload[] | null } | null;
   single_document_evidence_granularity?: string | null;
 }
