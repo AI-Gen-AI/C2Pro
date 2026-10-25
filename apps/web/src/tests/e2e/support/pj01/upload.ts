@@ -8,7 +8,7 @@
  */
 import path from "node:path";
 
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Response } from "@playwright/test";
 
 import type { Pj01RunRecorder } from "./run-recorder";
 
@@ -43,18 +43,40 @@ export async function uploadDocumentThroughUi(
   }
   await expect(typeControl).toHaveText(wanted);
 
-  const accepted = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new RegExp(`/projects/${projectId}/documents/?$`).test(new URL(response.url()).pathname),
-    { timeout: 120_000 },
-  );
+  type UploadBody = { id?: string; document_id?: string; task_id?: string | null };
+  const isUpload = (response: Response): boolean =>
+    response.request().method() === "POST" &&
+    new RegExp(`/projects/${projectId}/documents/?$`).test(new URL(response.url()).pathname);
+  // The page navigates as soon as the upload is accepted, and the browser then drops the response
+  // body (CDP "No resource with given identifier"). Ask for the body the moment the response
+  // arrives, before any navigation can happen, instead of after waiting for it.
+  const received = new Promise<{ status: number; ok: boolean; body: Promise<UploadBody | null> }>((resolve) => {
+    const onResponse = (response: Response): void => {
+      if (!isUpload(response)) return;
+      page.off("response", onResponse);
+      resolve({
+        status: response.status(),
+        ok: response.ok(),
+        body: response.json().then(
+          (parsed) => parsed as UploadBody,
+          () => null,
+        ),
+      });
+    };
+    page.on("response", onResponse);
+  });
   await page.getByRole("button", { name: /^upload 1 file$/i }).click();
-  const response = await accepted;
-  if (!response.ok()) {
-    throw new Error(`PJ01_UPLOAD_REJECTED: HTTP ${response.status()} for ${fileName}`);
+  const accepted = await Promise.race([
+    received,
+    new Promise<never>((_resolve, reject) =>
+      setTimeout(() => reject(new Error(`PJ01_UPLOAD_NO_RESPONSE: no answer to the upload of ${fileName}`)), 120_000),
+    ),
+  ]);
+  if (!accepted.ok) {
+    throw new Error(`PJ01_UPLOAD_REJECTED: HTTP ${accepted.status} for ${fileName}`);
   }
-  const body = (await response.json()) as { id?: string; document_id?: string; task_id?: string | null };
+  const body = await accepted.body;
+  if (!body) throw new Error("PJ01_UPLOAD_BODY_UNREADABLE: the accepted upload response could not be read");
   const documentId = body.id ?? body.document_id;
   if (!documentId) throw new Error("PJ01_UPLOAD_NO_DOCUMENT_ID: the upload response carried no document id");
 
@@ -74,5 +96,5 @@ export async function uploadDocumentThroughUi(
   }
   recorder.record("documentId", documentId);
   recorder.record("uploadTaskEnqueued", Boolean(taskId));
-  return { documentId, taskId, httpStatus: response.status() };
+  return { documentId, taskId, httpStatus: accepted.status };
 }

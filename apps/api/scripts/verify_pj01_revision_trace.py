@@ -112,7 +112,7 @@ async def verify(database_url: str, project_id: UUID, hash_a: str, hash_b: str) 
                 await conn.execute(
                     text(
                         "SELECT count(*) FROM review_items WHERE project_id = :p "
-                        "AND current_status::text = 'approved'"
+                        "AND upper(current_status::text) = 'APPROVED'"
                     ),
                     {"p": project_id},
                 )
