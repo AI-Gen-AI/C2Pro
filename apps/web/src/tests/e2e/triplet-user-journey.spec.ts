@@ -184,7 +184,7 @@ async function createProjectThroughWizard(page: Page): Promise<string> {
 type EvaluatedAlert = { rule_id?: string; severity?: string; message?: string };
 
 /** Another tenant's project, seeded for the isolation step (tests/e2e_seed/seed_wedge.py). */
-const FOREIGN_PROJECT_ID = "00000000-0000-0000-0000-00000000c304";
+const FOREIGN_PROJECT_ID = "00000000-0000-0000-0000-00000000c3f1";
 const FOREIGN_PROJECT_NAME = "Foreign Tenant Confidential Project";
 
 /** Sign out the way a user does: the header's user menu. */
