@@ -39,6 +39,8 @@ export interface ExtractedEntity {
   rejectionReason?: string;
   linkedWbs?: string[];
   linkedAlerts?: string[];
+  technicalSourceSection?: string | null;
+  technicalSourceUnverified?: boolean;
 }
 
 interface EntityValidationCardProps {
@@ -154,6 +156,12 @@ export function EntityValidationCard({
 
           {/* Metadata */}
           <div className="flex items-center gap-2 flex-wrap">
+            {entity.technicalSourceSection && (
+              <Badge variant="outline">Source section {entity.technicalSourceSection}</Badge>
+            )}
+            {entity.technicalSourceUnverified && (
+              <Badge variant="outline">Technical requirement not verified</Badge>
+            )}
             <Badge variant={confidenceBadge.variant}>
               {entity.confidence === null ? confidenceBadge.label : `${entity.confidence}% - ${confidenceBadge.label}`}
             </Badge>
