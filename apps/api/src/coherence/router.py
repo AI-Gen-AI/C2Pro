@@ -620,7 +620,9 @@ def _coherence_alert_to_create(
     source_locator = (
         str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
     )
-    clause_by_id = {str(clause.id): clause for clause in clauses}
+    # The caller's clause payload is diagnostic data, not provenance authority.
+    # Preserve the call contract, but never infer document identity from its metadata.
+    _ = clauses
     source_locators = _split_clause_locators(source_locator)
     candidate_clause_ids = [_uuid_or_none(locator) for locator in source_locators]
     # Composite documentary provenance is all-or-nothing. Promoting only the
@@ -644,20 +646,10 @@ def _coherence_alert_to_create(
         if document_id not in verified_document_ids:
             verified_document_ids.append(document_id)
 
-    source_clause = (
-        clause_by_id.get(source_locators[0])
-        if len(source_locators) == 1
-        else None
-    )
-    source_document_id = (
-        verified_document_ids[0]
-        if verified_document_ids
-        else (
-            str(source_clause.data.get("document_id"))
-            if source_clause is not None and source_clause.data.get("document_id")
-            else None
-        )
-    )
+    # Only a DB-verified current clause in this tenant/project can authorize a
+    # document association. A stale, external or synthetic locator must not
+    # promote caller-supplied clause.data["document_id"] into alert provenance.
+    source_document_id = verified_document_ids[0] if verified_document_ids else None
     detection_evidence = (
         {
             "source_clause_id": source_locator or None,
