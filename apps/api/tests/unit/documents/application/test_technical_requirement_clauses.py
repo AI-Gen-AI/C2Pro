@@ -86,3 +86,18 @@ def test_document_source_is_not_claimed_to_be_human_approved() -> None:
     assert clause.manually_verified is False
     assert clause.verified_at is None
     assert clause.extracted_entities["technical_requirement"]["verification_status"] == "unverified"
+
+
+def test_large_section_preserves_the_qualifying_obligation_and_exact_offsets() -> None:
+    revision = uuid4()
+    source = (
+        "Section 10.1 " + ("Engineering background information. " * 160)
+        + "\nThe reinforcement steel shall be B500S."
+    )
+    [clause] = _extract(source, revision_id=revision)
+    assert len(source) > 4000
+    assert "shall be B500S" in clause.full_text
+    assert clause.text_start_offset is not None
+    assert clause.text_end_offset is not None
+    assert source[clause.text_start_offset : clause.text_end_offset] == clause.full_text
+    assert clause.extracted_entities["technical_requirement"]["source_section"] == "10.1"
