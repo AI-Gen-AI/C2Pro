@@ -9,6 +9,7 @@ import { eligibleTechnicalClauses, TechnicalWBSReviewPanel } from "./TechnicalWB
 
 const { mocks } = vi.hoisted(() => ({
   mocks: {
+    auth: { orgId: "org-test-1" as string | null },
     post: vi.fn(),
     get: vi.fn(),
     documents: [
@@ -26,7 +27,7 @@ const { mocks } = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ userId: "clerk-test-user", orgId: "org-test-1", isLoaded: true }),
+  useAuth: () => ({ userId: "clerk-test-user", orgId: mocks.auth.orgId, isLoaded: true }),
 }));
 
 vi.mock("@/hooks/useProjectDocuments", () => ({
@@ -117,6 +118,7 @@ describe("eligibleTechnicalClauses", () => {
 describe("TechnicalWBSReviewPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.auth.orgId = "org-test-1";
     mocks.get.mockResolvedValue([]);
     mocks.revisions = [];
     mocks.detail = null;
@@ -248,6 +250,36 @@ describe("TechnicalWBSReviewPanel", () => {
     });
     expect(mocks.post).not.toHaveBeenCalled();
     expect(screen.queryByTestId("technical-wbs-review-receipt")).not.toBeInTheDocument();
+  });
+
+  it("restores review history for a signed-in personal tenant without orgId", async () => {
+    mocks.auth.orgId = null;
+    mocks.get.mockResolvedValue([{
+      event_id: "personal-event",
+      occurred_at: "2026-10-25T18:00:00",
+      decision: "CONFIRMED_FOR_REVIEW",
+      technical_document_id: "doc-p",
+      technical_revision_id: "rev-p",
+      source_clause_id: "clause-p",
+      source_section: "2.1",
+      proposed_wbs_baseline_id: "baseline-p",
+      proposed_wbs_node_id: "node-p",
+      reason: "Personal tenant historical review",
+      state: "HISTORICAL_AUDIT_ONLY",
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
+      approved_canonical_link: false,
+      technical_assessment: "NOT_ASSESSED",
+    }]);
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("technical-wbs-review-history"))
+        .toHaveTextContent("Personal tenant historical review"),
+    );
+    expect(mocks.get).toHaveBeenCalledWith({
+      url: "/api/v1/projects/project-1/technical-wbs/reviews",
+      method: "GET",
+    });
+    expect(mocks.post).not.toHaveBeenCalled();
   });
 
   it("refuses a response that pretends the audit created canonical authority", async () => {
