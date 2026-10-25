@@ -701,7 +701,7 @@ export default function EvidencePage() {
   const requiresValidationNote = useMemo(
     () =>
       pendingAction?.kind === "entity-approve" &&
-      pendingAction.confidence < 90,
+      (pendingAction.confidence === null || pendingAction.confidence < 90),
     [pendingAction],
   );
 
