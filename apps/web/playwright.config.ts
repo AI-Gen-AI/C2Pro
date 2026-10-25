@@ -56,6 +56,8 @@ export default defineConfig({
         // directory may itself contain "pj01-".
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
+        // Own project and Nightly step: a long journey that must not hide the rest of the suite.
+        /(^|[\\/])triplet-user-journey\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -275,6 +277,25 @@ export default defineConfig({
         task: "TASK-021",
         type: "visual-regression",
         scope: "core-pages",
+      },
+    },
+    {
+      // TS-E2E-TRIPLET-001: project → contract → HITL → budget + schedule → coherence →
+      // alerts/health/evidence → persistence, on the real local backend. The AI is mocked in
+      // the Nightly (C2PRO_AI_MOCK=1); the spec records and declares it. Explicit-only.
+      name: "triplet-journey",
+      testMatch: /(^|[\\/])triplet-user-journey\.spec\.ts$/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
+      metadata: {
+        suite: "TS-E2E-TRIPLET-001",
+        type: "e2e",
+        priority: "p0",
+        ai: "mocked-in-nightly",
+        description: "Three-document journey; not PQ-HITL-09 S1-S8",
       },
     },
     {

@@ -12,6 +12,8 @@ NOT_ASSESSED and raises no alert.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
@@ -50,6 +52,9 @@ pytestmark = pytest.mark.asyncio
 
 RULE = "DET-CRS-SCHDEAD"
 PROVISIONAL_RULE = "ADV-SCHDEAD-PROVISIONAL"
+TRIPLET_DIR = (
+    Path(__file__).resolve().parents[4] / "web" / "src" / "tests" / "e2e" / "test-data" / "triplet"
+)
 COMPLETION_CLAUSE = "La fecha de finalización de las obras será el 30 de junio de 2027."
 DURATION_CLAUSE = "El plazo de ejecución de las obras será de dieciocho meses desde la firma."
 PRICE_CLAUSE = "El precio del contrato asciende a 1.000.000 euros."
@@ -469,3 +474,43 @@ async def test_a_schedule_revision_that_is_not_current_is_not_assessed(
     assert loaded["reason"] == "schedule_revision_not_current"
     assert "date" not in loaded
     assert _schdead(await _evaluate(db, test_user, project_id)) == []
+
+
+# ── the browser journey's fixture files, through the same backend path ──────
+
+
+async def test_the_triplet_fixture_files_raise_the_budget_alerts_and_a_provisional_schedule_risk(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Grounds the E2E journey: its real fixture files, real worker, real evaluate; no AI."""
+    manifest = json.loads((TRIPLET_DIR / "triplet.manifest.json").read_text(encoding="utf-8"))
+    for name, expected in manifest["sha256"].items():
+        assert hashlib.sha256((TRIPLET_DIR / name).read_bytes()).hexdigest() == expected, name
+
+    project_id = await _project(db, test_user.tenant_id)
+    schedule_doc = schedule_rev = None
+    for filename, document_type in (
+        ("triplet-contract.pdf", DocumentType.CONTRACT),
+        ("triplet-budget.xlsx", DocumentType.BUDGET),
+        ("triplet-schedule.xlsx", DocumentType.SCHEDULE),
+    ):
+        document, revision = await _upload_and_ingest(
+            db, worker, test_user, project_id, filename=filename,
+            content=(TRIPLET_DIR / filename).read_bytes(), document_type=document_type,
+        )
+        if document_type is DocumentType.SCHEDULE:
+            schedule_doc, schedule_rev = document, revision
+
+    finish = (await _metadata(db, schedule_doc.id))["schedule_planned_finish"]
+    assert finish["date"] == manifest["schedule"]["planned_finish"]
+    assert finish["source_locator"] == manifest["schedule"]["source_locator"]
+    assert finish["revision_id"] == str(schedule_rev.revision_id)
+
+    result = await _evaluate(db, test_user, project_id)
+
+    rules = {alert.rule_id for alert in result.alerts}
+    assert rules >= set(manifest["expected_rules"])
+    assert rules >= set(manifest["expected_provisional"])
+    assert RULE not in rules  # a submitted schedule never confirms a breach
+    [advisory] = _schdead(result)
+    assert manifest["contract"]["completion_deadline"] in advisory.message

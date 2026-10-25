@@ -22,16 +22,23 @@ test.describe("Clerk Authentication Efficiency", () => {
     await expect(page.locator('h1:has-text("Projects")')).toBeVisible();
   });
 
-  test("should handle re-authentication with testing token if needed", async ({ page }) => {
-    /**
-     * If we ever need to go back to sign-in or sign-up pages during a test,
-     * we must call setupClerkTestingToken.
-     */
-    await setupClerkTestingToken({ page });
-    
-    await page.goto("/sign-in");
-    
-    // Bypasses bot detection, allowing us to interact with Clerk UI programmatically
-    await expect(page.locator('[data-clerk-component="SignIn"]')).toBeVisible();
+  test.describe("signed-out context", () => {
+    // The chromium project restores an authenticated session, for which Clerk
+    // does not render <SignIn/> at all. A sign-in page can only be exercised
+    // from a context that starts without that session.
+    test.use({ storageState: { cookies: [], origins: [] } });
+
+    test("should handle re-authentication with testing token if needed", async ({ page }) => {
+      /**
+       * If we ever need to go back to sign-in or sign-up pages during a test,
+       * we must call setupClerkTestingToken.
+       */
+      await setupClerkTestingToken({ page });
+
+      await page.goto("/sign-in");
+
+      // Bypasses bot detection, allowing us to interact with Clerk UI programmatically
+      await expect(page.locator('[data-clerk-component="SignIn"]')).toBeVisible();
+    });
   });
 });
