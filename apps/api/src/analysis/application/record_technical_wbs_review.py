@@ -11,19 +11,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from dataclasses import dataclass
-from io import BytesIO
-from pathlib import Path
-
-from docx import Document as DocxDocument
-
-from src.documents.adapters.parsers.docx_file_parser import DocxFileParser
-from src.documents.application.document_source import read_verified_revision_file
-from src.documents.ports.storage_service import IStorageService
 from datetime import UTC, datetime
 from enum import StrEnum
+from io import BytesIO
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from docx import Document as DocxDocument
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,8 +28,11 @@ from src.analysis.domain.technical_wbs_link_candidate import (
     preview_technical_wbs_link,
 )
 from src.core.auth.models import User, UserRole
+from src.documents.adapters.parsers.docx_file_parser import DocxFileParser
 from src.documents.adapters.persistence.models import ClauseORM, DocumentORM
+from src.documents.application.document_source import read_verified_revision_file
 from src.documents.domain.models import Clause, DocumentType
+from src.documents.ports.storage_service import IStorageService
 from src.temporal.adapters.persistence.current_revision_resolver import (
     SqlAlchemyCurrentRevisionResolver,
 )
