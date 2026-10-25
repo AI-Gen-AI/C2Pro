@@ -405,6 +405,8 @@ async def _get_persisted_clause_candidates(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {_CLAUSE_IN_CURRENT_SCOPE}
+          -- A lone PROPOSED technical revision can be 'resolved' but untrusted.
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
           AND LOWER(c.full_text) LIKE ANY(CAST(:keyword_patterns AS text[]))
         ORDER BY c.created_at ASC
         LIMIT :limit
@@ -463,6 +465,7 @@ async def _load_fallback_clause_candidates(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {_CLAUSE_IN_CURRENT_SCOPE}
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
         ORDER BY c.created_at ASC
         LIMIT :limit
     """)
@@ -492,10 +495,12 @@ async def _get_rag_chunk_clauses(
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
         JOIN projects p ON dc.project_id = p.id
+        JOIN documents d ON d.id = dc.document_id AND d.tenant_id = dc.tenant_id
         {current_chunk_join("dc")}
         WHERE dc.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {chunk_in_current_scope("dc", "cur")}
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
         ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
@@ -540,6 +545,7 @@ async def _get_parsed_text_fallback_clauses(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {parsed_text_in_current_scope("d", "cur")}
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
           AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
         ORDER BY d.created_at DESC
     """)

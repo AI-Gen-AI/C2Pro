@@ -696,7 +696,7 @@ class TestDocumentHelpers:
         assert body[0]["metadata"]["evidence_location"]["normalized"] is False
         assert body[1]["text"] == "CLS-002"
         assert body[1]["page"] is None
-        assert body[1]["confidence"] == pytest.approx(1.0)
+        assert body[1]["confidence"] is None
         assert body[1]["metadata"]["clause_type"] is None
         assert body[1]["metadata"]["evidence_location"]["bbox"] is None
 

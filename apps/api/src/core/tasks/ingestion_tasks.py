@@ -69,6 +69,9 @@ from src.documents.application.schedule_planned_finish import (
     METADATA_KEY as SCHEDULE_PLANNED_FINISH_KEY,
 )
 from src.documents.application.schedule_planned_finish import extract_schedule_planned_finish
+from src.documents.application.technical_requirement_clauses import (
+    extract_technical_requirement_clauses,
+)
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
@@ -1808,6 +1811,7 @@ async def _ingest_owned(
         block.get("text", "") for block in text_blocks if isinstance(block.get("text"), str)
     ).strip()
     contract_clause_count = 0
+    technical_requirement_count = 0
     metadata = dict(document.document_metadata or {})
     # #712: a fresh parse pass supersedes whatever the last analysis
     # attempt recorded -- a stale "failed, retry me" flag must not
@@ -1854,8 +1858,15 @@ async def _ingest_owned(
             metadata["parsed_text_revision_id"] = str(source_revision.revision_id)
         else:
             metadata.pop("parsed_text_revision_id", None)
-        if document.document_type == DocumentType.CONTRACT:
-            contract_clause_count = await _stage_contract_clauses(
+        if document.document_type in {
+            DocumentType.CONTRACT,
+            DocumentType.TECHNICAL_SPEC,
+            DocumentType.SPECIFICATION,
+        }:
+            # Technical requirements use the same C3a revision pin, immutable
+            # clause IDs and #711 processing fence as contract clauses. They
+            # are SOURCE observations only, never verified assessments.
+            staged_count = await _stage_contract_clauses(
                 session,
                 repo,
                 document=document,
@@ -1865,8 +1876,14 @@ async def _ingest_owned(
                 parsed_text=parsed_text,
                 parsed_payload=parsed_payload,
             )
-            if contract_clause_count:
-                metadata["contract_clause_count"] = contract_clause_count
+            if document.document_type == DocumentType.CONTRACT:
+                contract_clause_count = staged_count
+                if staged_count:
+                    metadata["contract_clause_count"] = staged_count
+            else:
+                technical_requirement_count = staged_count
+                if staged_count:
+                    metadata["technical_requirement_count"] = staged_count
     await repo.update_metadata(tenant_id, document_id, metadata)
     from datetime import UTC, datetime
 
@@ -1884,6 +1901,8 @@ async def _ingest_owned(
 
     if contract_clause_count:
         extraction_summary["contract_clauses"] = contract_clause_count
+    if technical_requirement_count:
+        extraction_summary["technical_requirement_clauses"] = technical_requirement_count
 
     processing_details = _build_processing_details(extraction_summary)
 
@@ -1966,14 +1985,23 @@ async def _stage_contract_clauses(
         raise RevisionAuthorityMismatchError(
             f"authority pinned revision {authority_revision_id}, ingesting {revision_id}"
         )
-    extracted = _extract_contract_clauses(
-        document_id=document.id,
-        project_id=document.project_id,
-        tenant_id=tenant_id,
-        parsed_text=parsed_text,
-        parsed_payload=parsed_payload,
-        revision_id=revision_id,
-    )
+    if document.document_type in {DocumentType.TECHNICAL_SPEC, DocumentType.SPECIFICATION}:
+        extracted = extract_technical_requirement_clauses(
+            document_id=document.id,
+            project_id=document.project_id,
+            tenant_id=tenant_id,
+            parsed_text=parsed_text,
+            revision_id=revision_id,
+        )
+    else:
+        extracted = _extract_contract_clauses(
+            document_id=document.id,
+            project_id=document.project_id,
+            tenant_id=tenant_id,
+            parsed_text=parsed_text,
+            parsed_payload=parsed_payload,
+            revision_id=revision_id,
+        )
     event_repository = SqlAlchemyProjectEventRepository(session)
     prior_events = (
         await event_repository.list_for_project(document.project_id, tenant_id)

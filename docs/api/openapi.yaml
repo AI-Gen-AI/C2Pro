@@ -7360,7 +7360,9 @@ components:
           - type: 'null'
           title: Page
         confidence:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Confidence
         metadata:
           additionalProperties: true

@@ -28,6 +28,7 @@ import {
   normalizeConfidence,
   normalizeEntityType,
   sanitizeFilename,
+  technicalSourcePresentation,
   type EvidencePanelTab,
   type PendingEvidenceAction,
 } from "@/components/features/evidence/evidence-page-utils";
@@ -360,6 +361,7 @@ export default function EvidencePage() {
         approvalResourceType: mapEntityTypeToApprovalResourceType(entity.type),
         confidence: normalizeConfidence(entity.confidence),
         page: entity.page,
+        ...technicalSourcePresentation(entity.metadata),
         validationStatus: "pending",
       })),
     [apiEntities, revisionReadOnly],
@@ -701,7 +703,7 @@ export default function EvidencePage() {
   const requiresValidationNote = useMemo(
     () =>
       pendingAction?.kind === "entity-approve" &&
-      pendingAction.confidence < 90,
+      (pendingAction.confidence === null || pendingAction.confidence < 90),
     [pendingAction],
   );
 
