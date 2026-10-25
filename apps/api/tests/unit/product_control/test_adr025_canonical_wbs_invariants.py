@@ -172,8 +172,11 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     # PC-2b.3: the import router stores immutable WBS import sources -- never WBS rows -- and creates an
     # IMPORT_REVIEW DRAFT only through the governed commands, on an explicit human action.
     imports = "src.wbs.adapters.http.import_router"
+    # ACC-01 S7 is AUDIT-ONLY: its route records human review evidence in
+    # project_events, never creates an approved canonical WBS association.
+    technical_reviews = "src.analysis.adapters.http.technical_wbs_review_router"
     allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance,
-                        governed, profiles, intelligence, imports}
+                        governed, profiles, intelligence, imports, technical_reviews}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -192,6 +195,13 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
                                        for path in intelligence_routes)
     import_routes = {path for (_, path), module in wbs_routes.items() if module == imports}
     assert import_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-imports") for path in import_routes)
+    # This is the ONLY non-canonical technical-WBS review surface: POST
+    # audit fact, NOT an approve/apply or direct wbs_nodes mutation endpoint.
+    technical_routes = {(methods, path) for (methods, path), module in wbs_routes.items()
+                        if module == technical_reviews}
+    assert technical_routes == {(
+        ("POST",), "/api/v1/projects/{project_id}/technical-wbs/reviews"
+    )}
 
 
 def test_wbs_import_never_writes_wbs_except_through_the_governed_draft_commands() -> None:
