@@ -83,6 +83,7 @@ class _Session:
         self.trust_ok = trust_ok
         self.events = []
         self.project_lock_count = 0
+        self.user_eligibility_query: str | None = None
 
     async def execute(self, stmt, params=None):
         if params and "project" in params:
@@ -98,6 +99,7 @@ class _Session:
         if hasattr(query, "column_descriptions"):
             entity = query.column_descriptions[0].get("entity")
             if entity is target.User:
+                self.user_eligibility_query = str(query)
                 return ACTOR if self.user_ok else None
             if entity is target.ClauseORM:
                 return _Clause() if self.clause_ok else None
@@ -401,3 +403,60 @@ async def test_review_event_timestamps_are_naive_utc_for_postgresql(monkeypatch)
     await _review(session)
     assert EVENTS[0].occurred_at.tzinfo is None
     assert EVENTS[0].created_at.tzinfo is None
+
+
+@pytest.mark.asyncio
+async def test_temporary_r2_docx_download_is_deleted_after_success(tmp_path: Path) -> None:
+    doc = docx.Document()
+    doc.add_paragraph("Section 4.1.2 Concrete shall exceed 35 MPa.")
+    path = tmp_path / "r2-temporary.docx"
+    doc.save(path)
+    expected_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    class _R2Download:
+        download_object_is_temporary = True
+
+        async def download_object(self, key: str) -> Path:
+            return path
+
+    reader = target.ImmutableDocxTechnicalTextReader(storage=_R2Download())  # type: ignore[arg-type]
+    rev = _revision().model_copy(update={"blob_hash": expected_hash})
+    assert "4.1.2" in await reader.read_verified_text(rev)
+    assert not path.exists(), "temporary object must be cleaned up on success"
+
+
+@pytest.mark.asyncio
+async def test_temporary_r2_docx_download_is_deleted_after_hash_failure(
+    tmp_path: Path,
+) -> None:
+    doc = docx.Document()
+    doc.add_paragraph("Section 4.1.2 Concrete shall exceed 35 MPa.")
+    path = tmp_path / "r2-invalid.docx"
+    doc.save(path)
+
+    class _R2Download:
+        download_object_is_temporary = True
+
+        async def download_object(self, key: str) -> Path:
+            return path
+
+    reader = target.ImmutableDocxTechnicalTextReader(storage=_R2Download())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="immutable revision blob hash mismatch"):
+        await reader.read_verified_text(_revision())
+    assert not path.exists(), "temporary object must be cleaned up on validation error"
+
+
+@pytest.mark.asyncio
+async def test_review_gate_uses_active_clerk_human_not_unsynced_is_verified(
+    monkeypatch,
+) -> None:
+    """Provisioned Clerk users default to is_verified=False in this schema."""
+    EVENTS.clear()
+    session = _Session()
+    _patch(monkeypatch, session)
+    result = await _review(session)
+    assert result.candidate.is_approved_link is False
+    assert session.user_eligibility_query is not None
+    assert "is_verified" not in session.user_eligibility_query
+    assert "clerk_user_id" in session.user_eligibility_query
+    assert "is_active" in session.user_eligibility_query
