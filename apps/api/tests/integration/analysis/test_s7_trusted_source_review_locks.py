@@ -45,6 +45,9 @@ async def _seed(db: AsyncSession, test_tenant) -> tuple:
         status="active",
         currency="EUR",
     ))
+    # ProjectORM and DocumentORM have no mapped relationship: a bare
+    # project_id FK doesn't impose ORM unit-of-work INSERT order.
+    await db.flush()
     db.add(DocumentORM(
         id=doc_id,
         tenant_id=tenant_id,
