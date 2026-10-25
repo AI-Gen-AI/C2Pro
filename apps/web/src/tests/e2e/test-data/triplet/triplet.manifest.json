@@ -1,0 +1,32 @@
+{
+  "fixture_id": "triplet-v1",
+  "purpose": "Contract + budget + schedule with a deliberate budget excess and a late schedule",
+  "ai": "No AI is needed to derive these expectations; the journey declares whether the backend runs with C2PRO_AI_MOCK",
+  "sha256": {
+    "triplet-budget.xlsx": "aabcbf422887f5eaae0a4846019403d6f90cdf451e0fdc649487f9cba08847ac",
+    "triplet-schedule.xlsx": "7b05eb8c4c86e040ffea4010ffa8bfbdab7a43d011b04aaea6dc815d0ce37fee",
+    "triplet-contract.pdf": "35b0bd55a6a70b2b34a868f10d1410aa345302d128f8dedfda0b53b10004e9ce"
+  },
+  "contract": {
+    "price_eur": 1000000,
+    "completion_deadline": "2027-06-30",
+    "clause_sentence": "Plazo. La fecha de finalización de las obras será el 30 de junio de 2027."
+  },
+  "budget": {
+    "stated_total_eur": 1500000
+  },
+  "schedule": {
+    "planned_finish": "2027-09-30",
+    "source_locator": "Plan!4",
+    "activity": "Entrega y recepción"
+  },
+  "expected_rules": [
+    "DET-CRS-CONBUD",
+    "DET-CRS-NEGMARGIN"
+  ],
+  "upload_ui_note": "The upload dialog accepts .pdf/.xlsx/.bc3 only (no .docx), so the contract fixture is a PDF",
+  "expected_provisional": [
+    "ADV-SCHDEAD-PROVISIONAL"
+  ],
+  "note_schedule": "The schedule finish is a source observation (not an approved baseline): it raises a provisional advisory, never a confirmed DET-CRS-SCHDEAD finding"
+}
