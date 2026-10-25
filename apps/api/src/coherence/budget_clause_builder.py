@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.domain.budget_line_availability import STRUCTURED_BUDGET_SOURCE_UNAVAILABLE
 from src.coherence.models import Clause
-from src.documents.application.budget_stated_total import STATED_TOTAL_BY_REVISION_KEY
+from src.documents.domain.revision_declarations import STATED_TOTAL_BY_REVISION_KEY
 from src.temporal.adapters.persistence.current_revision_sql import (
     clause_in_current_scope,
     current_revision_lateral,
@@ -56,7 +56,8 @@ async def load_contract_total(db: AsyncSession, project_id: UUID, tenant_id: UUI
 # for the budget document's trusted-current revision (C3a authority, the same predicate the
 # contract totals use). A proposed or rejected re-upload, a revision without a verifiable stamp and
 # a document whose current revision declares no total all yield no row: UNKNOWN, never the latest
-# ingested figure and never an older revision's.
+# ingested figure and never an older revision's. A revision that is only a pending proposal does
+# not count (B1 canonical-alert spec §3: PROPOSED evidence never moves canonical alerts or score).
 _BUDGET_DECLARATION_SQL = text(f"""
     SELECT (e.entry->>'total')::numeric AS amt,
            e.entry->'currencies' AS currencies
@@ -69,6 +70,13 @@ _BUDGET_DECLARATION_SQL = text(f"""
       AND d.tenant_id = CAST(:tenant_id AS uuid)
       AND d.document_type::text = 'budget'
       AND cur.resolved
+      -- A revision resolved only by the single-revision fallback must not be one a human has yet
+      -- to accept: a pending (PROPOSED) artifact for it is not canonical input.
+      AND (cur.trusted OR NOT EXISTS (
+            SELECT 1 FROM public.document_artifacts pa
+            WHERE pa.document_id = d.id AND pa.tenant_id = d.tenant_id
+              AND pa.document_revision_id = cur.revision_id
+              AND pa.trust_state = 'proposed'))
       AND e.entry->>'revision_id' = cur.revision_id::text
       AND jsonb_typeof(e.entry->'total') = 'number'
     ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST

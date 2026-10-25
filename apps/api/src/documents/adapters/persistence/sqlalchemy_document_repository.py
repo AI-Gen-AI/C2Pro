@@ -25,6 +25,7 @@ from src.documents.domain.models import (
     DocumentHistorySnapshot,
     DocumentStatus,
 )
+from src.documents.domain.revision_declarations import union_revision_declarations
 from src.documents.ports.document_repository import IDocumentRepository
 from src.temporal.adapters.persistence.current_revision_sql import (
     clause_in_current_scope,
@@ -421,14 +422,21 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     async def update_metadata(
         self, tenant_id: UUID, document_id: UUID, document_metadata: JsonDict
     ) -> None:
-        stmt = select(DocumentORM).where(
-            DocumentORM.id == document_id,
-            DocumentORM.tenant_id == tenant_id
+        # The whole-blob write below would drop revision-keyed declarations that another writer
+        # committed after this caller loaded its copy: lock the row, re-read what is committed
+        # and keep every revision entry the caller's copy does not carry.
+        stmt = (
+            select(DocumentORM)
+            .where(DocumentORM.id == document_id, DocumentORM.tenant_id == tenant_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
         if orm_document:
-            orm_document.document_metadata = document_metadata or {}
+            orm_document.document_metadata = union_revision_declarations(
+                document_metadata or {}, orm_document.document_metadata
+            )
             orm_document.updated_at = self._normalize_naive_utc(datetime.now(UTC))
 
     async def update_storage_path(self, tenant_id: UUID, document_id: UUID, storage_url: str) -> None:

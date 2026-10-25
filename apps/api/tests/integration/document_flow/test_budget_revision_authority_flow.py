@@ -265,3 +265,52 @@ async def test_reingesting_the_same_revision_is_idempotent(
     assert list(metadata[STATED_TOTAL_BY_REVISION_KEY]) == [str(revision_a.revision_id)]
     assert "stated_total" not in metadata
     assert await _declared_total(db, project_id, test_user) == 1_000_000
+
+
+async def test_a_single_revision_with_only_a_pending_proposal_is_not_canonical_input(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Codex P1: ``resolved`` through the single-revision fallback must not admit a PROPOSED budget."""
+    project_id = await _project(db, test_user.tenant_id)
+    document, revision = await _upload_and_ingest(
+        db, worker, test_user, project_id, filename="budget.xlsx",
+        content=_budget_xlsx(1_000_000), document_type=DocumentType.BUDGET,
+    )
+    assert await _declared_total(db, project_id, test_user) == 1_000_000, (
+        "premise: a lone revision with no artifact keeps the C3a single-revision reading"
+    )
+
+    await _propose(db, test_user, project_id, document, revision)
+    assert await _declared_total(db, project_id, test_user) is None, "a pending proposal is not evidence"
+
+    await _trust(db, test_user, project_id, document, revision)
+    assert await _declared_total(db, project_id, test_user) == 1_000_000
+
+
+async def test_a_stale_metadata_write_never_drops_another_revisions_declaration(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Codex P2: a writer holding an older copy of the blob (manual /parse of A overlapping the
+    ingestion of B) must not delete B's committed entry."""
+    project_id, document, revision_a = await _accepted_budget(db, worker, test_user)
+    stale_copy = dict(
+        (await db.execute(
+            text("SELECT document_metadata FROM documents WHERE id = :d"), {"d": document.id}
+        )).scalar_one()
+    )
+    assert list(stale_copy[STATED_TOTAL_BY_REVISION_KEY]) == [str(revision_a.revision_id)]
+
+    revision_b = await _reupload_and_ingest(db, worker, test_user, document, _budget_xlsx(2_000_000))
+
+    # The stale writer finishes last, with the map it loaded before B existed.
+    await SqlAlchemyDocumentRepository(db).update_metadata(test_user.tenant_id, document.id, stale_copy)
+    await db.commit()
+
+    entries = (await db.execute(
+        text("SELECT document_metadata->'stated_total_by_revision' FROM documents WHERE id = :d"),
+        {"d": document.id},
+    )).scalar_one()
+    assert set(entries) == {str(revision_a.revision_id), str(revision_b.revision_id)}
+
+    await _trust(db, test_user, project_id, document, revision_b)
+    assert await _declared_total(db, project_id, test_user) == 2_000_000, "approving B is not UNKNOWN"

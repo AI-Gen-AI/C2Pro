@@ -17,7 +17,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
-STATED_TOTAL_BY_REVISION_KEY = "stated_total_by_revision"
+from src.documents.domain.revision_declarations import STATED_TOTAL_BY_REVISION_KEY
+
 _LEGACY_KEYS = ("stated_total", "stated_total_currencies")
 
 
