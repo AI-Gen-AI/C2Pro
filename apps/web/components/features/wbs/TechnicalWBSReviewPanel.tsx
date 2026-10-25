@@ -125,7 +125,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
     baselineNo > 0 &&
       baseline.data?.digest_verified === true &&
       baseline.data?.id === authority?.baseline_id &&
-      baseline.data?.baseline_no === baselineNo &&
+      baseline.data?.baseline_no === baselineNo
   );
   const source = details.data;
   const validDocument = Boolean(
