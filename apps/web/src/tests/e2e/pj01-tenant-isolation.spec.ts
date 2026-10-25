@@ -27,15 +27,57 @@ const EMPTY_SESSION = { cookies: [], origins: [] };
 const FOREIGN_PROJECT_ID = "00000000-0000-0000-0000-00000000c3f1";
 const FOREIGN_PROJECT_NAME = "Foreign Tenant Confidential Project";
 
-function recordApiStatuses(page: Page, projectId: string): { url: string; status: number }[] {
-  const statuses: { url: string; status: number }[] = [];
+interface ApiStatus {
+  url: string;
+  status: number;
+  /** Seconds the API asked the caller to wait (rate limiting only). */
+  retryAfterSeconds?: number;
+}
+
+function recordApiStatuses(page: Page, projectId: string): ApiStatus[] {
+  const statuses: ApiStatus[] = [];
   page.on("response", (response) => {
     const url = new URL(response.url());
     if (url.pathname.startsWith("/api/") && url.pathname.includes(projectId)) {
-      statuses.push({ url: url.pathname, status: response.status() });
+      const retryAfter = Number(response.headers()["retry-after"]);
+      statuses.push({
+        url: url.pathname,
+        status: response.status(),
+        ...(Number.isFinite(retryAfter) ? { retryAfterSeconds: retryAfter } : {}),
+      });
     }
   });
   return statuses;
+}
+
+/**
+ * Open a project the caller must not see and return the API's AUTHORIZATION verdicts for it.
+ *
+ * The API rate-limits each user (a fixed one-minute window) and the journey that ran just before
+ * used that user's budget up: a 429 says "too many requests", not "not yours", so it proves nothing
+ * about isolation. When the API answers 429 the page is opened again only after the interval the
+ * API itself asked for (Retry-After), never after a guessed delay, and a run that never obtains a
+ * verdict fails as inconclusive instead of passing on a rate-limit answer.
+ */
+async function authorizationVerdicts(page: Page, statuses: ApiStatus[], projectId: string): Promise<ApiStatus[]> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    statuses.length = 0;
+    await page.goto(`/projects/${projectId}/documents`);
+    await expect
+      .poll(() => statuses.length, { timeout: 30_000, message: "the page must have asked the API about the project" })
+      .toBeGreaterThan(0);
+    const limited = statuses.filter((entry) => entry.status === 429);
+    if (limited.length === 0) return [...statuses];
+    const waitSeconds = Math.min(65, Math.max(...limited.map((entry) => entry.retryAfterSeconds ?? 60)));
+    test.info().annotations.push({
+      type: "rate-limited",
+      description: `attempt ${attempt + 1}: API answered 429 (Retry-After ${waitSeconds}s); retrying after that interval`,
+    });
+    await page.waitForTimeout(waitSeconds * 1000);
+  }
+  const verdicts = statuses.filter((entry) => entry.status !== 429);
+  if (verdicts.length === 0) throw new Error(`RATE_LIMITED_NO_VERDICT: ${JSON.stringify(statuses)}`);
+  return [...statuses];
 }
 
 async function createOwnProject(browser: Browser, baseURL: string): Promise<string> {
@@ -80,18 +122,15 @@ test.describe("TS-E2E-PJ01-002: PJ-01 browser isolation", () => {
     const page = await context.newPage();
     await signInAsJourneyUser(page, baseURL ?? "http://localhost:3100");
     const statuses = recordApiStatuses(page, FOREIGN_PROJECT_ID);
-    await page.goto(`/projects/${FOREIGN_PROJECT_ID}/documents`);
-    await expect
-      .poll(() => statuses.length, { timeout: 30_000, message: "the page must have asked the API about the foreign project" })
-      .toBeGreaterThan(0);
+    const verdicts = await authorizationVerdicts(page, statuses, FOREIGN_PROJECT_ID);
     await expect(page.getByText(FOREIGN_PROJECT_NAME)).toHaveCount(0);
     expect(
-      statuses.filter((entry) => ![401, 403, 404].includes(entry.status)),
-      `the API must deny every request for another tenant's project: ${JSON.stringify(statuses)}`,
+      verdicts.filter((entry) => ![401, 403, 404].includes(entry.status)),
+      `the API must deny every request for another tenant's project: ${JSON.stringify(verdicts)}`,
     ).toEqual([]);
     test.info().annotations.push({
       type: "tenant-isolation",
-      description: `A->B denied: ${JSON.stringify(statuses)}. B->A: ${TENANT_B_EMAIL ? "see next test" : "NOT_RUN (no second Clerk tenant identity)"}`,
+      description: `A->B denied: ${JSON.stringify(verdicts)}. B->A: ${TENANT_B_EMAIL ? "see next test" : "NOT_RUN (no second Clerk tenant identity)"}`,
     });
     await context.close();
   });
