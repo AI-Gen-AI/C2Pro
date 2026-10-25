@@ -29,7 +29,8 @@ def to_finding_signal(finding: CrossDocFinding) -> FindingSignal:
     """Map a cross-document finding onto the deterministic FindingSignal contract."""
     return FindingSignal(
         rule_id=finding.rule_id,
-        clause_id=f"xdoc:{finding.rule_id}",  # synthetic: a cross-doc finding spans clauses
+        # A cross-doc finding spans clauses (synthetic id) unless it names the clause it rests on.
+        clause_id=finding.source_clause_id or f"xdoc:{finding.rule_id}",
         source="deterministic",
         impact_score=min(1.0, 0.5 + finding.materiality_ratio),
         confidence=1.0,  # deterministic ⇒ clears the hard-conflict certainty floor
@@ -42,6 +43,7 @@ def to_finding_signal(finding: CrossDocFinding) -> FindingSignal:
             "delta": finding.delta,
             "direction": finding.direction,
             "materiality_ratio": finding.materiality_ratio,
+            **({"evidence": dict(finding.evidence)} if finding.evidence else {}),
         },
     )
 

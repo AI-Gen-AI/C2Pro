@@ -13,7 +13,10 @@ import contextlib
 import inspect
 import logging
 import re
+import unicodedata
 from collections.abc import Mapping
+from datetime import date
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -57,6 +60,10 @@ from src.documents.application.document_source import (
     resolve_source_revision,
 )
 from src.documents.application.revision_clauses import persist_revision_clauses
+from src.documents.application.schedule_planned_finish import (
+    METADATA_KEY as SCHEDULE_PLANNED_FINISH_KEY,
+)
+from src.documents.application.schedule_planned_finish import extract_schedule_planned_finish
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
@@ -442,6 +449,115 @@ def _contract_affected_categories(clause_type: ClauseType, text: str) -> list[st
     return deduped
 
 
+_COMPLETION_KEYWORDS = (
+    "fecha de finalizacion", "fecha de terminacion", "fecha limite de finalizacion",
+    "terminacion de las obras", "finalizacion de las obras", "completion date",
+    "date of completion", "date for completion", "practical completion",
+    "substantial completion", "completion deadline", "contractual completion",
+)
+# A milestone, a partial/intermediate date or a start date is a different kind of date: a
+# sentence mentioning one is never read as THE contractual completion deadline.
+_NOT_COMPLETION_MARKERS = (
+    "hito", "milestone", "parcial", "partial", "intermedi", "inicio", "comienzo",
+    "commencement", "start",
+)
+# An ISO date is a standalone token: "2027-06-30T23:30:00" or "2027-06-30 23:30" carry a time (and
+# possibly a zone) that this extractor does not interpret, so they are not calendar-exact dates.
+_ISO_DATE_RE = re.compile(r"(?<![\d-])(\d{4})-(\d{2})-(\d{2})(?![\d-]|t\d|\s+\d{1,2}:\d{2})")
+_ISO_LIKE_RE = re.compile(r"(?<![\d-])\d{4}-\d{2}-\d{2}")
+# Numeric day/month dates ("30/06/2027", "06/30/2027") depend on a locale this text does not state.
+_NUMERIC_DATE_RE = re.compile(r"\b\d{1,2}[/.]\d{1,2}[/.]\d{2,4}\b")
+_ES_MONTHS = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
+    "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11,
+    "diciembre": 12,
+}
+_EN_MONTHS = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7,
+    "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+}
+_ES_DATE_RE = re.compile(r"\b(\d{1,2}) de ([a-z]+) de (\d{4})\b")
+_EN_DMY_RE = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)? ([a-z]+),? (\d{4})\b")
+_EN_MDY_RE = re.compile(r"\b([a-z]+) (\d{1,2})(?:st|nd|rd|th)?,? (\d{4})\b")
+
+
+def _completion_dates(sentence: str) -> tuple[set[str], bool]:
+    """(calendar-exact dates a sentence states, whether it also holds a date-like token it
+    cannot read exactly).
+
+    Exact = an ISO date, or a day + month NAME + year (ES / EN). Not exact = an ISO date with a
+    time, a numeric day/month date, or an impossible date: the sentence then states a date this
+    extractor will not interpret, and the clause must not be read as if it stated none.
+    """
+    found: set[str] = set()
+
+    def add(year: int, month: int, day: int) -> None:
+        with contextlib.suppress(ValueError):
+            found.add(date(year, month, day).isoformat())
+
+    iso_valid = 0
+    for y, m, d in _ISO_DATE_RE.findall(sentence):
+        with contextlib.suppress(ValueError):
+            found.add(date(int(y), int(m), int(d)).isoformat())
+            iso_valid += 1
+    for d, month, y in _ES_DATE_RE.findall(sentence):
+        if month in _ES_MONTHS:
+            add(int(y), _ES_MONTHS[month], int(d))
+    for d, month, y in _EN_DMY_RE.findall(sentence):
+        if month in _EN_MONTHS:
+            add(int(y), _EN_MONTHS[month], int(d))
+    for month, d, y in _EN_MDY_RE.findall(sentence):
+        if month in _EN_MONTHS:
+            add(int(y), _EN_MONTHS[month], int(d))
+    unreadable = bool(_NUMERIC_DATE_RE.search(sentence)) or (
+        len(_ISO_LIKE_RE.findall(sentence)) > iso_valid
+    )
+    return found, unreadable
+
+
+def _extract_contract_completion_deadline(text: str) -> dict[str, Any] | None:
+    """The contractual completion deadline, only when a clause states it once and exactly.
+
+    Every sentence with a completion keyword (and no milestone / partial / start marker) is
+    read. Exactly one calendar-exact date across them is the deadline. Two different dates, a
+    sentence with several, or any date this extractor cannot read exactly make the statement
+    AMBIGUOUS: it is returned as such (never resolved to the first date) so the comparison is
+    reported NOT_ASSESSED. A duration ("plazo de 18 meses") states no date and yields None.
+    """
+    all_dates: set[str] = set()
+    ambiguous = False
+    stated = False
+    for sentence in re.split(r"(?<=[.;])\s+|\n+", text):
+        normalized = "".join(
+            ch for ch in unicodedata.normalize("NFD", sentence.lower())
+            if unicodedata.category(ch) != "Mn"
+        )
+        if not any(keyword in normalized for keyword in _COMPLETION_KEYWORDS):
+            continue
+        if any(marker in normalized for marker in _NOT_COMPLETION_MARKERS):
+            continue
+        dates, unreadable = _completion_dates(normalized)
+        if not dates and not unreadable:
+            continue
+        stated = True
+        all_dates |= dates
+        ambiguous = ambiguous or unreadable or len(dates) > 1
+    if not stated:
+        return None
+    if ambiguous or len(all_dates) != 1:
+        return {
+            "kind": "CONTRACT_COMPLETION_DEADLINE",
+            "basis": "stated_in_clause_text",
+            "ambiguous": True,
+            "dates": sorted(all_dates),
+        }
+    return {
+        "date": next(iter(all_dates)),
+        "kind": "CONTRACT_COMPLETION_DEADLINE",
+        "basis": "stated_in_clause_text",
+    }
+
+
 def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
     clause_type = _infer_contract_clause_type(text)
     affected_categories = _contract_affected_categories(clause_type, text)
@@ -487,6 +603,10 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
         deadline = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
         if deadline:
             data["deadline"] = deadline.group(1)
+    else:
+        completion = _extract_contract_completion_deadline(text)
+        if completion is not None:
+            data["completion_deadline"] = completion
     if clause_type == ClauseType.QUALITY:  # noqa: SIM102
         if any(term in text.lower() for term in ["inspection", "testing", "acceptance"]):
             data["quality_standards"] = ["inspection-testing-acceptance"]
@@ -1692,6 +1812,18 @@ async def _ingest_owned(
     # never belong in document metadata. Recorded so an operator (or a
     # retry) can tell "nothing to embed" from "provider misconfigured".
     metadata["rag_ingestion_outcome"] = rag_result.outcome.value
+    if document.document_type == DocumentType.SCHEDULE:
+        # The schedule's planned finish as a sourced observation of THIS pinned revision (or
+        # the reason there is none): the contract-completion comparator reads it, and the
+        # revision stamp lets readers ignore it once another revision is current.
+        metadata[SCHEDULE_PLANNED_FINISH_KEY] = await extract_schedule_planned_finish(
+            file_parser.excel_parser,
+            file_path=file_path,
+            file_format=Path(source_revision.blob_key).suffix if source_revision else "",
+            document_id=document_id,
+            revision_id=source_revision.revision_id if source_revision else None,
+            blob_hash=source_revision.blob_hash if source_revision else None,
+        )
     if parsed_text:
         metadata["parsed_text"] = parsed_text
         # C3a: parsed_text is overwritten per ingestion; the stamp lets readers serve
