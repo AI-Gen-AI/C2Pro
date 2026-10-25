@@ -80,6 +80,10 @@ const { alertsState } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/components/features/wbs/TechnicalWBSReviewPanel", () => ({
+  TechnicalWBSReviewPanel: () => <div data-testid="technical-wbs-review-mock" />,
+}));
+
 vi.mock("@/hooks/useProjectAlerts", () => ({
   useProjectAlerts: () => ({
     alerts: alertsState.alerts,
