@@ -308,15 +308,19 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   // and the audit report: far beyond the 30 s default. An explicit budget keeps
   // a genuine failure a locator failure instead of a masked global timeout.
   test.setTimeout(180_000);
+  // The app's own data request for the list (fetch/XHR), not the page navigation, which matches the
+  // same path and answers with HTML long before any document is loaded.
   const documentsListResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
-      response.url().includes(`/projects/${liveProjectId}/documents`),
+      ["fetch", "xhr"].includes(response.request().resourceType()) &&
+      new URL(response.url()).pathname.replace(/\/$/, "").endsWith(`/projects/${liveProjectId}/documents`),
     { timeout: 60_000 },
   );
   await gotoStable(page, `/projects/${liveProjectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
-  // Surface what the backend actually answered when the seeded names are not rendered.
+  // Wait for the list the app requested before judging what it rendered; surface what the backend
+  // answered when the seeded names are not rendered.
   const listed = await documentsListResponse.then(
     async (response) => `${response.status()} ${(await response.text()).slice(0, 600)}`,
     () => "no documents list response observed",
