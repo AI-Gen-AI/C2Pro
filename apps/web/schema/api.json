@@ -16136,7 +16136,16 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["clause_id", "expected_revision_id", "expected_blob_hash", "expected_wbs_baseline_id", "proposed_wbs_node_id", "decision", "idempotency_key", "reason"],
+        "required": [
+          "clause_id",
+          "expected_revision_id",
+          "expected_blob_hash",
+          "expected_wbs_baseline_id",
+          "proposed_wbs_node_id",
+          "decision",
+          "idempotency_key",
+          "reason"
+        ],
         "title": "TechnicalWBSReviewRequest",
         "description": "Never accept tenant, actor, project, or link-approval authority in JSON."
       },
@@ -16217,7 +16226,19 @@
           }
         },
         "type": "object",
-        "required": ["event_id", "decision", "replayed", "technical_document_id", "technical_revision_id", "source_clause_id", "source_section", "source_start_offset", "source_end_offset", "proposed_wbs_baseline_id", "proposed_wbs_node_id"],
+        "required": [
+          "event_id",
+          "decision",
+          "replayed",
+          "technical_document_id",
+          "technical_revision_id",
+          "source_clause_id",
+          "source_section",
+          "source_start_offset",
+          "source_end_offset",
+          "proposed_wbs_baseline_id",
+          "proposed_wbs_node_id"
+        ],
         "title": "TechnicalWBSReviewResponse"
       },
       "TemporalEntityRef": {
