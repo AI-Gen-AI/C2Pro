@@ -20,7 +20,7 @@ import type {
   TechnicalWBSReviewRequest,
   TechnicalWBSReviewResponse,
 } from "@/lib/api/generated/models";
-import { apiClient, normalizeGeneratedApiUrl } from "@/lib/api/client";
+import { orvalApiClient } from "@/lib/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -194,20 +194,18 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
     setError("");
     setReceipt(null);
     try {
-      const response = await apiClient.post<TechnicalWBSReviewResponse>(
-        normalizeGeneratedApiUrl(
-          `/api/v1/projects/${encodeURIComponent(projectId)}/technical-wbs/reviews`,
-        ),
-        body,
-      );
+      const response = await orvalApiClient<TechnicalWBSReviewResponse>({
+        url: `/api/v1/projects/${encodeURIComponent(projectId)}/technical-wbs/reviews`,
+        method: "POST",
+        data: body,
+      });
       if (
-        response.status !== 201 ||
-        response.data.authority !== "AUDIT_ONLY_NOT_CANONICAL_LINK" ||
-        response.data.approved_canonical_link !== false
+        response.authority !== "AUDIT_ONLY_NOT_CANONICAL_LINK" ||
+        response.approved_canonical_link !== false
       ) {
         throw new Error("The review receipt does not match audit-only authority.");
       }
-      setReceipt(response.data);
+      setReceipt(response);
     } catch {
       setError(
         "The review was not confirmed. Recheck the source and approved WBS; " +
