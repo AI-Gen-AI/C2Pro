@@ -431,7 +431,7 @@ async def test_revoke_public_execute_preserves_named_application_grants() -> Non
         app_function = f"{fx.schema}.is_project_member(uuid)"
         await conn.execute(
             f"CREATE FUNCTION {fx.schema}.is_project_member(uuid) RETURNS boolean "
-            "LANGUAGE sql SECURITY DEFINER AS $ SELECT false $"
+            "AS 'SELECT false;' LANGUAGE SQL SECURITY DEFINER"
         )
         await conn.execute(f"GRANT EXECUTE ON FUNCTION {app_function} TO {fx.app}")
         assert await conn.fetchval(
