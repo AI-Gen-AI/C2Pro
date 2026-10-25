@@ -117,6 +117,23 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
         )
 
 
+    # The real worker fixture does not manufacture an analysis artifact; save
+    # a genuine PROPOSED candidate before proving that all canonical readers
+    # exclude it. A revision without *any* artifact would be a false green.
+    artifacts = SqlAlchemyDocumentArtifactRepository(db)
+    await artifacts.save(
+        DocumentArtifact(
+            document_id=str(uploaded.id),
+            document_revision_id=str(revision.revision_id),
+            doc_type="technical_spec",
+        ),
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trust_state=TrustState.PROPOSED,
+    )
+    await db.commit()
+
+
     # A sole PROPOSED technical revision is not trusted canonical evidence.
     # C3a's single-revision fallback resolves it, so every coherence source
     # path must independently reject it until an actual approval.
@@ -148,19 +165,6 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
     #
     # Repository-level test setup invokes the exact candidate CAS directly;
     # this is NOT an authenticated final HITL user flow.
-    artifacts = SqlAlchemyDocumentArtifactRepository(db)
-    await artifacts.save(
-        DocumentArtifact(
-            document_id=str(uploaded.id),
-            document_revision_id=str(revision.revision_id),
-            doc_type="technical_spec",
-        ),
-        project_id=project_id,
-        tenant_id=tenant_id,
-        trust_state=TrustState.PROPOSED,
-    )
-    await db.commit()
-
     proposed_row = await db.scalar(
         select(DocumentArtifactORM)
         .where(
