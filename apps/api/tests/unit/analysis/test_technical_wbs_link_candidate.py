@@ -291,3 +291,47 @@ def test_overlong_heading_is_a_boundary_not_previous_section() -> None:
     )
     with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
         _preview(clause=clause, parsed_revision_text=source)
+
+
+def test_parenthesized_unsupported_code_is_never_truncated_into_parent() -> None:
+    full = "Section 1.2.3.4.5.6.7.8)\nSteel shall comply."
+    clause = replace(
+        _clause(),
+        clause_code="1.2.3.4.5.6.7",
+        full_text=full,
+        text_start_offset=0,
+        text_end_offset=len(full),
+    )
+    clause.extracted_entities["technical_requirement"]["source_section"] = "1.2.3.4.5.6.7"
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause, parsed_revision_text=full)
+
+
+def test_parenthesized_unsupported_code_blocks_previous_section_source() -> None:
+    source = (
+        "Section 4.1.2 Valid heading.\n"
+        "Section 1234)\n"
+        "Steel shall comply."
+    )
+    fragment = "Steel shall comply."
+    start = source.index(fragment)
+    clause = replace(
+        _clause(),
+        full_text=fragment,
+        text_start_offset=start,
+        text_end_offset=start + len(fragment),
+    )
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause, parsed_revision_text=source)
+
+
+def test_supported_parenthesized_heading_preserves_source_code() -> None:
+    source = "Section 4.1.2)\nConcrete shall exceed 35 MPa."
+    clause = replace(
+        _clause(),
+        full_text=source,
+        text_start_offset=0,
+        text_end_offset=len(source),
+    )
+    candidate = _preview(clause=clause, parsed_revision_text=source)
+    assert candidate.source_section == "4.1.2"
