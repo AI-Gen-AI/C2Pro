@@ -12,9 +12,15 @@ from typing import Any
 import docx
 import pytest
 from fastapi import UploadFile
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analysis.adapters.persistence.document_artifact_repository import (
+    SqlAlchemyDocumentArtifactRepository,
+)
+from src.analysis.adapters.persistence.models import DocumentArtifactORM
+from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.trust import CandidateBinding, TrustState
 from src.coherence.router import (
     _get_parsed_text_fallback_clauses,
     _get_persisted_clause_candidates,
@@ -27,12 +33,16 @@ from src.documents.adapters.persistence.sqlalchemy_document_repository import (
 )
 from src.documents.application.upload_document_use_case import UploadDocumentUseCase
 from src.documents.domain.models import DocumentType
+from src.temporal.adapters.persistence.current_revision_resolver import (
+    SqlAlchemyCurrentRevisionResolver,
+)
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
 )
 from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
+from src.temporal.domain.current_revision import CurrentRevisionStatus
 from tests.integration.document_flow.test_852_schedule_wbs_governance_guard import (
     _project,
     _ProjectRepo,
@@ -126,6 +136,74 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
     assert await db.scalar(
         text("SELECT count(*) FROM wbs_nodes WHERE project_id = :p"), {"p": project_id}
     ) == 0
+    assert await db.scalar(
+        text("SELECT count(*) FROM coherence_results WHERE project_id = :p"),
+        {"p": project_id},
+    ) == 0
+
+    # The positive side of S2/S4 source publication was previously absent:
+    # after a precisely bound candidate is trusted, current readers must see
+    # EXACTLY the persisted original technical sections (never confidence,
+    # compliance, WBS association or an invented coherence score).
+    #
+    # Repository-level test setup invokes the exact candidate CAS directly;
+    # this is NOT an authenticated final HITL user flow.
+    artifacts = SqlAlchemyDocumentArtifactRepository(db)
+    await artifacts.save(
+        DocumentArtifact(
+            document_id=str(uploaded.id),
+            document_revision_id=str(revision.revision_id),
+            doc_type="technical_spec",
+        ),
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trust_state=TrustState.PROPOSED,
+    )
+    await db.commit()
+
+    proposed_row = await db.scalar(
+        select(DocumentArtifactORM)
+        .where(
+            DocumentArtifactORM.tenant_id == tenant_id,
+            DocumentArtifactORM.document_id == uploaded.id,
+            DocumentArtifactORM.document_revision_id == revision.revision_id,
+            DocumentArtifactORM.trust_state == TrustState.PROPOSED.value,
+        )
+        .order_by(DocumentArtifactORM.artifact_version.desc())
+    )
+    assert proposed_row is not None
+    candidate = CandidateBinding(
+        artifact_id=proposed_row.artifact_id,
+        document_id=uploaded.id,
+        artifact_version=proposed_row.artifact_version,
+        artifact_hash=proposed_row.artifact_hash,
+    )
+    await artifacts.commit_candidate(candidate, tenant_id=tenant_id)
+    await db.commit()
+    current = await SqlAlchemyCurrentRevisionResolver(db).resolve(
+        tenant_id=tenant_id, document_id=uploaded.id
+    )
+    assert current.status is CurrentRevisionStatus.TRUSTED
+    assert current.revision_id == revision.revision_id
+
+    approved_candidates = await _get_persisted_clause_candidates(
+        db, project_id, tenant_id, 50
+    )
+    technical_candidates = [
+        clause for clause in approved_candidates
+        if str(clause.data.get("document_id")) == str(uploaded.id)
+    ]
+    assert len(technical_candidates) == 2
+    assert {clause.text for clause in technical_candidates} == set(SOURCE_SECTIONS)
+    assert {
+        str(clause.data.get("revision_id")) for clause in technical_candidates
+    } == {str(revision.revision_id)}
+    assert all(
+        clause.data.get("extraction_confidence") is None
+        for clause in technical_candidates
+    ), "trusted source text alone cannot invent technical confidence"
+
+    # Trusting a source for citation never settles technical compliance.
     assert await db.scalar(
         text("SELECT count(*) FROM coherence_results WHERE project_id = :p"),
         {"p": project_id},
