@@ -19,7 +19,7 @@ from src.documents.domain.models import Clause, ClauseType
 # source locator, not a derived identity or proof of technical compliance.
 _SECTION_START = re.compile(
     r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
-    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?=[ \t.:\-–]|$)",
+    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?!\d|\.\d)(?=[ \t\r\n.:\-–]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
 _OBLIGATION = re.compile(
