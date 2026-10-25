@@ -42,7 +42,7 @@ describe("S2-09 - DocumentUploadDropzone", () => {
 
     expect(
       await screen.findByText(
-        /unsupported file type: \.exe\. allowed: pdf, xlsx, bc3/i,
+        /unsupported file type: \.exe\. allowed: pdf, docx, xlsx, bc3/i,
       ),
     ).toBeInTheDocument();
     expect(uploadDocumentMock).not.toHaveBeenCalled();
@@ -69,6 +69,119 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     expect(screen.getByLabelText(/document type for budget\.xlsx/i)).toHaveTextContent("Budget");
     expect(screen.getByLabelText(/document type for schedule\.bc3/i)).toHaveTextContent("Budget");
     expect(uploadDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("stages and uploads a DOCX contract supported by the backend", async () => {
+    uploadDocumentMock.mockResolvedValue({ id: "doc-docx", task_id: "task-docx" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toHaveAttribute("accept", ".pdf,.docx,.xlsx,.bc3");
+    fireEvent.change(input, {
+      target: {
+        files: [createFile(
+          "contract.docx",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )],
+      },
+    });
+
+    expect(await screen.findByText("contract.docx")).toBeInTheDocument();
+    expect(screen.getByLabelText(/document type for contract\.docx/i)).toHaveTextContent("Contract");
+    fireEvent.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(
+        "proj_docx",
+        expect.objectContaining({ name: "contract.docx" }),
+        "contract",
+        { token: "fresh-token-123" },
+      );
+    });
+  });
+
+  it("uploads a DOCX technical specification under its explicit document type", async () => {
+    const user = userEvent.setup();
+    uploadDocumentMock.mockResolvedValue({ id: "doc-spec", task_id: "task-spec" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile(
+          "technical-specification.docx",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )],
+      },
+    });
+
+    const type = await screen.findByLabelText(/document type for technical-specification\.docx/i);
+    await user.click(type);
+    await user.click(await screen.findByRole("option", { name: "Specification" }));
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(
+        "proj_docx",
+        expect.objectContaining({ name: "technical-specification.docx" }),
+        "specification",
+        { token: "fresh-token-123" },
+      );
+    });
+  });
+
+  it("rejects an entire mixed batch if any DOCX is assigned to Budget", async () => {
+    const user = userEvent.setup();
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [
+          createFile("valid-contract.pdf", "application/pdf"),
+          createFile(
+            "invalid-budget.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("valid-contract.pdf")).toBeInTheDocument();
+    const type = await screen.findByLabelText(/document type for invalid-budget\.docx/i);
+    await user.click(type);
+    await user.click(await screen.findByRole("option", { name: "Budget" }));
+    await user.click(screen.getByRole("button", { name: /upload 2 files/i }));
+
+    expect(await screen.findByText(/DOCX cannot be uploaded as budget/i)).toBeInTheDocument();
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
+    expect(getTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses DOCX as a structured schedule before any upload request", async () => {
+    const user = userEvent.setup();
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile(
+          "schedule.docx",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )],
+      },
+    });
+
+    const type = await screen.findByLabelText(/document type for schedule\.docx/i);
+    await user.click(type);
+    await user.click(await screen.findByRole("option", { name: "Schedule" }));
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    expect(await screen.findByText(/DOCX cannot be uploaded as schedule/i)).toBeInTheDocument();
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
+    expect(getTokenMock).not.toHaveBeenCalled();
   });
 
   it("uses the provided default document type when a checklist CTA opens upload", async () => {
@@ -126,6 +239,52 @@ describe("S2-09 - DocumentUploadDropzone", () => {
         { token: "fresh-token-123" },
       );
     });
+  });
+
+  it("retries only the unaccepted file after a later upload in the batch fails", async () => {
+    const user = userEvent.setup();
+    uploadDocumentMock
+      .mockResolvedValueOnce({ id: "doc-contract", task_id: "task-contract" })
+      .mockRejectedValueOnce(new Error("Upload failed: 500"))
+      .mockResolvedValueOnce({ id: "doc-budget", task_id: "task-budget" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+    const onUploadComplete = vi.fn();
+
+    render(
+      <DocumentUploadDropzone
+        projectId="proj_partial"
+        onUploadComplete={onUploadComplete}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      createFile("accepted-contract.pdf", "application/pdf"),
+      createFile(
+        "retry-budget.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ),
+    ]);
+    await user.click(screen.getByRole("button", { name: /upload 2 files/i }));
+
+    expect(await screen.findByText(/1 file\(s\) accepted; 1 remain staged/i)).toBeInTheDocument();
+    expect(screen.queryByText("accepted-contract.pdf")).not.toBeInTheDocument();
+    expect(screen.getByText("retry-budget.xlsx")).toBeInTheDocument();
+    expect(uploadDocumentMock).toHaveBeenCalledTimes(2);
+    expect(onUploadComplete).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+    await waitFor(() => expect(uploadDocumentMock).toHaveBeenCalledTimes(3));
+    expect(uploadDocumentMock).toHaveBeenNthCalledWith(
+      3,
+      "proj_partial",
+      expect.objectContaining({ name: "retry-budget.xlsx" }),
+      "budget",
+      { token: "fresh-token-123" },
+    );
+    expect(await screen.findByText(/upload accepted for 1 file\(s\)/i)).toBeInTheDocument();
+    expect(screen.queryByText("retry-budget.xlsx")).not.toBeInTheDocument();
+    expect(onUploadComplete).toHaveBeenCalledTimes(2);
   });
 
   it("updates drag state and aria labels during DnD lifecycle", () => {
