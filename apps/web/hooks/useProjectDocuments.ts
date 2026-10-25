@@ -23,6 +23,7 @@ const documentTypeMap: Record<string, DocumentInfo['type']> = {
   schedule: 'schedule',
   budget: 'budget',
   specification: 'specification',
+  technical_spec: 'specification',
   drawing: 'drawing',
   other: 'other',
 };
