@@ -153,6 +153,10 @@ export function DocumentUploadDropzone({
     setUploading(true);
     setMessage(`Uploading ${stagedUploads.length} file(s)...`);
 
+    // Upload requests are sequential, not one atomic backend transaction. Retain
+    // only requests that have not been accepted if a later request fails, so
+    // retrying cannot create duplicate documents/revisions for earlier successes.
+    const acceptedUploads: StagedUpload[] = [];
     try {
       for (const staged of stagedUploads) {
         const { file, documentType } = staged;
@@ -164,6 +168,7 @@ export function DocumentUploadDropzone({
           documentType,
           freshToken ? { token: freshToken } : undefined,
         );
+        acceptedUploads.push(staged);
       }
       setMessage(
         `Upload accepted for ${stagedUploads.length} file(s). Backend processing is still required.`,
@@ -172,8 +177,20 @@ export function DocumentUploadDropzone({
       setStagedUploads([]);
       onUploadComplete?.();
     } catch (error) {
-      setMessage(formatUploadFailureMessage(error));
-      setStatusMessage("");
+      if (acceptedUploads.length > 0) {
+        const remainingCount = stagedUploads.length - acceptedUploads.length;
+        setStagedUploads((current) =>
+          current.filter((item) => !acceptedUploads.includes(item)),
+        );
+        setMessage(
+          `${acceptedUploads.length} file(s) accepted; ${remainingCount} remain staged. ${formatUploadFailureMessage(error)} Retry only the remaining files.`,
+        );
+        setStatusMessage(`${acceptedUploads.length} accepted; ${remainingCount} pending`);
+        onUploadComplete?.();
+      } else {
+        setMessage(formatUploadFailureMessage(error));
+        setStatusMessage("");
+      }
     } finally {
       setUploading(false);
     }
