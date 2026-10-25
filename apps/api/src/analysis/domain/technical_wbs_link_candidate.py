@@ -22,6 +22,11 @@ from src.documents.domain.models import Clause
 from src.temporal.domain.document_revision import DocumentRevision
 
 _SOURCE_SECTION = re.compile(r"\d{1,3}(?:\.\d{1,3}){0,6}\Z")
+_SOURCE_HEADING = re.compile(
+    r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
+    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?=[ \t.:\-–]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
 _EXTRACTION_MODEL = "deterministic-technical-section-v1"
 
 
@@ -111,6 +116,25 @@ def preview_technical_wbs_link(
         or parsed_revision_text[start:end] != clause.full_text
     ):
         raise TechnicalWBSLinkCandidateError("technical source span is not verified against revision")
+
+    # Read section identity from the independently pinned source, not two
+    # metadata fields that an upstream bug could falsify together. The saved
+    # evidence window can begin AFTER the heading in long technical sections.
+    # Find the last source heading preceding that window and enforce that its
+    # scope still contains the complete literal evidence span.
+    headings = list(_SOURCE_HEADING.finditer(parsed_revision_text))
+    enclosing_heading = next(
+        (heading for heading in reversed(headings) if heading.start() <= start),
+        None,
+    )
+    if enclosing_heading is None or enclosing_heading.group("code") != section:
+        raise TechnicalWBSLinkCandidateError("technical section is not the source heading")
+    next_heading = next(
+        (heading for heading in headings if heading.start() > enclosing_heading.start()),
+        None,
+    )
+    if next_heading is not None and end > next_heading.start():
+        raise TechnicalWBSLinkCandidateError("technical source span crosses source sections")
 
     if (
         approved_wbs_scope is None
