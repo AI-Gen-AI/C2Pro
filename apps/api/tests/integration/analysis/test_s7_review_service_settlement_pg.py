@@ -285,20 +285,17 @@ async def test_real_pg_service_denies_stale_and_foreign_without_event(
 
 
 async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_denials(
-    db: AsyncSession, test_session_factory, tmp_path: Path
+    db: AsyncSession, test_session_factory, tmp_path: Path, monkeypatch
 ) -> None:
-    """HTTP -> application service -> Postgres, with ONLY Clerk auth overridden.
+    """HTTP -> production session dependency -> real service -> Postgres.
 
-    This is a real ASGI and transaction integration; the principal comes from
-    a persisted Clerk-linked user but there is NO live JWT or browser login.
+    The only substitutions are a test-owned immutable DOCX storage provider
+    and a persisted Clerk-linked principal. NO live Clerk JWT/browser login.
     """
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
 
-    from src.analysis.adapters.http.technical_wbs_review_router import (
-        get_technical_wbs_review_service,
-        router,
-    )
+    from src.analysis.adapters.http import technical_wbs_review_router as review_router
     from src.core.auth.dependencies import get_current_user
 
     w = await _world(db, tmp_path)
@@ -307,19 +304,16 @@ async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_de
     assert reviewer.clerk_user_id and not reviewer.is_verified
 
     app = FastAPI()
-    app.include_router(router, prefix="/api/v1")
+    app.include_router(review_router.router, prefix="/api/v1")
     app.dependency_overrides[get_current_user] = lambda: reviewer
 
-    async def real_review_service():
-        async with test_session_factory() as session:
-            try:
-                yield RecordTechnicalWBSReviewService(session, w["reader"])
-                await session.commit()
-            except BaseException:
-                await session.rollback()
-                raise
-
-    app.dependency_overrides[get_technical_wbs_review_service] = real_review_service
+    # The real HTTP dependency must invoke get_session_with_tenant, which
+    # commits on successful response and rolls back on a failing request.
+    # test_session_factory already supplies core_database._session_factory.
+    # Only the immutable synthetic blob provider and Clerk principal differ.
+    monkeypatch.setattr(
+        review_router, "build_storage_service", lambda: w["reader"].storage
+    )
     endpoint = f"/api/v1/projects/{w['project']}/technical-wbs/reviews"
     body = {
         "clause_id": str(w["clause"]),
