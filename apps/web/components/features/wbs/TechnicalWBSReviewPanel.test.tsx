@@ -83,12 +83,13 @@ const CLAUSE = {
 function validFixtures() {
   mocks.revisions = [{
     status: "available", revision_id: REV, trust_state: "trusted",
-    is_current: true, current_basis: "trusted",
+    is_current: true, current_basis: "trusted", blob_hash: SHA,
   }];
   mocks.detail = {
     id: "doc-technical", project_id: "project-1",
     document_type: "technical_spec", revision_id: REV,
-    file_hash: SHA, clauses: [CLAUSE],
+    // Mutable document row has already moved to pending B; A must still review.
+    file_hash: "b".repeat(64), clauses: [CLAUSE],
   };
   mocks.baseline = {
     id: "baseline-2", baseline_no: 2, digest_verified: true,
@@ -176,6 +177,35 @@ describe("TechnicalWBSReviewPanel", () => {
     expect(screen.getByTestId("technical-wbs-review-receipt")).toHaveTextContent(
       "Not a canonical link; technical compliance not assessed.",
     );
+  });
+
+  it("accepts a governance-permitted self-approved baseline", () => {
+    validFixtures();
+    mocks.baseline = { ...mocks.baseline, self_approved: true };
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    expect(screen.queryByTestId("technical-wbs-no-baseline")).not.toBeInTheDocument();
+  });
+
+  it("freezes the submitted selection while its transport response is pending", async () => {
+    validFixtures();
+    let finish!: (receipt: unknown) => void;
+    mocks.post.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
+    fireEvent.change(screen.getByLabelText("Source requirement"), { target: { value: "clause-1" } });
+    fireEvent.change(screen.getByLabelText("Approved WBS node"), { target: { value: "node-11" } });
+    fireEvent.change(screen.getByLabelText("Reviewer reason"), { target: { value: "Verified prior baseline" } });
+    fireEvent.click(screen.getByTestId("technical-wbs-review-submit"));
+    await waitFor(() => expect(mocks.post).toHaveBeenCalledOnce());
+    expect(screen.getByLabelText("Technical specification")).toBeDisabled();
+    expect(screen.getByLabelText("Human decision")).toBeDisabled();
+    expect(screen.getByLabelText("Reviewer reason")).toBeDisabled();
+    finish({
+      event_id: "event-3", replayed: false, decision: "CONFIRMED_FOR_REVIEW",
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK", approved_canonical_link: false,
+      technical_assessment: "NOT_ASSESSED",
+    });
+    await waitFor(() => expect(screen.getByTestId("technical-wbs-review-receipt")).toBeInTheDocument());
   });
 
   it("refuses a response that pretends the audit created canonical authority", async () => {
