@@ -51,8 +51,7 @@ vi.mock("@/lib/api/generated/wbs-governance/wbs-governance", () => ({
   }),
 }));
 vi.mock("@/lib/api/client", () => ({
-  apiClient: { post: mocks.post },
-  normalizeGeneratedApiUrl: (url: string) => url.replace(/^\/api\/v1/, ""),
+  orvalApiClient: mocks.post,
 }));
 
 const authority: ProjectWBSAuthority = {
@@ -143,15 +142,12 @@ describe("TechnicalWBSReviewPanel", () => {
   it("POSTs exact revision, baseline, clause, actor-free payload and audit-only receipt", async () => {
     validFixtures();
     mocks.post.mockResolvedValue({
-      status: 201,
-      data: {
-        event_id: "event-1",
-        decision: "CONFIRMED_FOR_REVIEW",
-        replayed: false,
-        authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
-        approved_canonical_link: false,
-        technical_assessment: "NOT_ASSESSED",
-      },
+      event_id: "event-1",
+      decision: "CONFIRMED_FOR_REVIEW",
+      replayed: false,
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
+      approved_canonical_link: false,
+      technical_assessment: "NOT_ASSESSED",
     });
     renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
     fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
@@ -163,9 +159,10 @@ describe("TechnicalWBSReviewPanel", () => {
     });
     fireEvent.click(screen.getByTestId("technical-wbs-review-submit"));
     await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
-    expect(mocks.post).toHaveBeenCalledWith(
-      "/projects/project-1/technical-wbs/reviews",
-      {
+    expect(mocks.post).toHaveBeenCalledWith({
+      url: "/api/v1/projects/project-1/technical-wbs/reviews",
+      method: "POST",
+      data: {
         clause_id: "clause-1",
         expected_revision_id: REV,
         expected_blob_hash: SHA,
@@ -175,7 +172,7 @@ describe("TechnicalWBSReviewPanel", () => {
         idempotency_key: "idempotency-key-00000001",
         reason: "Verified against source and approved scope.",
       },
-    );
+    });
     expect(screen.getByTestId("technical-wbs-review-receipt")).toHaveTextContent(
       "Not a canonical link; technical compliance not assessed.",
     );
@@ -184,11 +181,8 @@ describe("TechnicalWBSReviewPanel", () => {
   it("refuses a response that pretends the audit created canonical authority", async () => {
     validFixtures();
     mocks.post.mockResolvedValue({
-      status: 201,
-      data: {
-        event_id: "event-2", authority: "CANONICAL_LINK_APPROVED",
-        approved_canonical_link: true,
-      },
+      event_id: "event-2", authority: "CANONICAL_LINK_APPROVED",
+      approved_canonical_link: true,
     });
     renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
     fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
