@@ -272,32 +272,6 @@ async function getSessionSubject(page: Page): Promise<string | null> {
 // auth.setup.ts. Signing out and signing in again here only raced that session
 // (and required a credential literal in the repository), so assert the restored
 // identity instead.
-// The Nightly serves the app with the dev server, which compiles each route on its first request:
-// that cold compile (not the product) is what raced the 5 s locators in the first test to touch a
-// route (Nightly 40171480641, 40173221009, 40174646724). Compile every route this journey visits
-// once, up front, in a throw-away context. Warm-up is not an assertion: a failing warm-up request
-// is ignored here and the journey's own assertions still decide.
-test.beforeAll(async ({ browser }) => {
-  test.setTimeout(240_000);
-  const context = await browser.newContext({ storageState: "playwright/.auth/user.json" });
-  try {
-    const page = await context.newPage();
-    for (const route of [
-      "documents",
-      "coherence?cohV1Scenario=full-triplet",
-      "evidence",
-      "review",
-      "report?mode=audit",
-    ]) {
-      await page
-        .goto(`/projects/${liveProjectId}/${route}`, { waitUntil: "load", timeout: 90_000 })
-        .catch(() => undefined);
-    }
-  } finally {
-    await context.close();
-  }
-});
-
 test.beforeEach(async ({ page }) => {
   await waitForAuthenticatedSession(page);
 
@@ -313,7 +287,11 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await gotoStable(page, `/projects/${projectId}/documents`);
   await expect(page.getByTestId("documents-page")).toBeVisible();
   await expect(page.getByText(/triplet complete/i)).toBeVisible();
-  await expect(page.getByText("baseline-contract.pdf")).toBeVisible();
+  // The rows render after the documents request settles (the checklist above comes first).
+  await expect(
+    page.getByText("baseline-contract.pdf"),
+    "the documents table must list the mocked contract once its request settles",
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("validated-budget.xlsx")).toBeVisible();
   await expect(page.getByText("approved-schedule.xlsx")).toBeVisible();
 
@@ -330,7 +308,7 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   );
 
   await gotoStable(page, `/projects/${projectId}/review`);
-  await expect(page.getByTestId("review-page")).toBeVisible();
+  await expectDataLoaded(page, { ready: "review-page", loading: "review-loading", error: "review-error" });
   await expect(page.getByText(/budget deviation has supporting evidence/i)).toBeVisible();
   await page.getByTestId("approve-review-wedge-1").click();
   await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
