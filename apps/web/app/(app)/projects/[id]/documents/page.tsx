@@ -369,11 +369,11 @@ export default function ProjectDocumentsPage() {
               Files will be scoped to{" "}
               <span className="font-medium text-foreground">{projectName}</span> and will
               appear in the document register once queued. Choose each file role before
-              upload: contract, budget, or schedule.
+              upload: contract, budget, schedule, or specification.
             </DialogDescription>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-full border bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm">
-                PDF, XLSX, BC3
+                PDF, DOCX, XLSX, BC3
               </span>
               <span className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
                 Max 50 MB each
@@ -385,6 +385,7 @@ export default function ProjectDocumentsPage() {
             maxFileSizeBytes={50 * 1024 * 1024}
             defaultType={defaultUploadType ?? undefined}
             onUploadComplete={handleUploadComplete}
+            onPartialUploadAccepted={() => void refetch()}
           />
         </DialogContent>
       </Dialog>

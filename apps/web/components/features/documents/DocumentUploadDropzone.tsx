@@ -36,6 +36,7 @@ type DocumentUploadDropzoneProps = {
   maxFileSizeBytes?: number;
   defaultType?: DocumentType;
   onUploadComplete?: () => void;
+  onPartialUploadAccepted?: () => void;
 };
 
 function getExtension(fileName: string): string {
@@ -74,6 +75,7 @@ export function DocumentUploadDropzone({
   maxFileSizeBytes,
   defaultType,
   onUploadComplete,
+  onPartialUploadAccepted,
 }: DocumentUploadDropzoneProps) {
   const { getToken } = useAuth();
   const [dragState, setDragState] = useState<"idle" | "active">("idle");
@@ -186,7 +188,9 @@ export function DocumentUploadDropzone({
           `${acceptedUploads.length} file(s) accepted; ${remainingCount} remain staged. ${formatUploadFailureMessage(error)} Retry only the remaining files.`,
         );
         setStatusMessage(`${acceptedUploads.length} accepted; ${remainingCount} pending`);
-        onUploadComplete?.();
+        // A partial success refreshes the document register but MUST NOT close
+        // the parent's upload dialog: its remaining staged files need retry.
+        onPartialUploadAccepted?.();
       } else {
         setMessage(formatUploadFailureMessage(error));
         setStatusMessage("");

@@ -249,11 +249,13 @@ describe("S2-09 - DocumentUploadDropzone", () => {
       .mockResolvedValueOnce({ id: "doc-budget", task_id: "task-budget" });
     getTokenMock.mockResolvedValue("fresh-token-123");
     const onUploadComplete = vi.fn();
+    const onPartialUploadAccepted = vi.fn();
 
     render(
       <DocumentUploadDropzone
         projectId="proj_partial"
         onUploadComplete={onUploadComplete}
+        onPartialUploadAccepted={onPartialUploadAccepted}
       />,
     );
 
@@ -271,7 +273,8 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     expect(screen.queryByText("accepted-contract.pdf")).not.toBeInTheDocument();
     expect(screen.getByText("retry-budget.xlsx")).toBeInTheDocument();
     expect(uploadDocumentMock).toHaveBeenCalledTimes(2);
-    expect(onUploadComplete).toHaveBeenCalledTimes(1);
+    expect(onPartialUploadAccepted).toHaveBeenCalledTimes(1);
+    expect(onUploadComplete).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
     await waitFor(() => expect(uploadDocumentMock).toHaveBeenCalledTimes(3));
@@ -284,7 +287,8 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     );
     expect(await screen.findByText(/upload accepted for 1 file\(s\)/i)).toBeInTheDocument();
     expect(screen.queryByText("retry-budget.xlsx")).not.toBeInTheDocument();
-    expect(onUploadComplete).toHaveBeenCalledTimes(2);
+    expect(onUploadComplete).toHaveBeenCalledTimes(1);
+    expect(onPartialUploadAccepted).toHaveBeenCalledTimes(1);
   });
 
   it("updates drag state and aria labels during DnD lifecycle", () => {
