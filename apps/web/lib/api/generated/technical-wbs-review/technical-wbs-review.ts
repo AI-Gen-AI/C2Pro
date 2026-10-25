@@ -116,7 +116,7 @@ export const getListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviews
         typeof listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGet
       >
     >,
-    TError = HTTPValidationError,
+    TError = void | HTTPValidationError,
   >(
     projectId: string,
     params?: ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams,
@@ -181,7 +181,7 @@ export type ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetQ
     >
   >;
 export type ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetQueryError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 export function useListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGet<
   TData = Awaited<
@@ -189,7 +189,7 @@ export function useListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsRevi
       typeof listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGet
     >
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   params:
@@ -234,7 +234,7 @@ export function useListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsRevi
       typeof listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGet
     >
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   params?: ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams,
@@ -277,7 +277,7 @@ export function useListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsRevi
       typeof listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGet
     >
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   params?: ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams,
@@ -308,7 +308,7 @@ export function useListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsRevi
       typeof listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGet
     >
   >,
-  TError = HTTPValidationError,
+  TError = void | HTTPValidationError,
 >(
   projectId: string,
   params?: ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams,
@@ -364,7 +364,7 @@ export const recordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReviewsPo
   };
 
 export const getRecordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReviewsPostMutationOptions =
-  <TError = HTTPValidationError, TContext = unknown>(options?: {
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
     mutation?: UseMutationOptions<
       Awaited<
         ReturnType<
@@ -426,13 +426,13 @@ export type RecordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReviewsPos
 export type RecordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReviewsPostMutationBody =
   TechnicalWBSReviewRequest;
 export type RecordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReviewsPostMutationError =
-  HTTPValidationError;
+  void | HTTPValidationError;
 
 /**
  * @summary Record Technical Wbs Review
  */
 export const useRecordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReviewsPost =
-  <TError = HTTPValidationError, TContext = unknown>(
+  <TError = void | HTTPValidationError, TContext = unknown>(
     options?: {
       mutation?: UseMutationOptions<
         Awaited<
