@@ -177,7 +177,9 @@ jobs:
         working-directory: apps/web
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/pj01-results.json
-        run: ./node_modules/.bin/playwright test --project=pj01-acceptance --reporter=list,json
+        # One worker: the journey and the isolation spec both drive the shared dev server, and
+        # a second page compiling a route there can force a full reload of the journey's page.
+        run: ./node_modules/.bin/playwright test --project=pj01-acceptance --workers=1 --reporter=list,json
 
       - name: Summarize triplet journey result
         if: always()

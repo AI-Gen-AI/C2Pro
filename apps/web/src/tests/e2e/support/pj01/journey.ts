@@ -28,7 +28,7 @@ import { contractBPdfPath, loadContractBManifest } from "../../../pj01/revision-
 import { assertCurrentStateThroughNavigation } from "./current-state";
 import { navigateTowardEvidence } from "./evidence";
 import { assertSixHealthDimensions, openHealthThroughNavigation } from "./health";
-import { observeProcessingWithoutReload, type ProcessingObservation } from "./processing";
+import { observeProcessingWithoutReload, trackDocumentsAnswers, type ProcessingObservation } from "./processing";
 import { approvePendingReviewThroughUi, returnToDocuments, type ReviewDecision } from "./review";
 import { uploadNewVersionThroughUi, type RevisionUploadResult } from "./revision";
 import { judgeHealthEvidenceRevision, readHealthEvidenceRevision } from "./revision-authority";
@@ -221,12 +221,16 @@ export async function runPj01SecondHalf(
   const revisionManifest = loadContractBManifest();
   recorder.record("revisionFixture", revisionManifest.fixture_id);
 
+  // What the application answers about the document from the moment revision B is accepted.
+  const answers = trackDocumentsAnswers(page, first.projectId, first.documentId);
+
   const revision = await recorder.step("PJ01-S8", "Upload revision B of the same document", async () => {
     const result = await uploadNewVersionThroughUi(page, recorder, {
       projectId: first.projectId,
       documentId: first.documentId,
       filePath: contractBPdfPath(revisionManifest),
       expectedVersion: 2,
+      onAccepted: () => answers.reset(),
     });
     await recorder.screenshot(page, "s8-revision-accepted");
     return result;
@@ -239,7 +243,9 @@ export async function runPj01SecondHalf(
       projectId: first.projectId,
       documentId: first.documentId,
       settlement: "review_required",
+      seedStage: answers.latest(),
     });
+    answers.stop();
     await recorder.screenshot(page, "s9-revision-gate");
     if (observed.evaluation.violations.length > 0 || !["review_required", "analyzed"].includes(observed.evaluation.outcome)) {
       const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");

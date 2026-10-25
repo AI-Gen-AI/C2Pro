@@ -19,6 +19,7 @@ import {
 } from "../../../pj01/processing-evaluator";
 import {
   classifyBackendDocument,
+  type BackendDocumentStage,
   classifyUiDocumentLabel,
   extractStatusLabel,
   isSettledStage,
@@ -28,6 +29,47 @@ import {
 import type { Pj01RunRecorder } from "./run-recorder";
 
 export const ANALYSIS_BUDGET_MS = 240_000;
+
+export interface DocumentsAnswerTracker {
+  /** The backend stage of the document in the application's most recent documents answer. */
+  latest(): BackendDocumentStage | null;
+  /** Forget what was answered so far (a new revision starts a new history). */
+  reset(): void;
+  stop(): void;
+}
+
+/**
+ * Remember what the APPLICATION's own documents requests answered, without making any request.
+ *
+ * A wait that starts after the page already settled (the pipeline can finish between the upload
+ * answer and the first poll) would otherwise see no answer at all and read as "never refreshed".
+ * The last answer received since the upload was accepted is the honest starting point of the wait.
+ */
+export function trackDocumentsAnswers(page: Page, projectId: string, documentId: string): DocumentsAnswerTracker {
+  const documentsPath = new RegExp(`/projects/${projectId}/documents/?$`);
+  let latest: BackendDocumentStage | null = null;
+  const onResponse = async (response: Response): Promise<void> => {
+    if (response.request().method() !== "GET" || !response.ok()) return;
+    if (!documentsPath.test(new URL(response.url()).pathname)) return;
+    try {
+      const body = (await response.json()) as { items?: PolledDocument[] } | PolledDocument[];
+      const document = (Array.isArray(body) ? body : (body.items ?? [])).find((item) => item.id === documentId);
+      if (document) latest = classifyBackendDocument(document);
+    } catch {
+      // unreadable body: keep the previous answer
+    }
+  };
+  page.on("response", onResponse);
+  return {
+    latest: () => latest,
+    reset: () => {
+      latest = null;
+    },
+    stop: () => {
+      page.off("response", onResponse);
+    },
+  };
+}
 
 export interface ProcessingObservation {
   timeline: ProcessingTimeline;
@@ -53,6 +95,8 @@ export async function observeProcessingWithoutReload(
      * like "no refresh ever happened".
      */
     trigger?: () => Promise<void>;
+    /** The last documents answer seen before this wait began (see {@link trackDocumentsAnswers}). */
+    seedStage?: BackendDocumentStage | null;
   },
 ): Promise<ProcessingObservation> {
   const { projectId, documentId } = options;
@@ -66,6 +110,7 @@ export async function observeProcessingWithoutReload(
   const polls: PollObservation[] = [];
   const uiSamples: UiObservation[] = [];
   let reloads = 0;
+  const reloadLog: { atMs: number; url: string }[] = [];
   const documentsPath = new RegExp(`/projects/${projectId}/documents/?$`);
   let startUrl = page.url();
 
@@ -83,10 +128,15 @@ export async function observeProcessingWithoutReload(
     }
   };
   const onNavigate = (): void => {
-    if (page.url() === startUrl) reloads += 1;
+    if (page.url() === startUrl) {
+      reloads += 1;
+      reloadLog.push({ atMs: clock(), url: page.url() });
+    }
   };
   page.on("response", onResponse);
   page.on("framenavigated", onNavigate);
+
+  if (options.seedStage) polls.push({ atMs: 0, stage: options.seedStage });
 
   try {
     if (options.trigger) {
@@ -134,12 +184,14 @@ export async function observeProcessingWithoutReload(
     settlement,
     msToTerminal: polls.find((poll) => isSettledStage(poll.stage, settlement))?.atMs ?? null,
     reloads,
+    reloadLog,
+    seededStage: options.seedStage ?? null,
   });
   for (const violation of evaluation.violations) {
     recorder.violation(`PROCESSING_${violation.code}`, violation.detail);
   }
   if (reloads > 0) {
-    recorder.violation("PROCESSING_PAGE_RELOADED", `the documents page reloaded ${reloads} time(s) during processing`);
+    recorder.violation("PROCESSING_PAGE_RELOADED", `the documents page reloaded ${reloads} time(s) during processing (at ${reloadLog.map((entry) => `${entry.atMs}ms`).join(", ")})`);
   }
   return { timeline, evaluation, reloads };
 }

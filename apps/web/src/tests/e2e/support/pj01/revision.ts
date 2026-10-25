@@ -26,7 +26,7 @@ const sha256 = (file: string): string => createHash("sha256").update(readFileSyn
 export async function uploadNewVersionThroughUi(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string; filePath: string; expectedVersion?: number },
+  options: { projectId: string; documentId: string; filePath: string; expectedVersion?: number; onAccepted?: () => void },
 ): Promise<RevisionUploadResult> {
   const { projectId, documentId, filePath } = options;
 
@@ -71,6 +71,7 @@ export async function uploadNewVersionThroughUi(
       `the stored revision hash ${body.file_hash} is not the sha256 of ${path.basename(filePath)}`,
     );
   }
+  options.onAccepted?.();
   await expect(dialog).toBeHidden({ timeout: 60_000 });
 
   const listed = await page.waitForResponse(
