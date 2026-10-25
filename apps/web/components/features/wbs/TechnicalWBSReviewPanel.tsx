@@ -123,7 +123,6 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
       baseline.data?.digest_verified === true &&
       baseline.data?.id === authority?.baseline_id &&
       baseline.data?.baseline_no === baselineNo &&
-      baseline.data?.self_approved === false,
   );
   const source = details.data;
   const validDocument = Boolean(
@@ -236,6 +235,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
           <span>Technical specification</span>
           <select
             aria-label="Technical specification"
+            disabled={busy}
             className="w-full rounded border bg-background p-2"
             value={selectedDocumentId}
             onChange={(e) => {
@@ -265,7 +265,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
             className="w-full rounded border bg-background p-2"
             value={clauses.some((clause) => clause.id === clauseId) ? clauseId : ""}
             onChange={(e) => { setClauseId(e.target.value); setReceipt(null); }}
-            disabled={!validDocument}
+            disabled={!validDocument || busy}
           >
             <option value="">Choose a source section</option>
             {clauses.map((clause) => (
@@ -295,7 +295,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
             className="w-full rounded border bg-background p-2"
             value={validBaseline && baseline.data?.nodes.some((n) => n.node_id === nodeId) ? nodeId : ""}
             onChange={(e) => { setNodeId(e.target.value); setReceipt(null); }}
-            disabled={!validBaseline}
+            disabled={!validBaseline || busy}
           >
             <option value="">Choose an approved baseline node</option>
             {validBaseline && baseline.data?.nodes.map((n) => (
@@ -307,6 +307,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
           <span>Human decision</span>
           <select
             aria-label="Human decision"
+            disabled={busy}
             className="w-full rounded border bg-background p-2"
             value={decision}
             onChange={(e) => {
@@ -322,6 +323,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
           <span>Reviewer reason (required)</span>
           <textarea
             aria-label="Reviewer reason"
+            disabled={busy}
             className="w-full rounded border bg-background p-2"
             rows={2}
             maxLength={2000}
