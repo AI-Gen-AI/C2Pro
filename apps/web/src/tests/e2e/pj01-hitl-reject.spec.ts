@@ -1,5 +1,5 @@
 /**
- * TS-E2E-TRIPLET-002 — ACC-01 S5: a human can REJECT a pending review, and only with a reason.
+ * TS-E2E-S5-001 — ACC-01 S5: a human can REJECT a pending review, and only with a reason.
  *
  * Replaces the conditional skips of DAP "HITL-002/HITL-003" (they targeted the unseeded demo project
  * `proj_demo_001` and never ran). Everything here is real: live Clerk sign-in, a new project created
@@ -26,7 +26,7 @@ import { uploadDocumentThroughUi } from "./support/pj01/upload";
 const CONTRACT = path.join(process.cwd(), "src", "tests", "e2e", "test-data", "triplet", "triplet-contract.docx");
 const REASON = "The extraction missed the completion-date penalty clause; re-analyse after correction.";
 
-test.describe("TS-E2E-TRIPLET-002: HITL rejection requires a reason", () => {
+test.describe("TS-E2E-S5-001: HITL rejection requires a reason", () => {
   test("a rejection needs a reason and leaves the document unapproved", async ({ browser, baseURL }) => {
     test.setTimeout(600_000);
     const base = baseURL ?? "http://localhost:3100";

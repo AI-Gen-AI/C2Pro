@@ -57,7 +57,7 @@ export default defineConfig({
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         // Own project and Nightly step: a long journey that must not hide the rest of the suite.
-        /(^|[\\/])triplet-(user-journey|hitl-reject)\.spec\.ts$/,
+        /(^|[\\/])triplet-user-journey\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -90,6 +90,8 @@ export default defineConfig({
       testMatch: [
         /(^|[\\/])pj01-first-user-journey\.spec\.ts$/,
         /(^|[\\/])pj01-tenant-isolation\.spec\.ts$/,
+        // ACC-01 S5: UI rejection needs a reason. Same live Clerk login and production runtime as PJ-01.
+        /(^|[\\/])pj01-hitl-reject\.spec\.ts$/,
       ],
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["global-setup"],
@@ -284,7 +286,7 @@ export default defineConfig({
       // alerts/health/evidence → persistence, on the real local backend. The AI is mocked in
       // the Nightly (C2PRO_AI_MOCK=1); the spec records and declares it. Explicit-only.
       name: "triplet-journey",
-      testMatch: /(^|[\\/])triplet-(user-journey|hitl-reject)\.spec\.ts$/,
+      testMatch: /(^|[\\/])triplet-user-journey\.spec\.ts$/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "playwright/.auth/user.json",
