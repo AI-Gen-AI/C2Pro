@@ -34,8 +34,8 @@ from src.temporal.adapters.persistence.project_event_repository import (
     SqlAlchemyProjectEventRepository,
 )
 from tests.integration.document_flow.test_852_schedule_wbs_governance_guard import (
-    _ProjectRepo,
     _project,
+    _ProjectRepo,
     worker,  # noqa: F401 - reuse real worker's isolated services
 )
 
