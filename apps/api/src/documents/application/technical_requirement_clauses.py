@@ -58,10 +58,21 @@ def extract_technical_requirement_clauses(
         raw = parsed_text[match.start():end]
         left_trim = len(raw) - len(raw.lstrip())
         stripped = raw.strip()
-        if len(stripped) < 30 or not _OBLIGATION.search(stripped):
+        if len(stripped) < 30:
             continue
-        start_offset = match.start() + left_trim
-        literal = stripped[:_MAX_SOURCE_CHARS]
+        obligation = _OBLIGATION.search(stripped)
+        if obligation is None:
+            continue
+        # Preserve the qualifying requirement inside the literal source span.
+        # A long source section can have extensive background text before the
+        # first operative sentence; silently keeping only its first 4000 chars
+        # would fabricate "evidence" with no obligation in the saved snippet.
+        window_start = (
+            0 if obligation.end() <= _MAX_SOURCE_CHARS
+            else max(0, obligation.start() - 200)
+        )
+        start_offset = match.start() + left_trim + window_start
+        literal = stripped[window_start : window_start + _MAX_SOURCE_CHARS]
         end_offset = start_offset + len(literal)
         section_code = match.group("code")
         clauses.append(
