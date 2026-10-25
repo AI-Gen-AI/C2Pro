@@ -8,6 +8,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import {
@@ -76,6 +77,7 @@ export function eligibleTechnicalClauses(
 type Props = { projectId: string; authority: ProjectWBSAuthority | null };
 
 export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
+  const { userId, orgId, isLoaded } = useAuth();
   const { documents, loading: documentsLoading, error: documentsError } =
     useProjectDocuments(projectId);
   const technicalDocuments = useMemo(
@@ -85,13 +87,14 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
   // Every mount (including after a fresh Clerk sign-in) reads persisted
   // facts. These records are historical, never a current/canonical link.
   const reviewHistory = useQuery({
-    queryKey: ["technical-wbs-review-history", projectId],
+    // Never reuse another actor or organization cached audit responses.
+    queryKey: ["technical-wbs-review-history", orgId, userId, projectId],
     queryFn: () =>
       orvalApiClient<TechnicalWBSReviewHistoryEntry[]>({
         url: `/api/v1/projects/${encodeURIComponent(projectId)}/technical-wbs/reviews`,
         method: "GET",
       }),
-    enabled: Boolean(projectId),
+    enabled: Boolean(isLoaded && userId && orgId && projectId),
   });
   const [documentId, setDocumentId] = useState("");
   const selectedDocumentId = technicalDocuments.some((doc) => doc.id === documentId)
