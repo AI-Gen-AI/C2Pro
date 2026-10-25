@@ -15,7 +15,7 @@ export type PendingEvidenceAction =
       kind: "entity-approve";
       entityId: string;
       label: string;
-      confidence: number;
+      confidence: number | null;
     }
   | {
       kind: "entity-reject";
@@ -98,7 +98,8 @@ export function downloadBlob(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export function normalizeConfidence(value: number): number {
+export function normalizeConfidence(value: number | null): number | null {
+  if (value === null) return null;
   if (value <= 1) {
     return Math.round(value * 100);
   }
