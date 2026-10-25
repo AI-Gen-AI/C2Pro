@@ -74,7 +74,13 @@ async def test_document_entities_route_returns_clause_derived_entities(
         title="Source text only",
         full_text="Section 1.2 Concrete strength shall exceed 35 MPa.",
         extraction_confidence=None,
-        extracted_entities={"evidence_location": {"page_number": None, "bbox": None}},
+        extracted_entities={
+            "technical_requirement": {
+                "source_section": "4.1.2",
+                "verification_status": "unverified",
+            },
+            "evidence_location": {"page_number": None, "bbox": None},
+        },
     )
     db.add_all([clause, unknown_confidence_clause])
     await db.commit()
