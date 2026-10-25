@@ -10364,8 +10364,10 @@ components:
         reason:
           type: string
           maxLength: 2000
+          minLength: 1
           title: Reason
-          default: ''
+          description: 'Why the reviewer rejects the item. Required: a rejection without
+            a reason is not auditable.'
         row_id:
           anyOf:
           - type: string
@@ -10373,6 +10375,8 @@ components:
           - type: 'null'
           title: Row Id
       type: object
+      required:
+      - reason
       title: RejectRequest
       description: 'See ApproveRequest docstring: reviewer identity is server-derived,
 
