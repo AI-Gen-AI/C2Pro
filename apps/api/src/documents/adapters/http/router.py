@@ -944,7 +944,8 @@ async def get_document_entities_endpoint(
                 type="clause",
                 text=clause.title or clause.full_text or clause.clause_code,
                 page=page_number,
-                confidence=float(clause.extraction_confidence or 1.0),
+                # Unknown extraction confidence must never become a fabricated 100%.
+                confidence=clause.extraction_confidence,
                 metadata=metadata,
             )
         )
