@@ -172,13 +172,23 @@ jobs:
       # Explicit dispatch only (inputs.run_pj01): the PJ-01 harness exercises revision B, What Changed?
       # and Current State with hash-bound fixtures. Its result is reported on its own and never mixed
       # into the suite above.
+      # PJ-01 judges whether the page reloads, refreshes and stays honest while a person waits. On
+      # `next dev` the dev server itself forces full reloads ("Fast Refresh had to perform a full
+      # reload") while it compiles routes on demand, which a journey cannot tell from an application
+      # reload (seen once in two otherwise identical runs). So it runs against the shipped runtime,
+      # exactly as the blocking E2E smoke in ci.yml does.
+      - name: Build frontend for PJ-01 (production runtime)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/web
+        run: pnpm build
+
       - name: Run PJ-01 first user journey (real backend, mock AI)
         if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
         working-directory: apps/web
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/pj01-results.json
-        # One worker: the journey and the isolation spec both drive the shared dev server, and
-        # a second page compiling a route there can force a full reload of the journey's page.
+          PLAYWRIGHT_WEBSERVER_MODE: production
+        # One worker: the journey and the isolation spec drive the same server one after the other.
         run: ./node_modules/.bin/playwright test --project=pj01-acceptance --workers=1 --reporter=list,json
 
       - name: Summarize triplet journey result
