@@ -110,3 +110,24 @@ def test_large_section_preserves_the_qualifying_obligation_and_exact_offsets() -
     assert clause.text_end_offset is not None
     assert source[clause.text_start_offset : clause.text_end_offset] == clause.full_text
     assert clause.extracted_entities["technical_requirement"]["source_section"] == "10.1"
+
+
+def test_crlf_preserves_full_numbered_source_section() -> None:
+    revision = uuid4()
+    source = "Section 4.1.2\r\nConcrete shall exceed 35 MPa."
+    [clause] = _extract(source, revision_id=revision)
+    assert clause.clause_code == "4.1.2"
+    assert source[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_truncated_parent_of_overdepth_heading_is_not_evidence() -> None:
+    revision = uuid4()
+    source = "Section 1.2.3.4.5.6.7.8\r\nConcrete shall exceed 35 MPa."
+    assert _extract(source, revision_id=revision) == []
+
+
+def test_heading_with_terminal_dot_has_full_source_code() -> None:
+    revision = uuid4()
+    source = "Section 4.1.2.\r\nSteel must comply with B500S."
+    [clause] = _extract(source, revision_id=revision)
+    assert clause.clause_code == "4.1.2"
