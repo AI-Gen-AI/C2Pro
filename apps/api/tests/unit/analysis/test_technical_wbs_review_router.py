@@ -85,7 +85,7 @@ def _app(service: _ReviewService, *, login: bool = True) -> FastAPI:
             hashed_password=None,
             clerk_user_id="clerk-test-s7",
             is_active=True,
-            is_verified=True,
+            is_verified=False,  # real Clerk auto-provisioning default; auth is via JWT
         )
     app.dependency_overrides[get_technical_wbs_review_service] = lambda: service
     return app
