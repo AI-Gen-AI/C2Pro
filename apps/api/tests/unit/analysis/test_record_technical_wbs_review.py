@@ -6,7 +6,11 @@ unit tests prove the service's ordered authority re-checks and recorded payload.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from pathlib import Path
+
+import docx
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -14,9 +18,9 @@ import pytest
 
 from src.analysis.application import record_technical_wbs_review as target
 from src.analysis.domain.technical_wbs_link_candidate import TechnicalWBSLinkCandidate
-from src.documents.domain.models import DocumentType
 from src.temporal.domain.current_revision import CurrentRevision, CurrentRevisionStatus
 from src.temporal.domain.document_revision import DocumentRevision
+from src.temporal.domain.project_event import ProjectEvent
 from src.wbs.domain.governance import AuthorityState, WBSAuthority
 
 TENANT = UUID("11111111-1111-1111-1111-111111111111")
@@ -29,7 +33,7 @@ BASE = UUID("77777777-7777-7777-7777-777777777777")
 ACTOR = UUID("88888888-8888-8888-8888-888888888888")
 NOW = datetime(2026, 10, 25, tzinfo=UTC)
 SOURCE = "Section 4.1.2 Concrete shall exceed 35 MPa."
-EVENTS = []
+EVENTS: list[ProjectEvent] = []
 
 
 @dataclass
@@ -86,7 +90,10 @@ class _Session:
         # Existing audit rows, if any, are supplied via self.events.
         return _Result(self.events[0] if self.events else None)
 
-    async def scalar(self, query):
+    async def scalar(self, query, params=None):
+        if params and "project" in params:
+            self.project_lock_count += 1
+            return PROJECT
         if hasattr(query, "column_descriptions"):
             entity = query.column_descriptions[0].get("entity")
             if entity is target.User:
@@ -291,3 +298,56 @@ async def test_invalid_action_or_idempotency_is_rejected_before_sql(monkeypatch)
     with pytest.raises(target.TechnicalMappingReviewError, match="idempotency key"):
         await _review(session, idempotency_key="short")
     assert session.project_lock_count == 0
+
+
+@pytest.mark.asyncio
+async def test_verified_docx_reader_matches_worker_source_offsets(tmp_path: Path) -> None:
+    """The production adapter parses SHA-pinned bytes in worker text-block order."""
+    doc = docx.Document()
+    doc.add_paragraph("Section 4.1.2 Concrete shall exceed 35 MPa.")
+    doc.add_paragraph("Section 4.2 Steel must meet B500S.")
+    path = tmp_path / "spec.docx"
+    doc.save(path)
+    content = path.read_bytes()
+    digest = hashlib.sha256(content).hexdigest()
+
+    class _Storage:
+        async def download_object(self, key: str) -> Path:
+            assert key == "revisions/technical.docx"
+            return path
+
+    rev = _revision().model_copy(update={"blob_hash": digest})
+    reader = target.ImmutableDocxTechnicalTextReader(storage=_Storage())  # type: ignore[arg-type]
+    parsed = await reader.read_verified_text(rev)
+    assert parsed == (
+        "Section 4.1.2 Concrete shall exceed 35 MPa.\n\n"
+        "Section 4.2 Steel must meet B500S."
+    )
+
+
+@pytest.mark.asyncio
+async def test_verified_docx_reader_denies_wrong_hash(tmp_path: Path) -> None:
+    doc = docx.Document()
+    doc.add_paragraph("Section 4.1.2 Concrete shall exceed 35 MPa.")
+    path = tmp_path / "spec.docx"
+    doc.save(path)
+
+    class _Storage:
+        async def download_object(self, key: str) -> Path:
+            return path
+
+    reader = target.ImmutableDocxTechnicalTextReader(storage=_Storage())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="REVISION_HASH_MISMATCH"):
+        await reader.read_verified_text(_revision())
+
+
+@pytest.mark.asyncio
+async def test_unsupported_source_format_fails_closed() -> None:
+    class _Storage:
+        async def download_object(self, key: str):
+            raise AssertionError("must not download unsupported format")
+
+    reader = target.ImmutableDocxTechnicalTextReader(storage=_Storage())  # type: ignore[arg-type]
+    rev = _revision().model_copy(update={"blob_key": "revisions/technical.pdf"})
+    with pytest.raises(target.TechnicalMappingReviewError, match="format is not supported"):
+        await reader.read_verified_text(rev)
