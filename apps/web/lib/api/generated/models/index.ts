@@ -261,8 +261,8 @@ export * from "./listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetPara
 export * from "./listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams";
 export * from "./listProjectsApiV1ProjectsGetParams";
 export * from "./listReviewQueueApiV1HitlQueueGetParams";
-export * from "./listTenantAlertsApiV1AlertsTenantGetParams";
 export * from "./listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams";
+export * from "./listTenantAlertsApiV1AlertsTenantGetParams";
 export * from "./listWbsChangeSetsApiV1ProjectsProjectIdWbsGovernanceChangeSetsGetParams";
 export * from "./livenessCheckApiV1HealthLiveGet200";
 export * from "./livenessCheckHealthLiveGet200";
