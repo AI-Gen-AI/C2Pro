@@ -97,6 +97,8 @@ export async function observeProcessingWithoutReload(
     trigger?: () => Promise<void>;
     /** The last documents answer seen before this wait began (see {@link trackDocumentsAnswers}). */
     seedStage?: BackendDocumentStage | null;
+    /** Names this wait in the run record (each wait is evidence of its own). */
+    label?: string;
   },
 ): Promise<ProcessingObservation> {
   const { projectId, documentId } = options;
@@ -175,7 +177,7 @@ export async function observeProcessingWithoutReload(
   };
   const evaluation = evaluateProcessingTimeline(timeline, { labelGraceMs, settlement });
 
-  recorder.record("processing", {
+  recorder.record(`processing.${options.label ?? "wait"}`, {
     outcome: evaluation.outcome,
     polls: polls.length,
     uiSamples: uiSamples.length,

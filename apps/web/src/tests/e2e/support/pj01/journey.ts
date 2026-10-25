@@ -86,7 +86,12 @@ async function processThroughHumanReview(
 ): Promise<HumanGateResult> {
   const { projectId, documentId, generation, label, stepId } = options;
   const gate = await recorder.step(`${stepId}`, `Processing ${label} until the human-review gate`, async () => {
-    const observed = await observeProcessingWithoutReload(page, recorder, { projectId, documentId, settlement: "review_required" });
+    const observed = await observeProcessingWithoutReload(page, recorder, {
+      projectId,
+      documentId,
+      settlement: "review_required",
+      label: `${label}.until-review-gate`,
+    });
     await recorder.screenshot(page, `${stepId.toLowerCase()}-gate`);
     if (observed.evaluation.violations.length > 0 || !["review_required", "analyzed"].includes(observed.evaluation.outcome)) {
       const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
@@ -110,6 +115,7 @@ async function processThroughHumanReview(
       projectId,
       documentId,
       trigger: () => returnToDocuments(page, recorder, projectId),
+      label: `${label}.after-decision`,
     });
     await recorder.screenshot(page, `${stepId.toLowerCase()}c-resumed`);
     if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
@@ -244,6 +250,7 @@ export async function runPj01SecondHalf(
       documentId: first.documentId,
       settlement: "review_required",
       seedStage: answers.latest(),
+      label: "Revision B.until-review-gate",
     });
     answers.stop();
     await recorder.screenshot(page, "s9-revision-gate");
@@ -306,6 +313,7 @@ export async function runPj01SecondHalf(
         projectId: first.projectId,
         documentId: first.documentId,
         trigger: () => returnToDocuments(page, recorder, first.projectId),
+        label: "Revision B.after-decision",
       });
       await recorder.screenshot(page, "s12c-revision-resumed");
       if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {

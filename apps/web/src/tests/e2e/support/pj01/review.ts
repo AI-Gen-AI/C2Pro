@@ -19,12 +19,15 @@ export interface ReviewDecision {
   /** The analysis generation the approved item belongs to (revision 1 -> g1, revision 2 -> g2). */
   generation: number | null;
   status: string;
+  /** Who the application recorded as the approver (an identity, not a secret). */
+  approvedBy: string;
 }
 
 interface ApprovedItem {
   item_id?: string;
   current_status?: string;
   approved_at?: string | null;
+  approved_by?: string | null;
   item_data?: { document_id?: string; thread_id?: string };
 }
 
@@ -91,11 +94,16 @@ export async function approvePendingReviewThroughUi(
   if (!item.approved_at || !/^approved$/i.test(item.current_status ?? "")) {
     recorder.violation("REVIEW_NOT_RECORDED_AS_APPROVED", `${label}: approved_at=${item.approved_at} status=${item.current_status}`);
   }
+  // The decision must carry an identity: an approval nobody is accountable for is not a human decision.
+  if (!item.approved_by?.trim()) {
+    recorder.violation("REVIEW_APPROVER_MISSING", `${label}: the approved item names no approver`);
+  }
   const decision: ReviewDecision = {
     itemId: String(item.item_id ?? ""),
     approvedAt: String(item.approved_at ?? ""),
     generation: Number.isNaN(generation) ? null : generation,
     status: String(item.current_status ?? ""),
+    approvedBy: String(item.approved_by ?? ""),
   };
   recorder.record(`review.${label}`, decision);
   return decision;
