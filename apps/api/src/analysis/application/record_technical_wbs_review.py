@@ -8,8 +8,17 @@ source reader that verifies the immutable revision bytes against blob_hash.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from dataclasses import dataclass
+from io import BytesIO
+from pathlib import Path
+
+from docx import Document as DocxDocument
+
+from src.documents.adapters.parsers.docx_file_parser import DocxFileParser
+from src.documents.application.document_source import read_verified_revision_file
+from src.documents.ports.storage_service import IStorageService
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
@@ -64,6 +73,33 @@ class VerifiedTechnicalTextReader(Protocol):
 
 
 @dataclass(frozen=True)
+class ImmutableDocxTechnicalTextReader:
+    """Production source adapter: parse only content-addressed immutable DOCX bytes.
+
+    Shares the worker's DOCX paragraph/table-cell order and join convention.
+    No mutable document_metadata, unstamped RAG chunks or user text is trusted.
+    PDF technical sources need a separate byte-verified adapter; fail closed.
+    """
+
+    storage: IStorageService
+
+    async def read_verified_text(self, revision: DocumentRevision) -> str:
+        if Path(revision.blob_key).suffix.lower() != ".docx":
+            raise TechnicalMappingReviewError("technical source format is not supported for review")
+        path = await self.storage.download_object(revision.blob_key)
+        verified_bytes = await asyncio.to_thread(
+            read_verified_revision_file, path, revision.blob_hash
+        )
+        return await asyncio.to_thread(self._parse, verified_bytes)
+
+    @staticmethod
+    def _parse(verified_bytes: bytes) -> str:
+        doc = DocxDocument(BytesIO(verified_bytes))
+        blocks = (text.strip() for text in DocxFileParser._iter_text_in_document_order(doc))
+        return "\n\n".join(text for text in blocks if text)
+
+
+@dataclass(frozen=True)
 class TechnicalMappingReviewResult:
     event_id: UUID
     candidate: TechnicalWBSLinkCandidate
@@ -105,13 +141,15 @@ class RecordTechnicalWBSReviewService:
         if not reason or not reason.strip() or len(reason.strip()) > 2000:
             raise TechnicalMappingReviewError("a bounded human review reason is required")
 
-        await self.session.execute(
+        locked_project = await self.session.scalar(
             text(
                 "SELECT id FROM projects "
                 "WHERE id = :project AND tenant_id = :tenant FOR UPDATE"
             ),
             {"project": project_id, "tenant": tenant_id},
         )
+        if locked_project is None:
+            raise TechnicalMappingReviewError("project unavailable to this tenant")
         # Fail closed without revealing cross-tenant existence.
         if await self.session.scalar(
             select(User.id).where(
@@ -121,6 +159,7 @@ class RecordTechnicalWBSReviewService:
                 User.is_verified.is_(True),
                 User.role.in_([UserRole.ADMIN, UserRole.USER]),
                 User.clerk_user_id.is_not(None),
+                User.clerk_user_id != "",
             )
         ) is None:
             raise TechnicalMappingReviewError("authenticated human reviewer required")
@@ -131,7 +170,7 @@ class RecordTechnicalWBSReviewService:
             project_id=project_id,
             node_ids={proposed_wbs_node_id},
         )
-        if authority.baseline_id != expected_wbs_baseline_id:
+        if authority.baseline_id is None or authority.baseline_id != expected_wbs_baseline_id:
             raise TechnicalMappingReviewError("the approved WBS baseline changed")
 
         source_clause = await self.session.scalar(
