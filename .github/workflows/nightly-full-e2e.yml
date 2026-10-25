@@ -200,15 +200,16 @@ jobs:
         if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
         working-directory: apps/api
         run: |
-          run_json="$(ls -t ../web/playwright/.pj01/*/run.json 2>/dev/null | head -n 1)"
-          if [ -z "$run_json" ]; then
-            echo "FAIL: the PJ-01 run wrote no run.json, nothing to verify"
-            exit 1
-          fi
-          python scripts/verify_pj01_revision_trace.py \
-            --run-json "$run_json" \
+          python scripts/verify_pj01_revision_trace.py --kind journey \
+            --run-dir ../web/playwright/.pj01 \
             --contract-a ../web/src/tests/e2e/test-data/pj01/contract-a.pdf \
             --contract-b ../web/src/tests/e2e/test-data/pj01/contract-b.pdf
+
+      # S5: what the browser rejected, read back from PostgreSQL (reason stored, nothing approved/trusted).
+      - name: Verify S5 rejection in PostgreSQL (independent read)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/api
+        run: python scripts/verify_pj01_revision_trace.py --kind reject --run-dir ../web/playwright/.pj01
 
       - name: Summarize triplet journey result
         if: always()
@@ -225,6 +226,9 @@ jobs:
       - name: Backend and worker errors during the run
         if: always()
         run: |
+          echo "== api: requests refused by the rate limiter =="
+          grep -c 'rate_limit_exceeded' "$RUNNER_TEMP/c2pro-nightly-api.log" || true
+          grep -n 'rate_limit_exceeded' "$RUNNER_TEMP/c2pro-nightly-api.log" | cut -c1-300 | tail -n 10 || true
           for name in api worker; do
             echo "== $name: 5xx responses / tracebacks / errors =="
             grep -nE ' (5[0-9]{2}) |Traceback|\[error|ERROR' "$RUNNER_TEMP/c2pro-nightly-$name.log" | tail -n 40 || true

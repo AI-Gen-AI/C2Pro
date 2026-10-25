@@ -24,6 +24,7 @@ route (wrong role, unbound finding, direct SQL against the ledger).
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -503,6 +504,23 @@ async def test_a_rejection_keeps_the_reason_and_the_decisions_but_never_trusts_t
     )
     with pytest.raises(FindingDecisionIdentityError):
         await _decide(w, test_user, _submission(w, ordinal=1, expected=1))
+
+    # The Nightly's independent PostgreSQL check agrees with what the route wrote, and refuses a
+    # reason the browser did not type.
+    verifier = _load_verifier()
+    url = db.bind.url.render_as_string(hide_password=False)
+    typed = hashlib.sha256(b"the extraction missed the penalty clause").hexdigest()
+    assert await verifier.verify_reject(url, w.project_id, w.document_id, typed) == []
+    wrong = await verifier.verify_reject(url, w.project_id, w.document_id, "0" * 64)
+    assert any("not the one the browser typed" in failure for failure in wrong)
+
+
+def _load_verifier() -> Any:
+    path = Path(__file__).resolve().parents[3] / "scripts" / "verify_pj01_revision_trace.py"
+    spec = importlib.util.spec_from_file_location("verify_pj01_revision_trace", path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
 
 
 # ── a rejection needs a reason (HTTP boundary) ───────────────────────────────

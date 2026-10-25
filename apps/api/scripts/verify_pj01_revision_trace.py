@@ -11,6 +11,10 @@ journey's project and proves that
 * revision B's artifact is the single active trusted one, and nothing is left proposed;
 * the review of revision B was decided by a human (approved), not auto-trusted.
 
+With ``--kind reject`` it proves the S5 rejection instead: the review the browser rejected is REJECTED
+with the typed reason stored (compared by SHA-256), nothing of the project is approved or still
+pending, no artifact is trusted and the document did not become analysed.
+
 It never mutates. It prints booleans and counts only (no tenant, user or Clerk identifiers), and
 exits non-zero on the first failed claim so the CI step is red when the database disagrees.
 """
@@ -42,12 +46,94 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _project_id_from_run(run_json: Path) -> UUID:
-    facts: dict[str, Any] = json.loads(run_json.read_text(encoding="utf-8")).get("facts", {})
-    raw = facts.get("projectId")
+MARKER = {"journey": "revisionFixture", "reject": "s5Reject"}
+
+
+def _facts_of(kind: str, run_dir: Path) -> dict[str, Any]:
+    """Facts of the newest run in ``run_dir`` that is of ``kind`` (never another spec's run)."""
+    candidates = sorted(
+        run_dir.glob("*/run.json"), key=lambda path: path.stat().st_mtime, reverse=True
+    )
+    for run_json in candidates:
+        facts = json.loads(run_json.read_text(encoding="utf-8")).get("facts", {})
+        if MARKER[kind] in facts:
+            return facts
+    raise SystemExit(f"FAIL: no {kind} run.json under {run_dir} ({len(candidates)} run(s) found)")
+
+
+def _project_id_from_facts(facts: dict[str, Any]) -> UUID:
+    raw = facts.get("projectId") or (facts.get("s5Reject") or {}).get("projectId")
     if not raw:
-        raise SystemExit(f"FAIL: {run_json} records no projectId")
+        raise SystemExit("FAIL: the run records no projectId")
     return UUID(str(raw))
+
+
+async def verify_reject(
+    database_url: str, project_id: UUID, document_id: UUID, reason_sha256: str
+) -> list[str]:
+    failures: list[str] = []
+    engine = create_async_engine(_normalize_database_url(database_url))
+    try:
+        async with engine.connect() as conn:
+            reviews = (
+                await conn.execute(
+                    text(
+                        "SELECT upper(current_status::text) AS status, approved_by, review_metadata "
+                        "FROM review_items WHERE project_id = :p AND document_id = :d"
+                    ),
+                    {"p": project_id, "d": document_id},
+                )
+            ).all()
+            statuses = sorted(r.status for r in reviews)
+            if statuses != ["REJECTED"]:
+                failures.append(
+                    f"review statuses of the document are {statuses}, expected exactly ['REJECTED']"
+                )
+            for review in reviews:
+                if not review.approved_by:
+                    failures.append("the rejection does not name who took the decision")
+                reason = (review.review_metadata or {}).get("rejection_reason")
+                if (
+                    not isinstance(reason, str)
+                    or hashlib.sha256(reason.encode()).hexdigest() != reason_sha256
+                ):
+                    failures.append("the stored rejection reason is not the one the browser typed")
+            other = (
+                await conn.execute(
+                    text(
+                        "SELECT count(*) FROM review_items WHERE project_id = :p AND document_id <> :d "
+                        "AND upper(current_status::text) = 'APPROVED'"
+                    ),
+                    {"p": project_id, "d": document_id},
+                )
+            ).scalar_one()
+            if other:
+                failures.append(
+                    f"{other} review item(s) of the project are approved without a rejection"
+                )
+            trusted = (
+                await conn.execute(
+                    text(
+                        "SELECT count(*) FROM document_artifacts WHERE project_id = :p AND trust_state = 'trusted'"
+                    ),
+                    {"p": project_id},
+                )
+            ).scalar_one()
+            if trusted:
+                failures.append(
+                    f"{trusted} artifact(s) became trusted although the review was rejected"
+                )
+            status = (
+                await conn.execute(
+                    text("SELECT upload_status::text FROM documents WHERE id = :d"),
+                    {"d": document_id},
+                )
+            ).scalar_one_or_none()
+            if status is None or status.lower() == "analyzed":
+                failures.append(f"document status is {status!r} after the rejection")
+    finally:
+        await engine.dispose()
+    return failures
 
 
 async def verify(database_url: str, project_id: UUID, hash_a: str, hash_b: str) -> list[str]:
@@ -126,14 +212,18 @@ async def verify(database_url: str, project_id: UUID, hash_a: str, hash_b: str) 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--kind", choices=sorted(MARKER), default="journey")
     parser.add_argument(
-        "--run-json", type=Path, required=True, help="run.json written by the PJ-01 recorder"
+        "--run-dir",
+        type=Path,
+        required=True,
+        help="directory holding the recorder's <run>/run.json files",
     )
     parser.add_argument(
-        "--contract-a", type=Path, required=True, help="committed fixture PDF of contract A"
+        "--contract-a", type=Path, help="committed fixture PDF of contract A (journey)"
     )
     parser.add_argument(
-        "--contract-b", type=Path, required=True, help="committed fixture PDF of contract B"
+        "--contract-b", type=Path, help="committed fixture PDF of contract B (journey)"
     )
     parser.add_argument("--database-url", default=os.environ.get("DATABASE_URL", ""))
     args = parser.parse_args()
@@ -141,21 +231,34 @@ def main() -> int:
         print("FAIL: no database url (set DATABASE_URL or pass --database-url)")
         return 2
 
-    failures = asyncio.run(
-        verify(
-            args.database_url,
-            _project_id_from_run(args.run_json),
-            _sha256(args.contract_a),
-            _sha256(args.contract_b),
+    facts = _facts_of(args.kind, args.run_dir)
+    project_id = _project_id_from_facts(facts)
+    if args.kind == "reject":
+        recorded = facts["s5Reject"]
+        failures = asyncio.run(
+            verify_reject(
+                args.database_url,
+                project_id,
+                UUID(str(recorded["documentId"])),
+                str(recorded["reasonSha256"]),
+            )
         )
-    )
+        ok = "OK: PostgreSQL holds the rejected review with the typed reason, no approval and no trusted artifact"
+    else:
+        if not (args.contract_a and args.contract_b):
+            print("FAIL: --contract-a and --contract-b are required for --kind journey")
+            return 2
+        failures = asyncio.run(
+            verify(
+                args.database_url, project_id, _sha256(args.contract_a), _sha256(args.contract_b)
+            )
+        )
+        ok = "OK: PostgreSQL holds revision A (trusted, now superseded) and revision B (active trusted) for the journey"
     if failures:
         for failure in failures:
             print(f"FAIL: {failure}")
         return 1
-    print(
-        "OK: PostgreSQL holds revision A (trusted, now superseded) and revision B (active trusted) for the journey"
-    )
+    print(ok)
     return 0
 
 

@@ -13,6 +13,7 @@
  * both routes that can reject) and the other negatives are proven against PostgreSQL in
  * `test_s5_hitl_reject_and_differentiated_approval.py`.
  */
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 import { expect, test } from "@playwright/test";
@@ -30,7 +31,8 @@ test.describe("TS-E2E-S5-001: HITL rejection requires a reason", () => {
   test("a rejection needs a reason and leaves the document unapproved", async ({ browser, baseURL }) => {
     test.setTimeout(600_000);
     const base = baseURL ?? "http://localhost:3100";
-    const recorder = Pj01RunRecorder.fromEnv();
+    // Its own run directory: the PostgreSQL check reads this run, never the PJ-01 journey's.
+    const recorder = new Pj01RunRecorder({ runId: `s5-reject-${new Date().toISOString().replace(/[:.]/g, "-")}` });
     // The login is live: an empty session, never the restored one.
     const context = await browser.newContext({ baseURL: base, storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
@@ -81,6 +83,7 @@ test.describe("TS-E2E-S5-001: HITL rejection requires a reason", () => {
     await confirm.click();
     const response = await rejected;
     expect(response.status(), await response.text().catch(() => "")).toBeLessThan(300);
+    const rejectedItemId = new URL(response.url()).pathname.match(/\/hitl\/queue\/([^/]+)\/reject/)?.[1] ?? null;
     const decided = (await response.json()) as { current_status?: string; approved_by?: string | null };
     expect(decided.current_status).toBe("REJECTED");
     expect(decided.approved_by, "the decision names who took it").toBeTruthy();
@@ -101,6 +104,16 @@ test.describe("TS-E2E-S5-001: HITL rejection requires a reason", () => {
     await expect(page.getByTestId(`document-row-${documentId}`).getByTestId("document-status-badge")).toHaveText(label, {
       timeout: 60_000,
     });
+    // Facts for the independent PostgreSQL read (scripts/verify_pj01_revision_trace.py --kind reject):
+    // which project, document and review the browser rejected, and the SHA-256 of the reason it typed.
+    recorder.record("s5Reject", {
+      projectId,
+      documentId,
+      reviewItemId: rejectedItemId,
+      reasonSha256: createHash("sha256").update(REASON).digest("hex"),
+      documentStateAfterRejection: label,
+    });
+    recorder.write();
     await context.close();
   });
 });
