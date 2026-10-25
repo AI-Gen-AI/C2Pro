@@ -47,6 +47,7 @@ from src.reporting.domain.current_state_report import (
     CurrentStateReport,
     CurrentStateSections,
     DocumentItem,
+    DocumentRevisionRef,
     DocumentsData,
     DocumentsSection,
     EvidenceBreakdown,
@@ -243,6 +244,14 @@ def _lifecycle_status(upload_status: object) -> str:
 _AWAITING_ANALYSIS = (DocumentLifecycleStatus.PARSED.value, DocumentLifecycleStatus.ANALYSIS_PENDING.value)
 
 
+def _revision_ref(state: Any, which: str) -> DocumentRevisionRef | None:
+    ref = getattr(state, which, None) if state is not None else None
+    if ref is None:
+        return None
+    revision_id, rev_no, blob_hash = ref
+    return DocumentRevisionRef(revision_id=revision_id, rev_no=rev_no, blob_hash=blob_hash)
+
+
 def project_documents(result: Any) -> DocumentsSection:
     domain = "documents"
     if not isinstance(result, SourceOk):
@@ -267,6 +276,8 @@ def project_documents(result: Any) -> DocumentsSection:
             version=document.version,
             uploaded_at=_as_utc(document.created_at) if document.created_at else None,
             parsed_at=_as_utc(document.parsed_at) if document.parsed_at else None,
+            trusted_revision=_revision_ref(result.value.revisions.get(document.id), "trusted"),
+            pending_revision=_revision_ref(result.value.revisions.get(document.id), "pending"),
         )
         for document in ordered[:MAX_LISTED_ITEMS]
     ]

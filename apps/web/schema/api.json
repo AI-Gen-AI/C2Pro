@@ -10646,6 +10646,28 @@
               }
             ],
             "title": "Parsed At"
+          },
+          "trusted_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRevisionRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The revision a human approved and the project's trusted analysis (Health, Coherence) rests on. Null until a revision has been approved."
+          },
+          "pending_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRevisionRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A newer revision that has been analysed but not approved yet. Nothing in this report is derived from it."
           }
         },
         "additionalProperties": false,
@@ -10660,6 +10682,30 @@
           "version"
         ],
         "title": "DocumentItem"
+      },
+      "DocumentRevisionRef": {
+        "properties": {
+          "revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revision Id"
+          },
+          "rev_no": {
+            "type": "integer",
+            "title": "Rev No",
+            "description": "Position in the document's revision history (1 = the first upload)."
+          },
+          "blob_hash": {
+            "type": "string",
+            "title": "Blob Hash",
+            "description": "SHA-256 of the exact stored bytes of this revision."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["revision_id", "rev_no", "blob_hash"],
+        "title": "DocumentRevisionRef",
+        "description": "One immutable revision of a document, identified by its content hash."
       },
       "DocumentLifecycleStatus": {
         "type": "string",

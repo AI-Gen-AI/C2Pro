@@ -12,7 +12,8 @@
  * acceptance run) call `runPj01FirstHalf` and continue from the returned project and
  * document, instead of re-implementing sign-in, upload and processing.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Page } from "@playwright/test";
@@ -33,6 +34,8 @@ import { approvePendingReviewThroughUi, returnToDocuments, type ReviewDecision }
 import { uploadNewVersionThroughUi, type RevisionUploadResult } from "./revision";
 import { judgeHealthEvidenceRevision, readHealthEvidenceRevision } from "./revision-authority";
 import type { Pj01RunRecorder } from "./run-recorder";
+
+const sha256 = (file: string): string => createHash("sha256").update(readFileSync(file)).digest("hex");
 import { createProjectThroughUi, signInAsJourneyUser } from "./session";
 import { uploadDocumentThroughUi } from "./upload";
 import {
@@ -294,7 +297,14 @@ export async function runPj01SecondHalf(
       await recorder.screenshot(page, "s10b-evidence-while-pending");
     });
     await recorder.step("PJ01-S11a", "Current State while revision B is pending", async () => {
-      await assertCurrentStateThroughNavigation(page, recorder, { projectId: first.projectId, phase: "pending-review" });
+      await assertCurrentStateThroughNavigation(page, recorder, {
+        projectId: first.projectId,
+        phase: "pending-review",
+        revisionTrace: {
+          trusted: { revisionId: whatChanged.sourceRevisionId, blobHash: sha256(contractAPdfPath(first.manifest)) },
+          pending: { revisionId: whatChanged.targetRevisionId, blobHash: sha256(contractBPdfPath(revisionManifest)) },
+        },
+      });
     });
   }
 
@@ -342,6 +352,7 @@ export async function runPj01SecondHalf(
       projectId: first.projectId,
       phase: "approved",
       approvedAt: approvedReview?.approvedAt ?? whatChanged.occurredAt,
+      revisionTrace: { trusted: { revisionId: whatChanged.targetRevisionId, blobHash: sha256(contractBPdfPath(revisionManifest)) } },
     });
   });
 

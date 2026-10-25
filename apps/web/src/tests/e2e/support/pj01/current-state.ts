@@ -22,8 +22,10 @@ import {
 } from "../../../pj01/current-state-evaluator";
 import {
   evaluateApprovedRevisionCurrentState,
+  evaluateCurrentStateRevisionTrace,
   evaluatePendingRevisionCurrentState,
   parseInstant,
+  type RevisionIdentity,
 } from "../../../pj01/revision-authority-evaluator";
 import { clickProjectTab } from "./health";
 import type { Pj01RunRecorder } from "./run-recorder";
@@ -41,7 +43,14 @@ export type CurrentStatePhase = "pending-review" | "approved";
 export async function assertCurrentStateThroughNavigation(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; phase: CurrentStatePhase; approvedAt?: string; waitMs?: number },
+  options: {
+    projectId: string;
+    phase: CurrentStatePhase;
+    approvedAt?: string;
+    waitMs?: number;
+    /** Fixture-bound identities: A is trusted while B waits; B is trusted once approved. */
+    revisionTrace?: { trusted: RevisionIdentity; pending?: RevisionIdentity };
+  },
 ): Promise<void> {
   const { projectId, phase } = options;
   const deadline = Date.now() + (options.waitMs ?? 60_000);
@@ -87,6 +96,11 @@ export async function assertCurrentStateThroughNavigation(
   for (const violation of authority) {
     recorder.violation(`CURRENT_STATE_${phase.toUpperCase()}_${violation.code}`, violation.detail);
   }
+  if (options.revisionTrace) {
+    for (const violation of evaluateCurrentStateRevisionTrace(report, options.revisionTrace)) {
+      recorder.violation(`CURRENT_STATE_${phase.toUpperCase()}_${violation.code}`, violation.detail);
+    }
+  }
   if (phase === "approved" && attempts > 1) {
     recorder.violation(
       "ANALYZED_BEFORE_CURRENT_STATE_REFRESH",
@@ -122,6 +136,8 @@ export async function assertCurrentStateThroughNavigation(
       filename: item.filename,
       version: item.version,
       lifecycle: item.lifecycle_status,
+      trustedRevision: item.trusted_revision ?? null,
+      pendingRevision: item.pending_revision ?? null,
     })),
     attention: report.sections.executive_summary?.data?.attention_items?.map((item) => item.kind),
     hitlSection: report.sections.hitl?.status,

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CurrentStateReportLike } from "./current-state-evaluator";
 import {
   evaluateApprovedRevisionCurrentState,
+  evaluateCurrentStateRevisionTrace,
   evaluateHealthEvidenceRevision,
   evaluatePendingRevisionCurrentState,
   parseInstant,
@@ -116,5 +117,43 @@ describe("evaluateApprovedRevisionCurrentState", () => {
       { approvedAt },
     ).map((v) => v.code);
     expect(codes).toEqual(["APPROVED_REVISION_NOT_ANALYZED", "APPROVED_REVISION_STILL_PENDING", "APPROVED_DECISION_STILL_PENDING"]);
+  });
+});
+
+describe("PJ-01 Current State revision trace", () => {
+  const revA = { revisionId: "rev-a", blobHash: "a".repeat(64) };
+  const revB = { revisionId: "rev-b", blobHash: "b".repeat(64) };
+  const ref = (identity: { revisionId: string; blobHash: string }, rev_no: number) => ({
+    revision_id: identity.revisionId,
+    rev_no,
+    blob_hash: identity.blobHash,
+  });
+  const reportWith = (item: Record<string, unknown>) =>
+    ({ sections: { documents: { status: "available", data: { total: 1, by_type: { contract: 1 }, items: [{ id: "d1", ...item }] } } } }) as never;
+
+  it("accepts A trusted while B is pending", () => {
+    const report = reportWith({ trusted_revision: ref(revA, 1), pending_revision: ref(revB, 2) });
+    expect(evaluateCurrentStateRevisionTrace(report, { trusted: revA, pending: revB })).toEqual([]);
+  });
+
+  it("accepts B trusted and nothing pending after approval", () => {
+    const report = reportWith({ trusted_revision: ref(revB, 2), pending_revision: null });
+    expect(evaluateCurrentStateRevisionTrace(report, { trusted: revB })).toEqual([]);
+  });
+
+  it("rejects a pending revision reported as trusted and a hash that is not the fixture's", () => {
+    const report = reportWith({ trusted_revision: ref(revB, 2), pending_revision: ref(revB, 2) });
+    expect(evaluateCurrentStateRevisionTrace(report, { trusted: revA, pending: revB }).map((v) => v.code)).toEqual(["TRUSTED_REVISION_MISMATCH"]);
+    const tampered = reportWith({ trusted_revision: { ...ref(revA, 1), blob_hash: "c".repeat(64) }, pending_revision: ref(revB, 2) });
+    expect(evaluateCurrentStateRevisionTrace(tampered, { trusted: revA, pending: revB }).map((v) => v.code)).toEqual(["TRUSTED_REVISION_MISMATCH"]);
+  });
+
+  it("rejects a revision still pending after the approval and a missing trace", () => {
+    const report = reportWith({ trusted_revision: ref(revB, 2), pending_revision: ref(revB, 2) });
+    expect(evaluateCurrentStateRevisionTrace(report, { trusted: revB }).map((v) => v.code)).toEqual(["PENDING_REVISION_AFTER_APPROVAL"]);
+    expect(evaluateCurrentStateRevisionTrace(reportWith({}), { trusted: revA, pending: revB }).map((v) => v.code)).toEqual([
+      "TRUSTED_REVISION_MISMATCH",
+      "PENDING_REVISION_MISMATCH",
+    ]);
   });
 });

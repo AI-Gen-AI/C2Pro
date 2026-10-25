@@ -191,6 +191,22 @@ jobs:
         # One worker: the journey and the isolation spec drive the same server one after the other.
         run: ./node_modules/.bin/playwright test --project=pj01-acceptance --workers=1 --reporter=list,json
 
+      # Independent of the browser: re-read PostgreSQL and prove the journey's revision trace
+      # (A trusted then superseded, B the active trusted one, hashes = the committed fixtures).
+      - name: Verify PJ-01 revision trace in PostgreSQL (independent read)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/api
+        run: |
+          run_json="$(ls -t ../web/playwright/.pj01/*/run.json 2>/dev/null | head -n 1)"
+          if [ -z "$run_json" ]; then
+            echo "FAIL: the PJ-01 run wrote no run.json, nothing to verify"
+            exit 1
+          fi
+          python scripts/verify_pj01_revision_trace.py \
+            --run-json "$run_json" \
+            --contract-a ../web/src/tests/e2e/test-data/pj01/contract-a.pdf \
+            --contract-b ../web/src/tests/e2e/test-data/pj01/contract-b.pdf
+
       - name: Summarize triplet journey result
         if: always()
         working-directory: apps/web

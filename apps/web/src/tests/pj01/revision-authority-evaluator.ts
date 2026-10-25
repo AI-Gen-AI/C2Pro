@@ -128,3 +128,47 @@ export function evaluateApprovedRevisionCurrentState(
   }
   return violations;
 }
+
+export interface RevisionIdentity {
+  revisionId: string;
+  /** SHA-256 of the committed fixture file, never read from the answer being judged. */
+  blobHash: string;
+}
+
+/**
+ * Revision trace of the single document in Current State, against fixture-bound identities:
+ * while B waits, A is the TRUSTED source and B is only pending; once B is approved B is trusted
+ * and nothing is pending. A pending revision is never reported as trusted.
+ */
+export function evaluateCurrentStateRevisionTrace(
+  report: CurrentStateReportLike,
+  expectation: { trusted: RevisionIdentity; pending?: RevisionIdentity },
+): RevisionAuthorityViolation[] {
+  const violations: RevisionAuthorityViolation[] = [];
+  const [item] = documentsOf(report);
+  if (!item) {
+    return [{ code: "REVISION_TRACE_DOCUMENT_MISSING", detail: "the documents section lists no document" }];
+  }
+  const same = (actual: { revision_id: string; blob_hash: string } | null | undefined, wanted: RevisionIdentity): boolean =>
+    !!actual && actual.revision_id === wanted.revisionId && actual.blob_hash === wanted.blobHash;
+  if (!same(item.trusted_revision, expectation.trusted)) {
+    violations.push({
+      code: "TRUSTED_REVISION_MISMATCH",
+      detail: `trusted revision ${JSON.stringify(item.trusted_revision ?? null)} is not ${expectation.trusted.revisionId} (sha256 ${expectation.trusted.blobHash})`,
+    });
+  }
+  if (expectation.pending) {
+    if (!same(item.pending_revision, expectation.pending)) {
+      violations.push({
+        code: "PENDING_REVISION_MISMATCH",
+        detail: `pending revision ${JSON.stringify(item.pending_revision ?? null)} is not ${expectation.pending.revisionId} (sha256 ${expectation.pending.blobHash})`,
+      });
+    }
+  } else if (item.pending_revision) {
+    violations.push({
+      code: "PENDING_REVISION_AFTER_APPROVAL",
+      detail: `revision ${item.pending_revision.revision_id} is still reported pending after the approval`,
+    });
+  }
+  return violations;
+}

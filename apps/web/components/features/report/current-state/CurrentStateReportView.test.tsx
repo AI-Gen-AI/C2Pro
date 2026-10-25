@@ -202,6 +202,15 @@ describe("CurrentStateReportView", () => {
     expect(within(section("health")).getByTestId("section-source")).toHaveTextContent("snapshot 7e1d2c3b");
   });
 
+  it("shows which revision is trusted and which one still awaits approval, with hashes", () => {
+    renderReport();
+    const documents = within(section("documents"));
+    expect(documents.getByTestId("document-trusted-revision")).toHaveAttribute("data-blob-hash", "a".repeat(64));
+    expect(documents.getByTestId("document-trusted-revision")).toHaveTextContent("Trusted revision 1");
+    expect(documents.getByTestId("document-pending-revision")).toHaveAttribute("data-blob-hash", "b".repeat(64));
+    expect(documents.getByTestId("document-pending-revision")).toHaveTextContent("awaits approval");
+  });
+
   it("labels documents by lifecycle, keeping analyzed, awaiting analysis and parsed apart", () => {
     const report = buildCurrentStateReport();
     const documents = report.sections.documents;

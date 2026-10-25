@@ -60,6 +60,9 @@ from src.modules.hitl.application.record_finding_decision_use_case import (
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
+from src.reporting.adapters.sources.sqlalchemy_current_state_sources import (
+    _load_revision_states as load_revision_states,
+)
 from tests.integration.document_flow import (
     test_758_checkpoint_lineage_authority_fence as lineage_harness,
 )
@@ -415,6 +418,48 @@ async def test_the_final_approval_is_a_separate_act_that_trusts_exactly_the_deci
             ),
         )
     assert len(await _ledger(db, w)) == 2
+
+
+async def test_current_state_reports_the_pending_revision_until_approval_then_the_trusted_one(
+    db: AsyncSession,
+    world: Any,
+    request_sessions: Any,  # noqa: F811
+) -> None:
+    """Persisted != trusted, read straight from PostgreSQL through the Current State loader."""
+    w = world
+    expected = (
+        await db.execute(
+            text("SELECT rev_no, blob_hash FROM document_revisions WHERE revision_id = :r"),
+            {"r": w.revision_id},
+        )
+    ).one()
+
+    async def _states() -> Any:
+        async with w.sessions(w.tenant_id) as session:
+            return (await load_revision_states(session, w.tenant_id, w.project_id)).get(w.document_id)
+
+    waiting = await _states()
+    assert waiting is not None
+    assert waiting.trusted is None, "a proposal awaiting approval is never reported as trusted"
+    assert waiting.pending == (w.revision_id, expected.rev_no, expected.blob_hash)
+
+    await _post_approve(
+        request_sessions,
+        w.tenant_id,
+        w.review_item_id,
+        saver=w.saver,
+        app=w.app,
+        sessions=w.sessions,
+        row_id=w.review_row_id,
+    )
+
+    approved = await _states()
+    assert approved is not None
+    assert approved.pending is None
+    assert approved.trusted == (w.revision_id, expected.rev_no, expected.blob_hash)
+
+    async with w.sessions(uuid4()) as foreign:
+        assert await load_revision_states(foreign, uuid4(), w.project_id) == {}
 
 
 async def test_a_rejection_keeps_the_reason_and_the_decisions_but_never_trusts_the_candidate(
