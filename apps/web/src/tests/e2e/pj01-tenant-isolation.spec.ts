@@ -55,6 +55,7 @@ test.describe("TS-E2E-PJ01-002: PJ-01 browser isolation", () => {
   let tenantAProjectId = "";
 
   test.beforeAll(async ({ browser, baseURL }) => {
+    test.setTimeout(180_000); // sign-in + project wizard; hooks do not inherit the describe timeout
     tenantAProjectId = await createOwnProject(browser, baseURL ?? "http://localhost:3100");
   });
 

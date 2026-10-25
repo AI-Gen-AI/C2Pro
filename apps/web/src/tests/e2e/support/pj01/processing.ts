@@ -46,6 +46,13 @@ export async function observeProcessingWithoutReload(
     labelGraceMs?: number;
     /** Where this wait ends: the analysis finished (default) or it reached a human-review gate. */
     settlement?: Settlement;
+    /**
+     * The user action that STARTS the observed period (e.g. leaving the review page for the
+     * Documents tab). It runs after the listeners are attached, so the very first documents answer
+     * it provokes is observed: a state that is already settled when the page loads must not look
+     * like "no refresh ever happened".
+     */
+    trigger?: () => Promise<void>;
   },
 ): Promise<ProcessingObservation> {
   const { projectId, documentId } = options;
@@ -60,7 +67,7 @@ export async function observeProcessingWithoutReload(
   const uiSamples: UiObservation[] = [];
   let reloads = 0;
   const documentsPath = new RegExp(`/projects/${projectId}/documents/?$`);
-  const startUrl = page.url();
+  let startUrl = page.url();
 
   const onResponse = async (response: Response): Promise<void> => {
     if (response.request().method() !== "GET" || !response.ok()) return;
@@ -82,6 +89,10 @@ export async function observeProcessingWithoutReload(
   page.on("framenavigated", onNavigate);
 
   try {
+    if (options.trigger) {
+      await options.trigger();
+      startUrl = page.url();
+    }
     while (clock() < budgetMs) {
       const row = page.getByTestId(`document-row-${documentId}`);
       if ((await row.count()) > 0) {

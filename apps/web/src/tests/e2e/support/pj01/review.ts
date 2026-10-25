@@ -98,9 +98,11 @@ export async function approvePendingReviewThroughUi(
     status: String(item.current_status ?? ""),
   };
   recorder.record(`review.${label}`, decision);
+  return decision;
+}
 
-  // Back to the Documents tab by navigation: processing resumes there and is observed from the page.
+/** Leave the review page for the Documents tab, where processing resumes and is observed. */
+export async function returnToDocuments(page: Page, recorder: Pj01RunRecorder, projectId: string): Promise<void> {
   await clickProjectTab(page, recorder, projectId, "documents", "DOCUMENTS_TAB_NOT_NAVIGABLE");
   await page.waitForURL(new RegExp(`/projects/${projectId}/documents`), { timeout: 30_000 });
-  return decision;
 }

@@ -29,7 +29,7 @@ import { assertCurrentStateThroughNavigation } from "./current-state";
 import { navigateTowardEvidence } from "./evidence";
 import { assertSixHealthDimensions, openHealthThroughNavigation } from "./health";
 import { observeProcessingWithoutReload, type ProcessingObservation } from "./processing";
-import { approvePendingReviewThroughUi, type ReviewDecision } from "./review";
+import { approvePendingReviewThroughUi, returnToDocuments, type ReviewDecision } from "./review";
 import { uploadNewVersionThroughUi, type RevisionUploadResult } from "./revision";
 import { judgeHealthEvidenceRevision, readHealthEvidenceRevision } from "./revision-authority";
 import type { Pj01RunRecorder } from "./run-recorder";
@@ -99,7 +99,11 @@ async function processThroughHumanReview(
     approvePendingReviewThroughUi(page, recorder, { projectId, documentId, expectedGeneration: generation, label }),
   );
   const resumed = await recorder.step(`${stepId}c`, `Processing resumes after the decision on ${label}`, async () => {
-    const observed = await observeProcessingWithoutReload(page, recorder, { projectId, documentId });
+    const observed = await observeProcessingWithoutReload(page, recorder, {
+      projectId,
+      documentId,
+      trigger: () => returnToDocuments(page, recorder, projectId),
+    });
     await recorder.screenshot(page, `${stepId.toLowerCase()}c-resumed`);
     if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
       const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
@@ -288,6 +292,7 @@ export async function runPj01SecondHalf(
       const observed = await observeProcessingWithoutReload(page, recorder, {
         projectId: first.projectId,
         documentId: first.documentId,
+        trigger: () => returnToDocuments(page, recorder, first.projectId),
       });
       await recorder.screenshot(page, "s12c-revision-resumed");
       if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
