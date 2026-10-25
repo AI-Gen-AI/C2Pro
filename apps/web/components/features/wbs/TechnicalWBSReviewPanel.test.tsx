@@ -25,6 +25,10 @@ const { mocks } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ userId: "clerk-test-user", orgId: "org-test-1", isLoaded: true }),
+}));
+
 vi.mock("@/hooks/useProjectDocuments", () => ({
   useProjectDocuments: () => ({
     documents: mocks.documents,
