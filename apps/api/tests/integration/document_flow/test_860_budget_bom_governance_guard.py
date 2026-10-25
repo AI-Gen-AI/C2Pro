@@ -331,10 +331,41 @@ async def test_budget_upload_creates_no_bom_and_stays_reparsable(
     state = await _document_state(db, document.id)
     assert state["status"] == "parsed_pending_analysis"
     assert state["parsing_error"] is None
+    # The declared total reaches document metadata through the NORMAL upload
+    # worker, not only the manual /parse endpoint: coherence reconciles it with
+    # the contract total (DET-CRS-CONBUD / NEGMARGIN).
+    assert state["metadata"]["stated_total"] == 2800.0
     # 17 / 18: the immutable revision is re-fetchable and deterministically reparsable.
     assert await _reparse_from_source(worker, document, revision) == (
         ["Concrete C30", "Steel rebar"], 2800.0,
     )
+
+
+BUDGET_NO_DECLARED_TOTAL = [
+    ["Concrete C30", 10, "m3", 100, 1000],
+    ["Steel rebar", 2, "t", 900, 1800],
+]
+
+
+async def test_worker_replaces_stated_total_and_never_keeps_a_stale_one(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    project_id = await _project(db, test_user.tenant_id)
+    document, revision_1 = await _upload_budget(db, worker, test_user, project_id, BUDGET_V1)
+    assert (await ingestion_tasks._process(document.id, revision_1.revision_id))["status"] == "success"
+    assert (await _document_state(db, document.id))["metadata"]["stated_total"] == 2800.0
+
+    # A newer revision with a different declared total replaces it ...
+    revision_2 = await _reupload(db, worker, test_user, document, BUDGET_V2)
+    assert (await ingestion_tasks._process(document.id, revision_2.revision_id))["status"] == "success"
+    assert (await _document_state(db, document.id))["metadata"]["stated_total"] == 3700.0
+
+    # ... and one that declares none must not leave the previous total behind.
+    revision_3 = await _reupload(db, worker, test_user, document, BUDGET_NO_DECLARED_TOTAL)
+    assert (await ingestion_tasks._process(document.id, revision_3.revision_id))["status"] == "success"
+    metadata = (await _document_state(db, document.id))["metadata"]
+    assert "stated_total" not in metadata
+    assert "stated_total_currencies" not in metadata
 
 
 # ── 1, 2, 4, 5, 6, 8: manual + procurement-edited BOM, repeated revisions ────
