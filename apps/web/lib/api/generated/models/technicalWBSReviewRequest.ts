@@ -39,14 +39,29 @@
  */
 import type { TechnicalMappingDecision } from "./technicalMappingDecision";
 
-/** Never accept tenant, actor, project, or link-approval authority in JSON. */
+/**
+ * Never accept tenant, actor, project, or link-approval authority in JSON.
+ */
 export interface TechnicalWBSReviewRequest {
   clause_id: string;
   expected_revision_id: string;
+  /**
+   * @minLength 64
+   * @maxLength 64
+   * @pattern ^[0-9a-f]{64}$
+   */
   expected_blob_hash: string;
   expected_wbs_baseline_id: string;
   proposed_wbs_node_id: string;
   decision: TechnicalMappingDecision;
+  /**
+   * @minLength 8
+   * @maxLength 128
+   */
   idempotency_key: string;
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
   reason: string;
 }
