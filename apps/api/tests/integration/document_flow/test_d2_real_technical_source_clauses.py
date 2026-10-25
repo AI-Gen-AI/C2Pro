@@ -101,7 +101,10 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
         assert row.extracted_entities["evidence_location"]["revision_id"] == str(
             revision.revision_id
         )
-        assert row.extracted_entities["technical_requirement"]["verification_status"] == "unverified"
+        assert (
+            row.extracted_entities["technical_requirement"]["verification_status"]
+            == "unverified"
+        )
 
 
     # A sole PROPOSED technical revision is not trusted canonical evidence.
