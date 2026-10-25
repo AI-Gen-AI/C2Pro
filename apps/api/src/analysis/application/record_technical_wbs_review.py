@@ -86,10 +86,17 @@ class ImmutableDocxTechnicalTextReader:
         if Path(revision.blob_key).suffix.lower() != ".docx":
             raise TechnicalMappingReviewError("technical source format is not supported for review")
         path = await self.storage.download_object(revision.blob_key)
-        verified_bytes = await asyncio.to_thread(
-            read_verified_revision_file, path, revision.blob_hash
-        )
-        return await asyncio.to_thread(self._parse, verified_bytes)
+        try:
+            verified_bytes = await asyncio.to_thread(
+                read_verified_revision_file, path, revision.blob_hash
+            )
+            return await asyncio.to_thread(self._parse, verified_bytes)
+        finally:
+            # R2 returns a fresh NamedTemporaryFile(delete=False), whereas
+            # local storage returns its actual persistent source object.
+            # Never remove a stored object, including on hash/parse failures.
+            if getattr(self.storage, "download_object_is_temporary", False):
+                await asyncio.to_thread(path.unlink, missing_ok=True)
 
     @staticmethod
     def _parse(verified_bytes: bytes) -> str:
@@ -186,7 +193,10 @@ class RecordTechnicalWBSReviewService:
                 User.id == actor_user_id,
                 User.tenant_id == tenant_id,
                 User.is_active.is_(True),
-                User.is_verified.is_(True),
+                # Clerk-backed identity is authenticated by get_current_user.
+                # auth_bootstrap provisions is_verified=False and there is no
+                # synchronized email-verification writer: requiring it here
+                # makes all valid Clerk reviewers permanently ineligible.
                 User.role.in_([UserRole.ADMIN, UserRole.USER]),
                 User.clerk_user_id.is_not(None),
                 User.clerk_user_id != "",
