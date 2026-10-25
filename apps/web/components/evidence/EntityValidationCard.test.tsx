@@ -20,6 +20,20 @@ describe("EntityValidationCard — active evidence is observable", () => {
     expect(card).toHaveAttribute("data-active", "true");
   });
 
+  it("shows unmeasured confidence without inventing a percentage", () => {
+    render(
+      <EntityValidationCard
+        entity={{ ...clause, confidence: null, page: null }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Not measured")).toBeInTheDocument();
+    expect(screen.getByText("Exact location unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/100% - High/)).not.toBeInTheDocument();
+  });
+
   it("does not mark an inactive card as active", () => {
     render(<EntityValidationCard entity={clause} onApprove={vi.fn()} onReject={vi.fn()} />);
 
