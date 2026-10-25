@@ -16,6 +16,12 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams(),
 }));
 
+const { mockInvalidateQueries } = vi.hoisted(() => ({ mockInvalidateQueries: vi.fn() }));
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+}));
+
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({
     isLoaded: true,
@@ -216,6 +222,33 @@ describe('ReviewPage', () => {
         data: {},
       });
     });
+  });
+
+  it('refreshes the project documents after a decision so the row does not stay "Review required"', async () => {
+    setupMock();
+    mockApproveMutate.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => {
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['project-documents', 'test-project-id'],
+      });
+    });
+  });
+
+  it('does not refresh the documents when the decision failed', async () => {
+    setupMock();
+    mockApproveMutate.mockRejectedValue(new Error('boom'));
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });
 
   it('keeps approve dialog open and surfaces mutation errors', async () => {

@@ -61,6 +61,13 @@ export interface Pj01FirstHalfResult {
   revisionAId: string | null;
 }
 
+/** What the wait saw, in one line, so a failed run explains itself in the CI log. */
+function describeObservation(observed: ProcessingObservation): string {
+  const stages = [...new Set(observed.timeline.polls.map((poll) => poll.stage))].join(">") || "none";
+  const labels = [...new Set(observed.timeline.uiSamples.map((sample) => sample.label))].join(" | ") || "none";
+  return `polls=${observed.timeline.polls.length} backendStages=${stages} uiLabels=${labels} reloads=${observed.reloads}`;
+}
+
 interface HumanGateResult {
   gate: ProcessingObservation;
   review: ReviewDecision | null;
@@ -83,7 +90,7 @@ async function processThroughHumanReview(
     await recorder.screenshot(page, `${stepId.toLowerCase()}-gate`);
     if (observed.evaluation.violations.length > 0 || !["review_required", "analyzed"].includes(observed.evaluation.outcome)) {
       const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
-      throw new Error(`PJ01_PROCESSING: ${label}: outcome=${observed.evaluation.outcome} violations=[${codes}]`);
+      throw new Error(`PJ01_PROCESSING: ${label}: outcome=${observed.evaluation.outcome} violations=[${codes}] ${describeObservation(observed)}`);
     }
     return observed;
   });
@@ -107,7 +114,7 @@ async function processThroughHumanReview(
     await recorder.screenshot(page, `${stepId.toLowerCase()}c-resumed`);
     if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
       const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
-      throw new Error(`PJ01_PROCESSING_AFTER_REVIEW: ${label}: outcome=${observed.evaluation.outcome} violations=[${codes}]`);
+      throw new Error(`PJ01_PROCESSING_AFTER_REVIEW: ${label}: outcome=${observed.evaluation.outcome} violations=[${codes}] ${describeObservation(observed)}`);
     }
     return observed;
   });
@@ -236,7 +243,7 @@ export async function runPj01SecondHalf(
     await recorder.screenshot(page, "s9-revision-gate");
     if (observed.evaluation.violations.length > 0 || !["review_required", "analyzed"].includes(observed.evaluation.outcome)) {
       const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
-      throw new Error(`PJ01_REVISION_PROCESSING: outcome=${observed.evaluation.outcome} violations=[${codes}]`);
+      throw new Error(`PJ01_REVISION_PROCESSING: outcome=${observed.evaluation.outcome} violations=[${codes}] ${describeObservation(observed)}`);
     }
     return observed;
   });
@@ -297,7 +304,7 @@ export async function runPj01SecondHalf(
       await recorder.screenshot(page, "s12c-revision-resumed");
       if (observed.evaluation.outcome !== "analyzed" || observed.evaluation.violations.length > 0) {
         const codes = observed.evaluation.violations.map((violation) => violation.code).join(", ");
-        throw new Error(`PJ01_REVISION_PROCESSING_AFTER_REVIEW: outcome=${observed.evaluation.outcome} violations=[${codes}]`);
+        throw new Error(`PJ01_REVISION_PROCESSING_AFTER_REVIEW: outcome=${observed.evaluation.outcome} violations=[${codes}] ${describeObservation(observed)}`);
       }
     });
   }

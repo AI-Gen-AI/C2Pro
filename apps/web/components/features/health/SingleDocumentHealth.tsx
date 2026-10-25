@@ -298,7 +298,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export function SingleDocumentHealth({ projectId }: { projectId: string }) {
   const { data, isLoading, isError, error } =
-    useGetProjectHealthApiV1ProjectsProjectIdHealthGet(projectId);
+    // Health is derived from decisions made elsewhere (an approved revision), so it is revalidated
+    // every time the view opens instead of trusting a copy cached for minutes.
+    useGetProjectHealthApiV1ProjectsProjectIdHealthGet(projectId, { query: { refetchOnMount: "always" } });
 
   if (isLoading) {
     return (

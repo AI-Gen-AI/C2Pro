@@ -59,9 +59,14 @@ export async function assertCurrentStateThroughNavigation(
       await clickProjectTab(page, recorder, projectId, "documents", "DOCUMENTS_TAB_NOT_NAVIGABLE");
       await page.waitForURL(new RegExp(`/projects/${projectId}/documents`), { timeout: 30_000 });
     }
-    const reportResponse = page.waitForResponse(isReport, { timeout: 120_000 });
     await clickProjectTab(page, recorder, projectId, "report", "REPORT_TAB_NOT_NAVIGABLE");
     await page.waitForURL(new RegExp(`/projects/${projectId}/report`), { timeout: 30_000 });
+    // The report states what was known when it was generated and is only regenerated when the user
+    // asks (by design): a copy opened earlier is reused on return. Ask for a current one.
+    const regenerate = page.getByRole("button", { name: /^regenerate$/i });
+    await expect(regenerate).toBeEnabled({ timeout: 120_000 });
+    const reportResponse = page.waitForResponse(isReport, { timeout: 120_000 });
+    await regenerate.click();
     report = (await (await reportResponse).json()) as CurrentStateReportLike;
     const asOf = report.sections.health?.source_as_of;
     const fresh = phase === "pending-review" || !options.approvedAt || (asOf != null && parseInstant(asOf) >= parseInstant(options.approvedAt));

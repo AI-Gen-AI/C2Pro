@@ -131,6 +131,15 @@ beforeEach(() => {
 
 // ── 1 — six-category view renders from the generated HealthVector type ─────────
 
+describe("Health revalidation", () => {
+  it("asks the server again every time the view opens (it is derived from decisions made elsewhere)", () => {
+    healthQueryMock.mockReset();
+    healthQueryMock.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
+    renderWithProviders(<SingleDocumentHealth projectId="project-1" />);
+    expect(healthQueryMock).toHaveBeenCalledWith("project-1", { query: { refetchOnMount: "always" } });
+  });
+});
+
 describe("1 — six-category view from the generated contract", () => {
   it("renders exactly the six canonical categories", () => {
     healthQueryMock.mockReturnValue(resolved(vector()));

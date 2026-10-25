@@ -114,7 +114,7 @@ export default function AnalysisPage() {
     data: healthVector,
     isLoading: healthLoading,
     isError: healthErrored,
-  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
+  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id, { query: { refetchOnMount: "always" } });
   const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
   const coherenceSuppressionReason = resolveCoherenceSuppressionReason({
     loading: healthLoading,

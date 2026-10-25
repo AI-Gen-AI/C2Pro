@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
@@ -95,6 +96,13 @@ export default function ReviewPage() {
   const reviewerIdentityReady = isUserLoaded && Boolean(reviewerName);
   const { data: project } = useProject(projectId);
   const projectName = project?.name?.trim();
+
+  const queryClient = useQueryClient();
+  // A review decision changes the document's lifecycle (it resumes or needs changes). The Documents
+  // list is cached for minutes and stops polling on a "review required" row, so without this it
+  // keeps showing the pre-decision state until a manual reload.
+  const refreshDocumentsAfterDecision = () =>
+    void queryClient.invalidateQueries({ queryKey: ['project-documents', projectId] });
 
   const approveMutation = useApproveItemApiV1HitlQueueItemIdApprovePost();
   const rejectMutation = useRejectItemApiV1HitlQueueItemIdRejectPost();
@@ -203,6 +211,7 @@ export default function ReviewPage() {
       markDecided(modal.item);
       closeModal();
       void refetch();
+      refreshDocumentsAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to approve review item');
       setActionError(message);
@@ -231,6 +240,7 @@ export default function ReviewPage() {
       markDecided(modal.item);
       closeModal();
       void refetch();
+      refreshDocumentsAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to reject review item');
       setActionError(message);
