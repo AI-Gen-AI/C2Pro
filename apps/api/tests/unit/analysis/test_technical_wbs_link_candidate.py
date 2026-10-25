@@ -1,0 +1,156 @@
+"""ACC-01 S7: a technical observation never silently becomes an approved WBS link."""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
+import pytest
+
+from src.analysis.domain.budget_row_evidence import ApprovedWBSScope
+from src.analysis.domain.technical_wbs_link_candidate import (
+    TechnicalLinkState,
+    TechnicalWBSLinkCandidateError,
+    preview_technical_wbs_link,
+)
+from src.documents.domain.models import Clause, ClauseType
+from src.temporal.domain.document_revision import DocumentRevision
+
+TENANT = UUID("11111111-1111-1111-1111-111111111111")
+PROJECT = UUID("22222222-2222-2222-2222-222222222222")
+DOCUMENT = UUID("33333333-3333-3333-3333-333333333333")
+REVISION = UUID("44444444-4444-4444-4444-444444444444")
+BASELINE = UUID("55555555-5555-5555-5555-555555555555")
+NODE = UUID("66666666-6666-6666-6666-666666666666")
+STAMP = datetime(2026, 10, 25, tzinfo=UTC)
+RAW_TEXT = (
+    "General description.\n"
+    "Section 4.1.2 Concrete compressive strength shall exceed 35 MPa at 28 days."
+)
+SECTION = "Section 4.1.2 Concrete compressive strength shall exceed 35 MPa at 28 days."
+START = RAW_TEXT.index(SECTION)
+
+
+def _revision() -> DocumentRevision:
+    return DocumentRevision(
+        revision_id=REVISION,
+        document_id=DOCUMENT,
+        project_id=PROJECT,
+        tenant_id=TENANT,
+        rev_no=1,
+        blob_hash="a" * 64,
+        blob_key="revisions/specification.docx",
+        valid_from=STAMP,
+        created_at=STAMP,
+    )
+
+
+def _clause() -> Clause:
+    return Clause(
+        id=uuid4(),
+        tenant_id=TENANT,
+        project_id=PROJECT,
+        document_id=DOCUMENT,
+        revision_id=REVISION,
+        clause_code="4.1.2",
+        clause_type=ClauseType.OTHER,
+        title=SECTION,
+        full_text=SECTION,
+        text_start_offset=START,
+        text_end_offset=START + len(SECTION),
+        extracted_entities={
+            "technical_requirement": {
+                "source_section": "4.1.2",
+                "verification_status": "unverified",
+            },
+            "evidence_location": {
+                "revision_id": str(REVISION),
+                "page_number": None,
+                "bbox": None,
+            },
+        },
+        extraction_confidence=None,
+        extraction_model="deterministic-technical-section-v1",
+    )
+
+
+def _scope() -> ApprovedWBSScope:
+    return ApprovedWBSScope(
+        tenant_id=TENANT,
+        project_id=PROJECT,
+        baseline_id=BASELINE,
+        node_ids=frozenset({NODE}),
+    )
+
+
+def _preview(**changes: object):
+    kwargs = {
+        "document_revision": _revision(),
+        "clause": _clause(),
+        "trusted_current_revision_id": REVISION,
+        "parsed_revision_text": RAW_TEXT,
+        "approved_wbs_scope": _scope(),
+        "proposed_wbs_node_id": NODE,
+        "actor_tenant_id": TENANT,
+    }
+    kwargs.update(changes)
+    return preview_technical_wbs_link(**kwargs)  # type: ignore[arg-type]
+
+
+def test_exact_source_and_approved_scope_yield_review_only_candidate() -> None:
+    candidate = _preview()
+    assert candidate.source_clause_id
+    assert candidate.tenant_id == TENANT
+    assert candidate.project_id == PROJECT
+    assert candidate.technical_document_id == DOCUMENT
+    assert candidate.technical_revision_id == REVISION
+    assert candidate.source_section == "4.1.2"
+    assert (candidate.source_start_offset, candidate.source_end_offset) == (
+        START, START + len(SECTION)
+    )
+    assert candidate.source_blob_hash == "a" * 64
+    assert candidate.proposed_wbs_baseline_id == BASELINE
+    assert candidate.proposed_wbs_node_id == NODE
+    assert candidate.state is TechnicalLinkState.HUMAN_REVIEW_REQUIRED
+    assert candidate.assessment == "NOT_ASSESSED"
+    assert candidate.is_approved_link is False
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"actor_tenant_id": uuid4()}, "authorized project"),
+        ({"clause": replace(_clause(), project_id=uuid4())}, "authorized project"),
+        ({"clause": replace(_clause(), tenant_id=uuid4())}, "authorized project"),
+        ({"trusted_current_revision_id": None}, "trusted-current"),
+        ({"trusted_current_revision_id": uuid4()}, "trusted-current"),
+        ({"clause": replace(_clause(), revision_id=None)}, "trusted-current"),
+        ({"clause": replace(_clause(), revision_id=uuid4())}, "trusted-current"),
+        ({"clause": replace(_clause(), extraction_model=None)}, "provenance"),
+        ({"approved_wbs_scope": None}, "approved scope"),
+        ({"proposed_wbs_node_id": uuid4()}, "approved scope"),
+        ({"approved_wbs_scope": replace(_scope(), tenant_id=uuid4())}, "approved scope"),
+        ({"approved_wbs_scope": replace(_scope(), project_id=uuid4())}, "approved scope"),
+        ({"parsed_revision_text": RAW_TEXT.replace("35 MPa", "45 MPa")}, "source span"),
+        ({"clause": replace(_clause(), text_end_offset=START + 5)}, "source span"),
+    ],
+)
+def test_invalid_authority_or_provenance_fail_closed(overrides: dict, reason: str) -> None:
+    with pytest.raises(TechnicalWBSLinkCandidateError, match=reason):
+        _preview(**overrides)
+
+
+def test_claimed_section_does_not_authorize_a_link() -> None:
+    source = _clause()
+    source.extracted_entities["technical_requirement"]["source_section"] = "9.9"
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="provenance"):
+        _preview(clause=source)
+
+
+def test_unverified_source_stays_unapproved_even_when_clause_was_reviewed() -> None:
+    clause = replace(_clause(), manually_verified=True, verified_at=STAMP)
+    candidate = _preview(clause=clause)
+    assert candidate.state is TechnicalLinkState.HUMAN_REVIEW_REQUIRED
+    assert not candidate.is_approved_link
+    assert candidate.assessment == "NOT_ASSESSED"
