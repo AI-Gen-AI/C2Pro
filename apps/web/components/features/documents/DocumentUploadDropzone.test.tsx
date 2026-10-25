@@ -241,6 +241,52 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     });
   });
 
+  it("retries only the unaccepted file after a later upload in the batch fails", async () => {
+    const user = userEvent.setup();
+    uploadDocumentMock
+      .mockResolvedValueOnce({ id: "doc-contract", task_id: "task-contract" })
+      .mockRejectedValueOnce(new Error("Upload failed: 500"))
+      .mockResolvedValueOnce({ id: "doc-budget", task_id: "task-budget" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+    const onUploadComplete = vi.fn();
+
+    render(
+      <DocumentUploadDropzone
+        projectId="proj_partial"
+        onUploadComplete={onUploadComplete}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      createFile("accepted-contract.pdf", "application/pdf"),
+      createFile(
+        "retry-budget.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ),
+    ]);
+    await user.click(screen.getByRole("button", { name: /upload 2 files/i }));
+
+    expect(await screen.findByText(/1 file\(s\) accepted; 1 remain staged/i)).toBeInTheDocument();
+    expect(screen.queryByText("accepted-contract.pdf")).not.toBeInTheDocument();
+    expect(screen.getByText("retry-budget.xlsx")).toBeInTheDocument();
+    expect(uploadDocumentMock).toHaveBeenCalledTimes(2);
+    expect(onUploadComplete).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+    await waitFor(() => expect(uploadDocumentMock).toHaveBeenCalledTimes(3));
+    expect(uploadDocumentMock).toHaveBeenNthCalledWith(
+      3,
+      "proj_partial",
+      expect.objectContaining({ name: "retry-budget.xlsx" }),
+      "budget",
+      { token: "fresh-token-123" },
+    );
+    expect(await screen.findByText(/upload accepted for 1 file\(s\)/i)).toBeInTheDocument();
+    expect(screen.queryByText("retry-budget.xlsx")).not.toBeInTheDocument();
+    expect(onUploadComplete).toHaveBeenCalledTimes(2);
+  });
+
   it("updates drag state and aria labels during DnD lifecycle", () => {
     render(<DocumentUploadDropzone projectId="proj_demo_001" />);
 
