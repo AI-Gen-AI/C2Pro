@@ -106,6 +106,37 @@ class TechnicalMappingReviewResult:
     replayed: bool
 
 
+async def require_locked_trusted_artifact(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    revision_id: UUID,
+) -> UUID:
+    """Lock the exact active trusted artifact until the transaction commits.
+
+    The trust writer's supersede-active UPDATE requires an incompatible row
+    lock, so it cannot silently change the source while human review settles.
+    PostgreSQL real-transaction tests must cover this lock, not only mocks.
+    """
+    artifact_id = await session.scalar(
+        select(DocumentArtifactORM.artifact_id)
+        .where(
+            DocumentArtifactORM.tenant_id == tenant_id,
+            DocumentArtifactORM.project_id == project_id,
+            DocumentArtifactORM.document_id == document_id,
+            DocumentArtifactORM.document_revision_id == revision_id,
+            DocumentArtifactORM.trust_state == "trusted",
+            DocumentArtifactORM.lifecycle_status == "active",
+        )
+        .with_for_update(read=True)
+    )
+    if artifact_id is None:
+        raise TechnicalMappingReviewError("active trusted artifact is unavailable")
+    return artifact_id
+
+
 @dataclass
 class RecordTechnicalWBSReviewService:
     session: AsyncSession
@@ -209,20 +240,13 @@ class RecordTechnicalWBSReviewService:
         # the existing active trusted row, which conflicts with FOR SHARE.
         # A new trust promotion therefore cannot invalidate our verified
         # source mid-review. No schema or writer-policy change is needed.
-        trust_row = await self.session.scalar(
-            select(DocumentArtifactORM.artifact_id)
-            .where(
-                DocumentArtifactORM.tenant_id == tenant_id,
-                DocumentArtifactORM.project_id == project_id,
-                DocumentArtifactORM.document_id == revision.document_id,
-                DocumentArtifactORM.document_revision_id == revision.revision_id,
-                DocumentArtifactORM.trust_state == "trusted",
-                DocumentArtifactORM.lifecycle_status == "active",
-            )
-            .with_for_update(read=True)
+        await require_locked_trusted_artifact(
+            self.session,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=revision.document_id,
+            revision_id=revision.revision_id,
         )
-        if trust_row is None:
-            raise TechnicalMappingReviewError("active trusted artifact is unavailable")
         current = await SqlAlchemyCurrentRevisionResolver(self.session).resolve(
             tenant_id=tenant_id, document_id=revision.document_id
         )
