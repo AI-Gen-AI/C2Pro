@@ -1,0 +1,74 @@
+name: C2Pro production read-only health
+on:
+  push:
+    branches:
+      - ops/c2pro-production-readonly-health-20261025
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-health-check:
+    name: Verify API, Postgres, Redis and Celery over public HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe read-only endpoints without credentials or mutations
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          BASE = "https://c2pro-production.up.railway.app"
+          PROBES = (
+              ("/api/v1/health/live", "live"),
+              ("/api/v1/health", "generic"),
+              ("/api/v1/health/ready", "ready"),
+              ("/api/v1/health/worker", "worker"),
+          )
+          failed = []
+          for path, kind in PROBES:
+              summary = ""
+              for attempt in range(1, 4):
+                  try:
+                      req = Request(BASE + path, headers={"Accept": "application/json", "User-Agent": "c2pro-governed-health-smoke/1.0"}, method="GET")
+                      with urlopen(req, timeout=16) as response:
+                          code = response.status
+                          body = json.loads(response.read(16384))
+                      if code != 200:
+                          raise ValueError("unexpected status " + str(code))
+                      status = body.get("status")
+                      if kind in ("live", "generic"):
+                          if status != "ok":
+                              raise ValueError("liveness status not ok")
+                          summary = "status=ok"
+                      elif kind == "ready":
+                          db, redis = body.get("database"), body.get("redis")
+                          if status != "healthy" or db != "up" or redis != "up":
+                              raise ValueError(f"readiness={status} db={db} redis={redis}")
+                          summary = "status=healthy db=up redis=up"
+                      else:
+                          consumers = body.get("workers_consuming_queue") or []
+                          if status != "healthy" or not consumers or body.get("queue") != "document_parsing":
+                              raise ValueError(f"worker_status={status} queue_consumers={len(consumers)}")
+                          summary = f"status=healthy queue=document_parsing active_workers={len(consumers)}"
+                      break
+                  except HTTPError as exc:
+                      summary = f"HTTP={exc.code}"
+                  except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+                      summary = type(exc).__name__ + ": " + str(exc)[:180]
+                  if attempt < 3:
+                      time.sleep(3)
+              if not (summary.startswith("status=ok") or summary.startswith("status=healthy")):
+                  print("FAIL " + path + " " + summary, flush=True)
+                  failed.append((path, summary))
+              else:
+                  print("PASS " + path + " " + summary, flush=True)
+          if failed:
+              raise SystemExit("Production read-only health smoke FAILED: " + ", ".join(path for path, _ in failed))
+          print("Production read-only health smoke PASS (4/4)")
+          PY
