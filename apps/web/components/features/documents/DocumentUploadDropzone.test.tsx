@@ -101,6 +101,65 @@ describe("S2-09 - DocumentUploadDropzone", () => {
     });
   });
 
+  it("uploads a DOCX technical specification under its explicit document type", async () => {
+    const user = userEvent.setup();
+    uploadDocumentMock.mockResolvedValue({ id: "doc-spec", task_id: "task-spec" });
+    getTokenMock.mockResolvedValue("fresh-token-123");
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [createFile(
+          "technical-specification.docx",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )],
+      },
+    });
+
+    const type = await screen.findByLabelText(/document type for technical-specification\.docx/i);
+    await user.click(type);
+    await user.click(await screen.findByRole("option", { name: "Specification" }));
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(
+        "proj_docx",
+        expect.objectContaining({ name: "technical-specification.docx" }),
+        "specification",
+        { token: "fresh-token-123" },
+      );
+    });
+  });
+
+  it("rejects an entire mixed batch if any DOCX is assigned to Budget", async () => {
+    const user = userEvent.setup();
+    render(<DocumentUploadDropzone projectId="proj_docx" />);
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [
+          createFile("valid-contract.pdf", "application/pdf"),
+          createFile(
+            "invalid-budget.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ),
+        ],
+      },
+    });
+
+    expect(await screen.findByText("valid-contract.pdf")).toBeInTheDocument();
+    const type = await screen.findByLabelText(/document type for invalid-budget\.docx/i);
+    await user.click(type);
+    await user.click(await screen.findByRole("option", { name: "Budget" }));
+    await user.click(screen.getByRole("button", { name: /upload 2 files/i }));
+
+    expect(await screen.findByText(/DOCX cannot be uploaded as budget/i)).toBeInTheDocument();
+    expect(uploadDocumentMock).not.toHaveBeenCalled();
+    expect(getTokenMock).not.toHaveBeenCalled();
+  });
+
   it("refuses DOCX as a structured schedule before any upload request", async () => {
     const user = userEvent.setup();
     render(<DocumentUploadDropzone projectId="proj_docx" />);
