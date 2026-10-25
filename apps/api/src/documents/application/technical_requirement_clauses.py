@@ -17,11 +17,15 @@ from src.documents.domain.models import Clause, ClauseType
 # Recognize only a genuine source section at the start of a line, never a
 # cross-reference inside prose ("according to section 4.2").  The code is a
 # source locator, not a derived identity or proof of technical compliance.
-_SECTION_START = re.compile(
+# Any recognizable numbered heading ends the preceding section, even when
+# its code is unsupported. Otherwise an obligation from an over-depth section
+# can leak into the prior eligible section and acquire a false source identity.
+_SECTION_BOUNDARY = re.compile(
     r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
-    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?!\d|\.\d)(?=[ \t\r\n.:\-–]|$)",
+    r"(?P<code>\d+(?:\.\d+)*)(?=[ \t\r\n.:\-–]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
+_ELIGIBLE_SECTION_CODE = re.compile(r"\d{1,3}(?:\.\d{1,3}){0,6}\Z")
 _OBLIGATION = re.compile(
     r"\b(?:shall|must|should|deber[aá]n?|debe(?:n)?|"
     r"se\s+exige|ser[aá]\s+obligatori[oa]s?|"
@@ -51,10 +55,14 @@ def extract_technical_requirement_clauses(
         # evidence. Legacy free-text remains available for noncanonical uses.
         return []
 
-    starts = list(_SECTION_START.finditer(parsed_text))
+    boundaries = list(_SECTION_BOUNDARY.finditer(parsed_text))
     clauses: list[Clause] = []
-    for index, match in enumerate(starts):
-        end = starts[index + 1].start() if index + 1 < len(starts) else len(parsed_text)
+    for index, match in enumerate(boundaries):
+        section_code = match.group("code")
+        if _ELIGIBLE_SECTION_CODE.fullmatch(section_code) is None:
+            # Still terminates the preceding section; no evidence of its own.
+            continue
+        end = boundaries[index + 1].start() if index + 1 < len(boundaries) else len(parsed_text)
         raw = parsed_text[match.start():end]
         left_trim = len(raw) - len(raw.lstrip())
         stripped = raw.strip()
@@ -74,7 +82,6 @@ def extract_technical_requirement_clauses(
         start_offset = match.start() + left_trim + window_start
         literal = stripped[window_start : window_start + _MAX_SOURCE_CHARS]
         end_offset = start_offset + len(literal)
-        section_code = match.group("code")
         clauses.append(
             Clause(
                 id=uuid4(),  # replaced by revision-derived UUID before DB insert
