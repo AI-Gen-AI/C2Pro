@@ -739,6 +739,10 @@ async def _verified_persisted_clause_documents(
           AND c.tenant_id = CAST(:tenant_id AS uuid)
           AND d.tenant_id = CAST(:tenant_id AS uuid)
           AND d.project_id = CAST(:project_id AS uuid)
+          -- A uniquely resolvable single PROPOSED revision is NOT approved
+          -- provenance. Only a trusted-current artifact may authorize an
+          -- Alerts foreign-key/document deep link (ACC-01 S4).
+          AND cur.trusted
           AND {clause_in_current_scope("c", "cur")}
         """
     )
