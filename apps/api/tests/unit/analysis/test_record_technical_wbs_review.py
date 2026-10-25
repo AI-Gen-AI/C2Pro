@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from pathlib import Path
-
-import docx
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 
+import docx
 import pytest
 
 from src.analysis.application import record_technical_wbs_review as target
