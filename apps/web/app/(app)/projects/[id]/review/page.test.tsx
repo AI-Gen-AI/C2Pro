@@ -137,7 +137,17 @@ describe('ReviewPage', () => {
 
     expect(mockUseQueue).toHaveBeenCalledWith(
       expect.objectContaining({ project_id: 'test-project-id' }),
+      expect.anything(),
     );
+  });
+
+  it('always revalidates the queue on open, so a new revision review is never hidden by a cached queue', () => {
+    setupMock();
+    render(<ReviewPage />);
+
+    expect(mockUseQueue).toHaveBeenCalledWith(expect.anything(), {
+      query: { refetchOnMount: 'always' },
+    });
   });
 
   it('highlights and scrolls to the exact item linked from the Documents page (#712)', () => {
@@ -372,6 +382,7 @@ describe('ReviewPage', () => {
     await waitFor(() => {
       expect(mockUseQueue).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 100 }),
+        expect.anything(),
       );
     });
   });

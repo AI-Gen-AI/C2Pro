@@ -41,6 +41,8 @@ test.describe("TS-E2E-PJ01-001: PJ-01 first real user journey", () => {
       expect(recorder.blockingFindings(), "no blocking PJ-01 findings").toEqual([]);
     } finally {
       const runFile = recorder.write();
+      // The run.json artifact is not always at hand: make the verdict readable in the CI log too.
+      console.log(`PJ01_SUMMARY ${recorder.summaryLine()}`);
       testInfo.annotations.push(
         { type: "pj01-classification", description: recorder.classification() },
         { type: "pj01-run", description: runFile },

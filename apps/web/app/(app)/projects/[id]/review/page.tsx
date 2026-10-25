@@ -134,7 +134,10 @@ export default function ReviewPage() {
   );
 
   const { data: queueData, isLoading, error, refetch } =
-    useListReviewQueueApiV1HitlQueueGet(queueParams);
+    // A new revision of an already-reviewed document opens a NEW review row. The queue is cached for
+    // minutes, so opening the page must always ask the server instead of showing the previous
+    // (already decided) queue with nothing left to approve.
+    useListReviewQueueApiV1HitlQueueGet(queueParams, { query: { refetchOnMount: 'always' } });
 
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
   const canLoadMore = items.length === pageLimit && pageLimit < MAX_PAGE_LIMIT;

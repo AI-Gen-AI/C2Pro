@@ -97,6 +97,16 @@ export class Pj01RunRecorder {
     });
   }
 
+  /** One line for the CI log: step outcomes plus every finding, without ids that are secrets (there are none). */
+  summaryLine(): string {
+    return JSON.stringify({
+      classification: this.classification(),
+      steps: this.steps.map((step) => `${step.id}:${step.status}${step.error ? `(${step.error})` : ""}`),
+      findings: this.findings.map((finding) => `${finding.blocking ? "BLOCKING " : ""}${finding.code}@${finding.step}: ${finding.detail}`),
+      facts: this.facts,
+    });
+  }
+
   async screenshot(page: Page, label: string): Promise<void> {
     mkdirSync(this.dir, { recursive: true });
     const file = `${String(this.steps.length).padStart(2, "0")}-${label.replace(/[^a-z0-9-]+/gi, "-")}.png`;
