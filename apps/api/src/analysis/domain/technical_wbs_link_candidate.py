@@ -24,7 +24,7 @@ from src.temporal.domain.document_revision import DocumentRevision
 _SOURCE_SECTION = re.compile(r"\d{1,3}(?:\.\d{1,3}){0,6}\Z")
 _SOURCE_HEADING = re.compile(
     r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
-    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?=[ \t.:\-–]|$)",
+    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?!\d|\.\d)(?=[ \t\r\n.:\-–]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
 _EXTRACTION_MODEL = "deterministic-technical-section-v1"
