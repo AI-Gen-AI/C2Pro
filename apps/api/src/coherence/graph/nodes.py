@@ -956,15 +956,24 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
         logger.info("cross_clause_eval: skipped (disabled)")
         return {"cross_signals": []}
 
-    from src.coherence.cross_document import cross_document_signals  # noqa: PLC0415
+    from src.coherence.cross_document import (  # noqa: PLC0415
+        cross_document_assessment,
+        to_finding_signal,
+    )
 
     signals: list[FindingSignal] = []
+    provisional: list[Any] = []
     errors: list[str] = []
 
     # Project-level cross-document comparators (assembled totals; no clause pairs
     # needed) — ADR-023 Phase 1b. Contract↔Budget / WBS↔Budget / BOM↔Budget.
     try:
-        signals.extend(cross_document_signals(state.clauses))
+        assessment = cross_document_assessment(
+            state.clauses,
+            schedule_planned_finish=state.config.schedule_planned_finish,
+        )
+        signals.extend(to_finding_signal(finding) for finding in assessment.findings)
+        provisional.extend(assessment.provisional)
     except (AttributeError, TypeError, ValueError) as e:
         error_msg = f"Cross-document comparator failed: {e}"
         logger.warning(error_msg)
@@ -1029,6 +1038,7 @@ def cross_clause_eval(state: CoherenceGraphState) -> NodeOutput:
 
     return {
         "cross_signals": signals,
+        "provisional_cross_findings": provisional,
         "errors": errors,
     }
 
@@ -1356,6 +1366,12 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
     # Convert signals to alerts for backward compat
     alerts = [_signal_to_alert(s) for s in state.all_signals]
 
+    # Provisional cross-document deviations: advisories with their evidence, never scored.
+    alerts.extend(
+        _provisional_deviation_alert(item, state.clauses)
+        for item in state.provisional_cross_findings
+    )
+
     # TASK-COH-V1-06: Handle insufficient_evidence -> AUDIT_INCOMPLETE alert
     if state.score is None:
         missing_dims = state.diagnostics.get("missing_dimensions", [])
@@ -1408,6 +1424,46 @@ def format_output(state: CoherenceGraphState) -> NodeOutput:
         "alerts": alerts,
         "result": result,
     }
+
+
+PROVISIONAL_DEVIATION_RULE_ID = "ADV-SCHDEAD-PROVISIONAL"
+
+
+def _provisional_deviation_alert(item: Any, clauses: list[Clause]) -> Alert:
+    """An advisory for a deviation backed by an observation that is not an approved baseline.
+
+    Points at the contract clause (expected) and names the schedule document, revision and row
+    (observed) in its claim. It is an Alert only: it is not a FindingSignal, so it never enters the
+    Coherence Score.
+    """
+    evidence = dict(item.evidence or {})
+    expected = dict(evidence.get("expected") or {})
+    observed = dict(evidence.get("observed") or {})
+    clause_id = str(item.source_clause_id or "")
+    clause_text = next((c.text for c in clauses if str(c.id) == clause_id), "")
+    days = int(item.delta)
+    message = (
+        f"Provisional schedule risk (not a confirmed breach): the submitted schedule's latest "
+        f"planned finish {observed.get('date')} is {days} days after the contractual completion "
+        f"date {expected.get('date')}. The schedule date is a source observation, not an approved "
+        f"temporal baseline."
+    )
+    claim = (
+        f"{message} Sources: contract clause {clause_id} (document {expected.get('document_id')}, "
+        f"revision {expected.get('revision_id')}); schedule document {observed.get('document_id')}, "
+        f"revision {observed.get('revision_id')}, row {observed.get('source_locator')}."
+    )
+    return Alert(
+        rule_id=PROVISIONAL_DEVIATION_RULE_ID,
+        severity="medium",
+        category="schedule",
+        message=message,
+        evidence=Evidence(
+            claim=claim,
+            source_clause_id=clause_id,
+            quote=clause_text[:300],
+        ),
+    )
 
 
 def _signal_to_alert(signal: FindingSignal) -> Alert:

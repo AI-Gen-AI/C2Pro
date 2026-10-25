@@ -73,6 +73,34 @@ class _FakeSession:
         return _FakeScalarResult([])
 
 
+
+@pytest.mark.asyncio
+async def test_incomplete_evaluation_disables_auto_resolve_without_committing() -> None:
+    """UNKNOWN coverage must not resolve an earlier alert just because it was not re-detected."""
+    project_id = uuid4()
+    tenant_id = uuid4()
+    session = _FakeSession()
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[],
+            auto_resolve=False,
+        )
+
+    kwargs = service.process_violations.await_args.kwargs
+    assert kwargs["violations"] == []
+    assert kwargs["auto_resolve"] is False
+    assert kwargs["commit"] is False
+
+
 @pytest.mark.asyncio
 async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -> None:
     project_id = uuid4()

@@ -59,7 +59,7 @@ from .graph.graph import evaluate_coherence_async
 from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
 from .models import Clause, CoherenceResult, DashboardSummary, EnrichedCoherenceResult
-from .schedule_clause_builder import build_schedule_clauses
+from .schedule_clause_builder import build_schedule_clauses, load_schedule_planned_finish
 from .scoring import ScoringService
 
 # Coherence evaluate router — mounted with api_v1_prefix in main.py
@@ -770,6 +770,7 @@ async def _mirror_coherence_alerts_to_alerts_table(
     tenant_id: UUID,
     alerts: Sequence[Any],
     clauses: Sequence[Clause] = (),
+    auto_resolve: bool = True,
 ) -> _CoherenceAlertReconciliation:
     """Reconcile findings and return the durable disposition truth for this transaction.
 
@@ -801,7 +802,7 @@ async def _mirror_coherence_alerts_to_alerts_table(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
-        auto_resolve=True,
+        auto_resolve=auto_resolve,
         commit=False,
     )
     finding_keys = tuple(service.finding_key(payload) for payload in payloads)
@@ -1066,6 +1067,17 @@ async def evaluate_project_coherence(
                 select(ProjectORM.name).where(ProjectORM.id == payload.project_id)
             )
 
+    # The schedule's observed planned finish (with its document/revision/row identity) for the
+    # contract-completion comparator. Best-effort: a failure leaves the comparison absent.
+    schedule_planned_finish: dict[str, Any] | None = None
+    if payload.project_id:
+        try:
+            schedule_planned_finish = await load_schedule_planned_finish(
+                db, payload.project_id, current_user.tenant_id
+            )
+        except Exception:
+            logger.warning("coherence_schedule_planned_finish_load_failed", exc_info=True)
+
     # Create evaluation config
     config = EvaluationConfig(
         low_budget_mode=payload.low_budget_mode,
@@ -1074,6 +1086,7 @@ async def evaluate_project_coherence(
         tenant_id=str(current_user.tenant_id),
         project_id=str(payload.project_id) if payload.project_id else None,
         project_name=project_name,
+        schedule_planned_finish=schedule_planned_finish,
     )
 
     # Evaluate using LangGraph subgraph
@@ -1094,15 +1107,23 @@ async def evaluate_project_coherence(
     # B1-09: durable human disposition is part of the scoring input authority.
     # Reconcile first (same transaction), then re-score the complete FindingSignals.
     # A validated false positive is excluded; ACKNOWLEDGED/accepted variance remains.
-    if payload.project_id and enriched_result.overall_score is not None:
+    # An incomplete audit may still surface evidence-backed findings. Preserve those
+    # in the Alert ledger without inventing a score or auto-resolving older findings
+    # that cannot be reassessed from the incomplete evidence.
+    if payload.project_id and (
+        enriched_result.overall_score is not None or enriched_result.alerts
+    ):
         reconciliation = await _mirror_coherence_alerts_to_alerts_table(
             db=db,
             project_id=payload.project_id,
             tenant_id=current_user.tenant_id,
             alerts=enriched_result.alerts,
             clauses=clauses,
+            auto_resolve=enriched_result.overall_score is not None,
         )
-        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+        if enriched_result.overall_score is not None and isinstance(
+            reconciliation, _CoherenceAlertReconciliation
+        ):
             enriched_result = _apply_disposition_aware_rescore(
                 enriched_result,
                 reconciliation,
@@ -1198,6 +1219,11 @@ async def evaluate_project_coherence(
         )
         # Alert lifecycle was reconciled before scoring with commit=False.
         # This one commit makes the disposition-aware score and Alert state durable together.
+        await db.commit()
+    elif payload.project_id and reconciliation is not None:
+        # A scoreless evaluation can still contain actionable findings. Persist the
+        # alert ledger without creating a fake CoherenceResult or changing trusted
+        # score authority. auto_resolve=False preserves older human dispositions.
         await db.commit()
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
@@ -1564,27 +1590,72 @@ async def get_coherence_dashboard(
     )
     latest_alert_at = latest_alert_at_result.scalar()
 
-    # Determine global score and breakdown
+    # The dashboard shows ONE generation of the project's Coherence: the score, its sub-scores and the
+    # alert count come from the same snapshot (a completed Analysis or the latest /coherence/evaluate
+    # CoherenceResult). Mixing them showed "score 90" (an old Analysis) beside "2 alerts" (a newer
+    # evaluate that scored 60). Timestamps are compared as UTC (naive values are UTC by contract); a
+    # snapshot without a usable timestamp never displaces the other (Analysis stays the tie-break).
+    analysis_at = _normalize_utc_datetime(
+        (latest_analysis.updated_at or latest_analysis.completed_at)
+        if latest_analysis is not None
+        else None
+    )
+    result_at = _normalize_utc_datetime(
+        coherence_result.calculated_at if coherence_result is not None else None
+    )
+    analysis_scored = latest_analysis is not None and latest_analysis.coherence_score is not None
+    # A persisted result carries a numeric score only when the evidence supported one; one marked as
+    # insufficient evidence has no score to show and is never the snapshot.
+    result_scored = coherence_result is not None and not (
+        coherence_result.score_reason or ""
+    ).startswith("insufficient")
+    snapshot: str | None = None
+    if analysis_scored and result_scored:
+        result_is_newer = (
+            analysis_at is not None and result_at is not None and result_at > analysis_at
+        )
+        snapshot = "result" if result_is_newer else "analysis"
+    elif analysis_scored:
+        snapshot = "analysis"
+    elif result_scored:
+        snapshot = "result"
+
     sub_scores = _empty_sub_scores()
     global_score: float | None = None
-
-    if latest_analysis and latest_analysis.coherence_score is not None:
+    if snapshot == "analysis" and latest_analysis is not None:
         global_score = latest_analysis.coherence_score
         sub_scores = _normalized_sub_scores(latest_analysis.coherence_breakdown)
-    elif coherence_result:
+    elif snapshot == "result" and coherence_result is not None:
         global_score = coherence_result.global_score
         sub_scores = _normalized_sub_scores(coherence_result.category_scores)
     elif project.coherence_score is not None:
         global_score = float(project.coherence_score)
 
-    # alert_count follows the same source priority as the score (see docstring):
-    # a completed Analysis first, then the latest /evaluate CoherenceResult, else
-    # the alerts table count computed above. Without this fallback an evaluate-only
-    # project (no analysis pipeline run) always reported alert_count = 0.
-    if latest_analysis and latest_analysis.alerts_count is not None:
-        alert_count = latest_analysis.alerts_count
-    elif coherence_result is not None and coherence_result.alerts is not None:
-        alert_count = len(coherence_result.alerts)
+    # Counts are never read as zero when unknown: an Analysis count is a stored integer, a result's
+    # count is its alert list; an /evaluate with insufficient evidence that reported no alerts says
+    # nothing about the alerts an earlier Analysis found.
+    analysis_count = latest_analysis.alerts_count if latest_analysis is not None else None
+    result_count: int | None = None
+    if coherence_result is not None and coherence_result.alerts is not None:
+        result_alerts = len(coherence_result.alerts)
+        evidence_insufficient = (coherence_result.score_reason or "").startswith("insufficient")
+        if result_alerts > 0 or not evidence_insufficient:
+            result_count = result_alerts
+    if snapshot == "analysis" and analysis_count is not None:
+        alert_count = analysis_count
+    elif snapshot == "result" and result_count is not None:
+        alert_count = result_count
+    elif snapshot is None:
+        # No scored snapshot: report the most recent source that knows its count.
+        if analysis_count is not None and result_count is not None:
+            result_is_newer = (
+                analysis_at is not None and result_at is not None and result_at > analysis_at
+            )
+            alert_count = result_count if result_is_newer else analysis_count
+        elif analysis_count is not None:
+            alert_count = analysis_count
+        elif result_count is not None:
+            alert_count = result_count
 
     # Calculate last_updated timestamp
     candidates = [
@@ -1603,6 +1674,16 @@ async def get_coherence_dashboard(
     ]
     last_updated = max(normalized_candidates, default=datetime.now(UTC))
 
+    # Score metadata describes the score that is shown. It comes from the selected /evaluate result,
+    # or from the latest result when no score is shown at all (it then says why: withheld, which
+    # dimensions are missing). Never from a result other than the one the score belongs to: an
+    # Analysis or a Project baseline score has no such metadata, so it is reported as unknown.
+    metadata_source = (
+        coherence_result
+        if snapshot == "result" or (snapshot is None and global_score is None)
+        else None
+    )
+
     summary = DashboardSummary(
         project_id=str(project_id),
         tenant_id=str(tenant_id),
@@ -1613,10 +1694,10 @@ async def get_coherence_dashboard(
         alert_count=alert_count,
         document_count=document_count,
         methodology_version="3.0",
-        score_version=coherence_result.score_version if coherence_result else None,
-        score_reason=coherence_result.score_reason if coherence_result else None,
+        score_version=metadata_source.score_version if metadata_source else None,
+        score_reason=metadata_source.score_reason if metadata_source else None,
         score_missing_dimensions=(
-            coherence_result.score_missing_dimensions if coherence_result else None
+            metadata_source.score_missing_dimensions if metadata_source else None
         ),
         last_updated=last_updated,
         categories_v2=None,
