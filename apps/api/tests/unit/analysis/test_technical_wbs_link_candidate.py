@@ -197,3 +197,43 @@ def test_requirement_span_must_not_cross_two_distinct_source_sections() -> None:
     )
     with pytest.raises(TechnicalWBSLinkCandidateError, match="crosses source sections"):
         _preview(clause=clause, parsed_revision_text=source)
+
+
+def test_crlf_heading_keeps_full_hierarchical_code_not_parent() -> None:
+    full = "Section 4.1.2\r\nConcrete shall exceed 35 MPa."
+    clause = replace(
+        _clause(),
+        full_text=full,
+        text_start_offset=0,
+        text_end_offset=len(full),
+    )
+    candidate = _preview(clause=clause, parsed_revision_text=full)
+    assert candidate.source_section == "4.1.2"
+
+
+def test_crlf_heading_does_not_allow_forged_parent_section_code() -> None:
+    full = "Section 4.1.2\r\nConcrete shall exceed 35 MPa."
+    clause = replace(
+        _clause(),
+        clause_code="4.1",
+        full_text=full,
+        text_start_offset=0,
+        text_end_offset=len(full),
+    )
+    clause.extracted_entities["technical_requirement"]["source_section"] = "4.1"
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause, parsed_revision_text=full)
+
+
+def test_overdepth_heading_never_backtracks_to_false_parent() -> None:
+    full = "Section 1.2.3.4.5.6.7.8\r\nThe steel shall comply."
+    clause = replace(
+        _clause(),
+        clause_code="1.2.3.4.5.6.7",
+        full_text=full,
+        text_start_offset=0,
+        text_end_offset=len(full),
+    )
+    clause.extracted_entities["technical_requirement"]["source_section"] = "1.2.3.4.5.6.7"
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause, parsed_revision_text=full)
