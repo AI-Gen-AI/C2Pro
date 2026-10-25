@@ -188,6 +188,47 @@ describe("TechnicalWBSReviewPanel", () => {
     );
   });
 
+  it("reviews a trusted source-backed specification from the integrated triplet", async () => {
+    // The actual four-document journey uploads documentType="specification",
+    // while canonical technical uploads may use documentType="technical_spec".
+    // Both are supported by the backend, subject to the SAME source and trust fences.
+    validFixtures();
+    mocks.detail = { ...mocks.detail, document_type: "specification" };
+    mocks.post.mockResolvedValue({
+      event_id: "event-specification",
+      replayed: false,
+      decision: "CONFIRMED_FOR_REVIEW",
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
+      approved_canonical_link: false,
+      technical_assessment: "NOT_ASSESSED",
+    });
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
+    fireEvent.change(screen.getByLabelText("Source requirement"), { target: { value: "clause-1" } });
+    fireEvent.change(screen.getByLabelText("Approved WBS node"), { target: { value: "node-11" } });
+    fireEvent.change(screen.getByLabelText("Reviewer reason"), {
+      target: { value: "Review the source-backed requirement with this WBS node" },
+    });
+    expect(screen.getByTestId("technical-wbs-review-submit")).toBeEnabled();
+    fireEvent.click(screen.getByTestId("technical-wbs-review-submit"));
+    await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1));
+    expect(mocks.post.mock.calls[0][0].data.expected_blob_hash).toBe(SHA);
+    expect(mocks.post.mock.calls[0][0].data.expected_revision_id).toBe(REV);
+    expect(screen.getByTestId("technical-wbs-review-receipt")).toHaveTextContent(
+      "Not a canonical link; technical compliance not assessed.",
+    );
+  });
+
+  it("cannot review an unrelated document family even when the source metadata is forged", () => {
+    validFixtures();
+    mocks.detail = { ...mocks.detail, document_type: "contract" };
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
+    expect(screen.getByTestId("technical-wbs-untrusted")).toBeInTheDocument();
+    expect(screen.getByTestId("technical-wbs-review-submit")).toBeDisabled();
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
   it("accepts a governance-permitted self-approved baseline", () => {
     validFixtures();
     mocks.baseline = { ...mocks.baseline, self_approved: true };
