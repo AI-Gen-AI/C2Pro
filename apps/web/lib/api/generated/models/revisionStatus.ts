@@ -44,7 +44,6 @@ export interface RevisionStatus {
   status?: RevisionStatusStatus;
   revision_id: string;
   rev_no?: number | null;
-  /** Immutable content hash pinned to this revision. */
   blob_hash?: string | null;
   trust_state?: string | null;
   artifact_id?: string | null;
