@@ -98,6 +98,9 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
   );
   // Never silently choose a revision when the trust reader conflicts.
   const trustedRevisionId = trusted.length === 1 ? trusted[0].revision_id : "";
+  // The document row may already point to uploaded B while approved A remains current.
+  // Only the immutable revision digest can be used for source identity.
+  const trustedBlobHash = trusted.length === 1 ? (trusted[0].blob_hash ?? "") : "";
   const details = useGetDocumentEndpointApiV1DocumentsDocumentIdGet(
     selectedDocumentId,
     trustedRevisionId ? { revision_id: trustedRevisionId } : undefined,
@@ -131,8 +134,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
       source.id === selectedDocumentId &&
       source.revision_id === trustedRevisionId &&
       source.document_type === "technical_spec" &&
-      typeof source.file_hash === "string" &&
-      HASH.test(source.file_hash),
+      HASH.test(trustedBlobHash),
   );
   const clauses = validDocument
     ? eligibleTechnicalClauses(source?.clauses, trustedRevisionId)
@@ -168,9 +170,9 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
   );
 
   async function recordDecision() {
-    if (!ready || busy || !selectedClause || !selectedNode || !source?.file_hash) return;
+    if (!ready || busy || !selectedClause || !selectedNode || !trustedBlobHash) return;
     const fingerprint = [
-      projectId, selectedDocumentId, trustedRevisionId, source.file_hash,
+      projectId, selectedDocumentId, trustedRevisionId, trustedBlobHash,
       authority?.baseline_id, selectedClause.id, selectedNode.node_id, decision,
       reason.trim(),
     ].join("|");
@@ -182,7 +184,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
     const body: TechnicalWBSReviewRequest = {
       clause_id: selectedClause.id,
       expected_revision_id: trustedRevisionId,
-      expected_blob_hash: source.file_hash,
+      expected_blob_hash: trustedBlobHash,
       expected_wbs_baseline_id: authority!.baseline_id!,
       proposed_wbs_node_id: selectedNode.node_id,
       decision,
