@@ -10,6 +10,7 @@ import { eligibleTechnicalClauses, TechnicalWBSReviewPanel } from "./TechnicalWB
 const { mocks } = vi.hoisted(() => ({
   mocks: {
     post: vi.fn(),
+    get: vi.fn(),
     documents: [
       {
         id: "doc-technical",
@@ -51,7 +52,8 @@ vi.mock("@/lib/api/generated/wbs-governance/wbs-governance", () => ({
   }),
 }));
 vi.mock("@/lib/api/client", () => ({
-  orvalApiClient: mocks.post,
+  orvalApiClient: (args: { method: string }) =>
+    args.method === "GET" ? mocks.get(args) : mocks.post(args),
 }));
 
 const authority: ProjectWBSAuthority = {
@@ -111,6 +113,7 @@ describe("eligibleTechnicalClauses", () => {
 describe("TechnicalWBSReviewPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.get.mockResolvedValue([]);
     mocks.revisions = [];
     mocks.detail = null;
     mocks.baseline = null;
@@ -206,6 +209,41 @@ describe("TechnicalWBSReviewPanel", () => {
       technical_assessment: "NOT_ASSESSED",
     });
     await waitFor(() => expect(screen.getByTestId("technical-wbs-review-receipt")).toBeInTheDocument());
+  });
+
+  it("recovers only historical audit facts from the server in a new panel session", async () => {
+    validFixtures();
+    mocks.get.mockResolvedValue([{
+      event_id: "event-restored",
+      occurred_at: "2026-10-25T18:00:00",
+      decision: "REJECTED",
+      technical_document_id: "doc-technical",
+      technical_revision_id: "revision-older",
+      source_clause_id: "clause-old",
+      source_section: "4.1",
+      proposed_wbs_baseline_id: "baseline-old",
+      proposed_wbs_node_id: "node-retired",
+      reason: "Historical requirement did not match scope",
+      state: "HISTORICAL_AUDIT_ONLY",
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
+      approved_canonical_link: false,
+      technical_assessment: "NOT_ASSESSED",
+    }]);
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    const prior = await screen.findByTestId("technical-wbs-review-history");
+    await waitFor(() => expect(prior).toHaveTextContent("Historical requirement did not match scope"));
+    expect(prior).toHaveTextContent("superseded sources");
+    expect(prior).toHaveTextContent("Rejected");
+    expect(prior.querySelector("a")).toHaveAttribute(
+      "href",
+      "/projects/project-1/evidence?documentId=doc-technical&revisionId=revision-older&highlightId=clause-old",
+    );
+    expect(mocks.get).toHaveBeenCalledWith({
+      url: "/api/v1/projects/project-1/technical-wbs/reviews",
+      method: "GET",
+    });
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("technical-wbs-review-receipt")).not.toBeInTheDocument();
   });
 
   it("refuses a response that pretends the audit created canonical authority", async () => {
