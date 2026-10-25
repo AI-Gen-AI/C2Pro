@@ -166,3 +166,31 @@ def test_overlong_code_still_ends_preceding_source_section() -> None:
         "The concrete must comply with B500S."
     )
     assert _extract(source, revision_id=revision) == []
+
+
+def test_closing_parenthesis_preserves_full_unsupported_section_as_boundary() -> None:
+    revision = uuid4()
+    source = (
+        "Section 9 General background only.\n"
+        "Section 1.2.3.4.5.6.7.8)\n"
+        "Steel shall comply with B500S."
+    )
+    assert _extract(source, revision_id=revision) == []
+
+
+def test_closing_parenthesis_after_overlong_code_is_also_boundary() -> None:
+    revision = uuid4()
+    source = (
+        "Section 9 General background only.\n"
+        "Section 1234)\n"
+        "Steel shall comply with B500S."
+    )
+    assert _extract(source, revision_id=revision) == []
+
+
+def test_supported_heading_with_closing_parenthesis_can_be_extracted() -> None:
+    revision = uuid4()
+    source = "Apartado 4.1.2) El acero deberá ser B500S."
+    [clause] = _extract(source, revision_id=revision)
+    assert clause.clause_code == "4.1.2"
+    assert source[clause.text_start_offset:clause.text_end_offset] == clause.full_text
