@@ -37,7 +37,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+
 export type ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams =
   {
+    /**
+     * @minimum 1
+     * @maximum 50
+     */
     limit?: number;
   };
