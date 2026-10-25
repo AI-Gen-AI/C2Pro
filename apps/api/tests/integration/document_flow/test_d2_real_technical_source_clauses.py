@@ -16,6 +16,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.tasks import ingestion_tasks
+from src.coherence.router import (
+    _get_parsed_text_fallback_clauses,
+    _get_persisted_clause_candidates,
+    _get_rag_chunk_clauses,
+    get_clauses_from_rag,
+)
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
@@ -96,6 +102,22 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
             revision.revision_id
         )
         assert row.extracted_entities["technical_requirement"]["verification_status"] == "unverified"
+
+
+    # A sole PROPOSED technical revision is not trusted canonical evidence.
+    # C3a's single-revision fallback resolves it, so every coherence source
+    # path must independently reject it until an actual approval.
+    candidate_groups = (
+        await _get_persisted_clause_candidates(db, project_id, tenant_id, 50),
+        await _get_rag_chunk_clauses(db, project_id, tenant_id, 50),
+        await _get_parsed_text_fallback_clauses(db, project_id, tenant_id),
+        await get_clauses_from_rag(db, project_id, tenant_id),
+    )
+    for candidates in candidate_groups:
+        assert all(
+            str(clause.data.get("document_id")) != str(uploaded.id)
+            for clause in candidates
+        ), "PROPOSED technical evidence entered canonical Coherence"
 
     # Ingestion does not add a canonical WBS or create a coherence result.
     assert await db.scalar(
