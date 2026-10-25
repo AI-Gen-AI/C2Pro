@@ -10790,6 +10790,11 @@ components:
           - type: integer
           - type: 'null'
           title: Rev No
+        blob_hash:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blob Hash
         trust_state:
           anyOf:
           - type: string
