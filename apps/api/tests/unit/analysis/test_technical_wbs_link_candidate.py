@@ -237,3 +237,57 @@ def test_overdepth_heading_never_backtracks_to_false_parent() -> None:
     clause.extracted_entities["technical_requirement"]["source_section"] = "1.2.3.4.5.6.7"
     with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
         _preview(clause=clause, parsed_revision_text=full)
+
+
+def test_unsupported_heading_revokes_preceding_section_authority() -> None:
+    """A 4.1.2 source cannot claim evidence actually below an unsupported heading."""
+    source = (
+        "Section 4.1.2 Valid section.\n"
+        "Old background content.\n"
+        "Section 1.2.3.4.5.6.7.8\r\n"
+        "The steel shall comply with B500S."
+    )
+    fragment = "The steel shall comply with B500S."
+    start = source.index(fragment)
+    clause = replace(
+        _clause(),
+        full_text=fragment,
+        text_start_offset=start,
+        text_end_offset=start + len(fragment),
+    )
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause, parsed_revision_text=source)
+
+
+def test_span_crossing_an_unsupported_heading_is_rejected() -> None:
+    source = (
+        "Section 4.1.2 The steel shall comply with B500S.\n"
+        "Section 1.2.3.4.5.6.7.8\r\n"
+        "Concrete shall exceed 35 MPa."
+    )
+    clause = replace(
+        _clause(),
+        full_text=source,
+        text_start_offset=0,
+        text_end_offset=len(source),
+    )
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="crosses source sections"):
+        _preview(clause=clause, parsed_revision_text=source)
+
+
+def test_overlong_heading_is_a_boundary_not_previous_section() -> None:
+    source = (
+        "Section 4.1.2 Valid section.\n"
+        "Sección 1234.2\r\n"
+        "El acero deberá ser B500S."
+    )
+    fragment = "El acero deberá ser B500S."
+    start = source.index(fragment)
+    clause = replace(
+        _clause(),
+        full_text=fragment,
+        text_start_offset=start,
+        text_end_offset=start + len(fragment),
+    )
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause, parsed_revision_text=source)
