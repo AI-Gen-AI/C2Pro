@@ -11,11 +11,14 @@ No production deployment until those dependencies and tenant E2E have passed.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.application.record_technical_wbs_review import (
     ImmutableDocxTechnicalTextReader,
@@ -32,6 +35,7 @@ from src.core.database import get_session_with_tenant
 from src.core.tenants.types import require_tenant_id
 from src.documents.adapters.storage.factory import build_storage_service
 from src.documents.application.document_source import RevisionSourceError
+from src.temporal.adapters.persistence.models import ProjectEventORM
 
 router = APIRouter(prefix="/projects", tags=["Technical WBS review"])
 
@@ -69,6 +73,88 @@ class TechnicalWBSReviewResponse(BaseModel):
     authority: Literal["AUDIT_ONLY_NOT_CANONICAL_LINK"] = "AUDIT_ONLY_NOT_CANONICAL_LINK"
     technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
     approved_canonical_link: Literal[False] = False
+
+
+class TechnicalWBSReviewHistoryEntry(BaseModel):
+    """A historical human audit fact; never an approved/current mapping."""
+
+    event_id: UUID
+    occurred_at: datetime
+    decision: TechnicalMappingDecision
+    technical_document_id: UUID
+    technical_revision_id: UUID
+    source_clause_id: UUID
+    source_section: str
+    proposed_wbs_baseline_id: UUID
+    proposed_wbs_node_id: UUID
+    reason: str
+    state: Literal["HISTORICAL_AUDIT_ONLY"] = "HISTORICAL_AUDIT_ONLY"
+    authority: Literal["AUDIT_ONLY_NOT_CANONICAL_LINK"] = "AUDIT_ONLY_NOT_CANONICAL_LINK"
+    technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
+    approved_canonical_link: Literal[False] = False
+
+
+async def get_technical_wbs_review_history_session(
+    current_user: User = Depends(get_current_user),
+) -> AsyncIterator[AsyncSession]:
+    """Reuse production tenant RLS, without constructing an unnecessary blob reader."""
+    tenant = require_tenant_id(current_user.tenant_id)
+    async with get_session_with_tenant(tenant) as session:
+        yield session
+
+
+@router.get(
+    _PREFIX,
+    response_model=list[TechnicalWBSReviewHistoryEntry],
+    responses={401: {"description": "Authentication required"}, 404: {"description": "Project not found"}},
+    summary="List the current reviewer's historical, audit-only Technical WBS decisions",
+)
+async def list_technical_wbs_reviews(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_technical_wbs_review_history_session),
+    limit: int = Query(default=30, ge=1, le=50),
+) -> list[TechnicalWBSReviewHistoryEntry]:
+    """Read durable own-user review facts only, scoped by tenant and project.
+
+    Historical events may reference a superseded source revision or WBS baseline;
+    they are NEVER an assertion about the current project graph, link or Health.
+    """
+    tenant = require_tenant_id(current_user.tenant_id)
+    project_exists = await session.scalar(
+        text("SELECT id FROM projects WHERE id = :project AND tenant_id = :tenant"),
+        {"project": project_id, "tenant": tenant},
+    )
+    if project_exists is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    rows = (
+        await session.scalars(
+            select(ProjectEventORM)
+            .where(
+                ProjectEventORM.tenant_id == tenant,
+                ProjectEventORM.project_id == project_id,
+                ProjectEventORM.event_type == "technical.wbs_link_reviewed",
+                ProjectEventORM.actor == f"user:{current_user.id}",
+            )
+            .order_by(ProjectEventORM.occurred_at.desc(), ProjectEventORM.event_id.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [
+        TechnicalWBSReviewHistoryEntry(
+            event_id=record.event_id,
+            occurred_at=record.occurred_at,
+            decision=TechnicalMappingDecision(record.payload["decision"]),
+            technical_document_id=UUID(record.payload["technical_document_id"]),
+            technical_revision_id=UUID(record.payload["technical_revision_id"]),
+            source_clause_id=UUID(record.payload["source_clause_id"]),
+            source_section=str(record.payload["source_section"]),
+            proposed_wbs_baseline_id=UUID(record.payload["wbs_baseline_id"]),
+            proposed_wbs_node_id=UUID(record.payload["wbs_node_id"]),
+            reason=str(record.payload["reason"]),
+        )
+        for record in rows
+    ]
 
 
 async def get_technical_wbs_review_service(
