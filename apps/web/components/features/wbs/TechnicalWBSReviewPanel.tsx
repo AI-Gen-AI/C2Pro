@@ -94,7 +94,8 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
         url: `/api/v1/projects/${encodeURIComponent(projectId)}/technical-wbs/reviews`,
         method: "GET",
       }),
-    enabled: Boolean(isLoaded && userId && orgId && projectId),
+    // Personal Clerk tenants legitimately have no active organization.
+    enabled: Boolean(isLoaded && userId && projectId),
   });
   const [documentId, setDocumentId] = useState("");
   const selectedDocumentId = technicalDocuments.some((doc) => doc.id === documentId)
