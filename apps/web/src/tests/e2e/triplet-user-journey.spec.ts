@@ -217,7 +217,9 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     // (the documented @clerk/testing flow: a sign-in ticket minted by the Clerk backend API for the
     // configured E2E identity, consumed by the real Clerk client) and the Organization/tenant is
     // proven before anything else happens. It is not the hosted sign-in form.
-    const context = await browser.newContext({ baseURL });
+    // `browser.newContext()` inherits the project's `use.storageState` (the restored session), so the
+    // empty state is explicit: Clerk refuses a sign-in over an existing session ("already signed in").
+    const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
     await test.step("S1: sign in live with Clerk (no restored session)", async () => {
       await signInWithClerk(page);

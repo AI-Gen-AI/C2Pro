@@ -313,7 +313,16 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await page.getByTestId("approve-review-wedge-1").click();
   await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
   await page.getByRole("button", { name: /confirm approve/i }).click();
-  await expect(page.getByTestId("stat-approved")).toContainText("1");
+  try {
+    await expect(page.getByTestId("stat-approved")).toContainText("1");
+  } catch (error) {
+    // Evidence, not a wait: what the HITL queue answered to the page after the approval was accepted
+    // tells a UI that failed to render an approved item from a backend that never reported one.
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\n` +
+        `HITL queue answers the page received (last 3): ${JSON.stringify(hitlQueueAnswers.slice(-3))}`,
+    );
+  }
 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
@@ -324,6 +333,13 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
 });
 
 test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => {
+  const hitlQueueAnswers: string[] = [];
+  page.on("response", async (response) => {
+    if (response.request().method() !== "GET" || !/\/hitl\/queue\/?$/.test(new URL(response.url()).pathname)) return;
+    const body = await response.text().catch(() => "");
+    const statuses = [...body.matchAll(/"current_status":"([^"]+)"/g)].map((match) => match[1]);
+    hitlQueueAnswers.push(`${response.status()} statuses=[${statuses.join(",")}]`);
+  });
   // Five real routes (first-time Next.js compilation in CI), a real HITL approval
   // and the audit report: far beyond the 30 s default. An explicit budget keeps
   // a genuine failure a locator failure instead of a masked global timeout.
