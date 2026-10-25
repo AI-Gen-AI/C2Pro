@@ -76,8 +76,7 @@ class TechnicalWBSReviewResponse(BaseModel):
 
 
 class TechnicalWBSReviewHistoryEntry(BaseModel):
-    """A historical human audit fact; never an approved/current mapping."""
-
+    # A historical human audit fact; never an approved/current mapping.
     event_id: UUID
     occurred_at: datetime
     decision: TechnicalMappingDecision
@@ -115,11 +114,7 @@ async def list_technical_wbs_reviews(
     session: AsyncSession = Depends(get_technical_wbs_review_history_session),
     limit: int = Query(default=30, ge=1, le=50),
 ) -> list[TechnicalWBSReviewHistoryEntry]:
-    """Read durable own-user review facts only, scoped by tenant and project.
-
-    Historical events may reference a superseded source revision or WBS baseline;
-    they are NEVER an assertion about the current project graph, link or Health.
-    """
+    # Historical facts may reference superseded sources; NEVER current authority.
     tenant = require_tenant_id(current_user.tenant_id)
     project_exists = await session.scalar(
         text("SELECT id FROM projects WHERE id = :project AND tenant_id = :tenant"),
