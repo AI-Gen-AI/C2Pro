@@ -510,13 +510,16 @@ async def test_a_rejection_keeps_the_reason_and_the_decisions_but_never_trusts_t
     verifier = _load_verifier()
     url = db.bind.url.render_as_string(hide_password=False)
     typed = hashlib.sha256(b"the extraction missed the penalty clause").hexdigest()
-    assert await verifier.verify_reject(url, w.project_id, w.document_id, w.review_item_id, typed) == []
-    wrong = await verifier.verify_reject(url, w.project_id, w.document_id, w.review_item_id, "0" * 64)
+    bound = (url, w.project_id, w.document_id)
+    assert await verifier.verify_reject(*bound, w.review_item_id, w.review_row_id, typed) == []
+    wrong = await verifier.verify_reject(*bound, w.review_item_id, w.review_row_id, "0" * 64)
     assert any("not the one the browser typed" in failure for failure in wrong)
-    # item_id (what the reject URL carries) is not the row's primary key: binding to the wrong one fails.
-    other = await verifier.verify_reject(url, w.project_id, w.document_id, w.review_row_id, typed)
-    assert any("not the item the browser rejected" in failure for failure in other)
-
+    # item_id and the row id are different identities: swapping them, or naming another review, fails.
+    swapped = await verifier.verify_reject(*bound, w.review_row_id, w.review_item_id, typed)
+    assert any("not the item the browser rejected" in failure for failure in swapped)
+    assert any("not the row the browser rejected" in failure for failure in swapped)
+    other_row = await verifier.verify_reject(*bound, w.review_item_id, uuid4(), typed)
+    assert any("not the row the browser rejected" in failure for failure in other_row)
 
 def _load_verifier() -> Any:
     path = Path(__file__).resolve().parents[3] / "scripts" / "verify_pj01_revision_trace.py"

@@ -83,10 +83,18 @@ test.describe("TS-E2E-S5-001: HITL rejection requires a reason", () => {
     await confirm.click();
     const response = await rejected;
     expect(response.status(), await response.text().catch(() => "")).toBeLessThan(300);
-    const rejectedItemId = new URL(response.url()).pathname.match(/\/hitl\/queue\/([^/]+)\/reject/)?.[1] ?? null;
-    const decided = (await response.json()) as { current_status?: string; approved_by?: string | null };
+    // The review UI addresses the exact ROW; the answer names both identities of the review.
+    const rejectUrlId = new URL(response.url()).pathname.match(/\/hitl\/queue\/([^/]+)\/reject/)?.[1] ?? null;
+    const decided = (await response.json()) as {
+      current_status?: string;
+      approved_by?: string | null;
+      item_id?: string;
+      row_id?: string | null;
+    };
     expect(decided.current_status).toBe("REJECTED");
     expect(decided.approved_by, "the decision names who took it").toBeTruthy();
+    expect(decided.item_id, "the answer names the review's business key").toBeTruthy();
+    expect(decided.row_id, "the answer names the exact row that was decided").toBeTruthy();
 
     await expect(page.getByTestId("stat-rejected")).toContainText("1", { timeout: 30_000 });
     await expect(page.getByTestId("stat-approved")).toContainText("0");
@@ -109,7 +117,9 @@ test.describe("TS-E2E-S5-001: HITL rejection requires a reason", () => {
     recorder.record("s5Reject", {
       projectId,
       documentId,
-      reviewItemId: rejectedItemId,
+      reviewItemId: decided.item_id,
+      reviewRowId: decided.row_id,
+      rejectUrlId,
       reasonSha256: createHash("sha256").update(REASON).digest("hex"),
       documentStateAfterRejection: label,
     });
