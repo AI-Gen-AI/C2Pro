@@ -490,9 +490,10 @@ async def test_the_triplet_fixture_files_raise_the_budget_alerts_and_a_provision
     project_id = await _project(db, test_user.tenant_id)
     schedule_doc = schedule_rev = None
     for filename, document_type in (
-        ("triplet-contract.pdf", DocumentType.CONTRACT),
+        ("triplet-contract.docx", DocumentType.CONTRACT),
         ("triplet-budget.xlsx", DocumentType.BUDGET),
         ("triplet-schedule.xlsx", DocumentType.SCHEDULE),
+        ("triplet-specification.docx", DocumentType.TECHNICAL_SPEC),
     ):
         document, revision = await _upload_and_ingest(
             db, worker, test_user, project_id, filename=filename,
@@ -514,3 +515,16 @@ async def test_the_triplet_fixture_files_raise_the_budget_alerts_and_a_provision
     assert RULE not in rules  # a submitted schedule never confirms a breach
     [advisory] = _schdead(result)
     assert manifest["contract"]["completion_deadline"] in advisory.message
+
+    # Four families, still no valid coverage: the score is withheld AND the findings are durable.
+    assert result.overall_score is None
+    await db.commit()
+    persisted = {
+        row.rule_id
+        for row in (
+            await db.execute(
+                text("SELECT rule_id FROM alerts WHERE project_id = :p"), {"p": project_id}
+            )
+        ).all()
+    }
+    assert persisted >= set(manifest["expected_rules"]) | set(manifest["expected_provisional"])

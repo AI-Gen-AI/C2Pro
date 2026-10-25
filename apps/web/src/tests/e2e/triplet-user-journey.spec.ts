@@ -1,23 +1,24 @@
 /**
- * TS-E2E-TRIPLET-001 — one user, one project, three documents, one decision trail.
+ * TS-E2E-TRIPLET-001 — one user, one project, four document families, one decision trail.
  *
- *   create project → upload contract → processing → HITL approval → upload budget and
- *   schedule → evaluate Coherence → Alerts / Health / Evidence → persistence
+ *   create project → upload contract (.docx) → processing → HITL approval → upload budget,
+ *   schedule and technical specification → evaluate Coherence → Alerts / Health / Evidence →
+ *   persistence
  *
  * WHAT IS REAL: the browser, the Next.js app, the FastAPI backend, PostgreSQL, the Celery
- * worker, the real .pdf/.xlsx fixture files (test-data/triplet) and every request between
- * them. Nothing is route-mocked. The contract fixture is a PDF because the upload dialog accepts
- * only .pdf/.xlsx/.bc3 (a .docx contract, which the backend and the PQ-HITL-09 matrix accept, cannot
- * be uploaded from the UI).
+ * worker, the real .docx/.xlsx fixture files (test-data/triplet) and every request between
+ * them. Nothing is route-mocked. The contract and the specification are .docx files, uploaded through
+ * the same dialog a user sees (PQ-HITL-09 S2 accepts .pdf/.docx for those families and refuses .docx
+ * for the structured budget and schedule).
  *
  * WHAT IS NOT: the AI. This suite runs with C2PRO_AI_MOCK=1 / C2PRO_EMBEDDINGS_MOCK=1, so the
  * contract analysis returns "not assessed" and the human approval is REQUIRED, never skipped.
  * The journey records which mode it ran in and fails if the HITL gate was bypassed.
  *
- * WHAT IT DOES NOT PROVE: this is a three-document journey. It is not PQ-HITL-09 S1–S8: there is
- * no technical-specification family, no revision B / What Changed, no Clerk relogin (persistence
- * is checked from a fresh browser context restored from the saved session) and no cross-tenant
- * denial here.
+ * WHAT IT DOES NOT PROVE: it is not PQ-HITL-09 S1–S8. The specification is accepted and stored but
+ * yields no coherence evidence today (no clauses), there is no revision B / What Changed, no Clerk
+ * relogin (persistence is checked from a fresh browser context restored from the saved session) and no
+ * cross-tenant denial here. Every step is reported as PARTIAL / NOT_EXERCISED, never as UAT PASS.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -243,14 +244,14 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     const contract = await test.step("upload the contract", () =>
       uploadDocumentThroughUi(page, recorder, {
         projectId,
-        filePath: fixture("triplet-contract.pdf"),
+        filePath: fixture("triplet-contract.docx"),
         documentType: "contract",
       }));
 
     // 3 ── the contract needs a human decision (the HITL gate must not be bypassed)
     await test.step("the contract waits for human review", async () => {
-      await expectDocumentState(page, "triplet-contract.pdf", /review required|analy[sz]ed/i);
-      const badge = await documentRow(page, "triplet-contract.pdf")
+      await expectDocumentState(page, "triplet-contract.docx", /review required|analy[sz]ed/i);
+      const badge = await documentRow(page, "triplet-contract.docx")
         .getByTestId("document-status-badge")
         .innerText();
       if (AI_IS_MOCKED) {
@@ -262,7 +263,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
     });
 
     await test.step("approve the contract in the review queue (HITL)", async () => {
-      const cta = documentRow(page, "triplet-contract.pdf").getByTestId("document-review-cta");
+      const cta = documentRow(page, "triplet-contract.docx").getByTestId("document-review-cta");
       if ((await cta.count()) === 0) {
         // Real AI may analyse without a review; with the mock this branch is a failure above.
         return;
@@ -292,7 +293,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
 
     await test.step("the approved contract finishes analysis and persists", async () => {
       await openProjectTab(page, projectId, "documents");
-      await expectApprovedDocumentSettled(page, "triplet-contract.pdf", latestDocuments);
+      await expectApprovedDocumentSettled(page, "triplet-contract.docx", latestDocuments);
       markStep(
         "S5",
         "PARTIAL",
@@ -313,13 +314,24 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         filePath: fixture("triplet-schedule.xlsx"),
         documentType: "schedule",
       }));
+    await test.step("upload the technical specification (fourth family)", () =>
+      uploadDocumentThroughUi(page, recorder, {
+        projectId,
+        filePath: fixture("triplet-specification.docx"),
+        documentType: "specification",
+      }));
     await test.step("budget and schedule finish processing", async () => {
       await expectDocumentState(page, "triplet-budget.xlsx", /analy[sz]ed|parsed/i);
       await expectDocumentState(page, "triplet-schedule.xlsx", /analy[sz]ed|parsed/i);
+      await expectDocumentState(page, "triplet-specification.docx", /parsed|analy[sz]ed|review required/i);
+      recorder.record(
+        "specificationState",
+        await documentRow(page, "triplet-specification.docx").getByTestId("document-status-badge").innerText(),
+      );
       markStep(
         "S2",
         "PARTIAL",
-        "contract, budget and schedule uploaded through the UI; no technical_spec family, no pinned revision hash check, UI gate only for rejection",
+        "contract (.docx), budget, schedule and technical specification (.docx) uploaded through the UI; no pinned revision hash check; refusal only at the UI gate",
       );
     });
 
@@ -352,49 +364,43 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         expect(rules, `${rule} must be shown as a provisional risk`).toContain(rule);
       }
       expect(rules, "a submitted schedule never confirms a breach").not.toContain("DET-CRS-SCHDEAD");
-      // Three document families are not the four of PQ-HITL-09: with no technical specification
-      // the coherence score is honestly WITHHELD. A withheld score must say why (AUDIT_INCOMPLETE);
-      // a null score without a reason would be a hidden failure.
+      // The specification yields no coherence evidence today, so the score is honestly WITHHELD.
+      // A withheld score must say why (AUDIT_INCOMPLETE); a null score without a reason would be a
+      // hidden failure.
       if (evaluated.overall_score === null || evaluated.overall_score === undefined) {
         expect(rules, "a withheld score must be explained by AUDIT_INCOMPLETE").toContain("AUDIT_INCOMPLETE");
         test.info().annotations.push({
           type: "finding",
-          description: "SCORE_WITHHELD_AUDIT_INCOMPLETE: no coherence score for contract + budget + schedule",
+          description: "SCORE_WITHHELD_AUDIT_INCOMPLETE: no coherence score for contract + budget + schedule + specification",
         });
       }
       recorder.record("evaluatedRules", [...rules]);
       markStep(
         "S3",
         "PARTIAL",
-        `evaluation ran on three families; score ${evaluated.overall_score ?? "withheld (AUDIT_INCOMPLETE)"}; the six-dimension Health vector is not asserted dimension by dimension`,
+        `evaluation ran on four families (the specification adds no evidence yet); score ${evaluated.overall_score ?? "withheld (AUDIT_INCOMPLETE)"}; the six-dimension Health vector is not asserted dimension by dimension`,
       );
     });
 
     // 6 ── sees Alerts, Health and Evidence
     await test.step("Alerts lists the discrepancies", async () => {
       await openProjectTab(page, projectId, "alerts");
-      // SOFT on purpose: /coherence/evaluate raises the discrepancies but only persists them to
-      // the Alerts table when a score exists, so with the score withheld this page is empty.
-      // That is a product gap the journey must keep reporting (red), not hide, while the
-      // remaining steps still run.
+      // The score is withheld, yet the evidence-backed discrepancies must be durable (#1110): the
+      // Alerts table lists them. A hard assertion: this was the journey's known red.
       await expect
         .poll(async () => page.locator("table tbody tr").count(), {
           message:
             "ALERTS_NOT_PERSISTED: the evaluation raised the discrepancies but the Alerts table does not list them",
           timeout: 30_000,
         })
-        .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length)
-        .catch((error: unknown) => {
-          expect.soft(false, String(error)).toBe(true);
-        });
+        .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length);
 
       // S4: an alert must lead to its source. Only the clause link exists today (the XLSX row is named in
       // the evidence text, not linked), so this checks the clause -> evidence navigation.
       const evidenceLink = page.getByRole("link", { name: /^view evidence for /i }).first();
-      if ((await evidenceLink.count()) === 0) {
-        markStep("S4", "NOT_EXERCISED", "no alert row with an evidence link (ALERTS_NOT_PERSISTED)");
-        return;
-      }
+      await expect(evidenceLink, "a persisted alert must link to its contract clause").toBeVisible({
+        timeout: 30_000,
+      });
       await evidenceLink.click();
       await page.waitForURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=`), { timeout: 30_000 });
       await expect(page.getByText(/could not load|failed to load/i)).toHaveCount(0);
@@ -415,7 +421,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
 
     await test.step("Evidence opens the contract the completion date came from", async () => {
       await openProjectTab(page, projectId, "documents");
-      await documentRow(page, "triplet-contract.pdf").getByRole("link").first().click();
+      await documentRow(page, "triplet-contract.docx").getByRole("link").first().click();
       await page.waitForURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=${contract.documentId}`), {
         timeout: 30_000,
       });
@@ -430,12 +436,9 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         await reopened.goto(`/projects/${projectId}/alerts`);
         await expect
           .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 30_000 })
-          .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length)
-          .catch((error: unknown) => {
-            expect.soft(false, `ALERTS_NOT_PERSISTED (fresh context): ${String(error)}`).toBe(true);
-          });
+          .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length);
         await reopened.goto(`/projects/${projectId}/documents`);
-        for (const name of ["triplet-contract.pdf", "triplet-budget.xlsx", "triplet-schedule.xlsx"]) {
+        for (const name of ["triplet-contract.docx", "triplet-budget.xlsx", "triplet-schedule.xlsx", "triplet-specification.docx"]) {
           await expect(documentRow(reopened, name)).toHaveCount(1);
         }
         markStep(

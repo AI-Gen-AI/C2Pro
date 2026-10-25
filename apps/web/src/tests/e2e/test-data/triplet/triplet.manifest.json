@@ -1,11 +1,12 @@
 {
   "fixture_id": "triplet-v1",
-  "purpose": "Contract + budget + schedule with a deliberate budget excess and a late schedule",
+  "purpose": "Contract (.docx) + budget + schedule + technical specification (.docx): a deliberate budget excess and a late schedule",
   "ai": "No AI is needed to derive these expectations; the journey declares whether the backend runs with C2PRO_AI_MOCK",
   "sha256": {
     "triplet-budget.xlsx": "aabcbf422887f5eaae0a4846019403d6f90cdf451e0fdc649487f9cba08847ac",
     "triplet-schedule.xlsx": "7b05eb8c4c86e040ffea4010ffa8bfbdab7a43d011b04aaea6dc815d0ce37fee",
-    "triplet-contract.pdf": "35b0bd55a6a70b2b34a868f10d1410aa345302d128f8dedfda0b53b10004e9ce"
+    "triplet-contract.docx": "5d85acdfc54601e174383361acbb5ef4126a9d1a0b181d3bebeeb82371ff7c4a",
+    "triplet-specification.docx": "41120f87b1e7e1710396f1388e6ecff78f0eb64582de802077ccb27196dc11a0"
   },
   "contract": {
     "price_eur": 1000000,
@@ -24,9 +25,16 @@
     "DET-CRS-CONBUD",
     "DET-CRS-NEGMARGIN"
   ],
-  "upload_ui_note": "The upload dialog accepts .pdf/.xlsx/.bc3 only (no .docx), so the contract fixture is a PDF",
   "expected_provisional": [
     "ADV-SCHDEAD-PROVISIONAL"
   ],
-  "note_schedule": "The schedule finish is a source observation (not an approved baseline): it raises a provisional advisory, never a confirmed DET-CRS-SCHDEAD finding"
+  "note_schedule": "The schedule finish is a source observation (not an approved baseline): it raises a provisional advisory, never a confirmed DET-CRS-SCHDEAD finding",
+  "specification": {
+    "document_type": "specification",
+    "sections": [
+      "4.1.2",
+      "4.2"
+    ],
+    "note": "ingested, but yields no coherence evidence today: TECHNICAL stays withheld"
+  }
 }
