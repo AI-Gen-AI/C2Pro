@@ -363,6 +363,7 @@ export * from "./startSampleProjectApiV1OnboardingSampleProjectStartPost200";
 export * from "./subscriptionPlan";
 export * from "./systemStatusResponse";
 export * from "./technicalMappingDecision";
+export * from "./technicalWBSReviewHistoryEntry";
 export * from "./technicalWBSReviewRequest";
 export * from "./technicalWBSReviewResponse";
 export * from "./temporalEntityRef";
