@@ -22,6 +22,7 @@ from docx import Document as DocxDocument
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.analysis.domain.budget_row_evidence import ApprovedWBSScope
 from src.analysis.domain.technical_wbs_link_candidate import (
     TechnicalWBSLinkCandidate,
@@ -202,6 +203,26 @@ class RecordTechnicalWBSReviewService:
         ):
             raise TechnicalMappingReviewError("source revision does not match reviewed document")
 
+        # Hold a PostgreSQL FOR SHARE lock on THIS active trusted artifact
+        # until the caller commits. Every canonical trust promotion (HITL
+        # commit_candidate or direct trusted save) must first UPDATE/supersede
+        # the existing active trusted row, which conflicts with FOR SHARE.
+        # A new trust promotion therefore cannot invalidate our verified
+        # source mid-review. No schema or writer-policy change is needed.
+        trust_row = await self.session.scalar(
+            select(DocumentArtifactORM.artifact_id)
+            .where(
+                DocumentArtifactORM.tenant_id == tenant_id,
+                DocumentArtifactORM.project_id == project_id,
+                DocumentArtifactORM.document_id == revision.document_id,
+                DocumentArtifactORM.document_revision_id == revision.revision_id,
+                DocumentArtifactORM.trust_state == "trusted",
+                DocumentArtifactORM.lifecycle_status == "active",
+            )
+            .with_for_update(read=True)
+        )
+        if trust_row is None:
+            raise TechnicalMappingReviewError("active trusted artifact is unavailable")
         current = await SqlAlchemyCurrentRevisionResolver(self.session).resolve(
             tenant_id=tenant_id, document_id=revision.document_id
         )
@@ -287,7 +308,8 @@ class RecordTechnicalWBSReviewService:
                 replayed=True,
             )
 
-        now = datetime.now(UTC)
+        # project_events columns are TIMESTAMP WITHOUT TIME ZONE.
+        now = datetime.now(UTC).replace(tzinfo=None)
         event = ProjectEvent(
             event_id=uuid4(),
             tenant_id=tenant_id,
