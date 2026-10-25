@@ -360,6 +360,11 @@ export default function EvidencePage() {
         approvalResourceType: mapEntityTypeToApprovalResourceType(entity.type),
         confidence: normalizeConfidence(entity.confidence),
         page: entity.page,
+        technicalSourceSection: typeof (entity.metadata?.technical_requirement as Record<string, unknown> | undefined)?.source_section === "string"
+          ? String((entity.metadata?.technical_requirement as Record<string, unknown>).source_section)
+          : null,
+        technicalSourceUnverified:
+          (entity.metadata?.technical_requirement as Record<string, unknown> | undefined)?.verification_status === "unverified",
         validationStatus: "pending",
       })),
     [apiEntities, revisionReadOnly],
