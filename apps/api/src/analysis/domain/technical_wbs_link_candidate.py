@@ -22,9 +22,12 @@ from src.documents.domain.models import Clause
 from src.temporal.domain.document_revision import DocumentRevision
 
 _SOURCE_SECTION = re.compile(r"\d{1,3}(?:\.\d{1,3}){0,6}\Z")
+# Detect ALL numbered source headings as authority boundaries, including
+# unsupported over-depth/overlong codes. An ignored heading must not let an
+# earlier approved-looking section claim obligations written below it.
 _SOURCE_HEADING = re.compile(
     r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
-    r"(?P<code>\d{1,3}(?:\.\d{1,3}){0,6})(?!\d|\.\d)(?=[ \t\r\n.:\-–]|$)",
+    r"(?P<code>\d+(?:\.\d+)*)(?=[ \t\r\n.:\-–]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
 _EXTRACTION_MODEL = "deterministic-technical-section-v1"
