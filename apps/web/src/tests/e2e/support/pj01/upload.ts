@@ -50,13 +50,15 @@ export async function uploadDocumentThroughUi(
   // The page navigates as soon as the upload is accepted, and the browser then drops the response
   // body (CDP "No resource with given identifier"). Ask for the body the moment the response
   // arrives, before any navigation can happen, instead of after waiting for it.
-  const received = new Promise<{ status: number; ok: boolean; body: Promise<UploadBody | null> }>((resolve) => {
+  const received = new Promise<{ status: number; ok: boolean; retryAfter: string | null; requestId: string | null; body: Promise<UploadBody | null> }>((resolve) => {
     const onResponse = (response: Response): void => {
       if (!isUpload(response)) return;
       page.off("response", onResponse);
       resolve({
         status: response.status(),
         ok: response.ok(),
+        retryAfter: response.headers()["retry-after"] ?? null,
+        requestId: response.headers()["x-request-id"] ?? null,
         body: response.json().then(
           (parsed) => parsed as UploadBody,
           () => null,
@@ -73,7 +75,9 @@ export async function uploadDocumentThroughUi(
     ),
   ]);
   if (!accepted.ok) {
-    throw new Error(`PJ01_UPLOAD_REJECTED: HTTP ${accepted.status} for ${fileName}`);
+    throw new Error(
+      `PJ01_UPLOAD_REJECTED: HTTP ${accepted.status} for ${fileName} (retry-after=${accepted.retryAfter ?? "none"}, request-id=${accepted.requestId ?? "none"})`,
+    );
   }
   const body = await accepted.body;
   if (!body) throw new Error("PJ01_UPLOAD_BODY_UNREADABLE: the accepted upload response could not be read");

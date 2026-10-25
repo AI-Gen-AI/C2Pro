@@ -38,6 +38,7 @@ import {
   establishAuthenticatedSession,
   observeAuth,
 } from "./support/p0b-auth";
+import { captureJsonResponse } from "./support/response-json";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CONTRACT_FIXTURE = path.join(HERE, "test-data", "sample-contract.pdf");
@@ -49,13 +50,13 @@ const HEALTH_POLL_INTERVAL_MS = 5_000;
 
 /** Load the analysis page and return the health vector it fetched. */
 async function loadHealthVector(page: Page, projectId: string): Promise<HealthVector> {
-  const responsePromise = page.waitForResponse(
-    (response) =>
-      /\/projects\/[0-9a-f-]{36}\/health/.test(response.url()) && response.status() === 200,
-    { timeout: 60_000 },
+  const healthVector = captureJsonResponse<HealthVector>(
+    page,
+    (response) => /\/projects\/[0-9a-f-]{36}\/health/.test(response.url()) && response.status() === 200,
+    { label: "project health" },
   );
   await page.goto(`/projects/${projectId}/analysis`);
-  return (await responsePromise).json() as Promise<HealthVector>;
+  return healthVector;
 }
 
 interface P0bDocumentRecord {
@@ -67,15 +68,15 @@ interface P0bDocumentRecord {
 
 async function waitForDocumentTerminal(page: Page, projectId: string, documentId: string, deadline: number, requireAnalyzed = false): Promise<P0bDocumentRecord> {
   while (Date.now() < deadline) {
-    const responsePromise = page.waitForResponse(
+    const documentsPayload = captureJsonResponse<{ items?: P0bDocumentRecord[] } | P0bDocumentRecord[]>(
+      page,
       (response) => response.request().method() === "GET" &&
         (["/api/projects/", "/api/v1/projects/"].some((prefix) => new URL(response.url()).pathname.replace(/\/$/, "") === `${prefix}${projectId}/documents`) && (response.headers()["content-type"] ?? "").includes("application/json")) &&
         response.status() === 200,
-      { timeout: 60_000 },
+      { label: "documents list" },
     );
     await page.goto(`/projects/${projectId}/documents`);
-    const payload = await (await responsePromise).json() as
-      { items?: P0bDocumentRecord[] } | P0bDocumentRecord[];
+    const payload = await documentsPayload;
     const records = Array.isArray(payload) ? payload : payload.items ?? [];
     const document = records.find((item) => item.id === documentId);
     if (!document) {
@@ -97,15 +98,16 @@ async function waitForDocumentTerminal(page: Page, projectId: string, documentId
 async function approveP0bReview(page: Page, projectId: string, reviewItemId: string, deadline: number): Promise<void> {
   // Documents expose the business item_id; the review UI submits the immutable
   // row_id. Read the actual queue response so the HTTP waiter targets that row.
-  const queueResponsePromise = page.waitForResponse(
+  const queueResponse = captureJsonResponse<{
+    items?: Array<{ item_id: string; row_id?: string | null }>;
+  }>(
+    page,
     (response) => response.request().method() === "GET" && response.status() === 200 &&
       new URL(response.url()).pathname.replace(/\/$/, "") === "/api/hitl/queue",
-    { timeout: 30_000 },
+    { timeout: 30_000, label: "HITL queue" },
   );
   await page.goto(`/projects/${projectId}/review?itemId=${encodeURIComponent(reviewItemId)}`);
-  const queue = await (await queueResponsePromise).json() as {
-    items?: Array<{ item_id: string; row_id?: string | null }>;
-  };
+  const queue = await queueResponse;
   const matchingRows = (queue.items ?? []).filter((item) => item.item_id === reviewItemId);
   if (matchingRows.length !== 1 || !matchingRows[0].row_id) {
     throw new Error("P0B_HITL_EXACT_REVIEW_ROW_UNAVAILABLE");

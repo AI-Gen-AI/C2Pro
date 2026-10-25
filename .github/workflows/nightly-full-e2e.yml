@@ -132,6 +132,16 @@ jobs:
       # verify Clerk JWTs without a hard-coded Clerk host.
       - name: Start backend API
         working-directory: apps/api
+        # Every spec of this job signs in as the same E2E user of the same tenant. With ENVIRONMENT=test
+        # the API uses its in-memory limiter: a sliding 60 s window of RATE_LIMIT_PER_MINUTE (default 60)
+        # requests PER TENANT, answering 429 with "Retry-After: 60". Nightly 40228726004 / 40230538011:
+        # PJ-01 spends that budget, so the spec that follows it was refused (project creation, upload,
+        # isolation setup) and its outcome depended on spec order, not on the product. The limiter keeps
+        # its own tests (Backend Security Suite: test_clerk_auth_and_rate_limiter.py); the acceptance
+        # specs judge flows and authorization, not throttling, so their API gets a budget that one
+        # sequence of specs cannot exhaust.
+        env:
+          RATE_LIMIT_PER_MINUTE: "600"
         run: |
           python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
             > "$RUNNER_TEMP/c2pro-nightly-jwks.log" 2>&1 &

@@ -69,7 +69,7 @@ def _project_id_from_facts(facts: dict[str, Any]) -> UUID:
 
 
 async def verify_reject(
-    database_url: str, project_id: UUID, document_id: UUID, reason_sha256: str
+    database_url: str, project_id: UUID, document_id: UUID, item_id: UUID, reason_sha256: str
 ) -> list[str]:
     failures: list[str] = []
     engine = create_async_engine(_normalize_database_url(database_url))
@@ -78,7 +78,7 @@ async def verify_reject(
             reviews = (
                 await conn.execute(
                     text(
-                        "SELECT upper(current_status::text) AS status, approved_by, review_metadata "
+                        "SELECT id, item_id, upper(current_status::text) AS status, approved_by, review_metadata "
                         "FROM review_items WHERE project_id = :p AND document_id = :d"
                     ),
                     {"p": project_id, "d": document_id},
@@ -90,6 +90,10 @@ async def verify_reject(
                     f"review statuses of the document are {statuses}, expected exactly ['REJECTED']"
                 )
             for review in reviews:
+                # The id in the reject URL the browser called is the review's business key (item_id), not the
+                # primary key of the row; binding to it proves THIS decision, not merely "some rejection".
+                if review.item_id != item_id:
+                    failures.append("the rejected review is not the item the browser rejected")
                 if not review.approved_by:
                     failures.append("the rejection does not name who took the decision")
                 reason = (review.review_metadata or {}).get("rejection_reason")
@@ -240,6 +244,7 @@ def main() -> int:
                 args.database_url,
                 project_id,
                 UUID(str(recorded["documentId"])),
+                UUID(str(recorded["reviewItemId"])),
                 str(recorded["reasonSha256"]),
             )
         )
