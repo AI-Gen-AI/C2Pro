@@ -337,7 +337,7 @@ async def test_verified_docx_reader_denies_wrong_hash(tmp_path: Path) -> None:
             return path
 
     reader = target.ImmutableDocxTechnicalTextReader(storage=_Storage())  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="REVISION_HASH_MISMATCH"):
+    with pytest.raises(ValueError, match="immutable revision blob hash mismatch"):
         await reader.read_verified_text(_revision())
 
 
