@@ -390,6 +390,8 @@ async def test_historical_revision_clause_is_not_promoted_to_current_evidence() 
 
     payload = service.process_violations.await_args.kwargs["violations"][0]
     assert payload.source_clause_id is None
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
     assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(
         stale_clause_id
     )
@@ -397,6 +399,65 @@ async def test_historical_revision_clause_is_not_promoted_to_current_evidence() 
     statement = session.current_scope_statements[0]
     assert "document_artifacts" in statement
     assert "revision_id" in statement
+
+
+@pytest.mark.asyncio
+async def test_only_proposed_revision_does_not_authorize_canonical_document_link() -> None:
+    """C3a resolved=True for a sole PROPOSED revision, but trusted=False (S4 fail closed).
+
+    This is a SQL predicate contract test with the untrusted DB outcome simulated;
+    real PostgreSQL regression remains the final integration acceptance gate.
+    """
+    project_id = uuid4()
+    tenant_id = uuid4()
+    clause_id = uuid4()
+    proposed_document_id = uuid4()
+    alert = SimpleNamespace(
+        severity="high",
+        category="budget",
+        rule_id="DET-BUD-PROPOSED-ONLY",
+        message="Proposed-only evidence must not be linked as trusted",
+        evidence=SimpleNamespace(
+            source_clause_id=str(clause_id),
+            claim="Candidate budget clause",
+            quote="Proposed amount",
+        ),
+    )
+    session = _FakeSession(
+        persisted_clause_documents={clause_id: proposed_document_id},
+        trusted_current_clause_ids=set(),
+    )
+    service = MagicMock()
+    service.process_violations = AsyncMock(return_value=[])
+
+    with (
+        patch("src.coherence.router.SqlAlchemyAlertRepository"),
+        patch("src.coherence.router.AlertGeneratorService", return_value=service),
+    ):
+        await _mirror_coherence_alerts_to_alerts_table(
+            db=session,  # type: ignore[arg-type]
+            project_id=project_id,
+            tenant_id=tenant_id,
+            alerts=[alert],
+            clauses=[
+                Clause(
+                    id=str(clause_id),
+                    text="Proposed amount",
+                    data={"document_id": str(proposed_document_id)},
+                )
+            ],
+        )
+
+    assert session.current_scope_statements
+    statement = session.current_scope_statements[0]
+    assert "AND cur.trusted" in statement
+    assert "c.tenant_id = CAST(:tenant_id AS uuid)" in statement
+    assert "d.project_id = CAST(:project_id AS uuid)" in statement
+    payload = service.process_violations.await_args.kwargs["violations"][0]
+    assert payload.source_clause_id is None
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
+    assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(clause_id)
 
 
 @pytest.mark.asyncio
@@ -447,9 +508,8 @@ async def test_uuid_looking_external_locator_is_not_used_as_clause_foreign_key()
     assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == str(
         external_locator
     )
-    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == str(
-        document_id
-    )
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
 
 
 @pytest.mark.asyncio
@@ -495,7 +555,8 @@ async def test_mirror_keeps_unresolvable_locator_as_text_but_not_fake_uuid_fk() 
     assert payload.category == "SCOPE"
     assert payload.source_clause_id is None
     assert payload.alert_metadata["detection_evidence"]["source_clause_id"] == "parsed_deadbeef"
-    assert payload.alert_metadata["detection_evidence"]["source_document_id"] == "doc-fallback"
+    assert payload.affected_entities == {}
+    assert payload.alert_metadata["detection_evidence"]["source_document_id"] is None
 
 
 @pytest.mark.asyncio
