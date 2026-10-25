@@ -194,19 +194,19 @@ def _patch(monkeypatch, session, *, revision_status=CurrentRevisionStatus.TRUSTE
 
 
 async def _review(session, **overrides):
-    args = dict(
-        tenant_id=TENANT,
-        project_id=PROJECT,
-        actor_user_id=ACTOR,
-        clause_id=CLAUSE,
-        expected_revision_id=REV,
-        expected_blob_hash="a" * 64,
-        expected_wbs_baseline_id=BASE,
-        proposed_wbs_node_id=NODE,
-        decision=target.TechnicalMappingDecision.CONFIRMED_FOR_REVIEW,
-        idempotency_key="review-key-A",
-        reason="Source and target verified by project engineer",
-    )
+    args = {
+        "tenant_id": TENANT,
+        "project_id": PROJECT,
+        "actor_user_id": ACTOR,
+        "clause_id": CLAUSE,
+        "expected_revision_id": REV,
+        "expected_blob_hash": "a" * 64,
+        "expected_wbs_baseline_id": BASE,
+        "proposed_wbs_node_id": NODE,
+        "decision": target.TechnicalMappingDecision.CONFIRMED_FOR_REVIEW,
+        "idempotency_key": "review-key-A",
+        "reason": "Source and target verified by project engineer",
+    }
     args.update(overrides)
     return await target.RecordTechnicalWBSReviewService(
         session=session, source_reader=_Source()
