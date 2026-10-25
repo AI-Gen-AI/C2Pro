@@ -22,7 +22,7 @@ from src.documents.domain.models import Clause, ClauseType
 # can leak into the prior eligible section and acquire a false source identity.
 _SECTION_BOUNDARY = re.compile(
     r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
-    r"(?P<code>\d+(?:\.\d+)*)(?=[ \t\r\n.:\-–]|$)",
+    r"(?P<code>\d+(?:\.\d+)*)(?!\.\d)(?=[^\w]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
 _ELIGIBLE_SECTION_CODE = re.compile(r"\d{1,3}(?:\.\d{1,3}){0,6}\Z")
