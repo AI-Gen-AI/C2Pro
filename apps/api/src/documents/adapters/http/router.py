@@ -938,6 +938,25 @@ async def get_document_entities_endpoint(
                 "normalized": bool(evidence_location.get("normalized", True)),
             },
         }
+        # Surface the *literal* technical section ID to the evidence UI as
+        # unverified source metadata. This is not compliance, an approved WBS
+        # reference, a page coordinate or a scored assessment.
+        technical_source = (
+            clause.extracted_entities.get("technical_requirement")
+            if clause.extracted_entities
+            else None
+        )
+        if isinstance(technical_source, dict):
+            section = technical_source.get("source_section")
+            if (
+                isinstance(section, str)
+                and section
+                and all(part.isdigit() and 1 <= len(part) <= 3 for part in section.split("."))
+            ):
+                metadata["technical_requirement"] = {
+                    "source_section": section,
+                    "verification_status": "unverified",
+                }
         entities.append(
             DocumentEntityResponse(
                 id=clause.id,
