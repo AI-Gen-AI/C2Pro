@@ -60,9 +60,11 @@ vi.mock("@/components/features/analysis/AnalysisProgressTracker", () => ({
 vi.mock("@/components/features/documents/DocumentUploadDropzone", () => ({
   DocumentUploadDropzone: ({
     onUploadComplete,
+    onPartialUploadAccepted,
     defaultType,
   }: {
     onUploadComplete?: () => void;
+    onPartialUploadAccepted?: () => void;
     defaultType?: string;
   }) => (
     <div>
@@ -70,6 +72,9 @@ vi.mock("@/components/features/documents/DocumentUploadDropzone", () => ({
       <div>Default upload type: {defaultType ?? "none"}</div>
       <button type="button" onClick={onUploadComplete}>
         Finish Upload
+      </button>
+      <button type="button" onClick={onPartialUploadAccepted}>
+        Partial Upload Accepted
       </button>
     </div>
   ),
@@ -542,9 +547,9 @@ describe("ProjectDocumentsPage", () => {
     expect(uploadDialog).toHaveClass("shadow-2xl");
     expect(screen.getByTestId("documents-upload-dialog-shell")).toHaveClass("gap-5");
     expect(
-      screen.getByText(/choose each file role before upload: contract, budget, or schedule/i),
+      screen.getByText(/choose each file role before upload: contract, budget, schedule, or specification/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/pdf, xlsx, bc3/i)).toBeInTheDocument();
+    expect(screen.getByText(/pdf, docx, xlsx, bc3/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /finish upload/i }));
 
@@ -552,6 +557,31 @@ describe("ProjectDocumentsPage", () => {
     await waitFor(() =>
       expect(screen.queryByText("Upload Documents")).not.toBeInTheDocument(),
     );
+  });
+
+  it("refreshes on partial upload without closing the dialog or losing remaining files", async () => {
+    const refetch = vi.fn();
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch,
+    });
+
+    render(<ProjectDocumentsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /upload document/i }));
+    expect(screen.getByRole("dialog", { name: /upload documents/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /partial upload accepted/i }));
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("dialog", { name: /upload documents/i })).toBeInTheDocument();
+    expect(screen.getByText("Upload Dropzone")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /finish upload/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /upload documents/i })).not.toBeInTheDocument(),
+    );
+    expect(refetch).toHaveBeenCalledTimes(2);
   });
 
   it("opens upload with the checklist-selected document type", async () => {
