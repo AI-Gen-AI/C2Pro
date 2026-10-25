@@ -26,6 +26,9 @@ from src.analysis.adapters.graph.workflow import (
     ensure_checkpointer_ready,
 )
 from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
+from src.analysis.adapters.http.technical_wbs_review_router import (
+    router as technical_wbs_review_router,
+)
 from src.bulk_operations.router import router as bulk_operations_router
 from src.config import settings
 from src.core.ai.analytics_router import router as ai_analytics_router
@@ -62,7 +65,6 @@ from src.modules.hitl.adapters.http.router import router as hitl_router
 from src.projects.adapters.http.router import router as projects_router
 from src.reporting.adapters.http.router import router as project_reports_router
 from src.temporal.adapters.http.router import router as temporal_router
-from src.analysis.adapters.http.technical_wbs_review_router import router as technical_wbs_review_router
 from src.wbs.adapters.http.governance_router import router as wbs_governance_router
 from src.wbs.adapters.http.governed_change_router import router as wbs_governed_change_router
 from src.wbs.adapters.http.import_router import router as wbs_import_router
