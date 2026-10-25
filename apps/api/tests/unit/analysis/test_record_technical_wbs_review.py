@@ -76,9 +76,12 @@ class _Clause:
 
 
 class _Session:
-    def __init__(self, *, user_ok: bool = True, clause_ok: bool = True) -> None:
+    def __init__(
+        self, *, user_ok: bool = True, clause_ok: bool = True, trust_ok: bool = True
+    ) -> None:
         self.user_ok = user_ok
         self.clause_ok = clause_ok
+        self.trust_ok = trust_ok
         self.events = []
         self.project_lock_count = 0
 
@@ -99,6 +102,8 @@ class _Session:
                 return ACTOR if self.user_ok else None
             if entity is target.ClauseORM:
                 return _Clause() if self.clause_ok else None
+            if entity is target.DocumentArtifactORM:
+                return REV if self.trust_ok else None
         raise AssertionError(f"unrecognized read: {query!s}")
 
 
@@ -350,3 +355,24 @@ async def test_unsupported_source_format_fails_closed() -> None:
     rev = _revision().model_copy(update={"blob_key": "revisions/technical.pdf"})
     with pytest.raises(target.TechnicalMappingReviewError, match="format is not supported"):
         await reader.read_verified_text(rev)
+
+
+@pytest.mark.asyncio
+async def test_missing_active_trusted_artifact_fails_before_event_append(monkeypatch) -> None:
+    EVENTS.clear()
+    session = _Session(trust_ok=False)
+    _patch(monkeypatch, session)
+    with pytest.raises(target.TechnicalMappingReviewError, match="active trusted artifact"):
+        await _review(session)
+    assert EVENTS == []
+
+
+@pytest.mark.asyncio
+async def test_audit_uses_postgres_compatible_naive_utc(monkeypatch) -> None:
+    EVENTS.clear()
+    session = _Session()
+    _patch(monkeypatch, session)
+    await _review(session)
+    assert len(EVENTS) == 1
+    assert EVENTS[0].occurred_at.tzinfo is None
+    assert EVENTS[0].created_at.tzinfo is None
