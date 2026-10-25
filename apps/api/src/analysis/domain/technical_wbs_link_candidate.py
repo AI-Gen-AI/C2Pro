@@ -27,7 +27,7 @@ _SOURCE_SECTION = re.compile(r"\d{1,3}(?:\.\d{1,3}){0,6}\Z")
 # earlier approved-looking section claim obligations written below it.
 _SOURCE_HEADING = re.compile(
     r"^[ \t]*(?:section|secci[oó]n|apartado)[ \t]+"
-    r"(?P<code>\d+(?:\.\d+)*)(?=[ \t\r\n.:\-–]|$)",
+    r"(?P<code>\d+(?:\.\d+)*)(?!\.\d)(?=[^\w]|$)",
     re.IGNORECASE | re.MULTILINE,
 )
 _EXTRACTION_MODEL = "deterministic-technical-section-v1"
