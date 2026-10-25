@@ -39,7 +39,7 @@ from src.documents.application.budget_stated_total import (
     record_revision_stated_total,
 )
 from src.documents.application.reupload_document_use_case import ReuploadDocumentUseCase
-from src.documents.domain.models import DocumentType
+from src.documents.domain.models import DocumentStatus, DocumentType
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
 )
@@ -314,3 +314,30 @@ async def test_a_stale_metadata_write_never_drops_another_revisions_declaration(
 
     await _trust(db, test_user, project_id, document, revision_b)
     assert await _declared_total(db, project_id, test_user) == 2_000_000, "approving B is not UNKNOWN"
+
+
+async def test_update_metadata_keeps_the_callers_other_pending_changes_with_autoflush_off(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Regression (03b8d06f CI): production sessions run with ``autoflush=False``. The merge of
+    committed declarations must not refresh the mapped row, or a status change the caller made just
+    before (upload: QUEUED -> UPLOADED) is discarded and the document keeps its old status."""
+    project_id, document, _a = await _accepted_budget(db, worker, test_user)
+    repo = SqlAlchemyDocumentRepository(db)
+    db.sync_session.autoflush = False
+    try:
+        await repo.update_status(test_user.tenant_id, document.id, DocumentStatus.QUEUED)
+        await db.commit()
+        await repo.update_status(test_user.tenant_id, document.id, DocumentStatus.UPLOADED)
+        await repo.update_metadata(test_user.tenant_id, document.id, {"note": "x"})
+        await db.commit()
+    finally:
+        db.sync_session.autoflush = True
+
+    row = (await db.execute(
+        text("SELECT upload_status::text, document_metadata FROM documents WHERE id = :d"),
+        {"d": document.id},
+    )).one()
+    assert row[0] == "uploaded", "the pending status change must survive update_metadata"
+    assert row[1]["note"] == "x"
+    assert STATED_TOTAL_BY_REVISION_KEY in row[1], "committed revision declarations are kept"
