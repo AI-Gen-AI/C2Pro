@@ -386,3 +386,33 @@ async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_de
 
     async with test_session_factory() as observer:
         assert len(await _events(observer, w)) == 1
+
+
+async def test_revision_status_exposes_immutable_a_hash_when_document_uploaded_b(
+    db: AsyncSession, test_session_factory, tmp_path: Path
+) -> None:
+    """S7 + S6: uploaded B's mutable document hash cannot replace trusted A's SHA.
+
+    The revision status response must expose the source revision's immutable
+    blob_hash, not documents.file_hash updated by the next upload.
+    """
+    from src.temporal.adapters.persistence.revision_status_reader import (
+        SqlAlchemyRevisionStatusReader,
+    )
+
+    world = await _world(db, tmp_path)
+    document = await db.get(DocumentORM, world["document"])
+    assert document is not None
+    document.file_hash = "b" * 64
+    await db.commit()
+    async with test_session_factory() as observer:
+        status = await SqlAlchemyRevisionStatusReader(observer).read(
+            tenant_id=world["tenant"],
+            project_id=world["project"],
+            document_id=world["document"],
+            revision_id=world["revision"],
+        )
+        assert status is not None
+        assert status.status == "available"
+        assert status.blob_hash == world["digest"]
+        assert status.blob_hash != document.file_hash
