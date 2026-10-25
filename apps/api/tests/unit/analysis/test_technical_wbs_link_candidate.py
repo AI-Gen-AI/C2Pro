@@ -154,3 +154,46 @@ def test_unverified_source_stays_unapproved_even_when_clause_was_reviewed() -> N
     assert candidate.state is TechnicalLinkState.HUMAN_REVIEW_REQUIRED
     assert not candidate.is_approved_link
     assert candidate.assessment == "NOT_ASSESSED"
+
+
+def test_matching_forged_section_codes_are_rejected_against_original_heading() -> None:
+    """Both metadata fields may lie together; the immutable source overrides them."""
+    clause = replace(_clause(), clause_code="9.9")
+    clause.extracted_entities["technical_requirement"]["source_section"] = "9.9"
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="source heading"):
+        _preview(clause=clause)
+
+
+def test_requirement_window_after_a_long_heading_still_recovers_true_source_section() -> None:
+    section = (
+        "Section 6.2 " + "Background information only. " * 180
+        + "The concrete shall withstand 50 MPa."
+    )
+    raw = "Preamble\n" + section
+    obligation = raw.index("shall withstand")
+    start = obligation - 12  # the extractor may window in after 4,000 chars
+    excerpt = raw[start : start + 120]
+    clause = replace(
+        _clause(),
+        clause_code="6.2",
+        title=excerpt,
+        full_text=excerpt,
+        text_start_offset=start,
+        text_end_offset=start + len(excerpt),
+    )
+    clause.extracted_entities["technical_requirement"]["source_section"] = "6.2"
+    candidate = _preview(clause=clause, parsed_revision_text=raw)
+    assert candidate.source_section == "6.2"
+    assert candidate.source_start_offset == start
+    assert candidate.is_approved_link is False
+
+
+def test_requirement_span_must_not_cross_two_distinct_source_sections() -> None:
+    source = RAW_TEXT + "\nSection 5.1 Additional concrete obligations must be checked."
+    clause = replace(
+        _clause(),
+        text_end_offset=len(source),
+        full_text=source[START:],
+    )
+    with pytest.raises(TechnicalWBSLinkCandidateError, match="crosses source sections"):
+        _preview(clause=clause, parsed_revision_text=source)
