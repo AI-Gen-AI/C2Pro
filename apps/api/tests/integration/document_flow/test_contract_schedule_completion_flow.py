@@ -216,8 +216,31 @@ async def _metadata(db: AsyncSession, document_id: UUID) -> dict[str, Any]:
     return dict(row.document_metadata or {})
 
 
+async def approve_document(
+    db: AsyncSession, user: Any, project_id: UUID, document: Document, revision: Any
+) -> None:
+    """The human approval: a TRUSTED artifact bound to exactly ``revision`` (what HITL approval leaves)."""
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.analysis.domain.contracts import DocumentArtifact, RiskItem
+
+    await SqlAlchemyDocumentArtifactRepository(db).save(
+        DocumentArtifact(
+            document_id=str(document.id),
+            document_revision_id=str(revision.revision_id),
+            doc_type="contract",
+            extracted_risks=[RiskItem(title="r", description="d")],
+        ),
+        project_id=project_id,
+        tenant_id=user.tenant_id,
+    )
+    await db.commit()
+
+
 async def _scenario(
-    db: AsyncSession, worker: Any, user: Any, *, contract: list[str], schedule: list[list[Any]]
+    db: AsyncSession, worker: Any, user: Any, *, contract: list[str], schedule: list[list[Any]],
+    approve_contract: bool = False,
 ) -> tuple[UUID, Document, Any, Document, Any]:
     project_id = await _project(db, user.tenant_id)
     contract_doc, contract_rev = await _upload_and_ingest(
@@ -228,6 +251,8 @@ async def _scenario(
         db, worker, user, project_id, filename="schedule.xlsx",
         content=_xlsx(schedule), document_type=DocumentType.SCHEDULE,
     )
+    if approve_contract:
+        await approve_document(db, user, project_id, contract_doc, contract_rev)
     return project_id, contract_doc, contract_rev, schedule_doc, schedule_rev
 
 
@@ -340,7 +365,8 @@ async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
 ) -> None:
     """A scoreless /evaluate itself must commit the provisional advisory to Alerts."""
     project_id, contract_doc, *_ = await _scenario(
-        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
+        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE,
+        approve_contract=True,  # the document link is only authorised by an approved contract (#1111)
     )
     result = await _evaluate(db, test_user, project_id)
     assert result.overall_score is None, "this regression must exercise the score-withheld path"

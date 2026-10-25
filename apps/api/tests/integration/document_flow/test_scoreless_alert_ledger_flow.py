@@ -50,9 +50,12 @@ async def _alerts(db: AsyncSession, project_id: Any, rule: str = PROVISIONAL_RUL
     )
 
 
-async def _persist_advisory(db: AsyncSession, worker: Any, user: Any) -> tuple[Any, Any]:
+async def _persist_advisory(
+    db: AsyncSession, worker: Any, user: Any, *, approve_contract: bool = True
+) -> tuple[Any, Any]:
     project_id, contract_doc, *_ = await _scenario(
-        db, worker, user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
+        db, worker, user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE,
+        approve_contract=approve_contract,
     )
     result = await _evaluate(db, user, project_id)
     assert result.overall_score is None, "the regression must exercise the score-withheld path"
@@ -144,3 +147,18 @@ async def test_scoreless_alerts_are_not_written_for_another_project_or_tenant(
     [row] = await _alerts(db, project_id)
     assert row.id == first.id
     assert row.tenant_id == test_user.tenant_id
+
+
+async def test_an_unapproved_contract_keeps_the_alert_but_authorises_no_document_link(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """ACC-01 S4 (#1111) x #1110: the finding is durable, the deep link fails closed.
+
+    Only a trusted-current (approved) clause may authorise the Alerts foreign key / document link; a
+    contract still awaiting its review must not be linked as if it were approved evidence.
+    """
+    _project_id, row = await _persist_advisory(db, worker, test_user, approve_contract=False)
+
+    assert str(row.status).lower() == "open"
+    assert row.source_clause_id is None, "no source link from an unapproved contract"
+    assert row.alert_metadata["detection_evidence"]["claim"], "the evidence text is still persisted"
