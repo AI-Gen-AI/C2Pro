@@ -5,6 +5,11 @@ on:
     # Run before the 04:00 I13 and 05:00 evaluation lanes.
     - cron: "30 1 * * *"
   workflow_dispatch:
+    inputs:
+      run_pj01:
+        description: "Also run the PJ-01 first-user journey (login, project, Contract A, Health, Evidence, revision B, What Changed?, Current State) against the same real local backend"
+        type: boolean
+        default: false
 
 concurrency:
   group: nightly-full-e2e-${{ github.ref }}
@@ -164,6 +169,16 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/triplet-results.json
         run: ./node_modules/.bin/playwright test --project=triplet-journey --reporter=list,json
 
+      # Explicit dispatch only (inputs.run_pj01): the PJ-01 harness exercises revision B, What Changed?
+      # and Current State with hash-bound fixtures. Its result is reported on its own and never mixed
+      # into the suite above.
+      - name: Run PJ-01 first user journey (real backend, mock AI)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/pj01-results.json
+        run: ./node_modules/.bin/playwright test --project=pj01-acceptance --reporter=list,json
+
       - name: Summarize triplet journey result
         if: always()
         working-directory: apps/web
@@ -192,6 +207,7 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
+            apps/web/playwright/.pj01/
             ${{ runner.temp }}/c2pro-nightly-api.log
             ${{ runner.temp }}/c2pro-nightly-worker.log
           if-no-files-found: warn
