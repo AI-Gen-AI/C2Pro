@@ -354,6 +354,28 @@ async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_de
         assert replay.json()["replayed"] is True
         assert replay.json()["event_id"] == receipt["event_id"]
 
+        # A distinct HTTP request, session and DB transaction retrieves only
+        # the authenticated reviewer's durable historical fact, never a link.
+        history = await client.get(endpoint)
+        assert history.status_code == 200, history.text
+        [record] = history.json()
+        assert record["event_id"] == receipt["event_id"]
+        assert record["source_clause_id"] == str(w["clause"])
+        assert record["technical_revision_id"] == str(w["revision"])
+        assert record["proposed_wbs_baseline_id"] == str(w["baseline"])
+        assert record["proposed_wbs_node_id"] == str(w["node"])
+        assert record["reason"] == body["reason"]
+        assert record["decision"] == "CONFIRMED_FOR_REVIEW"
+        assert record["state"] == "HISTORICAL_AUDIT_ONLY"
+        assert record["authority"] == "AUDIT_ONLY_NOT_CANONICAL_LINK"
+        assert record["approved_canonical_link"] is False
+
+        assert (await client.get(endpoint, params={"limit": 0})).status_code == 422
+        assert (await client.get(endpoint, params={"limit": 51})).status_code == 422
+        assert (
+            await client.get(f"/api/v1/projects/{uuid4()}/technical-wbs/reviews")
+        ).status_code == 404
+
         contradictory = await client.post(endpoint, json={**body, "decision": "REJECTED"})
         assert contradictory.status_code == 409, contradictory.text
 
@@ -370,6 +392,23 @@ async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_de
         )
         assert stale_hash.status_code == 409, stale_hash.text
 
+    # Another actor in the same tenant cannot read the first actor's audit
+    # history. The override models only a separately authenticated principal,
+    # not a real Clerk login.
+    other_reviewer = User(
+        id=uuid4(),
+        tenant_id=w["tenant"],
+        email=f"other-s7-{uuid4().hex}@example.invalid",
+        clerk_user_id=f"clerk-other-s7-{uuid4().hex}",
+        is_active=True,
+        is_verified=False,
+    )
+    app.dependency_overrides[get_current_user] = lambda: other_reviewer
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        other_history = await client.get(endpoint)
+        assert other_history.status_code == 200, other_history.text
+        assert other_history.json() == []
+
     # An unrelated tenant principal must not learn if the first project exists.
     foreign_reviewer = User(
         id=uuid4(),
@@ -383,6 +422,8 @@ async def test_http_router_real_service_real_pg_commit_relogin_simulation_and_de
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         foreign = await client.post(endpoint, json=body)
         assert foreign.status_code == 404, foreign.text
+        foreign_history = await client.get(endpoint)
+        assert foreign_history.status_code == 404, foreign_history.text
 
     async with test_session_factory() as observer:
         assert len(await _events(observer, w)) == 1
