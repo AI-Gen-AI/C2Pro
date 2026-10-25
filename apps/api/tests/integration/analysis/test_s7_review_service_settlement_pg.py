@@ -54,7 +54,11 @@ class _ImmutableLocalStorage:
         return self.path
 
 
-async def _world(db: AsyncSession, tmp_path: Path):
+async def _world(
+    db: AsyncSession,
+    tmp_path: Path,
+    document_type: DocumentType = DocumentType.TECHNICAL_SPEC,
+):
     scope = await _scope(db)
     _, ids, applied = await _baseline_one(db, scope)
     baseline = applied.baseline_id
@@ -81,7 +85,7 @@ async def _world(db: AsyncSession, tmp_path: Path):
             id=document,
             tenant_id=scope.tenant,
             project_id=scope.project,
-            document_type=DocumentType.TECHNICAL_SPEC,
+            document_type=document_type,
             filename="technical-s7.docx",
             file_format=".docx",
             file_hash=digest,
@@ -192,6 +196,46 @@ async def _events(db: AsyncSession, w: dict) -> list[ProjectEventORM]:
             )
         ).all()
     )
+
+
+@pytest.mark.parametrize(
+    ("document_type", "allowed"),
+    [
+        (DocumentType.TECHNICAL_SPEC, True),
+        (DocumentType.SPECIFICATION, True),
+        (DocumentType.CONTRACT, False),
+    ],
+)
+async def test_technical_document_families_are_enforced_against_real_postgres(
+    db: AsyncSession,
+    test_session_factory,
+    tmp_path: Path,
+    document_type: DocumentType,
+    allowed: bool,
+) -> None:
+    """S2->S7: actual triplet 'specification' works; forged contract source fails."""
+    w = await _world(db, tmp_path, document_type)
+    async with test_session_factory() as request_session:
+        service = RecordTechnicalWBSReviewService(request_session, w["reader"])
+        if allowed:
+            receipt = await service.execute(**_arguments(w))
+            assert receipt.candidate.technical_revision_id == w["revision"]
+            assert receipt.candidate.source_clause_id == w["clause"]
+            assert receipt.candidate.is_approved_link is False
+            await request_session.commit()
+        else:
+            with pytest.raises(
+                TechnicalMappingReviewError,
+                match="technical clause or immutable revision not found",
+            ):
+                await service.execute(**_arguments(w))
+            await request_session.rollback()
+
+    async with test_session_factory() as observer:
+        events = await _events(observer, w)
+        assert len(events) == (1 if allowed else 0)
+        if events:
+            assert events[0].payload["authority"] == "AUDIT_ONLY_NOT_CANONICAL_LINK"
 
 
 async def test_real_pg_service_commit_replay_conflict_without_canonical_link(
