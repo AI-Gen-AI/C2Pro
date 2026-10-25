@@ -167,7 +167,10 @@ jobs:
         working-directory: apps/web
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/triplet-results.json
-        run: ./node_modules/.bin/playwright test --project=triplet-journey --reporter=list,json
+        # One worker: both triplet specs sign in as the same E2E user and create a project through the
+        # wizard; run side by side (Nightly 40224064215) both stalled at project creation, so they run
+        # one after the other. This isolates them; it is not a finding about the cause.
+        run: ./node_modules/.bin/playwright test --project=triplet-journey --workers=1 --reporter=list,json
 
       # Explicit dispatch only (inputs.run_pj01): the PJ-01 harness exercises revision B, What Changed?
       # and Current State with hash-bound fixtures. Its result is reported on its own and never mixed
