@@ -438,8 +438,14 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
           .poll(async () => reopened.locator("table tbody tr").count(), { timeout: 30_000 })
           .toBeGreaterThanOrEqual(manifest.expected_rules.length + manifest.expected_provisional.length);
         await reopened.goto(`/projects/${projectId}/documents`);
+        await expect(reopened.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
+        // A new context compiles/loads the route cold and the rows render after the list request:
+        // wait for the list the app requested, then require every document, exactly once.
         for (const name of ["triplet-contract.docx", "triplet-budget.xlsx", "triplet-schedule.xlsx", "triplet-specification.docx"]) {
-          await expect(documentRow(reopened, name)).toHaveCount(1);
+          await expect(
+            documentRow(reopened, name),
+            `${name} must be listed once in a fresh context (documents page rendered, row missing)`,
+          ).toHaveCount(1, { timeout: 30_000 });
         }
         markStep(
           "S8",

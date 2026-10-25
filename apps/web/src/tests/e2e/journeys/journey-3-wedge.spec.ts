@@ -209,6 +209,22 @@ async function waitForAuthenticatedSession(page: Page) {
  * (`net::ERR_ABORTED`): the Next.js app can issue a client-side redirect right
  * after /projects settles. Only that abort is retried; any other failure surfaces.
  */
+async function expectDataLoaded(
+  page: Page,
+  ids: { ready: string; loading: string; error: string },
+): Promise<void> {
+  try {
+    await expect(page.getByTestId(ids.ready)).toBeVisible({ timeout: 30_000 });
+  } catch {
+    const backendError = await page.getByTestId(ids.error).innerText({ timeout: 1_000 }).catch(() => null);
+    const stillLoading = (await page.getByTestId(ids.loading).count()) > 0;
+    throw new Error(
+      `${ids.ready} not shown after 30 s: ` +
+        (backendError ? `the page rendered a backend error: ${backendError}` : stillLoading ? "still loading" : "neither loading nor error rendered"),
+    );
+  }
+}
+
 async function gotoStable(page: Page, url: string) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -338,7 +354,9 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   );
 
   await gotoStable(page, `/projects/${liveProjectId}/review`);
-  await expect(page.getByTestId("review-page")).toBeVisible();
+  // The page renders `review-page` only after its queue request settles (`review-loading` before,
+  // `review-error` on failure): wait for that state and say which one it is stuck in.
+  await expectDataLoaded(page, { ready: "review-page", loading: "review-loading", error: "review-error" });
   await expect(page.getByTestId(`review-item-${liveReviewItemId}`)).toBeVisible();
 
   const approveResponse = page.waitForResponse((response) =>
