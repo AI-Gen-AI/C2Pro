@@ -53,7 +53,7 @@ async def test_the_budget_total_and_the_schedule_finish_both_reach_one_evaluatio
         db, worker, test_user, project_id, filename="contract.docx",
         content=_docx([PRICE_CLAUSE, COMPLETION_CLAUSE]), document_type=DocumentType.CONTRACT,
     )
-    budget_doc, _ = await _upload_and_ingest(
+    budget_doc, budget_rev = await _upload_and_ingest(
         db, worker, test_user, project_id, filename="budget.xlsx",
         content=_budget_xlsx(1_500_000), document_type=DocumentType.BUDGET,
     )
@@ -63,7 +63,8 @@ async def test_the_budget_total_and_the_schedule_finish_both_reach_one_evaluatio
     )
 
     # Both worker observations are recorded for their own document type.
-    assert (await _metadata(db, budget_doc.id))["stated_total"] == 1_500_000
+    declared = (await _metadata(db, budget_doc.id))["stated_total_by_revision"]
+    assert declared[str(budget_rev.revision_id)]["total"] == 1_500_000
     assert (await _metadata(db, schedule_doc.id))["schedule_planned_finish"]["date"] == "2027-09-30"
 
     result = await _evaluate(db, test_user, project_id)

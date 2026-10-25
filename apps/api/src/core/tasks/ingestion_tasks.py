@@ -53,6 +53,7 @@ from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
     SqlAlchemyRagIngestionService,
 )
 from src.documents.adapters.storage.factory import build_storage_service
+from src.documents.application.budget_stated_total import record_revision_stated_total
 from src.documents.application.document_source import (
     REVISION_HASH_MISMATCH,
     RevisionSourceError,
@@ -1818,22 +1819,21 @@ async def _ingest_owned(
     metadata["rag_ingestion_outcome"] = rag_result.outcome.value
     if document.document_type == DocumentType.BUDGET:
         # The declared budget total (and its denominations) is what coherence
-        # reconciles against the contract total (DET-CRS-CONBUD / NEGMARGIN).
-        # Only the manual /parse endpoint used to record it, so a normally
-        # uploaded budget never reached those rules. Mirror that persistence
-        # here, and never let a previous revision's total outlive a new
-        # revision that declares none.
+        # reconciles against the contract total (DET-CRS-CONBUD / NEGMARGIN). It is
+        # recorded for THIS pinned revision only: a proposed (or later rejected)
+        # re-upload must not replace what the accepted revision declared, and readers
+        # take the trusted-current revision's entry. A revision that declares none
+        # records that, so approving it never revives an older revision's figure.
         stated_total = _extract_budget_stated_total(parsed_payload)
-        if stated_total is not None:
-            metadata["stated_total"] = stated_total
-            currencies = _extract_budget_currencies(parsed_payload)
-            if currencies:
-                metadata["stated_total_currencies"] = currencies
-            else:
-                metadata.pop("stated_total_currencies", None)
-        else:
-            metadata.pop("stated_total", None)
-            metadata.pop("stated_total_currencies", None)
+        record_revision_stated_total(
+            metadata,
+            revision_id=source_revision.revision_id if source_revision else None,
+            blob_hash=source_revision.blob_hash if source_revision else None,
+            total=stated_total,
+            currencies=(
+                _extract_budget_currencies(parsed_payload) if stated_total is not None else None
+            ),
+        )
     if document.document_type == DocumentType.SCHEDULE:
         # The schedule's planned finish as a sourced observation of THIS pinned revision (or
         # the reason there is none): the contract-completion comparator reads it, and the

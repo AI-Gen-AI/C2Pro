@@ -118,6 +118,35 @@ async def test_parse_document_updates_parsed_at(
     assert mock_repository.commit.call_count == 2
 
 
+class _Revision:
+    """The pinned revision the parse run resolved (identity and hash are all the writer needs)."""
+
+    def __init__(self) -> None:
+        self.revision_id = uuid4()
+        self.blob_hash = "sha256:" + "ab" * 32
+        self.blob_key = "documents/budget.xlsx"
+
+
+def _pinned_revision(revision: _Revision):
+    """Resolve ``revision`` as the current source and serve its bytes from the mocked path."""
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    stack.enter_context(
+        patch(
+            "src.documents.application.parse_document_use_case.resolve_source_revision",
+            AsyncMock(return_value=revision),
+        )
+    )
+    stack.enter_context(
+        patch(
+            "src.documents.application.parse_document_use_case.fetch_source_file",
+            AsyncMock(return_value=Path("/tmp/budget.xlsx")),
+        )
+    )
+    return stack
+
+
 @pytest.mark.asyncio
 async def test_parse_document_persists_budget_stated_total(
     use_case,
@@ -151,13 +180,61 @@ async def test_parse_document_persists_budget_stated_total(
         return_value={"file_format": ".xlsx", "budget": budget_rows}
     )
 
-    await use_case.execute(tenant_id, document_id, user_id)
+    revision = _Revision()
+    use_case.revision_repository = MagicMock()
+    with _pinned_revision(revision):
+        await use_case.execute(tenant_id, document_id, user_id)
 
     mock_repository.update_metadata.assert_awaited_with(
         tenant_id,
         document_id,
-        {"stated_total": 654_144_805.0},
+        {
+            "stated_total_by_revision": {
+                str(revision.revision_id): {
+                    "revision_id": str(revision.revision_id),
+                    "blob_hash": revision.blob_hash,
+                    "total": 654_144_805.0,
+                    "currencies": [],
+                }
+            }
+        },
     )
+
+
+@pytest.mark.asyncio
+async def test_parse_document_without_a_pinned_revision_records_no_unstamped_total(
+    use_case,
+    mock_repository,
+    mock_storage,
+    mock_parser,
+    sample_document,
+):
+    """No revision identity, no declaration: an unstamped total is never evidence."""
+    budget_document = Document(
+        id=sample_document.id,
+        project_id=sample_document.project_id,
+        tenant_id=sample_document.tenant_id,
+        document_type=DocumentType.BUDGET,
+        filename="budget.xlsx",
+        upload_status=DocumentStatus.UPLOADED,
+        file_format=".xlsx",
+    )
+    mock_repository.get_by_id = AsyncMock(return_value=budget_document)
+    mock_repository.update_status = AsyncMock()
+    mock_repository.commit = AsyncMock()
+    mock_storage.download_file = AsyncMock(return_value=Path("/tmp/budget.xlsx"))
+    mock_parser.parse_document_file = AsyncMock(
+        return_value={
+            "file_format": ".xlsx",
+            "budget": _BudgetRows([{"item": "Capitulo 01", "quantity": 1, "total": 100.0}]),
+        }
+    )
+
+    await use_case.execute(budget_document.tenant_id, budget_document.id, uuid4())
+
+    metadata = mock_repository.update_metadata.await_args.args[2]
+    assert "stated_total" not in metadata
+    assert "stated_total_by_revision" not in metadata
 
 
 @pytest.mark.asyncio
@@ -188,12 +265,24 @@ async def test_parse_document_persists_budget_currencies_with_stated_total(
         return_value={"file_format": ".xlsx", "budget": budget_rows}
     )
 
-    await use_case.execute(budget_document.tenant_id, budget_document.id, uuid4())
+    revision = _Revision()
+    use_case.revision_repository = MagicMock()
+    with _pinned_revision(revision):
+        await use_case.execute(budget_document.tenant_id, budget_document.id, uuid4())
 
     mock_repository.update_metadata.assert_awaited_with(
         budget_document.tenant_id,
         budget_document.id,
-        {"stated_total": 654_144_805.0, "stated_total_currencies": ["USD"]},
+        {
+            "stated_total_by_revision": {
+                str(revision.revision_id): {
+                    "revision_id": str(revision.revision_id),
+                    "blob_hash": revision.blob_hash,
+                    "total": 654_144_805.0,
+                    "currencies": ["USD"],
+                }
+            }
+        },
     )
 
 

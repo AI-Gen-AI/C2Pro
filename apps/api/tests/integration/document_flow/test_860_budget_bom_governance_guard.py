@@ -302,6 +302,13 @@ async def _document_state(db: AsyncSession, document_id: UUID) -> dict[str, Any]
             "metadata": dict(row.document_metadata or {})}
 
 
+def _declared(metadata: dict[str, Any], revision_id: Any) -> float | None:
+    """The total this revision declared (None: it declared none) from the revision-bound entry."""
+    entry = metadata["stated_total_by_revision"][str(revision_id)]
+    assert entry["revision_id"] == str(revision_id)
+    return entry["total"]
+
+
 async def _reparse_from_source(storage: Any, document: Document, revision: Any
                                ) -> tuple[list[str], float | None]:
     """Recover the structured budget from the immutable, hash-verified revision."""
@@ -334,7 +341,8 @@ async def test_budget_upload_creates_no_bom_and_stays_reparsable(
     # The declared total reaches document metadata through the NORMAL upload
     # worker, not only the manual /parse endpoint: coherence reconciles it with
     # the contract total (DET-CRS-CONBUD / NEGMARGIN).
-    assert state["metadata"]["stated_total"] == 2800.0
+    assert _declared(state["metadata"], revision.revision_id) == 2800.0
+    assert "stated_total" not in state["metadata"], "no unstamped total survives"
     # 17 / 18: the immutable revision is re-fetchable and deterministically reparsable.
     assert await _reparse_from_source(worker, document, revision) == (
         ["Concrete C30", "Steel rebar"], 2800.0,
@@ -353,17 +361,20 @@ async def test_worker_replaces_stated_total_and_never_keeps_a_stale_one(
     project_id = await _project(db, test_user.tenant_id)
     document, revision_1 = await _upload_budget(db, worker, test_user, project_id, BUDGET_V1)
     assert (await ingestion_tasks._process(document.id, revision_1.revision_id))["status"] == "success"
-    assert (await _document_state(db, document.id))["metadata"]["stated_total"] == 2800.0
+    assert _declared((await _document_state(db, document.id))["metadata"], revision_1.revision_id) == 2800.0
 
-    # A newer revision with a different declared total replaces it ...
+    # A newer revision with a different declared total is recorded under ITS OWN revision ...
     revision_2 = await _reupload(db, worker, test_user, document, BUDGET_V2)
     assert (await ingestion_tasks._process(document.id, revision_2.revision_id))["status"] == "success"
-    assert (await _document_state(db, document.id))["metadata"]["stated_total"] == 3700.0
+    metadata = (await _document_state(db, document.id))["metadata"]
+    assert _declared(metadata, revision_2.revision_id) == 3700.0
+    assert _declared(metadata, revision_1.revision_id) == 2800.0, "the earlier revision keeps its own figure"
 
-    # ... and one that declares none must not leave the previous total behind.
+    # ... and one that declares none records that: it never carries a previous total.
     revision_3 = await _reupload(db, worker, test_user, document, BUDGET_NO_DECLARED_TOTAL)
     assert (await ingestion_tasks._process(document.id, revision_3.revision_id))["status"] == "success"
     metadata = (await _document_state(db, document.id))["metadata"]
+    assert _declared(metadata, revision_3.revision_id) is None
     assert "stated_total" not in metadata
     assert "stated_total_currencies" not in metadata
 
@@ -417,7 +428,7 @@ async def test_parse_endpoint_writes_no_bom_and_keeps_stated_total(
     project_id = await _project(db, tenant_id)
     manual_id = await _manual_bom(db, project_id)
     before = await _bom(db, project_id)
-    document, _revision = await _upload_budget(db, worker, test_user, project_id, BUDGET_V1)
+    document, revision = await _upload_budget(db, worker, test_user, project_id, BUDGET_V1)
 
     doc_repo = SqlAlchemyDocumentRepository(db)
     use_case = ParseDocumentUseCase(
@@ -437,7 +448,7 @@ async def test_parse_endpoint_writes_no_bom_and_keeps_stated_total(
     assert [row[0] for row in before] == [manual_id]
     state = await _document_state(db, document.id)
     # 20: stated_total behaves as already defined (parse endpoint persists it).
-    assert state["metadata"]["stated_total"] == 2800.0
+    assert _declared(state["metadata"], revision.revision_id) == 2800.0
     # 19: parsed_text behaves as already defined -- a flat .xlsx budget has none.
     assert "parsed_text" not in state["metadata"]
     assert state["parsing_error"] is None
@@ -447,20 +458,14 @@ async def test_parse_endpoint_writes_no_bom_and_keeps_stated_total(
 
 
 async def test_coherence_never_treats_bom_rows_as_budget_truth(
-    db: AsyncSession, test_user: Any
+    db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
     tenant_id = test_user.tenant_id
     project_id = await _project(db, tenant_id)
-    budget_doc = uuid4()
-    await db.execute(
-        text("INSERT INTO documents (id, tenant_id, project_id, document_type, filename, "
-             "upload_status, version, storage_encrypted, document_metadata, created_at, "
-             "updated_at) VALUES (:id, :tid, :pid, 'budget', 'budget.xlsx', "
-             "'parsed_pending_analysis', 1, true, CAST(:meta AS jsonb), now(), now())"),
-        {"id": budget_doc, "tid": tenant_id, "pid": project_id,
-         "meta": '{"stated_total": 2800.0}'},
-    )
-    await db.commit()
+    # A real budget revision, ingested by the worker: its declared total is revision-stamped.
+    budget, revision = await _upload_budget(db, worker, test_user, project_id, BUDGET_V1)
+    assert (await ingestion_tasks._process(budget.id, revision.revision_id))["status"] == "success"
+    budget_doc = budget.id
     await _manual_bom(db, project_id)  # 9: manual procurement BOM
     await _procurement_edited_legacy_row(db, tenant_id, project_id, budget_doc)  # 10: legacy
 
