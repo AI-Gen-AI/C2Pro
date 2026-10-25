@@ -195,13 +195,23 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
                                        for path in intelligence_routes)
     import_routes = {path for (_, path), module in wbs_routes.items() if module == imports}
     assert import_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-imports") for path in import_routes)
-    # This is the ONLY non-canonical technical-WBS review surface: POST
-    # audit fact, NOT an approve/apply or direct wbs_nodes mutation endpoint.
+    # The ONLY non-canonical technical-WBS surface is this bounded pair:
+    # POST appends a human audit fact to project_events; GET reads that audit
+    # history. Neither approves a link nor writes canonical WBS nodes.
     technical_routes = {(methods, path) for (methods, path), module in wbs_routes.items()
                         if module == technical_reviews}
-    assert technical_routes == {(
-        ("POST",), "/api/v1/projects/{project_id}/technical-wbs/reviews"
-    )}
+    review_path = "/api/v1/projects/{project_id}/technical-wbs/reviews"
+    assert technical_routes == {
+        (("GET",), review_path),
+        (("POST",), review_path),
+    }
+    from src.analysis.adapters.http.technical_wbs_review_router import (
+        list_technical_wbs_reviews,
+        record_technical_wbs_review,
+    )
+
+    assert wbs_routes[(("GET",), review_path)] == list_technical_wbs_reviews.__module__
+    assert wbs_routes[(("POST",), review_path)] == record_technical_wbs_review.__module__
 
 
 def test_wbs_import_never_writes_wbs_except_through_the_governed_draft_commands() -> None:
