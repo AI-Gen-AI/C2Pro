@@ -150,7 +150,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
       source.project_id === projectId &&
       source.id === selectedDocumentId &&
       source.revision_id === trustedRevisionId &&
-      source.document_type === "technical_spec" &&
+      (source.document_type === "technical_spec" || source.document_type === "specification") &&
       HASH.test(trustedBlobHash),
   );
   const clauses = validDocument
