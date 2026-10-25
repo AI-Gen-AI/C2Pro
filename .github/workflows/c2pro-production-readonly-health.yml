@@ -4,6 +4,8 @@ on:
     branches:
       - ops/c2pro-production-readonly-health-20261025
   workflow_dispatch:
+  schedule:
+    - cron: "23 */6 * * *"
 
 permissions:
   contents: read
