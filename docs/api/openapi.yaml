@@ -1743,8 +1743,7 @@ paths:
     get:
       tags:
       - Technical WBS review
-      summary: List the current reviewer's historical, audit-only Technical WBS
-        decisions
+      summary: List the current reviewer's historical, audit-only Technical WBS decisions
       operationId: list_technical_wbs_reviews_api_v1_projects__project_id__technical_wbs_reviews_get
       security:
       - HTTPBearer: []
@@ -1774,8 +1773,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TechnicalWBSReviewHistoryEntry'
-                title: Response List Technical Wbs Reviews Api V1 Projects  Project Id
-                  Technical Wbs Reviews Get
+                title: Response List Technical Wbs Reviews Api V1 Projects  Project
+                  Id  Technical Wbs Reviews Get
         '401':
           description: Authentication required
         '404':
