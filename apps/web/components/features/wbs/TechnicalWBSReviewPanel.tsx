@@ -7,6 +7,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import {
@@ -17,6 +18,7 @@ import { useGetWbsBaselineApiV1ProjectsProjectIdWbsGovernanceBaselinesBaselineNo
 import type {
   ProjectWBSAuthority,
   TechnicalMappingDecision,
+  TechnicalWBSReviewHistoryEntry,
   TechnicalWBSReviewRequest,
   TechnicalWBSReviewResponse,
 } from "@/lib/api/generated/models";
@@ -80,6 +82,17 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
     () => documents.filter((doc) => doc.type === "specification" && doc.extension === "docx"),
     [documents],
   );
+  // Every mount (including after a fresh Clerk sign-in) reads persisted
+  // facts. These records are historical, never a current/canonical link.
+  const reviewHistory = useQuery({
+    queryKey: ["technical-wbs-review-history", projectId],
+    queryFn: () =>
+      orvalApiClient<TechnicalWBSReviewHistoryEntry[]>({
+        url: `/api/v1/projects/${encodeURIComponent(projectId)}/technical-wbs/reviews`,
+        method: "GET",
+      }),
+    enabled: Boolean(projectId),
+  });
   const [documentId, setDocumentId] = useState("");
   const selectedDocumentId = technicalDocuments.some((doc) => doc.id === documentId)
     ? documentId
@@ -207,6 +220,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
         throw new Error("The review receipt does not match audit-only authority.");
       }
       setReceipt(response);
+      void reviewHistory.refetch();
     } catch {
       setError(
         "The review was not confirmed. Recheck the source and approved WBS; " +
@@ -349,6 +363,40 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
             <p><strong>Not a canonical link; technical compliance not assessed.</strong></p>
           </div>
         ) : null}
+        <section data-testid="technical-wbs-review-history" aria-label="My previous reviews">
+          <h3 className="font-semibold">My previous reviews — historical audit only</h3>
+          <p className="text-muted-foreground">
+            These are your persisted review decisions, including superseded sources.
+            They do not establish current WBS links, approval or compliance.
+          </p>
+          {reviewHistory.isLoading ? <p>Loading persisted reviews…</p> : null}
+          {reviewHistory.isError ? (
+            <p role="alert">Prior reviews could not be loaded.</p>
+          ) : null}
+          {reviewHistory.isSuccess && reviewHistory.data.length === 0 ? (
+            <p>No review decisions recorded for this user in this project.</p>
+          ) : null}
+          {reviewHistory.isSuccess && reviewHistory.data.length > 0 ? (
+            <ul className="space-y-2">
+              {reviewHistory.data.map((item) => (
+                <li key={item.event_id} className="rounded border p-2">
+                  <p>
+                    {item.decision === "REJECTED" ? "Rejected" : "Confirmed for later review"}
+                    {" — "}{item.source_section}
+                  </p>
+                  <p>Reason: {item.reason}</p>
+                  <p className="text-muted-foreground">WBS node: {item.proposed_wbs_node_id}</p>
+                  <Link className="underline" href={
+                    `/projects/${encodeURIComponent(projectId)}/evidence` +
+                    `?documentId=${encodeURIComponent(item.technical_document_id)}` +
+                    `&revisionId=${encodeURIComponent(item.technical_revision_id)}` +
+                    `&highlightId=${encodeURIComponent(item.source_clause_id)}`
+                  }>Inspect historical source</Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
       </CardContent>
     </Card>
   );
