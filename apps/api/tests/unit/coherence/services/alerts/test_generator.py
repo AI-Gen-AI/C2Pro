@@ -913,6 +913,50 @@ class TestB1RealCrossRevisionIdentity:
         )
         assert svc._observation_key(v1.alert_metadata) != svc._observation_key(v2.alert_metadata)
 
+    def test_provisional_schedule_finding_is_a_new_finding_when_the_schedule_revision_changes(
+        self,
+    ) -> None:
+        """The claim names the schedule revision and row, so a reviewed finding never masks a new one."""
+        from types import SimpleNamespace
+
+        from src.coherence.graph.nodes import _provisional_deviation_alert
+        from src.coherence.router import _coherence_alert_to_create
+
+        svc = AlertGeneratorService(repository=MagicMock())
+        contract_document = uuid4()
+        clause_id = uuid4()
+        schedule_document = uuid4()
+        contract_revision = uuid4()
+
+        def candidate(schedule_revision):
+            item = SimpleNamespace(
+                source_clause_id=str(clause_id),
+                delta=12,
+                evidence={
+                    "expected": {
+                        "date": "2027-01-31",
+                        "document_id": str(contract_document),
+                        "revision_id": str(contract_revision),
+                    },
+                    "observed": {
+                        "date": "2027-02-12",
+                        "document_id": str(schedule_document),
+                        "revision_id": str(schedule_revision),
+                        "source_locator": "row 7",
+                    },
+                },
+            )
+            return _coherence_alert_to_create(
+                project_id=uuid4(),
+                alert=_provisional_deviation_alert(item, []),
+                clauses=[],
+                persisted_clause_documents={clause_id: contract_document},
+            )
+
+        revision_1, revision_2 = uuid4(), uuid4()
+        assert svc._fingerprint(candidate(revision_1)) == svc._fingerprint(candidate(revision_1))
+        assert svc._fingerprint(candidate(revision_1)) != svc._fingerprint(candidate(revision_2))
+
     @pytest.mark.asyncio
     async def test_dismissed_v1_family_reopens_on_real_v2_clause_without_creating_new_alert(self) -> None:
         document_id = uuid4()
