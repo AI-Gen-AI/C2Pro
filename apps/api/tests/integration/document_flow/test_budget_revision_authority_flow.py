@@ -287,6 +287,25 @@ async def test_a_single_revision_with_only_a_pending_proposal_is_not_canonical_i
     assert await _declared_total(db, project_id, test_user) == 1_000_000
 
 
+async def test_a_pending_proposal_without_a_revision_binding_is_still_not_canonical_input(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """``document_artifacts.document_revision_id`` is nullable: an unbound proposal of a single-revision document is that revision's."""
+    project_id = await _project(db, test_user.tenant_id)
+    document, revision = await _upload_and_ingest(
+        db, worker, test_user, project_id, filename="budget.xlsx",
+        content=_budget_xlsx(1_000_000), document_type=DocumentType.BUDGET,
+    )
+    await _propose(db, test_user, project_id, document, revision)
+    await db.execute(
+        text("UPDATE document_artifacts SET document_revision_id = NULL WHERE document_id = :d"),
+        {"d": document.id},
+    )
+    await db.commit()
+
+    assert await _declared_total(db, project_id, test_user) is None
+
+
 async def test_a_stale_metadata_write_never_drops_another_revisions_declaration(
     db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
