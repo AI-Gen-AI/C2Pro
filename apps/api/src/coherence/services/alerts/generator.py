@@ -115,7 +115,8 @@ class AlertGeneratorService:
                     and prior_fingerprint not in fingerprints
                 ):
                     existing_alert.status = AlertStatus.RESOLVED
-                    existing_alert.resolved_at = now
+                    # the column is TIMESTAMP WITHOUT TIME ZONE: an aware value fails the UPDATE
+                    existing_alert.resolved_at = now.replace(tzinfo=None)
                     existing_alert.resolution_notes = self._merge_notes(
                         existing_alert.resolution_notes,
                         "Auto-resolved: violation not detected in latest analysis.",
