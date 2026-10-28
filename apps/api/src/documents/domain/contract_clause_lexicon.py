@@ -118,3 +118,85 @@ PERCENT_WORDS: tuple[str, ...] = ("por ciento", "por cien", "per cent", "percent
 
 # How many characters on each side of a percentage are searched for a role term.
 PERCENT_ROLE_WINDOW = 48
+
+# Another period right behind a figure ("0.5% per week", "2% mensual", "3% por hora"): that figure is
+# not a daily rate and not a cumulative cap. An adjective is enough ("mensual"); a noun counts only after
+# an introducer ("por mes", "per week", "cada hora"), so "desde el mes 6" or "within the month" do not.
+OTHER_PERIOD_ADJECTIVES: Terms = {
+    "en": (
+        "weekly",
+        "monthly",
+        "yearly",
+        "annual",
+        "annually",
+        "quarterly",
+        "hourly",
+        "biweekly",
+        "bimonthly",
+        "fortnightly",
+    ),
+    "es": (
+        "semanal",
+        "semanales",
+        "mensual",
+        "mensuales",
+        "anual",
+        "anuales",
+        "trimestral",
+        "trimestrales",
+        "bimestral",
+        "semestral",
+        "quincenal",
+        "horaria",
+        "horario",
+        "mensualmente",
+        "anualmente",
+        "semanalmente",
+    ),
+}
+
+OTHER_PERIOD_NOUNS: Terms = {
+    "en": (
+        "week*",
+        "month*",
+        "year*",
+        "quarter*",
+        "fortnight*",
+        "hour",
+        "hours",
+        "period",
+        "periods",
+    ),
+    "es": (
+        "semana*",
+        "mes",
+        "meses",
+        "ano",
+        "anos",
+        "quincena*",
+        "trimestre*",
+        "bimestre*",
+        "semestre*",
+        "hora",
+        "horas",
+        "periodo",
+        "periodos",
+        "anualidad*",
+        "mensualidad*",
+    ),
+}
+
+PERIOD_INTRODUCERS: tuple[str, ...] = (
+    "por",
+    "per",
+    "cada",
+    "al",
+    "a la",
+    "en",
+    "every",
+    "each",
+    "/",
+)
+
+# "every 7 days", "por cada 30 dias": a period made of several days is not a daily rate either.
+OTHER_PERIOD_REGEXES: tuple[str, ...] = (r"(?:cada|every|each)\s+\d+\s+(?:dias?|days?)",)

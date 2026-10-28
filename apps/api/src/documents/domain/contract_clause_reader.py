@@ -15,9 +15,13 @@ from functools import cache
 from src.documents.domain.contract_clause_lexicon import (
     CLAUSE_TYPE_ORDER,
     CLAUSE_TYPE_TERMS,
+    OTHER_PERIOD_ADJECTIVES,
+    OTHER_PERIOD_NOUNS,
+    OTHER_PERIOD_REGEXES,
     PERCENT_ROLE_TERMS,
     PERCENT_ROLE_WINDOW,
     PERCENT_WORDS,
+    PERIOD_INTRODUCERS,
     Terms,
 )
 
@@ -172,6 +176,33 @@ def _roles_in_sentence(sentence: str, spans: list[tuple[int, int]]) -> list[str 
     return roles
 
 
+def _alternation(terms: Terms) -> str:
+    return "|".join(_term_pattern(term).pattern for term in _all_terms(terms))
+
+
+_PERIOD_INTRODUCER = "|".join(
+    re.escape(word) if word == "/" else _term_pattern(word).pattern for word in PERIOD_INTRODUCERS
+)
+_PERIOD_NOUN_RE = re.compile(
+    rf"(?:{_PERIOD_INTRODUCER})\s*(?:(?:cada|el|la|un|una|an?)\s+)?(?:{_alternation(OTHER_PERIOD_NOUNS)})"
+)
+# an adjective qualifies the figure only when it comes right behind it ("2% mensual"), not inside the
+# base ("0.1% of the monthly invoice")
+_PERIOD_ADJECTIVE_RE = re.compile(rf"\s*(?:{_alternation(OTHER_PERIOD_ADJECTIVES)})")
+_OTHER_PERIOD_REGEXES = tuple(re.compile(pattern) for pattern in OTHER_PERIOD_REGEXES)
+_PERIOD_REACH = 20  # characters after a figure searched for another period ("0.5% per week")
+
+
+def _period_follows(sentence: str, end: int, next_start: int) -> bool:
+    """Another period behind a figure: an adjective right after it, or "per week", "every 7 days"."""
+    region = sentence[end : min(end + _PERIOD_REACH, next_start)]
+    return bool(
+        _PERIOD_ADJECTIVE_RE.match(region)
+        or _PERIOD_NOUN_RE.search(region)
+        or any(pattern.search(region) for pattern in _OTHER_PERIOD_REGEXES)
+    )
+
+
 def penalty_rate_and_cap(text: str) -> tuple[float | None, float | None]:
     """(daily rate, cumulative cap) of a penalty clause, each as a fraction, or None.
 
@@ -179,7 +210,8 @@ def penalty_rate_and_cap(text: str) -> tuple[float | None, float | None]:
     advance payment in the next sentence is never taken for the penalty's cap. Inside it, each
     percentage takes the role of the term that claims it ("diario", "por día", "per day" for the
     daily rate; "tope", "máximo", "capped at", "not to exceed" for the cap). A percentage no term
-    claims is not assigned. The first figure found for a role wins.
+    claims is not assigned, and neither is one with another period right behind it ("0.5% per
+    week", "2% mensual", "por cada 7 días"). The first figure found for a role wins.
     """
     folded = fold(text)
     mentions = extract_percentages(text)
@@ -191,7 +223,12 @@ def penalty_rate_and_cap(text: str) -> tuple[float | None, float | None]:
         if not in_sentence or not any(p.search(sentence) for p in _penalty_patterns()):
             continue
         spans = [(m.start - sentence_start, m.end - sentence_start) for m in in_sentence]
-        for mention, role in zip(in_sentence, _roles_in_sentence(sentence, spans), strict=True):
+        roles = _roles_in_sentence(sentence, spans)
+        for index, role in enumerate(roles):
+            next_start = spans[index + 1][0] if index + 1 < len(spans) else len(sentence)
+            if role is not None and _period_follows(sentence, spans[index][1], next_start):
+                roles[index] = None  # "0.5% per week" is neither a daily rate nor a total cap
+        for mention, role in zip(in_sentence, roles, strict=True):
             if role == "DAILY" and daily is None:
                 daily = mention.value
             elif role == "CAP" and cap is None:

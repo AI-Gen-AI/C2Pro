@@ -296,3 +296,45 @@ def test_spanish_delivery_clauses_do_not_become_at_risk() -> None:
 
 def test_english_delivery_clauses_keep_their_existing_at_risk_status() -> None:
     assert _data("The final deadline is 30 June 2027.")["status"] == "at_risk"
+
+
+# ── a period right behind a figure (follow-up to #1127) ──────────────────────────────────────────
+# "For each day of delay ... a penalty of 0.5% per week" was read as a 0.5% DAILY rate. A figure with another
+# period right behind it ("per week", "mensual", "por cada 7 días", "per hour") is neither a daily rate nor a
+# total cap. An adjective counts only directly after the figure, a noun only after an introducer.
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "For each day of delay the Contractor shall pay a penalty of 0.5% per week.",
+            (None, None),
+        ),
+        ("For each day of delay a penalty of 0.5% weekly applies", (None, None)),
+        ("For each day of delay a penalty of 0.5% quarterly applies", (None, None)),
+        ("Por cada día de retraso se aplicará una penalización del 2% mensual.", (None, None)),
+        ("Por cada día de retraso penalización del 2% por cada 7 días", (None, None)),
+        ("Por cada día de retraso penalización del 2% cada 30 días", (None, None)),
+        ("Per each day of delay penalty of 2% per hour.", (None, None)),
+        ("Por cada día de retraso, la penalización será del 0,1% anual del precio", (None, None)),
+        ("Penalidad del 0,1% por día, tope del 10% semanal.", (0.001, None)),
+        ("Penalidad del 0,1% por día, tope del 10% por semana.", (0.001, None)),
+        ("Penalidad del 0,1% por día, que no excederá el 10% mensual.", (0.001, None)),
+        ("Por cada día de retraso penalización del 0,1% con tope del 10% anual", (0.001, None)),
+        # a period word that does not qualify the figure does not hide it
+        ("Penalidad de 0,1% por día de retraso, desde el mes 3.", (0.001, None)),
+        ("Penalidad diaria del 0,1% con tope del 10%, desde el año 2 del contrato.", (0.001, 0.10)),
+        ("Penalty of 0.1% of the monthly invoice per day of delay", (0.001, None)),
+        ("Delay penalty: 0.02% per day and 0.1% per week", (0.0002, None)),
+        ("Liquidated damages: 0.5% per week, capped at 10% of the price.", (None, 0.10)),
+        ("Penalidad diaria de 0,1% (equivalente a 3% mensual)", (0.001, None)),
+    ],
+)
+def test_another_period_right_behind_a_figure_hides_it(
+    text: str, expected: tuple[float | None, float | None]
+) -> None:
+    daily, cap = penalty_rate_and_cap(text)
+
+    assert daily == pytest.approx(expected[0])
+    assert cap == pytest.approx(expected[1])
