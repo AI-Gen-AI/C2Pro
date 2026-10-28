@@ -25,6 +25,7 @@ from src.documents.domain.models import (
     DocumentHistorySnapshot,
     DocumentStatus,
 )
+from src.documents.domain.revision_declarations import union_revision_declarations
 from src.documents.ports.document_repository import IDocumentRepository
 from src.temporal.adapters.persistence.current_revision_sql import (
     clause_in_current_scope,
@@ -421,14 +422,29 @@ class SqlAlchemyDocumentRepository(IDocumentRepository):
     async def update_metadata(
         self, tenant_id: UUID, document_id: UUID, document_metadata: JsonDict
     ) -> None:
+        # The whole-blob write below would drop revision-keyed declarations that another writer
+        # committed after this caller loaded its copy. Lock the row and read what is COMMITTED with a
+        # plain column query (never an ORM refresh: sessions run with autoflush off, so refreshing the
+        # mapped row would silently discard this caller's other pending changes, e.g. upload_status).
+        committed = (
+            await self.session.execute(
+                text(
+                    "SELECT document_metadata FROM documents "
+                    "WHERE id = :document_id AND tenant_id = :tenant_id FOR UPDATE"
+                ),
+                {"document_id": document_id, "tenant_id": tenant_id},
+            )
+        ).scalar_one_or_none()
         stmt = select(DocumentORM).where(
             DocumentORM.id == document_id,
-            DocumentORM.tenant_id == tenant_id
+            DocumentORM.tenant_id == tenant_id,
         )
         result = await self.session.execute(stmt)
         orm_document = result.scalar_one_or_none()
         if orm_document:
-            orm_document.document_metadata = document_metadata or {}
+            orm_document.document_metadata = union_revision_declarations(
+                document_metadata or {}, committed
+            )
             orm_document.updated_at = self._normalize_naive_utc(datetime.now(UTC))
 
     async def update_storage_path(self, tenant_id: UUID, document_id: UUID, storage_url: str) -> None:

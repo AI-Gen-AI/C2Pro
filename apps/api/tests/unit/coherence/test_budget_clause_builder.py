@@ -30,10 +30,13 @@ class _Result:
     def scalar_one_or_none(self) -> object | None:
         return self._rows[0] if self._rows else None
 
+    def first(self) -> object | None:
+        return self._rows[0] if self._rows else None
+
 
 class _Session:
-    """Answers, in order: stated total, contract total, budget currencies,
-    contract currencies. Unscripted queries find nothing."""
+    """Answers, in order: the budget declaration (total, currencies) of the trusted-current
+    revision, contract total, contract currencies. Unscripted queries find nothing."""
 
     def __init__(self, results: list[_Result]) -> None:
         self._results = results
@@ -54,9 +57,8 @@ async def test_each_side_keeps_its_denomination_and_mismatch_is_not_assessed() -
     )
 
     session = _Session([
-        _Result([Decimal("310.00")]),
+        _Result([(Decimal("310.00"), ["usd"])]),
         _Result([Decimal("280.00")]),
-        _Result([["usd"]]),
         _Result([["EUR"]]),
     ])
     [clause] = await build_budget_clauses(session, uuid4(), uuid4())  # type: ignore[arg-type]
@@ -73,9 +75,8 @@ async def test_same_denomination_on_both_sides_still_flags_negative_margin() -> 
     from src.coherence.cross_document import RULE_BUDGET_EXCEEDS_CONTRACT, cross_document_signals
 
     session = _Session([
-        _Result([Decimal("310.00")]),
+        _Result([(Decimal("310.00"), ["EUR"])]),
         _Result([Decimal("280.00")]),
-        _Result([["EUR"]]),
         _Result([["EUR"]]),
     ])
     [clause] = await build_budget_clauses(session, uuid4(), uuid4())  # type: ignore[arg-type]
@@ -87,7 +88,7 @@ async def test_same_denomination_on_both_sides_still_flags_negative_margin() -> 
 async def test_stated_and_contract_totals_reach_one_declared_total_clause() -> None:
     project_id = uuid4()
     tenant_id = uuid4()
-    session = _Session([_Result([Decimal("310.00")]), _Result([Decimal("280.00")])])
+    session = _Session([_Result([(Decimal("310.00"), None)]), _Result([Decimal("280.00")])])
 
     clauses = await build_budget_clauses(session, project_id, tenant_id)  # type: ignore[arg-type]
 
@@ -105,7 +106,7 @@ async def test_stated_and_contract_totals_reach_one_declared_total_clause() -> N
 @pytest.mark.asyncio
 async def test_budget_line_rules_are_not_evaluated_from_the_declared_total() -> None:
     """No line set is derived from ``stated_total``: the line rules stay unassessed."""
-    session = _Session([_Result([Decimal("310.00")]), _Result([Decimal("280.00")])])
+    session = _Session([_Result([(Decimal("310.00"), None)]), _Result([Decimal("280.00")])])
 
     [clause] = await build_budget_clauses(session, uuid4(), uuid4())  # type: ignore[arg-type]
 
@@ -131,7 +132,7 @@ async def test_no_stated_total_means_no_fabricated_budget_clause() -> None:
 @pytest.mark.asyncio
 async def test_stated_total_alone_is_kept_without_a_contract_total() -> None:
     project_id = uuid4()
-    session = _Session([_Result([Decimal("310.00")]), _Result([])])
+    session = _Session([_Result([(Decimal("310.00"), None)]), _Result([])])
 
     [clause] = await build_budget_clauses(session, project_id, uuid4())  # type: ignore[arg-type]
 

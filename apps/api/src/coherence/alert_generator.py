@@ -67,6 +67,7 @@ TEMPLATES: dict[str, str] = {
     "R6": "Falta una licencia o permiso requerido en el contrato.",
     "AUDIT_INCOMPLETE": "Coherence Score withheld: missing dimensions {missing_dimensions}. Supply schedule and/or budget to obtain a defensible score.",  # TBD-EN
     "ADV-BUDGET-EXHAUSTED": "Deep semantic analysis paused: tenant analysis budget exhausted. Resets {reset_date}.",
+    "ADV-SCHDEAD-PROVISIONAL": "Provisional schedule risk: the submitted schedule finishes after the contractual completion date; it is not an approved baseline.",
 }
 
 RULE_TITLES: dict[str, str] = {
@@ -108,6 +109,7 @@ RULE_TITLES: dict[str, str] = {
     "R6": "Permisos contractuales incompletos",
     "AUDIT_INCOMPLETE": "Audit incomplete — full triplet not provided",  # TBD-EN
     "ADV-BUDGET-EXHAUSTED": "Deep semantic analysis paused",
+    "ADV-SCHDEAD-PROVISIONAL": "Provisional schedule risk (not a confirmed breach)",
 }
 
 RULE_SEVERITIES: dict[str, AlertSeverity] = {
@@ -149,6 +151,7 @@ RULE_SEVERITIES: dict[str, AlertSeverity] = {
     "R6": AlertSeverity.MEDIUM,
     "AUDIT_INCOMPLETE": AlertSeverity.MEDIUM,
     "ADV-BUDGET-EXHAUSTED": AlertSeverity.LOW,
+    "ADV-SCHDEAD-PROVISIONAL": AlertSeverity.MEDIUM,
 }
 
 SUMMARY_TEMPLATES: dict[str, str] = {
@@ -390,6 +393,7 @@ class AlertGenerator:
             "DET-CRS-NEGMARGIN": "BUDGET",
             "DET-CRS-RISKCONT": "BUDGET",
             "DET-CRS-SCHDEAD": "SCHEDULE",
+            "ADV-SCHDEAD-PROVISIONAL": "SCHEDULE",
             "DET-TIM-STATUS": "SCHEDULE",
             "DET-TIM-DURATION": "SCHEDULE",
             "DET-TIM-GAP": "SCHEDULE",

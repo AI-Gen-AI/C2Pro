@@ -130,6 +130,10 @@ class EvaluationConfig:
     project_id: str | None = None
     # Project name/identity — enables the project-identity (LOC-MISMATCH) comparator.
     project_name: str | None = None
+    # The current schedule revision's observed planned finish (document/revision/row identity),
+    # for the contract-completion vs schedule-finish comparator. Project-level source, not clause
+    # evidence: it never counts as TIME coverage by itself.
+    schedule_planned_finish: dict[str, Any] | None = None
 
 
 # =============================================================================
@@ -239,6 +243,10 @@ class CoherenceGraphState:
     # schedule authority). Never evidence, never a category-wide veto: a category stays assessed
     # when other valid evidence covers it, and the limitation is reported beside it (PC-2a.3).
     evidence_limitations: dict[str, str] = field(default_factory=dict)
+
+    # Cross-document deviations backed only by an observation (e.g. a submitted schedule that is not an
+    # approved baseline). Never scored; format_output shows them as provisional advisories.
+    provisional_cross_findings: list[Any] = field(default_factory=list)
 
     # Scoring output
     all_signals: list[FindingSignal] = field(default_factory=list)
