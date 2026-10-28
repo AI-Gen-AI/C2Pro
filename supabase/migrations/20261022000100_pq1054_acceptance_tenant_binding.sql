@@ -42,6 +42,13 @@ BEGIN
         RETURN;
     END IF;
 
+    -- Remove only the implicit PUBLIC EXECUTE grant on the application RLS
+    -- helper. Supabase's explicit anon/authenticated/service_role grants remain.
+    -- The read-only acceptance login must not call any SECURITY DEFINER helper.
+    IF to_regprocedure('public.is_project_member(uuid)') IS NOT NULL THEN
+        EXECUTE 'REVOKE EXECUTE ON FUNCTION public.is_project_member(uuid) FROM PUBLIC';
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1
           FROM pg_catalog.pg_roles
@@ -183,6 +190,8 @@ BEGIN
       FROM pg_catalog.pg_class AS c
       JOIN pg_catalog.pg_namespace AS ns ON ns.oid = c.relnamespace
      WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+       -- SELECT on an object is not executable without schema USAGE.
+       AND pg_catalog.has_schema_privilege(role_oid, ns.oid, 'USAGE')
        AND NOT (ns.nspname = 'c2pro_security'
                 AND c.relname = 'acceptance_tenant_binding')
        AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
@@ -228,6 +237,8 @@ BEGIN
       FROM pg_catalog.pg_proc AS p
       JOIN pg_catalog.pg_namespace AS ns ON ns.oid = p.pronamespace
      WHERE p.prosecdef
+       -- event_trigger functions cannot be called directly by this role.
+       AND p.prorettype <> 'event_trigger'::regtype
        AND ns.nspname NOT IN ('pg_catalog', 'information_schema')
        AND pg_catalog.has_function_privilege(role_oid, p.oid, 'EXECUTE')
        AND pg_catalog.has_schema_privilege(role_oid, ns.oid, 'USAGE');

@@ -238,6 +238,9 @@ async def approve_document(
     await db.commit()
 
 
+_trust = approve_document  # name used by the main-line revision-authority tests
+
+
 async def _scenario(
     db: AsyncSession, worker: Any, user: Any, *, contract: list[str], schedule: list[list[Any]],
     approve_contract: bool = False,

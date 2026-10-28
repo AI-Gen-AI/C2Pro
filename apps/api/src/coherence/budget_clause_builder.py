@@ -75,7 +75,8 @@ _BUDGET_DECLARATION_SQL = text(f"""
       AND (cur.trusted OR NOT EXISTS (
             SELECT 1 FROM public.document_artifacts pa
             WHERE pa.document_id = d.id AND pa.tenant_id = d.tenant_id
-              AND pa.document_revision_id = cur.revision_id
+              AND (pa.document_revision_id = cur.revision_id
+                   OR (pa.document_revision_id IS NULL AND cur.single_revision))
               AND pa.trust_state = 'proposed'))
       AND e.entry->>'revision_id' = cur.revision_id::text
       AND jsonb_typeof(e.entry->'total') = 'number'
