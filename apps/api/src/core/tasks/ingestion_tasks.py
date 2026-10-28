@@ -60,6 +60,10 @@ from src.documents.application.revision_clauses import persist_revision_clauses
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
 )
+from src.documents.domain.contract_clause_reader import (
+    infer_clause_type_name,
+    penalty_rate_and_cap,
+)
 from src.documents.domain.models import Clause, ClauseType, DocumentStatus, DocumentType
 from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.rag_ingestion_service import RagIngestionOutcome
@@ -213,18 +217,9 @@ def _build_processing_details(extraction_summary: dict[str, Any]) -> dict[str, A
 
 
 def _infer_contract_clause_type(text: str) -> ClauseType:
-    lowered = text.lower()
-    if any(term in lowered for term in ["penalt", "liquidated damages", "delay"]):
-        return ClauseType.PENALTY
-    if any(term in lowered for term in ["payment", "invoice", "certified"]):
-        return ClauseType.PAYMENT
-    if any(term in lowered for term in ["warranty", "defect", "liability"]):
-        return ClauseType.WARRANTY
-    if any(term in lowered for term in ["scope", "includes", "works", "deliverable"]):
-        return ClauseType.SCOPE
-    if any(term in lowered for term in ["milestone", "deadline", "completion", "schedule"]):
-        return ClauseType.DELIVERY
-    return ClauseType.OTHER
+    """Clause type from the per-language term tables (``contract_clause_lexicon``), not from code."""
+    name = infer_clause_type_name(text)
+    return ClauseType[name] if name else ClauseType.OTHER
 
 
 def _parse_money_number(raw: str) -> float | None:
@@ -361,16 +356,6 @@ def _contract_currency_evidence(text: str, parsed_text: str) -> tuple[str, str]:
     return _detect_contract_currency(f"{text} {parsed_text}"), "default"
 
 
-def _extract_percentage(text: str) -> float | None:
-    match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
-    if not match:
-        return None
-    try:
-        return float(match.group(1)) / 100.0
-    except ValueError:
-        return None
-
-
 def _extract_days(text: str) -> int | None:
     match = re.search(r"(\d+)\s*(?:days?|días)", text, re.IGNORECASE)
     if not match:
@@ -466,18 +451,19 @@ def _build_contract_clause_data(text: str, parsed_text: str) -> dict[str, Any]:
         data["total_amount"] = amount
 
     if clause_type == ClauseType.PENALTY:
-        pct = _extract_percentage(text)
-        if pct is not None:
-            data["daily_penalty_pct"] = pct
-            data["penalty_cap_pct"] = pct
+        daily_rate, cap = penalty_rate_and_cap(text)
+        if daily_rate is not None:
+            data["daily_penalty_pct"] = daily_rate
+        if cap is not None:
+            data["penalty_cap_pct"] = cap
     if clause_type == ClauseType.PAYMENT:
         days = _extract_days(text)
         if days is not None:
             data["payment_term_days"] = days
     lowered = text.lower()
-    if clause_type == ClauseType.DELIVERY or any(
-        term in lowered for term in ["schedule", "deadline", "milestone", "completion"]
-    ):
+    # Unchanged on purpose (English keywords only): classifying Spanish delivery clauses as DELIVERY
+    # must not start stamping every "plazo"/"hito" clause as at_risk and manufacture TIME findings.
+    if any(term in lowered for term in ["schedule", "deadline", "milestone", "completion"]):
         data["status"] = "at_risk"
     if clause_type == ClauseType.WARRANTY:
         months = _extract_months(text)
