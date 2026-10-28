@@ -26,6 +26,10 @@ from fastapi import UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.analysis.adapters.persistence.document_artifact_repository import (
+    SqlAlchemyDocumentArtifactRepository,
+)
+from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 from src.coherence.schedule_clause_builder import load_schedule_planned_finish
 from src.core.auth.models import SubscriptionPlan, Tenant
@@ -211,6 +215,23 @@ async def _metadata(db: AsyncSession, document_id: UUID) -> dict[str, Any]:
     return dict(row.document_metadata or {})
 
 
+async def _trust(
+    db: AsyncSession, user: Any, project_id: UUID, document: Document, revision: Any
+) -> None:
+    """Approval: a TRUSTED artifact bound to exactly ``revision`` (the state a HITL approval leaves)."""
+    await SqlAlchemyDocumentArtifactRepository(db).save(
+        DocumentArtifact(
+            document_id=str(document.id),
+            document_revision_id=str(revision.revision_id),
+            doc_type="contract",
+            extracted_risks=[RiskItem(title="r", description="d")],
+        ),
+        project_id=project_id,
+        tenant_id=user.tenant_id,
+    )
+    await db.commit()
+
+
 async def _scenario(
     db: AsyncSession, worker: Any, user: Any, *, contract: list[str], schedule: list[list[Any]]
 ) -> tuple[UUID, Document, Any, Document, Any]:
@@ -339,9 +360,12 @@ async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
         get_clauses_from_rag,
     )
 
-    project_id, contract_doc, *_ = await _scenario(
+    project_id, contract_doc, contract_rev, *_ = await _scenario(
         db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
     )
+    # A clause only earns a navigable document link once its contract is APPROVED (a TRUSTED artifact
+    # bound to the revision): the mirror fails closed on unverified document associations (#1111).
+    await _trust(db, test_user, project_id, contract_doc, contract_rev)
     result = await _evaluate(db, test_user, project_id)
     [advisory] = _schdead(result)
     clauses = await get_clauses_from_rag(db, project_id, test_user.tenant_id)
