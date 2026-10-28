@@ -541,3 +541,58 @@ def _on_time_contract() -> bytes:
             PENALTY_CLAUSE,
         ]
     )
+
+
+async def test_a_project_whose_only_contract_awaits_approval_gets_an_explicit_state_not_a_404(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """#1138: the document exists, it is just not canonical input yet. No score, no finding, no write."""
+    project_id = await _project(db, test_user.tenant_id)
+    contract, revision = await _upload_and_ingest(
+        db,
+        worker,
+        test_user,
+        project_id,
+        filename="contract.docx",
+        content=_other_contract(),
+        document_type=DocumentType.CONTRACT,
+    )
+    await _propose(db, test_user, project_id, contract, revision)
+
+    result = await _evaluate(db, test_user, project_id)
+
+    assert result.overall_score is None and result.alerts == []
+    assert result.score_reason == "contract_pending_approval"
+    assert result.score_missing_dimensions
+    assert (await _alert_count(db, project_id), await _score_rows(db, project_id)) == (0, 0)
+
+
+async def test_a_project_with_nothing_uploaded_still_answers_404(
+    db: AsyncSession, test_user: Any
+) -> None:
+    from fastapi import HTTPException
+
+    project_id = await _project(db, test_user.tenant_id)
+
+    with pytest.raises(HTTPException) as caught:
+        await _evaluate(db, test_user, project_id)
+
+    assert caught.value.status_code == 404
+
+
+async def _alert_count(db: AsyncSession, project_id: UUID) -> int:
+    return int(
+        (
+            await db.execute(text("SELECT count(*) FROM alerts WHERE project_id = :p"), {"p": project_id})
+        ).scalar_one()
+    )
+
+
+async def _score_rows(db: AsyncSession, project_id: UUID) -> int:
+    return int(
+        (
+            await db.execute(
+                text("SELECT count(*) FROM coherence_results WHERE project_id = :p"), {"p": project_id}
+            )
+        ).scalar_one()
+    )

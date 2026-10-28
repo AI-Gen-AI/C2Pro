@@ -792,6 +792,49 @@ async def _documents_excluded_from_evaluation(db: AsyncSession, project_id: UUID
     return bool(count)
 
 
+CONTRACT_PENDING_APPROVAL = "contract_pending_approval"
+
+# Contract documents that are not canonical input: awaiting a human decision (or without a usable
+# current revision). Only the contract is asked for; other types keep their own rules.
+_CONTRACTS_AWAITING_APPROVAL_SQL = text(f"""
+    SELECT count(*)
+    FROM documents d
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'contract'
+      AND NOT cur.canonical
+""")
+
+
+async def _contracts_awaiting_approval(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
+    count = await db.scalar(
+        _CONTRACTS_AWAITING_APPROVAL_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return bool(count)
+
+
+def _contract_pending_approval_result(
+    include_diagnostics: bool,
+) -> CoherenceResult | EnrichedCoherenceResult:
+    """Explicit state for a project whose only evidence is a contract awaiting approval."""
+    missing = sorted(_CATEGORY_KEYWORDS)
+    limitation = {"CONTRACT": "The contract is awaiting approval; nothing was evaluated."}
+    if include_diagnostics:
+        return EnrichedCoherenceResult(
+            overall_score=None,
+            score_reason=CONTRACT_PENDING_APPROVAL,
+            score_missing_dimensions=missing,
+            evidence_limitations=limitation,
+        )
+    return CoherenceResult(
+        overall_score=None,
+        alerts=[],
+        score_reason=CONTRACT_PENDING_APPROVAL,
+        score_missing_dimensions=missing,
+    )
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
@@ -1058,6 +1101,13 @@ async def evaluate_project_coherence(
             db, payload.project_id, current_user.tenant_id, payload.max_chunks
         )
         if not clauses:
+            pending_contracts = await _contracts_awaiting_approval(
+                db, payload.project_id, current_user.tenant_id
+            )
+            if pending_contracts:
+                # The document exists; it is not canonical input yet. That is a state of the
+                # project, not "nothing was uploaded": no score, no finding, no alert touched.
+                return _contract_pending_approval_result(include_diagnostics)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No document clauses found. Please upload and parse documents first.",
