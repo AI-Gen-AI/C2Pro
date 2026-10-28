@@ -42,6 +42,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.current_revision_sql import (
     chunk_in_current_scope,
     clause_in_current_scope,
+    contract_input_in_current_scope,
     current_chunk_join,
     current_revision_lateral,
     parsed_text_in_current_scope,
@@ -264,7 +265,12 @@ _CLAUSES_PER_CATEGORY = 10
 _CURRENT_CLAUSE_JOIN = (
     f"CROSS JOIN LATERAL {current_revision_lateral('c.document_id', 'c.tenant_id')} AS cur"
 )
-_CLAUSE_IN_CURRENT_SCOPE = clause_in_current_scope("c", "cur")
+# A contract that still awaits approval (a PROPOSED artifact pending) is not canonical input: its clauses
+# feed neither the rules nor the completion-deadline comparison (#1133). Other document types keep the
+# plain current-revision scope.
+_CLAUSE_IN_CURRENT_SCOPE = (
+    f"{clause_in_current_scope('c', 'cur')} AND {contract_input_in_current_scope('d', 'cur')}"
+)
 _CURRENT_DOCUMENT_JOIN = (
     f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur"
 )
@@ -492,10 +498,12 @@ async def _get_rag_chunk_clauses(
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
         JOIN projects p ON dc.project_id = p.id
+        JOIN documents d ON d.id = dc.document_id
         {current_chunk_join("dc")}
         WHERE dc.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {chunk_in_current_scope("dc", "cur")}
+          AND {contract_input_in_current_scope("d", "cur")}
         ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
@@ -540,6 +548,7 @@ async def _get_parsed_text_fallback_clauses(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {parsed_text_in_current_scope("d", "cur")}
+          AND {contract_input_in_current_scope("d", "cur")}
           AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
         ORDER BY d.created_at DESC
     """)
@@ -759,6 +768,30 @@ async def _verified_persisted_clause_documents(
     return {row.id: row.document_id for row in rows}
 
 
+# A document the evaluation does not read -- it has no usable current revision (unresolved: several revisions
+# and none approved, with or without a pending proposal), or it is a contract/budget that is not canonical
+# input -- is NOT evaluated. "Not evaluated" is never "resolved": while one exists the evaluation is
+# incomplete and must not auto-resolve alerts (B1 spec 7.4, #1133). A WBS source is never analysed, so a second
+# revision of it can never be approved and is not counted. Coarse on purpose: it blocks resolving
+# for the whole project, which fails closed (an alert stays open until the revision question is settled).
+_DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL = text(f"""
+    SELECT count(*)
+    FROM documents d
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
+      AND ((NOT cur.resolved AND d.document_type::text <> 'wbs')
+           OR (d.document_type::text IN ('contract', 'budget') AND NOT cur.canonical))
+""")
+
+
+async def _documents_excluded_from_evaluation(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
+    count = await db.scalar(
+        _DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return bool(count)
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
@@ -766,6 +799,7 @@ async def _mirror_coherence_alerts_to_alerts_table(
     tenant_id: UUID,
     alerts: Sequence[Any],
     clauses: Sequence[Clause] = (),
+    evaluation_complete: bool = True,
 ) -> _CoherenceAlertReconciliation:
     """Reconcile findings and return the durable disposition truth for this transaction.
 
@@ -797,7 +831,8 @@ async def _mirror_coherence_alerts_to_alerts_table(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
-        auto_resolve=True,
+        auto_resolve=evaluation_complete
+        and not await _documents_excluded_from_evaluation(db, project_id, tenant_id),
         commit=False,
     )
     finding_keys = tuple(service.finding_key(payload) for payload in payloads)
@@ -1065,6 +1100,7 @@ async def evaluate_project_coherence(
     # The schedule's observed planned finish (with its document/revision/row identity) for the
     # contract-completion comparator. Best-effort: a failure leaves the comparison absent.
     schedule_planned_finish: dict[str, Any] | None = None
+    schedule_assessable = True
     if payload.project_id:
         try:
             schedule_planned_finish = await load_schedule_planned_finish(
@@ -1072,6 +1108,11 @@ async def evaluate_project_coherence(
             )
         except Exception:
             logger.warning("coherence_schedule_planned_finish_load_failed", exc_info=True)
+            schedule_assessable = False
+        # A schedule the comparison could not read (stale revision stamp, several schedules, malformed
+        # observation) was not evaluated: that is not "fixed", so nothing may be auto-resolved.
+        if isinstance(schedule_planned_finish, dict) and "reason" in schedule_planned_finish:
+            schedule_assessable = False
 
     # Create evaluation config
     config = EvaluationConfig(
@@ -1109,6 +1150,7 @@ async def evaluate_project_coherence(
             tenant_id=current_user.tenant_id,
             alerts=enriched_result.alerts,
             clauses=clauses,
+            evaluation_complete=schedule_assessable,
         )
         if isinstance(reconciliation, _CoherenceAlertReconciliation):
             enriched_result = _apply_disposition_aware_rescore(

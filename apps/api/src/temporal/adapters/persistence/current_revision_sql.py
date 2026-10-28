@@ -4,7 +4,12 @@
 for one document of one tenant:
 
 * ``revision_id`` -- the current revision (NULL when unresolved or without lineage);
-* ``resolved`` / ``trusted`` / ``single_revision`` -- see ``CurrentRevisionStatus``.
+* ``resolved`` / ``trusted`` / ``single_revision`` -- see ``CurrentRevisionStatus``;
+* ``canonical`` -- ``trusted``, or resolved through the single-revision fallback with no proposal
+  pending for it (a legacy TRUSTED artifact without a revision binding stays canonical when a
+  re-analysis is proposed). Readers that feed CANONICAL findings or the score (contract totals, deadlines and
+  clauses; the budget declaration) use it: a PROPOSED artifact never moves canonical alerts (ADR-026,
+  B1 spec §3). Readers that must show or retrieve what a human still has to approve use ``resolved``.
 
 The ``*_IN_CURRENT_SCOPE`` predicates then decide whether a clause row, a RAG
 chunk or a document's parsed text belongs to that current revision. A row bound
@@ -40,7 +45,8 @@ def current_revision_lateral(document: str, tenant: str) -> str:
             END AS revision_id,
             ({trusted} OR {single}) AS resolved,
             {trusted} AS trusted,
-            (l.revisions <= 1) AS single_revision
+            (l.revisions <= 1) AS single_revision,
+            ({trusted} OR ({single} AND (t.any_trusted OR NOT t.any_proposed))) AS canonical
         FROM (
             SELECT count(*) AS revisions, (array_agg(r.revision_id))[1] AS only_revision
             FROM public.document_revisions r
@@ -54,7 +60,10 @@ def current_revision_lateral(document: str, tenant: str) -> str:
                     AS trusted_revision,
                 (COALESCE(bool_or(a.trust_state = 'rejected'), false)
                  AND NOT COALESCE(bool_or(a.trust_state IN ('proposed', 'trusted')), false))
-                    AS rejected_only
+                    AS rejected_only,
+                COALESCE(bool_or(a.trust_state = 'proposed'), false) AS any_proposed,
+                COALESCE(bool_or(a.trust_state = 'trusted' AND a.lifecycle_status = 'active'), false)
+                    AS any_trusted
             FROM public.document_artifacts a
             WHERE a.document_id = {document} AND a.tenant_id = {tenant}
         ) AS t
@@ -71,6 +80,20 @@ def clause_in_current_scope(clause: str, current: str) -> str:
               AND bound.tenant_id = {clause}.tenant_id
               AND bound.revision_id = {current}.revision_id))
     )"""
+
+
+def canonical_clause_in_current_scope(clause: str, current: str) -> str:
+    """Predicate: clause row ``clause`` is canonical input (see ``canonical`` above)."""
+    return f"{current}.canonical AND {clause_in_current_scope(clause, current)}"
+
+
+def contract_input_in_current_scope(document: str, current: str) -> str:
+    """Predicate: a document of any type is read, a contract only when it is canonical input.
+
+    Only the contract carries the pending-proposal rule: a schedule's authority is its baseline approval
+    (ADR-029/031), a budget has its own declaration rule, and a specification is read as submitted.
+    """
+    return f"({document}.document_type::text <> 'contract' OR {current}.canonical)"
 
 
 def stamp_in_current_scope(stamp: str, current: str) -> str:
@@ -104,7 +127,9 @@ def current_chunk_join(chunk: str, alias: str = "cur") -> str:
 
 
 __all__ = [
+    "canonical_clause_in_current_scope",
     "chunk_in_current_scope",
+    "contract_input_in_current_scope",
     "clause_in_current_scope",
     "current_chunk_join",
     "current_revision_lateral",

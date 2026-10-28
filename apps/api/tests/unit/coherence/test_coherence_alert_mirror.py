@@ -69,6 +69,10 @@ class _FakeSession:
         self.executed.append((statement, params))
         return _FakeExecuteResult([])
 
+    async def scalar(self, statement: object, params: object | None = None) -> int:
+        """The auto-resolve guard (documents excluded from the evaluation): none here."""
+        return 0
+
     async def scalars(self, statement: object) -> _FakeScalarResult:
         return _FakeScalarResult([])
 
