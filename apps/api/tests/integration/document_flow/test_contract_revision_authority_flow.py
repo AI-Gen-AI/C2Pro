@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.budget_clause_builder import _CONTRACT_CURRENCIES_SQL, load_contract_total
 from src.coherence.router import (
+    _documents_excluded_from_evaluation,
     _get_parsed_text_fallback_clauses,
     _get_rag_chunk_clauses,
     _mirror_coherence_alerts_to_alerts_table,
@@ -32,6 +33,9 @@ from src.coherence.router import (
 )
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentType
+from src.temporal.adapters.persistence.document_revision_repository import (
+    SqlAlchemyDocumentRevisionRepository,
+)
 from tests.integration.document_flow.test_budget_revision_authority_flow import (
     _propose,
     _reupload_and_ingest,
@@ -399,6 +403,94 @@ async def test_a_new_revision_without_any_artifact_does_not_auto_resolve_its_ale
     before = await _alert_row(db, project_id)
 
     await _reupload_and_ingest(db, worker, test_user, contract, _revised_contract())
+    second = await _evaluate(db, test_user, project_id)
+
+    assert second.overall_score is not None
+    assert await _alert_row(db, project_id) == before
+
+
+def _wbs_xlsx(version: int) -> bytes:
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _xlsx
+
+    return _xlsx(LATE_SCHEDULE[: len(LATE_SCHEDULE) - version + 1])
+
+
+async def test_a_reuploaded_wbs_source_never_blocks_the_resolving_of_alerts(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """A WBS source is never analysed, so its second revision can never be approved: it is not "excluded"."""
+    from io import BytesIO
+
+    from fastapi import UploadFile
+
+    from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+        SqlAlchemyDocumentRepository,
+    )
+    from src.documents.application.reupload_document_use_case import ReuploadDocumentUseCase
+    from src.documents.application.upload_document_use_case import UploadDocumentUseCase
+    from src.temporal.adapters.persistence.project_event_repository import (
+        SqlAlchemyProjectEventRepository,
+    )
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _ProjectRepo
+
+    project_id = await _project(db, test_user.tenant_id)
+    revisions = SqlAlchemyDocumentRevisionRepository(db)
+    wbs = await UploadDocumentUseCase(
+        document_repository=SqlAlchemyDocumentRepository(db),
+        storage_service=worker,
+        project_repository=_ProjectRepo(),  # type: ignore[arg-type]
+        revision_repository=revisions,
+        event_repository=SqlAlchemyProjectEventRepository(db),
+    ).execute(
+        project_id=project_id,
+        file=UploadFile(filename="wbs.xlsx", file=BytesIO(_wbs_xlsx(1))),
+        document_type=DocumentType.WBS,
+        user_id=test_user.id,
+        tenant_id=test_user.tenant_id,
+    )
+    await ReuploadDocumentUseCase(
+        document_repository=SqlAlchemyDocumentRepository(db),
+        revision_repository=revisions,
+        storage_service=worker,
+        event_repository=SqlAlchemyProjectEventRepository(db),
+    ).execute(
+        tenant_id=test_user.tenant_id,
+        document_id=wbs.id,
+        file_content=_wbs_xlsx(2),
+        user_id=test_user.id,
+    )
+    await db.commit()
+    assert len(await revisions.list_lineage(wbs.id, test_user.tenant_id)) == 2
+
+    assert await _documents_excluded_from_evaluation(db, project_id, test_user.tenant_id) is False
+
+
+async def test_a_schedule_whose_observation_is_stale_does_not_auto_resolve_its_alerts(
+    db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The approved schedule V1 raised the deadline alert; V2 is ingested (not approved) and overwrites the
+    observation, so the comparison is not assessable for V1: not evaluated, hence not resolved (round 2, P2)."""
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _xlsx
+
+    project_id, _, _ = await _scored_project(db, worker, test_user, monkeypatch)
+    schedule_id = (
+        await db.execute(
+            text(
+                "SELECT id FROM documents WHERE project_id = :p AND document_type::text = 'schedule'"
+            ),
+            {"p": project_id},
+        )
+    ).scalar_one()
+    schedule = await db.get(DocumentORM, schedule_id)
+    [first_revision] = await SqlAlchemyDocumentRevisionRepository(db).list_lineage(
+        schedule_id, test_user.tenant_id
+    )
+    await _trust(db, test_user, project_id, schedule, first_revision)
+    await _evaluate(db, test_user, project_id)
+    before = await _alert_row(db, project_id)
+    assert before["status"].lower() == "open"
+
+    await _reupload_and_ingest(db, worker, test_user, schedule, _xlsx(LATE_SCHEDULE[:-1]))
     second = await _evaluate(db, test_user, project_id)
 
     assert second.overall_score is not None
