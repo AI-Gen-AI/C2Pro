@@ -42,6 +42,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.current_revision_sql import (
     chunk_in_current_scope,
     clause_in_current_scope,
+    contract_input_in_current_scope,
     current_chunk_join,
     current_revision_lateral,
     parsed_text_in_current_scope,
@@ -264,7 +265,12 @@ _CLAUSES_PER_CATEGORY = 10
 _CURRENT_CLAUSE_JOIN = (
     f"CROSS JOIN LATERAL {current_revision_lateral('c.document_id', 'c.tenant_id')} AS cur"
 )
-_CLAUSE_IN_CURRENT_SCOPE = clause_in_current_scope("c", "cur")
+# A contract that still awaits approval (a PROPOSED artifact pending) is not canonical input: its clauses
+# feed neither the rules nor the completion-deadline comparison (#1133). Other document types keep the
+# plain current-revision scope.
+_CLAUSE_IN_CURRENT_SCOPE = (
+    f"{clause_in_current_scope('c', 'cur')} AND {contract_input_in_current_scope('d', 'cur')}"
+)
 _CURRENT_DOCUMENT_JOIN = (
     f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur"
 )
@@ -492,10 +498,12 @@ async def _get_rag_chunk_clauses(
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
         JOIN projects p ON dc.project_id = p.id
+        JOIN documents d ON d.id = dc.document_id
         {current_chunk_join("dc")}
         WHERE dc.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {chunk_in_current_scope("dc", "cur")}
+          AND {contract_input_in_current_scope("d", "cur")}
         ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
@@ -540,6 +548,7 @@ async def _get_parsed_text_fallback_clauses(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {parsed_text_in_current_scope("d", "cur")}
+          AND {contract_input_in_current_scope("d", "cur")}
           AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
         ORDER BY d.created_at DESC
     """)
