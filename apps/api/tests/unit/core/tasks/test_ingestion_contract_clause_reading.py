@@ -18,18 +18,16 @@ from src.coherence.rules_engine.base import ApplicabilityState
 from src.coherence.rules_engine.deterministic import PenaltyCapEvaluator
 from src.core.tasks.ingestion_tasks import (
     _build_contract_clause_data,
-    _extract_percentage,
     _infer_contract_clause_type,
 )
+from src.documents.domain.contract_clause_reader import extract_percentages, penalty_rate_and_cap
 from src.documents.domain.models import ClauseType
 
 ES_PENALTY = (
     "Penalizaciones. Por demora en la entrega de las obras se aplicará una penalización del "
     "0,1% diario del precio del contrato, con un tope del 10% del precio del contrato."
 )
-EN_PENALTY = (
-    "Liquidated damages for delay shall accrue at 0.1% per day, capped at 10% of the contract price."
-)
+EN_PENALTY = "Liquidated damages for delay shall accrue at 0.1% per day, capped at 10% of the contract price."
 
 
 def _data(text: str) -> dict:
@@ -58,14 +56,18 @@ def test_daily_rate_and_cap_are_extracted_separately(text: str) -> None:
 
 
 def test_a_clause_with_only_a_daily_rate_does_not_invent_a_cap() -> None:
-    data = _data("Penalizaciones. El retraso en la entrega se penalizará con un 0,1% diario del precio del contrato.")
+    data = _data(
+        "Penalizaciones. El retraso en la entrega se penalizará con un 0,1% diario del precio del contrato."
+    )
 
     assert data["daily_penalty_pct"] == pytest.approx(0.001)
     assert "penalty_cap_pct" not in data
 
 
 def test_a_clause_with_only_a_cap_does_not_invent_a_daily_rate() -> None:
-    data = _data("Penalizaciones. La demora se penalizará con un tope del 10% del precio del contrato.")
+    data = _data(
+        "Penalizaciones. La demora se penalizará con un tope del 10% del precio del contrato."
+    )
 
     assert data["penalty_cap_pct"] == pytest.approx(0.10)
     assert "daily_penalty_pct" not in data
@@ -91,7 +93,7 @@ def test_an_unlabelled_percentage_is_not_guessed_as_rate_or_cap() -> None:
     ],
 )
 def test_decimal_comma_and_point_are_read_by_context(text: str, expected: float) -> None:
-    assert _extract_percentage(text) == pytest.approx(expected)
+    assert extract_percentages(text)[0].value == pytest.approx(expected)
 
 
 # ── classification, Spanish and English ──────────────────────────────────────────────────────────
@@ -111,14 +113,26 @@ def test_decimal_comma_and_point_are_read_by_context(text: str, expected: float)
         ("La factura se abonará a 30 días desde su recepción.", ClauseType.PAYMENT),
         ("Payment shall be made against each certified invoice.", ClauseType.PAYMENT),
         # WARRANTY
-        ("Garantía. El plazo de garantía será de 24 meses desde la recepción.", ClauseType.WARRANTY),
+        (
+            "Garantía. El plazo de garantía será de 24 meses desde la recepción.",
+            ClauseType.WARRANTY,
+        ),
         ("El contratista responderá de los defectos y vicios ocultos.", ClauseType.WARRANTY),
-        ("Responsabilidad. La responsabilidad total del contratista queda limitada al 100% del precio.", ClauseType.WARRANTY),
+        (
+            "Responsabilidad. La responsabilidad total del contratista queda limitada al 100% del precio.",
+            ClauseType.WARRANTY,
+        ),
         ("The Contractor warrants the works against defects.", ClauseType.WARRANTY),
         ("Total liability is limited to the contract price.", ClauseType.WARRANTY),
         # SCOPE
-        ("Alcance. El contrato comprende el suministro y montaje de los equipos.", ClauseType.SCOPE),
-        ("Objeto. El contratista ejecutará las obras de urbanización descritas en el proyecto.", ClauseType.SCOPE),
+        (
+            "Alcance. El contrato comprende el suministro y montaje de los equipos.",
+            ClauseType.SCOPE,
+        ),
+        (
+            "Objeto. El contratista ejecutará las obras de urbanización descritas en el proyecto.",
+            ClauseType.SCOPE,
+        ),
         ("The scope includes all deliverables listed in Annex A.", ClauseType.SCOPE),
         # DELIVERY
         ("Plazo. El hito de entrega parcial será el 30 de junio de 2027.", ClauseType.DELIVERY),
@@ -138,7 +152,9 @@ def test_accents_and_case_do_not_change_the_classification() -> None:
     assert _infer_contract_clause_type("garantia de 24 meses") is ClauseType.WARRANTY
 
 
-@pytest.mark.parametrize("text", ["Frameworks and networks are described.", "El capital social asciende a 3.000 euros."])
+@pytest.mark.parametrize(
+    "text", ["Frameworks and networks are described.", "El capital social asciende a 3.000 euros."]
+)
 def test_terms_match_whole_words_not_arbitrary_substrings(text: str) -> None:
     # "frameworks"/"networks" contain "works"; "capital" starts with "cap": neither is a clause type or a cap.
     assert _infer_contract_clause_type(text) is ClauseType.OTHER
@@ -171,3 +187,112 @@ def test_spanish_excessive_penalty_is_flagged_with_the_right_numbers() -> None:
     assert signal is not None
     assert clause.data["daily_penalty_pct"] == pytest.approx(0.005)
     assert clause.data["penalty_cap_pct"] == pytest.approx(0.25)
+
+
+# ── review findings (independent review of this fix) ─────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # a role term sits BETWEEN the two percentages: each term claims only its nearest number
+        "La penalización diaria será del 0,1% y el tope del 10%.",
+        "Daily penalty shall be 0.1% and the cap shall be 10%.",
+        "Liquidated damages are not to exceed 10% and accrue at 0.1% per day.",
+        "La demora se penalizará con 0,1% al día, no superará el 10% del precio.",
+        "Penalización por demora: 0,1% diario, hasta un 10% del precio del contrato.",
+    ],
+)
+def test_a_role_term_between_two_percentages_does_not_swap_the_roles(text: str) -> None:
+    assert penalty_rate_and_cap(text) == (pytest.approx(0.001), pytest.approx(0.10))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Por demora, penalización de 0,1% diario. La responsabilidad total queda limitada al 100% del precio.",
+        "Penalty for delay of 0.1% per day. Total liability shall not exceed 100% of the price.",
+        "Por demora 0,1% diario. Retención del 5% de cada pago. Tope del 10%.",
+        "Penalty for delay of 0.1% per day. Advance payment of 20% is repaid; maximum 10%.",
+        # one sentence: "limited to" marks a liability limit, not a penalty cap
+        "Por demora se aplicará 0,1% diario y la responsabilidad total queda limitada al 100% del precio.",
+    ],
+)
+def test_a_liability_limit_or_retention_is_never_taken_for_the_penalty_cap(text: str) -> None:
+    daily, cap = penalty_rate_and_cap(text)
+
+    assert daily == pytest.approx(0.001)
+    assert cap is None
+
+
+def test_a_weekly_rate_is_not_a_daily_rate_and_the_cap_survives() -> None:
+    daily, cap = penalty_rate_and_cap(
+        "Liquidated damages: 0.5% per week, capped at 10% of the price."
+    )
+
+    assert daily is None
+    assert cap == pytest.approx(0.10)
+
+
+def test_an_unrelated_maximum_does_not_make_a_percentage_a_cap() -> None:
+    daily, cap = penalty_rate_and_cap(
+        "Penalización del 10% con un máximo de 90 días y un 0,1% diario."
+    )
+
+    assert daily == pytest.approx(0.001)
+    assert cap is None
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("10,5.5%", []),
+        ("0.5.2%", []),
+        ("1.000.000%", []),
+        ("1.000%", [0.01]),  # documented: a lone mark in a percentage is the decimal mark
+        ("5 per cent", [0.05]),
+        ("10 por cien", [0.10]),
+        ("10 percentage", []),
+        ("entre el 5 y el 10%", [0.10]),
+    ],
+)
+def test_percentage_tokens_are_validated(text: str, expected: list[float]) -> None:
+    assert [m.value for m in extract_percentages(text)] == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Cláusula penal por incumplimiento de plazos.", ClauseType.PENALTY),
+        ("Se aplicará una multa del 1% por incidencia.", ClauseType.PENALTY),
+        ("Penalisation for late completion.", ClauseType.PENALTY),
+        ("Prepayment of 20% is due on signature.", ClauseType.PAYMENT),
+        ("El precio se abonará mediante certificaciones mensuales.", ClauseType.PAYMENT),
+        ("Final completion and rescheduled milestones.", ClauseType.DELIVERY),
+    ],
+)
+def test_classifier_keeps_the_english_inflections_the_old_substrings_covered(
+    text: str, expected: ClauseType
+) -> None:
+    assert _infer_contract_clause_type(text) is expected
+
+
+def test_priority_order_is_penalty_payment_warranty_scope_delivery() -> None:
+    # A clause naming several things is typed by the first match in this order (unchanged order).
+    assert _infer_contract_clause_type("Penalización y garantía de las obras") is ClauseType.PENALTY
+    assert _infer_contract_clause_type("Pago de las obras") is ClauseType.PAYMENT
+    assert _infer_contract_clause_type("Garantía de las obras") is ClauseType.WARRANTY
+    assert _infer_contract_clause_type("El plazo de ejecución de las obras") is ClauseType.SCOPE
+    assert _infer_contract_clause_type("El plazo de ejecución") is ClauseType.DELIVERY
+
+
+def test_spanish_delivery_clauses_do_not_become_at_risk() -> None:
+    """Classifying 'plazo/hito/entrega' must not stamp status=at_risk (that manufactured TIME findings)."""
+    assert "status" not in _data(
+        "Plazo de ejecución: 18 meses desde la firma del acta de replanteo."
+    )
+    assert "status" not in _data("Hito 2: entrega del informe final antes del 1 de octubre.")
+
+
+def test_english_delivery_clauses_keep_their_existing_at_risk_status() -> None:
+    assert _data("The final deadline is 30 June 2027.")["status"] == "at_risk"
