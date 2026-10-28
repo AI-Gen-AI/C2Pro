@@ -53,29 +53,32 @@
 
 **With the baseline approved, the triplet must produce `overall_score != None`.**
 
-Measured on the triplet (mock AI, local experiment where the schedule finish was stamped `APPROVED_BASELINE`; no production code changed):
+Measured on the triplet fixture, **unchanged**, with mock AI (local experiments, `C2PRO_AI_MOCK=1`; the schedule finish stamped `APPROVED_BASELINE` where noted):
 
 | Case | Assessed categories | active_weight | overall_score |
 |---|---|---|---|
-| Today (provisional) | SCOPE | 1/6 = 0.167 | None (`insufficient_active_weight`) |
-| Confirmed `DET-CRS-SCHDEAD` only | SCOPE | 0.167 | None — the signal exists but TIME stays unassessed |
-| + TIME assessed (coverage forced) | SCOPE, TIME | 2/6 = 0.333 (< 0.35) | None |
-| + TIME assessed + a quality clause in the contract | SCOPE, TIME, QUALITY | 3/6 = 0.50 | **60.0** (TIME 25.9, QUALITY 80, SCOPE 80) |
+| Before #1127 (provisional schedule) | SCOPE | 1/6 = 0.167 | None (`insufficient_active_weight`) |
+| Before #1127, confirmed `DET-CRS-SCHDEAD` only | SCOPE | 0.167 | None: the signal exists but TIME stays unassessed |
+| **After #1127**, provisional schedule | SCOPE (80), LEGAL (80) | 2/6 = 0.333 (< 0.35) | None; no new finding (a 0.1% daily penalty is exactly the configured maximum, a 10% cap is under 15%) |
+| After #1127, baseline approved, TIME assessed by rule 7 | SCOPE (80), LEGAL (80), TIME (25.9) | 3/6 = 0.50 | **60.0**; signals `DET-CRS-CONBUD`, `DET-CRS-NEGMARGIN`, `DET-CRS-SCHDEAD` |
 
-So `DET-CRS-SCHDEAD` is **not sufficient**. Missing weight: 0.35 − 0.167 = **0.183**, i.e. **two more categories** (each worth 1/6). Needed:
-1. **Product change (rule 7):** TIME becomes assessed when the comparator evaluates. This gives 0.333, still short by 0.017.
-2. **A third assessed dimension.** Not available from the triplet today: BUDGET is withheld by design (`assessment_unavailable`, `STRUCTURED_BUDGET_SOURCE_UNAVAILABLE`, #860: no structured budget lines), TECHNICAL gets no evidence from the specification, and neither LEGAL nor QUALITY is assessed by the fixture's contract in mock. In the experiment, adding a contract clause on quality standards and testing made QUALITY assessed (via the text-based category router); penalty and liability clauses did not make LEGAL assessed (see §Open questions for the code-level reason).
+Caveats of the measurement: mock AI (the real-AI run of the triplet, tracked separately, records `audit_coverage` and `category_scores` and may add categories, never remove them); the TIME row forces TIME coverage with a local test patch standing in for rule 7, which is not implemented yet; it was run on the ACC-01 integration tree with #1127's change applied, not on `main`.
 
-**Fixture decision: deferred.** The triplet fixture is **not** extended by this ADR. Whether it must be (and how) is decided after the real-AI run of the triplet (Task A), whose report records `audit_coverage` and `category_scores` and therefore shows whether enrichment and the LLM rules already assess LEGAL or QUALITY with a real model. Until then the acceptance test is specified but its fixture is open.
+`DET-CRS-SCHDEAD` alone is **not sufficient**: the v1 scorer needs at least 3 of 6 categories assessed (uniform 1/6 weights, `MIN_ACTIVE_WEIGHT = 0.35`; 2/6 = 0.333 fails). What closes the gap:
 
-Lowering `MIN_ACTIVE_WEIGHT` below 0.333 to make two categories enough is **rejected** here: it is an ADR-009 scoring decision and would let a project score on 1/3 of the audit.
+1. **Rule 7 (this ADR):** TIME becomes assessed, partially, when the comparator evaluates.
+2. **The third dimension is LEGAL, and it comes from #1127** (issue #1126): Spanish penalty clauses are no longer read as `OTHER`, `daily_penalty_pct` and `penalty_cap_pct` are extracted separately and correctly, and the registered `DET-LEG-PENALTY` rule becomes applicable on the triplet's penalty clause ("0,1% diario"). BUDGET stays withheld by design (`STRUCTURED_BUDGET_SOURCE_UNAVAILABLE`, #860) and TECHNICAL gets no evidence from the specification, so neither contributes.
 
-The acceptance test therefore requires rule 7 plus a third assessed dimension (source to be decided as above), and asserts `overall_score` is not None, that the score differs from the run without approval, and that the partial-coverage limitation is present.
+**Decision: the triplet fixture is not extended.** The earlier plan to add a quality clause to the contract is dropped: LEGAL provides the third category from the fixture as it is. (Earlier text in this ADR deferred the fixture decision to the real-AI run; the mock measurement above makes that unnecessary, and the real-AI run is now a confirmation, not a precondition.)
+
+Lowering `MIN_ACTIVE_WEIGHT` below 0.333 to make two categories enough is **rejected**: it is an ADR-009 scoring decision and would let a project score on a third of the audit.
+
+The acceptance test requires rule 7, runs the **untouched** triplet, and asserts that `overall_score` is not None (60.0 in the measurement above, to be re-derived when it is implemented), that it differs from the run without approval, that LEGAL, TIME and SCOPE are the assessed categories, and that the partial-coverage limitation is present.
 
 ## Tests that prove a deadline contradiction scores (PostgreSQL integration, extending `test_contract_schedule_completion_flow.py`)
 
 1. Late schedule, not baseline-approved ⇒ only `ADV-SCHDEAD-PROVISIONAL`, score and signals unchanged (exists today; keep).
-2. Baseline approved for the current revision ⇒ `DET-CRS-SCHDEAD` in `finding_signals`, TIME assessed (with the partial-coverage limitation), provisional advisory gone, new `score_version`; whether `overall_score` is not None depends on the third-dimension decision in §Open questions.
+2. Baseline approved for the current revision ⇒ `DET-CRS-SCHDEAD` in `finding_signals`, TIME assessed (with the partial-coverage limitation), provisional advisory gone, new `score_version`; `overall_score` is not None on the untouched triplet (see §Acceptance criterion).
 3. On-time schedule, baseline approved ⇒ no finding, TIME assessed (clean) **and `evidence_limitations["TIME"]` is present with the partial-coverage text** (asserted on the result and on `category_breakdown`).
 4. New revision approved/trusted after the baseline ⇒ back to provisional; a merely PROPOSED or REJECTED newer revision ⇒ baseline still valid (rule 5).
 5. Approval for a non-current revision, a wrong `blob_hash`, another tenant's project, or by an AI/service actor ⇒ rejected (DB + API); replay idempotent.
@@ -84,14 +87,14 @@ Slice 2 adds: concurrent approvals leave one current row; browser journey step "
 
 ## Open questions
 
-1. **Why do penalty and liability clauses not make LEGAL assessed?** (answered by reading code, plus the mock experiments above and two helper calls on the classifier and percentage parser)
+1. **Why do penalty and liability clauses not make LEGAL assessed?** **Resolved by #1127** (issue #1126, merged 2026-10-28). The analysis below is kept as the record of why; after #1127 the Spanish penalty clause of the triplet makes LEGAL assessed. (Answered at the time by reading code, plus mock experiments and two helper calls on the classifier and percentage parser.)
 
    LEGAL becomes assessed through one of three routes; none is reached by the triplet in mock:
    - **Deterministic evaluators.** Only three LEGAL evaluators are registered (`DET-LEG-PENALTY`, `DET-LEG-NOTICE`, `DET-LEG-REVIEW`); `WarrantyPeriodEvaluator`, `PaymentTermEvaluator` and `InsuranceExpiryEvaluator` exist in `rules_engine/deterministic.py` but are **not** in `DETERMINISTIC_EVALUATORS`. Each registered one overrides `applicability` and is evaluated only if the clause carries structured inputs: `has_penalty_cap` / `penalty_cap_pct` / `daily_penalty_pct` (penalty), `notice_period_days` (notice), `last_review_date` (review). A category is marked assessed when an evaluator's applicability is `EVALUATED`, whether or not it raises a finding.
    - **Who fills those fields.** (a) Deterministic ingestion (`core/tasks/ingestion_tasks._build_contract_clause_data`) sets `daily_penalty_pct`/`penalty_cap_pct` only when `_infer_contract_clause_type` returns `PENALTY`; that classifier matches **English substrings only** (`penalt`, `liquidated damages`, `delay`, and likewise `payment`, `warranty`, `liability`…). Spanish clauses ("Penalizaciones… penalización… retraso", "Garantía", "Responsabilidad") classify as `OTHER`, so no field is set. Verified by calling the classifier: the triplet's own penalty clause and my probe penalty, liability and warranty clauses all return `OTHER`; the English equivalent returns `PENALTY`. (b) LLM clause enrichment (`coherence/extraction/clause_extractor`, Haiku; schema includes `penalty_cap_pct`, `daily_penalty_pct`, `has_penalty_cap`, `notice_period_days`, `warranty_months`…), which returns `{}` under `C2PRO_AI_MOCK=1`.
    - **Text router and LLM rules.** `CategoryRouter` priors marked only QUALITY in the experiment. With real AI and `low_budget_mode=False`, the LLM rule `R-RESPONSIBILITY-01` (LEGAL) marks LEGAL assessed when it evaluates a clause whose keyword-inferred category is LEGAL.
 
-   Three defects found on the way (not fixed here; filed together as issue #1126, priority P1, scheduled **before** Slice 1): the English-only clause-type classifier; `_extract_percentage` reads `0,1%` as 0.01 (10× too large; `0.1%` reads 0.001), a bug for Spanish decimals; and the same percentage is stored as both `daily_penalty_pct` and `penalty_cap_pct`.
+   Three defects found on the way (filed together as issue #1126, priority P1, fixed by #1127 before Slice 1): the English-only clause-type classifier; `_extract_percentage` reads `0,1%` as 0.01 (10× too large; `0.1%` reads 0.001), a bug for Spanish decimals; and the same percentage is stored as both `daily_penalty_pct` and `penalty_cap_pct`.
 
    **Would a typical EPC contract satisfy it?** In **mock**: no, for Spanish contracts via ingestion (classifier), and for any contract via enrichment (disabled). With **real AI**: probably yes. A typical EPC states delay damages with a rate and cap, notice periods for claims, defects liability and insurance, so enrichment can populate `daily_penalty_pct`/`penalty_cap_pct`/`has_penalty_cap`/`notice_period_days` regardless of language, and the LLM rule applies to LEGAL-dominant clauses. This is a prediction from reading the code, to be confirmed by the real-AI run of the triplet, but the triplet contract is a 4-clause fixture whose only penalty clause is classified TIME by keyword score (`retraso`, `entrega`), so it may not exercise this even with a real model.
 2. Role required to approve a baseline; activity-level dates beyond the project finish; multi-schedule projects; contract completion modifications.
