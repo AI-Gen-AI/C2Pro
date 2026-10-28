@@ -1,0 +1,8 @@
+# The labelled corpus holds real contract clauses: it never enters this public repository.
+*.jsonl
+*.pdf
+*.docx
+*.doc
+*.txt
+corpus/
+!SCHEMA.md
