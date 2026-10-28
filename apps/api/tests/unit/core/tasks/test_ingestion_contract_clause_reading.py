@@ -505,3 +505,15 @@ def test_a_cap_written_with_por_100_must_be_a_share_of_the_price() -> None:
 
     assert daily == pytest.approx(0.001)
     assert cap is None
+
+
+def test_plural_cap_verbs_are_read_like_the_singular_ones() -> None:
+    # Lexicon only: like "no podrá superar", the plural binds to the nearest figure whatever its subject.
+    # The corpus review of this change found joint, per-period and other-penalty caps read as the cap
+    # ("La penalidad diaria del 0,1% y las retenciones no podrán superar el 5%"): not cleared for merge.
+    daily, cap = penalty_rate_and_cap(
+        "Se aplicará una penalidad del 0,05% por día de demora. Las penalidades no podrán superar el 5% del precio."
+    )
+
+    assert daily == pytest.approx(0.0005)
+    assert cap == pytest.approx(0.05)

@@ -105,6 +105,8 @@ PERCENT_ROLE_TERMS: Mapping[str, Terms] = {
             "no superara*",
             "no podra exceder*",
             "no podra superar*",
+            "no podran exceder*",
+            "no podran superar*",
             "sin exceder*",
             "en ningun caso",
             "hasta un",
