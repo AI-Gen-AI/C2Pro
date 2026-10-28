@@ -386,6 +386,25 @@ async def test_a_pending_new_revision_of_any_document_does_not_auto_resolve_its_
     assert await _alert_row(db, project_id) == before
 
 
+async def test_a_new_revision_without_any_artifact_does_not_auto_resolve_its_alerts(
+    db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Excluded from the evaluation is excluded, with or without a proposal (independent review, P2).
+
+    Two revisions and no artifact at all: the document has no current revision, so it is not read, and
+    nothing awaits "approval" in the narrow sense. Its alert must still stay as it was.
+    """
+    project_id, contract, _ = await _scored_project(db, worker, test_user, monkeypatch)
+    await _evaluate(db, test_user, project_id)
+    before = await _alert_row(db, project_id)
+
+    await _reupload_and_ingest(db, worker, test_user, contract, _revised_contract())
+    second = await _evaluate(db, test_user, project_id)
+
+    assert second.overall_score is not None
+    assert await _alert_row(db, project_id) == before
+
+
 async def test_a_fixed_finding_of_an_approved_revision_still_auto_resolves(
     db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
