@@ -954,8 +954,10 @@ class TestB1RealCrossRevisionIdentity:
             )
 
         revision_1, revision_2 = uuid4(), uuid4()
-        assert svc._fingerprint(candidate(revision_1)) == svc._fingerprint(candidate(revision_1))
-        assert svc._fingerprint(candidate(revision_1)) != svc._fingerprint(candidate(revision_2))
+        first = svc._fingerprint(candidate(revision_1))
+        again = svc._fingerprint(candidate(revision_1))
+        assert first == again, "same input, same fingerprint"
+        assert first != svc._fingerprint(candidate(revision_2))
 
     @pytest.mark.asyncio
     async def test_dismissed_v1_family_reopens_on_real_v2_clause_without_creating_new_alert(self) -> None:
