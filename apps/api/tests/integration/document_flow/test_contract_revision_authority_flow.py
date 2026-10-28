@@ -303,7 +303,7 @@ async def _scored_project(
         content=_xlsx(LATE_SCHEDULE),
         document_type=DocumentType.SCHEDULE,
     )
-    await _upload_and_ingest(
+    specification, specification_revision = await _upload_and_ingest(
         db,
         worker,
         user,
@@ -312,6 +312,8 @@ async def _scored_project(
         content=_docx(SPECIFICATION),
         document_type=DocumentType.SPECIFICATION,
     )
+    # Approved, as a real project's specification is: a pending one may be withheld from the reading.
+    await _trust(db, user, project_id, specification, specification_revision)
     contract, revision = await _upload_and_ingest(
         db,
         worker,
