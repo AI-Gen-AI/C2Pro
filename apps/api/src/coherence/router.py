@@ -768,6 +768,30 @@ async def _verified_persisted_clause_documents(
     return {row.id: row.document_id for row in rows}
 
 
+# A document that awaits approval (a PROPOSED artifact is pending and the document has no usable current
+# revision: unresolved, or a contract that is not canonical) is NOT evaluated. "Not evaluated" is never
+# "resolved": while one exists the evaluation is incomplete and must not auto-resolve alerts (B1 spec 7.4,
+# #1133). Rejected-only documents do not block: nothing is pending for them.
+_DOCUMENTS_AWAITING_APPROVAL_SQL = text(f"""
+    SELECT count(*)
+    FROM documents d
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
+      AND EXISTS (
+            SELECT 1 FROM public.document_artifacts a
+            WHERE a.document_id = d.id AND a.tenant_id = d.tenant_id AND a.trust_state = 'proposed')
+      AND (NOT cur.resolved OR (d.document_type::text = 'contract' AND NOT cur.canonical))
+""")
+
+
+async def _documents_await_approval(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
+    count = await db.scalar(
+        _DOCUMENTS_AWAITING_APPROVAL_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return bool(count)
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
@@ -806,7 +830,7 @@ async def _mirror_coherence_alerts_to_alerts_table(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
-        auto_resolve=True,
+        auto_resolve=not await _documents_await_approval(db, project_id, tenant_id),
         commit=False,
     )
     finding_keys = tuple(service.finding_key(payload) for payload in payloads)

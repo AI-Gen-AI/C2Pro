@@ -30,8 +30,13 @@ from src.coherence.router import (
     _mirror_coherence_alerts_to_alerts_table,
     get_clauses_from_rag,
 )
+from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentType
-from tests.integration.document_flow.test_budget_revision_authority_flow import _propose, _trust
+from tests.integration.document_flow.test_budget_revision_authority_flow import (
+    _propose,
+    _reupload_and_ingest,
+    _trust,
+)
 from tests.integration.document_flow.test_contract_schedule_completion_flow import (
     COMPLETION_CLAUSE,
     LATE_SCHEDULE,
@@ -247,3 +252,179 @@ def _other_contract() -> bytes:
     from tests.integration.document_flow.test_contract_schedule_completion_flow import _docx
 
     return _docx([PRICE_CLAUSE])
+
+
+# ── "not evaluated" is never "resolved" ───────────────────────────────────────────────────────────────
+
+
+async def _alert_row(db: AsyncSession, project_id: UUID) -> dict[str, Any]:
+    row = (
+        await db.execute(
+            text(
+                "SELECT status::text AS status, resolved_at, resolution_notes, title, severity::text AS severity, "
+                "rule_id, alert_metadata->>'fingerprint' AS fingerprint "
+                "FROM alerts WHERE project_id = :p AND rule_id = :r"
+            ),
+            {"p": project_id, "r": PROVISIONAL_RULE},
+        )
+    ).one()
+    return dict(row._mapping)
+
+
+OBJECT_CLAUSE = "Objeto. El contratista ejecutará las obras de urbanización descritas en el proyecto de referencia."
+PENALTY_CLAUSE = "Penalizaciones. El retraso en la entrega se penalizará con un 0,1% diario del precio del contrato."
+SPECIFICATION = [
+    "Alcance. El suministro incluye la entrega de todos los entregables de obra civil descritos en el proyecto.",
+    "Calidad. Todos los materiales cumplirán la norma UNE aplicable y se realizarán ensayos de control de calidad.",
+]
+
+
+async def _scored_project(
+    db: AsyncSession, worker: Any, user: Any, monkeypatch: pytest.MonkeyPatch
+) -> tuple[UUID, Any, Any]:
+    """A schedule and a specification that score on their own, plus a contract that raises the advisory."""
+    from src.coherence import scoring
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _docx, _xlsx
+
+    # The fixture documents assess fewer categories than a real project: lower the stability threshold so
+    # that the other documents still produce a score (the case in which the mirror runs and auto-resolves).
+    monkeypatch.setattr(scoring, "MIN_ACTIVE_WEIGHT", 0.1)
+    project_id = await _project(db, user.tenant_id)
+    await _upload_and_ingest(
+        db,
+        worker,
+        user,
+        project_id,
+        filename="schedule.xlsx",
+        content=_xlsx(LATE_SCHEDULE),
+        document_type=DocumentType.SCHEDULE,
+    )
+    await _upload_and_ingest(
+        db,
+        worker,
+        user,
+        project_id,
+        filename="spec.docx",
+        content=_docx(SPECIFICATION),
+        document_type=DocumentType.SPECIFICATION,
+    )
+    contract, revision = await _upload_and_ingest(
+        db,
+        worker,
+        user,
+        project_id,
+        filename="contract.docx",
+        content=_docx([OBJECT_CLAUSE, PRICE_CLAUSE, COMPLETION_CLAUSE, PENALTY_CLAUSE]),
+        document_type=DocumentType.CONTRACT,
+    )
+    return project_id, contract, revision
+
+
+async def test_a_pending_new_revision_of_the_contract_does_not_auto_resolve_its_alerts(
+    db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A contract raises an alert; a new revision is uploaded and stays PROPOSED; other documents still score.
+
+    The contract is then not evaluated (two revisions and none approved: it has no current revision). That
+    must leave its alert exactly as it was: B1 spec 7.4, an incomplete evaluation never auto-resolves, and
+    "not evaluated" is never "resolved".
+    """
+    project_id, contract, _ = await _scored_project(db, worker, test_user, monkeypatch)
+    first = await _evaluate(db, test_user, project_id)
+    assert first.overall_score is not None
+    before = await _alert_row(db, project_id)
+    assert before["status"].lower() == "open"
+
+    revision_b = await _reupload_and_ingest(db, worker, test_user, contract, _revised_contract())
+    await _propose(db, test_user, project_id, contract, revision_b)
+    second = await _evaluate(db, test_user, project_id)
+
+    assert second.overall_score is not None  # the other documents still score
+    assert await _alert_row(db, project_id) == before
+
+
+async def test_a_proposal_on_the_only_revision_of_the_contract_does_not_auto_resolve_its_alerts(
+    db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The analysis writes a PROPOSED artifact for the contract that raised an alert (single revision)."""
+    project_id, contract, revision = await _scored_project(db, worker, test_user, monkeypatch)
+    await _evaluate(db, test_user, project_id)
+    before = await _alert_row(db, project_id)
+
+    await _propose(db, test_user, project_id, contract, revision)
+    second = await _evaluate(db, test_user, project_id)
+
+    assert second.overall_score is not None
+    assert await _alert_row(db, project_id) == before
+
+
+async def test_a_pending_new_revision_of_any_document_does_not_auto_resolve_its_alerts(
+    db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not only the contract: the schedule that raised the advisory gets a new PROPOSED revision."""
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _xlsx
+
+    project_id, _, _ = await _scored_project(db, worker, test_user, monkeypatch)
+    await _evaluate(db, test_user, project_id)
+    before = await _alert_row(db, project_id)
+    schedule_id = (
+        await db.execute(
+            text(
+                "SELECT id FROM documents WHERE project_id = :p AND document_type::text = 'schedule'"
+            ),
+            {"p": project_id},
+        )
+    ).scalar_one()
+    schedule = await db.get(DocumentORM, schedule_id)
+
+    revision_b = await _reupload_and_ingest(
+        db, worker, test_user, schedule, _xlsx(LATE_SCHEDULE[:-1])
+    )
+    await _propose(db, test_user, project_id, schedule, revision_b)
+    await _evaluate(db, test_user, project_id)
+
+    assert await _alert_row(db, project_id) == before
+
+
+async def test_a_fixed_finding_of_an_approved_revision_still_auto_resolves(
+    db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guard concerns documents awaiting approval only: an approved revision that fixes the finding resolves it."""
+    project_id, contract, _ = await _scored_project(db, worker, test_user, monkeypatch)
+    await _evaluate(db, test_user, project_id)
+    assert (await _alert_row(db, project_id))["status"].lower() == "open"
+
+    revision_b = await _reupload_and_ingest(db, worker, test_user, contract, _on_time_contract())
+    await _trust(db, test_user, project_id, contract, revision_b)
+    result = await _evaluate(db, test_user, project_id)
+
+    assert result.overall_score is not None
+    assert [a for a in result.alerts if a.rule_id == PROVISIONAL_RULE] == []
+    after = await _alert_row(db, project_id)
+    assert after["status"].lower() == "resolved" and after["resolved_at"] is not None
+
+
+def _revised_contract() -> bytes:
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _docx
+
+    return _docx(
+        [
+            OBJECT_CLAUSE,
+            PRICE_CLAUSE,
+            "La fecha de finalización de las obras será el 31 de julio de 2027.",
+            PENALTY_CLAUSE,
+        ]
+    )
+
+
+def _on_time_contract() -> bytes:
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import _docx
+
+    return _docx(
+        [
+            OBJECT_CLAUSE,
+            PRICE_CLAUSE,
+            "La fecha de finalización de las obras será el 31 de diciembre de 2027.",
+            PENALTY_CLAUSE,
+        ]
+    )
