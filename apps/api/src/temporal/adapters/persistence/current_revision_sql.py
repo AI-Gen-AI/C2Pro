@@ -6,7 +6,8 @@ for one document of one tenant:
 * ``revision_id`` -- the current revision (NULL when unresolved or without lineage);
 * ``resolved`` / ``trusted`` / ``single_revision`` -- see ``CurrentRevisionStatus``;
 * ``canonical`` -- ``trusted``, or resolved through the single-revision fallback with no proposal
-  pending for it. Readers that feed CANONICAL findings or the score (contract totals, deadlines and
+  pending for it (a legacy TRUSTED artifact without a revision binding stays canonical when a
+  re-analysis is proposed). Readers that feed CANONICAL findings or the score (contract totals, deadlines and
   clauses; the budget declaration) use it: a PROPOSED artifact never moves canonical alerts (ADR-026,
   B1 spec §3). Readers that must show or retrieve what a human still has to approve use ``resolved``.
 
@@ -45,7 +46,7 @@ def current_revision_lateral(document: str, tenant: str) -> str:
             ({trusted} OR {single}) AS resolved,
             {trusted} AS trusted,
             (l.revisions <= 1) AS single_revision,
-            ({trusted} OR ({single} AND NOT t.any_proposed)) AS canonical
+            ({trusted} OR ({single} AND (t.any_trusted OR NOT t.any_proposed))) AS canonical
         FROM (
             SELECT count(*) AS revisions, (array_agg(r.revision_id))[1] AS only_revision
             FROM public.document_revisions r
@@ -60,7 +61,9 @@ def current_revision_lateral(document: str, tenant: str) -> str:
                 (COALESCE(bool_or(a.trust_state = 'rejected'), false)
                  AND NOT COALESCE(bool_or(a.trust_state IN ('proposed', 'trusted')), false))
                     AS rejected_only,
-                COALESCE(bool_or(a.trust_state = 'proposed'), false) AS any_proposed
+                COALESCE(bool_or(a.trust_state = 'proposed'), false) AS any_proposed,
+                COALESCE(bool_or(a.trust_state = 'trusted' AND a.lifecycle_status = 'active'), false)
+                    AS any_trusted
             FROM public.document_artifacts a
             WHERE a.document_id = {document} AND a.tenant_id = {tenant}
         ) AS t
