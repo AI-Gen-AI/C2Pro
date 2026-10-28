@@ -15,8 +15,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
+from src.analysis.application.alerts_use_cases import UpdateAlertStatusUseCase
 from src.analysis.application.dtos import AlertCreate
-from src.analysis.domain.enums import AlertSeverity, AlertType
+from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType
 from src.coherence.router import _mirror_coherence_alerts_to_alerts_table
 from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.core.auth.models import SubscriptionPlan, Tenant
@@ -115,3 +116,26 @@ async def test_the_mirror_resolves_through_the_same_path(db: AsyncSession, test_
     await db.commit()
 
     assert await _statuses(db, project_id) == [("resolved", True)]
+
+
+@pytest.mark.parametrize("target", [AlertStatus.RESOLVED, AlertStatus.DISMISSED])
+async def test_a_human_resolving_or_dismissing_an_alert_writes_the_same_naive_column(
+    db: AsyncSession, test_user, target: AlertStatus
+) -> None:
+    """``PATCH /alerts/{id}`` stamped ``datetime.now(UTC)`` into the same naive column and answered 500."""
+    project_id = await _project(db, test_user.tenant_id)
+    repository = SqlAlchemyAlertRepository(db)
+    alert = await repository.create(
+        _violation(project_id).model_copy(update={"tenant_id": test_user.tenant_id})
+    )
+    await db.commit()
+
+    updated = await UpdateAlertStatusUseCase(repository).execute(
+        alert_id=alert.id,
+        tenant_id=test_user.tenant_id,
+        status=target,
+        resolution_notes="done by a person",
+    )
+
+    assert updated.status == target
+    assert (await _statuses(db, project_id)) == [(target.value.lower(), True)]
