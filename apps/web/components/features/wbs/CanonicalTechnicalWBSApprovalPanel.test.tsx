@@ -1,10 +1,13 @@
 /** ACC-01 S7: explicit canonical approval is separate from durable audit. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, renderWithProviders, screen, waitFor } from "@/src/tests/test-utils";
 import type { TechnicalWBSReviewHistoryEntry } from "@/lib/api/generated/models";
 import { CanonicalTechnicalWBSApprovalPanel } from "./CanonicalTechnicalWBSApprovalPanel";
 
 const post = vi.fn();
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ orgId: "org-test-1", userId: "clerk-test-user", isLoaded: true }),
+}));
 vi.mock("@/lib/api/client", () => ({
   orvalApiClient: (...args: unknown[]) => post(...args),
 }));
@@ -53,7 +56,7 @@ describe("CanonicalTechnicalWBSApprovalPanel", () => {
   });
 
   it("does not turn an audit-only review into approval without a separate human confirmation", () => {
-    render(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
+    renderWithProviders(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
     const button = screen.getByTestId("technical-wbs-canonical-submit");
     expect(button).toBeDisabled();
     expect(screen.getByText(/earlier audit did not/i)).toBeInTheDocument();
@@ -64,7 +67,7 @@ describe("CanonicalTechnicalWBSApprovalPanel", () => {
 
   it("POSTs only exact audit, baseline, node and explicit human approval, and validates receipt", async () => {
     post.mockResolvedValue(reply);
-    render(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
+    renderWithProviders(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
     configureApproval();
     fireEvent.click(screen.getByTestId("technical-wbs-canonical-submit"));
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -87,7 +90,7 @@ describe("CanonicalTechnicalWBSApprovalPanel", () => {
   });
 
   it("never offers the final approval action for rejected or noncanonical audit authorities", () => {
-    const { rerender } = render(
+    const { rerender } = renderWithProviders(
       <CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={{ ...audit, decision: "REJECTED" }} />,
     );
     configureApproval();
@@ -103,7 +106,7 @@ describe("CanonicalTechnicalWBSApprovalPanel", () => {
 
   it("fails closed when server receipt mismatches exact technical revision or WBS node", async () => {
     post.mockResolvedValue({ ...reply, wbs_node_id: "other-node" });
-    render(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
+    renderWithProviders(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
     configureApproval();
     fireEvent.click(screen.getByTestId("technical-wbs-canonical-submit"));
     await waitFor(() =>
@@ -117,7 +120,7 @@ describe("CanonicalTechnicalWBSApprovalPanel", () => {
 
   it("does not blindly repeat a possibly committed event after 502", async () => {
     post.mockRejectedValue(new Error("502 after commit"));
-    render(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
+    renderWithProviders(<CanonicalTechnicalWBSApprovalPanel projectId="project-1" audit={audit} />);
     configureApproval();
     fireEvent.click(screen.getByTestId("technical-wbs-canonical-submit"));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/do not submit this decision again/i));

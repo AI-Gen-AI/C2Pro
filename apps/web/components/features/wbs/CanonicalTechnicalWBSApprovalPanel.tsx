@@ -7,6 +7,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useQueryClient } from "@tanstack/react-query";
+import { canonicalTechnicalLinksQueryKey } from "./CanonicalTechnicalWBSLinksPanel";
 import type { TechnicalWBSReviewHistoryEntry } from "@/lib/api/generated/models";
 import { orvalApiClient } from "@/lib/api/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +35,8 @@ type Props = {
 };
 
 export function CanonicalTechnicalWBSApprovalPanel({ projectId, audit }: Props) {
+  const { orgId, userId } = useAuth();
+  const queryClient = useQueryClient();
   const [approvalReason, setApprovalReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
@@ -88,6 +93,11 @@ export function CanonicalTechnicalWBSApprovalPanel({ projectId, audit }: Props) 
       }
       setReceipt(result);
       setConfirmed(false);
+      // A POST receipt is not a read-after-write projection. Re-fetch the
+      // server-validated CURRENT state rather than injecting an optimistic link.
+      void queryClient.invalidateQueries({
+        queryKey: canonicalTechnicalLinksQueryKey(orgId, userId, projectId),
+      });
     } catch {
       // A transport error can occur after the backend committed the immutable
       // event. Do not encourage repeated approval without checking persistence.
