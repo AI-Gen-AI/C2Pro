@@ -535,7 +535,8 @@ describe("EvidencePage highlight mapping", () => {
       linkTo({ documentId: "doc-b", highlightId: "clause-b", origin: "health" });
       useProjectDocumentsMock.mockReturnValue({
         documents: documents.map((doc) => ({
-          ...doc, extension: doc.id === "doc-b" ? "docx" : "pdf",
+          ...doc, name: doc.id === "doc-b" ? "Contract B.docx" : doc.name,
+          extension: doc.id === "doc-b" ? "docx" : "pdf",
         })),
         loading: false, error: null, refetch: vi.fn(),
       });
@@ -563,7 +564,7 @@ describe("EvidencePage highlight mapping", () => {
           "The contractor shall pay a delay penalty after seven days.",
         );
       });
-      expect(screen.getByTestId("evidence-source-document")).toHaveTextContent("Contract B.pdf");
+      expect(screen.getByTestId("evidence-source-document")).toHaveTextContent("Contract B.docx");
       expect(screen.getByTestId("evidence-native-document")).toHaveTextContent(
         "Original DOCX document",
       );
