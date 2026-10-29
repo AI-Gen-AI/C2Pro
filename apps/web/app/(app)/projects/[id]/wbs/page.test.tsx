@@ -83,6 +83,9 @@ const { alertsState } = vi.hoisted(() => ({
 vi.mock("@/components/features/wbs/TechnicalWBSReviewPanel", () => ({
   TechnicalWBSReviewPanel: () => <div data-testid="technical-wbs-review-mock" />,
 }));
+vi.mock("@/components/features/wbs/CanonicalTechnicalWBSLinksPanel", () => ({
+  CanonicalTechnicalWBSLinksPanel: () => <div data-testid="technical-wbs-approved-mock" />,
+}));
 
 vi.mock("@/hooks/useProjectAlerts", () => ({
   useProjectAlerts: () => ({
@@ -148,6 +151,7 @@ describe("ProjectWBSPage", () => {
       screen.getByRole("heading", { name: /work breakdown structure/i }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("wbs-tree")).toBeInTheDocument();
+    expect(screen.getByTestId("technical-wbs-approved-mock")).toBeInTheDocument();
     expect(screen.getByText(/no wbs items recorded for this project/i)).toBeInTheDocument();
   });
 
