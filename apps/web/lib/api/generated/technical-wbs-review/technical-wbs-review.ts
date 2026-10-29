@@ -54,7 +54,11 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CanonicalTechnicalWBSLinkRequest,
+  CanonicalTechnicalWBSLinkResponse,
+  CurrentCanonicalTechnicalWBSLinkResponse,
   HTTPValidationError,
+  ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
   ListTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams,
   TechnicalWBSReviewHistoryEntry,
   TechnicalWBSReviewRequest,
@@ -463,3 +467,385 @@ export const useRecordTechnicalWbsReviewApiV1ProjectsProjectIdTechnicalWbsReview
       queryClient,
     );
   };
+/**
+ * Never infer final authority from an audit-only review event.
+ * @summary Explicitly approve a current, canonical Technical to WBS association
+ */
+export const approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost =
+  (
+    projectId: string,
+    canonicalTechnicalWBSLinkRequest: CanonicalTechnicalWBSLinkRequest,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<CanonicalTechnicalWBSLinkResponse>({
+      url: `/api/v1/projects/${projectId}/technical-wbs/canonical-links`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: canonicalTechnicalWBSLinkRequest,
+      signal,
+    });
+  };
+
+export const getApproveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost
+        >
+      >,
+      TError,
+      { projectId: string; data: CanonicalTechnicalWBSLinkRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost
+      >
+    >,
+    TError,
+    { projectId: string; data: CanonicalTechnicalWBSLinkRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost
+        >
+      >,
+      { projectId: string; data: CanonicalTechnicalWBSLinkRequest }
+    > = (props) => {
+      const { projectId, data } = props ?? {};
+
+      return approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost(
+        projectId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type ApproveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost
+      >
+    >
+  >;
+export type ApproveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPostMutationBody =
+  CanonicalTechnicalWBSLinkRequest;
+export type ApproveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPostMutationError =
+  void | HTTPValidationError;
+
+/**
+ * @summary Explicitly approve a current, canonical Technical to WBS association
+ */
+export const useApproveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost =
+  <TError = void | HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost
+          >
+        >,
+        TError,
+        { projectId: string; data: CanonicalTechnicalWBSLinkRequest },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof approveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPost
+      >
+    >,
+    TError,
+    { projectId: string; data: CanonicalTechnicalWBSLinkRequest },
+    TContext
+  > => {
+    return useMutation(
+      getApproveCanonicalTechnicalWbsLinkApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * No audit-only event is accepted as canonical, even after relogin.
+ * @summary Read persisted Technical–WBS approvals with independently verified current authority
+ */
+export const listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet =
+  (
+    projectId: string,
+    params?: ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+    signal?: AbortSignal,
+  ) => {
+    return orvalApiClient<CurrentCanonicalTechnicalWBSLinkResponse[]>({
+      url: `/api/v1/projects/${projectId}/technical-wbs/canonical-links`,
+      method: "GET",
+      params,
+      signal,
+    });
+  };
+
+export const getListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetQueryKey =
+  (
+    projectId: string,
+    params?: ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+  ) => {
+    return [
+      `/api/v1/projects/${projectId}/technical-wbs/canonical-links`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    projectId: string,
+    params?: ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetQueryKey(
+        projectId,
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+        >
+      >
+    > = ({ signal }) =>
+      listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet(
+        projectId,
+        params,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: projectId !== null && projectId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+      >
+    >
+  >;
+export type ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetQueryError =
+  void | HTTPValidationError;
+
+export function useListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params:
+    | undefined
+    | ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Read persisted Technical–WBS approvals with independently verified current authority
+ */
+
+export function useListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  projectId: string,
+  params?: ListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getListCanonicalTechnicalWbsLinksApiV1ProjectsProjectIdTechnicalWbsCanonicalLinksGetQueryOptions(
+      projectId,
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
