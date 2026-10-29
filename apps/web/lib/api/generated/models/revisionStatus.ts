@@ -50,9 +50,7 @@ export interface RevisionStatus {
   is_current?: boolean;
   current_revision_id?: string | null;
   current_basis?: string;
-  /** Immutable source revision SHA-256, not documents.file_hash. */
-  blob_hash?: string | null;
-
   materialization?: MaterializationStatus | null;
   reason?: string | null;
+  blob_hash?: string | null;
 }
