@@ -98,6 +98,8 @@ export default function EvidencePage() {
   const requestedDocumentId = searchParams.get("documentId");
   const requestedHighlightId = searchParams.get("highlightId");
   const requestedRevisionId = searchParams.get("revisionId");
+  // Health links cite the persisted source clause, not a semantic/alert alias.
+  const requestedFromHealth = searchParams.get("origin") === "health";
   const revisionReadOnly = Boolean(requestedRevisionId);
   const { isLoaded: isUserLoaded, user } = useUser();
   const reviewerName = user?.primaryEmailAddress?.emailAddress ?? user?.id;
@@ -197,10 +199,15 @@ export default function EvidencePage() {
   const reviewProjectAlert = useReviewAlertApiV1AlertsAlertIdReviewPost();
   const resolveProjectAlert = useResolveAlertApiV1AlertsAlertIdResolvePost();
 
-  const sourceClauses = useMemo(
-    () => sourceEvidenceClausesFromDocumentDetail(documentDetail?.clauses),
-    [documentDetail?.clauses],
-  );
+  const sourceClauses = useMemo(() => {
+    // The cited document must be the fetched one and belong to this project.
+    // A stale or mismatched detail response must never lend a clause to another source.
+    if (!documentDetail || documentDetail.id !== selectedDocumentId ||
+        (documentDetail.project_id && documentDetail.project_id !== id)) {
+      return [];
+    }
+    return sourceEvidenceClausesFromDocumentDetail(documentDetail.clauses);
+  }, [documentDetail, id, selectedDocumentId]);
   // The generated document-detail type does not guarantee an immutable
   // PDF revision identity yet. An absent/incorrect server binding must
   // block a revision-pinned link rather than display today's PDF as history.
@@ -251,6 +258,7 @@ export default function EvidencePage() {
       evidenceId: requestedHighlightId,
       semanticTargets: semanticEvidenceTargets,
       sourceClauses,
+      preferSourceClause: requestedFromHealth,
       revisionId: requestedRevisionId,
       documentRevisionId,
     });
@@ -258,6 +266,7 @@ export default function EvidencePage() {
     requestedDocumentId,
     requestedHighlightId,
     requestedRevisionId,
+    requestedFromHealth,
     documentRevisionId,
     selectedDocumentId,
     semanticEvidenceTargets,
@@ -465,6 +474,7 @@ export default function EvidencePage() {
     requestedEvidenceResolution?.kind === "document-fallback"
       ? requestedEvidenceResolution.target
       : null;
+  const exactSourceClause = requestedSourceClause ?? requestedDocumentFallback;
 
   const handleApproveEntity = useCallback(
     async (entityId: string, note?: string) => {
@@ -925,6 +935,34 @@ export default function EvidencePage() {
             Exact highlight unavailable. The linked source evidence has no resolvable page span, so its source document is shown without inventing a page.
           </AlertDescription>
         </Alert>
+      )}
+
+      {exactSourceClause && selectedDocument && !requestedRevisionUnavailable && (
+        <section
+          data-testid="evidence-exact-source"
+          data-source-document-id={selectedDocumentId ?? ""}
+          data-source-clause-id={exactSourceClause.id}
+          aria-label="Verified source clause"
+          className="rounded-xl border bg-card p-4 text-sm"
+        >
+          <h2 className="font-semibold">Source clause {exactSourceClause.clauseCode ?? exactSourceClause.id}</h2>
+          <p className="mt-1 text-muted-foreground" data-testid="evidence-source-document">
+            From {selectedDocument.name}
+            {exactSourceClause.page !== null ? ` · Page ${exactSourceClause.page}` : " · Page not verified"}
+          </p>
+          {exactSourceClause.excerpt ? (
+            <blockquote
+              data-testid="evidence-source-excerpt"
+              className="mt-3 whitespace-pre-wrap border-l-2 pl-3 text-foreground"
+            >
+              {exactSourceClause.excerpt}
+            </blockquote>
+          ) : (
+            <p data-testid="evidence-source-text-unavailable" className="mt-2 text-muted-foreground">
+              Original clause text is not available in this document response; no text was invented.
+            </p>
+          )}
+        </section>
       )}
 
       <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} />

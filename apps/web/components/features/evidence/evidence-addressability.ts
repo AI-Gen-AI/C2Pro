@@ -21,6 +21,8 @@ export interface SourceEvidenceClause {
   id: string;
   clauseCode: string | null;
   label: string;
+  /** Exact clause source text from document detail, not AI-generated narrative. */
+  excerpt?: string;
   page: number | null;
   startOffset: number | null;
   endOffset: number | null;
@@ -94,6 +96,7 @@ export function sourceEvidenceClausesFromDocumentDetail(
         id,
         clauseCode,
         label: title ?? fullText ?? clauseCode ?? id,
+        ...(fullText ? { excerpt: fullText } : {}),
         page: asPage(evidenceLocation?.page_number),
         startOffset: asNonNegativeInteger(clause.text_start_offset),
         endOffset: asNonNegativeInteger(clause.text_end_offset),
@@ -114,19 +117,22 @@ export function resolveEvidenceAddress({
   sourceClauses,
   revisionId,
   documentRevisionId,
+  preferSourceClause = false,
 }: {
   evidenceId: string;
   semanticTargets: SemanticEvidenceTarget[];
   sourceClauses: SourceEvidenceClause[];
   revisionId?: string | null;
   documentRevisionId?: string | null;
+  /** Health references persisted clause IDs, never semantic substitutes. */
+  preferSourceClause?: boolean;
 }): EvidenceAddressResolution {
   // A pinned source must match BOTH the current PDF revision and the clause.
   // Never fall through to a current semantic projection on a stale revision.
   if (revisionId && revisionId !== documentRevisionId) {
     return { kind: "unresolved" };
   }
-  if (!revisionId) {
+  if (!revisionId && !preferSourceClause) {
     const semanticTarget = semanticTargets.find((target) => target.id === evidenceId);
     if (semanticTarget) {
       return { kind: "semantic", target: semanticTarget };
