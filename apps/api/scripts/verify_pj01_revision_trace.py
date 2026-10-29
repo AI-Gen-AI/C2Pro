@@ -9,7 +9,8 @@ journey's project and proves that
   the SHA-256 of the committed fixture files for contract A (revision 1) and contract B (revision 2);
 * revision A was a trusted source before B: its artifact was trusted and has since been superseded (trusted + lifecycle superseded);
 * revision B's artifact is the single active trusted one, and nothing is left proposed;
-* the review of revision B was decided by a human (approved), not auto-trusted.
+* the review of revision B was decided by a human (approved): an APPROVED review bound to B's trusted artifact
+  (candidate_binding artifact id and hash), naming who decided and when. An approval of revision A never counts.
 
 With ``--kind reject`` it proves the S5 rejection instead: the review the browser rejected is REJECTED
 with the typed reason stored (compared by SHA-256), nothing of the project is approved or still
@@ -148,6 +149,47 @@ async def verify_reject(
     return failures
 
 
+async def _approval_of_candidate(conn: Any, project_id: UUID, artifact: Any) -> list[str]:
+    """The human approval that made THIS artifact trusted -- not any approval in the project.
+
+    A review is bound to the exact candidate it gates (``review_metadata.candidate_binding``). The
+    approval of revision B must therefore be an APPROVED review whose binding names B's artifact (and
+    its hash) and whose row names who decided and when. An approval of revision A, of another document,
+    or a review bound to a different candidate never satisfies it.
+    """
+    reviews = (
+        await conn.execute(
+            text(
+                "SELECT id, upper(current_status::text) AS status, approved_by, approved_at, "
+                "review_metadata->'candidate_binding'->>'artifact_id' AS bound_artifact, "
+                "review_metadata->'candidate_binding'->>'artifact_hash' AS bound_hash "
+                "FROM review_items WHERE project_id = :p AND document_id = :d "
+                "AND review_metadata->'candidate_binding'->>'artifact_id' = :a"
+            ),
+            {"p": project_id, "d": artifact.document_id, "a": str(artifact.artifact_id)},
+        )
+    ).all()
+    if not reviews:
+        return ["no review is bound to revision B's trusted artifact"]
+    approved = [r for r in reviews if r.status == "APPROVED"]
+    if not approved:
+        return [
+            "revision B's artifact is trusted but the review bound to it is not approved "
+            f"(statuses: {sorted(r.status for r in reviews)}); an approval of another revision does not count"
+        ]
+    failures: list[str] = []
+    for review in approved:
+        if not (review.approved_by or "").strip():
+            failures.append("the approval of revision B does not name who took the decision")
+        if review.approved_at is None:
+            failures.append("the approval of revision B has no decision time")
+        if review.bound_hash != artifact.artifact_hash:
+            failures.append(
+                "the approved review is bound to different content than revision B's artifact"
+            )
+    return failures
+
+
 async def verify(database_url: str, project_id: UUID, hash_a: str, hash_b: str) -> list[str]:
     failures: list[str] = []
     engine = create_async_engine(_normalize_database_url(database_url))
@@ -176,7 +218,8 @@ async def verify(database_url: str, project_id: UUID, hash_a: str, hash_b: str) 
             artifacts = (
                 await conn.execute(
                     text(
-                        "SELECT document_revision_id, trust_state, lifecycle_status FROM document_artifacts "
+                        "SELECT artifact_id, document_id, document_revision_id, trust_state, lifecycle_status, "
+                        "artifact_hash FROM document_artifacts "
                         "WHERE project_id = :p ORDER BY artifact_version"
                     ),
                     {"p": project_id},
@@ -206,17 +249,11 @@ async def verify(database_url: str, project_id: UUID, hash_a: str, hash_b: str) 
                 failures.append(
                     f"{len(leftovers)} proposed artifact(s) are still waiting for a decision"
                 )
-            approved = (
-                await conn.execute(
-                    text(
-                        "SELECT count(*) FROM review_items WHERE project_id = :p "
-                        "AND upper(current_status::text) = 'APPROVED'"
-                    ),
-                    {"p": project_id},
-                )
-            ).scalar_one()
-            if approved < 1:
-                failures.append("no review item of the project was approved by a human")
+            if b_artifact is not None and (b_artifact.trust_state, b_artifact.lifecycle_status) == (
+                "trusted",
+                "active",
+            ):
+                failures.extend(await _approval_of_candidate(conn, project_id, b_artifact))
     finally:
         await engine.dispose()
     return failures
