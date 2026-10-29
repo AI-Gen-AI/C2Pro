@@ -80,7 +80,8 @@ export function EvidenceRevisionHistoryPanel({
     Boolean(trustedCurrentRevision && trustedCurrentRevision.revision_id !== selectedRevisionId);
   const baselineRevisionId = comparingProposal ? trustedCurrentRevision?.revision_id ?? null : null;
   // Read the approved A independently from the proposed B. This is a
-  // source-by-source preview, not an inferred semantic diff or an approval.
+  // revision-scoped extracted-entity preview (a title can replace raw clause
+  // text), not a verified source quote, semantic diff or approval.
   const baselineClausesQuery =
     useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet(
       documentId ?? "",
@@ -169,9 +170,9 @@ export function EvidenceRevisionHistoryPanel({
                 </div>
                 {comparingProposal && trustedCurrentRevision ? (
                   <div data-testid="revision-a-b-comparison" className="mt-3 space-y-2 rounded-md border p-3">
-                    <p className="font-medium">Approved A vs proposed B — original clause excerpts</p>
+                    <p className="font-medium">Approved A vs proposed B — extracted clause previews</p>
                     <p className="text-xs text-muted-foreground">
-                      Read-only parallel sources, not a verified change diff. Only an approved human decision can change the trusted current revision.
+                      Read-only extracted clause labels; not a source-text verification or a computed change diff. Only an approved human decision can change the trusted current revision.
                     </p>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div data-testid="revision-approved-baseline" className="rounded border p-2">
@@ -179,7 +180,7 @@ export function EvidenceRevisionHistoryPanel({
                         {baselineClausesQuery.isLoading ? <p>Loading approved evidence…</p>
                           : baselineClausesQuery.isError ? <p role="alert">Approved revision evidence unavailable.</p>
                           : <>
-                            <p>{baselineClauses.length} stored source clauses</p>
+                            <p>{baselineClauses.length} stored extracted clauses</p>
                             <ul className="mt-2 space-y-1">
                               {baselineClauses.slice(0, 3).map((clause) => (
                                 <li key={clause.id} className="whitespace-pre-wrap rounded bg-muted/40 p-2">{clause.text}</li>
@@ -192,7 +193,7 @@ export function EvidenceRevisionHistoryPanel({
                         {clausesQuery.isLoading ? <p>Loading proposed evidence…</p>
                           : clausesQuery.isError ? <p role="alert">Proposed revision evidence unavailable.</p>
                           : <>
-                            <p>{clauses.length} stored source clauses</p>
+                            <p>{clauses.length} stored extracted clauses</p>
                             <ul className="mt-2 space-y-1">
                               {clauses.slice(0, 3).map((clause) => (
                                 <li key={clause.id} className="whitespace-pre-wrap rounded bg-muted/40 p-2">{clause.text}</li>
