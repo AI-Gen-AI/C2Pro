@@ -1,12 +1,15 @@
 /** ACC-01 S7: explicit canonical approval is separate from durable audit. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, renderWithProviders as render, screen, waitFor } from "@/src/tests/test-utils";
 import type { TechnicalWBSReviewHistoryEntry } from "@/lib/api/generated/models";
 import { CanonicalTechnicalWBSApprovalPanel } from "./CanonicalTechnicalWBSApprovalPanel";
 
 const post = vi.fn();
 vi.mock("@/lib/api/client", () => ({
   orvalApiClient: (...args: unknown[]) => post(...args),
+}));
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ orgId: "org-s7", userId: "user-s7", isLoaded: true }),
 }));
 
 const audit: TechnicalWBSReviewHistoryEntry = {
