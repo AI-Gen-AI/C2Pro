@@ -82,6 +82,8 @@ async def _structured_document(
         document_id=document_id, rev_no=1, blob_hash=digest, blob_key=key,
         valid_from=now, created_at=now,
     ))
+    # The immutable revision must exist before its FK-bearing trusted artifact.
+    await db.flush()
     db.add(DocumentArtifactORM(
         artifact_id=uuid4(), tenant_id=w["tenant"], project_id=w["project"],
         document_id=document_id, document_revision_id=revision_id,
