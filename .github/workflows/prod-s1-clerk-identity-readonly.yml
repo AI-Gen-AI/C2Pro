@@ -1,6 +1,11 @@
 name: C2Pro S1 Clerk Production Identity - Read Only
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/prod-s1-clerk-identity-readonly.yml"
+      - "apps/web/playwright.prod-s1.config.ts"
+      - "apps/web/src/tests/e2e/prod-acceptance/acc01-s1-clerk-production*"
   workflow_dispatch:
     inputs:
       confirm_readonly:
@@ -16,6 +21,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # No production credentials or protected environments are available to PR CI.
+  s1-static-typecheck:
+    name: "S1 read-only Playwright TypeScript compile (PR, no secrets)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup web toolchain
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck web workspace
+        working-directory: apps/web
+        run: pnpm typecheck
+
   s1-identity-readonly:
     name: "ACC-01 S1 Clerk production A/B read-only qualification"
     if: github.ref == 'refs/heads/main'
