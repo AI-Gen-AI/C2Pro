@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.http import technical_wbs_review_router as router
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
+from src.documents.adapters.persistence.models import ClauseORM
 from src.analysis.application.approve_canonical_technical_wbs_link import (
     CANONICAL_APPROVAL,
     ApproveCanonicalTechnicalWBSLinkService,
@@ -125,3 +126,63 @@ async def test_s7_canonical_get_reloads_persisted_approved_link_and_marks_stale_
         denied = await client.get(endpoint)
         assert denied.status_code == 404, denied.text
         assert denied.json()["detail"] == "Project not found"
+
+
+async def test_s7_canonical_read_fails_closed_on_reindexed_source_offsets(
+    db: AsyncSession, test_session_factory, tmp_path: Path
+) -> None:
+    """The immutable approval remains, but a changed ClauseORM is not current."""
+    w = await _world(db, tmp_path)
+    actor = await db.get(User, w["actor"])
+    assert actor is not None
+    app = FastAPI()
+    app.include_router(router.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: actor
+    endpoint = f"/api/v1/projects/{w['project']}/technical-wbs/canonical-links"
+
+    async with test_session_factory() as review_session:
+        audit = await RecordTechnicalWBSReviewService(
+            review_session, w["reader"]
+        ).execute(**_arguments(w))
+        await review_session.commit()
+    async with test_session_factory() as approval_session:
+        await ApproveCanonicalTechnicalWBSLinkService(approval_session).execute(
+            tenant_id=w["tenant"],
+            project_id=w["project"],
+            actor_user_id=w["actor"],
+            review_event_id=audit.event_id,
+            expected_wbs_baseline_id=w["baseline"],
+            expected_wbs_node_id=w["node"],
+            approval=CANONICAL_APPROVAL,
+            idempotency_key="s7-read-proof-offset-key",
+            reason="Human approves source section and exact offsets",
+        )
+        await approval_session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.get(endpoint)
+        assert first.status_code == 200, first.text
+        assert first.json()[0]["state"] == "CURRENT"
+
+    # Simulate a re-indexing regression on the synthetic source clause. The
+    # revision identity, blob hash and artifact remain valid, but the excerpt
+    # offsets no longer describe the source the human reviewed.
+    async with test_session_factory() as edit_session:
+        clause = await edit_session.scalar(
+            select(ClauseORM).where(
+                ClauseORM.id == w["clause"],
+                ClauseORM.tenant_id == w["tenant"],
+                ClauseORM.project_id == w["project"],
+            )
+        )
+        assert clause is not None
+        assert clause.text_start_offset == 0
+        clause.text_start_offset = 1
+        await edit_session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        after = await client.get(endpoint)
+        assert after.status_code == 200, after.text
+        assert len(after.json()) == 1
+        assert after.json()[0]["state"] == "STALE_SOURCE"
+        assert after.json()[0]["technical_assessment"] == "NOT_ASSESSED"
