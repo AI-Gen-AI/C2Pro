@@ -20,7 +20,8 @@ from src.core.auth.models import User
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 from tests.integration.analysis.test_s7_review_service_settlement_pg import _world
 from tests.integration.analysis.test_s7_structured_wbs_three_source_pg import (
-    _SyntheticImmutableStorage, _structured_document,
+    _structured_document,
+    _SyntheticImmutableStorage,
 )
 
 pytestmark = pytest.mark.asyncio
