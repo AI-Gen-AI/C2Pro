@@ -78,7 +78,7 @@ class TestDocumentUpload:
 
         Given: Un cliente autenticado y un archivo .zip.
         When: Se envia una peticion POST a /api/v1/projects/{project_id}/documents.
-        Then: La API responde con 400 Bad Request.
+        Then: La API responde con 415 Unsupported Media Type.
         """
         # Arrange
         fake_zip_content = b"PK\x03\x04..."
@@ -96,7 +96,7 @@ class TestDocumentUpload:
         )
 
         # Assert
-        assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.text}"
+        assert response.status_code == 415, f"Expected 415, got {response.status_code}: {response.text}"
         assert response.json()["detail"] == "File type '.zip' is not allowed."
 
     async def test_upload_fails_with_file_too_large(self, client: AsyncClient, get_auth_headers):
