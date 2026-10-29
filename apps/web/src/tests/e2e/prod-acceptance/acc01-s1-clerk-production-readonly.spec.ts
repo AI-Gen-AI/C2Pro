@@ -171,7 +171,7 @@ async function readBoundedSyntheticProject(
         cache: "no-store",
         credentials: "same-origin",
         headers: {
-          Authorization: \`Bearer \${token}\`,
+          Authorization: "Bearer " + token,
           "X-Tenant-ID": tenantId,
         },
       });
