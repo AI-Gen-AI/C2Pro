@@ -20,6 +20,7 @@
  * relogin (persistence is checked from a fresh browser context restored from the saved session) and no
  * cross-tenant denial here. Every step is reported as PARTIAL / NOT_EXERCISED, never as UAT PASS.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -35,6 +36,8 @@ const manifest = JSON.parse(readFileSync(path.join(FIXTURE_DIR, "triplet.manifes
   expected_rules: string[];
   expected_provisional: string[];
   contract: { completion_deadline: string };
+  sha256: Record<string, string>;
+  specification: { document_type: "technical_spec" };
 };
 const fixture = (name: string): string => path.join(FIXTURE_DIR, name);
 
@@ -95,7 +98,91 @@ type PolledDocument = {
   status?: string | null;
   lifecycle_status?: string | null;
   status_detail?: string | null;
+  document_type?: string | null;
 };
+
+type S2UploadedSource = {
+  filename: string;
+  documentType: string;
+  documentId: string;
+  taskId: string | null;
+};
+
+/** User-facing acceptance probe: API read-back of the exact uploaded bytes, not a mock. */
+async function verifyS2FourSourceLedger(
+  page: Page,
+  projectId: string,
+  sources: S2UploadedSource[],
+): Promise<void> {
+  expect(sources, "S2 must upload exactly four source families").toHaveLength(4);
+  expect(new Set(sources.map((s) => s.documentId)).size, "distinct persisted document IDs").toBe(4);
+  for (const source of sources) {
+    expect(source.taskId, `${source.filename}: the worker must have been enqueued`).toBeTruthy();
+    const expectedHash = manifest.sha256[source.filename];
+    expect(expectedHash, `${source.filename}: pinned fixture hash must exist`).toMatch(/^[a-f0-9]{64}$/);
+    expect(
+      createHash("sha256").update(readFileSync(fixture(source.filename))).digest("hex"),
+      `${source.filename}: original fixture bytes changed without updating the manifest`,
+    ).toBe(expectedHash);
+  }
+
+  const result = await page.evaluate(async ({ projectId: id, sources: requested }) => {
+    const token = await window.Clerk?.session?.getToken();
+    if (!token) throw new Error("S2_AUTH_CONTEXT_MISSING");
+    const headers = { Authorization: `Bearer ${token}` };
+    const listing = await fetch(`/api/v1/projects/${id}/documents?limit=100`, { headers });
+    const list = listing.ok
+      ? (await listing.json()) as { items?: { id: string; filename: string; document_type: string }[] }
+      : null;
+    const reads = await Promise.all(requested.map(async (source) => {
+      const revisions = await fetch(`/api/v1/documents/${source.documentId}/revisions`, { headers });
+      const revisionRows = revisions.ok
+        ? (await revisions.json()) as { revision_id: string; rev_no?: number }[]
+        : [];
+      const download = await fetch(`/api/v1/documents/${source.documentId}/download`, { headers });
+      const bytes = download.ok ? Array.from(new Uint8Array(await download.arrayBuffer())) : [];
+      return {
+        id: source.documentId,
+        revisionHttp: revisions.status,
+        revisions: revisionRows,
+        downloadHttp: download.status,
+        bytes,
+      };
+    }));
+    return { listHttp: listing.status, rows: list?.items ?? [], reads };
+  }, { projectId, sources });
+
+  expect(result.listHttp, "the authenticated project documents API must respond").toBe(200);
+  for (const source of sources) {
+    const matches = result.rows.filter((row) => row.id === source.documentId && row.filename === source.filename);
+    expect(matches, `${source.filename}: exact identity must be listed once`).toHaveLength(1);
+    expect(matches[0]?.document_type, `${source.filename}: canonical persisted document type`).toBe(source.documentType);
+    const read = result.reads.find((item) => item.id === source.documentId);
+    expect(read?.revisionHttp, `${source.filename}: revision lineage read-back`).toBe(200);
+    expect(read?.revisions, `${source.filename}: exactly one immutable genesis revision`).toHaveLength(1);
+    expect(read?.revisions[0]?.rev_no, `${source.filename}: genesis version`).toBe(1);
+    expect(read?.revisions[0]?.revision_id, `${source.filename}: durable revision identity`).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(read?.downloadHttp, `${source.filename}: authenticated original-byte read-back`).toBe(200);
+    expect(
+      createHash("sha256").update(Buffer.from(read?.bytes ?? [])).digest("hex"),
+      `${source.filename}: exact bytes persisted and readable through the API`,
+    ).toBe(manifest.sha256[source.filename]);
+  }
+  test.info().annotations.push({
+    type: "s2-source-ledger",
+    description: JSON.stringify({
+      projectId,
+      sources: sources.map((s) => ({
+        filename: s.filename, type: s.documentType, documentId: s.documentId,
+        revisionId: result.reads.find((r) => r.id === s.documentId)?.revisions[0]?.revision_id,
+        sha256: manifest.sha256[s.filename],
+      })),
+    }),
+  });
+}
+
 
 /** Remember the latest documents-list answer the APP itself received (no extra requests). */
 function trackDocumentsList(page: Page, projectId: string): () => PolledDocument[] {
@@ -333,25 +420,32 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       );
     });
 
-    // 4 ── uploads the budget and the schedule
-    await test.step("upload the budget", () =>
+    // 4 ── four upload receipts must bind one project, four distinct IDs and exact source types.
+    const budget = await test.step("upload the budget", () =>
       uploadDocumentThroughUi(page, recorder, {
         projectId,
         filePath: fixture("triplet-budget.xlsx"),
         documentType: "budget",
       }));
-    await test.step("upload the schedule", () =>
+    const schedule = await test.step("upload the schedule", () =>
       uploadDocumentThroughUi(page, recorder, {
         projectId,
         filePath: fixture("triplet-schedule.xlsx"),
         documentType: "schedule",
       }));
-    await test.step("upload the technical specification (fourth family)", () =>
+    const technical = await test.step("upload the technical specification (fourth family)", () =>
       uploadDocumentThroughUi(page, recorder, {
         projectId,
         filePath: fixture("triplet-specification.docx"),
-        documentType: "specification",
+        documentType: manifest.specification.document_type,
       }));
+    await test.step("S2: API read-back of original bytes, canonical types and revision IDs", () =>
+      verifyS2FourSourceLedger(page, projectId, [
+        { filename: "triplet-contract.docx", documentType: "contract", ...contract },
+        { filename: "triplet-budget.xlsx", documentType: "budget", ...budget },
+        { filename: "triplet-schedule.xlsx", documentType: "schedule", ...schedule },
+        { filename: "triplet-specification.docx", documentType: "technical_spec", ...technical },
+      ]));
     await test.step("budget and schedule finish processing", async () => {
       await expectDocumentState(page, "triplet-budget.xlsx", /analy[sz]ed|parsed/i);
       await expectDocumentState(page, "triplet-schedule.xlsx", /analy[sz]ed|parsed/i);
@@ -363,7 +457,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       markStep(
         "S2",
         "PARTIAL",
-        "contract (.docx), budget, schedule and technical specification (.docx) uploaded through the UI; no pinned revision hash check; refusal only at the UI gate",
+        "four canonical types + original SHA256 bytes, genesis revision IDs and worker task receipts verified by authenticated API; AI mocked and no independent PostgreSQL UAT, so PARTIAL",
       );
     });
 
