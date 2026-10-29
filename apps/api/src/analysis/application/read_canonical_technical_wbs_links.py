@@ -157,8 +157,8 @@ class ReadCanonicalTechnicalWBSLinksService:
                         DocumentRevisionORM.blob_hash == hash_value,
                     )
                 )
-                clause_id_found = await self.session.scalar(
-                    select(ClauseORM.id).join(
+                original_clause = await self.session.scalar(
+                    select(ClauseORM).join(
                         DocumentORM,
                         (DocumentORM.id == ClauseORM.document_id)
                         & (DocumentORM.tenant_id == ClauseORM.tenant_id),
@@ -173,6 +173,24 @@ class ReadCanonicalTechnicalWBSLinksService:
                             [DocumentType.TECHNICAL_SPEC, DocumentType.SPECIFICATION]
                         ),
                     )
+                )
+                # The same clause ID is insufficient: persisted extracted source
+                # identity (section, offsets and deterministic extractor) must
+                # still equal the exact approved event. A re-index or tampered
+                # clause cannot silently keep an obsolete link CURRENT.
+                tech_metadata = (
+                    (original_clause.extracted_entities or {}).get("technical_requirement")
+                    if original_clause is not None
+                    else None
+                )
+                clause_matches = bool(
+                    original_clause is not None
+                    and original_clause.extraction_model == "deterministic-technical-section-v1"
+                    and isinstance(tech_metadata, dict)
+                    and tech_metadata.get("source_section") == section
+                    and original_clause.text_start_offset == p.get("source_start_offset")
+                    and original_clause.text_end_offset == p.get("source_end_offset")
+                    and original_clause.full_text
                 )
                 audit_event = await self.session.scalar(
                     select(ProjectEventORM).where(
@@ -208,11 +226,14 @@ class ReadCanonicalTechnicalWBSLinksService:
                     and audit_event.payload.get("technical_revision_id") == str(revision_id)
                     and audit_event.payload.get("source_clause_id") == str(clause_id)
                     and audit_event.payload.get("source_blob_hash") == hash_value
+                    and audit_event.payload.get("source_section") == section
+                    and audit_event.payload.get("source_start_offset") == p.get("source_start_offset")
+                    and audit_event.payload.get("source_end_offset") == p.get("source_end_offset")
                     and audit_event.payload.get("wbs_baseline_id") == str(event_baseline)
                     and audit_event.payload.get("wbs_node_id") == str(node_id)
                 )
                 source_current = bool(
-                    revision is not None and clause_id_found is not None
+                    revision is not None and clause_matches
                     and audit_matches and active_trust is not None
                     and resolved is not None
                     and resolved.status is CurrentRevisionStatus.TRUSTED
