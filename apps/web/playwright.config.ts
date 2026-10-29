@@ -92,6 +92,8 @@ export default defineConfig({
         /(^|[\\/])pj01-tenant-isolation\.spec\.ts$/,
         // ACC-01 S5: UI rejection needs a reason. Same live Clerk login and production runtime as PJ-01.
         /(^|[\\/])pj01-hitl-reject\.spec\.ts$/,
+        // ACC-01 S3: a contract awaiting approval is a stated state (not a 404, not a score). Same live Clerk login.
+        /(^|[\\/])pj01-contract-pending-approval\.spec\.ts$/,
       ],
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["global-setup"],
