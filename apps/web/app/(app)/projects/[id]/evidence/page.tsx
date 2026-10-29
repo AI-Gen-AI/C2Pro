@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { type ExtractedEntity } from "@/components/evidence";
 import { EvidenceActionDialog } from "@/components/features/evidence/EvidenceActionDialog";
@@ -98,6 +99,9 @@ export default function EvidencePage() {
   const requestedDocumentId = searchParams.get("documentId");
   const requestedHighlightId = searchParams.get("highlightId");
   const requestedRevisionId = searchParams.get("revisionId");
+  // Return path is constructed locally from the authenticated project scope,
+  // never from a user-supplied full URL (no open redirects or cross-project jump).
+  const returnReviewItemId = searchParams.get("returnReviewItemId");
   // Health links cite the persisted source clause, not a semantic/alert alias.
   const requestedFromHealth = searchParams.get("origin") === "health";
   const revisionReadOnly = Boolean(requestedRevisionId);
@@ -964,6 +968,16 @@ export default function EvidencePage() {
           )}
         </section>
       )}
+
+      {returnReviewItemId ? (
+        <Link
+          data-testid="evidence-return-to-review"
+          href={`/projects/${encodeURIComponent(id)}/review?itemId=${encodeURIComponent(returnReviewItemId)}`}
+          className="inline-flex rounded-md border px-3 py-2 text-sm font-medium text-primary hover:underline"
+        >
+          Back to this review
+        </Link>
+      ) : null}
 
       <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} />
 
