@@ -36,14 +36,54 @@ export async function uploadDocumentThroughUi(
   // change it through the visible options only when the default is not the wanted type.
   const typeControl = page.getByLabel(`Document type for ${fileName}`);
   await expect(typeControl, "the staged file must expose its document type").toBeVisible({ timeout: 15_000 });
-  const wanted = new RegExp(`^\\s*${documentType}\\s*$`, "i");
+  // The API identifier and the label visible to a human intentionally differ.
+  const selectedLabel = documentType === "technical_spec" ? "Technical specification" : documentType;
+  const wanted = new RegExp(`^\\s*${selectedLabel}\\s*/**
+ * PJ-01 step 3: upload a contract through the real upload surface.
+ *
+ * Proves acceptance before any processing wait: the upload POST must succeed, return the
+ * document id and an enqueued task id, and the dialog must close (it closes only after
+ * `uploadDocument` resolved). A null task id means the processing task was never enqueued,
+ * which would otherwise surface minutes later as an unexplained stuck document.
+ */
+import path from "node:path";
+
+import { expect, type Page, type Response } from "@playwright/test";
+
+import type { Pj01RunRecorder } from "./run-recorder";
+
+export interface UploadResult {
+  documentId: string;
+  taskId: string | null;
+  httpStatus: number;
+}
+
+export async function uploadDocumentThroughUi(
+  page: Page,
+  recorder: Pj01RunRecorder,
+  options: { projectId: string; filePath: string; documentType?: string },
+): Promise<UploadResult> {
+  const { projectId, filePath } = options;
+  const documentType = options.documentType ?? "contract";
+  const fileName = path.basename(filePath);
+
+  await page.getByRole("button", { name: /upload document/i }).click();
+  const surface = page.getByTestId("document-upload-surface");
+  await expect(surface).toBeVisible({ timeout: 15_000 });
+  await page.setInputFiles('input[type="file"]', filePath);
+
+  // The staged file's type is a Select trigger (shadcn): confirm the type the user sees and
+  // change it through the visible options only when the default is not the wanted type.
+  const typeControl = page.getByLabel(`Document type for ${fileName}`);
+  await expect(typeControl, "the staged file must expose its document type").toBeVisible({ timeout: 15_000 });
+, "i");
   if (!wanted.test(await typeControl.innerText())) {
     await typeControl.click();
     await page.getByRole("option", { name: wanted }).click();
   }
   await expect(typeControl).toHaveText(wanted);
 
-  type UploadBody = { id?: string; document_id?: string; task_id?: string | null };
+  type UploadBody = { id?: string; document_id?: string; task_id?: string | null; document_type?: string };
   const isUpload = (response: Response): boolean =>
     response.request().method() === "POST" &&
     new RegExp(`/projects/${projectId}/documents/?$`).test(new URL(response.url()).pathname);
@@ -83,6 +123,10 @@ export async function uploadDocumentThroughUi(
   if (!body) throw new Error("PJ01_UPLOAD_BODY_UNREADABLE: the accepted upload response could not be read");
   const documentId = body.id ?? body.document_id;
   if (!documentId) throw new Error("PJ01_UPLOAD_NO_DOCUMENT_ID: the upload response carried no document id");
+  // The fourth family must persist as technical_spec, not the generic specification alias.
+  if (body.document_type !== documentType) {
+    throw new Error(`PJ01_UPLOAD_TYPE_MISMATCH: ${fileName}: expected ${documentType}, server returned ${String(body.document_type)}`);
+  }
 
   try {
     await expect(surface).toBeHidden({ timeout: 60_000 });
