@@ -96,7 +96,7 @@ async function verifyAuthenticatedBackendTenant(page: Page, expectedTenantId: st
       return { status: 0, tenantMatches: false, activeUser: false };
     }
 
-    let token: string | null = null;
+    let token: string | null;
     try {
       token = await session.getToken({
         organizationId: organization.id,
@@ -154,7 +154,7 @@ async function preventProductWrites(page: Page): Promise<() => void> {
       await route.continue();
       return;
     }
-    let isProductOrigin = false;
+    let isProductOrigin: boolean;
     try {
       const url = new URL(request.url());
       isProductOrigin =
