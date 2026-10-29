@@ -111,6 +111,10 @@ def test_source_has_no_write_queries_or_clerk_mutations() -> None:
     assert "await transaction.rollback()" in source
     assert "SELECT count(*) FROM users" in source
     assert "SELECT count(*) FROM tenants" in source
+    assert "synthetic_acceptance" in source
+    assert "A_TENANT_HAS_UNAUTHORIZED_PROJECTS" in source
+    assert "name NOT LIKE 'ACCEPT-706-%'" in source
+    assert "B_TENANT_NOT_EMPTY_SYNTHETIC" in source
     assert "client.get(" in source
     assert "client.post(" not in source
     assert "client.patch(" not in source
