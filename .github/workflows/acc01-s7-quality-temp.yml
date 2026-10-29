@@ -2,7 +2,10 @@ name: TEMP ACC-01 S7 Ruff and mypy parity
 on:
   push:
     branches: [feat/acc01-s7-structured-links-20261029]
-    paths: [.github/workflows/acc01-s7-quality-temp.yml]
+    paths:
+      - .github/workflows/acc01-s7-quality-temp.yml
+      - apps/api/src/analysis/application/canonical_structured_wbs_links.py
+      - apps/api/tests/integration/analysis/test_s7_structured_wbs_three_source_pg.py
 permissions:
   contents: read
 jobs:
