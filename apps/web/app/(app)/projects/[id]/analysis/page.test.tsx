@@ -397,6 +397,112 @@ describe("P0b-L4-5 — Health surface placement and Coherence suppression", () =
     expect(note).not.toHaveTextContent(/has not produced enough|insufficient evidence/i);
   });
 
+  it("S3 — a pending contract has null Score, no budget subscore and a real review route", () => {
+    baseMocks();
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: null,
+        score_reason: "contract_pending_approval",
+        sub_scores: { BUDGET: 87 },
+        document_count: 1,
+      },
+      isLoading: false,
+      error: null,
+    });
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(true),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    const note = expectNoCoherenceNumber();
+    expect(note).toHaveAttribute("data-reason", "contract_pending_approval");
+    expect(note).toHaveTextContent(/contract awaiting approval/i);
+    expect(note).toHaveTextContent(/no score is available/i);
+    expect(screen.getByTestId("analysis-review-contract-link")).toHaveAttribute(
+      "href",
+      "/projects/proj-real-7/review",
+    );
+    expect(screen.getByTitle("Awaiting contract approval before coherence is evaluated"))
+      .toHaveTextContent("—");
+    expect(screen.queryByText("87")).not.toBeInTheDocument();
+  });
+
+  it("S3 — a stale numeric dashboard cannot override an explicit pending-approval reason", () => {
+    baseMocks();
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 91,
+        score_reason: "contract_pending_approval",
+        sub_scores: { BUDGET: 79 },
+        document_count: 3,
+      },
+      isLoading: false,
+      error: null,
+    });
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(true),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(expectNoCoherenceNumber()).toHaveAttribute("data-reason", "contract_pending_approval");
+    expect(screen.queryByText("91")).not.toBeInTheDocument();
+    expect(screen.queryByText("79")).not.toBeInTheDocument();
+  });
+
+  it("S3 — a backend null remains unavailable even if Health still has an older subscore ref", () => {
+    baseMocks();
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: null,
+        score_reason: null,
+        sub_scores: {},
+        document_count: 1,
+      },
+      isLoading: false,
+      error: null,
+    });
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(true),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(expectNoCoherenceNumber()).toHaveAttribute("data-reason", "coherence_unavailable");
+    expect(screen.queryByTestId("analysis-review-contract-link")).not.toBeInTheDocument();
+  });
+
+  it("S3 — a genuine numeric zero with positive trusted evidence is a valid Score", () => {
+    baseMocks();
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: 0,
+        score_reason: null,
+        sub_scores: {},
+        document_count: 3,
+      },
+      isLoading: false,
+      error: null,
+    });
+    projectHealthMock.mockReturnValue({
+      data: vectorWithCoherence(true),
+      isLoading: false,
+      isError: false,
+    });
+
+    renderWithProviders(<AnalysisPage />);
+
+    expect(screen.getByTestId("analysis-coherence-score")).toHaveTextContent("0");
+    expect(screen.queryByTestId("analysis-coherence-unavailable")).not.toBeInTheDocument();
+  });
+
   it("4 — with positive subscore evidence, renders the Coherence readouts unchanged", () => {
     baseMocks();
     projectHealthMock.mockReturnValue({
