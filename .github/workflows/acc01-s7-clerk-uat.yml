@@ -1,3 +1,4 @@
+# Final post-quality verification. Auth uses disposable test project, NEVER production.
 name: ACC-01 S7 Clerk signout/relogin UAT - isolated
 on:
   push:
