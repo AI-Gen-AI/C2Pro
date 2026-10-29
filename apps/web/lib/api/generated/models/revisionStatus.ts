@@ -44,6 +44,7 @@ export interface RevisionStatus {
   status?: RevisionStatusStatus;
   revision_id: string;
   rev_no?: number | null;
+  blob_hash?: string | null;
   trust_state?: string | null;
   artifact_id?: string | null;
   artifact_version?: number | null;

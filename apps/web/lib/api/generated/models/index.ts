@@ -261,6 +261,7 @@ export * from "./listProjectAlertsCompatibilityApiProjectsProjectIdAlertsGetPara
 export * from "./listProjectAlertsCompatibilityApiV1ProjectsProjectIdAlertsGetParams";
 export * from "./listProjectsApiV1ProjectsGetParams";
 export * from "./listReviewQueueApiV1HitlQueueGetParams";
+export * from "./listTechnicalWbsReviewsApiV1ProjectsProjectIdTechnicalWbsReviewsGetParams";
 export * from "./listTenantAlertsApiV1AlertsTenantGetParams";
 export * from "./listWbsChangeSetsApiV1ProjectsProjectIdWbsGovernanceChangeSetsGetParams";
 export * from "./livenessCheckApiV1HealthLiveGet200";
@@ -362,6 +363,10 @@ export * from "./stakeholderUpdateRequestStakeholderMetadata";
 export * from "./startSampleProjectApiV1OnboardingSampleProjectStartPost200";
 export * from "./subscriptionPlan";
 export * from "./systemStatusResponse";
+export * from "./technicalMappingDecision";
+export * from "./technicalWBSReviewHistoryEntry";
+export * from "./technicalWBSReviewRequest";
+export * from "./technicalWBSReviewResponse";
 export * from "./temporalEntityRef";
 export * from "./temporalEntityRefEntityType";
 export * from "./tenantResponse";

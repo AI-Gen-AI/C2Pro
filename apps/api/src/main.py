@@ -26,6 +26,9 @@ from src.analysis.adapters.graph.workflow import (
     ensure_checkpointer_ready,
 )
 from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
+from src.analysis.adapters.http.technical_wbs_review_router import (
+    router as technical_wbs_review_router,
+)
 from src.bulk_operations.router import router as bulk_operations_router
 from src.config import settings
 from src.core.ai.analytics_router import router as ai_analytics_router
@@ -309,6 +312,7 @@ def create_application() -> FastAPI:
     app.include_router(project_reports_router, prefix=api_v1_prefix)
     app.include_router(documents_router, prefix=api_v1_prefix)
     app.include_router(temporal_router, prefix=api_v1_prefix)
+    app.include_router(technical_wbs_review_router, prefix=api_v1_prefix)  # ACC-01 S7 audit-only human decisions
     app.include_router(wbs_governance_router, prefix=api_v1_prefix)  # PC-2a.1 read-only
     app.include_router(wbs_governed_change_router, prefix=api_v1_prefix)  # PC-2a.2 governed commands
     app.include_router(wbs_profile_catalog_router, prefix=api_v1_prefix)  # PC-2b.1 read-only profile catalog
