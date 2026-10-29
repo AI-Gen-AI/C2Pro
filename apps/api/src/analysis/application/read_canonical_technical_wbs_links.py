@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -132,7 +132,7 @@ class ReadCanonicalTechnicalWBSLinksService:
             audit_id = _uuid(p.get("review_event_id"))
             hash_value = str(p.get("source_blob_hash") or "")
             section = str(p.get("source_section") or "")
-            node = current_nodes.get(node_id)
+            node = current_nodes.get(cast(UUID, node_id))
             wbs_current = baseline_id is not None and event_baseline == baseline_id and node is not None
             structurally_valid = bool(
                 document_id and revision_id and clause_id and audit_id
@@ -216,7 +216,7 @@ class ReadCanonicalTechnicalWBSLinksService:
                 # SHARE lock: a concurrent trust promotion cannot invalidate
                 # this projection between status checks.
                 resolved = await resolver.resolve(
-                    tenant_id=tenant_id, document_id=document_id
+                    tenant_id=tenant_id, document_id=cast(UUID, document_id)
                 ) if active_trust is not None else None
                 audit_matches = bool(
                     audit_event is not None
