@@ -34,7 +34,7 @@ def test_checked_in_json_and_yaml_keep_s2_and_add_audit_only_s7() -> None:
         assert {"trusted_revision", "pending_revision"} <= set(document_item)
         assert "blob_hash" in schemas["RevisionStatus"]["properties"]
         assert "DocumentEntityResponse" in schemas
-        assert S7_MODELS <= set(schemas)
+        assert set(schemas) >= S7_MODELS
         assert set(document["paths"][REVIEW_ROUTE]) == {"get", "post"}
         assert set(document["paths"][CANONICAL_ROUTE]) == {"get", "post"}
         assert (
