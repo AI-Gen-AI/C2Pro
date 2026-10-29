@@ -108,6 +108,9 @@ function labelType(type: string): string {
   if (!type) {
     return 'Document';
   }
+  if (type === 'technical_spec') {
+    return 'Technical specification';
+  }
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
