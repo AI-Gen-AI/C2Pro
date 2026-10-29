@@ -1,0 +1,81 @@
+name: TEMP ACC-01 Orval generated contract reconciliation
+on:
+  push:
+    branches:
+      - fix/acc01-orval-generated-20261029
+    paths:
+      - .github/workflows/acc01-orval-reconcile-temp.yml
+concurrency:
+  group: acc01-orval-reconcile-temp
+  cancel-in-progress: false
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependency graph
+        run: pnpm install --frozen-lockfile
+      - name: Generate Orval files and deterministic Prettier output
+        run: |
+          pnpm --dir apps/web run generate:api
+          pnpm --dir apps/web exec prettier --write lib/api/generated schema/api.json
+      - name: Stage only generated API contract files
+        run: |
+          mkdir -p generated-artifact/apps/web/lib/api
+          mkdir -p generated-artifact/apps/web/schema
+          cp -a apps/web/lib/api/generated generated-artifact/apps/web/lib/api/
+          cp apps/web/schema/api.json generated-artifact/apps/web/schema/api.json
+          test -f generated-artifact/apps/web/lib/api/generated/models/index.ts
+          test -f generated-artifact/apps/web/schema/api.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: acc01-orval-generated-exact
+          path: generated-artifact/
+          if-no-files-found: error
+          retention-days: 1
+  commit-to-isolated-branch:
+    needs: generate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clear only generated folder before restoring generated artifact
+        run: |
+          rm -rf apps/web/lib/api/generated
+          mkdir -p apps/web/lib/api/generated
+      - uses: actions/download-artifact@v4
+        with:
+          name: acc01-orval-generated-exact
+          path: .
+      - name: Commit ONLY generated API artifacts to the test branch
+        run: |
+          set -euo pipefail
+          test -f apps/web/lib/api/generated/models/index.ts
+          test -f apps/web/schema/api.json
+          git add -A -- apps/web/lib/api/generated apps/web/schema/api.json
+          git diff --cached --name-only | while IFS= read -r path; do
+            case "$path" in
+              apps/web/lib/api/generated/*|apps/web/schema/api.json) ;;
+              *) echo "Unexpected file: $path"; exit 1 ;;
+            esac
+          done
+          if git diff --cached --quiet; then
+            echo "Generated output already in sync"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(ACC-01): reconcile generated Orval types and API client"
+          git push origin HEAD:refs/heads/fix/acc01-orval-generated-20261029
