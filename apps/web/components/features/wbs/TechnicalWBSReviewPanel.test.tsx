@@ -119,6 +119,7 @@ describe("TechnicalWBSReviewPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.orgId = "org-test-1";
+    mocks.documents[0].type = "specification";
     mocks.get.mockResolvedValue([]);
     mocks.revisions = [];
     mocks.detail = null;
@@ -189,8 +190,8 @@ describe("TechnicalWBSReviewPanel", () => {
   });
 
   it("reviews a trusted source-backed specification from the integrated triplet", async () => {
-    // The actual four-document journey uploads documentType="specification",
-    // while canonical technical uploads may use documentType="technical_spec".
+    // Legacy documents can still be called specification, but S2 now sends
+    // the distinct technical_spec family. Both must remain selectable.
     // Both are supported by the backend, subject to the SAME source and trust fences.
     validFixtures();
     mocks.detail = { ...mocks.detail, document_type: "specification" };
@@ -217,6 +218,78 @@ describe("TechnicalWBSReviewPanel", () => {
     expect(screen.getByTestId("technical-wbs-review-receipt")).toHaveTextContent(
       "Not a canonical link; technical compliance not assessed.",
     );
+  });
+
+  it("S7 — accepts the fourth technical_spec document uploaded by the S2 interface", () => {
+    validFixtures();
+    mocks.documents[0].type = "technical_spec";
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    expect(screen.getByRole("option", { name: "technical.docx" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Technical specification"), {
+      target: { value: "doc-technical" },
+    });
+    fireEvent.change(screen.getByLabelText("Source requirement"), { target: { value: "clause-1" } });
+    fireEvent.change(screen.getByLabelText("Approved WBS node"), { target: { value: "node-11" } });
+    fireEvent.change(screen.getByLabelText("Reviewer reason"), {
+      target: { value: "Review trustworthy section 4.1 against the approved WBS." },
+    });
+    expect(screen.getByTestId("technical-wbs-review-submit")).toBeEnabled();
+  });
+
+  it("S7 — final approval appears only for a persisted confirmed matching audit", async () => {
+    validFixtures();
+    mocks.documents[0].type = "technical_spec";
+    mocks.get.mockResolvedValue([{
+      event_id: "a4e29dad-1111-4444-8888-2b756c4d0871",
+      occurred_at: "2026-10-29T15:30:00Z",
+      decision: "CONFIRMED_FOR_REVIEW",
+      technical_document_id: "doc-technical",
+      technical_revision_id: REV,
+      source_clause_id: "clause-1",
+      source_section: "4.1",
+      proposed_wbs_baseline_id: "baseline-2",
+      proposed_wbs_node_id: "node-11",
+      reason: "Independent review was recorded",
+      state: "HISTORICAL_AUDIT_ONLY",
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
+      approved_canonical_link: false,
+      technical_assessment: "NOT_ASSESSED",
+    }]);
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
+    fireEvent.change(screen.getByLabelText("Source requirement"), { target: { value: "clause-1" } });
+    fireEvent.change(screen.getByLabelText("Approved WBS node"), { target: { value: "node-11" } });
+    const final = await screen.findByTestId("technical-wbs-canonical-approval");
+    expect(final).toHaveTextContent("Final Technical → WBS approval");
+    expect(screen.getByTestId("technical-wbs-canonical-submit")).toBeDisabled();
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+
+  it("S7 — an audit for a stale baseline or rejected candidate never enables canonical approval", async () => {
+    validFixtures();
+    mocks.get.mockResolvedValue([{
+      event_id: "bb7f7e14-1111-4444-8888-2b756c4d0871",
+      occurred_at: "2026-10-29T15:30:00Z",
+      decision: "CONFIRMED_FOR_REVIEW",
+      technical_document_id: "doc-technical",
+      technical_revision_id: REV,
+      source_clause_id: "clause-1",
+      source_section: "4.1",
+      proposed_wbs_baseline_id: "old-baseline",
+      proposed_wbs_node_id: "node-11",
+      reason: "Old approved baseline",
+      state: "HISTORICAL_AUDIT_ONLY",
+      authority: "AUDIT_ONLY_NOT_CANONICAL_LINK",
+      approved_canonical_link: false,
+    }]);
+    renderWithProviders(<TechnicalWBSReviewPanel projectId="project-1" authority={authority} />);
+    fireEvent.change(screen.getByLabelText("Technical specification"), { target: { value: "doc-technical" } });
+    fireEvent.change(screen.getByLabelText("Source requirement"), { target: { value: "clause-1" } });
+    fireEvent.change(screen.getByLabelText("Approved WBS node"), { target: { value: "node-11" } });
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith({
+      url: "/api/v1/projects/project-1/technical-wbs/reviews", method: "GET",
+    }));
+    expect(screen.queryByTestId("technical-wbs-canonical-approval")).not.toBeInTheDocument();
   });
 
   it("cannot review an unrelated document family even when the source metadata is forged", () => {

@@ -26,6 +26,7 @@ import type {
 import { orvalApiClient } from "@/lib/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CanonicalTechnicalWBSApprovalPanel } from "./CanonicalTechnicalWBSApprovalPanel";
 
 type TechnicalClause = {
   id: string;
@@ -81,7 +82,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
   const { documents, loading: documentsLoading, error: documentsError } =
     useProjectDocuments(projectId);
   const technicalDocuments = useMemo(
-    () => documents.filter((doc) => doc.type === "specification" && doc.extension === "docx"),
+    () => documents.filter((doc) => (doc.type === "technical_spec" || doc.type === "specification") && doc.extension === "docx"),
     [documents],
   );
   // Every mount (including after a fresh Clerk sign-in) reads persisted
@@ -171,6 +172,23 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
   const selectedNode = validBaseline
     ? baseline.data?.nodes.find((n) => n.node_id === nodeId)
     : null;
+  // The exact review must have reached the durable, authenticated GET before
+  // the final human-approval action is even offered. No POST result alone can
+  // bootstrap canonical authority.
+  const confirmedReview = validBaseline && validDocument &&
+      selectedClause && selectedNode && decision === "CONFIRMED_FOR_REVIEW"
+    ? reviewHistory.data?.find((row) =>
+        row.state === "HISTORICAL_AUDIT_ONLY" &&
+        row.authority === "AUDIT_ONLY_NOT_CANONICAL_LINK" &&
+        row.approved_canonical_link === false &&
+        row.decision === "CONFIRMED_FOR_REVIEW" &&
+        row.technical_document_id === selectedDocumentId &&
+        row.technical_revision_id === trustedRevisionId &&
+        row.source_clause_id === selectedClause.id &&
+        row.proposed_wbs_baseline_id === authority?.baseline_id &&
+        row.proposed_wbs_node_id === selectedNode.node_id
+      )
+    : undefined;
   const ready = Boolean(
     validBaseline &&
       validDocument &&
@@ -366,6 +384,13 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
             <p>{receipt.replayed ? "Existing decision recovered." : "Human decision recorded."}</p>
             <p><strong>Not a canonical link; technical compliance not assessed.</strong></p>
           </div>
+        ) : null}
+        {confirmedReview ? (
+          <CanonicalTechnicalWBSApprovalPanel
+            key={confirmedReview.event_id}
+            projectId={projectId}
+            audit={confirmedReview}
+          />
         ) : null}
         <section data-testid="technical-wbs-review-history" aria-label="My previous reviews">
           <h3 className="font-semibold">My previous reviews — historical audit only</h3>

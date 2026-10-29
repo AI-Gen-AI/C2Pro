@@ -501,3 +501,79 @@ async def test_revision_status_exposes_immutable_a_hash_when_document_uploaded_b
         assert status.status == "available"
         assert status.blob_hash == world["digest"]
         assert status.blob_hash != document.file_hash
+
+
+async def test_real_pg_canonical_writer_requires_explicit_approval_and_replays(
+    db: AsyncSession, test_session_factory, tmp_path: Path
+) -> None:
+    """The final association is a separate durable event, never an audit inference."""
+    from src.analysis.application.approve_canonical_technical_wbs_link import (
+        CANONICAL_APPROVAL,
+        CANONICAL_LINK_EVENT,
+        ApproveCanonicalTechnicalWBSLinkService,
+        CanonicalTechnicalWBSLinkError,
+    )
+
+    w = await _world(db, tmp_path)
+    async with test_session_factory() as review_session:
+        review = await RecordTechnicalWBSReviewService(
+            review_session, w["reader"]
+        ).execute(**_arguments(w))
+        await review_session.commit()
+
+    approval_args = {
+        "tenant_id": w["tenant"],
+        "project_id": w["project"],
+        "actor_user_id": w["actor"],
+        "review_event_id": review.event_id,
+        "expected_wbs_baseline_id": w["baseline"],
+        "expected_wbs_node_id": w["node"],
+        "approval": CANONICAL_APPROVAL,
+        "idempotency_key": "s7-canonical-pg-key",
+        "reason": "Final human approval of the current source-to-WBS mapping",
+    }
+    async with test_session_factory() as approval_session:
+        accepted = await ApproveCanonicalTechnicalWBSLinkService(
+            approval_session
+        ).execute(**approval_args)
+        assert accepted.replayed is False
+        assert accepted.technical_revision_id == w["revision"]
+        await approval_session.commit()
+
+    async with test_session_factory() as observer:
+        events = list(
+            (
+                await observer.scalars(
+                    select(ProjectEventORM).where(
+                        ProjectEventORM.tenant_id == w["tenant"],
+                        ProjectEventORM.project_id == w["project"],
+                        ProjectEventORM.event_type == CANONICAL_LINK_EVENT,
+                    )
+                )
+            ).all()
+        )
+        assert len(events) == 1
+        event = events[0]
+        assert event.event_id == accepted.event_id
+        assert event.actor == f"user:{w['actor']}"
+        assert event.payload["review_event_id"] == str(review.event_id)
+        assert event.payload["authority"] == "EXPLICIT_HUMAN_CANONICAL_LINK"
+        assert event.payload["approval"] == CANONICAL_APPROVAL
+        assert event.payload["source_blob_hash"] == w["digest"]
+        assert event.payload["wbs_baseline_id"] == str(w["baseline"])
+        assert event.payload["wbs_node_id"] == str(w["node"])
+
+    async with test_session_factory() as replay_session:
+        replay = await ApproveCanonicalTechnicalWBSLinkService(
+            replay_session
+        ).execute(**approval_args)
+        assert replay.replayed is True
+        assert replay.event_id == accepted.event_id
+        await replay_session.commit()
+
+    async with test_session_factory() as conflict_session:
+        with pytest.raises(CanonicalTechnicalWBSLinkError, match="already settled"):
+            await ApproveCanonicalTechnicalWBSLinkService(conflict_session).execute(
+                **{**approval_args, "reason": "A contradictory second approval"}
+            )
+        await conflict_session.rollback()

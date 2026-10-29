@@ -42,6 +42,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "wbs.intelligence.run_usage",
         # ACC-01 S7: human review audit only. NEVER a canonical WBS link.
         "technical.wbs_link_reviewed",
+        # ACC-01 S7: explicit, human-approved canonical association.
+        # This is distinct from technical.wbs_link_reviewed audit observations.
+        "technical.wbs_link_approved",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")
