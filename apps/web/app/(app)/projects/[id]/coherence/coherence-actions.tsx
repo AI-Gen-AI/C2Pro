@@ -5,7 +5,10 @@ import {
   deriveTripletChecklist,
   TripletChecklist,
 } from "@/components/features/documents/TripletChecklist";
-import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
+import {
+  CONTRACT_PENDING_MESSAGE,
+  useProjectCoherenceActions,
+} from "@/hooks/useProjectCoherenceActions";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 
 type CoherenceActionsProps = {
@@ -15,7 +18,8 @@ type CoherenceActionsProps = {
 export function CoherenceActions({ projectId }: CoherenceActionsProps) {
   const { documents } = useProjectDocuments(projectId);
   const checklist = deriveTripletChecklist(documents);
-  const { evaluateCoherence, isEvaluating } = useProjectCoherenceActions(projectId);
+  const { evaluateCoherence, isEvaluating, contractPendingApproval } =
+    useProjectCoherenceActions(projectId);
   const disabled = !checklist.complete || isEvaluating;
 
   return (
@@ -41,6 +45,15 @@ export function CoherenceActions({ projectId }: CoherenceActionsProps) {
           {isEvaluating ? "Evaluating..." : "Evaluate coherence"}
         </Button>
       </div>
+      {contractPendingApproval ? (
+        <p
+          role="status"
+          data-testid="contract-pending-approval"
+          className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          {CONTRACT_PENDING_MESSAGE}
+        </p>
+      ) : null}
       {!checklist.complete ? (
         <div className="mt-4">
           <TripletChecklist documents={documents} compact />
