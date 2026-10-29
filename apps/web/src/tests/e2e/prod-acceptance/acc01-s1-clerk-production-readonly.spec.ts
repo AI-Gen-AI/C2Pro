@@ -77,6 +77,69 @@ async function startClerkSession(page: Page, email: string, expectedTenant: stri
   }));
 }
 
+/**
+ * Server-side positive identity control. GET /api/auth/me is backed by
+ * AuthService.get_current_user() and the persisted tenant association. Merely
+ * observing a Clerk session or copying publicMetadata is NOT sufficient.
+ * Never return or log the bearer, user identity, or the full API response.
+ */
+async function verifyAuthenticatedBackendTenant(page: Page, expectedTenantId: string): Promise<void> {
+  const evidence = await page.evaluate(async (tenantId: string) => {
+    const client = window.Clerk;
+    const session = client?.session;
+    const organization = client?.organization;
+    if (session?.status !== "active" || !organization) {
+      return { status: 0, tenantMatches: false, activeUser: false };
+    }
+    // Compare the active organization before requesting its scoped token.
+    if (organization.publicMetadata?.tenant_id !== tenantId) {
+      return { status: 0, tenantMatches: false, activeUser: false };
+    }
+
+    let token: string | null = null;
+    try {
+      token = await session.getToken({
+        organizationId: organization.id,
+        skipCache: true,
+      });
+    } catch {
+      return { status: 0, tenantMatches: false, activeUser: false };
+    }
+    if (!token) return { status: 0, tenantMatches: false, activeUser: false };
+
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Tenant-ID": tenantId,
+        },
+      });
+      if (response.status !== 200) {
+        return { status: response.status, tenantMatches: false, activeUser: false };
+      }
+      const payload: unknown = await response.json();
+      const shape = payload as {
+        tenant?: { id?: unknown };
+        user?: { is_active?: unknown };
+      } | null;
+      return {
+        status: response.status,
+        tenantMatches: shape?.tenant?.id === tenantId,
+        activeUser: shape?.user?.is_active === true,
+      };
+    } catch {
+      return { status: 0, tenantMatches: false, activeUser: false };
+    }
+  }, expectedTenantId);
+
+  expect(evidence.status, "the backend must authenticate this Clerk identity via GET /auth/me").toBe(200);
+  expect(evidence.tenantMatches, "the backend's persisted tenant must match Clerk's active organization").toBe(true);
+  expect(evidence.activeUser, "backend user must be active").toBe(true);
+}
+
 function watchProjectReads(page: Page): number[] {
   const statuses: number[] = [];
   page.on("response", (response) => {
@@ -115,6 +178,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
       expect(facts.sessionActive).toBe(true);
       expect(facts.tenantId).toBe(required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
       expect(facts.activeOrgId).toBe(required("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"));
+      await verifyAuthenticatedBackendTenant(page, required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
       const statuses = watchProjectReads(page);
       await page.goto("/projects/" + APPROVED_A_PROJECT_ID + "/documents");
       await expect.poll(() => statuses.length, { timeout: 30_000 }).toBeGreaterThan(0);
@@ -135,10 +199,18 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
       expect(facts.activeOrgId).toBeTruthy();
       expect(facts.activeOrgId).not.toBe(required("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"));
 
+      // Fail closed if B exists in Clerk but is not linked to a real backend user
+      // in its own tenant. Otherwise an unauthenticated 401 could appear to pass.
+      await verifyAuthenticatedBackendTenant(page, TENANT_B_ID);
+
       const statuses = watchProjectReads(page);
       await page.goto("/projects/" + APPROVED_A_PROJECT_ID + "/documents");
       await expect.poll(() => statuses.length, { timeout: 30_000 }).toBeGreaterThan(0);
-      expect(statuses.every((status) => [401, 403, 404].includes(status))).toBe(true);
+      expect(
+        statuses.every((status) => [403, 404].includes(status)),
+        "B was already authenticated by /auth/me; target must deny, not return 401/429",
+      ).toBe(true);
+      expect(statuses).not.toContain(401);
       expect(statuses).not.toContain(429);
 
       mkdirSync(path.dirname(OUTPUT), { recursive: true });
@@ -149,6 +221,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
           user_a_synthetic_project_read: "PASS_FROM_PRIOR_TEST",
           tenant_b_clerk_session: "PASS",
           tenant_b_org_metadata: "PASS",
+          tenant_b_backend_authenticated_and_tenant_linked: "PASS",
           tenant_b_to_a_denial: "PASS",
           tenant_a_to_b_denial: "NOT_RUN_NO_AUTHORIZED_B_PROJECT",
           ui_password_login: "NOT_RUN_TESTING_TOKEN_AUTH",
