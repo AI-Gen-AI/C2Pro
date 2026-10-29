@@ -24,7 +24,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AnalysisProgressTracker } from '@/components/features/analysis/AnalysisProgressTracker';
-import { TripletChecklist, type TripletSlotType } from '@/components/features/documents/TripletChecklist';
+import { TripletChecklist } from '@/components/features/documents/TripletChecklist';
+import type { DocumentType as ApiDocumentType } from '@/lib/api/generated/models';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
 import { useProjectCoherenceActions } from '@/hooks/useProjectCoherenceActions';
 import { apiClient } from '@/lib/api/client';
@@ -166,6 +167,7 @@ export default function ProjectDocumentsPage() {
   const projectId = params.id as string;
   const { data: project } = useProject(projectId);
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
+  const hasTechnicalSpecification = documents.some((doc) => doc.type === 'technical_spec');
   const { evaluateCoherence, isEvaluating } = useProjectCoherenceActions(projectId);
   const deleteDocument = useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete();
   const projectName = project?.name?.trim() || projectId;
@@ -178,7 +180,7 @@ export default function ProjectDocumentsPage() {
   const [documentToDelete, setDocumentToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
-  const [defaultUploadType, setDefaultUploadType] = useState<TripletSlotType | null>(null);
+  const [defaultUploadType, setDefaultUploadType] = useState<ApiDocumentType | null>(null);
   const [versionTarget, setVersionTarget] = useState<{ id: string; name: string } | null>(null);
   const [versionFile, setVersionFile] = useState<File | null>(null);
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
@@ -221,7 +223,7 @@ export default function ProjectDocumentsPage() {
     refetch();
   };
 
-  const handleOpenUploadDialog = (type?: TripletSlotType) => {
+  const handleOpenUploadDialog = (type?: ApiDocumentType) => {
     setDefaultUploadType(type ?? null);
     setUploadDialogOpen(true);
   };
@@ -351,6 +353,27 @@ export default function ProjectDocumentsPage() {
         onEvaluateCoherence={() => void evaluateCoherence()}
         evaluatePending={isEvaluating}
       />
+
+      {/* The fourth ACC-01 source is distinct from the Coherence triplet. */}
+      <section className="flex flex-col gap-3 rounded-2xl border bg-card/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-testid="technical-specification-slot">
+        <div className="flex items-start gap-3">
+          <FileText className="mt-1 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <h2 className="text-sm font-semibold">Technical specification</h2>
+            <p className="text-sm text-muted-foreground">
+              Fourth project source for technical requirements. Separate from the Contract–Budget–Schedule coherence triplet.
+            </p>
+          </div>
+        </div>
+        {hasTechnicalSpecification ? (
+          <Badge variant="outline" data-testid="technical-specification-present">In document register</Badge>
+        ) : (
+          <Button type="button" variant="outline" className="rounded-xl" onClick={() => handleOpenUploadDialog('technical_spec')}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload technical specification
+          </Button>
+        )}
+      </section>
 
       {/* Upload Dialog */}
       <Dialog
