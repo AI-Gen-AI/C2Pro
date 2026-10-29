@@ -940,6 +940,8 @@ export default function EvidencePage() {
       {exactSourceClause && selectedDocument && !requestedRevisionUnavailable && (
         <section
           data-testid="evidence-exact-source"
+          data-source-document-id={selectedDocumentId ?? ""}
+          data-source-clause-id={exactSourceClause.id}
           aria-label="Verified source clause"
           className="rounded-xl border bg-card p-4 text-sm"
         >
