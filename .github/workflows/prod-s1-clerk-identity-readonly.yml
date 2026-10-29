@@ -1,0 +1,162 @@
+name: C2Pro S1 Clerk Production Identity - Read Only
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/prod-s1-clerk-identity-readonly.yml"
+      - "apps/web/playwright.prod-s1.config.ts"
+      - "apps/web/src/tests/e2e/prod-acceptance/acc01-s1-clerk-production*"
+      - "apps/api/scripts/verify_prod_s1_clerk_link_readonly.py"
+      - "apps/api/tests/unit/test_prod_s1_clerk_link_readonly.py"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Start with safe preflight_only; browser_readonly requires separate approval."
+        required: true
+        type: choice
+        default: preflight_only
+        options:
+          - preflight_only
+          - browser_readonly
+      confirm_readonly:
+        description: "Type RUN-S1-READONLY. Only pre-existing synthetic A/B identities."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c2pro-s1-clerk-production-identity-readonly
+  cancel-in-progress: false
+
+jobs:
+  # No production credentials or protected environments are available to PR CI.
+  s1-static-typecheck:
+    name: "S1 read-only Playwright TypeScript compile (PR, no secrets)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup web toolchain
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck web workspace
+        working-directory: apps/web
+        run: pnpm typecheck
+
+  # The backend safety preflight has offline tests; always exercise them
+  # without any production credential on the proposed exact PR HEAD.
+  s1-static-preflight-tests:
+    name: "S1 Clerk↔PostgreSQL preflight offline tests (PR, no secrets)"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend Python
+        uses: ./.github/actions/setup-python-backend
+        with:
+          install-system-deps: "false"
+      - name: Run nine offline fail-closed checks
+        working-directory: apps/api
+        run: python -m pytest tests/unit/test_prod_s1_clerk_link_readonly.py -q
+
+  s1-identity-readonly:
+    name: "ACC-01 S1 Clerk production A/B read-only qualification"
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production-qualification
+    # Keep all protected credentials away from dependency-install/build steps.
+    env:
+      PLAYWRIGHT_BASE_URL: https://c2pro.io
+      PROD_S1_CONFIRM_READONLY: ${{ inputs.confirm_readonly }}
+    steps:
+      - name: Fail closed on operator intent and protected qualification secrets
+        shell: bash
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.PROD_S1_CLERK_PUBLISHABLE_KEY || vars.PROD_S1_CLERK_PUBLISHABLE_KEY }}
+          E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+        run: |
+          set -euo pipefail
+          test "$PROD_S1_CONFIRM_READONLY" = "RUN-S1-READONLY" || {
+            echo "::error::S1 READONLY not explicitly authorized."; exit 2;
+          }
+          test "${{ inputs.mode }}" = "preflight_only" || test "${{ inputs.mode }}" = "browser_readonly" || {
+            echo "::error::S1 mode not allowed."; exit 2;
+          }
+          for name in CLERK_SECRET_KEY CLERK_PUBLISHABLE_KEY E2E_CLERK_TENANT_B_USER_EMAIL PROD_ACCEPTANCE_CLERK_EMAIL PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID PROD_ACCEPTANCE_EXPECTED_TENANT_ID PROD_ACCEPTANCE_DATABASE_URL_READONLY; do
+            test -n "${!name:-}" || { echo "::error::Missing protected prerequisite: $name"; exit 2; }
+          done
+          [[ "$CLERK_SECRET_KEY" == sk_live_* ]] || {
+            echo "::error::Expected a production Clerk secret key in the protected qualification environment."; exit 2;
+          }
+          [[ "$CLERK_PUBLISHABLE_KEY" == pk_live_* ]] || {
+            echo "::error::Expected a production Clerk publishable key."; exit 2;
+          }
+          echo "Protected prerequisites are present; secret values withheld."
+
+      - name: Checkout exact trusted control SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Perform a READ ONLY DB + Clerk identity check before any browser login.
+      # An authenticated GET can implicitly auto-provision a user/tenant; without
+      # this guard, claiming "read-only production" would be incorrect.
+      - name: Setup Python for readonly identity preflight
+        uses: ./.github/actions/setup-python-backend
+        with:
+          install-system-deps: "false"
+
+      - name: Verify A/B Clerk <-> persisted PostgreSQL bindings (no writes)
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
+          E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
+        working-directory: apps/api
+        run: python scripts/verify_prod_s1_clerk_link_readonly.py
+
+      # Only load JavaScript dependencies AFTER preflight has passed.
+      # The default mode does not install or execute browser/frontend code.
+      - name: Setup frontend toolchain for separately approved browser run
+        if: inputs.mode == 'browser_readonly'
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright Chromium
+        if: inputs.mode == 'browser_readonly'
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Check real Clerk identities and B-to-A denial (no application writes)
+        if: inputs.mode == 'browser_readonly'
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.PROD_S1_CLERK_PUBLISHABLE_KEY || vars.PROD_S1_CLERK_PUBLISHABLE_KEY }}
+          E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test --config=playwright.prod-s1.config.ts --project=prod-s1-identity-readonly --reporter=line --workers=1
+
+      - name: Save category-only acceptance evidence
+        if: always() && inputs.mode == 'browser_readonly'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acc01-s1-clerk-identity-readonly
+          path: apps/web/playwright/.prod-acceptance/s1-b-to-a-readonly.json
+          if-no-files-found: warn
+          retention-days: 3
+
+      # This lane deliberately does not run provision_clerk_e2e_fixture.py,
+      # perform database writes, or claim A-to-B (no authorized B project).
