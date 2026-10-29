@@ -70,6 +70,19 @@ describe("PJ-01 Evidence landing", () => {
     ]);
   });
 
+  it("S4 — a matching semantic card cannot substitute for missing original Health source text", () => {
+    const violations = evaluateEvidenceLanding({
+      url: `http://x/projects/p/evidence?documentId=${DOC}&highlightId=${CLAUSE}&origin=health`,
+      activeEntityId: CLAUSE,
+      unavailableNotice: null,
+      verifiedSourceDocumentId: DOC,
+      verifiedSourceClauseId: CLAUSE,
+      verifiedSourceExcerpt: null,
+    }, { documentId: DOC, clauseId: CLAUSE });
+
+    expect(violations.map((violation) => violation.code)).toEqual(["EVIDENCE_CLAUSE_NOT_ACTIVE"]);
+  });
+
   it("rejects another document, an inactive clause or an unavailable notice", () => {
     const codes = evaluateEvidenceLanding(
       { url: "http://x/projects/p/evidence?documentId=other&highlightId=nope", activeEntityId: null, unavailableNotice: "gone" },
