@@ -1,0 +1,107 @@
+name: TEMP S7 regenerate OpenAPI + Orval in isolated branch
+on:
+  push:
+    branches: [feat/acc01-s7-structured-links-20261029]
+    paths: [.github/workflows/acc01-s7-regenerate-temp.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENVIRONMENT: test
+      DEBUG: "true"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_ANON_KEY: test
+      SUPABASE_SERVICE_ROLE_KEY: test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      ANTHROPIC_API_KEY: sk-ant-test-mock
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-python-backend
+      - name: Produce exact FastAPI OpenAPI YAML
+        working-directory: apps/api
+        run: |
+          pip install pyyaml
+          python scripts/generate_openapi.py > /dev/null
+      - name: Add only new S7 route+models to existing JSON API schema
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          from src.main import create_application
+          import json
+          from pathlib import Path
+          source = create_application().openapi()
+          path = Path("../web/schema/api.json")
+          existing = json.loads(path.read_text())
+          new_path = "/api/v1/projects/{project_id}/structured-wbs/canonical-links"
+          assert new_path not in existing["paths"]
+          assert set(source["paths"][new_path]) == {"get", "post"}
+          existing["paths"][new_path] = source["paths"][new_path]
+          names = (
+              "ApproveStructuredWBSLinkRequest", "StructuredWBSLinkApprovalResponse",
+              "CurrentStructuredWBSLinkResponse",
+          )
+          for name in names:
+              assert name in source["components"]["schemas"]
+              assert name not in existing["components"]["schemas"]
+              existing["components"]["schemas"][name] = source["components"]["schemas"][name]
+          path.write_text(json.dumps(existing, ensure_ascii=False, indent=2) + "\n")
+          print("Only one new path and three new schemas added; old JSON untouched")
+          PY
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate client and format checked files
+        run: |
+          pnpm --dir apps/web generate:api
+          pnpm --dir apps/web exec prettier --write lib/api/generated schema/api.json
+      - name: Stage generated-only bundle
+        run: |
+          mkdir -p stage/docs/api stage/apps/web/schema stage/apps/web/lib/api
+          cp docs/api/openapi.yaml stage/docs/api/openapi.yaml
+          cp apps/web/schema/api.json stage/apps/web/schema/api.json
+          cp -a apps/web/lib/api/generated stage/apps/web/lib/api/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: acc01-s7-exact-generated-files
+          path: stage/
+          retention-days: 1
+  commit-isolated:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: rm -rf apps/web/lib/api/generated && mkdir -p apps/web/lib/api/generated
+      - uses: actions/download-artifact@v4
+        with:
+          name: acc01-s7-exact-generated-files
+          path: .
+      - name: Commit only contract/generated files
+        run: |
+          set -euo pipefail
+          test -f apps/web/lib/api/generated/models/index.ts
+          test -f docs/api/openapi.yaml
+          git add -A -- docs/api/openapi.yaml apps/web/schema/api.json apps/web/lib/api/generated
+          git diff --cached --name-only | while IFS= read -r path; do
+            case "$path" in
+              docs/api/openapi.yaml|apps/web/schema/api.json|apps/web/lib/api/generated/*) ;;
+              *) echo "UNEXPECTED: $path"; exit 1 ;;
+            esac
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(S7): exact OpenAPI and Orval generated Budget/Schedule canonical links"
+            git push origin HEAD:refs/heads/feat/acc01-s7-structured-links-20261029
+          fi
