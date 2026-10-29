@@ -209,7 +209,7 @@ describe("ChangeDetailPage — current vs historical, trust and materialization 
     render(<ChangeDetailPage />);
 
     const status = within(await screen.findByTestId("revision-status"));
-    expect(status.getByText("Current revision")).toBeInTheDocument();
+    expect(status.getByText("Trusted current revision")).toBeInTheDocument();
     expect(status.getByText("Trusted")).toBeInTheDocument();
     expect(status.getByTestId("revision-materialization")).toHaveTextContent(
       "All effects currently authorized by governance were applied.",
