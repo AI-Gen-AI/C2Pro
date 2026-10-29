@@ -48,10 +48,14 @@ async def run_postgres_test_bootstrap(
     cleanup_step: BootstrapStep,
     prepare_step: BootstrapStep,
     warning_sink: WarningSink,
+    strict_cleanup: bool = False,
 ) -> None:
-    cleanup_error = await _run_optional_bootstrap_phase(engine, cleanup_step)
-    if cleanup_error is not None:
-        warning_sink(cleanup_error)
+    if strict_cleanup:
+        await _run_bootstrap_phase(engine, cleanup_step)
+    else:
+        cleanup_error = await _run_optional_bootstrap_phase(engine, cleanup_step)
+        if cleanup_error is not None:
+            warning_sink(cleanup_error)
 
     await _run_bootstrap_phase(engine, ensure_pgvector_extension)
     await _run_bootstrap_phase(engine, prepare_step)
@@ -115,3 +119,40 @@ async def reset_public_schema(conn: AsyncConnection) -> None:
     await conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
     await conn.execute(text("CREATE SCHEMA public"))
     await conn.execute(text("SET search_path TO public"))
+
+
+async def reset_test_schemas(conn: AsyncConnection) -> None:
+    """Reset both fixture-owned schemas, including SQL-only dependants.
+
+    Call only after validating the test target. Dropping public alone leaves
+    recovery rows and removes their FK/trigger through CASCADE.
+    """
+    await conn.execute(text("DROP SCHEMA IF EXISTS system_recovery CASCADE"))
+    await reset_public_schema(conn)
+
+
+async def provision_recovery_schema(conn: AsyncConnection) -> None:
+    """Apply the checked-out recovery migration after ORM tables are rebuilt.
+
+    This is the metadata fixture profile, not an Alembic stamp or a claim that
+    all migrations are still present. Never duplicate the recovery DDL here.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    path = (Path(__file__).resolve().parents[2] / "alembic" / "versions"
+            / "20260927_0711_recovery_discovery.py")
+    spec = importlib.util.spec_from_file_location("fixture_recovery_migration", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("recovery_migration_unavailable")
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    def apply(sync_conn):
+        migration.op = Operations(MigrationContext.configure(sync_conn))
+        migration.upgrade()
+
+    await conn.run_sync(apply)
