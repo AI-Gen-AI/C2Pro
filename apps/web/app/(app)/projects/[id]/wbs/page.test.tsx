@@ -83,6 +83,11 @@ const { alertsState } = vi.hoisted(() => ({
 vi.mock("@/components/features/wbs/TechnicalWBSReviewPanel", () => ({
   TechnicalWBSReviewPanel: () => <div data-testid="technical-wbs-review-mock" />,
 }));
+vi.mock("@/components/features/wbs/CanonicalTechnicalWBSLinksPanel", () => ({
+  CanonicalTechnicalWBSLinksPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="s7-canonical-links-mounted" data-project-id={projectId} />
+  ),
+}));
 
 vi.mock("@/hooks/useProjectAlerts", () => ({
   useProjectAlerts: () => ({
@@ -144,6 +149,8 @@ describe("ProjectWBSPage", () => {
     renderWithProviders(<ProjectWBSPage />);
 
     expect(screen.getByTestId("wbs-tree-view")).toBeInTheDocument();
+    expect(screen.getByTestId("s7-canonical-links-mounted"))
+      .toHaveAttribute("data-project-id", "proj-real-wbs");
     expect(
       screen.getByRole("heading", { name: /work breakdown structure/i }),
     ).toBeInTheDocument();
