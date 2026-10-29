@@ -20,7 +20,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.application.approve_canonical_technical_wbs_link import (\n    CANONICAL_APPROVAL,\n    ApproveCanonicalTechnicalWBSLinkService,\n    CanonicalTechnicalWBSLinkError,\n)\nfrom src.analysis.application.record_technical_wbs_review import (
+from src.analysis.application.approve_canonical_technical_wbs_link import (
+    ApproveCanonicalTechnicalWBSLinkService,
+    CanonicalTechnicalWBSLinkError,
+)
+from src.analysis.application.record_technical_wbs_review import (
     ImmutableDocxTechnicalTextReader,
     RecordTechnicalWBSReviewService,
     TechnicalMappingDecision,
