@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from fastapi import HTTPException
 
 from src.coherence.router import (
