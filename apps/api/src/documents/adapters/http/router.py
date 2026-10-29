@@ -191,8 +191,10 @@ def _validate_upload_extension(
     document_type: DocumentType | None = None,
 ) -> None:
     if file_extension not in ALLOWED_EXTENSIONS:
+        # PQ-HITL-09 S2: unknown media types are 415, while a valid extension
+        # assigned to the wrong structured document family remains 400.
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"File type '{file_extension}' is not allowed.",
         )
     if document_type is not None:
