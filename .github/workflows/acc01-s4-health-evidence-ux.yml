@@ -12,6 +12,9 @@ on:
       - "apps/web/components/features/evidence/evidence-addressability.test.ts"
       - "apps/web/components/features/health/SingleDocumentHealth.tsx"
       - "apps/web/components/features/health/SingleDocumentHealth.test.tsx"
+      - "apps/web/src/tests/pj01/health-evaluator.ts"
+      - "apps/web/src/tests/pj01/health-source-document.test.ts"
+      - "apps/web/src/tests/e2e/support/pj01/evidence.ts"
       - ".github/workflows/acc01-s4-health-evidence-ux.yml"
 
 permissions:
@@ -43,4 +46,5 @@ jobs:
           node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
             components/features/evidence/evidence-addressability.test.ts \
             components/features/health/SingleDocumentHealth.test.tsx \
+            src/tests/pj01/health-source-document.test.ts \
             'app/(app)/projects/[id]/evidence/page.test.tsx'
