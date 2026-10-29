@@ -26,6 +26,11 @@ import {
 } from '@/lib/api/generated/hitl/hitl';
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
 import { ReviewStatus } from '@/lib/api/generated/models/reviewStatus';
+import { getGetProjectHealthApiV1ProjectsProjectIdHealthGetQueryKey } from '@/lib/api/generated/project-health/project-health';
+import {
+  getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey,
+  getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryKey,
+} from '@/lib/api/generated/coherence-dashboard/coherence-dashboard';
 
 const PAGE_LIMIT_STEP = 50;
 const MAX_PAGE_LIMIT = 200;
@@ -101,8 +106,21 @@ export default function ReviewPage() {
   // A review decision changes the document's lifecycle (it resumes or needs changes). The Documents
   // list is cached for minutes and stops polling on a "review required" row, so without this it
   // keeps showing the pre-decision state until a manual reload.
-  const refreshDocumentsAfterDecision = () =>
+  // HITL can change trusted document lifecycle AND Health/Coherence. Keep all
+  // three views synchronized after the server records a decision; no automatic
+  // Score or analysis-complete claim is made by these cache invalidations.
+  const refreshProjectAfterDecision = () => {
     void queryClient.invalidateQueries({ queryKey: ['project-documents', projectId] });
+    void queryClient.invalidateQueries({
+      queryKey: getGetProjectHealthApiV1ProjectsProjectIdHealthGetQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryKey(projectId),
+    });
+  };
 
   const approveMutation = useApproveItemApiV1HitlQueueItemIdApprovePost();
   const rejectMutation = useRejectItemApiV1HitlQueueItemIdRejectPost();
@@ -110,7 +128,11 @@ export default function ReviewPage() {
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
   const [rejectReason, setRejectReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [pageLimit, setPageLimit] = useState(PAGE_LIMIT_STEP);
+  // A Documents→Review deep link must actually find the item even if it
+  // is not among the default first 50. The backend caps this at 200.
+  const [pageLimit, setPageLimit] = useState(
+    targetItemId ? MAX_PAGE_LIMIT : PAGE_LIMIT_STEP,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   // C2PRO #649: one human decision -> one request. The ref closes the gap
   // before React re-renders the disabled state (rapid clicks land in the
@@ -122,6 +144,12 @@ export default function ReviewPage() {
   // queue shows their new status, so a stale PENDING card cannot be
   // approved a second time.
   const [decidedKeys, setDecidedKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const [decisionReceipt, setDecisionReceipt] = useState<{
+    rowId: string;
+    action: 'approve' | 'reject';
+    /** A 5xx may occur after the server durably records the decision. */
+    uncertain: boolean;
+  } | null>(null);
 
   const queueParams = useMemo(
     () => ({
@@ -140,6 +168,21 @@ export default function ReviewPage() {
     useListReviewQueueApiV1HitlQueueGet(queueParams, { query: { refetchOnMount: 'always' } });
 
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
+  useEffect(() => {
+    if (targetItemId) setPageLimit(MAX_PAGE_LIMIT);
+  }, [targetItemId]);
+  const targetIsMissing = Boolean(
+    targetItemId && pageLimit === MAX_PAGE_LIMIT &&
+    !items.some((item) => item.item_id === targetItemId),
+  );
+  const receiptRow = decisionReceipt
+    ? items.find((item) => item.row_id === decisionReceipt.rowId)
+    : undefined;
+  const confirmedDecision = Boolean(
+    receiptRow && decisionReceipt &&
+    receiptRow.current_status === (decisionReceipt.action === 'approve'
+      ? ReviewStatus.APPROVED : ReviewStatus.REJECTED),
+  );
   const canLoadMore = items.length === pageLimit && pageLimit < MAX_PAGE_LIMIT;
 
   useEffect(() => {
@@ -212,9 +255,10 @@ export default function ReviewPage() {
         data: {},
       });
       markDecided(modal.item);
+      setDecisionReceipt({ rowId: reviewRowId, action: 'approve', uncertain: false });
       closeModal();
       void refetch();
-      refreshDocumentsAfterDecision();
+      refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to approve review item');
       setActionError(message);
@@ -241,9 +285,10 @@ export default function ReviewPage() {
         },
       });
       markDecided(modal.item);
+      setDecisionReceipt({ rowId: reviewRowId, action: 'reject', uncertain: false });
       closeModal();
       void refetch();
-      refreshDocumentsAfterDecision();
+      refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to reject review item');
       setActionError(message);
@@ -339,7 +384,9 @@ export default function ReviewPage() {
         <div className="space-y-3" data-testid="review-queue">
           {items.map((item) => (
             <div
-              key={item.item_id}
+              // item_id is reusable across revisions; a new row must remount
+              // fresh controls rather than inherit the previous row's UI state.
+              key={decisionKey(item)}
               id={`review-item-${item.item_id}`}
               className={
                 targetItemId === item.item_id
