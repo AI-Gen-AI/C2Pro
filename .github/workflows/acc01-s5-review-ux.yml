@@ -1,0 +1,41 @@
+name: ACC-01 S5 — Review decision UX
+
+on:
+  pull_request:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - "apps/web/app/(app)/projects/[id]/review/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/review/page.test.tsx"
+      - ".github/workflows/acc01-s5-review-ux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s5-review-ux:
+    name: "S5 review UX — types, lint and focused tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: S5 HITL ReviewPage, exact-row and persisted-status UX tests
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            'app/(app)/projects/[id]/review/page.test.tsx' \
+            components/features/review/ReviewItemCard.test.tsx \
+            components/features/review/review-source-links.test.ts
