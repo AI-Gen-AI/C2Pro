@@ -1,4 +1,4 @@
-# Final post-quality verification. Auth uses disposable test project, NEVER production.
+# Final post-review verification: explicit Playwright glob selector; disposable test project, NEVER production.
 name: ACC-01 S7 Clerk signout/relogin UAT - isolated
 on:
   push:
