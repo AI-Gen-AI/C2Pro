@@ -16,6 +16,8 @@ export default defineConfig({
     trace: "off",
     screenshot: "off",
     video: "off",
+    // Interception of product mutations must not be bypassed by a service worker.
+    serviceWorkers: "block",
     ...devices["Desktop Chrome"],
   },
   projects: [
