@@ -26,13 +26,22 @@ from src.analysis.application.record_technical_wbs_review import (
 from src.core.auth.models import User, UserRole
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
 from src.documents.adapters.persistence.models import DocumentORM
-from src.documents.application.document_source import RevisionSourceError, read_verified_revision_file
+from src.documents.application.document_source import (
+    RevisionSourceError,
+    read_verified_revision_file,
+)
 from src.documents.domain.models import DocumentType
 from src.documents.ports.storage_service import IStorageService
-from src.temporal.adapters.persistence.current_revision_resolver import SqlAlchemyCurrentRevisionResolver
-from src.temporal.adapters.persistence.document_revision_repository import SqlAlchemyDocumentRevisionRepository
+from src.temporal.adapters.persistence.current_revision_resolver import (
+    SqlAlchemyCurrentRevisionResolver,
+)
+from src.temporal.adapters.persistence.document_revision_repository import (
+    SqlAlchemyDocumentRevisionRepository,
+)
 from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
-from src.temporal.adapters.persistence.project_event_repository import SqlAlchemyProjectEventRepository
+from src.temporal.adapters.persistence.project_event_repository import (
+    SqlAlchemyProjectEventRepository,
+)
 from src.temporal.domain.current_revision import CurrentRevisionStatus
 from src.temporal.domain.document_revision import DocumentRevision
 from src.temporal.domain.project_event import ProjectEvent
