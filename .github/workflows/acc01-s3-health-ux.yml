@@ -9,6 +9,7 @@ on:
       - "apps/web/app/(app)/projects/[id]/analysis/page.test.tsx"
       - "apps/api/src/coherence/router.py"
       - "apps/api/tests/core/test_coherence_dashboard_derivation.py"
+      - "apps/api/tests/core/test_coherence_route_contract.py"
       - ".github/workflows/acc01-s3-health-ux.yml"
 
 permissions:
@@ -49,4 +50,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Compile affected Python files without importing production services
-        run: python3 -m py_compile apps/api/src/coherence/router.py apps/api/tests/core/test_coherence_dashboard_derivation.py
+        run: python3 -m py_compile apps/api/src/coherence/router.py apps/api/tests/core/test_coherence_dashboard_derivation.py apps/api/tests/core/test_coherence_route_contract.py
