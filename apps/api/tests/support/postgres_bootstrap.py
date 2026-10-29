@@ -132,10 +132,12 @@ async def reset_test_schemas(conn: AsyncConnection) -> None:
 
 
 async def provision_recovery_schema(conn: AsyncConnection) -> None:
-    """Apply the checked-out recovery migration after ORM tables are rebuilt.
+    """Restore SQL-only recovery obligations on the metadata test fixture.
 
-    This is the metadata fixture profile, not an Alembic stamp or a claim that
-    all migrations are still present. Never duplicate the recovery DDL here.
+    SQLAlchemy create_all cannot recreate the Alembic-owned tables. Import the
+    checked-out migration DDL rather than duplicating it in test scaffolding.
+    This deliberately does NOT stamp Alembic or claim a fully migrated DB.
+    A genuinely migrated schema requires the separate alembic_schema route.
     """
     import importlib.util
     from pathlib import Path
@@ -143,16 +145,45 @@ async def provision_recovery_schema(conn: AsyncConnection) -> None:
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
 
-    path = (Path(__file__).resolve().parents[2] / "alembic" / "versions"
-            / "20260927_0711_recovery_discovery.py")
-    spec = importlib.util.spec_from_file_location("fixture_recovery_migration", path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("recovery_migration_unavailable")
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
+    versions = Path(__file__).resolve().parents[2] / "alembic" / "versions"
+
+    def load_migration(filename: str, name: str):
+        spec = importlib.util.spec_from_file_location(name, versions / filename)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"recovery_migration_unavailable:{filename}")
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        return migration
+
+    discovery = load_migration(
+        "20260927_0711_recovery_discovery.py", "fixture_recovery_discovery"
+    )
+    trust = load_migration(
+        "20260927_0714_document_artifact_trust_state.py", "fixture_trust_projection"
+    )
+    materialization = load_migration(
+        "20261004_0002_trusted_artifact_materialization.py",
+        "fixture_trusted_materialization",
+    )
 
     def apply(sync_conn):
-        migration.op = Operations(MigrationContext.configure(sync_conn))
-        migration.upgrade()
+        operations = Operations(MigrationContext.configure(sync_conn))
+        discovery.op = operations
+        discovery.upgrade()
+
+        # Only the SQL-only obligation table, not the 0714 historical
+        # reclassification or application data migrations.
+        trust.op = operations
+        trust._create_projection_index()
+
+        # The repository always writes materialization_state. Keep the fixture
+        # aligned to the exact migration-owned projection columns and index,
+        # without replaying its business-table alterations on ORM create_all.
+        for statement in (
+            materialization.ADD_MATERIALIZATION_COLUMNS_SQL,
+            materialization.ADD_MATERIALIZATION_STATE_CHECK_SQL,
+            materialization.ADD_PENDING_MATERIALIZATION_INDEX_SQL,
+        ):
+            operations.execute(statement)
 
     await conn.run_sync(apply)
