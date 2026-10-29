@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - feat/acc01-s7-canonical-technical-wbs-20261029
+      - integration/acc01-e2e-20261025
     paths:
       - "apps/api/src/analysis/application/read_canonical_technical_wbs_links.py"
       - "apps/api/src/analysis/adapters/http/technical_wbs_review_router.py"
