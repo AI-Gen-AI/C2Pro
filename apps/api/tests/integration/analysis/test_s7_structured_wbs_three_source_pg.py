@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import openpyxl
 import pytest
@@ -18,18 +18,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.analysis.application.approve_canonical_technical_wbs_link import (
-    CANONICAL_APPROVAL, ApproveCanonicalTechnicalWBSLinkService,
+    CANONICAL_APPROVAL,
+    ApproveCanonicalTechnicalWBSLinkService,
 )
 from src.analysis.application.canonical_structured_wbs_links import (
-    APPROVAL, ApproveStructuredWBSLinkService, ImmutableXLSXRowReader,
-    ReadStructuredWBSLinksService, StructuredWBSLinkError,
+    APPROVAL,
+    ApproveStructuredWBSLinkService,
+    ImmutableXLSXRowReader,
+    ReadStructuredWBSLinksService,
+    StructuredWBSLinkError,
 )
-from src.analysis.application.read_canonical_technical_wbs_links import ReadCanonicalTechnicalWBSLinksService
+from src.analysis.application.read_canonical_technical_wbs_links import (
+    ReadCanonicalTechnicalWBSLinksService,
+)
 from src.analysis.application.record_technical_wbs_review import RecordTechnicalWBSReviewService
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentType
-from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
+from src.temporal.adapters.persistence.models import DocumentRevisionORM
 from tests.integration.analysis.test_s7_review_service_settlement_pg import _arguments, _world
 
 pytestmark = pytest.mark.asyncio
@@ -92,10 +98,13 @@ async def _structured_document(
         trust_state="trusted", lifecycle_status="active",
     ))
     await db.commit()
-    return dict(
-        family=family, source_document_id=document_id, source_revision_id=revision_id,
-        expected_blob_hash=digest, source_locator="Sheet!2",
-    )
+    return {
+        "family": family,
+        "source_document_id": document_id,
+        "source_revision_id": revision_id,
+        "expected_blob_hash": digest,
+        "source_locator": "Sheet!2",
+    }
 
 
 def _args(w: dict, item: dict, **overrides) -> dict:
