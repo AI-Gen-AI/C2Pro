@@ -51,6 +51,7 @@ jobs:
       PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
       PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
       PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+      PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
     steps:
       - name: Fail closed on operator intent and protected qualification secrets
         shell: bash
@@ -59,7 +60,7 @@ jobs:
           test "$PROD_S1_CONFIRM_READONLY" = "RUN-S1-READONLY" || {
             echo "::error::S1 READONLY not explicitly authorized."; exit 2;
           }
-          for name in CLERK_SECRET_KEY CLERK_PUBLISHABLE_KEY E2E_CLERK_TENANT_B_USER_EMAIL PROD_ACCEPTANCE_CLERK_EMAIL PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID PROD_ACCEPTANCE_EXPECTED_TENANT_ID; do
+          for name in CLERK_SECRET_KEY CLERK_PUBLISHABLE_KEY E2E_CLERK_TENANT_B_USER_EMAIL PROD_ACCEPTANCE_CLERK_EMAIL PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID PROD_ACCEPTANCE_EXPECTED_TENANT_ID PROD_ACCEPTANCE_DATABASE_URL_READONLY; do
             test -n "${!name:-}" || { echo "::error::Missing protected prerequisite: $name"; exit 2; }
           done
           [[ "$CLERK_SECRET_KEY" == sk_live_* ]] || {
@@ -75,6 +76,18 @@ jobs:
 
       - name: Setup frontend toolchain
         uses: ./.github/actions/setup-node-web
+
+      # Perform a READ ONLY DB + Clerk identity check before any browser login.
+      # An authenticated GET can implicitly auto-provision a user/tenant; without
+      # this guard, claiming "read-only production" would be incorrect.
+      - name: Setup Python for readonly identity preflight
+        uses: ./.github/actions/setup-python-backend
+        with:
+          install-system-deps: "false"
+
+      - name: Verify A/B Clerk <-> persisted PostgreSQL bindings (no writes)
+        working-directory: apps/api
+        run: python scripts/verify_prod_s1_clerk_link_readonly.py
 
       - name: Install Playwright Chromium
         working-directory: apps/web
