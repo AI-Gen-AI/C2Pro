@@ -175,7 +175,7 @@ class TestDocumentUpload:
 
         response = client.post(f"/projects/{sample_document.project_id}/documents", files=files, data=data)
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
         assert ".exe" in response.json()["detail"]
 
     def test_doc_http_000c_upload_rejects_budget_docx(self, client, app, sample_document):
