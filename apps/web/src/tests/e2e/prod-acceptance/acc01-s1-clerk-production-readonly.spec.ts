@@ -141,6 +141,56 @@ async function verifyAuthenticatedBackendTenant(page: Page, expectedTenantId: st
 }
 
 /**
+ * Compare both identities using the SAME exact tenant-scoped backend route.
+ * A status 200 on some other project endpoint must not prove that A owns this
+ * synthetic project; B's neutral 404 must come from this exact route.
+ * Project data and bearer token remain within the browser, never in artifacts.
+ */
+async function readBoundedSyntheticProject(
+  page: Page,
+  expectedTenantId: string,
+): Promise<{ status: number; projectOwned: boolean }> {
+  return page.evaluate(async ({ tenantId, projectId }) => {
+    const session = window.Clerk?.session;
+    const org = window.Clerk?.organization;
+    if (session?.status !== "active" || !org || org.publicMetadata?.tenant_id !== tenantId) {
+      return { status: 0, projectOwned: false };
+    }
+
+    let token: string | null;
+    try {
+      token = await session.getToken({ organizationId: org.id, skipCache: true });
+    } catch {
+      return { status: 0, projectOwned: false };
+    }
+    if (!token) return { status: 0, projectOwned: false };
+
+    try {
+      const response = await fetch("/api/projects/" + projectId, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: {
+          Authorization: \`Bearer \${token}\`,
+          "X-Tenant-ID": tenantId,
+        },
+      });
+      if (response.status !== 200) {
+        return { status: response.status, projectOwned: false };
+      }
+      const payload: unknown = await response.json();
+      const project = payload as { id?: unknown; tenant_id?: unknown } | null;
+      return {
+        status: response.status,
+        projectOwned: project?.id === projectId && project?.tenant_id === tenantId,
+      };
+    } catch {
+      return { status: 0, projectOwned: false };
+    }
+  }, { tenantId: expectedTenantId, projectId: APPROVED_A_PROJECT_ID });
+}
+
+/**
  * Refuse application writes even if an unexpected component tries to emit one
  * while the browser signs in or renders the synthetic project. Clerk's own
  * cross-origin authentication calls are outside this product-write boundary.
@@ -215,6 +265,9 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
       expect(facts.tenantId).toBe(required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
       expect(facts.activeOrgId).toBe(required("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"));
       await verifyAuthenticatedBackendTenant(page, required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
+      const exactProject = await readBoundedSyntheticProject(page, required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
+      expect(exactProject.status, "A must GET the exact authorized synthetic project").toBe(200);
+      expect(exactProject.projectOwned, "backend must return exact project ID and A tenant").toBe(true);
       const statuses = watchProjectReads(page);
       await page.goto("/projects/" + APPROVED_A_PROJECT_ID + "/documents");
       await expect.poll(() => statuses.length, { timeout: 30_000 }).toBeGreaterThan(0);
@@ -240,6 +293,10 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
       // Fail closed if B exists in Clerk but is not linked to a real backend user
       // in its own tenant. Otherwise an unauthenticated 401 could appear to pass.
       await verifyAuthenticatedBackendTenant(page, TENANT_B_ID);
+
+      const exactProject = await readBoundedSyntheticProject(page, TENANT_B_ID);
+      expect(exactProject.status, "B must see neutral 404 for A's exact synthetic project").toBe(404);
+      expect(exactProject.projectOwned).toBe(false);
 
       const statuses = watchProjectReads(page);
       await page.goto("/projects/" + APPROVED_A_PROJECT_ID + "/documents");
