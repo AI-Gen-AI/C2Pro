@@ -2,7 +2,10 @@ name: TEMP ACC-01 S7 PostgreSQL exact traceback
 on:
   push:
     branches: [feat/acc01-s7-structured-links-20261029]
-    paths: [.github/workflows/acc01-s7-pg-diagnostic-temp.yml]
+    paths:
+      - .github/workflows/acc01-s7-pg-diagnostic-temp.yml
+      - apps/api/tests/integration/analysis/test_s7_structured_wbs_three_source_pg.py
+      - apps/api/src/analysis/application/canonical_structured_wbs_links.py
 jobs:
   isolated-pg:
     runs-on: ubuntu-latest
