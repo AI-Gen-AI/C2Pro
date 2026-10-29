@@ -106,7 +106,7 @@ export default defineConfig({
     },
     {
       // S7 browser signout+fresh-context Clerk authentication. Run only by dedicated UAT.
-            name: "s7-clerk-uat",
+      name: "s7-clerk-uat",
       testMatch: [/(^|[\\/])s7-clerk-relogin\\.spec\\.ts$/],
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["global-setup"],
@@ -118,7 +118,7 @@ export default defineConfig({
       },
     },
     {
-name: "pj01-focal",      // Explicit-only focused diagnostics.  They retain their environment
+      // Explicit-only focused diagnostics.  They retain their environment
       // guards, but are deliberately outside the canonical PJ-01 selection.
       name: "pj01-focal",
       testMatch: [
