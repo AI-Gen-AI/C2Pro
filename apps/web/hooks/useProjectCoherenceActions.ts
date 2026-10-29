@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useEvaluateProjectCoherenceApiV1CoherenceEvaluatePost,
@@ -7,7 +8,14 @@ import { getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey } fro
 import { getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryKey } from "@/lib/api/generated/alerts/alerts";
 import { showToast } from "@/lib/ui/toast";
 
+/** `score_reason` the API answers when the project's only evidence is a contract awaiting approval. */
+export const CONTRACT_PENDING_APPROVAL = "contract_pending_approval";
+
+export const CONTRACT_PENDING_MESSAGE =
+  "A contract is awaiting approval, so nothing was evaluated. No score or findings were produced; approve the contract in Review to evaluate.";
+
 type CoherenceResultSummary = {
+  score_reason?: unknown;
   alerts?: unknown[];
   diagnostics?: {
     total_clauses?: unknown;
@@ -15,7 +23,12 @@ type CoherenceResultSummary = {
   };
 };
 
+function isContractPending(result: unknown): boolean {
+  return (result as CoherenceResultSummary | null)?.score_reason === CONTRACT_PENDING_APPROVAL;
+}
+
 function evaluatedToastMessage(result: unknown): string {
+  if (isContractPending(result)) return CONTRACT_PENDING_MESSAGE;
   const summary = result as CoherenceResultSummary;
   const rawClauseCount =
     summary.diagnostics?.total_clauses ?? summary.diagnostics?.clauses_count;
@@ -32,6 +45,7 @@ export function useProjectCoherenceActions(projectId: string) {
   const queryClient = useQueryClient();
   const evaluateMutation = useEvaluateProjectCoherenceApiV1CoherenceEvaluatePost();
   const analyzeMutation = useAnalyzeDocumentApiV1AnalysisAnalyzePost();
+  const [contractPendingApproval, setContractPendingApproval] = useState(false);
 
   const invalidateProjectCoherence = async () => {
     await queryClient.invalidateQueries({
@@ -49,6 +63,7 @@ export function useProjectCoherenceActions(projectId: string) {
     const result = await evaluateMutation.mutateAsync({
       data: { project_id: projectId },
     });
+    setContractPendingApproval(isContractPending(result));
     await invalidateProjectCoherence();
     showToast(evaluatedToastMessage(result));
   };
@@ -64,6 +79,7 @@ export function useProjectCoherenceActions(projectId: string) {
   return {
     evaluateCoherence,
     rerunAnalysis,
+    contractPendingApproval,
     isEvaluating: evaluateMutation.isPending,
     isRerunningAnalysis: analyzeMutation.isPending,
   };
