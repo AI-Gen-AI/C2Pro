@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - feat/acc01-s7-canonical-technical-wbs-20261029
+      - integration/acc01-e2e-20261025
     paths:
       - "apps/web/types/document.ts"
       - "apps/web/hooks/useProjectDocuments.ts"
