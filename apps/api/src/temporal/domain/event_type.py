@@ -43,6 +43,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # S7: audit observation and separately authenticated durable human approval.
         "technical.wbs_link_reviewed",
         "technical.wbs_link_approved",
+        # S7: separately human-approved row/activity associations; no TIME/BUDGET score authority.
+        "budget.wbs_link_approved",
+        "schedule.wbs_link_approved",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

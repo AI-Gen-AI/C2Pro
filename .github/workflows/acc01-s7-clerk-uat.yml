@@ -1,0 +1,112 @@
+# Final post-review verification: explicit Playwright glob selector; disposable test project, NEVER production.
+name: ACC-01 S7 Clerk signout/relogin UAT - isolated
+on:
+  push:
+    branches: [feat/acc01-s7-structured-links-20261029]
+    paths:
+      - .github/workflows/acc01-s7-clerk-uat.yml
+  workflow_dispatch:
+concurrency:
+  group: acc01-s7-clerk-uat-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  s7-clerk:
+    name: Real Clerk re-login + PostgreSQL S7 triple link (synthetic source seed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      STORAGE_PROVIDER: local
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      C2PRO_AI_MOCK: "1"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      CORS_ORIGINS: '["http://localhost:3100"]'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout exact isolated branch SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fail closed if test-only Clerk credentials absent
+        run: |
+          set -euo pipefail
+          test -n "${CLERK_SECRET_KEY:-}" || { echo "::error::S7 Clerk test secret missing"; exit 2; }
+          test -n "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" || { echo "::error::S7 Clerk test publishable key missing"; exit 2; }
+          test "${C2PRO_AI_MOCK}" = "1" && test "${STORAGE_PROVIDER}" = "local"
+      - name: Generate ephemeral test JWT secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+      - name: Set up Python backend
+        uses: ./.github/actions/setup-python-backend
+      - name: Start isolated PostgreSQL and Redis
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+      - name: Provision and verify actual nonproduction Clerk fixture
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+      - name: Seed S7 WBS and original synthetic sources (zero approvals)
+        working-directory: apps/api
+        run: python -m scripts.seed_s7_clerk_uat
+      - name: Verify Clerk organization and tenant binding
+        working-directory: apps/api
+        run: python scripts/verify_e2e_tenant_link.py
+      - name: Start FastAPI and Clerk JWT JWKS fixture
+        working-directory: apps/api
+        env:
+          RATE_LIMIT_PER_MINUTE: "600"
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" > "$RUNNER_TEMP/s7-jwks.log" 2>&1 &
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 > "$RUNNER_TEMP/s7-api.log" 2>&1 &
+          for _ in {1..60}; do
+            if curl -fsS http://localhost:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          tail -n 90 "$RUNNER_TEMP/s7-api.log"
+          exit 1
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Run REAL Clerk sign-out + NEW context + sign-in
+        id: clerk_journey
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/s7-clerk-results.json
+        run: ./node_modules/.bin/playwright test --project=s7-clerk-uat --workers=1 --reporter=list,json
+      - name: Summarize UAT result without tokens
+        if: always()
+        working-directory: apps/web
+        run: |
+          if test -f playwright-report/s7-clerk-results.json; then
+            node scripts/playwright-summary.mjs playwright-report/s7-clerk-results.json "S7 real Clerk logout/relogin with 3 WBS links" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload non-secret Playwright summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acc01-s7-clerk-relogin-evidence
+          path: apps/web/playwright-report/s7-clerk-results.json
+          if-no-files-found: warn
+          retention-days: 3
+      - name: Cleanup disposable Postgres and Redis
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

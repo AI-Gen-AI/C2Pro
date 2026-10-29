@@ -58,6 +58,7 @@ export default defineConfig({
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         // Own project and Nightly step: a long journey that must not hide the rest of the suite.
         /(^|[\\/])triplet-user-journey\.spec\.ts$/,
+        /(^|[\\/])s7-clerk-relogin\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -102,6 +103,19 @@ export default defineConfig({
         type: "e2e",
         priority: "p0",
         description: "PJ-01 first real user journey (Login → Create → Upload A → Processing → Health → Evidence → Revision B → What Changed → Current State)",
+      },
+    },
+    {
+      // S7 browser signout+fresh-context Clerk authentication. Run only by dedicated UAT.
+      name: "s7-clerk-uat",
+      testMatch: ["**/s7-clerk-relogin.spec.ts"],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "ACC-01-S7-CLERK-UAT",
+        type: "e2e",
+        priority: "p0",
+        description: "Real Clerk logout and fresh browser login with three typed human-approved source-to-WBS links",
       },
     },
     {

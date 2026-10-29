@@ -7706,6 +7706,140 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/structured-wbs/canonical-links": {
+      "post": {
+        "tags": ["Structured WBS links"],
+        "summary": "Explicitly approve one immutable Budget row or Schedule activity WBS link",
+        "operationId": "approve_structured_wbs_link_api_v1_projects__project_id__structured_wbs_canonical_links_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveStructuredWBSLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredWBSLinkApprovalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human approver denied"
+          },
+          "404": {
+            "description": "Project or document not found"
+          },
+          "409": {
+            "description": "Stale source, altered XLSX row or WBS authority"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Structured WBS links"],
+        "summary": "Read durable approved Budget and Schedule WBS links with current authority",
+        "operationId": "list_structured_wbs_links_api_v1_projects__project_id__structured_wbs_canonical_links_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CurrentStructuredWBSLinkResponse"
+                  },
+                  "title": "Response List Structured Wbs Links Api V1 Projects  Project Id  Structured Wbs Canonical Links Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -20991,6 +21125,264 @@
         ],
         "title": "CurrentCanonicalTechnicalWBSLinkResponse",
         "description": "Durable approval event with current authority rederived on each GET."
+      },
+      "ApproveStructuredWBSLinkRequest": {
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": ["budget", "schedule"],
+            "title": "Family"
+          },
+          "source_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Document Id"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Revision Id"
+          },
+          "expected_blob_hash": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Blob Hash"
+          },
+          "source_locator": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Source Locator"
+          },
+          "expected_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Baseline Id"
+          },
+          "expected_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Node Id"
+          },
+          "approval": {
+            "type": "string",
+            "const": "APPROVE_CANONICAL_LINK",
+            "title": "Approval"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "family",
+          "source_document_id",
+          "source_revision_id",
+          "expected_blob_hash",
+          "source_locator",
+          "expected_wbs_baseline_id",
+          "expected_wbs_node_id",
+          "approval",
+          "idempotency_key",
+          "reason"
+        ],
+        "title": "ApproveStructuredWBSLinkRequest",
+        "description": "Client cannot supply actor or tenant; project is the authenticated URL scope."
+      },
+      "StructuredWBSLinkApprovalResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "family": {
+            "type": "string",
+            "enum": ["budget", "schedule"],
+            "title": "Family"
+          },
+          "source_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Document Id"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Revision Id"
+          },
+          "source_locator": {
+            "type": "string",
+            "title": "Source Locator"
+          },
+          "source_blob_hash": {
+            "type": "string",
+            "title": "Source Blob Hash"
+          },
+          "wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Wbs Baseline Id"
+          },
+          "wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Wbs Node Id"
+          },
+          "authority": {
+            "type": "string",
+            "const": "EXPLICIT_HUMAN_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "EXPLICIT_HUMAN_CANONICAL_LINK"
+          },
+          "source_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Source Assessment",
+            "default": "NOT_ASSESSED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "replayed",
+          "family",
+          "source_document_id",
+          "source_revision_id",
+          "source_locator",
+          "source_blob_hash",
+          "wbs_baseline_id",
+          "wbs_node_id"
+        ],
+        "title": "StructuredWBSLinkApprovalResponse"
+      },
+      "CurrentStructuredWBSLinkResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "family": {
+            "type": "string",
+            "enum": ["budget", "schedule"],
+            "title": "Family"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "source_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision Id"
+          },
+          "source_locator": {
+            "type": "string",
+            "title": "Source Locator"
+          },
+          "source_blob_hash": {
+            "type": "string",
+            "title": "Source Blob Hash"
+          },
+          "wbs_baseline_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Baseline Id"
+          },
+          "wbs_node_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Node Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "STALE_SOURCE",
+              "STALE_WBS",
+              "STALE_BOTH",
+              "UNVERIFIED"
+            ],
+            "title": "State"
+          },
+          "authority": {
+            "type": "string",
+            "const": "EXPLICIT_HUMAN_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "EXPLICIT_HUMAN_CANONICAL_LINK"
+          },
+          "source_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Source Assessment",
+            "default": "NOT_ASSESSED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "family",
+          "approved_at",
+          "source_document_id",
+          "source_revision_id",
+          "source_locator",
+          "source_blob_hash",
+          "wbs_baseline_id",
+          "wbs_node_id",
+          "state"
+        ],
+        "title": "CurrentStructuredWBSLinkResponse"
       }
     },
     "securitySchemes": {
