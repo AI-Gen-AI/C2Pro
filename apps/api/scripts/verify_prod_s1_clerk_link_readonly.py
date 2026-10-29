@@ -139,7 +139,8 @@ async def verify_db(a: Identity, b: Identity) -> None:
                         text(
                             "SELECT count(*) FROM tenants "
                             "WHERE id = :tenant AND clerk_org_id = :org "
-                            "AND is_active IS TRUE"
+                            "AND is_active IS TRUE "
+                            "AND coalesce((settings ->> 'synthetic_acceptance')::boolean, false) IS TRUE"
                         ),
                         {"tenant": identity.tenant_id, "org": identity.clerk_org_id},
                     )
@@ -172,6 +173,18 @@ async def verify_db(a: Identity, b: Identity) -> None:
                 )
                 if owned.scalar_one() != 1:
                     raise PreflightBlocked("A_SYNTHETIC_PROJECT_NOT_AUTHORIZED")
+
+                # A's /projects page can list the tenant's projects. Never
+                # open that page when it could expose a non-synthetic project.
+                foreign_count = await connection.execute(
+                    text(
+                        "SELECT count(*) FROM projects "
+                        "WHERE tenant_id = :tenant AND name NOT LIKE 'ACCEPT-706-%'"
+                    ),
+                    {"tenant": a.tenant_id},
+                )
+                if foreign_count.scalar_one() != 0:
+                    raise PreflightBlocked("A_TENANT_HAS_UNAUTHORIZED_PROJECTS")
 
                 await connection.execute(
                     text("SELECT set_config('app.current_tenant', :tenant, true)"),
