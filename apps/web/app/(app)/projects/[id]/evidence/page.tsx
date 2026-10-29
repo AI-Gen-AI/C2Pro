@@ -979,7 +979,7 @@ export default function EvidencePage() {
         </Link>
       ) : null}
 
-      <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} />
+      <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} projectId={id} />
 
       <EvidenceWorkspace
         splitView={splitView}

@@ -1,0 +1,44 @@
+name: ACC-01 S6 — Trusted A vs Proposed B
+
+on:
+  pull_request:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - "apps/web/app/(app)/projects/[id]/changes/[documentId]/[revisionId]/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/changes/[documentId]/[revisionId]/page.test.tsx"
+      - "apps/web/app/(app)/projects/[id]/evidence/page.tsx"
+      - "apps/web/components/features/evidence/EvidenceRevisionHistoryPanel.tsx"
+      - "apps/web/components/features/evidence/EvidenceRevisionHistoryPanel.test.tsx"
+      - ".github/workflows/acc01-s6-revision-authority-ux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s6-revision-authority:
+    name: "S6 — TS, lint and revision authority UX regressions"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: S6 trusted A vs proposed B source evidence and change history tests
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            components/features/evidence/EvidenceRevisionHistoryPanel.test.tsx \
+            'app/(app)/projects/[id]/changes/[documentId]/[revisionId]/page.test.tsx' \
+            'app/(app)/projects/[id]/evidence/page.test.tsx'
