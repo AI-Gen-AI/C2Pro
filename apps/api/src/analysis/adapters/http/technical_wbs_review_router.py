@@ -24,6 +24,10 @@ from src.analysis.application.approve_canonical_technical_wbs_link import (
     ApproveCanonicalTechnicalWBSLinkService,
     CanonicalTechnicalWBSLinkError,
 )
+from src.analysis.application.list_canonical_technical_wbs_links import (
+    CanonicalLinkProjectNotFound,
+    ListCanonicalTechnicalWBSLinksService,
+)
 from src.analysis.application.record_technical_wbs_review import (
     ImmutableDocxTechnicalTextReader,
     RecordTechnicalWBSReviewService,
@@ -108,6 +112,25 @@ class CanonicalTechnicalWBSLinkResponse(BaseModel):
     )
     approved_canonical_link: Literal[True] = True
     technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
+
+
+class CanonicalTechnicalWBSLinkListEntry(BaseModel):
+    """A historical event is NOT necessarily a presently valid WBS link."""
+
+    event_id: UUID
+    occurred_at: datetime
+    review_event_id: UUID
+    technical_document_id: UUID
+    technical_revision_id: UUID
+    source_clause_id: UUID
+    source_section: str
+    wbs_baseline_id: UUID
+    wbs_node_id: UUID
+    current_state: Literal["CURRENT_VERIFIED", "HISTORICAL_NOT_CURRENT"]
+    state_reason: str
+    authority: Literal["EXPLICIT_HUMAN_CANONICAL_LINK"]
+    approval: Literal["APPROVE_CANONICAL_LINK"]
+    technical_assessment: Literal["NOT_ASSESSED"]
 
 
 class TechnicalWBSReviewHistoryEntry(BaseModel):
@@ -256,6 +279,47 @@ async def record_technical_wbs_review(
         proposed_wbs_baseline_id=c.proposed_wbs_baseline_id,
         proposed_wbs_node_id=c.proposed_wbs_node_id,
     )
+
+
+async def get_canonical_technical_wbs_link_reader(
+    session: AsyncSession = Depends(get_technical_wbs_review_history_session),
+) -> ListCanonicalTechnicalWBSLinksService:
+    return ListCanonicalTechnicalWBSLinksService(session=session)
+
+
+@router.get(
+    "/{project_id}/technical-wbs/canonical-links",
+    response_model=list[CanonicalTechnicalWBSLinkListEntry],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Active Clerk user required"},
+        404: {"description": "Project unavailable to this tenant"},
+    },
+    summary="List historical Technical→WBS approvals and verify current canonical authority",
+)
+async def list_canonical_technical_wbs_links(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    reader: ListCanonicalTechnicalWBSLinksService = Depends(
+        get_canonical_technical_wbs_link_reader
+    ),
+    limit: int = Query(default=50, ge=1, le=50),
+) -> list[CanonicalTechnicalWBSLinkListEntry]:
+    if not current_user.is_active or not current_user.clerk_user_id:
+        raise HTTPException(status_code=403, detail="Active Clerk user required")
+    tenant = require_tenant_id(current_user.tenant_id)
+    try:
+        rows = await reader.execute(
+            tenant_id=tenant, project_id=project_id, limit=limit,
+        )
+    except CanonicalLinkProjectNotFound as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
+    return [
+        CanonicalTechnicalWBSLinkListEntry.model_validate(
+            item.__dict__,
+        )
+        for item in rows
+    ]
 
 
 async def get_canonical_technical_wbs_link_service(
