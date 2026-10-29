@@ -140,6 +140,41 @@ async function verifyAuthenticatedBackendTenant(page: Page, expectedTenantId: st
   expect(evidence.activeUser, "backend user must be active").toBe(true);
 }
 
+/**
+ * Refuse application writes even if an unexpected component tries to emit one
+ * while the browser signs in or renders the synthetic project. Clerk's own
+ * cross-origin authentication calls are outside this product-write boundary.
+ */
+async function preventProductWrites(page: Page): Promise<() => void> {
+  let refused = 0;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const method = request.method().toUpperCase();
+    if (["GET", "HEAD", "OPTIONS"].includes(method)) {
+      await route.continue();
+      return;
+    }
+    let isProductOrigin = false;
+    try {
+      const url = new URL(request.url());
+      isProductOrigin =
+        url.protocol === "https:" &&
+        ["c2pro.io", "www.c2pro.io", "c2pro-production.up.railway.app"].includes(url.hostname);
+    } catch {
+      refused += 1;
+      await route.abort();
+      return;
+    }
+    if (isProductOrigin) {
+      refused += 1;
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  return () => expect(refused, "read-only S1 must not attempt application writes").toBe(0);
+}
+
 function watchProjectReads(page: Page): number[] {
   const statuses: number[] = [];
   page.on("response", (response) => {
@@ -174,6 +209,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
     const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
+      const verifyReadOnly = await preventProductWrites(page);
       const facts = await startClerkSession(page, required("PROD_ACCEPTANCE_CLERK_EMAIL"), required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
       expect(facts.sessionActive).toBe(true);
       expect(facts.tenantId).toBe(required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
@@ -183,6 +219,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
       await page.goto("/projects/" + APPROVED_A_PROJECT_ID + "/documents");
       await expect.poll(() => statuses.length, { timeout: 30_000 }).toBeGreaterThan(0);
       expect(statuses, "the approved A project must be accessible to A").toContain(200);
+      verifyReadOnly();
     } finally {
       await context.close();
     }
@@ -192,6 +229,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
     const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
+      const verifyReadOnly = await preventProductWrites(page);
       const facts = await startClerkSession(page, required("E2E_CLERK_TENANT_B_USER_EMAIL"), TENANT_B_ID);
       expect(facts.sessionActive).toBe(true);
       expect(facts.memberships).toBe(1);
@@ -212,6 +250,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
       ).toBe(true);
       expect(statuses).not.toContain(401);
       expect(statuses).not.toContain(429);
+      verifyReadOnly();
 
       mkdirSync(path.dirname(OUTPUT), { recursive: true });
       writeFileSync(
