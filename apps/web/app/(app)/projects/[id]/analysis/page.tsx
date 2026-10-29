@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { AlertTriangle, Gauge, RadioTower, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,18 +73,22 @@ function errorMessage(
  * reason_if_unavailable) is a governed P1 follow-up; until it exists this stays
  * neutral rather than asserting more than the contract proves.
  */
-type CoherenceSuppressionReason = "loading" | "unverified" | "coherence_unavailable";
+type CoherenceSuppressionReason = "loading" | "unverified" | "coherence_unavailable" | "contract_pending_approval";
 
 function resolveCoherenceSuppressionReason({
   loading,
   errored,
   hasVector,
+  scoreReason,
 }: {
   loading: boolean;
   errored: boolean;
   hasVector: boolean;
+  scoreReason?: string | null;
 }): CoherenceSuppressionReason {
   if (loading) return "loading";
+  // Only an exact backend reason licenses naming an approval blocker.
+  if (scoreReason === "contract_pending_approval") return "contract_pending_approval";
   if (!errored && hasVector) return "coherence_unavailable";
   return "unverified";
 }
@@ -95,6 +100,8 @@ const COHERENCE_SUPPRESSION_COPY: Record<CoherenceSuppressionReason, string> = {
   coherence_unavailable:
     "Coherence is not available for this analysis yet. Availability depends on " +
     "having enough reconcilable evidence to evaluate consistency.",
+  contract_pending_approval:
+    "Contract awaiting approval. Coherence has not been evaluated and no Score is available until the contract is reviewed.",
 };
 
 export default function AnalysisPage() {
@@ -115,11 +122,22 @@ export default function AnalysisPage() {
     isLoading: healthLoading,
     isError: healthErrored,
   } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id, { query: { refetchOnMount: "always" } });
-  const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
+  // A dashboard null must remain null, even if a previously loaded Health
+  // snapshot still carries a coherence evidence ref. Never convert null to 0.
+  const coherenceScore =
+    typeof dashboard?.coherence_score === "number" && Number.isFinite(dashboard.coherence_score)
+      ? dashboard.coherence_score
+      : null;
+  const contractPendingApproval = dashboard?.score_reason === "contract_pending_approval";
+  const showCoherence =
+    coherenceScore !== null &&
+    !contractPendingApproval &&
+    coherenceSubscoreIsIncorporated(healthVector);
   const coherenceSuppressionReason = resolveCoherenceSuppressionReason({
     loading: healthLoading,
     errored: healthErrored,
     hasVector: healthVector != null,
+    scoreReason: dashboard?.score_reason,
   });
   const {
     data: alertsResponse,
@@ -148,7 +166,6 @@ export default function AnalysisPage() {
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert: AlertResponse) => alert.status === "open");
-  const coherenceScore = numberValue(dashboard.coherence_score);
   const documentCount = numberValue(dashboard.document_count);
   const subScores = objectValue(dashboard.sub_scores);
   const dashboardExtras = dashboard as DashboardExtras;
@@ -160,10 +177,16 @@ export default function AnalysisPage() {
     dashboardExtras.score_missing_dimensions,
   );
   const budgetScore =
-    typeof subScores["BUDGET"] === "number" ? subScores["BUDGET"] : null;
+    !contractPendingApproval && typeof subScores["BUDGET"] === "number"
+      ? subScores["BUDGET"]
+      : null;
   const budgetValue = budgetScore === null ? "—" : String(budgetScore);
   const budgetTitle =
-    budgetScore === null ? "Requires budget document" : undefined;
+    contractPendingApproval
+      ? "Awaiting contract approval before coherence is evaluated"
+      : budgetScore === null
+        ? "Requires budget document"
+        : undefined;
   const recentAlerts = openAlerts.slice(0, 3).map((alert: AlertResponse) => ({
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
@@ -289,6 +312,15 @@ export default function AnalysisPage() {
                 className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
               >
                 {COHERENCE_SUPPRESSION_COPY[coherenceSuppressionReason]}
+                {coherenceSuppressionReason === "contract_pending_approval" ? (
+                  <Link
+                    className="ml-2 font-medium underline underline-offset-2"
+                    href={`/projects/${id}/review`}
+                    data-testid="analysis-review-contract-link"
+                  >
+                    Open project review queue
+                  </Link>
+                ) : null}
               </p>
             )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
