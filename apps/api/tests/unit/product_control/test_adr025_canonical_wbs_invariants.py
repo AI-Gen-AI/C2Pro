@@ -172,8 +172,10 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     # PC-2b.3: the import router stores immutable WBS import sources -- never WBS rows -- and creates an
     # IMPORT_REVIEW DRAFT only through the governed commands, on an explicit human action.
     imports = "src.wbs.adapters.http.import_router"
+    # Technical S7 audit, explicit canonical approval and readback share one bounded router.
+    technical_reviews = "src.analysis.adapters.http.technical_wbs_review_router"
     allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance,
-                        governed, profiles, intelligence, imports}
+                        governed, profiles, intelligence, imports, technical_reviews}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -192,6 +194,29 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
                                        for path in intelligence_routes)
     import_routes = {path for (_, path), module in wbs_routes.items() if module == imports}
     assert import_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-imports") for path in import_routes)
+    # Review remains audit-only. Canonical approval is a separate explicit POST;
+    # its GET only reads persisted approvals and must never grant authority itself.
+    technical_routes = {(methods, path) for (methods, path), module in wbs_routes.items()
+                        if module == technical_reviews}
+    review_path = "/api/v1/projects/{project_id}/technical-wbs/reviews"
+    canonical_path = "/api/v1/projects/{project_id}/technical-wbs/canonical-links"
+    assert technical_routes == {
+        (("GET",), review_path),
+        (("POST",), review_path),
+        (("GET",), canonical_path),
+        (("POST",), canonical_path),
+    }
+    from src.analysis.adapters.http.technical_wbs_review_router import (
+        approve_canonical_technical_wbs_link,
+        list_canonical_technical_wbs_links,
+        list_technical_wbs_reviews,
+        record_technical_wbs_review,
+    )
+
+    assert wbs_routes[(("GET",), review_path)] == list_technical_wbs_reviews.__module__
+    assert wbs_routes[(("POST",), review_path)] == record_technical_wbs_review.__module__
+    assert wbs_routes[(("GET",), canonical_path)] == list_canonical_technical_wbs_links.__module__
+    assert wbs_routes[(("POST",), canonical_path)] == approve_canonical_technical_wbs_link.__module__
 
 
 def test_wbs_import_never_writes_wbs_except_through_the_governed_draft_commands() -> None:
