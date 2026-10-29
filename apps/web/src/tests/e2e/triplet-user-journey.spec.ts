@@ -139,13 +139,16 @@ async function verifyS2FourSourceLedger(
       const revisionRows = revisions.ok
         ? (await revisions.json()) as { revision_id: string; rev_no?: number }[]
         : [];
-      const download = await fetch(`/api/v1/documents/${source.documentId}/download`, { headers });
-      const bytes = download.ok ? Array.from(new Uint8Array(await download.arrayBuffer())) : [];
+      const revisionId = revisionRows[0]?.revision_id;
+      const download = revisionId
+        ? await fetch(`/api/v1/documents/${source.documentId}/download?revision_id=${encodeURIComponent(revisionId)}`, { headers })
+        : null;
+      const bytes = download?.ok ? Array.from(new Uint8Array(await download.arrayBuffer())) : [];
       return {
         id: source.documentId,
         revisionHttp: revisions.status,
         revisions: revisionRows,
-        downloadHttp: download.status,
+        downloadHttp: download?.status ?? 0,
         bytes,
       };
     }));
