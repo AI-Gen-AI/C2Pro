@@ -10,8 +10,16 @@ on:
       - "apps/api/tests/unit/test_prod_s1_clerk_link_readonly.py"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Start with safe preflight_only; browser_readonly requires separate approval."
+        required: true
+        type: choice
+        default: preflight_only
+        options:
+          - preflight_only
+          - browser_readonly
       confirm_readonly:
-        description: "Type RUN-S1-READONLY. Reads only the preauthorized synthetic A project."
+        description: "Type RUN-S1-READONLY. Only pre-existing synthetic A/B identities."
         required: true
         type: string
 
@@ -82,6 +90,9 @@ jobs:
           test "$PROD_S1_CONFIRM_READONLY" = "RUN-S1-READONLY" || {
             echo "::error::S1 READONLY not explicitly authorized."; exit 2;
           }
+          test "${{ inputs.mode }}" = "preflight_only" || test "${{ inputs.mode }}" = "browser_readonly" || {
+            echo "::error::S1 mode not allowed."; exit 2;
+          }
           for name in CLERK_SECRET_KEY CLERK_PUBLISHABLE_KEY E2E_CLERK_TENANT_B_USER_EMAIL PROD_ACCEPTANCE_CLERK_EMAIL PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID PROD_ACCEPTANCE_EXPECTED_TENANT_ID PROD_ACCEPTANCE_DATABASE_URL_READONLY; do
             test -n "${!name:-}" || { echo "::error::Missing protected prerequisite: $name"; exit 2; }
           done
@@ -95,9 +106,6 @@ jobs:
 
       - name: Checkout exact trusted control SHA
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup frontend toolchain
-        uses: ./.github/actions/setup-node-web
 
       # Perform a READ ONLY DB + Clerk identity check before any browser login.
       # An authenticated GET can implicitly auto-provision a user/tenant; without
@@ -118,11 +126,19 @@ jobs:
         working-directory: apps/api
         run: python scripts/verify_prod_s1_clerk_link_readonly.py
 
+      # Only load JavaScript dependencies AFTER preflight has passed.
+      # The default mode does not install or execute browser/frontend code.
+      - name: Setup frontend toolchain for separately approved browser run
+        if: inputs.mode == 'browser_readonly'
+        uses: ./.github/actions/setup-node-web
+
       - name: Install Playwright Chromium
+        if: inputs.mode == 'browser_readonly'
         working-directory: apps/web
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Check real Clerk identities and B-to-A denial (no application writes)
+        if: inputs.mode == 'browser_readonly'
         env:
           CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
           CLERK_PUBLISHABLE_KEY: ${{ secrets.PROD_S1_CLERK_PUBLISHABLE_KEY || vars.PROD_S1_CLERK_PUBLISHABLE_KEY }}
@@ -134,7 +150,7 @@ jobs:
         run: ./node_modules/.bin/playwright test --config=playwright.prod-s1.config.ts --project=prod-s1-identity-readonly --reporter=line --workers=1
 
       - name: Save category-only acceptance evidence
-        if: always()
+        if: always() && inputs.mode == 'browser_readonly'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: acc01-s1-clerk-identity-readonly
