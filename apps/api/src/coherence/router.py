@@ -1104,17 +1104,22 @@ async def evaluate_project_coherence(
     if payload.clauses:
         clauses = payload.clauses
     elif payload.project_id:
+        # S3: a contract that has no canonical/approved current input blocks any
+        # relational Coherence Score, even if Budget/Schedule clauses are already
+        # searchable. The old check only ran when *no* RAG clauses existed, so it
+        # could score unrelated documents before a human approved the contract.
+        # A trusted revision A with proposed revision B remains canonical via
+        # current_revision_lateral, so normal S6 revision continuity is preserved.
+        if await _contracts_awaiting_approval(
+            db, payload.project_id, current_user.tenant_id
+        ):
+            # Pending is not an evaluation result: do not persist a Score or
+            # change the alert register before this human authority decision.
+            return _contract_pending_approval_result(include_diagnostics)
         clauses = await get_clauses_from_rag(
             db, payload.project_id, current_user.tenant_id, payload.max_chunks
         )
         if not clauses:
-            pending_contracts = await _contracts_awaiting_approval(
-                db, payload.project_id, current_user.tenant_id
-            )
-            if pending_contracts:
-                # The document exists; it is not canonical input yet. That is a state of the
-                # project, not "nothing was uploaded": no score, no finding, no alert touched.
-                return _contract_pending_approval_result(include_diagnostics)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No document clauses found. Please upload and parse documents first.",
