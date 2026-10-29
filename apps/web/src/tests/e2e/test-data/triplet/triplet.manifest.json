@@ -30,11 +30,11 @@
   ],
   "note_schedule": "The schedule finish is a source observation (not an approved baseline): it raises a provisional advisory, never a confirmed DET-CRS-SCHDEAD finding",
   "specification": {
-    "document_type": "specification",
+    "document_type": "technical_spec",
     "sections": [
       "4.1.2",
       "4.2"
     ],
-    "note": "ingested, but yields no coherence evidence today: TECHNICAL stays withheld"
+    "note": "Canonical technical_spec source is persisted as the fourth family; extraction and coherence evidence require separate acceptance, never inferred from upload."
   }
 }
