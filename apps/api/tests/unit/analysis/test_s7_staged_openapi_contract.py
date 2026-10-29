@@ -7,11 +7,15 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[5]
 REVIEW_ROUTE = "/api/v1/projects/{project_id}/technical-wbs/reviews"
+CANONICAL_ROUTE = "/api/v1/projects/{project_id}/technical-wbs/canonical-links"
 S7_MODELS = {
     "TechnicalMappingDecision",
     "TechnicalWBSReviewHistoryEntry",
     "TechnicalWBSReviewRequest",
     "TechnicalWBSReviewResponse",
+    "CanonicalTechnicalWBSLinkRequest",
+    "CanonicalTechnicalWBSLinkResponse",
+    "CurrentCanonicalTechnicalWBSLinkResponse",
 }
 
 
@@ -32,6 +36,24 @@ def test_checked_in_json_and_yaml_keep_s2_and_add_audit_only_s7() -> None:
         assert "DocumentEntityResponse" in schemas
         assert S7_MODELS <= set(schemas)
         assert set(document["paths"][REVIEW_ROUTE]) == {"get", "post"}
+        assert set(document["paths"][CANONICAL_ROUTE]) == {"get", "post"}
+        assert (
+            document["paths"][CANONICAL_ROUTE]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"]
+            == "#/components/schemas/CanonicalTechnicalWBSLinkRequest"
+        )
+        assert (
+            document["paths"][CANONICAL_ROUTE]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["items"]["$ref"]
+            == "#/components/schemas/CurrentCanonicalTechnicalWBSLinkResponse"
+        )
+        assert schemas["CanonicalTechnicalWBSLinkRequest"]["properties"]["approval"]["const"] == (
+            "APPROVE_CANONICAL_LINK"
+        )
+        assert (
+            schemas["CurrentCanonicalTechnicalWBSLinkResponse"]["properties"]["state"]["enum"]
+            == ["CURRENT", "STALE_SOURCE", "STALE_WBS", "STALE_BOTH", "UNVERIFIED"]
+        )
 
     exports = (ROOT / "apps/web/lib/api/generated/models/index.ts").read_text(
         encoding="utf-8"
