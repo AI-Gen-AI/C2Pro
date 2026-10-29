@@ -1,0 +1,46 @@
+name: ACC-01 S2 — Four-document frontend UX
+
+on:
+  pull_request:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - "apps/web/components/features/documents/DocumentUploadDropzone.tsx"
+      - "apps/web/components/features/documents/DocumentUploadDropzone.test.tsx"
+      - "apps/web/hooks/useProjectDocuments.ts"
+      - "apps/web/hooks/useProjectDocuments.test.ts"
+      - "apps/web/types/document.ts"
+      - "apps/web/app/(app)/projects/[id]/documents/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/documents/page.test.tsx"
+      - ".github/workflows/acc01-s2-frontend-ux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s2-typed-documents:
+    name: "S2 four-document UX — types, lint and focused tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: Focused S2 document lifecycle UX tests (no backend or secrets)
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            components/features/documents/DocumentUploadDropzone.test.tsx \
+            hooks/useProjectDocuments.test.ts \
+            'app/(app)/projects/[id]/documents/page.test.tsx'

@@ -204,6 +204,72 @@ describe("ProjectDocumentsPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("labels a real technical_spec document distinctly instead of Other", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_technical_001",
+          name: "Technical-Specification.docx",
+          type: "technical_spec",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-10-29T09:00:00Z"),
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    expect(screen.getByTestId("document-row-doc_technical_001")).toHaveTextContent(
+      "Technical specification",
+    );
+    expect(screen.getByText("Showing 1 of 1 documents")).toBeInTheDocument();
+  });
+
+  it("offers the fourth Technical specification input without changing the coherence triplet", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    const fourthSlot = screen.getByTestId("technical-specification-slot");
+    expect(fourthSlot).toHaveTextContent("Fourth project source");
+    expect(fourthSlot).toHaveTextContent("coherence triplet");
+    fireEvent.click(within(fourthSlot).getByRole("button", { name: /upload technical specification/i }));
+    expect(screen.getByText("Default upload type: technical_spec")).toBeInTheDocument();
+  });
+
+  it("shows Technical specification as registered, not as completed analysis", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_technical_001",
+          name: "Technical-Specification.docx",
+          type: "technical_spec",
+          fileSize: 1024,
+          status: "processing",
+          lifecycleStatus: "processing",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    const fourthSlot = screen.getByTestId("technical-specification-slot");
+    expect(within(fourthSlot).getByTestId("technical-specification-present")).toHaveTextContent(
+      "In document register",
+    );
+    expect(within(fourthSlot).queryByRole("button", { name: /upload technical specification/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-row-doc_technical_001")).toHaveTextContent("Processing");
+  });
+
   it("shows analysis progress while documents are still processing", () => {
     useProjectDocumentsMock.mockReturnValue({
       documents: [
