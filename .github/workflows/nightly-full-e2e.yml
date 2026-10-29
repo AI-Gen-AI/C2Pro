@@ -181,6 +181,7 @@ jobs:
       # TS-E2E-TRIPLET-001: the long three-document journey has its own step so its result is
       # never mixed into the suite above. AI is mocked here (C2PRO_AI_MOCK=1) and the spec says so.
       - name: Run triplet user journey (real backend, mock AI)
+        id: triplet_s2_journey
         if: always()
         working-directory: apps/web
         env:
@@ -189,6 +190,19 @@ jobs:
         # wizard; run side by side (Nightly 40224064215) both stalled at project creation, so they run
         # one after the other. This isolates them; it is not a finding about the cause.
         run: ./node_modules/.bin/playwright test --project=triplet-journey --workers=1 --reporter=list,json
+
+      # S2: a separate process reads the actual SQL tables of THIS Playwright
+      # project, before cleanup destroys the job's migrated PostgreSQL database.
+      # API/listing and browser screenshots alone are not an independent DB check.
+      - name: Verify S2 four-source ledger directly in PostgreSQL
+        if: always() && steps.triplet_s2_journey.outcome == 'success'
+        working-directory: apps/api
+        run: |
+          python scripts/verify_s2_triplet_pg.py \
+            --playwright-json ../web/playwright-report/triplet-results.json \
+            --manifest ../web/src/tests/e2e/test-data/triplet/triplet.manifest.json \
+            --fixture-dir ../web/src/tests/e2e/test-data/triplet \
+            --output ../web/playwright-report/s2-postgres-ledger.json
 
       # Explicit dispatch only (inputs.run_pj01): the PJ-01 harness exercises revision B, What Changed?
       # and Current State with hash-bound fixtures. Its result is reported on its own and never mixed
