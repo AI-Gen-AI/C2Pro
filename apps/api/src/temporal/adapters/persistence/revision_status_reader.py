@@ -20,7 +20,7 @@ from src.temporal.domain.current_revision import CurrentRevisionStatus
 
 _REVISION_SQL = text(
     """
-    SELECT r.rev_no
+    SELECT r.rev_no, r.blob_hash
       FROM document_revisions r
      WHERE r.revision_id = cast(:revision_id as uuid)
        AND r.document_id = cast(:document_id as uuid)
@@ -79,6 +79,7 @@ class SqlAlchemyRevisionStatusReader:
         return RevisionStatus(
             revision_id=revision_id,
             rev_no=int(revision.rev_no),
+            blob_hash=str(revision.blob_hash) if revision.blob_hash else None,
             trust_state=str(artifact.trust_state) if artifact is not None else None,
             artifact_id=artifact.artifact_id if artifact is not None else None,
             artifact_version=int(artifact.artifact_version) if artifact is not None else None,
