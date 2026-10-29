@@ -1,6 +1,14 @@
 name: Nightly Full E2E
 
 on:
+  # Bounded S2 owner dispatch: only a change to this workflow on the
+  # isolated integration branch launches the existing Nightly suite.
+  # Ordinary product commits do not trigger extra Nightlies.
+  push:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - '.github/workflows/nightly-full-e2e.yml'
   schedule:
     # Run before the 04:00 I13 and 05:00 evaluation lanes.
     - cron: "30 1 * * *"
