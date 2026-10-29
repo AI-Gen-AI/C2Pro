@@ -204,6 +204,30 @@ describe("ProjectDocumentsPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("labels a real technical_spec document distinctly instead of Other", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_technical_001",
+          name: "Technical-Specification.docx",
+          type: "technical_spec",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-10-29T09:00:00Z"),
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    expect(screen.getByTestId("document-row-doc_technical_001")).toHaveTextContent(
+      "Technical specification",
+    );
+    expect(screen.getByText("Showing 1 of 1 documents")).toBeInTheDocument();
+  });
+
   it("shows analysis progress while documents are still processing", () => {
     useProjectDocumentsMock.mockReturnValue({
       documents: [
