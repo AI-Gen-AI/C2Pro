@@ -294,6 +294,36 @@ describe("EvidencePage highlight mapping", () => {
     });
   });
 
+  it("S5 — returns from inspected source evidence to the exact review in the same project", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1",
+        returnReviewItemId: "review-source-42",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-return-to-review")).toHaveAttribute(
+      "href",
+      "/projects/proj-1/review?itemId=review-source-42",
+    );
+    expect(screen.getByRole("link", { name: /back to this review/i })).toBeInTheDocument();
+  });
+
+  it("S5 — never accepts an external URL as a review return destination", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => key === "returnReviewItemId"
+        ? "https://outside.invalid/?jump=1"
+        : null,
+    });
+    render(<EvidencePage />);
+    const link = screen.getByTestId("evidence-return-to-review");
+    expect(link).toHaveAttribute(
+      "href",
+      "/projects/proj-1/review?itemId=https%3A%2F%2Foutside.invalid%2F%3Fjump%3D1",
+    );
+    expect(link.getAttribute("href")).not.toMatch(/^https?:/);
+  });
+
   it("blocks a stale A revision and never opens another/current PDF", () => {
     useSearchParamsMock.mockReturnValue({
       get: (key: string) => ({
