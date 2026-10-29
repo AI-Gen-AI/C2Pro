@@ -218,7 +218,9 @@ export function evaluateEvidenceLanding(
     observed.verifiedSourceDocumentId === expected.documentId &&
     observed.verifiedSourceClauseId === expected.clauseId &&
     Boolean(observed.verifiedSourceExcerpt?.trim());
-  if (observed.activeEntityId !== expected.clauseId && !verifiedSource) {
+  const requiresSourceProof = params.get("origin") === "health";
+  if ((requiresSourceProof && !verifiedSource) ||
+      (!requiresSourceProof && observed.activeEntityId !== expected.clauseId && !verifiedSource)) {
     violations.push({ code: "EVIDENCE_CLAUSE_NOT_ACTIVE", detail: `active evidence is ${observed.activeEntityId ?? "none"}; exact source quote not verified` });
   }
   if (observed.unavailableNotice) {
