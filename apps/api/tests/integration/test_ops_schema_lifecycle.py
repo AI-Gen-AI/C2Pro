@@ -69,3 +69,36 @@ async def test_recovery_trigger_tracks_insert_update_and_delete(db, test_tenant)
     assert (await db.execute(text(
         "SELECT count(*) FROM system_recovery.document_work_index WHERE document_id=:d"
     ), {"d": document})).scalar_one() == 0
+
+
+@pytest.mark.parametrize("iteration", [1, 2])
+async def test_trusted_projection_schema_matches_migration(db, iteration):
+    """Each ORM fixture must restore the SQL-only #714/C3b obligations.
+
+    This is a metadata-fixture shape regression, not a full Alembic/RLS gate.
+    """
+    assert (await db.execute(text(
+        "SELECT to_regclass('system_recovery.trusted_projection_index')"
+    ))).scalar_one() is not None, f"trusted_projection_missing_iteration_{iteration}"
+
+    columns = (await db.execute(text(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'system_recovery' "
+        "AND table_name = 'trusted_projection_index'"
+    ))).scalars().all()
+    assert {
+        "artifact_id", "document_id", "tenant_id", "project_id",
+        "artifact_version", "artifact_hash", "projection_state",
+        "materialization_state", "materialization_attempts",
+        "materialization_checked_at", "materialized_analysis_id",
+        "materialization_detail",
+    }.issubset(set(columns))
+
+    assert (await db.execute(text(
+        "SELECT count(*) FROM pg_constraint "
+        "WHERE conrelid='system_recovery.trusted_projection_index'::regclass "
+        "AND contype='f'"
+    ))).scalar_one() == 1
+    assert (await db.execute(text(
+        "SELECT count(*) FROM system_recovery.trusted_projection_index"
+    ))).scalar_one() == 0
