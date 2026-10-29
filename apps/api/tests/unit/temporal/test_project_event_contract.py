@@ -83,3 +83,11 @@ def test_project_event_accepts_evidence_refs() -> None:
     )
 
     assert event.evidence_refs[0].tier is EvidenceTier.VERIFIED
+
+
+def test_technical_wbs_review_is_registered_as_audit_event_only() -> None:
+    """Review facts use the immutable ledger, not an unregistered canonical link."""
+    assert validate_event_type("technical.wbs_link_reviewed") == "technical.wbs_link_reviewed"
+    with pytest.raises(ValueError, match="Unknown ProjectEvent event_type"):
+        validate_event_type("technical.wbs_link_applied")
+

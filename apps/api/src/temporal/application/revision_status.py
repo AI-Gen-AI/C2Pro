@@ -35,6 +35,8 @@ class RevisionStatus(BaseModel):
     status: Literal["available", "unavailable"] = "available"
     revision_id: UUID
     rev_no: int | None = None
+    # Immutable revision content identity, never the mutable documents.file_hash.
+    blob_hash: str | None = None
     # proposed | trusted | rejected | superseded; None when no artifact is bound.
     trust_state: str | None = None
     artifact_id: UUID | None = None
