@@ -8,9 +8,9 @@ No mutation, migration, implied technical compliance, or score calculation.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
-import re
 from typing import Literal
 from uuid import UUID
 

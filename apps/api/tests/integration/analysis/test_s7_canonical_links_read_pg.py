@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.http import technical_wbs_review_router as router
 from src.analysis.adapters.persistence.models import DocumentArtifactORM
-from src.documents.adapters.persistence.models import ClauseORM
 from src.analysis.application.approve_canonical_technical_wbs_link import (
     CANONICAL_APPROVAL,
     ApproveCanonicalTechnicalWBSLinkService,
@@ -20,6 +19,7 @@ from src.analysis.application.approve_canonical_technical_wbs_link import (
 from src.analysis.application.record_technical_wbs_review import RecordTechnicalWBSReviewService
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
+from src.documents.adapters.persistence.models import ClauseORM
 from tests.integration.analysis.test_s7_review_service_settlement_pg import (
     _arguments,
     _world,
