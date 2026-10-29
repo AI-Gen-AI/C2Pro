@@ -103,5 +103,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if ! git diff --cached --quiet; then
             git commit -m "chore(S7): exact OpenAPI and Orval generated Budget/Schedule canonical links"
+            git fetch origin feat/acc01-s7-structured-links-20261029
+            git rebase origin/feat/acc01-s7-structured-links-20261029
             git push origin HEAD:refs/heads/feat/acc01-s7-structured-links-20261029
           fi
