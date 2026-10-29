@@ -24,6 +24,10 @@ from src.analysis.application.approve_canonical_technical_wbs_link import (
     ApproveCanonicalTechnicalWBSLinkService,
     CanonicalTechnicalWBSLinkError,
 )
+from src.analysis.application.read_canonical_technical_wbs_links import (
+    CanonicalLinkReadError,
+    ReadCanonicalTechnicalWBSLinksService,
+)
 from src.analysis.application.record_technical_wbs_review import (
     ImmutableDocxTechnicalTextReader,
     RecordTechnicalWBSReviewService,
@@ -106,6 +110,27 @@ class CanonicalTechnicalWBSLinkResponse(BaseModel):
     authority: Literal["EXPLICIT_HUMAN_CANONICAL_LINK"] = (
         "EXPLICIT_HUMAN_CANONICAL_LINK"
     )
+    approved_canonical_link: Literal[True] = True
+    technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
+
+
+class CurrentCanonicalTechnicalWBSLinkResponse(BaseModel):
+    """Durable approval event with current authority rederived on each GET."""
+
+    event_id: UUID
+    review_event_id: UUID | None
+    approved_at: datetime
+    technical_document_id: UUID | None
+    technical_revision_id: UUID | None
+    source_clause_id: UUID | None
+    source_section: str
+    source_blob_hash: str
+    wbs_baseline_id: UUID | None
+    wbs_node_id: UUID | None
+    wbs_code: str | None
+    wbs_name: str | None
+    state: Literal["CURRENT", "STALE_SOURCE", "STALE_WBS", "STALE_BOTH", "UNVERIFIED"]
+    authority: Literal["EXPLICIT_HUMAN_CANONICAL_LINK"] = "EXPLICIT_HUMAN_CANONICAL_LINK"
     approved_canonical_link: Literal[True] = True
     technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
 
@@ -322,3 +347,48 @@ async def approve_canonical_technical_wbs_link(
         wbs_baseline_id=result.wbs_baseline_id,
         wbs_node_id=result.wbs_node_id,
     )
+
+@router.get(
+    "/{project_id}/technical-wbs/canonical-links",
+    response_model=list[CurrentCanonicalTechnicalWBSLinkResponse],
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Project not found"},
+    },
+    summary="Read persisted Technical–WBS approvals with independently verified current authority",
+)
+async def list_canonical_technical_wbs_links(
+    project_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_technical_wbs_review_history_session),
+    limit: int = Query(default=50, ge=1, le=50),
+) -> list[CurrentCanonicalTechnicalWBSLinkResponse]:
+    """No audit-only event is accepted as canonical, even after relogin."""
+    tenant = require_tenant_id(current_user.tenant_id)
+    try:
+        views = await ReadCanonicalTechnicalWBSLinksService(session).list(
+            tenant_id=tenant, project_id=project_id, limit=limit,
+        )
+    except CanonicalLinkReadError as exc:
+        if str(exc) == "project not found":
+            raise HTTPException(status_code=404, detail="Project not found") from exc
+        raise HTTPException(status_code=422, detail="Invalid query limit") from exc
+    return [
+        CurrentCanonicalTechnicalWBSLinkResponse(
+            event_id=view.event_id,
+            review_event_id=view.review_event_id,
+            approved_at=view.approved_at,
+            technical_document_id=view.technical_document_id,
+            technical_revision_id=view.technical_revision_id,
+            source_clause_id=view.source_clause_id,
+            source_section=view.source_section,
+            source_blob_hash=view.source_blob_hash,
+            wbs_baseline_id=view.wbs_baseline_id,
+            wbs_node_id=view.wbs_node_id,
+            wbs_code=view.wbs_code,
+            wbs_name=view.wbs_name,
+            state=view.state,
+        )
+        for view in views
+    ]
+
