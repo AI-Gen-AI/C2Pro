@@ -30,6 +30,7 @@ import { ChevronRight, ChevronDown, Expand, Loader2 } from "lucide-react";
 import { useWBSTree, type WBSTreeItem } from "@/hooks/useWBSTree";
 import { useProjectAlerts } from "@/hooks/useProjectAlerts";
 import { TechnicalWBSReviewPanel } from "@/components/features/wbs/TechnicalWBSReviewPanel";
+import { CanonicalTechnicalWBSLinksPanel } from "@/components/features/wbs/CanonicalTechnicalWBSLinksPanel";
 import type { ProjectWBSAuthority } from "@/lib/api/generated/models";
 
 const ALERT_SEVERITY_CLASSES: Record<string, string> = {
@@ -333,6 +334,7 @@ export default function ProjectWBSPage() {
 
       <WBSAlertsPanel projectId={projectId} />
       <TechnicalWBSReviewPanel projectId={projectId} authority={authority} />
+      <CanonicalTechnicalWBSLinksPanel projectId={projectId} authority={authority} items={items} />
 
       <Card data-testid="wbs-tree">
         <CardHeader className="flex flex-row items-center justify-between">
