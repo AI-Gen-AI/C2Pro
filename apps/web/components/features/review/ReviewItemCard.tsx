@@ -301,7 +301,7 @@ export function ReviewItemCard({
             {documentId ? (
               <Link
                 className="font-medium text-primary underline-offset-4 hover:underline"
-                href={`/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(documentId)}`}
+                href={`/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(documentId)}&returnReviewItemId=${encodeURIComponent(item.item_id)}`}
               >
                 View evidence
               </Link>
@@ -309,7 +309,7 @@ export function ReviewItemCard({
             {citedSourceLinks.map((source) => (
               <Link
                 key={source.key}
-                href={source.href}
+                href={`${source.href}&returnReviewItemId=${encodeURIComponent(item.item_id)}`}
                 className="font-medium text-primary underline-offset-4 hover:underline"
                 title="Pending server verification of document revision and source clause"
               >
