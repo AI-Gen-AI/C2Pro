@@ -65,18 +65,20 @@ jobs:
           set -euo pipefail
           test "${C2PRO_AI_MOCK}" = '0'
           test "${C2PRO_EMBEDDINGS_MOCK}" = '0'
+          missing=0
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
             echo '::error::S2 live AI BLOCKED: GitHub Actions secret S2_E2E_ANTHROPIC_API_KEY is missing.'
-            exit 2
+            missing=1
           fi
           if [ -z "${OPENAI_API_KEY:-}" ]; then
             echo '::error::S2 live embeddings BLOCKED: GitHub Actions secret S2_E2E_OPENAI_API_KEY is missing.'
-            exit 2
+            missing=1
           fi
           if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then
             echo '::error::Clerk E2E test credentials are missing.'
-            exit 2
+            missing=1
           fi
+          if [ "$missing" -ne 0 ]; then exit 2; fi
           echo 'Dedicated test-only AI credentials available; values are never printed.'
 
       - name: Generate ephemeral test JWT secret
