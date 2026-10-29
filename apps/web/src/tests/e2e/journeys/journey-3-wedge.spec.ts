@@ -313,12 +313,15 @@ test("E2E-W1..W5 typed triplet to report export", async ({ page }) => {
   await page.getByTestId("approve-review-wedge-1").click();
   await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
   await page.getByRole("button", { name: /confirm approve/i }).click();
-  await expect(page.getByTestId("stat-approved")).toContainText("1");
+  // The refresh that follows a decision goes through the dev server's API proxy and can trail the POST by
+  // several seconds on a loaded runner (Nightly 40832592692: POST 07:05:38, queue GET 07:05:44, answered
+  // APPROVED); wait for that data state instead of the 5 s default.
+  await expect(page.getByTestId("stat-approved")).toContainText("1", { timeout: 30_000 });
 
   // The Report tab defaults to Current State (P0d slice 8); the Audit Report view is
   // reached only via ?mode=audit, matching what a user gets from clicking "Audit export".
   await gotoStable(page, `/projects/${projectId}/report?mode=audit`);
-  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /audit report/i })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: projectName }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /download json/i })).toBeEnabled();
 });
@@ -379,7 +382,7 @@ test("E2E-W3..W5 @real-backend validates the seeded wedge", async ({ page }) => 
   await page.getByRole("button", { name: /confirm approve/i }).click();
   await expect((await approveResponse).status()).toBe(200);
   try {
-    await expect(page.getByTestId("stat-approved")).toContainText("1");
+    await expect(page.getByTestId("stat-approved")).toContainText("1", { timeout: 30_000 });
   } catch (error) {
     // Evidence, not a wait: what the HITL queue answered to the page after the approval was accepted
     // tells a UI that failed to render an approved item from a backend that never reported one.
