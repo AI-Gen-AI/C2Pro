@@ -105,7 +105,20 @@ export default defineConfig({
       },
     },
     {
-      // Explicit-only focused diagnostics.  They retain their environment
+      // S7 browser signout+fresh-context Clerk authentication. Run only by dedicated UAT.
+            name: "s7-clerk-uat",
+      testMatch: [/(^|[\\/])s7-clerk-relogin\\.spec\\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "ACC-01-S7-CLERK-UAT",
+        type: "e2e",
+        priority: "p0",
+        description: "Real Clerk logout and fresh browser login with three typed human-approved source-to-WBS links",
+      },
+    },
+    {
+name: "pj01-focal",      // Explicit-only focused diagnostics.  They retain their environment
       // guards, but are deliberately outside the canonical PJ-01 selection.
       name: "pj01-focal",
       testMatch: [
