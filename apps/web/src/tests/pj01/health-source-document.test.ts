@@ -36,6 +36,40 @@ describe("PJ-01 Evidence landing", () => {
     ).toEqual([]);
   });
 
+  it("S4 — accepts exact verified source text even without a semantic entity or PDF page", () => {
+    expect(evaluateEvidenceLanding({
+      url: `http://x/projects/p/evidence?documentId=${DOC}&highlightId=${CLAUSE}&origin=health`,
+      activeEntityId: null,
+      unavailableNotice: null,
+      verifiedSourceDocumentId: DOC,
+      verifiedSourceClauseId: CLAUSE,
+      verifiedSourceExcerpt: "The original signed contract says payment within 30 days.",
+    }, { documentId: DOC, clauseId: CLAUSE })).toEqual([]);
+  });
+
+  it("S4 — never treats a source badge without text or a mismatched document as acceptance", () => {
+    const common = {
+      url: `http://x/projects/p/evidence?documentId=${DOC}&highlightId=${CLAUSE}&origin=health`,
+      activeEntityId: null,
+      unavailableNotice: null,
+      verifiedSourceClauseId: CLAUSE,
+    };
+    expect(evaluateEvidenceLanding({
+      ...common,
+      verifiedSourceDocumentId: DOC,
+      verifiedSourceExcerpt: "  ",
+    }, { documentId: DOC, clauseId: CLAUSE }).map((v) => v.code)).toEqual([
+      "EVIDENCE_CLAUSE_NOT_ACTIVE",
+    ]);
+    expect(evaluateEvidenceLanding({
+      ...common,
+      verifiedSourceDocumentId: "other-document",
+      verifiedSourceExcerpt: "Text from another document",
+    }, { documentId: DOC, clauseId: CLAUSE }).map((v) => v.code)).toEqual([
+      "EVIDENCE_CLAUSE_NOT_ACTIVE",
+    ]);
+  });
+
   it("rejects another document, an inactive clause or an unavailable notice", () => {
     const codes = evaluateEvidenceLanding(
       { url: "http://x/projects/p/evidence?documentId=other&highlightId=nope", activeEntityId: null, unavailableNotice: "gone" },
