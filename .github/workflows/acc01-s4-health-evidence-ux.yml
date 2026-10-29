@@ -1,0 +1,46 @@
+name: ACC-01 S4 — Health to Evidence source
+
+on:
+  pull_request:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - "apps/web/app/(app)/projects/[id]/evidence/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/evidence/page.test.tsx"
+      - "apps/web/components/features/evidence/EvidenceViewerPanel.tsx"
+      - "apps/web/components/features/evidence/evidence-addressability.ts"
+      - "apps/web/components/features/evidence/evidence-addressability.test.ts"
+      - "apps/web/components/features/health/SingleDocumentHealth.tsx"
+      - "apps/web/components/features/health/SingleDocumentHealth.test.tsx"
+      - ".github/workflows/acc01-s4-health-evidence-ux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s4-source-evidence:
+    name: "S4 source evidence — types, lint and Health-to-Evidence tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: Health → Evidence source addressability / document viewer tests
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            components/features/evidence/evidence-addressability.test.ts \
+            components/features/health/SingleDocumentHealth.test.tsx \
+            'app/(app)/projects/[id]/evidence/page.test.tsx'
