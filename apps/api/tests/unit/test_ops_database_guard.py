@@ -1,7 +1,7 @@
 """The pure guard can also be run with unittest without loading pytest plugins."""
 import importlib.util
-from pathlib import Path
 import unittest
+from pathlib import Path
 from urllib.parse import urlencode
 
 SOURCE = Path(__file__).resolve().parents[1] / "support/test_database_guard.py"

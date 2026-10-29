@@ -13,15 +13,15 @@ schema creation that runs inside each pytest session.
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
 import os
+from collections.abc import AsyncGenerator
 from importlib import import_module
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import Column, event, text
-from sqlalchemy.engine import make_url
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
