@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import re
 from typing import Literal
 from uuid import UUID
 
@@ -122,14 +123,9 @@ class ReadCanonicalTechnicalWBSLinksService:
                 _uuid(p.get("wbs_baseline_id")),
                 _uuid(p.get("wbs_node_id")),
             ))
-        document_ids = {d for _, d, _, _, _, _ in entries if d is not None}
-
         # All current identities are derived from tenant-scoped persisted state,
         # never from event metadata, current UI selection or an audit-only event.
-        current = await SqlAlchemyCurrentRevisionResolver(self.session).resolve_many(
-            tenant_id=tenant_id, document_ids=document_ids
-        )
-
+        resolver = SqlAlchemyCurrentRevisionResolver(self.session)
         output: list[CanonicalTechnicalWBSLinkView] = []
         for event, document_id, revision_id, clause_id, event_baseline, node_id in entries:
             p = event.payload or {}
@@ -141,7 +137,7 @@ class ReadCanonicalTechnicalWBSLinksService:
             structurally_valid = bool(
                 document_id and revision_id and clause_id and audit_id
                 and event_baseline and node_id
-                and len(hash_value) == 64
+                and re.fullmatch(r"[0-9a-f]{64}", hash_value) is not None
                 and p.get("authority") == "EXPLICIT_HUMAN_CANONICAL_LINK"
                 and p.get("approval") == CANONICAL_APPROVAL
                 and p.get("technical_assessment") == "NOT_ASSESSED"
@@ -178,8 +174,8 @@ class ReadCanonicalTechnicalWBSLinksService:
                         ),
                     )
                 )
-                audit_exists = await self.session.scalar(
-                    select(ProjectEventORM.event_id).where(
+                audit_event = await self.session.scalar(
+                    select(ProjectEventORM).where(
                         ProjectEventORM.event_id == audit_id,
                         ProjectEventORM.tenant_id == tenant_id,
                         ProjectEventORM.project_id == project_id,
@@ -198,10 +194,26 @@ class ReadCanonicalTechnicalWBSLinksService:
                         DocumentArtifactORM.lifecycle_status == "active",
                     ).with_for_update(read=True)
                 )
-                resolved = current.get(document_id)
+                # Resolve the canonical revision AFTER acquiring an artifact
+                # SHARE lock: a concurrent trust promotion cannot invalidate
+                # this projection between status checks.
+                resolved = await resolver.resolve(
+                    tenant_id=tenant_id, document_id=document_id
+                ) if active_trust is not None else None
+                audit_matches = bool(
+                    audit_event is not None
+                    and audit_event.payload.get("authority") == "AUDIT_ONLY_NOT_CANONICAL_LINK"
+                    and audit_event.payload.get("decision") == "CONFIRMED_FOR_REVIEW"
+                    and audit_event.payload.get("technical_document_id") == str(document_id)
+                    and audit_event.payload.get("technical_revision_id") == str(revision_id)
+                    and audit_event.payload.get("source_clause_id") == str(clause_id)
+                    and audit_event.payload.get("source_blob_hash") == hash_value
+                    and audit_event.payload.get("wbs_baseline_id") == str(event_baseline)
+                    and audit_event.payload.get("wbs_node_id") == str(node_id)
+                )
                 source_current = bool(
                     revision is not None and clause_id_found is not None
-                    and audit_exists is not None and active_trust is not None
+                    and audit_matches and active_trust is not None
                     and resolved is not None
                     and resolved.status is CurrentRevisionStatus.TRUSTED
                     and resolved.revision_id == revision_id
