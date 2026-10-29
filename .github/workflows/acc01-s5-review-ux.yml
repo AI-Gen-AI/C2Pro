@@ -7,6 +7,10 @@ on:
     paths:
       - "apps/web/app/(app)/projects/[id]/review/page.tsx"
       - "apps/web/app/(app)/projects/[id]/review/page.test.tsx"
+      - "apps/web/app/(app)/projects/[id]/evidence/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/evidence/page.test.tsx"
+      - "apps/web/components/features/review/ReviewItemCard.tsx"
+      - "apps/web/components/features/review/ReviewItemCard.test.tsx"
       - ".github/workflows/acc01-s5-review-ux.yml"
 
 permissions:
@@ -37,5 +41,6 @@ jobs:
         run: |
           node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
             'app/(app)/projects/[id]/review/page.test.tsx' \
+            'app/(app)/projects/[id]/evidence/page.test.tsx' \
             components/features/review/ReviewItemCard.test.tsx \
             components/features/review/review-source-links.test.ts
