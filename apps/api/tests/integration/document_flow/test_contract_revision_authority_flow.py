@@ -218,9 +218,14 @@ async def test_the_parsed_text_fallback_does_not_read_a_pending_contract(
     assert of_contract(read) == []
 
 
-async def test_only_the_contract_carries_the_pending_proposal_rule(
+async def test_a_specification_is_read_only_once_approved(
     db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
+    """On this branch the technical-specification rule (D2) is stricter than the contract rule of #1137.
+
+    A pending specification is withheld (PROPOSED is not TRUSTED); once approved it is read. On ``main`` a
+    specification is still read as submitted; the contract rule never applied to it.
+    """
     project_id, _, _ = await _contract_scenario(db, worker, test_user)
     specification, revision = await _upload_and_ingest(
         db,
@@ -233,8 +238,15 @@ async def test_only_the_contract_carries_the_pending_proposal_rule(
     )
     await _propose(db, test_user, project_id, specification, revision)
 
-    chunks = await _get_rag_chunk_clauses(db, project_id, test_user.tenant_id, max_chunks=50)
-    assert [c for c in chunks if c.data.get("document_id") == str(specification.id)] != []
+    def of_specification(chunks: list[Any]) -> list[Any]:
+        return [c for c in chunks if c.data.get("document_id") == str(specification.id)]
+
+    pending = await _get_rag_chunk_clauses(db, project_id, test_user.tenant_id, max_chunks=50)
+    assert of_specification(pending) == []
+
+    await _trust(db, test_user, project_id, specification, revision)
+    approved = await _get_rag_chunk_clauses(db, project_id, test_user.tenant_id, max_chunks=50)
+    assert of_specification(approved) != []
 
 
 async def test_a_legacy_trusted_artifact_without_a_binding_stays_canonical_when_a_reanalysis_is_proposed(
