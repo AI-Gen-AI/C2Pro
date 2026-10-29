@@ -119,3 +119,26 @@ def test_source_has_no_write_queries_or_clerk_mutations() -> None:
     assert "client.post(" not in source
     assert "client.patch(" not in source
     assert "client.delete(" not in source
+
+
+def test_production_credentials_are_step_scoped_and_browser_opt_in() -> None:
+    """Never leak live Clerk/DB secrets into dependency install job environment."""
+    workflow = (
+        Path(__file__).resolve().parents[4]
+        / ".github"
+        / "workflows"
+        / "prod-s1-clerk-identity-readonly.yml"
+    ).read_text()
+    assert "default: preflight_only" in workflow
+    assert "if: inputs.mode == 'browser_readonly'" in workflow
+
+    protected_job = workflow.split("  s1-identity-readonly:", 1)[1]
+    job_header = protected_job.split("    steps:", 1)[0]
+    assert "CLERK_SECRET_KEY:" not in job_header
+    assert "PROD_ACCEPTANCE_DATABASE_URL_READONLY:" not in job_header
+
+    setup = protected_job.split("      - name: Setup frontend toolchain for separately approved browser run", 1)[1]
+    assert "if: inputs.mode == 'browser_readonly'" in setup.split("      - name:", 1)[0]
+    browser = protected_job.split("      - name: Check real Clerk identities and B-to-A denial", 1)[1]
+    assert "PROD_ACCEPTANCE_DATABASE_URL_READONLY:" not in browser.split("      - name:", 1)[0]
+    assert "CLERK_SECRET_KEY:" in browser.split("      - name:", 1)[0]
