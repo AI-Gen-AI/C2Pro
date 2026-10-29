@@ -16,7 +16,7 @@ import path from "node:path";
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-import { requireProductionOrigin } from "./support/prod-preflight";
+import { requireProductionApiOrigin, requireProductionOrigin } from "./support/prod-preflight";
 
 const TENANT_B_ID = "00000000-0000-0000-0000-00000000a1f1";
 const APPROVED_A_PROJECT_ID = "e7c6031f-cd9e-4642-a5ea-35a0207ceaeb";
@@ -54,14 +54,16 @@ type BrowserOrg = {
   memberships: number;
 };
 
-async function startClerkSession(page: Page, email: string): Promise<BrowserOrg> {
+async function startClerkSession(page: Page, email: string, expectedTenant: string): Promise<BrowserOrg> {
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: email });
   await page.goto("/projects");
   await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible({ timeout: 30_000 });
   await page.waitForFunction(
-    () => window.Clerk?.session?.status === "active" && Boolean(window.Clerk?.organization),
-    undefined,
+    (tenant: string) =>
+      window.Clerk?.session?.status === "active" &&
+      window.Clerk?.organization?.publicMetadata?.tenant_id === tenant,
+    expectedTenant,
     { timeout: 60_000 },
   );
   return page.evaluate<BrowserOrg>(() => ({
@@ -80,8 +82,16 @@ function watchProjectReads(page: Page): number[] {
   page.on("response", (response) => {
     const url = new URL(response.url());
     const current = requireProductionOrigin(page.url());
+    let originAllowed = url.origin === current;
+    if (!originAllowed) {
+      try {
+        originAllowed = requireProductionApiOrigin(url.origin) === url.origin;
+      } catch {
+        originAllowed = false;
+      }
+    }
     if (
-      url.origin === current &&
+      originAllowed &&
       url.pathname.startsWith("/api/") &&
       url.pathname.includes("/projects/" + APPROVED_A_PROJECT_ID) &&
       response.request().method() === "GET"
@@ -101,7 +111,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
     const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
-      const facts = await startClerkSession(page, required("PROD_ACCEPTANCE_CLERK_EMAIL"));
+      const facts = await startClerkSession(page, required("PROD_ACCEPTANCE_CLERK_EMAIL"), required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
       expect(facts.sessionActive).toBe(true);
       expect(facts.tenantId).toBe(required("PROD_ACCEPTANCE_EXPECTED_TENANT_ID"));
       expect(facts.activeOrgId).toBe(required("PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID"));
@@ -118,7 +128,7 @@ test.describe("ACC-01 S1 production Clerk identities (read-only)", () => {
     const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
-      const facts = await startClerkSession(page, required("E2E_CLERK_TENANT_B_USER_EMAIL"));
+      const facts = await startClerkSession(page, required("E2E_CLERK_TENANT_B_USER_EMAIL"), TENANT_B_ID);
       expect(facts.sessionActive).toBe(true);
       expect(facts.memberships).toBe(1);
       expect(facts.tenantId).toBe(TENANT_B_ID);
