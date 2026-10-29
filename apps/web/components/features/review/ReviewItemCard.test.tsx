@@ -43,7 +43,7 @@ describe('ReviewItemCard', () => {
     expect(screen.getByText(/detected budget evidence/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View evidence' })).toHaveAttribute(
       'href',
-      '/projects/project-1/evidence?documentId=doc-123',
+      '/projects/project-1/evidence?documentId=doc-123&returnReviewItemId=item-1',
     );
     expect(screen.queryByText(/"document_id"/)).not.toBeInTheDocument();
   });
@@ -278,10 +278,10 @@ describe('PQ-HITL-06 review item source navigation', () => {
       />,
     );
     expect(screen.getByRole('link', { name: 'Inspect cited clause §5.2' })).toHaveAttribute(
-      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-52',
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-52&returnReviewItemId=item-1',
     );
     expect(screen.getByRole('link', { name: 'Inspect cited clause §1.3' })).toHaveAttribute(
-      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-13',
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-13&returnReviewItemId=item-1',
     );
     expect(screen.getByRole('link', { name: 'View evidence' })).toBeInTheDocument();
   });
@@ -313,9 +313,9 @@ describe('PQ-HITL-06 review item source navigation', () => {
     const sourceLinks = screen.getAllByRole('link', { name: /^Inspect cited clause §/ });
     expect(sourceLinks).toHaveLength(3);
     expect(sourceLinks.map((link) => link.getAttribute('href'))).toEqual([
-      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-61',
-      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-63',
-      '/projects/project-1/evidence?documentId=doc-b&revisionId=rev-b&highlightId=b-64',
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-61&returnReviewItemId=item-1',
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-63&returnReviewItemId=item-1',
+      '/projects/project-1/evidence?documentId=doc-b&revisionId=rev-b&highlightId=b-64&returnReviewItemId=item-1',
     ]);
     // A source link locates a clause; it never turns the prose into a
     // verified finding or executes an HITL decision on navigation.
