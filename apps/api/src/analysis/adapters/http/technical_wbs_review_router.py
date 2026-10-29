@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.application.record_technical_wbs_review import (
+from src.analysis.application.approve_canonical_technical_wbs_link import (\n    CANONICAL_APPROVAL,\n    ApproveCanonicalTechnicalWBSLinkService,\n    CanonicalTechnicalWBSLinkError,\n)\nfrom src.analysis.application.record_technical_wbs_review import (
     ImmutableDocxTechnicalTextReader,
     RecordTechnicalWBSReviewService,
     TechnicalMappingDecision,
@@ -73,6 +73,37 @@ class TechnicalWBSReviewResponse(BaseModel):
     authority: Literal["AUDIT_ONLY_NOT_CANONICAL_LINK"] = "AUDIT_ONLY_NOT_CANONICAL_LINK"
     technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
     approved_canonical_link: Literal[False] = False
+
+
+class CanonicalTechnicalWBSLinkRequest(BaseModel):
+    """The approval is explicit; actor, tenant and project stay server-owned."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    review_event_id: UUID
+    expected_wbs_baseline_id: UUID
+    expected_wbs_node_id: UUID
+    approval: Literal["APPROVE_CANONICAL_LINK"]
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class CanonicalTechnicalWBSLinkResponse(BaseModel):
+    event_id: UUID
+    replayed: bool
+    technical_document_id: UUID
+    technical_revision_id: UUID
+    source_clause_id: UUID
+    source_section: str
+    source_start_offset: int
+    source_end_offset: int
+    wbs_baseline_id: UUID
+    wbs_node_id: UUID
+    authority: Literal["EXPLICIT_HUMAN_CANONICAL_LINK"] = (
+        "EXPLICIT_HUMAN_CANONICAL_LINK"
+    )
+    approved_canonical_link: Literal[True] = True
+    technical_assessment: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
 
 
 class TechnicalWBSReviewHistoryEntry(BaseModel):
@@ -220,4 +251,70 @@ async def record_technical_wbs_review(
         source_end_offset=c.source_end_offset,
         proposed_wbs_baseline_id=c.proposed_wbs_baseline_id,
         proposed_wbs_node_id=c.proposed_wbs_node_id,
+    )
+
+
+async def get_canonical_technical_wbs_link_service(
+    current_user: User = Depends(get_current_user),
+) -> AsyncIterator[ApproveCanonicalTechnicalWBSLinkService]:
+    """The final approval uses the authenticated principal and tenant transaction."""
+    tenant = require_tenant_id(current_user.tenant_id)
+    async with get_session_with_tenant(tenant) as session:
+        yield ApproveCanonicalTechnicalWBSLinkService(session=session)
+
+
+@router.post(
+    "/{project_id}/technical-wbs/canonical-links",
+    response_model=CanonicalTechnicalWBSLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Human approver access denied"},
+        404: {"description": "Project or audit review not found"},
+        409: {"description": "Stale source or WBS authority, or conflicting approval"},
+    },
+    summary="Explicitly approve a current, canonical Technical to WBS association",
+)
+async def approve_canonical_technical_wbs_link(
+    project_id: UUID,
+    body: CanonicalTechnicalWBSLinkRequest,
+    current_user: User = Depends(get_current_user),
+    service: ApproveCanonicalTechnicalWBSLinkService = Depends(
+        get_canonical_technical_wbs_link_service
+    ),
+) -> CanonicalTechnicalWBSLinkResponse:
+    """Never infer final authority from an audit-only review event."""
+    tenant = require_tenant_id(current_user.tenant_id)
+    try:
+        result = await service.execute(
+            tenant_id=tenant,
+            project_id=project_id,
+            actor_user_id=current_user.id,
+            review_event_id=body.review_event_id,
+            expected_wbs_baseline_id=body.expected_wbs_baseline_id,
+            expected_wbs_node_id=body.expected_wbs_node_id,
+            approval=body.approval,
+            idempotency_key=body.idempotency_key,
+            reason=body.reason,
+        )
+    except CanonicalTechnicalWBSLinkError as exc:
+        if str(exc) == "project unavailable to this tenant":
+            raise HTTPException(status_code=404, detail="Project or audit review not found") from exc
+        if str(exc) == "authenticated human approver required":
+            raise HTTPException(status_code=403, detail="Human approver access denied") from exc
+        raise HTTPException(
+            status_code=409, detail="Canonical source or authority changed"
+        ) from exc
+
+    return CanonicalTechnicalWBSLinkResponse(
+        event_id=result.event_id,
+        replayed=result.replayed,
+        technical_document_id=result.technical_document_id,
+        technical_revision_id=result.technical_revision_id,
+        source_clause_id=result.source_clause_id,
+        source_section=result.source_section,
+        source_start_offset=result.source_start_offset,
+        source_end_offset=result.source_end_offset,
+        wbs_baseline_id=result.wbs_baseline_id,
+        wbs_node_id=result.wbs_node_id,
     )
