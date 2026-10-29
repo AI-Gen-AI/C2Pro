@@ -19,11 +19,14 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.analysis.application.record_technical_wbs_review import require_locked_trusted_artifact
+from src.analysis.application.record_technical_wbs_review import (
+    TechnicalMappingReviewError,
+    require_locked_trusted_artifact,
+)
 from src.core.auth.models import User, UserRole
-from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
 from src.documents.adapters.persistence.models import DocumentORM
-from src.documents.application.document_source import read_verified_revision_file
+from src.documents.application.document_source import RevisionSourceError, read_verified_revision_file
 from src.documents.domain.models import DocumentType
 from src.documents.ports.storage_service import IStorageService
 from src.temporal.adapters.persistence.current_revision_resolver import SqlAlchemyCurrentRevisionResolver
@@ -168,18 +171,24 @@ class ApproveStructuredWBSLinkService:
             or revision.blob_hash != expected_blob_hash
         ):
             raise StructuredWBSLinkError("source document/revision/hash unavailable")
-        await require_locked_trusted_artifact(
-            self.session, tenant_id=tenant_id, project_id=project_id,
-            document_id=source_document_id, revision_id=source_revision_id,
-        )
+        try:
+            await require_locked_trusted_artifact(
+                self.session, tenant_id=tenant_id, project_id=project_id,
+                document_id=source_document_id, revision_id=source_revision_id,
+            )
+        except TechnicalMappingReviewError as exc:
+            raise StructuredWBSLinkError("source revision is not trusted") from exc
         current = await SqlAlchemyCurrentRevisionResolver(self.session).resolve(
             tenant_id=tenant_id, document_id=source_document_id
         )
         if current.status is not CurrentRevisionStatus.TRUSTED or current.revision_id != source_revision_id:
             raise StructuredWBSLinkError("source revision is not current trusted")
-        row = await self.reader.read_row(
-            revision=revision, family=family, source_locator=source_locator
-        )
+        try:
+            row = await self.reader.read_row(
+                revision=revision, family=family, source_locator=source_locator
+            )
+        except (RevisionSourceError, ExcelParsingError, OSError) as exc:
+            raise StructuredWBSLinkError("immutable structured source unavailable") from exc
         declared_node = row.get("wbs_node_id")
         if declared_node not in (None, "") and str(declared_node) != str(expected_wbs_node_id):
             raise StructuredWBSLinkError("source WBS node ID disagrees with proposed canonical node")
