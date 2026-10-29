@@ -1797,6 +1797,27 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
+    # S3: the early /coherence/evaluate guard returns contract_pending_approval
+    # without persisting a scored CoherenceResult. The dashboard is a separate
+    # GET and must independently derive the same trust state. Otherwise an old
+    # Analysis or project baseline can present a numeric Score to a user whose
+    # only current contract is not approved. The current_revision_lateral query
+    # distinguishes an unapproved first revision from an already trusted A with
+    # a proposed B: the latter retains A's canonical authority.
+    if document_count and await _contracts_awaiting_approval(db, project_id, tenant_id):
+        summary = summary.model_copy(
+            update={
+                "global_score": None,
+                "coherence_score": None,
+                "sub_scores": _empty_sub_scores(),
+                "score_version": None,
+                "score_reason": CONTRACT_PENDING_APPROVAL,
+                "score_missing_dimensions": sorted(_CATEGORY_KEYWORDS),
+            }
+        )
+
+    # No alerts are resolved or deleted by an unapproved contract. Existing
+    # alert counts remain visible as historical/open action signals.
     summary = await _attach_trusted_projection(summary, project_id, tenant_id, db)
 
     v2_enabled = await _v2_enabled_for(tenant_id, flags_service)
