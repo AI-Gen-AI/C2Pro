@@ -88,6 +88,16 @@ function errorMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
+function outcomeMayAlreadyBeRecorded(error: unknown): boolean {
+  // A 502 from HITL resume may occur AFTER the approval row was committed.
+  // Never invite a blind second decision on the same immutable review row.
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { status?: unknown } }).response;
+    if (response?.status === 502) return true;
+  }
+  return error instanceof Error && /\b502\b|review approved, but resuming/i.test(error.message);
+}
+
 export default function ReviewPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -261,6 +271,12 @@ export default function ReviewPage() {
       refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to approve review item');
+      if (outcomeMayAlreadyBeRecorded(error) && modal.kind === 'approve' && modal.item.row_id) {
+        markDecided(modal.item);
+        setDecisionReceipt({ rowId: modal.item.row_id, action: 'approve', uncertain: true });
+        void refetch();
+        refreshProjectAfterDecision();
+      }
       setActionError(message);
       showToast(message);
     } finally {
@@ -291,6 +307,12 @@ export default function ReviewPage() {
       refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to reject review item');
+      if (outcomeMayAlreadyBeRecorded(error) && modal.kind === 'reject' && modal.item.row_id) {
+        markDecided(modal.item);
+        setDecisionReceipt({ rowId: modal.item.row_id, action: 'reject', uncertain: true });
+        void refetch();
+        refreshProjectAfterDecision();
+      }
       setActionError(message);
       showToast(message);
     } finally {
@@ -338,6 +360,39 @@ export default function ReviewPage() {
           </p>
         )}
       </div>
+
+      {targetIsMissing ? (
+        <div data-testid="review-target-unavailable" role="status"
+             className="rounded-lg border bg-muted/40 p-4 text-sm">
+          This linked review item is not in the current project queue (up to 200 items).
+          It may have moved or no longer be available. No other review was selected.
+        </div>
+      ) : null}
+
+      {decisionReceipt ? (
+        <div data-testid="review-decision-receipt" role="status"
+             className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium">
+              {confirmedDecision
+                ? `Review ${decisionReceipt.action === 'approve' ? 'approved' : 'rejected'} — confirmed by refreshed queue`
+                : decisionReceipt.uncertain
+                  ? 'Review outcome needs verification'
+                  : 'Decision request accepted — checking saved review status'}
+            </p>
+            <p className="text-muted-foreground">
+              {confirmedDecision
+                ? 'The review decision is recorded. Document processing and Health may still be updating.'
+                : decisionReceipt.uncertain
+                  ? 'The workflow reported an error after the request. The decision may already be stored; check the refreshed queue before attempting another decision.'
+                  : 'Do not treat the document as analyzed until its updated lifecycle confirms completion.'}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Refresh review status
+          </Button>
+        </div>
+      ) : null}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -468,7 +523,9 @@ export default function ReviewPage() {
             </Button>
             <Button
               onClick={handleApprove}
-              disabled={approving || !reviewerIdentityReady}
+              disabled={approving || !reviewerIdentityReady ||
+                Boolean(decisionReceipt?.uncertain && modal.kind === 'approve' &&
+                  decisionReceipt.rowId === modal.item.row_id)}
               aria-busy={approving}
               title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
               className="bg-green-600 hover:bg-green-700"
@@ -534,7 +591,9 @@ export default function ReviewPage() {
               disabled={
                 rejecting ||
                 rejectReason.trim().length === 0 ||
-                !reviewerIdentityReady
+                !reviewerIdentityReady ||
+                Boolean(decisionReceipt?.uncertain && modal.kind === 'reject' &&
+                  decisionReceipt.rowId === modal.item.row_id)
               }
               title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
             >
