@@ -187,6 +187,48 @@ async function verifyS2FourSourceLedger(
 }
 
 
+/** Reject malformed families at the same authenticated API and prove zero durable rows. */
+async function verifyS2RejectedUploads(page: Page, projectId: string): Promise<void> {
+  const observed = await page.evaluate(async (id) => {
+    const token = await window.Clerk?.session?.getToken();
+    if (!token) throw new Error("S2_AUTH_CONTEXT_MISSING");
+    const headers = { Authorization: `Bearer ${token}` };
+    const list = async (): Promise<string[]> => {
+      const response = await fetch(`/api/v1/projects/${id}/documents?limit=100`, { headers });
+      if (!response.ok) throw new Error(`S2_LIST_FAILED: ${response.status}`);
+      const json = (await response.json()) as { items: { id: string }[] };
+      return json.items.map((item) => item.id).sort();
+    };
+    const before = await list();
+    const cases = [
+      { filename: "invalid-budget.docx", type: "budget", status: 400 },
+      { filename: "invalid-schedule.docx", type: "schedule", status: 400 },
+      { filename: "unsupported-technical.bin", type: "technical_spec", status: 415 },
+    ];
+    const results = [];
+    for (const negative of cases) {
+      const form = new FormData();
+      form.append("document_type", negative.type);
+      form.append("file", new File(["invalid-fixture"], negative.filename, { type: "application/octet-stream" }));
+      const response = await fetch(`/api/v1/projects/${id}/documents`, {
+        method: "POST", headers, body: form,
+      });
+      results.push({ filename: negative.filename, expected: negative.status, actual: response.status });
+    }
+    return { before, after: await list(), results };
+  }, projectId);
+
+  for (const result of observed.results) {
+    expect(result.actual, `${result.filename}: exact backend refusal code`).toBe(result.expected);
+  }
+  expect(observed.before, "four accepted documents before invalid uploads").toHaveLength(4);
+  expect(observed.after, "invalid uploads must add no documents to the project").toEqual(observed.before);
+  test.info().annotations.push({
+    type: "s2-negative-uploads",
+    description: JSON.stringify({ projectId, results: observed.results, unchangedDocuments: observed.after.length }),
+  });
+}
+
 /** Remember the latest documents-list answer the APP itself received (no extra requests). */
 function trackDocumentsList(page: Page, projectId: string): () => PolledDocument[] {
   let latest: PolledDocument[] = [];
@@ -449,6 +491,8 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         { filename: "triplet-schedule.xlsx", documentType: "schedule", ...schedule },
         { filename: "triplet-specification.docx", documentType: "technical_spec", ...technical },
       ]));
+    await test.step("S2: invalid types rejected by backend without persistent side effects", () =>
+      verifyS2RejectedUploads(page, projectId));
     await test.step("budget and schedule finish processing", async () => {
       await expectDocumentState(page, "triplet-budget.xlsx", /analy[sz]ed|parsed/i);
       await expectDocumentState(page, "triplet-schedule.xlsx", /analy[sz]ed|parsed/i);
