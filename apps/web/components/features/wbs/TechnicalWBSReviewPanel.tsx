@@ -81,7 +81,7 @@ export function TechnicalWBSReviewPanel({ projectId, authority }: Props) {
   const { documents, loading: documentsLoading, error: documentsError } =
     useProjectDocuments(projectId);
   const technicalDocuments = useMemo(
-    () => documents.filter((doc) => doc.type === "specification" && doc.extension === "docx"),
+    () => documents.filter((doc) => (doc.type === "technical_spec" || doc.type === "specification") && doc.extension === "docx"),
     [documents],
   );
   // Every mount (including after a fresh Clerk sign-in) reads persisted
