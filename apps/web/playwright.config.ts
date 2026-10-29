@@ -108,7 +108,7 @@ export default defineConfig({
     {
       // S7 browser signout+fresh-context Clerk authentication. Run only by dedicated UAT.
       name: "s7-clerk-uat",
-      testMatch: [/(^|[\\/])s7-clerk-relogin\\.spec\\.ts$/],
+      testMatch: ["**/s7-clerk-relogin.spec.ts"],
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["global-setup"],
       metadata: {
