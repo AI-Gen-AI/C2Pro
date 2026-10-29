@@ -62,19 +62,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production-qualification
+    # Keep all protected credentials away from dependency-install/build steps.
     env:
       PLAYWRIGHT_BASE_URL: https://c2pro.io
       PROD_S1_CONFIRM_READONLY: ${{ inputs.confirm_readonly }}
-      CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
-      CLERK_PUBLISHABLE_KEY: ${{ secrets.PROD_S1_CLERK_PUBLISHABLE_KEY || vars.PROD_S1_CLERK_PUBLISHABLE_KEY }}
-      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
-      PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
-      PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
-      PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
-      PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
     steps:
       - name: Fail closed on operator intent and protected qualification secrets
         shell: bash
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.PROD_S1_CLERK_PUBLISHABLE_KEY || vars.PROD_S1_CLERK_PUBLISHABLE_KEY }}
+          E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
         run: |
           set -euo pipefail
           test "$PROD_S1_CONFIRM_READONLY" = "RUN-S1-READONLY" || {
@@ -106,6 +108,13 @@ jobs:
           install-system-deps: "false"
 
       - name: Verify A/B Clerk <-> persisted PostgreSQL bindings (no writes)
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
+          E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
+          PROD_ACCEPTANCE_DATABASE_URL_READONLY: ${{ secrets.PROD_ACCEPTANCE_DATABASE_URL_READONLY }}
         working-directory: apps/api
         run: python scripts/verify_prod_s1_clerk_link_readonly.py
 
@@ -114,6 +123,13 @@ jobs:
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Check real Clerk identities and B-to-A denial (no application writes)
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.PROD_S1_CLERK_SECRET_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.PROD_S1_CLERK_PUBLISHABLE_KEY || vars.PROD_S1_CLERK_PUBLISHABLE_KEY }}
+          E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_EMAIL: ${{ secrets.PROD_ACCEPTANCE_CLERK_EMAIL }}
+          PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID: ${{ secrets.PROD_ACCEPTANCE_CLERK_ORGANIZATION_ID }}
+          PROD_ACCEPTANCE_EXPECTED_TENANT_ID: ${{ secrets.PROD_ACCEPTANCE_EXPECTED_TENANT_ID }}
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test --config=playwright.prod-s1.config.ts --project=prod-s1-identity-readonly --reporter=line --workers=1
 
