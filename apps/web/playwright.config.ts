@@ -58,6 +58,7 @@ export default defineConfig({
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         // Own project and Nightly step: a long journey that must not hide the rest of the suite.
         /(^|[\\/])triplet-user-journey\.spec\.ts$/,
+        /(^|[\\/])s7-clerk-relogin\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
