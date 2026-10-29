@@ -185,6 +185,71 @@ describe("EvidenceRevisionHistoryPanel — read-only revision truth", () => {
     expect(screen.queryByRole("button", { name: /Trusted current/i })).not.toBeInTheDocument();
   });
 
+  it("S6 — after a verified approval B becomes trusted current and A becomes history", () => {
+    listRevisions.mockReturnValue({
+      data: [
+        {
+          revision_id: "revision-A",
+          rev_no: 1,
+          status: "available",
+          trust_state: "trusted",
+          is_current: false,
+          current_basis: "trusted",
+        },
+        {
+          revision_id: "revision-B",
+          rev_no: 2,
+          status: "available",
+          trust_state: "trusted",
+          is_current: true,
+          current_basis: "trusted",
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    render(<EvidenceRevisionHistoryPanel documentId="doc-1" projectId="proj-123" />);
+    expect(screen.getByRole("button", { name: /Revision 2 — Trusted current/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Revision 1 — Trusted artifact — not current/i }))
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Revision 2/i }));
+    expect(screen.queryByTestId("revision-a-b-comparison")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("revision-proposal-warning")).not.toBeInTheDocument();
+    expect(screen.getByText(/7 stored clauses in this selected revision/i)).toBeInTheDocument();
+  });
+
+  it("S6 — a rejected B remains historical and cannot displace approved A", () => {
+    listRevisions.mockReturnValue({
+      data: [
+        {
+          revision_id: "revision-A",
+          rev_no: 1,
+          status: "available",
+          trust_state: "trusted",
+          is_current: true,
+          current_basis: "trusted",
+        },
+        {
+          revision_id: "revision-B",
+          rev_no: 2,
+          status: "available",
+          trust_state: "rejected",
+          is_current: false,
+          current_basis: "trusted",
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    render(<EvidenceRevisionHistoryPanel documentId="doc-1" projectId="proj-123" />);
+    expect(screen.getByRole("button", { name: /Revision 1 — Trusted current/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Revision 2 — Rejected — historical/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Revision 2/i }));
+    expect(screen.getByText(/7 stored clauses in this selected revision/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("revision-a-b-comparison")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("revision-proposal-warning")).not.toBeInTheDocument();
+  });
+
   it("never labels a revision trusted-current when its current authority is unresolved", () => {
     listRevisions.mockReturnValue({
       data: [
