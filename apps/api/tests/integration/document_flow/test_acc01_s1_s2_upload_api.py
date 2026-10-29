@@ -312,7 +312,8 @@ async def test_the_api_refuses_an_incompatible_format_and_persists_nothing(
 
     response = await _post(api, project_id, document_type, filename, data, mime)
 
-    assert 400 <= response.status_code < 500, (response.status_code, response.text)
+    expected_status = 415 if filename.endswith((".exe", ".bin")) else 400
+    assert response.status_code == expected_status, (response.status_code, response.text)
     assert response.json().get("detail"), "the refusal carries a reason"
     assert await _counts(db, project_id) == {"documents": 0, "revisions": 0, "events": 0}
     assert sorted(p for p in worker._base_dir.rglob("*") if p.is_file()) == blobs_before, (
@@ -336,5 +337,5 @@ async def test_a_refused_upload_does_not_disturb_the_accepted_ones_sent_with_it(
     responses = await asyncio.gather(*requests)
 
     assert [response.status_code for response in responses[:4]] == [202] * 4
-    assert 400 <= responses[4].status_code < 500
+    assert responses[4].status_code == 400  # structured Budget cannot accept DOCX
     assert await _counts(db, project_id) == {"documents": 4, "revisions": 4, "events": 4}
