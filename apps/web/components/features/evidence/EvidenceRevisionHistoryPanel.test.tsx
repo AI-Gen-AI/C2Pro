@@ -124,14 +124,14 @@ describe("EvidenceRevisionHistoryPanel — read-only revision truth", () => {
     expect(warning).toHaveTextContent(/proposed and is not authorized/i);
     expect(warning).toHaveTextContent(/approved revision 1 remains trusted current/i);
     const compare = screen.getByTestId("revision-a-b-comparison");
-    expect(compare).toHaveTextContent(/read-only parallel sources, not a verified change diff/i);
+    expect(compare).toHaveTextContent(//read-only extracted clause labels; not a source-text verification or a computed change diff/i/i);
 
     const baseline = screen.getByTestId("revision-approved-baseline");
-    expect(baseline).toHaveTextContent("9 stored source clauses");
+    expect(baseline).toHaveTextContent("9 stored extracted clauses");
     // A and B show only the first three verified source rows, not inferred matches.
     expect(baseline).toHaveTextContent("A Clause 1: obligation");
     const proposed = screen.getByTestId("revision-proposed-source");
-    expect(proposed).toHaveTextContent("7 stored source clauses");
+    expect(proposed).toHaveTextContent("7 stored extracted clauses");
     expect(proposed).toHaveTextContent("B Clause 1: obligation");
     expect(baseline).not.toHaveTextContent("B Clause 1: obligation");
     expect(proposed).not.toHaveTextContent("A Clause 1: obligation");
