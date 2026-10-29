@@ -23,7 +23,7 @@ const documentTypeMap: Record<string, DocumentInfo['type']> = {
   schedule: 'schedule',
   budget: 'budget',
   specification: 'specification',
-  technical_spec: 'specification',
+  technical_spec: 'technical_spec',
   drawing: 'drawing',
   other: 'other',
 };
@@ -34,7 +34,7 @@ const documentTypeMap: Record<string, DocumentInfo['type']> = {
 function transformDocument(doc: DocumentListResponse): DocumentInfo {
   // Map file format to extension based on filename
   const extension = doc.filename?.split('.').pop()?.toLowerCase() || 'pdf';
-  const validExtension = ['pdf', 'xlsx', 'docx', 'dwg'].includes(extension)
+  const validExtension = ['pdf', 'xlsx', 'bc3', 'docx', 'dwg'].includes(extension)
     ? extension as DocumentInfo['extension']
     : 'pdf';
 
