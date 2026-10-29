@@ -39,7 +39,20 @@ export function EvidenceViewerPanel({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {selectedDocumentId ? (
+        {selectedDocumentId && selectedDocument && selectedDocument.extension && selectedDocument.extension !== "pdf" ? (
+          <div
+            data-testid="evidence-native-document"
+            className="m-6 rounded-xl border bg-muted/30 p-6 text-sm"
+          >
+            <h3 className="font-semibold">Original {selectedDocument.extension.toUpperCase()} document</h3>
+            <p className="mt-2 text-muted-foreground">
+              A PDF page preview is not available for this source format.
+              Verified clauses and their original text appear in the source
+              panel above when extraction has produced them; C2Pro will not
+              display this file as a PDF or invent a page highlight.
+            </p>
+          </div>
+        ) : selectedDocumentId ? (
           <LazyPdfEvidenceViewer
             fileUrl={buildDocumentDownloadUrl(selectedDocumentId, selectedRevisionId)}
             highlights={highlights}
