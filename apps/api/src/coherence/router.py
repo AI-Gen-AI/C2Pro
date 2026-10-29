@@ -1104,17 +1104,22 @@ async def evaluate_project_coherence(
     if payload.clauses:
         clauses = payload.clauses
     elif payload.project_id:
+        # S3: a contract that has no canonical/approved current input blocks any
+        # relational Coherence Score, even if Budget/Schedule clauses are already
+        # searchable. The old check only ran when *no* RAG clauses existed, so it
+        # could score unrelated documents before a human approved the contract.
+        # A trusted revision A with proposed revision B remains canonical via
+        # current_revision_lateral, so normal S6 revision continuity is preserved.
+        if await _contracts_awaiting_approval(
+            db, payload.project_id, current_user.tenant_id
+        ):
+            # Pending is not an evaluation result: do not persist a Score or
+            # change the alert register before this human authority decision.
+            return _contract_pending_approval_result(include_diagnostics)
         clauses = await get_clauses_from_rag(
             db, payload.project_id, current_user.tenant_id, payload.max_chunks
         )
         if not clauses:
-            pending_contracts = await _contracts_awaiting_approval(
-                db, payload.project_id, current_user.tenant_id
-            )
-            if pending_contracts:
-                # The document exists; it is not canonical input yet. That is a state of the
-                # project, not "nothing was uploaded": no score, no finding, no alert touched.
-                return _contract_pending_approval_result(include_diagnostics)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No document clauses found. Please upload and parse documents first.",
@@ -1797,6 +1802,27 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
+    # S3: the early /coherence/evaluate guard returns contract_pending_approval
+    # without persisting a scored CoherenceResult. The dashboard is a separate
+    # GET and must independently derive the same trust state. Otherwise an old
+    # Analysis or project baseline can present a numeric Score to a user whose
+    # only current contract is not approved. The current_revision_lateral query
+    # distinguishes an unapproved first revision from an already trusted A with
+    # a proposed B: the latter retains A's canonical authority.
+    if document_count and await _contracts_awaiting_approval(db, project_id, tenant_id):
+        summary = summary.model_copy(
+            update={
+                "global_score": None,
+                "coherence_score": None,
+                "sub_scores": _empty_sub_scores(),
+                "score_version": None,
+                "score_reason": CONTRACT_PENDING_APPROVAL,
+                "score_missing_dimensions": sorted(_CATEGORY_KEYWORDS),
+            }
+        )
+
+    # No alerts are resolved or deleted by an unapproved contract. Existing
+    # alert counts remain visible as historical/open action signals.
     summary = await _attach_trusted_projection(summary, project_id, tenant_id, db)
 
     v2_enabled = await _v2_enabled_for(tenant_id, flags_service)
