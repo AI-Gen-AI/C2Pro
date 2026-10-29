@@ -7,6 +7,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { useQueryClient } from "@tanstack/react-query";
+import { canonicalTechnicalLinksKey } from "./CanonicalTechnicalWBSLinksPanel";
 import type { TechnicalWBSReviewHistoryEntry } from "@/lib/api/generated/models";
 import { orvalApiClient } from "@/lib/api/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +35,8 @@ type Props = {
 };
 
 export function CanonicalTechnicalWBSApprovalPanel({ projectId, audit }: Props) {
+  const { orgId, userId } = useAuth();
+  const queryClient = useQueryClient();
   const [approvalReason, setApprovalReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
@@ -88,6 +93,11 @@ export function CanonicalTechnicalWBSApprovalPanel({ projectId, audit }: Props) 
       }
       setReceipt(result);
       setConfirmed(false);
+      // The approval event is now in the durable backend, but the independent
+      // WBS read projection must be fetched again (including after a relogin).
+      void queryClient.invalidateQueries({
+        queryKey: canonicalTechnicalLinksKey(orgId, userId, projectId),
+      });
     } catch {
       // A transport error can occur after the backend committed the immutable
       // event. Do not encourage repeated approval without checking persistence.
@@ -148,6 +158,7 @@ export function CanonicalTechnicalWBSApprovalPanel({ projectId, audit }: Props) 
             <p>Approval event: <code>{receipt.event_id}</code></p>
             <p>{receipt.replayed ? "Identical decision safely replayed." : "New explicit decision accepted."}</p>
             <p>Technical compliance remains NOT ASSESSED; Health is not recalculated by this approval.</p>
+          <p>Refresh the Technical → WBS approved links panel to verify current authority.</p>
           </div>
         ) : null}
       </CardContent>
