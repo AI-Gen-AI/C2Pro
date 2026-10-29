@@ -63,7 +63,7 @@ jobs:
         run: python apps/api/scripts/provision_clerk_e2e_fixture.py
       - name: Seed S7 WBS and original synthetic sources (zero approvals)
         working-directory: apps/api
-        run: python scripts/seed_s7_clerk_uat.py
+        run: python -m scripts.seed_s7_clerk_uat
       - name: Verify Clerk organization and tenant binding
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
