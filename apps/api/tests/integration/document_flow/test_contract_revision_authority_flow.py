@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.coherence.budget_clause_builder import _CONTRACT_CURRENCIES_SQL, load_contract_total
 from src.coherence.router import (
+    CONTRACT_PENDING_APPROVAL,
     _documents_excluded_from_evaluation,
     _get_parsed_text_fallback_clauses,
     _get_rag_chunk_clauses,
@@ -302,8 +303,8 @@ async def _scored_project(
     from src.coherence import scoring
     from tests.integration.document_flow.test_contract_schedule_completion_flow import _docx, _xlsx
 
-    # The fixture documents assess fewer categories than a real project: lower the stability threshold so
-    # that the other documents still produce a score (the case in which the mirror runs and auto-resolves).
+    # The fixture's first assessment produces a score and an alert. Once a contract
+    # becomes unapproved, a later assessment must fail closed without clearing either.
     monkeypatch.setattr(scoring, "MIN_ACTIVE_WEIGHT", 0.1)
     project_id = await _project(db, user.tenant_id)
     await _upload_and_ingest(
@@ -341,7 +342,7 @@ async def _scored_project(
 async def test_a_pending_new_revision_of_the_contract_does_not_auto_resolve_its_alerts(
     db: AsyncSession, worker: Any, test_user: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A contract raises an alert; a new revision is uploaded and stays PROPOSED; other documents still score.
+    """A contract raises an alert; a proposed revision blocks further relational scoring without resolving old alerts.
 
     The contract is then not evaluated (two revisions and none approved: it has no current revision). That
     must leave its alert exactly as it was: B1 spec 7.4, an incomplete evaluation never auto-resolves, and
@@ -357,7 +358,9 @@ async def test_a_pending_new_revision_of_the_contract_does_not_auto_resolve_its_
     await _propose(db, test_user, project_id, contract, revision_b)
     second = await _evaluate(db, test_user, project_id)
 
-    assert second.overall_score is not None  # the other documents still score
+    assert second.overall_score is None  # Contract authority blocks the entire relational Score.
+    assert second.score_reason == CONTRACT_PENDING_APPROVAL
+    assert second.alerts == []
     assert await _alert_row(db, project_id) == before
 
 
@@ -372,7 +375,9 @@ async def test_a_proposal_on_the_only_revision_of_the_contract_does_not_auto_res
     await _propose(db, test_user, project_id, contract, revision)
     second = await _evaluate(db, test_user, project_id)
 
-    assert second.overall_score is not None
+    assert second.overall_score is None
+    assert second.score_reason == CONTRACT_PENDING_APPROVAL
+    assert second.alerts == []
     assert await _alert_row(db, project_id) == before
 
 
@@ -419,7 +424,9 @@ async def test_a_new_revision_without_any_artifact_does_not_auto_resolve_its_ale
     await _reupload_and_ingest(db, worker, test_user, contract, _revised_contract())
     second = await _evaluate(db, test_user, project_id)
 
-    assert second.overall_score is not None
+    assert second.overall_score is None
+    assert second.score_reason == CONTRACT_PENDING_APPROVAL
+    assert second.alerts == []
     assert await _alert_row(db, project_id) == before
 
 
