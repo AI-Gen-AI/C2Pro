@@ -68,7 +68,9 @@ async def _read_analysed_document(db, project_id: UUID, document_id: UUID):
         "d.upload_status::text AS status, d.document_metadata AS metadata, "
         "d.parsing_error FROM documents d WHERE d.id=:d"
     ), {"d": document_id})).one_or_none()
-    if doc is None or doc.type != "technical_spec" or doc.project_id != project_id:
+    if doc is None:
+        invalid("S3 technical document/project identity mismatch")
+    if doc.type != "technical_spec" or doc.project_id != project_id:
         invalid("S3 technical document/project identity mismatch")
     if doc.status != "analyzed" or doc.parsing_error is not None:
         invalid("S3 document did not complete analysis after HITL")
