@@ -531,7 +531,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         await expect(approve, "technical-source review item must be available").toBeEnabled({ timeout: 120_000 });
         const approved = page.waitForResponse(
           (response) => response.request().method() === "POST"
-            && /\\/hitl\\/queue\\/[^/]+\\/approve/.test(response.url()),
+            && new RegExp("/hitl/queue/[^/]+/approve").test(response.url()),
           { timeout: 120_000 },
         );
         await approve.click();
