@@ -19,7 +19,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from scripts.verify_s2_triplet_pg import (
+from verify_s2_triplet_pg import (
     annotation,
     invalid,
     local_test_dsn,
