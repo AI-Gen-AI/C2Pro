@@ -302,11 +302,14 @@ def _build_clause(row: Sequence[object]) -> Clause | None:
         "document_id": doc_id,
         "source": "persisted_clause",
         "source_document_type": doc_type,
-        "document_type": doc_type,
         "category": affected_categories[0],
         "affected_categories": affected_categories,
         **extracted_dict,
     }
+    if doc_type in {"technical_spec", "specification"}:
+        # Metadata for N8 CategoryRouter is intentionally technical-only:
+        # do NOT reclassify any contract, budget, or schedule in this S3 PR.
+        clause_data["document_type"] = doc_type
     if (
         doc_type in {"technical_spec", "specification"}
         and isinstance(extracted_dict.get("technical_requirement"), dict)
