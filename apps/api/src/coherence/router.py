@@ -286,20 +286,47 @@ def _build_clause(row: Sequence[object]) -> Clause | None:
         return None
     extracted_dict = extracted if isinstance(extracted, dict) else {}
     affected_categories = extracted_dict.get("affected_categories")
+    # A technical specification is a document family, not a seventh Coherence
+    # dimension. Preserve its exact source family for evidence deep links while
+    # routing its numbered requirements into the canonical TECHNICAL category.
+    canonical_family_category = (
+        "TECHNICAL" if doc_type in {"technical_spec", "specification"} else doc_type.upper()
+    )
     if not isinstance(affected_categories, list) or not affected_categories:
-        fallback_category = extracted_dict.get("category", doc_type)
-        affected_categories = [str(fallback_category).upper()]
+        fallback_category = extracted_dict.get("category", canonical_family_category)
+        category = str(fallback_category).upper()
+        affected_categories = [
+            "TECHNICAL" if category in {"TECHNICAL_SPEC", "SPECIFICATION"} else category
+        ]
+    clause_data = {
+        "document_id": doc_id,
+        "source": "persisted_clause",
+        "source_document_type": doc_type,
+        "document_type": doc_type,
+        "category": affected_categories[0],
+        "affected_categories": affected_categories,
+        **extracted_dict,
+    }
+    if (
+        doc_type in {"technical_spec", "specification"}
+        and isinstance(extracted_dict.get("technical_requirement"), dict)
+    ):
+        # An approved SOURCE allows citation but does not prove the building
+        # meets that requirement. The deterministic extraction records only
+        # unverified obligations, even when the source artifact is trusted.
+        # The graph may show the exact evidence and findings, but TECHNICAL
+        # must remain unassessed (NULL) until an independent compliance
+        # assessment has its own authority. Never synthesize that authority
+        # from the section text or the source's HITL approval.
+        clause_data["category"] = "TECHNICAL"
+        clause_data["affected_categories"] = ["TECHNICAL"]
+        clause_data["assessment_unavailable"] = {
+            "TECHNICAL": "TECHNICAL_SOURCE_ONLY_COMPLIANCE_UNVERIFIED"
+        }
     return Clause(
         id=clause_id,
         text=text_value,
-        data={
-            "document_id": doc_id,
-            "source": "persisted_clause",
-            "source_document_type": doc_type,
-            "category": affected_categories[0],
-            "affected_categories": affected_categories,
-            **extracted_dict,
-        },
+        data=clause_data,
     )
 
 
