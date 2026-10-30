@@ -79,3 +79,21 @@ def test_technical_document_without_a_requirement_does_not_invent_one() -> None:
     assert clause.data["category"] == "TECHNICAL"
     assert "technical_requirement" not in clause.data
     assert "assessment_unavailable" not in clause.data
+
+
+def test_public_coherence_response_preserves_reason_and_missing_dimensions() -> None:
+    """Default /coherence/evaluate must explain withheld Health, not hide it."""
+    from src.coherence.models import EnrichedCoherenceResult
+    from src.coherence.router import _convert_enriched_to_coherence_result
+
+    evaluated = EnrichedCoherenceResult(
+        overall_score=None,
+        alerts=[],
+        score_reason="insufficient_active_weight",
+        score_missing_dimensions=["TECHNICAL", "QUALITY"],
+    )
+    public = _convert_enriched_to_coherence_result(evaluated)
+    assert public.overall_score is None
+    assert public.score_reason == "insufficient_active_weight"
+    assert public.score_missing_dimensions == ["TECHNICAL", "QUALITY"]
+    assert public.model_dump()["score_missing_dimensions"] == ["TECHNICAL", "QUALITY"]
