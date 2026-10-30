@@ -23,7 +23,7 @@ jobs:
     # playwright.config.ts) against a real local backend started exactly as the
     # P0b Acceptance Journey lane does: PostgreSQL + Redis, migrations, the Clerk
     # E2E Organization fixture, seeded auth tenancy, a Celery worker and the API.
-    # S3 isolated UAT: verified technical HITL and public Health missing-dimensions propagation on exact-HEAD.
+    # S3 complete-journey rerun after direct SQL helper CLI smoke 10/10 PASS; test-only AI keys.
     # Acceptance is valid only when the model, worker and independent SQL gates all pass.
     name: S3 technical HITL + six-dimension Health (real AI and PostgreSQL)
     runs-on: ubuntu-latest
