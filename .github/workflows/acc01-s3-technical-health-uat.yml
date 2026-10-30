@@ -23,7 +23,7 @@ jobs:
     # playwright.config.ts) against a real local backend started exactly as the
     # P0b Acceptance Journey lane does: PostgreSQL + Redis, migrations, the Clerk
     # E2E Organization fixture, seeded auth tenancy, a Celery worker and the API.
-    # S2 live AI attempt: dedicated test-only provider keys; both AI and embeddings mock disabled.
+    # S3 isolated UAT rerun after Playwright parser correction: dedicated test-only provider keys; both mocks disabled.
     # Acceptance is valid only when the model, worker and independent SQL gates all pass.
     name: S3 technical HITL + six-dimension Health (real AI and PostgreSQL)
     runs-on: ubuntu-latest
