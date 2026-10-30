@@ -23,7 +23,8 @@ jobs:
     # playwright.config.ts) against a real local backend started exactly as the
     # P0b Acceptance Journey lane does: PostgreSQL + Redis, migrations, the Clerk
     # E2E Organization fixture, seeded auth tenancy, a Celery worker and the API.
-    # Inference is deterministic at the provider boundary only (C2PRO_AI_MOCK).
+    # S2 live AI attempt: dedicated test-only provider keys; both AI and embeddings mock disabled.
+    # Acceptance is valid only when the model, worker and independent SQL gates all pass.
     name: S2 four-source browser + genuine AI + PostgreSQL
     runs-on: ubuntu-latest
     timeout-minutes: 60
