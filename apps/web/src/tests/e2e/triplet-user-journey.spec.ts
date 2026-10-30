@@ -64,6 +64,8 @@ const markStep = (stepId: string, state: StepCoverage["state"], note: string): v
 };
 
 const AI_IS_MOCKED = process.env.C2PRO_AI_MOCK === "1";
+// S3 acceptance is explicit opt-in: normal S2/S8 runs stay unchanged.
+const S3_REQUIRE_TECHNICAL_APPROVAL = process.env.S3_REQUIRE_TECHNICAL_APPROVAL === "1";
 const runTag = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
 const projectName = `Triplet Journey ${runTag}`;
 const projectCode = `TJ${runTag}`;
@@ -508,6 +510,47 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       );
     });
 
+    // The S3-specific lane requires an actual source approval for the technical
+    // specification. An ingestion-status badge or an LLM response by itself is
+    // never trusted technical evidence, much less assessed compliance.
+    if (S3_REQUIRE_TECHNICAL_APPROVAL) {
+      await test.step("S3: approve technical source explicitly through Clerk HITL", async () => {
+        await openProjectTab(page, projectId, "documents");
+        const row = documentRow(page, "triplet-specification.docx");
+        const action = row.getByTestId("document-review-cta");
+        await expect.poll(
+          () => action.count(),
+          {
+            message: "S3_TECHNICAL_REVIEW_UNAVAILABLE: parsed technical source has no human approval action; inspect RAG/graph/checkpoint and do not trust it implicitly",
+            timeout: DOCUMENT_BUDGET_MS,
+          },
+        ).toBeGreaterThan(0);
+        await action.first().click();
+        await expect(page.getByTestId("review-page")).toBeVisible({ timeout: 30_000 });
+        const approve = page.locator('[data-testid^="approve-"]').first();
+        await expect(approve, "technical-source review item must be available").toBeEnabled({ timeout: 120_000 });
+        const approved = page.waitForResponse(
+          (response) => response.request().method() === "POST"
+            && /\\/hitl\\/queue\\/[^/]+\\/approve/.test(response.url()),
+          { timeout: 120_000 },
+        );
+        await approve.click();
+        await expect(page.getByRole("dialog", { name: /approve review item/i })).toBeVisible();
+        await page.getByRole("button", { name: /confirm approve/i }).click();
+        const response = await approved;
+        expect(response.status(), "technical-source approval must succeed").toBeLessThan(300);
+        test.info().annotations.push({
+          type: "s3-technical-source-approval",
+          description: JSON.stringify({
+            projectId, documentId: technical.documentId,
+            status: response.status(), sourceOnly: true,
+          }),
+        });
+        await openProjectTab(page, projectId, "documents");
+        await expectApprovedDocumentSettled(page, "triplet-specification.docx", latestDocuments);
+      });
+    }
+
     // 5 ── evaluates Coherence
     const evaluated = await test.step("evaluate coherence", async () => {
       await openProjectTab(page, projectId, "coherence");
@@ -523,7 +566,12 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       await evaluateButton.click();
       const response = await answered;
       expect(response.status(), "coherence evaluation must succeed").toBeLessThan(300);
-      return (await response.json()) as { alerts?: EvaluatedAlert[]; overall_score?: number | null };
+      return (await response.json()) as {
+        alerts?: EvaluatedAlert[];
+        overall_score?: number | null;
+        score_missing_dimensions?: string[];
+        category_breakdown?: { category: string; state?: string; score?: number | null }[];
+      };
     });
 
     await test.step("the evaluation names every expected discrepancy", () => {
@@ -537,7 +585,28 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
         expect(rules, `${rule} must be shown as a provisional risk`).toContain(rule);
       }
       expect(rules, "a submitted schedule never confirms a breach").not.toContain("DET-CRS-SCHDEAD");
-      // The specification yields no coherence evidence today, so the score is honestly WITHHELD.
+      // A source-approved technical specification now contributes cited
+      // requirements, not proof of compliance. Health must explicitly keep its
+      // technical dimension unassessed even if the text looks perfectly compliant.
+      if (S3_REQUIRE_TECHNICAL_APPROVAL) {
+        expect(evaluated.overall_score, "S3 must not fabricate a numeric headline").toBeNull();
+        expect(evaluated.score_missing_dimensions ?? [], "TECHNICAL not assessed").toContain("TECHNICAL");
+        const technicalDimension = (evaluated.category_breakdown ?? []).find(
+          (entry) => entry.category.toUpperCase() === "TECHNICAL",
+        );
+        expect(technicalDimension, "six-dimension Health must include TECHNICAL").toBeDefined();
+        expect(technicalDimension?.state, "source approval is not technical compliance").toBe("unassessed");
+        expect(technicalDimension?.score, "unverified TECHNICAL remains NULL").toBeNull();
+        test.info().annotations.push({
+          type: "s3-technical-health",
+          description: JSON.stringify({
+            projectId, documentId: technical.documentId,
+            technicalState: technicalDimension?.state, technicalScore: technicalDimension?.score,
+            overallScore: evaluated.overall_score,
+            missingDimensions: evaluated.score_missing_dimensions,
+          }),
+        });
+      }
       // A withheld score must say why (AUDIT_INCOMPLETE); a null score without a reason would be a
       // hidden failure.
       if (evaluated.overall_score === null || evaluated.overall_score === undefined) {
