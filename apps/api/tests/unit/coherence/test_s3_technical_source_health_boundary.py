@@ -97,3 +97,23 @@ def test_public_coherence_response_preserves_reason_and_missing_dimensions() -> 
     assert public.score_reason == "insufficient_active_weight"
     assert public.score_missing_dimensions == ["TECHNICAL", "QUALITY"]
     assert public.model_dump()["score_missing_dimensions"] == ["TECHNICAL", "QUALITY"]
+
+
+def test_s3_independent_sql_cli_loads_sibling_verifier() -> None:
+    """Catch the direct-script import error before another expensive real UAT."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    command = root / "scripts" / "verify_s3_technical_health_pg.py"
+    process = subprocess.run(
+        [sys.executable, str(command), "--help"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    assert process.returncode == 0, process.stderr
+    assert "--playwright-json" in process.stdout
