@@ -207,6 +207,34 @@ async def test_real_worker_persists_two_revision_bound_technical_sources_without
         clause.data["technical_requirement"]["verification_status"] == "unverified"
         for clause in technical_candidates
     ), "source publication must not imply human technical verification"
+    assert all(
+        clause.data["category"] == "TECHNICAL"
+        and clause.data["source_document_type"] == "technical_spec"
+        and clause.data["assessment_unavailable"] == {
+            "TECHNICAL": "TECHNICAL_SOURCE_ONLY_COMPLIANCE_UNVERIFIED"
+        }
+        for clause in technical_candidates
+    ), "approved source is cited in Health but never treated as compliance"
+
+    # Exercise the actual project-scoped Coherence/Health API after trusting the
+    # source. A genuine (but unassessed) requirement is now present; the Health
+    # must still withhold the TECHNICAL dimension and overall score.
+    from tests.integration.document_flow.test_contract_schedule_completion_flow import (
+        _evaluate,
+    )
+
+    health = await _evaluate(db, test_user, project_id)
+    assert health.overall_score is None, "a source-only spec cannot earn a score"
+    assert "TECHNICAL" in (health.score_missing_dimensions or [])
+    technical_health = [
+        item for item in health.category_breakdown
+        if item.category in {"technical", "TECHNICAL"}
+    ]
+    assert technical_health, "Health must explicitly represent TECHNICAL"
+    assert all(
+        item.score is None and item.state == "unassessed"
+        for item in technical_health
+    ), "technical compliance remains unmeasured, never green or zero"
 
     # Trusting a source for citation never settles technical compliance.
     assert await db.scalar(
