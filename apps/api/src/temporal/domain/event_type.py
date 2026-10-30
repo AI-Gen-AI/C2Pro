@@ -40,6 +40,8 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # PC-2b.4 (#923): model-call usage of one intelligence run, attributed to tenant, project and
         # run -- counts only, never prompts, evidence or output (offline runs are marked synthetic).
         "wbs.intelligence.run_usage",
+        # ACC-01 S7: human review audit only. NEVER a canonical WBS link.
+        "technical.wbs_link_reviewed",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")
