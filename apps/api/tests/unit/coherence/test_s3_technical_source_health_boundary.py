@@ -105,7 +105,7 @@ def test_s3_independent_sql_cli_loads_sibling_verifier() -> None:
     import sys
     from pathlib import Path
 
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     command = root / "scripts" / "verify_s3_technical_health_pg.py"
     process = subprocess.run(
         [sys.executable, str(command), "--help"],
