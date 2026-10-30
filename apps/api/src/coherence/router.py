@@ -244,6 +244,12 @@ def _convert_enriched_to_coherence_result(enriched: EnrichedCoherenceResult) -> 
         alerts=enriched.alerts,
         category_breakdown=enriched.category_breakdown,
         calculated_at=enriched.calculated_at,
+        # S3: Health must disclose why a dimension remains unassessed even
+        # through the default public endpoint (include_diagnostics=False).
+        # Dropping these nullable canonical fields turned a legitimate NULL
+        # score into an unexplained result with missingDimensions=[] in UI.
+        score_reason=enriched.score_reason,
+        score_missing_dimensions=enriched.score_missing_dimensions,
     )
 
 
