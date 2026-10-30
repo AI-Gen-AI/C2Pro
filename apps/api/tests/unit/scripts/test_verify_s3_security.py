@@ -47,8 +47,9 @@ def test_fixed_existing_workflow_output_is_accepted() -> None:
     r"C:\\tmp\\exfiltrate.json",
 ])
 def test_arbitrary_absolute_or_traversal_output_rejected(bad: str) -> None:
+    bad_path = Path(bad)
     with pytest.raises(ValueError, match="fixed to the authorized"):
-        s3._require_fixed_output_argument(Path(bad))
+        s3._require_fixed_output_argument(bad_path)
 
 
 def test_persisted_json_matches_contract_and_is_atomic(apps_root: Path) -> None:
@@ -62,7 +63,8 @@ def test_persisted_json_matches_contract_and_is_atomic(apps_root: Path) -> None:
     s3.write_s3_report(report)
     path = apps_root / "web" / "playwright-report" / s3._OUTPUT_FILE_NAME
     assert path.read_text() == json.dumps(report, sort_keys=True, indent=2) + "\n"
-    assert path.is_file() and not path.is_symlink()
+    assert path.is_file()
+    assert not path.is_symlink()
     assert not list(path.parent.glob(".s3-evidence-*.tmp"))
     # Genuine re-run replaces only the one authorized regular report.
     report["result"] = "PASS"
@@ -126,6 +128,7 @@ class _FakeConnection:
         self.calls = []
         self.fail_score = False
         self.fail_binding = False
+        self.missing_document = False
     async def __aenter__(self): return self
     async def __aexit__(self, *args): return False
     async def execute(self, stmt, params=None):
@@ -134,6 +137,8 @@ class _FakeConnection:
         if "SET TRANSACTION READ ONLY" in sql:
             return _Result(None)
         if "FROM documents d" in sql:
+            if self.missing_document:
+                return _Result(None)
             return _Result(SimpleNamespace(
                 tenant_id=self.tenant, project_id=self.project,
                 type="technical_spec", status="analyzed", parsing_error=None,
@@ -195,6 +200,14 @@ def test_successful_verifier_preserves_exact_report_schema(monkeypatch):
     }
     assert engine.disposed
     assert conn.calls[0][0] == "SET TRANSACTION READ ONLY"
+
+
+def test_verifier_rejects_missing_document_before_attribute_access(monkeypatch):
+    conn, engine, (_, project, document, revision) = _fake_env(monkeypatch)
+    conn.missing_document = True
+    with pytest.raises(ValueError, match="technical document/project identity mismatch"):
+        asyncio.run(s3.verify("test", project, document, revision))
+    assert engine.disposed
 
 
 @pytest.mark.parametrize("failure,expected", [
