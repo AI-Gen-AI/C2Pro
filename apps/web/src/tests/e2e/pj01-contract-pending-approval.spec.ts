@@ -5,15 +5,16 @@
  * sign-in, projects created through the wizard, the real .docx contract uploaded through the dialog, the real
  * Celery worker and the real `/coherence/evaluate` route. What it proves in the browser:
  *
- *  1. A project WITHOUT documents: the checklist says the contract is missing (no "awaiting approval"), and
+ *  1. The project BEFORE any upload: the checklist says the contract is missing (no "awaiting approval"), and
  *     evaluating answers 404 "No document clauses found" -- nothing was uploaded.
- *  2. A project whose only contract waits for its mandatory review: the page says in words that the contract
+ *  2. The SAME project once its only contract waits for its mandatory review: the page says in words that the contract
  *     awaits approval and that nothing is evaluated; no Evaluate button is offered; evaluating anyway (the
  *     authenticated session of this browser) answers 200 with a NULL score, no alerts and
  *     `score_reason = contract_pending_approval` -- not a 404 and not a number; nothing is written (no alert
  *     rows, the Coherence page shows no score).
  *
- * The two projects are told apart by what the user sees AND by what the API answers.
+ * One project, two moments (a single wizard run: a full page load resets Clerk, and the project-entry check
+ * needs it settled): the two situations are told apart by what the user sees AND by what the API answers.
  */
 import path from "node:path";
 
@@ -73,18 +74,16 @@ test.describe("TS-E2E-S3-001: a contract awaiting approval is stated, not a 404 
 
     const observation = await signInAsJourneyUser(page, base);
 
-    // ── 1. no documents ────────────────────────────────────────────────────────────────────────────────
-    const emptyProjectId = await createProjectThroughUi(page, observation, `S3 empty ${tag}`);
+    // ── 1. no documents yet ────────────────────────────────────────────────────────────────────────────
+    const projectId = await createProjectThroughUi(page, observation, `S3 pending ${tag}`);
     await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("triplet-awaiting-approval"), "nothing awaits approval here").toHaveCount(0);
     await expect(page.getByText("Missing").first()).toBeVisible();
-    const empty = await callApi(page, "POST", "/api/v1/coherence/evaluate", { project_id: emptyProjectId });
+    const empty = await callApi(page, "POST", "/api/v1/coherence/evaluate", { project_id: projectId });
     expect(empty.status, JSON.stringify(empty.body)).toBe(404);
     expect(JSON.stringify(empty.body)).toMatch(/No document clauses found/i);
 
     // ── 2. a contract that waits for its mandatory review ───────────────────────────────────────────────
-    await page.goto("/projects");
-    const projectId = await createProjectThroughUi(page, observation, `S3 pending ${tag}`);
     const { documentId } = await uploadDocumentThroughUi(page, recorder, {
       projectId,
       filePath: CONTRACT,
@@ -131,13 +130,12 @@ test.describe("TS-E2E-S3-001: a contract awaiting approval is stated, not a 404 
     await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/coherence`), { timeout: 30_000 });
     await expect(page.getByRole("img", { name: /Coherence Score/i })).toHaveCount(0);
 
-    // The two situations are different for the user AND for the API.
+    // The two moments of the same project are different for the user AND for the API.
     expect(pending.status).not.toBe(empty.status);
 
     recorder.record("s3PendingContract", {
       projectId,
       documentId,
-      emptyProjectId,
       pendingStatus: pending.status,
       emptyStatus: empty.status,
       scoreReason: result.score_reason,
