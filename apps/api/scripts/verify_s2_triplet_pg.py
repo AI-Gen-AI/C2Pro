@@ -20,6 +20,16 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _within_repo(path: Path) -> Path:
+    """A CLI path must resolve inside this repository checkout: no ``..``, absolute or symlink escape."""
+    resolved = path.resolve()
+    if not resolved.is_relative_to(REPO_ROOT):
+        raise SystemExit(f"FAIL: {path} resolves outside the repository")
+    return resolved
+
 FAMILIES = {
     "triplet-contract.docx": "contract",
     "triplet-budget.xlsx": "budget",
@@ -238,13 +248,17 @@ async def main():
     parser.add_argument("--fixture-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    playwright_json = _within_repo(args.playwright_json)
+    manifest = _within_repo(args.manifest)
+    fixture_dir = _within_repo(args.fixture_dir)
+    output = _within_repo(args.output)
     project_id, entries = source_trace(
-        json.loads(args.playwright_json.read_text()),
-        json.loads(args.manifest.read_text()), args.fixture_dir
+        json.loads(playwright_json.read_text()),
+        json.loads(manifest.read_text()), fixture_dir
     )
     report = await verify(os.environ.get("TEST_DATABASE_URL", ""), project_id, entries)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print("PASS S2 independent SQL: 4 documents, revisions, events, processing authorities")
 
 

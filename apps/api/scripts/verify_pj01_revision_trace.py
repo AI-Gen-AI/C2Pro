@@ -35,6 +35,16 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _within_repo(path: Path) -> Path:
+    """A CLI path must resolve inside this repository checkout: no ``..``, absolute or symlink escape."""
+    resolved = path.resolve()
+    if not resolved.is_relative_to(REPO_ROOT):
+        raise SystemExit(f"FAIL: {path} resolves outside the repository")
+    return resolved
+
 
 def _normalize_database_url(raw: str) -> str:
     for prefix in ("postgresql://", "postgres://"):
@@ -280,6 +290,7 @@ def main() -> int:
         print("FAIL: no database url (set DATABASE_URL or pass --database-url)")
         return 2
 
+    args.run_dir = _within_repo(args.run_dir)
     facts = _facts_of(args.kind, args.run_dir)
     project_id = _project_id_from_facts(facts)
     if args.kind == "reject":
@@ -301,7 +312,10 @@ def main() -> int:
             return 2
         failures = asyncio.run(
             verify(
-                args.database_url, project_id, _sha256(args.contract_a), _sha256(args.contract_b)
+                args.database_url,
+                project_id,
+                _sha256(_within_repo(args.contract_a)),
+                _sha256(_within_repo(args.contract_b)),
             )
         )
         ok = "OK: PostgreSQL holds revision A (trusted, now superseded) and revision B (active trusted) for the journey"
