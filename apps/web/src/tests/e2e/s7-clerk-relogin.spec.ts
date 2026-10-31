@@ -63,14 +63,32 @@ interface Snapshot {
   budget: Link;
   schedule: Link;
   technical: Link;
+  health: {
+    computedAt: string;
+    compositeScore: number | null;
+    compositeBand: string;
+    assessments: Array<{ category: string; state: string }>;
+  };
+  coherence: {
+    globalScore: number | null;
+    scoreVersion: string | null;
+    scoreReason: string | null;
+    missingDimensions: string[];
+    categoryScores: Record<string, number | null>;
+    evaluatedAt: string;
+  };
 }
 
 async function snapshot(page: Page): Promise<Snapshot> {
   const root = `/api/v1/projects/${fixture.projectId}`;
-  const [structured, technical] = await Promise.all([
+  const [structured, technical, health, dashboard] = await Promise.all([
     call(page, `${root}/structured-wbs/canonical-links`),
     call(page, `${root}/technical-wbs/canonical-links`),
+    call(page, `${root}/health`),
+    call(page, `/api/v1/coherence/dashboard/${fixture.projectId}`),
   ]);
+  expect(health.status, "authenticated project Health read").toBe(200);
+  expect(dashboard.status, "authenticated persisted Coherence dashboard read").toBe(200);
   expect(structured.status, "Clerk-authenticated structured WBS GET").toBe(200);
   expect(technical.status, "Clerk-authenticated technical WBS GET").toBe(200);
   const structuredLinks = structured.data as Link[];
@@ -91,7 +109,55 @@ async function snapshot(page: Page): Promise<Snapshot> {
   expect(budget?.source_document_id).toBe(fixture.budget.documentId);
   expect(schedule?.source_document_id).toBe(fixture.schedule.documentId);
   expect(technicalLinks[0]?.technical_document_id).toBe(fixture.technical.documentId);
-  return { budget: budget!, schedule: schedule!, technical: technicalLinks[0] };
+  const healthBody = health.data as {
+    project_id?: string;
+    computed_at?: string;
+    composite_score?: number | null;
+    composite_band?: string;
+    single_document_coverage?: { assessments?: Array<{ category: string; state: string }> } | null;
+  };
+  const scoreBody = dashboard.data as {
+    project_id?: string;
+    global_score?: number | null;
+    score_version?: string | null;
+    score_reason?: string | null;
+    score_missing_dimensions?: string[] | null;
+    sub_scores?: Record<string, number | null>;
+    last_updated?: string;
+  };
+  expect(healthBody.project_id).toBe(fixture.projectId);
+  expect(scoreBody.project_id).toBe(fixture.projectId);
+  const assessments = healthBody.single_document_coverage?.assessments ?? [];
+  expect(assessments, "six real Health assessments, not the no-snapshot fallback").toHaveLength(6);
+  expect(new Set(assessments.map((a) => a.category)).size).toBe(6);
+  expect(
+    scoreBody.global_score !== null && scoreBody.global_score !== undefined ||
+      Boolean(scoreBody.score_reason && scoreBody.score_missing_dimensions?.length),
+    "evaluated Coherence must be persisted; two empty/null dashboard reads do not prove persistence",
+  ).toBe(true);
+  expect(Object.keys(scoreBody.sub_scores ?? {})).toHaveLength(6);
+  expect(scoreBody.last_updated, "persisted evaluation timestamp").toBeTruthy();
+
+  return {
+    budget: budget!, schedule: schedule!, technical: technicalLinks[0],
+    health: {
+      computedAt: healthBody.computed_at ?? "",
+      compositeScore: healthBody.composite_score ?? null,
+      compositeBand: healthBody.composite_band ?? "",
+      assessments: assessments.map((a) => ({ category: a.category, state: a.state }))
+        .sort((a, b) => a.category.localeCompare(b.category)),
+    },
+    coherence: {
+      globalScore: scoreBody.global_score ?? null,
+      scoreVersion: scoreBody.score_version ?? null,
+      scoreReason: scoreBody.score_reason ?? null,
+      missingDimensions: [...(scoreBody.score_missing_dimensions ?? [])].sort(),
+      categoryScores: Object.fromEntries(
+        Object.entries(scoreBody.sub_scores ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+      ),
+      evaluatedAt: scoreBody.last_updated ?? "",
+    },
+  };
 }
 
 test("S7 one canonical WBS: genuine Clerk approvals, signout and clean-context relogin retain 3 links", async ({
@@ -146,7 +212,28 @@ test("S7 one canonical WBS: genuine Clerk approvals, signout and clean-context r
     expect(approved.status, JSON.stringify(approved.data).slice(0, 200)).toBe(201);
   }
 
+  // Exactly one genuine evaluation on the SAME three-source/WBS project.
+  // No POST, re-score, refresh-trigger or state mutation is allowed after this point.
+  const evaluation = await call(page, "/api/v1/coherence/evaluate", "POST", {
+    project_id: fixture.projectId,
+    low_budget_mode: true,
+    include_rag_similarity: false,
+  });
+  expect(evaluation.status, "same-project Coherence evaluation must complete").toBe(200);
+  const evaluated = evaluation.data as {
+    overall_score?: number | null;
+    score_reason?: string | null;
+    score_missing_dimensions?: string[] | null;
+  };
+  expect(
+    evaluated.overall_score !== null && evaluated.overall_score !== undefined ||
+      Boolean(evaluated.score_reason && evaluated.score_missing_dimensions?.length),
+    "evaluation must produce evidence-backed score or explicit honest null with missing dimensions",
+  ).toBe(true);
+
   const before = await snapshot(page);
+  expect(before.coherence.globalScore, "stored Score agrees with the evaluation").toBe(evaluated.overall_score ?? null);
+  expect(before.coherence.scoreReason, "stored Score reason agrees with the evaluation").toBe(evaluated.score_reason ?? null);
   await page.getByRole("button", { name: "User menu" }).click();
   await page.getByRole("menuitem", { name: /sign out/i }).click();
   await expect(page).toHaveURL(/\/sign-in/, { timeout: 30_000 });
