@@ -20,7 +20,8 @@ export const IGNORED_CONSOLE_NOISE: readonly RegExp[] = [
  * (a continuation line that carries none of the words above). Decided by WHERE the message comes from, not by
  * its text, so an error raised by C2Pro's own code or origin is never excluded.
  */
-export const THIRD_PARTY_ORIGIN = /(^|\.)(clerk\.[a-z.]+|clerk\.com|clerk\.accounts\.dev|cloudflare\.com)(\/|:|$)/i;
+// accounts.dev is Clerk's hosted Accounts Portal (<instance>.accounts.dev), where /sign-in lands after a sign-out.
+export const THIRD_PARTY_ORIGIN = /(^|\.)(clerk\.[a-z.]+|clerk\.com|accounts\.dev|cloudflare\.com)$/i;
 
 function originOf(url: string): string {
   try {
