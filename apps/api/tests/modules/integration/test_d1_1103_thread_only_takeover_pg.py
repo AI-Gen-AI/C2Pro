@@ -96,11 +96,26 @@ async def test_d1_1103_thread_only_crash_pre_n17_changed_decision_preserves_sour
     ).config["configurable"]["checkpoint_id"]
     assert latest_id != source_id, "first attempt must leave a descendant"
 
+    source_params = {"tid": thread_id, "cid": source_id}
+    source_checkpoint_sql = text(
+        "SELECT checkpoint_id, checkpoint_ns, parent_checkpoint_id, "
+        "type, checkpoint, metadata FROM checkpoints "
+        "WHERE thread_id=:tid AND checkpoint_id=:cid"
+    )
+    source_resume_writes_sql = text(
+        "SELECT count(*) FROM checkpoint_writes "
+        "WHERE thread_id=:tid AND checkpoint_id=:cid AND channel='__resume__'"
+    )
     async with independent_sessions(tenant.id) as observer:
-        source_writes = int(await observer.scalar(text(
-            "SELECT count(*) FROM checkpoint_writes "
-            "WHERE thread_id=:tid AND checkpoint_id=:cid AND channel='__resume__'"
-        ), {"tid": thread_id, "cid": source_id}) or 0)
+        source_writes = int(
+            await observer.scalar(source_resume_writes_sql, source_params) or 0
+        )
+        original_source = (
+            await observer.execute(source_checkpoint_sql, source_params)
+        ).one_or_none()
+    assert original_source is not None, "interrupt source checkpoint missing before takeover"
+    original_source = tuple(original_source)
+    assert original_source[0] == source_id
 
     # Attempt 2 REJECT changes both the decision and the reviewer.
     # Capture the use-case failure with fence and source-write provenance.
@@ -132,6 +147,25 @@ async def test_d1_1103_thread_only_crash_pre_n17_changed_decision_preserves_sour
     assert outcome.status == "rejected", "takeover must not replay old APPROVE"
     assert source_writes == 0, (
         f"immutable source has prior __resume__ write: {source_writes}"
+    )
+    # A new independent session AFTER takeover must observe the immutable
+    # original source, not the fork or a later descendant.
+    async with independent_sessions(tenant.id) as observer:
+        post_takeover_source_writes = int(
+            await observer.scalar(source_resume_writes_sql, source_params) or 0
+        )
+        source_after_takeover = (
+            await observer.execute(source_checkpoint_sql, source_params)
+        ).one_or_none()
+    assert post_takeover_source_writes == 0, (
+        "takeover wrote __resume__ to the original interrupt source: "
+        f"{post_takeover_source_writes}"
+    )
+    assert source_after_takeover is not None, (
+        "takeover removed the original interrupt source checkpoint"
+    )
+    assert tuple(source_after_takeover) == original_source, (
+        "takeover modified or replaced the original interrupt source checkpoint"
     )
     assert len(N17_RUNS) == 1, "no second N17 execution on REJECT"
     assert await _counts(db, document.project_id) == (0, 0)
