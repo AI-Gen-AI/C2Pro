@@ -50,6 +50,37 @@ A step is **PASS** only with evidence of the class named in the verdict, tied to
 - **UAT real:** run the same table by hand (or the PJ-01 harness) against the isolated environment with real Clerk
   and real AI; file the evidence outside the repository and reference it from the tracking issue.
 
+## Integral S1–S8 runner (one executable, opt-in)
+
+`acc01-s2-live-ai-uat.yml` carries the integral runner behind `workflow_dispatch` with `integral_uat=true`; with the
+default (`false`) the workflow behaves exactly as before. Its scenario is
+`apps/web/src/tests/e2e/integral-s1-s8.spec.ts` (Playwright project `integral-s1-s8`): ONE project created by Clerk
+Development identity A through the wizard carries every stage; identity B (another Organization and tenant) owns a
+project of its own for the denial in both directions, before and after the relogin.
+
+| Dispatch input | Meaning |
+|---|---|
+| `integral_uat=true` | select the integral runner instead of the original S2 job |
+| `integral_preflight_only=true` | read-only check of the two Clerk Development identities (no database, no AI) |
+| `integral_ai_mode=deterministic-rehearsal` (default) | runs the whole runner with `C2PRO_AI_MOCK=1`: no paid provider key is even in the environment; the verdict is `REHEARSAL_ONLY_NOT_UAT`, never UAT |
+| `integral_ai_mode=real-ai` + `integral_confirm_real_ai_sha=<full candidate SHA>` | real provider calls (`C2PRO_AI_MOCK=0`); refused unless the typed SHA equals the dispatched one |
+
+Fail-closed rules of the runner: the job checks `HEAD == GITHUB_SHA`; backend, worker and frontend runtime SHAs are read
+from the RUNNING processes (`write_integral_runtime_receipt.py`); the database is prepared only with the two tenants
+(`seed_integral_uat.py`, nothing of the journey); a failure records the FIRST failing stage and the run stops there
+(later stages are `NOT_RUN`, never inferred); what the product cannot do is `PARTIAL` with its reason.
+`verify_integral_s1_s8_pg.py` re-reads PostgreSQL on the same project id and writes `integral-manifest.json`
+(candidate/runtime SHAs, project ids, document/revision/event ids, provider call receipt, Clerk identity checks, S1–S8
+verdicts, first failure). Artifacts hold JSON only: no screenshot, trace, prompt or completion.
+
+Declared limits (reported in every manifest, never hidden):
+
+* the canonical WBS baseline is approved by the same human who submitted it (tenant A has one human), under the
+  tenant setting `wbs_governance.require_distinct_approver=false` set by the seed; it is recorded as `self_approved`;
+* granular per-finding decisions have no HTTP route or UI, so they are not exercised in the browser (S5 is `PARTIAL`);
+* the alert → source link is the contract clause; budget/schedule rows are named in the evidence text (S4 is `PARTIAL`);
+* the verdict `NOT_ACCEPTED_UNTIL_INDEPENDENT_REVIEW` is fixed: the runner never accepts itself.
+
 ## Rules
 
 - No merge, deployment, production SQL/DDL, bypass of a human approval, or automatic change to MASTER as part of a run.

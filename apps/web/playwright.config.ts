@@ -59,6 +59,8 @@ export default defineConfig({
         // Own project and Nightly step: a long journey that must not hide the rest of the suite.
         /(^|[\\/])triplet-user-journey\.spec\.ts$/,
         /(^|[\\/])s7-clerk-relogin\.spec\.ts$/,
+        // Opt-in integral S1-S8 UAT (own project, own workflow job).
+        /(^|[\\/])integral-s1-s8\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -116,6 +118,20 @@ export default defineConfig({
         type: "e2e",
         priority: "p0",
         description: "Real Clerk logout and fresh browser login with three typed human-approved source-to-WBS links",
+      },
+    },
+    {
+      // Integral ACC-01 S1-S8 UAT: ONE project from the first login to the relogin, two Clerk tenants. Opt-in
+      // only (INTEGRAL_UAT=1, set by the integral job of acc01-s2-live-ai-uat.yml); never part of another suite.
+      name: "integral-s1-s8",
+      testMatch: [/(^|[\\/])integral-s1-s8\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "TS-E2E-INTEGRAL-S1S8-001",
+        type: "e2e",
+        priority: "p0",
+        description: "One persisted project S1-S8, two Clerk Development tenants, fail-closed ledger",
       },
     },
     {
