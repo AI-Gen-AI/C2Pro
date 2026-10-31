@@ -145,6 +145,7 @@ def build_receipt(
     discards: Counter[str],
     candidates: list[dict[str, Any]],
     a_known: bool,
+    unmarked_pseudonyms: list[str] | None = None,
 ) -> dict[str, Any]:
     valid = [c for c in candidates if c["reason"] == "VALID"]
     preparable = [c for c in candidates if c["reason"] == "ZERO_MEMBERSHIP_PREPARABLE"]
@@ -171,9 +172,19 @@ def build_receipt(
             "INTEGRAL_SYNTHETIC_EMAIL_DOMAINS) or confirm none may be used; then repeat"
         ),
     }[verdict]
+    # The vocabulary of the owner's brief: a candidate, creation (only after a complete search with NO unmarked
+    # account left to qualify), or an inventory that cannot be concluded (including accounts nobody has qualified).
+    if verdict in {"DEV_B_AVAILABLE", "DEV_B_PREPARABLE"}:
+        outcome = "DEV_B_CANDIDATE_FOUND"
+    elif creation_required:
+        outcome = "DEV_B_CREATION_REQUIRED"
+    else:
+        outcome = "INVENTORY_INCOMPLETE"
     return {
         "verdict": verdict,
+        "outcome": outcome,
         "unmarked_users": unmarked,
+        "unmarked_pseudonyms": sorted(unmarked_pseudonyms or []),
         "next_step": next_step,
         "inventory": {
             "complete": complete,
@@ -209,6 +220,7 @@ def main() -> int:
     email_a = os.getenv("E2E_CLERK_USER_EMAIL", provisioner.DEFAULT_E2E_EMAIL).strip().lower()
     discards: Counter[str] = Counter()
     candidates: list[dict[str, Any]] = []
+    unmarked: list[str] = []
     a_user = a_org = a_tenant = ""
     try:
         with httpx.Client(timeout=30.0, headers={"Authorization": f"Bearer {secret_key}"}) as http:
@@ -242,6 +254,9 @@ def main() -> int:
                     continue
                 if not is_authorised_synthetic(user, domains):
                     discards["NOT_AUTHORISED_SYNTHETIC"] += 1
+                    # Pseudonym only (sha256 prefix of the primary email): the owner can recognise their own
+                    # account by hashing it, and nothing is examined about an account nobody has qualified.
+                    unmarked.append(_pseudonym((emails_of(user) or [""])[0]))
                     continue
                 ms = _unwrap(clerk.get(f"/users/{uid}/organization_memberships", {"limit": PAGE}))
                 reason, ids = classify_candidate(ms, a_org, a_tenant)
@@ -264,6 +279,7 @@ def main() -> int:
         discards=discards,
         candidates=candidates,
         a_known=bool(a_org and a_tenant),
+        unmarked_pseudonyms=unmarked,
     )
     receipt["clerk_environment"] = environment
     receipt["synthetic_domains_configured"] = len(domains)

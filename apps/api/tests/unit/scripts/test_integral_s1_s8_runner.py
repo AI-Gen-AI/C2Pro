@@ -1218,3 +1218,80 @@ def test_unmarked_users_make_creation_an_owner_decision_not_a_conclusion() -> No
     assert receipt["verdict"] == "NO_AUTHORISED_CANDIDATE"
     assert receipt["creation_required"] is False and receipt["unmarked_users"] == 2
     assert "owner decision" in receipt["next_step"]
+
+
+def test_the_outcome_uses_the_vocabulary_of_the_brief() -> None:
+    from collections import Counter
+
+    assert _receipt(True, ["VALID"])["outcome"] == "DEV_B_CANDIDATE_FOUND"
+    assert _receipt(True, ["ZERO_MEMBERSHIP_PREPARABLE"])["outcome"] == "DEV_B_CANDIDATE_FOUND"
+    assert _receipt(False, [])["outcome"] == "INVENTORY_INCOMPLETE"
+    assert _receipt(True, ["MULTIPLE_MEMBERSHIPS"])["outcome"] == "DEV_B_CREATION_REQUIRED"
+    unqualified = discovery.build_receipt(
+        complete=True,
+        listed=3,
+        counted=3,
+        discards=Counter({"NOT_AUTHORISED_SYNTHETIC": 2, "IS_IDENTITY_A": 1}),
+        candidates=[],
+        a_known=True,
+        unmarked_pseudonyms=["bbbbbbbbbbbb", "aaaaaaaaaaaa"],
+    )
+    assert unqualified["outcome"] == "INVENTORY_INCOMPLETE", (
+        "creation is never concluded while accounts await qualification"
+    )
+    assert unqualified["unmarked_pseudonyms"] == ["aaaaaaaaaaaa", "bbbbbbbbbbbb"]
+    assert "@" not in json.dumps(unqualified)
+
+
+# ── JWKS and the authentication preflight (P1) ────────────────────────────────────────────────────────────
+GOOD_KEY = {"kty": "RSA", "kid": "ins_1", "n": "abc", "e": "AQAB", "use": "sig", "alg": "RS256"}
+
+
+def test_a_public_rsa_jwks_is_accepted() -> None:
+    assert preflight.validate_jwks({"keys": [GOOD_KEY]}) is None
+
+
+@pytest.mark.parametrize(
+    ("document", "needle"),
+    [
+        ({}, "no keys"),
+        ({"keys": []}, "no keys"),
+        ("not a document", "no keys"),
+        ({"keys": [dict(GOOD_KEY, kid="")]}, "public RSA key"),
+        ({"keys": [dict(GOOD_KEY, kty="oct")]}, "public RSA key"),
+        ({"keys": [dict(GOOD_KEY, d="secret")]}, "private key material"),
+    ],
+)
+def test_an_unusable_or_private_jwks_is_refused(document: object, needle: str) -> None:
+    assert needle in (preflight.validate_jwks(document) or "")
+
+
+def test_the_scenario_starts_only_after_both_identities_authenticated() -> None:
+    config = (WEB / "playwright.config.ts").read_text()
+    scenario = config[config.index('name: "integral-s1-s8"') :].split("metadata:", 1)[0]
+    assert '"integral-auth-preflight"' in scenario
+    spec = (WEB / "src" / "tests" / "e2e" / "integral-auth-preflight.spec.ts").read_text()
+    assert "/api/v1/projects" in spec
+    assert "POST" not in spec, "the authentication preflight only reads"
+
+
+def test_the_auth_preflight_runs_with_the_scenario_and_its_receipt_is_kept() -> None:
+    text = _workflow_text()
+    assert "integral-auth-preflight.json" in text
+    assert "--project=integral-s1-s8" in text
+
+
+def test_product_gaps_travel_into_the_manifest_next_to_their_stage() -> None:
+    _, browser, _ = _world()
+    browser["productGaps"] = [{"stage": "S5", "gap": "no route", "minimalCorrection": "expose it"}]
+    manifest = _manifest(browser)
+    assert manifest["product_gaps"] == browser["productGaps"]
+    assert _manifest({**browser, "productGaps": None})["product_gaps"] == []
+
+
+def test_the_spec_states_the_known_product_gaps_and_never_hides_them() -> None:
+    source = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text()
+    for stage in ("S4", "S5", "S7"):
+        assert f'stage: "{stage}"' in source
+    assert "RecordFindingDecisionUseCase" in source
+    assert "N17" in source

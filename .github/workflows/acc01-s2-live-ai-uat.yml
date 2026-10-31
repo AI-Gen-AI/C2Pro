@@ -645,7 +645,9 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/integral-results.json
         run: |
-          # The Next.js server is started by Playwright; its runtime SHA is read from the running process.
+          # The Next.js server is started by Playwright; its runtime SHA is read from the running process. The
+          # project integral-auth-preflight runs first (dependency): both Clerk identities must reach the local API
+          # with a real JWT, or the scenario does not start.
           ( python ../api/scripts/write_integral_runtime_receipt.py --role frontend --process-pattern "next dev" \
               --expected-sha "${GITHUB_SHA}" --wait-seconds 240 || true ) &
           ./node_modules/.bin/playwright test --project=integral-s1-s8 --workers=1 --reporter=list,json
@@ -716,6 +718,7 @@ jobs:
           path: |
             apps/web/playwright-report/integral-manifest.json
             apps/web/playwright-report/integral-browser-manifest.json
+            apps/web/playwright-report/integral-auth-preflight.json
             apps/web/playwright-report/integral-provider-receipt.json
             apps/web/playwright-report/integral-runtime-backend.json
             apps/web/playwright-report/integral-runtime-worker.json

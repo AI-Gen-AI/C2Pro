@@ -154,6 +154,25 @@ B_EXPORT_PREFIX = "TENANT_B_"
 SEED_TENANT_A = "00000000-0000-0000-0000-00000000a113"
 
 
+def validate_jwks(document: Any) -> str | None:
+    """Pure: why this is NOT a usable public JWKS, or None. The backend verifies every Clerk JWT with it."""
+    keys = document.get("keys") if isinstance(document, dict) else None
+    if not isinstance(keys, list) or not keys:
+        return "the instance JWKS holds no keys"
+    for key in keys:
+        if (
+            not isinstance(key, dict)
+            or key.get("kty") != "RSA"
+            or not key.get("kid")
+            or not key.get("n")
+            or not key.get("e")
+        ):
+            return "the instance JWKS holds a key that is not a public RSA key with an id"
+        if any(private in key for private in ("d", "p", "q", "dp", "dq", "qi")):
+            return "the instance JWKS exposes private key material"
+    return None
+
+
 def a_export_lines(a: IdentityReport) -> list[str]:
     """Pure: the GITHUB_ENV lines the UAT needs about A, from a READY report (no Clerk write)."""
     return [
@@ -230,6 +249,10 @@ def main(argv: list[str] | None = None) -> int:
                 jwks_document = admin.jwks()
             except provisioner.FixtureError as exc:
                 print(f"FAIL: cannot read the instance JWKS: {str(exc)[:200]}", file=sys.stderr)
+                return FAILED
+            problem = validate_jwks(jwks_document)
+            if problem:
+                print(f"FAIL: {problem}", file=sys.stderr)
                 return FAILED
     code, reasons = evaluate_pair(reports[0], reports[1])
     if code == READY and reports[0].tenant_id != SEED_TENANT_A:

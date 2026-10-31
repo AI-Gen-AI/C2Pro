@@ -73,6 +73,14 @@ from the RUNNING processes (`write_integral_runtime_receipt.py`); the database i
 (candidate/runtime SHAs, project ids, document/revision/event ids, provider call receipt, Clerk identity checks, S1–S8
 verdicts, first failure). Artifacts hold JSON only: no screenshot, trace, prompt or completion.
 
+Clerk during the UAT is READ-ONLY for both identities: the preflight verifies A and B and takes the public JWKS
+(validated: public RSA keys only) into the runner's temporary directory, so `CLERK_JWKS_URL` stays functional. The
+Playwright project `integral-auth-preflight` then presents each identity's real JWT to the local API; the scenario
+(`integral-s1-s8`) depends on it and does not start otherwise. Writing to Clerk Development is only possible in the
+separate, SHA-confirmed jobs `integral-prepare-dev-a` / `integral-prepare-dev-b`; `integral_discover_dev_b` is a
+read-only, paginated inventory whose receipt holds counts and pseudonyms only (outcomes `DEV_B_CANDIDATE_FOUND`,
+`DEV_B_CREATION_REQUIRED`, `INVENTORY_INCOMPLETE`).
+
 Declared limits (reported in every manifest, never hidden):
 
 * the canonical WBS baseline is approved by the same human who submitted it (tenant A has one human), under the

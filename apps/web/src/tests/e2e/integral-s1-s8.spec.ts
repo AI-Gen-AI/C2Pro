@@ -27,10 +27,10 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { callApi, itemsOf, str, type Json } from "./support/integral/api";
+import { DENIAL, clerkIdentity, denialsFor, pseudonym, signInTenantB, type ClerkIdentity } from "./support/integral/identity";
 import {
   FILES,
   LOCATORS,
@@ -73,6 +73,28 @@ const EMPTY_SESSION = { cookies: [], origins: [] };
 const REJECTION_REASON =
   "The draft sets a 5 MPa concrete strength: the figure is implausible for structural work. Re-issue the specification.";
 
+/**
+ * What the PRODUCT cannot do today, stated in every manifest next to the stage it limits, with the minimum
+ * correction. A gap is never turned into a PASS; closing one is a product change with its own review.
+ */
+const PRODUCT_GAPS = [
+  {
+    stage: "S4",
+    gap: "an alert leads to its contract clause; the Budget row and the Schedule activity it also rests on are named in the evidence text, not linked",
+    minimalCorrection: "carry the source locator (sheet!row) of each cited structured row in detection_evidence and render it as a link to the revision",
+  },
+  {
+    stage: "S5",
+    gap: "granular per-finding decisions (CONFIRMED / DISMISSED) exist as a use case over an append-only ledger but have no HTTP route and no UI control",
+    minimalCorrection: "expose RecordFindingDecisionUseCase as POST /hitl/queue/{item}/findings/{finding}/decision and add the controls to the review card; a run also needs a provider that yields findings",
+  },
+  {
+    stage: "S7",
+    gap: "the WBS baseline is approved by the same human who submitted it (a tenant with one human): separation of duties is not satisfied",
+    minimalCorrection: "a second human administrator in the tenant (or an independent approval); the run records self_approved and never equates it with an independent approval",
+  },
+] as const;
+
 const TITLES: Record<StageId, string> = {
   S1: "Two Clerk identities in different tenants; project created through the UI; foreign tenant denied",
   S2: "Four sources uploaded through the dialog with pinned bytes; unsupported file refused",
@@ -95,53 +117,10 @@ const REQUIRED: Partial<Record<StageId, string[]>> = {
   S8: ["signed-out", "relogin-same-user", "state-identical", "a-to-b-denied-after", "b-to-a-denied-after"],
 };
 
-interface ClerkIdentity {
-  userId: string;
-  organizationId: string;
-  tenantId: string;
-}
-
-async function clerkIdentity(page: Page): Promise<ClerkIdentity> {
-  return page.evaluate(() => ({
-    userId: window.Clerk?.user?.id ?? "",
-    organizationId: window.Clerk?.organization?.id ?? "",
-    tenantId: String((window.Clerk?.organization?.publicMetadata as { tenant_id?: string } | undefined)?.tenant_id ?? ""),
-  }));
-}
-
-const pseudonym = (value: string): string => (value ? sha256Hex(value).slice(0, 12) : "");
-
-/** A second, independently authenticated Clerk identity in its own context (live sign-in token, empty storage). */
-async function signInTenantB(browser: Browser, baseURL: string): Promise<{ page: Page; close: () => Promise<void> }> {
-  const context = await browser.newContext({ baseURL, storageState: EMPTY_SESSION });
-  const page = await context.newPage();
-  await setupClerkTestingToken({ page });
-  await page.goto("/");
-  await clerk.loaded({ page });
-  await clerk.signIn({ page, emailAddress: TENANT_B_EMAIL });
-  await page.waitForFunction(() => Boolean(window.Clerk?.organization), undefined, { timeout: 60_000 });
-  return { page, close: () => context.close() };
-}
-
-const DENIAL = [401, 403, 404];
-
-/** What the application answers a signed-in user about a project of ANOTHER tenant: only denials are acceptable. */
-async function denialsFor(page: Page, foreignProjectId: string): Promise<number[]> {
-  const urls = [
-    `/api/v1/projects/${foreignProjectId}`,
-    `/api/v1/projects/${foreignProjectId}/documents`,
-    `/api/v1/alerts/projects/${foreignProjectId}`,
-    `/api/v1/projects/${foreignProjectId}/health`,
-  ];
-  const statuses: number[] = [];
-  for (const url of urls) statuses.push((await callApi(page, url)).status);
-  return statuses;
-}
-
 test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () => {
-  test.beforeEach((_fixtures, testInfo) => {
+  test.beforeEach(({ browserName }, testInfo) => {
     // Opt-in only: the integral UAT workflow sets INTEGRAL_UAT=1; nothing else may run this journey by accident.
-    testInfo.skip(process.env.INTEGRAL_UAT !== "1", "set INTEGRAL_UAT=1 to run the integral S1-S8 UAT");
+    testInfo.skip(process.env.INTEGRAL_UAT !== "1", `set INTEGRAL_UAT=1 to run the integral S1-S8 UAT (${browserName})`);
   });
 
   test("S1–S8 in one persisted project, two tenants, real Clerk", async ({ browser, baseURL }) => {
@@ -167,7 +146,8 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
       reviewIds: Record<string, string>;
       eventIds: Record<string, string>;
       snapshotDigests: { before?: string; after?: string };
-    } = { projectA: "", projectB: "", documentIds: {}, reviewIds: {}, eventIds: {}, snapshotDigests: {} };
+      dynamicGaps: Array<{ stage: string; gap: string; minimalCorrection: string }>;
+    } = { projectA: "", projectB: "", documentIds: {}, reviewIds: {}, eventIds: {}, snapshotDigests: {}, dynamicGaps: [] };
 
     // The page of user A; replaced by the page of the NEW login at S8.
     const contextA = await browser.newContext({ baseURL: base, storageState: EMPTY_SESSION });
@@ -209,6 +189,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           distinctTenants: Boolean(state.identityA && state.identityB && state.identityA.tenantId !== state.identityB.tenantId),
         },
         snapshotDigests: state.snapshotDigests,
+        productGaps: [...PRODUCT_GAPS, ...state.dynamicGaps],
         pj01RunDirectory: path.basename(recorder.dir),
       });
     };
@@ -230,7 +211,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.evidence("projectA", state.projectA);
         await recorder.screenshot(pageA, "s1-project-a-created");
 
-        tenantB = await signInTenantB(browser, base);
+        tenantB = await signInTenantB(browser, base, TENANT_B_EMAIL);
         state.identityB = await clerkIdentity(tenantB.page);
         ledger.check("Clerk identity B has a user, an active Organization and a tenant", Boolean(state.identityB.userId && state.identityB.organizationId && state.identityB.tenantId));
         ledger.milestone("tenant-b-identity");
@@ -474,6 +455,9 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         const contractId = state.contract!.documentId;
         const hashA = pinnedSha(FILES.contractA);
         const hashB = pinnedSha(FILES.contractB);
+        // What the project says (Health, Score) while revision A is the only trusted contract.
+        const healthBeforeB = await readHealth(pageA, projectId);
+        const scoreBeforeB = await readDashboard(pageA, projectId);
         await uploadNewVersionThroughUi(pageA, recorder, { projectId, documentId: contractId, filePath: filePath(FILES.contractB), expectedVersion: 2 });
         // The helper expects a one-document project; this project lists five, which is not a finding.
         const findings = recorder.blockingFindings().filter((f) => f.code !== "DOCUMENT_DUPLICATED" && f.step === "setup");
@@ -493,6 +477,35 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.check("while B is pending, A is still the trusted current revision", aTrustedWhilePending, `${revA?.trustState}/${revA?.isCurrent}`);
         ledger.check("a pending B is never trusted", revB?.trustState !== "trusted", String(revB?.trustState));
         if (aTrustedWhilePending && revB?.trustState !== "trusted") ledger.milestone("a-still-trusted");
+
+        // A pending B changes nothing the project already states: Health and the persisted Score keep resting on the
+        // trusted revision A, and "contract_pending_approval" is NOT claimed (it only describes a project whose
+        // contract has NO trusted revision yet).
+        if (pending) {
+          const healthPending = await readHealth(pageA, projectId);
+          const scorePending = await readDashboard(pageA, projectId);
+          ledger.check(
+            "while B is pending, Health still states the assessments that rest on A",
+            JSON.stringify(healthPending?.assessments ?? null) === JSON.stringify(healthBeforeB?.assessments ?? null),
+          );
+          ledger.check(
+            "while B is pending, the persisted Score, its version and its reason are those of A",
+            scorePending.globalScore === scoreBeforeB.globalScore &&
+              scorePending.scoreVersion === scoreBeforeB.scoreVersion &&
+              scorePending.scoreReason === scoreBeforeB.scoreReason,
+            `${scoreBeforeB.globalScore}/${scoreBeforeB.scoreReason} -> ${scorePending.globalScore}/${scorePending.scoreReason}`,
+          );
+          ledger.check(
+            "contract_pending_approval is not claimed while a trusted revision A stands",
+            scorePending.scoreReason !== "contract_pending_approval",
+            String(scorePending.scoreReason),
+          );
+          ledger.evidence("scoreWhileBPending", {
+            score: scorePending.globalScore,
+            reason: scorePending.scoreReason,
+            missing: scorePending.missingDimensions,
+          });
+        }
 
         const changed = await readWhatChanged(pageA, recorder, { projectId, documentId: contractId, marker: "garant" });
         ledger.check("What Changed names revision A as the source and B as the target", changed.sourceRevisionId === revA?.revisionId && changed.targetRevisionId === revB?.revisionId);
@@ -562,6 +575,14 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           }
         }
         ledger.evidence("linkAttempts", attempts.map((a) => ({ family: a.family, status: a.status, detail: a.detail })));
+        const untrusted = attempts.filter((a) => a.family !== "technical" && a.status !== 201 && /not (current )?trusted/i.test(a.detail));
+        if (untrusted.length > 0) {
+          state.dynamicGaps.push({
+            stage: "S7",
+            gap: `${untrusted.map((a) => a.family).join(" and ")} source revision(s) uploaded through the UI are not TRUSTED: only the N17 graph writes trusted artifacts and structured workbooks never pass through it, so no canonical link can rest on them`,
+            minimalCorrection: "give a structured revision an explicit human trust approval (a proposed artifact + review, then commit_candidate) without touching N17; until then S7 fails honestly here",
+          });
+        }
 
         const links = await readLinks(pageA, projectId);
         const current = links.filter((l) => l.state === "CURRENT" && l.authority === "EXPLICIT_HUMAN_CANONICAL_LINK" && l.baselineId === state.wbs!.baselineId && l.nodeId === state.wbs!.childNodeId);

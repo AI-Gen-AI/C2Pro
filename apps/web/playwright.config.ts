@@ -61,6 +61,7 @@ export default defineConfig({
         /(^|[\\/])s7-clerk-relogin\.spec\.ts$/,
         // Opt-in integral S1-S8 UAT (own project, own workflow job).
         /(^|[\\/])integral-s1-s8\.spec\.ts$/,
+        /(^|[\\/])integral-auth-preflight\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -126,13 +127,23 @@ export default defineConfig({
       name: "integral-s1-s8",
       testMatch: [/(^|[\\/])integral-s1-s8\.spec\.ts$/],
       use: { ...devices["Desktop Chrome"] },
-      dependencies: ["global-setup"],
+      // The scenario starts only if both identities authenticated against the local API (JWKS verified).
+      dependencies: ["global-setup", "integral-auth-preflight"],
       metadata: {
         suite: "TS-E2E-INTEGRAL-S1S8-001",
         type: "e2e",
         priority: "p0",
         description: "One persisted project S1-S8, two Clerk Development tenants, fail-closed ledger",
       },
+    },
+    {
+      // Authentication preflight of the integral UAT: both Clerk Development identities reach the local API with
+      // a real JWT. Read-only (GETs); opt-in (INTEGRAL_UAT=1) and run BEFORE the scenario.
+      name: "integral-auth-preflight",
+      testMatch: [/(^|[\\/])integral-auth-preflight\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: { suite: "TS-E2E-INTEGRAL-AUTH-001", type: "e2e", priority: "p0" },
     },
     {
       // Explicit-only focused diagnostics.  They retain their environment

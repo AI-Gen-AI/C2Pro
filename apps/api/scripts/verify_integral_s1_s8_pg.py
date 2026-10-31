@@ -747,6 +747,7 @@ def build_manifest(
         "provider_real_call_receipt": receipt,
         "clerk_identity_checks": browser.get("clerkIdentityChecks"),
         "snapshot_digests": browser.get("snapshotDigests"),
+        "product_gaps": browser.get("productGaps") or [],
         "steps_S1_S8": steps,
         "postgres_checks": [
             {"stage": c.stage, "name": c.name, "ok": c.ok, "detail": c.detail} for c in checks
