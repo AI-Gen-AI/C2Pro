@@ -2,9 +2,12 @@
 name: ACC-01 S7 Clerk signout/relogin UAT - isolated
 on:
   push:
-    branches: [feat/acc01-s7-structured-links-20261029]
+    branches:
+      - feat/acc01-s7-structured-links-20261029
+      - integration/acc01-e2e-20261025
     paths:
       - .github/workflows/acc01-s7-clerk-uat.yml
+      - apps/web/src/tests/e2e/s7-clerk-relogin.spec.ts
   workflow_dispatch:
 concurrency:
   group: acc01-s7-clerk-uat-${{ github.ref }}
