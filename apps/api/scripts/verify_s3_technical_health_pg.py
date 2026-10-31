@@ -14,13 +14,13 @@ import json
 import os
 import secrets
 import stat
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-
 from verify_s2_triplet_pg import (
     annotation,
     invalid,
@@ -215,10 +215,9 @@ def write_s3_report(result: dict[str, Any]) -> None:
     try:
         web_fd = os.open("web", _DIR_FLAGS, dir_fd=apps_fd)
         try:
-            try:
+            with suppress(FileExistsError):
                 os.mkdir(_OUTPUT_DIR_NAME, mode=0o700, dir_fd=web_fd)
-            except FileExistsError:
-                pass  # Existing directory must pass the O_NOFOLLOW check below.
+            # Existing directory must pass the O_NOFOLLOW check below.
             report_fd = os.open(_OUTPUT_DIR_NAME, _DIR_FLAGS, dir_fd=web_fd)
             try:
                 # Reject an already planted final symlink. A concurrent swap
@@ -247,10 +246,8 @@ def write_s3_report(result: dict[str, Any]) -> None:
                         src_dir_fd=report_fd, dst_dir_fd=report_fd,
                     )
                 finally:
-                    try:
+                    with suppress(FileNotFoundError):
                         os.unlink(temp_name, dir_fd=report_fd)
-                    except FileNotFoundError:
-                        pass
             finally:
                 os.close(report_fd)
         finally:

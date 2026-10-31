@@ -105,12 +105,14 @@ def fixture(monkeypatch, *, baseline=BASE, current=True, trusted=True, row_wrong
 
 
 async def approve(session, reader, **overrides):
-    data = dict(tenant_id=TENANT, project_id=PROJECT, actor_user_id=ACTOR,
-                family="budget", source_document_id=DOC, source_revision_id=REV,
-                expected_blob_hash=HASH, source_locator=LOCATOR,
-                expected_wbs_baseline_id=BASE, expected_wbs_node_id=NODE,
-                approval=target.APPROVAL, idempotency_key="human-approval-001",
-                reason="Engineer verified the original budget row and the approved baseline")
+    data = {
+        "tenant_id": TENANT, "project_id": PROJECT, "actor_user_id": ACTOR,
+        "family": "budget", "source_document_id": DOC, "source_revision_id": REV,
+        "expected_blob_hash": HASH, "source_locator": LOCATOR,
+        "expected_wbs_baseline_id": BASE, "expected_wbs_node_id": NODE,
+        "approval": target.APPROVAL, "idempotency_key": "human-approval-001",
+        "reason": "Engineer verified the original budget row and the approved baseline",
+    }
     data.update(overrides)
     return await target.ApproveStructuredWBSLinkService(session, reader).execute(**data)
 

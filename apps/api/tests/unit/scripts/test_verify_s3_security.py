@@ -5,11 +5,10 @@ report schema. No worktree, real DB, provider, UAT or credentials required.
 """
 import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -172,7 +171,9 @@ class _FakeConnection:
 
 
 class _FakeEngine:
-    def __init__(self, conn): self.conn = conn; self.disposed = False
+    def __init__(self, conn):
+        self.conn = conn
+        self.disposed = False
     def connect(self): return self.conn
     async def dispose(self): self.disposed = True
 
