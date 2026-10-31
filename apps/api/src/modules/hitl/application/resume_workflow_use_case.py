@@ -451,6 +451,7 @@ class ResumeWorkflowUseCase:
         ownership: Ownership,
         thread_id: str,
         restored: Any,
+        thread_only: bool = False,
     ) -> dict[str, Any]:
         """The exact checkpoint THIS ATTEMPT is entitled to resume from.
 
@@ -504,27 +505,21 @@ class ResumeWorkflowUseCase:
             configurable["checkpoint_id"] = source_id
             configurable.setdefault("thread_id", thread_id)
             config["configurable"] = configurable
-            return config
+            # Never resume the original source directly after a prior attempt
+            # has advanced the thread. It may hold the old __resume__ payload.
+            return await self._fork_for_attempt(
+                graph_app=graph_app, base=config, ownership=ownership
+            )
 
-        # A first, never-resumed attempt (fencing_token == 1) has no prior
-        # ``__resume__`` write to replay, so it resumes the original interrupt
-        # checkpoint directly and needs no isolating fork. Superseded attempts
-        # (fencing_token > 1) must NOT reuse it: prior ``__resume__`` writes
-        # can replay stale provenance, so they resume from their own fork.
-        #
-        # NOTE: LangGraph reports a fork's pending task WITHOUT its interrupt
-        # payload (``tasks[].interrupts == ()``), but ``Command(resume=...)``
-        # on the fork IS consumed and runs N13 -> N17. This is proven against
-        # the real graph and PostgreSQL saver in
-        # tests/modules/integration/test_p0b_checkpoint_fork_differential.py,
-        # including the source_checkpoint_id == restored.checkpoint_id case.
+        # Thread-only reviews lack a pinned checkpoint and must keep the
+        # interrupt source free of the first attempt's __resume__ writes. A
+        # dedicated fork is required even at fencing_token=1. Pinned first
+        # attempts retain their historical behavior; their takeovers ALWAYS
+        # fork the source under the branch above or the fallback below.
         base: dict[str, Any] = restored.config
-        if ownership.fencing_token == 1 and (
-            not ownership.source_checkpoint_id
-            or ownership.source_checkpoint_id == restored.checkpoint_id
-        ):
+        if ownership.fencing_token == 1 and not thread_only:
             logger.info(
-                "hitl_resume_first_attempt_original_interrupt",
+                "hitl_resume_first_attempt_pinned_interrupt",
                 operation_id=str(ownership.operation_id),
                 attempt_id=str(ownership.attempt_id),
                 checkpoint_id=restored.checkpoint_id,
@@ -587,23 +582,21 @@ class ResumeWorkflowUseCase:
         """
         aupdate_state = getattr(graph_app, "aupdate_state", None)
         if aupdate_state is None:
-            return base
+            raise RuntimeError("HITL checkpoint fork unavailable; refusing source resume")
         try:
             fork = await aupdate_state(
                 base, {"resume_provenance": ownership.as_graph_provenance()}
             )
-        except Exception:  # noqa: BLE001
-            # Fail open to the base checkpoint: for a FIRST attempt (no
-            # prior resume write) that is still correct, and a takeover
-            # that cannot fork is caught by the fence at N17 rather than
-            # being allowed to write.
+        except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "hitl_resume_attempt_fork_failed",
                 operation_id=str(ownership.operation_id),
                 attempt_id=str(ownership.attempt_id),
                 exc_info=True,
             )
-            return base
+            raise RuntimeError(
+                "HITL checkpoint fork failed; refusing source resume"
+            ) from exc
         # A fork is only usable if it actually came back as a config naming a
         # checkpoint. Anything else (None, a stub) is treated as "could not
         # fork" rather than trusted: passing it to ainvoke would resume the
@@ -614,14 +607,23 @@ class ResumeWorkflowUseCase:
             if isinstance(fork, dict)
             else None
         )
-        if not fork_checkpoint_id:
+        source_cfg = (base.get("configurable") or {})
+        fork_cfg = ((fork.get("configurable") or {}) if isinstance(fork, dict) else {})
+        if (
+            not fork_checkpoint_id
+            or str(fork_checkpoint_id) == str(source_cfg.get("checkpoint_id"))
+            or fork_cfg.get("thread_id") != source_cfg.get("thread_id")
+            or fork_cfg.get("checkpoint_ns", "") != source_cfg.get("checkpoint_ns", "")
+        ):
             logger.warning(
                 "hitl_resume_attempt_fork_unusable",
                 operation_id=str(ownership.operation_id),
                 attempt_id=str(ownership.attempt_id),
                 returned=type(fork).__name__,
             )
-            return base
+            raise RuntimeError(
+                "HITL checkpoint fork is unusable; refusing source resume"
+            )
         logger.info(
             "hitl_resume_attempt_forked",
             operation_id=str(ownership.operation_id),
@@ -1042,6 +1044,7 @@ class ResumeWorkflowUseCase:
                     ownership=ownership,
                     thread_id=thread_id,
                     restored=restored,
+                    thread_only=not bool((review_item.metadata or {}).get("checkpoint_id")),
                 )
                 logger.info(
                     "resuming_workflow",

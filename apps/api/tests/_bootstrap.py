@@ -13,6 +13,7 @@ schema creation that runs inside each pytest session.
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncGenerator
 from importlib import import_module
 
@@ -20,15 +21,18 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import Column, event, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 
 from src.config import settings
 from src.core.database import Base
 from tests.support.postgres_bootstrap import (
-    reset_public_schema,
+    provision_recovery_schema,
+    reset_test_schemas,
     run_postgres_test_bootstrap,
 )
+from tests.support.test_database_guard import assert_ops_database_binding
 
 # ---------------------------------------------------------------------------
 # Pytest configuration (markers + Prometheus reset)
@@ -338,25 +342,21 @@ async def test_engine(request):
     """
 
     database_url = settings.database_url
+    ops_job_id = os.environ.get("C2PRO_OPS_JOB_ID")
+    assert_ops_database_binding(database_url, ops_job_id, os.environ.get("C2PRO_OPS_EVIDENCE_DIR"))
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    root_database_url = database_url.rsplit("/", 1)[0] + "/postgres"
-    try:
-        root_engine = create_async_engine(
-            root_database_url,
-            echo=False,
-            pool_pre_ping=True,
-            isolation_level="AUTOCOMMIT",
-            connect_args={"statement_cache_size": 0},
+    # Ops already provisioned the owned DB. Preserve the default local/CI
+    # bootstrap only outside Ops; never create a second hard-coded database.
+    if ops_job_id is None:
+        root_database_url = make_url(database_url).set(database="postgres").render_as_string(
+            hide_password=False
         )
-        async with root_engine.connect() as conn:
-            result = await conn.execute(text("SELECT 1 FROM pg_database WHERE datname = 'c2pro_test'"))
-            if not result.scalar_one_or_none():
-                await conn.execute(text("CREATE DATABASE c2pro_test"))
-        await root_engine.dispose()
-    except Exception as exc:
-        print(f"[WARNING] Could not ensure c2pro_test database exists: {exc}")
+        try:
+            await _ensure_default_test_database(root_database_url)
+        except Exception as exc:
+            print(f"[WARNING] Could not ensure c2pro_test database exists: {type(exc).__name__}")
 
     engine = create_async_engine(
         database_url,
@@ -371,12 +371,14 @@ async def test_engine(request):
     _ensure_test_fk_stub_tables()
 
     if request.node.get_closest_marker("alembic_schema") is not None:
-        yield engine
-        await engine.dispose()
+        try:
+            yield engine
+        finally:
+            await engine.dispose()
         return
 
     async def _cleanup_bootstrap(conn) -> None:
-        await reset_public_schema(conn)
+        await reset_test_schemas(conn)
 
     async def _prepare_bootstrap(conn) -> None:
         await _reset_metadata_enum_types(conn)
@@ -387,42 +389,51 @@ async def test_engine(request):
         finally:
             _set_metadata_enum_create_type(True)
         await _ensure_rls_and_audit_compatibility(conn)
+        await provision_recovery_schema(conn)
 
-    await run_postgres_test_bootstrap(
-        engine,
-        cleanup_step=_cleanup_bootstrap,
-        prepare_step=_prepare_bootstrap,
-        warning_sink=lambda exc: print(f"[WARNING] Bootstrap drop_all skipped: {exc}"),
-    )
-
-    # Recreate engine after schema reset to avoid stale pooled connections.
-    await engine.dispose()
-    engine = create_async_engine(
-        database_url,
-        echo=False,
-        pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=10,
-        connect_args={"statement_cache_size": 0},
-    )
-    async with engine.begin() as conn:
-        _set_metadata_enum_create_type(False)
+    try:
+        await run_postgres_test_bootstrap(
+            engine,
+            cleanup_step=_cleanup_bootstrap,
+            prepare_step=_prepare_bootstrap,
+            warning_sink=lambda exc: None,
+            strict_cleanup=True,
+        )
+        # Discard asyncpg connections that cached types before the schema reset.
+        await engine.dispose()
+        engine = create_async_engine(
+            database_url, echo=False, pool_pre_ping=True, pool_size=5, max_overflow=10,
+            connect_args={"statement_cache_size": 0},
+        )
+        await _reprovision_checkpoint_schema()
+        yield engine
+    finally:
         try:
-            await conn.run_sync(Base.metadata.create_all)
+            async with engine.begin() as conn:
+                await reset_test_schemas(conn)
+            # Standalone lifespan tests may follow without requesting test_engine.
+            await _reprovision_checkpoint_schema()
         finally:
-            _set_metadata_enum_create_type(True)
+            await engine.dispose()
 
-    await _reprovision_checkpoint_schema()
 
-    yield engine
-
-    async with engine.begin() as conn:
-        try:
-            await conn.run_sync(Base.metadata.drop_all)
-        except Exception as exc:
-            print(f"[WARNING] Teardown drop_all skipped: {exc}")
-
-    await engine.dispose()
+async def _ensure_default_test_database(root_database_url: str) -> None:
+    root_engine = None
+    try:
+        root_engine = create_async_engine(
+            root_database_url,
+            echo=False,
+            pool_pre_ping=True,
+            isolation_level="AUTOCOMMIT",
+            connect_args={"statement_cache_size": 0},
+        )
+        async with root_engine.connect() as conn:
+            result = await conn.execute(text("SELECT 1 FROM pg_database WHERE datname = 'c2pro_test'"))
+            if not result.scalar_one_or_none():
+                await conn.execute(text("CREATE DATABASE c2pro_test"))
+    finally:
+        if root_engine is not None:
+            await root_engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
