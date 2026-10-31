@@ -7,6 +7,7 @@ or old approval is replayed after a crashed first attempt.
 from __future__ import annotations
 
 from uuid import uuid4
+import warnings
 
 import pytest
 from sqlalchemy import select, text
@@ -124,6 +125,18 @@ async def test_d1_1103_thread_only_crash_pre_n17_changed_decision_preserves_sour
         )
 
     op = await _operation_row(independent_sessions, tenant.id, review.id)
+    warnings.warn(
+        "D1_1103_DIAGNOSTIC_AFTER_TAKEOVER "
+        f"source_resume_writes={source_writes} "
+        f"n17_runs={len(N17_RUNS)} "
+        f"fence={getattr(op, 'fencing_token', None)} "
+        f"revision={getattr(op, 'decision_revision', None)} "
+        f"attempts={getattr(op, 'attempts', None)} "
+        f"outcome={getattr(outcome, 'status', None)} "
+        f"counts={await _counts(db, document.project_id)} "
+        f"persisted={await _persisted_events(db, document.project_id)}",
+        UserWarning, stacklevel=1
+    )
     assert op is not None and op.fencing_token > 1, (
         f"takeover fence missing: op={op}"
     )
