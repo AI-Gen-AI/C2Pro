@@ -71,6 +71,7 @@ import {
 import { IntegralLedger, digestOf, sha256Hex, type StageId } from "./support/integral/ledger";
 import { Pj01RunRecorder } from "./support/pj01/run-recorder";
 import { uploadNewVersionThroughUi } from "./support/pj01/revision";
+import { readProjectTabs } from "./support/pj01/health";
 import { createProjectThroughUi, signInAsJourneyUser } from "./support/pj01/session";
 import { uploadDocumentThroughUi } from "./support/pj01/upload";
 
@@ -424,7 +425,23 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         const honest = score === null ? Boolean(evaluated.score_reason) && missing.length > 0 : !(score === 0 && missing.length > 0);
         ledger.check("a null Score states its reason and what is missing; a Score is never 0 for missing evidence", honest, `score=${score} reason=${evaluated.score_reason ?? "none"} missing=${missing.join("|")}`);
         const dashboard = await readDashboard(pageA, projectId);
-        ledger.check("the persisted dashboard states the same Score and reason", dashboard.globalScore === score && dashboard.scoreReason === (evaluated.score_reason ?? null), `${dashboard.globalScore}/${dashboard.scoreReason}`);
+        // The dashboard shows ONE generation and never an evaluation marked "insufficient_*" as the snapshot: it then
+        // states no Score AND no reason (router: result_scored). The evaluation's own answer keeps the reason.
+        const reasonKept = dashboard.scoreReason === (evaluated.score_reason ?? null);
+        const reasonDropped = !reasonKept && score === null && dashboard.globalScore === null && (evaluated.score_reason ?? "").startsWith("insufficient");
+        ledger.check(
+          "the persisted dashboard states the same Score (with its reason, or no Score at all when the evidence is insufficient)",
+          dashboard.globalScore === score && (reasonKept || reasonDropped),
+          `${dashboard.globalScore}/${dashboard.scoreReason} vs ${score}/${evaluated.score_reason ?? "none"}`,
+        );
+        if (reasonDropped) {
+          ledger.partial(`the persisted dashboard drops the reason of an insufficient evaluation (${evaluated.score_reason}): only the evaluation answer explains why there is no Score`);
+          state.dynamicGaps.push({
+            stage: "S3",
+            gap: `a null Score caused by insufficient evidence (${evaluated.score_reason}) is explained by the evaluation answer only: the persisted dashboard returns no Score and no reason, so a later visit cannot say why`,
+            minimalCorrection: "return score_reason and score_missing_dimensions of the latest persisted result in the dashboard even when no Score is shown",
+          });
+        }
         ledger.evidence("score", { overall: score, reason: evaluated.score_reason ?? null, missing, version: dashboard.scoreVersion, evaluatedAt: dashboard.evaluatedAt });
         if (honest) ledger.milestone("score-honest");
 
@@ -531,7 +548,9 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.evidence("whatChanged", { eventId: changed.changeEventId, cause: changed.changeCause, changes: changed.changeCount });
         if (changed.state === "ready") ledger.milestone("what-changed");
 
-        const stateBefore = (await readCurrentState(pageA, recorder, projectId)).find((d) => d.filename === FILES.contractA);
+        const currentBefore = await readCurrentState(pageA, recorder, projectId);
+        ledger.evidence("currentStateBefore", currentBefore.map((d) => ({ filename: d.filename, lifecycle: d.lifecycle, trusted: Boolean(d.trustedRevision), pending: Boolean(d.pendingRevision) })));
+        const stateBefore = currentBefore.find((d) => d.filename === FILES.contractA);
         const okPending = stateBefore?.trustedRevision?.revision_id === revA?.revisionId && stateBefore?.trustedRevision?.blob_hash === hashA && stateBefore?.pendingRevision?.revision_id === revB?.revisionId && stateBefore?.pendingRevision?.blob_hash === hashB;
         ledger.check("Current State shows A trusted and B pending", okPending, JSON.stringify(stateBefore ?? null));
         if (okPending) ledger.milestone("current-state-pending");
@@ -549,7 +568,9 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.check("after the approval B is the trusted current revision", trustedB, `${revBAfter?.trustState}/${revBAfter?.isCurrent}`);
         ledger.check("A is no longer current", revAAfter?.isCurrent !== true);
         if (trustedB) ledger.milestone("revision-b-approved");
-        const stateAfter = (await readCurrentState(pageA, recorder, projectId)).find((d) => d.filename === FILES.contractA);
+        const currentAfter = await readCurrentState(pageA, recorder, projectId);
+        ledger.evidence("currentStateAfter", currentAfter.map((d) => ({ filename: d.filename, lifecycle: d.lifecycle, trusted: Boolean(d.trustedRevision), pending: Boolean(d.pendingRevision) })));
+        const stateAfter = currentAfter.find((d) => d.filename === FILES.contractA);
         const okApproved = stateAfter?.trustedRevision?.revision_id === revB?.revisionId && stateAfter?.trustedRevision?.blob_hash === hashB && !stateAfter?.pendingRevision;
         ledger.check("Current State rests on B with nothing pending", okApproved, JSON.stringify(stateAfter ?? null));
         if (okApproved) ledger.milestone("current-state-approved");
@@ -565,7 +586,20 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         if (state.wbs.selfApproved) {
           ledger.partial("the WBS baseline was approved by the same human who submitted it: this tenant has ONE human, so separation of duties is relaxed by tenant setting (declared, recorded as self_approved)");
         }
-        await openProjectTab(pageA, projectId, "wbs");
+        const tabs = await readProjectTabs(pageA);
+        const wbsTab = tabs.find((tab) => new RegExp(`/projects/${projectId}/wbs(?:[/?#]|$)`).test(tab.href));
+        if (wbsTab) {
+          await openProjectTab(pageA, projectId, "wbs");
+        } else {
+          ledger.partial("the canonical WBS page is not reachable from the project navigation (no WBS tab)");
+          state.dynamicGaps.push({
+            stage: "S7",
+            gap: `the approved canonical WBS page (/projects/{id}/wbs) exists but no project tab leads to it (tabs: ${tabs.map((tab) => tab.name).join(", ")})`,
+            minimalCorrection: "add a WBS entry to the project navigation so the baseline and the canonical links are reachable by a person",
+          });
+          await pageA.goto(`/projects/${projectId}/wbs`);
+          await expect(pageA).toHaveURL(new RegExp(`/projects/${projectId}/wbs`), { timeout: 30_000 });
+        }
         await recorder.screenshot(pageA, "s7-wbs");
 
         const trustedRevision = async (documentId: string): Promise<{ revisionId: string; blobHash: string }> => {

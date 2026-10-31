@@ -1365,3 +1365,16 @@ def test_every_upload_starts_from_the_documents_tab_and_ui_actions_cannot_hang()
     config = (WEB / "playwright.config.ts").read_text(encoding="utf-8")
     scenario = config[config.index('name: "integral-s1-s8"') :].split("metadata:", 1)[0]
     assert "actionTimeout: 90_000" in scenario
+
+
+def test_the_second_run_lessons_are_encoded_in_the_scenario() -> None:
+    """Run 41242458663: S3 reason dropped by the dashboard, Current State blind, no WBS tab. Each is stated, not hidden."""
+    spec = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text(encoding="utf-8")
+    assert "reasonDropped" in spec
+    assert 'stage: "S3"' in spec
+    assert 'ledger.evidence("currentStateBefore"' in spec
+    assert 'ledger.evidence("currentStateAfter"' in spec
+    wbs = spec.split("const wbsTab", 1)[1].split("s7-wbs", 1)[0]
+    assert "no project tab leads to it" in wbs
+    assert 'stage: "S7"' in wbs
+    assert "readProjectTabs" in spec
