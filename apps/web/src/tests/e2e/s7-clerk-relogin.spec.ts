@@ -7,12 +7,11 @@
  * The S7 approval HTTP requests, both Clerk logins, and DB reads are genuine.
  */
 import { readFileSync } from "node:fs";
-
-import { approveWithHttpResponse } from "../support/p0b-hitl-http-retry";
 import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { approveWithHttpResponse } from "../support/p0b-hitl-http-retry";
 import { establishAuthenticatedSession } from "./support/p0b-auth";
 
 interface InputDocument {
@@ -178,7 +177,7 @@ async function produceRealHealth(page: Page): Promise<void> {
   const accepted = page.waitForResponse((response) => (
     response.request().method() === "POST" &&
     (["/api/projects/", "/api/v1/projects/"].some(
-      (prefix) => new URL(response.url()).pathname.replace(/\\/$/, "") === `${prefix}${projectId}/documents`
+      (prefix) => new URL(response.url()).pathname.replace(/\/$/, "") === `${prefix}${projectId}/documents`
     ))
   ), { timeout: 90_000 });
   await uploadButton.click();
@@ -229,7 +228,7 @@ async function produceRealHealth(page: Page): Promise<void> {
     submitOnce: async (id, remaining) => {
       const [response] = await Promise.all([
         page.waitForResponse((candidate) => candidate.request().method() === "POST" &&
-          new URL(candidate.url()).pathname.replace(/\\/$/, "") ===
+          new URL(candidate.url()).pathname.replace(/\/$/, "") ===
           `/api/hitl/queue/${encodeURIComponent(id)}/approve`,
         { timeout: remaining }),
         confirm.click({ timeout: remaining }),
