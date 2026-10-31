@@ -7,6 +7,8 @@
  * The S7 approval HTTP requests, both Clerk logins, and DB reads are genuine.
  */
 import { readFileSync } from "node:fs";
+
+import { approveWithHttpResponse } from "../support/p0b-hitl-http-retry";
 import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -32,6 +34,8 @@ interface Fixture {
 }
 
 const SOURCE = path.join(process.cwd(), "playwright-report", "s7-clerk-source.json");
+const CONTRACT = path.join(process.cwd(), "src/tests/e2e/test-data/sample-contract.pdf");
+const ANALYSIS_BUDGET_MS = 240_000;
 const fixture = JSON.parse(readFileSync(SOURCE, "utf8")) as Fixture;
 
 async function call(
@@ -160,13 +164,128 @@ async function snapshot(page: Page): Promise<Snapshot> {
   };
 }
 
+/** Run the existing P0b graph in the SAME WBS project, rather than fabricating Health rows. */
+async function produceRealHealth(page: Page): Promise<void> {
+  const projectId = fixture.projectId;
+  const deadline = Date.now() + ANALYSIS_BUDGET_MS;
+  await page.goto(`/projects/${projectId}/documents`);
+  await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: /upload document/i }).click();
+  await expect(page.getByTestId("document-upload-surface")).toBeVisible();
+  await page.setInputFiles('input[type="file"]', CONTRACT);
+  const uploadButton = page.getByRole("button", { name: /^upload 1 file$/i });
+  await expect(uploadButton).toBeEnabled();
+  const accepted = page.waitForResponse((response) => (
+    response.request().method() === "POST" &&
+    (["/api/projects/", "/api/v1/projects/"].some(
+      (prefix) => new URL(response.url()).pathname.replace(/\\/$/, "") === `${prefix}${projectId}/documents`
+    ))
+  ), { timeout: 90_000 });
+  await uploadButton.click();
+  const answer = await accepted;
+  expect(answer.ok(), "real contract upload must enqueue analysis").toBe(true);
+  const uploaded = await answer.json() as { id?: string; document_id?: string; task_id?: string };
+  const documentId = uploaded.id ?? uploaded.document_id;
+  expect(documentId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(uploaded.task_id, "real Celery analysis must be enqueued").toBeTruthy();
+  await expect(page.getByTestId("document-upload-surface")).toBeHidden({ timeout: 60_000 });
+
+  let reviewItemId: string | null = null;
+  for (;;) {
+    expect(Date.now(), "real analysis did not reach a HITL review").toBeLessThan(deadline);
+    const docs = await call(page, `/api/v1/projects/${projectId}/documents`);
+    expect(docs.status, "same-project authenticated document read").toBe(200);
+    const data = docs.data as { items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+    const items = Array.isArray(data) ? data : data.items ?? [];
+    const document = items.find((item) => item.id === documentId);
+    const state = String(document?.lifecycle_status ?? "");
+    if (state === "review_required") {
+      expect(document?.review_count).toBe(1);
+      reviewItemId = String(document?.review_item_id ?? "");
+      expect(reviewItemId).toBeTruthy();
+      break;
+    }
+    if (["analyzed", "error", "failed_retryable", "needs_changes"].includes(state)) {
+      throw new Error(`S7_HEALTH_REAL_GRAPH_HITL_BYPASS_OR_FAILURE:${state}`);
+    }
+    await page.waitForTimeout(3_000);
+  }
+  const item = reviewItemId!;
+  const queue = await call(page, `/api/v1/hitl/queue?project_id=${projectId}&limit=100`);
+  expect(queue.status).toBe(200);
+  const rows = (queue.data as { items?: Array<{ item_id: string; row_id?: string }> }).items ?? [];
+  const matches = rows.filter((row) => row.item_id === item && row.row_id);
+  expect(matches, "exact immutable review row for this new contract").toHaveLength(1);
+  const rowId = matches[0].row_id!;
+  await page.goto(`/projects/${projectId}/review?itemId=${encodeURIComponent(item)}`);
+  const card = page.getByTestId(`review-item-${item}`);
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.getByTestId(`approve-${item}`).click();
+  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  await expect(dialog).toBeVisible();
+  const confirm = dialog.getByRole("button", { name: /confirm approve/i });
+  await approveWithHttpResponse({
+    now: () => Date.now(),
+    submitOnce: async (id, remaining) => {
+      const [response] = await Promise.all([
+        page.waitForResponse((candidate) => candidate.request().method() === "POST" &&
+          new URL(candidate.url()).pathname.replace(/\\/$/, "") ===
+          `/api/hitl/queue/${encodeURIComponent(id)}/approve`,
+        { timeout: remaining }),
+        confirm.click({ timeout: remaining }),
+      ]);
+      return response;
+    },
+    waitUntilReady: async (remaining) => {
+      await expect(confirm).toBeEnabled({ timeout: remaining });
+    },
+    delay: (ms) => page.waitForTimeout(ms),
+    confirmed: async (remaining) => {
+      await expect(dialog).toBeHidden({ timeout: remaining });
+    },
+  }, item, rowId, deadline);
+
+  for (;;) {
+    expect(Date.now(), "real graph did not persist analyzed document").toBeLessThan(deadline);
+    const docs = await call(page, `/api/v1/projects/${projectId}/documents`);
+    expect(docs.status).toBe(200);
+    const data = docs.data as { items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+    const items = Array.isArray(data) ? data : data.items ?? [];
+    const state = String(items.find((d) => d.id === documentId)?.lifecycle_status ?? "");
+    if (state === "analyzed") break;
+    if (["error", "failed_retryable", "needs_changes"].includes(state)) {
+      throw new Error(`S7_REAL_CONTRACT_ANALYSIS_FAILED:${state}`);
+    }
+    await page.waitForTimeout(3_000);
+  }
+
+  // Completion is the persisted read model, NOT an HTTP-200 or a forged event.
+  for (;;) {
+    expect(Date.now(), "graph.completed did not yield six persisted Health assessments").toBeLessThan(deadline);
+    const response = await call(page, `/api/v1/projects/${projectId}/health`);
+    expect(response.status).toBe(200);
+    const health = response.data as {
+      single_document_coverage?: { assessments?: Array<{ category: string }> } | null;
+    };
+    const assessments = health.single_document_coverage?.assessments ?? [];
+    if (assessments.length === 6) {
+      expect(new Set(assessments.map((a) => a.category)).size).toBe(6);
+      break;
+    }
+    await page.waitForTimeout(3_000);
+  }
+}
+
 test("S7 one canonical WBS: genuine Clerk approvals, signout and clean-context relogin retain 3 links", async ({
   page, browser,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
   expect(fixture.fixtureMode).toBe("synthetic-source-only");
   expect(fixture.approvalEventsSeeded).toBe(false);
   await establishAuthenticatedSession(page);
+
+  // P0b original contract goes through real worker, HITL, graph and snapshot in this exact S7 project.
+  await produceRealHealth(page);
 
   const userBefore = await page.evaluate(() => window.Clerk?.user?.id ?? null);
   expect(userBefore).toBeTruthy();

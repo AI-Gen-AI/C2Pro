@@ -18,7 +18,7 @@ jobs:
   s7-clerk:
     name: Real Clerk re-login + PostgreSQL S7 triple link (synthetic source seed)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
@@ -27,6 +27,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
       ENVIRONMENT: test
       STORAGE_PROVIDER: local
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
@@ -71,6 +72,31 @@ jobs:
       - name: Verify Clerk organization and tenant binding
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
+      # Reuse the P0b real graph/Health producer; the old source-only S7 fixture
+      # never dispatched graph.completed or wrote a Health project snapshot.
+      - name: Start real document analysis and snapshot Celery consumer
+        working-directory: apps/api
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker \
+            --loglevel=info --queues=document_parsing --concurrency=2 \
+            > "$RUNNER_TEMP/s7-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/s7-worker.pid"
+          python - <<'PY'
+          import time
+          from src.core.tasks.celery_app import celery_app
+          deadline = time.monotonic() + 45
+          while time.monotonic() < deadline:
+              queue_map = celery_app.control.inspect(timeout=3).active_queues() or {}
+              if any(
+                  queue.get("name") == "document_parsing"
+                  for queues in queue_map.values() for queue in queues
+              ):
+                  print("S7 real document_parsing/snapshot consumer READY")
+                  break
+              time.sleep(2)
+          else:
+              raise SystemExit("S7_CELERY_DOCUMENT_ANALYSIS_CONSUMER_NOT_READY")
+          PY
       - name: Start FastAPI and Clerk JWT JWKS fixture
         working-directory: apps/api
         env:
@@ -95,6 +121,18 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/s7-clerk-results.json
         run: ./node_modules/.bin/playwright test --project=s7-clerk-uat --workers=1 --reporter=list,json
+      - name: Independently verify real analysis / graph event / Health snapshot lineage in PostgreSQL
+        if: steps.clerk_journey.outcome == 'success'
+        working-directory: apps/api
+        run: |
+          project_id="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          fixture = json.loads(Path("../web/playwright-report/s7-clerk-source.json").read_text())
+          print(fixture["projectId"])
+          PY
+          )"
+          python scripts/verify_p0b_journey.py --project-id "$project_id"
       - name: Summarize UAT result without tokens
         if: always()
         working-directory: apps/web
@@ -110,6 +148,8 @@ jobs:
           path: apps/web/playwright-report/s7-clerk-results.json
           if-no-files-found: warn
           retention-days: 3
-      - name: Cleanup disposable Postgres and Redis
+      - name: Cleanup disposable Postgres, Redis and worker
         if: always()
-        run: docker compose -f docker-compose.test.yml down -v
+        run: |
+          if test -f "$RUNNER_TEMP/s7-worker.pid"; then kill "$(cat "$RUNNER_TEMP/s7-worker.pid")" || true; fi
+          docker compose -f docker-compose.test.yml down -v
