@@ -125,16 +125,16 @@ async def test_d1_1103_thread_only_crash_pre_n17_changed_decision_preserves_sour
         )
 
     op = await _operation_row(independent_sessions, tenant.id, review.id)
+    warnings.warn(f"D1SRC={source_writes} N17={len(N17_RUNS)}", UserWarning, stacklevel=1)
     warnings.warn(
-        "D1_1103_DIAGNOSTIC_AFTER_TAKEOVER "
-        f"source_resume_writes={source_writes} "
-        f"n17_runs={len(N17_RUNS)} "
-        f"fence={getattr(op, 'fencing_token', None)} "
-        f"revision={getattr(op, 'decision_revision', None)} "
-        f"attempts={getattr(op, 'attempts', None)} "
-        f"outcome={getattr(outcome, 'status', None)} "
-        f"counts={await _counts(db, document.project_id)} "
-        f"persisted={await _persisted_events(db, document.project_id)}",
+        f"D1FENCE={getattr(op, 'fencing_token', None)} "
+        f"REV={getattr(op, 'decision_revision', None)} "
+        f"ATT={getattr(op, 'attempts', None)}", UserWarning, stacklevel=1
+    )
+    warnings.warn(
+        f"D1OUT={getattr(outcome, 'status', None)} "
+        f"COUNT={await _counts(db, document.project_id)} "
+        f"EV={await _persisted_events(db, document.project_id)}",
         UserWarning, stacklevel=1
     )
     assert op is not None and op.fencing_token > 1, (
