@@ -11,6 +11,18 @@ import { sha256Hex } from "./ledger";
 
 const EMPTY_SESSION = { cookies: [], origins: [] };
 
+/**
+ * Identity B of the integral UAT is a Clerk DEVELOPMENT user named by ONE variable and nothing else. There is no
+ * fallback to a legacy tenant-B name and never a substitution by a Production identity; when it is missing the
+ * result is the empty string and every caller fails closed. The authentication preflight and the scenario both
+ * read it here, so they can only ever sign in as the same B.
+ */
+export const DEV_B_EMAIL_ENV = "INTEGRAL_CLERK_DEV_B_EMAIL";
+
+export function developmentBEmail(): string {
+  return (process.env[DEV_B_EMAIL_ENV] ?? "").trim();
+}
+
 export interface ClerkIdentity {
   userId: string;
   organizationId: string;

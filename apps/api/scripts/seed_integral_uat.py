@@ -50,7 +50,7 @@ def require_environment(env: dict[str, str] | os._Environ[str] = os.environ) -> 
         "CLERK_E2E_ORG_ID",
         "TENANT_B_CLERK_E2E_USER_ID",
         "TENANT_B_CLERK_E2E_ORG_ID",
-        "E2E_CLERK_TENANT_B_USER_EMAIL",
+        "INTEGRAL_CLERK_DEV_B_EMAIL",
     )
     missing = [name for name in needed if not env.get(name)]
     if missing:
@@ -93,7 +93,7 @@ async def _upsert_tenant_b(db: AsyncSession, ids: dict[str, str]) -> None:
             User(
                 id=USER_B_ID,
                 tenant_id=TENANT_B_ID,
-                email=ids["E2E_CLERK_TENANT_B_USER_EMAIL"],
+                email=ids["INTEGRAL_CLERK_DEV_B_EMAIL"],
                 hashed_password=TEST_PASSWORD_HASH,
                 first_name="Tenant",
                 last_name="B",

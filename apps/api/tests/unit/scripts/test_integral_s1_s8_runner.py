@@ -907,7 +907,7 @@ GOOD_ENV = {
     "CLERK_E2E_ORG_ID": "org_a",
     "TENANT_B_CLERK_E2E_USER_ID": "user_b",
     "TENANT_B_CLERK_E2E_ORG_ID": "org_b",
-    "E2E_CLERK_TENANT_B_USER_EMAIL": "b@example.test",
+    "INTEGRAL_CLERK_DEV_B_EMAIL": "b@example.test",
 }
 
 
@@ -1295,3 +1295,43 @@ def test_the_spec_states_the_known_product_gaps_and_never_hides_them() -> None:
         assert f'stage: "{stage}"' in source
     assert "RecordFindingDecisionUseCase" in source
     assert "N17" in source
+
+
+# ── identity B comes from ONE variable, everywhere (no legacy fallback) ───────────────────────────────────
+LEGACY_B = "E2E_CLERK_TENANT_B_USER_EMAIL"
+INTEGRAL_FILES = [
+    *sorted((WEB / "src" / "tests" / "e2e" / "support" / "integral").glob("*.ts")),
+    WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts",
+    WEB / "src" / "tests" / "e2e" / "integral-auth-preflight.spec.ts",
+    Path(seed.__file__),
+    Path(preflight.__file__),
+    Path(discovery.__file__),
+    Path(verifier.__file__),
+    WEB.parents[1] / ".github" / "workflows" / "acc01-s2-live-ai-uat.yml",
+]
+
+
+@pytest.mark.parametrize("path", INTEGRAL_FILES, ids=lambda p: p.name)
+def test_no_integral_file_refers_to_the_legacy_b_identity(path: Path) -> None:
+    assert LEGACY_B not in path.read_text(encoding="utf-8")
+
+
+def test_the_preflight_and_the_scenario_read_b_through_the_same_function() -> None:
+    e2e = WEB / "src" / "tests" / "e2e"
+    for name in ("integral-s1-s8.spec.ts", "integral-auth-preflight.spec.ts"):
+        text = (e2e / name).read_text(encoding="utf-8")
+        assert "developmentBEmail()" in text
+        assert "process.env.INTEGRAL_CLERK_DEV_B_EMAIL" not in text, "B is read in one place only"
+    identity = (e2e / "support" / "integral" / "identity.ts").read_text(encoding="utf-8")
+    assert 'DEV_B_EMAIL_ENV = "INTEGRAL_CLERK_DEV_B_EMAIL"' in identity
+    assert 'return (process.env[DEV_B_EMAIL_ENV] ?? "").trim();' in identity, (
+        "one variable, no fallback"
+    )
+
+
+def test_the_seed_fails_closed_without_the_dedicated_b_variable() -> None:
+    env = copy.deepcopy(GOOD_ENV)
+    env.pop("INTEGRAL_CLERK_DEV_B_EMAIL")
+    env[LEGACY_B] = "prod-b@example.test"
+    with pytest.raises(seed.SeedError, match="MISSING_CLERK_IDENTITY"):
+        seed.require_environment(env)

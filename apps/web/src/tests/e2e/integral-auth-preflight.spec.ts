@@ -16,10 +16,10 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { callApi } from "./support/integral/api";
-import { clerkIdentity, pseudonym, signInTenantB } from "./support/integral/identity";
+import { DEV_B_EMAIL_ENV, clerkIdentity, developmentBEmail, pseudonym, signInTenantB } from "./support/integral/identity";
 import { signInAsJourneyUser } from "./support/pj01/session";
 
-const TENANT_B_EMAIL = process.env.INTEGRAL_CLERK_DEV_B_EMAIL ?? process.env.E2E_CLERK_TENANT_B_USER_EMAIL ?? "";
+const TENANT_B_EMAIL = developmentBEmail();
 const RECEIPT = path.join(process.cwd(), "playwright-report", "integral-auth-preflight.json");
 const EMPTY_SESSION = { cookies: [], origins: [] };
 
@@ -31,7 +31,7 @@ test.describe("TS-E2E-INTEGRAL-AUTH-001: both Clerk Development identities authe
   test("A and B reach the local API with a real Clerk JWT, in different tenants", async ({ browser, baseURL }) => {
     test.setTimeout(300_000);
     const base = baseURL ?? "http://localhost:3100";
-    expect(TENANT_B_EMAIL, "identity B must be configured").not.toBe("");
+    expect(TENANT_B_EMAIL, `identity B must be configured (${DEV_B_EMAIL_ENV}); there is no fallback`).not.toBe("");
 
     const contextA = await browser.newContext({ baseURL: base, storageState: EMPTY_SESSION });
     const pageA = await contextA.newPage();

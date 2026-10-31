@@ -30,7 +30,16 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 import { callApi, itemsOf, str, type Json } from "./support/integral/api";
-import { DENIAL, clerkIdentity, denialsFor, pseudonym, signInTenantB, type ClerkIdentity } from "./support/integral/identity";
+import {
+  DENIAL,
+  DEV_B_EMAIL_ENV,
+  clerkIdentity,
+  denialsFor,
+  developmentBEmail,
+  pseudonym,
+  signInTenantB,
+  type ClerkIdentity,
+} from "./support/integral/identity";
 import {
   FILES,
   LOCATORS,
@@ -66,7 +75,7 @@ import { createProjectThroughUi, signInAsJourneyUser } from "./support/pj01/sess
 import { uploadDocumentThroughUi } from "./support/pj01/upload";
 
 const AI_MOCK = process.env.C2PRO_AI_MOCK === "1";
-const TENANT_B_EMAIL = process.env.E2E_CLERK_TENANT_B_USER_EMAIL ?? "";
+const TENANT_B_EMAIL = developmentBEmail();
 const REPORT_DIR = path.join(process.cwd(), "playwright-report");
 const BROWSER_MANIFEST = path.join(REPORT_DIR, "integral-browser-manifest.json");
 const EMPTY_SESSION = { cookies: [], origins: [] };
@@ -197,7 +206,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
     try {
       // ═══ S1 ═══════════════════════════════════════════════════════════════════════════════════════════════
       await ledger.stage("S1", async () => {
-        ledger.check("tenant B identity configured (E2E_CLERK_TENANT_B_USER_EMAIL)", TENANT_B_EMAIL.length > 0);
+        ledger.check(`tenant B identity configured (${DEV_B_EMAIL_ENV}, no fallback)`, TENANT_B_EMAIL.length > 0);
         if (!TENANT_B_EMAIL) throw new Error("S1_TENANT_B_IDENTITY_NOT_CONFIGURED");
 
         const observation = await signInAsJourneyUser(pageA, base);
