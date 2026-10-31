@@ -24,6 +24,7 @@ import importlib.util
 import json
 import os
 import sys
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,24 @@ from typing import Any
 import httpx
 
 READY, NEEDS_B_ORGANIZATION, FAILED = 0, 3, 1
+
+# Identity B of THIS runner (#1112) is a Clerk DEVELOPMENT user. It is not the Production B of the read-only
+# validation lane (#1144): that identity lives in another Clerk instance and never counts here.
+DEV_B_EMAIL_ENV = "INTEGRAL_CLERK_DEV_B_EMAIL"
+LEGACY_B_EMAIL_ENV = "E2E_CLERK_TENANT_B_USER_EMAIL"
+
+
+def resolve_b_email(environ: dict[str, str] | os._Environ[str]) -> str:
+    """The dedicated Development-B variable wins; the legacy tenant-B name is only a fallback."""
+    return (environ.get(DEV_B_EMAIL_ENV) or environ.get(LEGACY_B_EMAIL_ENV) or "").strip()
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _load_provisioner() -> Any:
@@ -79,7 +98,8 @@ def evaluate_identity(
     report = IdentityReport(label=label, users_found=len(users), membership_count=len(memberships))
     if len(users) != 1:
         report.problems.append(
-            f"the email resolves to {len(users)} Clerk user(s), expected exactly one"
+            f"the email resolves to {len(users)} Clerk user(s) in the Development instance, expected "
+            "exactly one (a Production identity of the read-only lane #1144 does not count)"
         )
         return report
     report.user_id = str(users[0].get("id") or "")
@@ -100,6 +120,8 @@ def evaluate_identity(
         report.problems.append("the membership names no Organization")
     if not report.tenant_id:
         report.problems.append("the Organization carries no publicMetadata.tenant_id")
+    elif not _is_uuid(report.tenant_id):
+        report.problems.append("the Organization's publicMetadata.tenant_id is not a valid UUID")
     return report
 
 
@@ -133,15 +155,19 @@ def main() -> int:
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
     )
     email_a = os.getenv("E2E_CLERK_USER_EMAIL", provisioner.DEFAULT_E2E_EMAIL)
-    email_b = os.getenv("E2E_CLERK_TENANT_B_USER_EMAIL", "")
+    email_b = resolve_b_email(os.environ)
     if not secret_key:
         print("FAIL: CLERK_SECRET_KEY is required.", file=sys.stderr)
         return FAILED
     if not email_b:
         print(
-            "FAIL: E2E_CLERK_TENANT_B_USER_EMAIL is not configured: identity B does not exist for this run.",
+            f"FAIL: {DEV_B_EMAIL_ENV} (or legacy {LEGACY_B_EMAIL_ENV}) is not configured: Development "
+            "identity B does not exist for this run. Nothing is created and nothing is faked.",
             file=sys.stderr,
         )
+        return FAILED
+    if email_a.strip().lower() == email_b.lower():
+        print("FAIL: identities A and B resolve to the same email.", file=sys.stderr)
         return FAILED
     try:
         environment = provisioner.require_development_instance(secret_key, publishable)

@@ -723,7 +723,12 @@ def _membership(org: str, tenant: str | None) -> dict:
     return {"organization": {"id": org, "public_metadata": {"tenant_id": tenant} if tenant else {}}}
 
 
+def _tid(n: int) -> str:
+    return f"00000000-0000-0000-0000-{n:012d}"
+
+
 def _ready(label: str, user: str, org: str, tenant: str) -> preflight.IdentityReport:
+    tenant = _tid(int(tenant[1:])) if tenant[:1] == "t" and tenant[1:].isdigit() else tenant
     return preflight.evaluate_identity(label, [{"id": user}], [_membership(org, tenant)])
 
 
@@ -774,6 +779,39 @@ def test_an_organization_without_a_tenant_fails() -> None:
 def test_shared_user_organization_or_tenant_fails(b: tuple[str, str, str], needle: str) -> None:
     code, reasons = preflight.evaluate_pair(_ready("A", "u1", "o1", "t1"), _ready("B", *b))
     assert code == preflight.FAILED and any(needle in r for r in reasons)
+
+
+def test_a_tenant_that_is_not_a_uuid_fails() -> None:
+    report = preflight.evaluate_identity("B", [{"id": "u2"}], [_membership("o2", "not-a-uuid")])
+    assert not report.ready and "valid UUID" in report.problems[0]
+
+
+def test_the_dedicated_development_b_variable_wins_over_the_legacy_name() -> None:
+    env = {"INTEGRAL_CLERK_DEV_B_EMAIL": " dev-b@example.test ", "E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test"}
+    assert preflight.resolve_b_email(env) == "dev-b@example.test"
+    assert preflight.resolve_b_email({"E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test"}) == "old@x.test"
+    assert preflight.resolve_b_email({}) == ""
+
+
+def test_main_fails_closed_without_b_and_never_reaches_clerk(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("INTEGRAL_CLERK_DEV_B_EMAIL", "E2E_CLERK_TENANT_B_USER_EMAIL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_x")
+    assert preflight.main() == preflight.FAILED
+
+
+def test_main_refuses_a_production_key_before_any_clerk_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLERK_SECRET_KEY", "sk_live_x")
+    monkeypatch.setenv("INTEGRAL_CLERK_DEV_B_EMAIL", "b@example.test")
+    monkeypatch.setenv("E2E_CLERK_USER_EMAIL", "a@example.test")
+    assert preflight.main() == preflight.FAILED
+
+
+def test_main_refuses_identical_a_and_b_emails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_x")
+    monkeypatch.setenv("E2E_CLERK_USER_EMAIL", "Same@example.test")
+    monkeypatch.setenv("INTEGRAL_CLERK_DEV_B_EMAIL", "same@example.test")
+    assert preflight.main() == preflight.FAILED
 
 
 def test_a_broken_a_fails_before_judging_b() -> None:
