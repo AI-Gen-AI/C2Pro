@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "C2Pro API",
-    "description": "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma de inteligencia contractual para proyectos de construcci\u00c3\u00b3n e ingenier\u00c3\u00ada.\n\n        ## Caracter\u00c3\u00adsticas\n\n        - \u00f0\u0178\u201d **Auditor\u00c3\u00ada Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n        - \u00f0\u0178\u00a4\u2013 **IA Especializada**: Claude 4 entrenado en documentos de construcci\u00c3\u00b3n\n        - \u00f0\u0178\u201c\u0160 **Coherence Score**: Indicador 0-100 de alineaci\u00c3\u00b3n entre documentos\n        - \u00f0\u0178\u2018\u00a5 **Stakeholder Intelligence**: Extracci\u00c3\u00b3n y mapeo autom\u00c3\u00a1tico de stakeholders\n        - \u00f0\u0178\u201c\u02c6 **Multi-tenant**: Aislamiento completo de datos por organizaci\u00c3\u00b3n\n\n        ## Autenticaci\u00c3\u00b3n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\u00c3\u00b3n.\n\n        1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`\n\n        ## L\u00c3\u00admites de Uso\n\n        - **Rate Limit**: 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n        - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \u00f0\u0178\u201c\u00a7 Email: support@c2pro.app\n        - \u00f0\u0178\u201c\u2013 Docs: https://docs.c2pro.app\n        - \u00f0\u0178\u2019\u00ac Discord: https://discord.gg/c2pro\n        ",
+    "description": "\n        **C2Pro - Contract Intelligence Platform**\n\n        Plataforma de inteligencia contractual para proyectos de construcciÃ³n e ingenierÃ­a.\n\n        ## CaracterÃ­sticas\n\n        - ðŸ” **AuditorÃ­a Tridimensional**: Detecta incoherencias entre contrato, cronograma y presupuesto\n        - ðŸ¤– **IA Especializada**: Claude 4 entrenado en documentos de construcciÃ³n\n        - ðŸ“Š **Coherence Score**: Indicador 0-100 de alineaciÃ³n entre documentos\n        - ðŸ‘¥ **Stakeholder Intelligence**: ExtracciÃ³n y mapeo automÃ¡tico de stakeholders\n        - ðŸ“ˆ **Multi-tenant**: Aislamiento completo de datos por organizaciÃ³n\n\n        ## AutenticaciÃ³n\n\n        La API usa JWT (JSON Web Tokens) para autenticaciÃ³n.\n\n        1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization: Bearer <token>`\n\n        ## LÃ­mites de Uso\n\n        - **Rate Limit**: 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n        - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - ðŸ“§ Email: support@c2pro.app\n        - ðŸ“– Docs: https://docs.c2pro.app\n        - ðŸ’¬ Discord: https://discord.gg/c2pro\n        ",
     "version": "1.0.0"
   },
   "paths": {
@@ -1362,7 +1362,7 @@
       "get": {
         "tags": ["project-health"],
         "summary": "Get latest project health vector",
-        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\nand its siblings behave: \"not found\" covers both \"does not exist\" and \"belongs to\nanother tenant\", so the response never reveals which. Returning 200 with an empty\nvector would make an authorization failure indistinguishable from a real project\nthat simply has no snapshot yet \u2014 and \"no data\" is a legitimate answer only for a\nproject the caller actually owns.",
+        "description": "Return latest tenant-scoped project HealthVector or honest insufficient data.\n\nA project the caller cannot see is a 404, exactly as ``GET /projects/{project_id}``\nand its siblings behave: \"not found\" covers both \"does not exist\" and \"belongs to\nanother tenant\", so the response never reveals which. Returning 200 with an empty\nvector would make an authorization failure indistinguishable from a real project\nthat simply has no snapshot yet — and \"no data\" is a legitimate answer only for a\nproject the caller actually owns.",
         "operationId": "get_project_health_api_v1_projects__project_id__health_get",
         "security": [
           {
@@ -4889,11 +4889,11 @@
               }
             }
           },
-          "404": {
-            "description": "Review item not found"
-          },
           "400": {
             "description": "Invalid request - review item not pending or missing checkpoint data"
+          },
+          "404": {
+            "description": "Review item not found"
           },
           "422": {
             "description": "Validation error - invalid decision value or feedback too long"
@@ -5069,7 +5069,7 @@
       "post": {
         "tags": ["MCP - Model Context Protocol"],
         "summary": "Query Vista Permitida",
-        "description": "Ejecuta una query sobre una vista permitida.\n\n    **Seguridad:**\n    - Solo vistas en allowlist\n    - Rate limiting por tenant\n    - Query limits (timeout, row count)\n    - Auditor\u00eda completa\n\n    **Vistas permitidas:**\n    - v_project_summary\n    - v_project_alerts\n    - v_project_clauses\n    - v_project_stakeholders\n    - v_project_wbs\n    - v_project_bom\n    - v_coherence_breakdown\n    - v_raci_matrix",
+        "description": "Ejecuta una query sobre una vista permitida.\n\n    **Seguridad:**\n    - Solo vistas en allowlist\n    - Rate limiting por tenant\n    - Query limits (timeout, row count)\n    - Auditoría completa\n\n    **Vistas permitidas:**\n    - v_project_summary\n    - v_project_alerts\n    - v_project_clauses\n    - v_project_stakeholders\n    - v_project_wbs\n    - v_project_bom\n    - v_coherence_breakdown\n    - v_raci_matrix",
         "operationId": "query_view_api_v1_mcp_query_view_post",
         "requestBody": {
           "content": {
@@ -5108,8 +5108,8 @@
     "/api/v1/mcp/call-function": {
       "post": {
         "tags": ["MCP - Model Context Protocol"],
-        "summary": "Llamar Funci\u00f3n Permitida",
-        "description": "Ejecuta una funci\u00f3n permitida.\n\n    **Seguridad:**\n    - Solo funciones en allowlist\n    - Validaci\u00f3n de par\u00e1metros\n    - Rate limiting\n    - Auditor\u00eda\n\n    **Funciones permitidas:**\n    - fn_get_clause_by_id\n    - fn_get_stakeholder_by_id\n    - fn_get_neighbors (Knowledge Graph)\n    - fn_find_path (Knowledge Graph)\n    - fn_get_subgraph (Knowledge Graph)",
+        "summary": "Llamar Función Permitida",
+        "description": "Ejecuta una función permitida.\n\n    **Seguridad:**\n    - Solo funciones en allowlist\n    - Validación de parámetros\n    - Rate limiting\n    - Auditoría\n\n    **Funciones permitidas:**\n    - fn_get_clause_by_id\n    - fn_get_stakeholder_by_id\n    - fn_get_neighbors (Knowledge Graph)\n    - fn_find_path (Knowledge Graph)\n    - fn_get_subgraph (Knowledge Graph)",
         "operationId": "call_function_api_v1_mcp_call_function_post",
         "requestBody": {
           "content": {
@@ -7435,6 +7435,411 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{project_id}/technical-wbs/reviews": {
+      "get": {
+        "tags": ["Technical WBS review"],
+        "summary": "List the current reviewer's historical, audit-only Technical WBS decisions",
+        "operationId": "list_technical_wbs_reviews_api_v1_projects__project_id__technical_wbs_reviews_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TechnicalWBSReviewHistoryEntry"
+                  },
+                  "type": "array",
+                  "title": "Response List Technical Wbs Reviews Api V1 Projects  Project Id  Technical Wbs Reviews Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Technical WBS review"],
+        "summary": "Record Technical Wbs Review",
+        "description": "Explicit human review only; source and WBS authority rechecked by service.",
+        "operationId": "record_technical_wbs_review_api_v1_projects__project_id__technical_wbs_reviews_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TechnicalWBSReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicalWBSReviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Reviewer access denied"
+          },
+          "404": {
+            "description": "Project or source not found"
+          },
+          "409": {
+            "description": "Stale revision, WBS or conflicting review"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/technical-wbs/canonical-links": {
+      "post": {
+        "tags": ["Technical WBS review"],
+        "summary": "Explicitly approve a current, canonical Technical to WBS association",
+        "description": "Never infer final authority from an audit-only review event.",
+        "operationId": "approve_canonical_technical_wbs_link_api_v1_projects__project_id__technical_wbs_canonical_links_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanonicalTechnicalWBSLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanonicalTechnicalWBSLinkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human approver access denied"
+          },
+          "404": {
+            "description": "Project or audit review not found"
+          },
+          "409": {
+            "description": "Stale source or WBS authority, or conflicting approval"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Technical WBS review"],
+        "summary": "Read persisted Technical–WBS approvals with independently verified current authority",
+        "description": "No audit-only event is accepted as canonical, even after relogin.",
+        "operationId": "list_canonical_technical_wbs_links_api_v1_projects__project_id__technical_wbs_canonical_links_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CurrentCanonicalTechnicalWBSLinkResponse"
+                  },
+                  "title": "Response List Canonical Technical Wbs Links Api V1 Projects  Project Id  Technical Wbs Canonical Links Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/structured-wbs/canonical-links": {
+      "post": {
+        "tags": ["Structured WBS links"],
+        "summary": "Explicitly approve one immutable Budget row or Schedule activity WBS link",
+        "operationId": "approve_structured_wbs_link_api_v1_projects__project_id__structured_wbs_canonical_links_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveStructuredWBSLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredWBSLinkApprovalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Human approver denied"
+          },
+          "404": {
+            "description": "Project or document not found"
+          },
+          "409": {
+            "description": "Stale source, altered XLSX row or WBS authority"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Structured WBS links"],
+        "summary": "Read durable approved Budget and Schedule WBS links with current authority",
+        "operationId": "list_structured_wbs_links_api_v1_projects__project_id__structured_wbs_canonical_links_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CurrentStructuredWBSLinkResponse"
+                  },
+                  "title": "Response List Structured Wbs Links Api V1 Projects  Project Id  Structured Wbs Canonical Links Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7458,8 +7863,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -8101,7 +8506,7 @@
             "type": "string",
             "title": "Analysis Prompt",
             "description": "Analysis prompt/question for the documents",
-            "default": "Analiza todos los documentos del proyecto y extrae: 1) Partes contratantes, 2) Objeto del contrato, 3) Duraci\u00f3n, 4) Importe, 5) Posibles riesgos"
+            "default": "Analiza todos los documentos del proyecto y extrae: 1) Partes contratantes, 2) Objeto del contrato, 3) Duración, 4) Importe, 5) Posibles riesgos"
           }
         },
         "type": "object",
@@ -8280,7 +8685,7 @@
         },
         "type": "object",
         "title": "ApproveRequest",
-        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client \u2014 it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement review for a newer candidate shares; without the row, a\ndecision from a stale screen would land on a review the human never saw.\nA pinned row that is no longer awaiting a decision fails closed."
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is never\naccepted from the client — it is derived server-side from the\nauthenticated session (Depends(get_current_user)). A client-supplied\nreviewer field here would let any authenticated user forge a review as\nanother user, corrupting the HITL audit trail. Do not add a reviewer\nidentity field back.\n\nC2PRO #714: ``row_id`` pins the decision to the EXACT review row the\nreviewer saw (ReviewItemResponse.row_id). item_id is a business key a\nreplacement review for a newer candidate shares; without the row, a\ndecision from a stale screen would land on a review the human never saw.\nA pinned row that is no longer awaiting a decision fails closed."
       },
       "AttachEvidenceRequest": {
         "properties": {
@@ -8352,7 +8757,7 @@
         "type": "object",
         "required": ["detail"],
         "title": "AuthErrorResponse",
-        "description": "Response de error de autenticaci\u00f3n.",
+        "description": "Response de error de autenticación.",
         "example": {
           "detail": "Invalid credentials",
           "error_code": "INVALID_CREDENTIALS"
@@ -8804,7 +9209,7 @@
           },
           "evidence_count": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Evidence Count",
             "default": 0
           },
@@ -8986,17 +9391,17 @@
           "evidence_coverage": {
             "type": "number",
             "title": "Evidence Coverage",
-            "default": 0.0
+            "default": 0
           },
           "technical_reliability": {
             "type": "number",
             "title": "Technical Reliability",
-            "default": 0.0
+            "default": 0
           },
           "evidence_freshness": {
             "type": "number",
             "title": "Evidence Freshness",
-            "default": 0.0
+            "default": 0
           },
           "applicability_reason": {
             "anyOf": [
@@ -9287,7 +9692,7 @@
         "properties": {
           "change_index": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Change Index"
           },
           "change_type": {
@@ -9721,7 +10126,7 @@
         "type": "object",
         "required": ["rule_id", "clause_id", "severity", "summary"],
         "title": "ContractClarityFinding",
-        "description": "One clause-level clarity finding.\n\nSeverity only \u2014 deliberately carries no score/confidence/weight field so\nit cannot be aggregated into a Health dimension or the Coherence Score."
+        "description": "One clause-level clarity finding.\n\nSeverity only — deliberately carries no score/confidence/weight field so\nit cannot be aggregated into a Health dimension or the Coherence Score."
       },
       "CookieConsentCreateRequest": {
         "properties": {
@@ -10297,7 +10702,7 @@
           "last_updated"
         ],
         "title": "DashboardSummary",
-        "description": "Consolidated view of project coherence for the dashboard.\n\nECOA v2 (ADR-009 \u00a77.2 step 1): the optional `categories_v2` field carries\nthe locked v2 contract. Defaults to None so v1 clients are unaffected."
+        "description": "Consolidated view of project coherence for the dashboard.\n\nECOA v2 (ADR-009 §7.2 step 1): the optional `categories_v2` field carries\nthe locked v2 contract. Defaults to None so v1 clients are unaffected."
       },
       "DetectionEvidenceResponse": {
         "properties": {
@@ -10555,7 +10960,14 @@
             "title": "Page"
           },
           "confidence": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Confidence"
           },
           "metadata": {
@@ -10646,6 +11058,28 @@
               }
             ],
             "title": "Parsed At"
+          },
+          "trusted_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRevisionRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The revision a human approved and the project's trusted analysis (Health, Coherence) rests on. Null until a revision has been approved."
+          },
+          "pending_revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRevisionRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A newer revision that has been analysed but not approved yet. Nothing in this report is derived from it."
           }
         },
         "additionalProperties": false,
@@ -10660,6 +11094,30 @@
           "version"
         ],
         "title": "DocumentItem"
+      },
+      "DocumentRevisionRef": {
+        "properties": {
+          "revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Revision Id"
+          },
+          "rev_no": {
+            "type": "integer",
+            "title": "Rev No",
+            "description": "Position in the document's revision history (1 = the first upload)."
+          },
+          "blob_hash": {
+            "type": "string",
+            "title": "Blob Hash",
+            "description": "SHA-256 of the exact stored bytes of this revision."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["revision_id", "rev_no", "blob_hash"],
+        "title": "DocumentRevisionRef",
+        "description": "One immutable revision of a document, identified by its content hash."
       },
       "DocumentLifecycleStatus": {
         "type": "string",
@@ -11348,8 +11806,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100.0,
-                "minimum": 0.0
+                "maximum": 100,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -11446,31 +11904,31 @@
             "type": "number",
             "title": "Scope Factor",
             "description": "Scope normalization factor used in scoring",
-            "default": 1.0
+            "default": 1
           },
           "penalty_density": {
             "type": "number",
             "title": "Penalty Density",
             "description": "Raw weighted penalty density before decay",
-            "default": 0.0
+            "default": 0
           },
           "avg_impact": {
             "type": "number",
             "title": "Avg Impact",
             "description": "Average impact_score across all findings",
-            "default": 0.0
+            "default": 0
           },
           "avg_confidence": {
             "type": "number",
             "title": "Avg Confidence",
             "description": "Average confidence across all findings",
-            "default": 0.0
+            "default": 0
           },
           "llm_cost_usd": {
             "type": "number",
             "title": "Llm Cost Usd",
             "description": "Total LLM cost for this evaluation",
-            "default": 0.0
+            "default": 0
           },
           "evaluation_mode": {
             "type": "string",
@@ -12082,18 +12540,18 @@
           },
           "impact_score": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Impact Score",
             "description": "Continuous severity: 0.0 = no issue, 1.0 = catastrophic"
           },
           "confidence": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Confidence",
             "description": "Evaluator confidence: 1.0 = certain, 0.5 = borderline",
-            "default": 1.0
+            "default": 1
           },
           "severity": {
             "type": "string",
@@ -12156,7 +12614,7 @@
         "type": "object",
         "required": ["function_name", "params"],
         "title": "FunctionCallRequest",
-        "description": "Request para llamada a funci\u00f3n."
+        "description": "Request para llamada a función."
       },
       "GlobalV2": {
         "properties": {
@@ -12174,12 +12632,12 @@
           "completeness_score": {
             "type": "number",
             "title": "Completeness Score",
-            "default": 0.0
+            "default": 0
           },
           "technical_reliability_index": {
             "type": "number",
             "title": "Technical Reliability Index",
-            "default": 0.0
+            "default": 0
           },
           "status": {
             "type": "string",
@@ -12205,7 +12663,7 @@
           "active_weight": {
             "type": "number",
             "title": "Active Weight",
-            "default": 0.0
+            "default": 0
           }
         },
         "type": "object",
@@ -12243,7 +12701,7 @@
           },
           "evidence_count": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Evidence Count"
           },
           "missing_data": {
@@ -12399,8 +12857,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100.0,
-                "minimum": 0.0
+                "maximum": 100,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -12413,8 +12871,8 @@
           },
           "confidence": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Confidence"
           },
           "evidence": {
@@ -12480,8 +12938,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 100.0,
-                "minimum": 0.0
+                "maximum": 100,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -12714,8 +13172,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -12761,8 +13219,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -12796,8 +13254,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1.0,
-                "minimum": 0.0
+                "maximum": 1,
+                "minimum": 0
               },
               {
                 "type": "null"
@@ -12959,7 +13417,7 @@
             "email": "usuario@ejemplo.com",
             "first_name": "Juan",
             "id": "550e8400-e29b-41d4-a716-446655440000",
-            "last_name": "P\u00e9rez",
+            "last_name": "Pérez",
             "role": "admin"
           }
         }
@@ -13430,7 +13888,7 @@
         "type": "object",
         "required": ["current_password", "new_password"],
         "title": "PasswordChangeRequest",
-        "description": "Request para cambio de contrase\u00f1a."
+        "description": "Request para cambio de contraseña."
       },
       "PowerLevel": {
         "type": "string",
@@ -14570,7 +15028,7 @@
               }
             ],
             "title": "Password Confirm",
-            "description": "Opcional; si se env\u00eda debe coincidir con password"
+            "description": "Opcional; si se envía debe coincidir con password"
           },
           "first_name": {
             "anyOf": [
@@ -14599,7 +15057,7 @@
           "accept_terms": {
             "type": "boolean",
             "title": "Accept Terms",
-            "description": "Debe aceptar t\u00e9rminos y condiciones",
+            "description": "Debe aceptar términos y condiciones",
             "default": true
           }
         },
@@ -14612,7 +15070,7 @@
           "company_name": "Constructora Ejemplo S.L.",
           "email": "usuario@ejemplo.com",
           "first_name": "Juan",
-          "last_name": "P\u00e9rez",
+          "last_name": "Pérez",
           "password": "Password123!",
           "password_confirm": "Password123!"
         }
@@ -14749,7 +15207,7 @@
         "type": "object",
         "required": ["resolution"],
         "title": "ResolveAlertRequest",
-        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\naccepted from the client \u2014 it is always the authenticated session's\nuser_id. A client-supplied resolved_by here would let any authenticated\nuser forge a resolution as another user, corrupting the audit trail."
+        "description": "SECURITY (EPIC-OPS-DOCFLOW Stream C): resolver identity is never\naccepted from the client — it is always the authenticated session's\nuser_id. A client-supplied resolved_by here would let any authenticated\nuser forge a resolution as another user, corrupting the audit trail."
       },
       "ResumeWorkflowRequest": {
         "properties": {
@@ -14836,7 +15294,7 @@
         "type": "object",
         "required": ["item_id"],
         "title": "ReviewDecisionDTO",
-        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name`` are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``) at the\npoint this DTO is consumed \u2014 a client-supplied identity here would let any\nauthenticated user forge a review as another user, corrupting the HITL\naudit trail. Do not add reviewer identity fields back to this model."
+        "description": "Refers to Suite ID: TS-I13-E2E-REAL-001.\n\nSECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is NEVER accepted\nfrom the client. ``reviewer_id``/``reviewer_name`` are derived server-side\nfrom the authenticated session (``Depends(get_current_user)``) at the\npoint this DTO is consumed — a client-supplied identity here would let any\nauthenticated user forge a review as another user, corrupting the HITL\naudit trail. Do not add reviewer identity fields back to this model."
       },
       "ReviewItemResponse": {
         "properties": {
@@ -15177,6 +15635,17 @@
               }
             ],
             "title": "Reason"
+          },
+          "blob_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blob Hash"
           }
         },
         "type": "object",
@@ -15197,8 +15666,8 @@
           },
           "confidence": {
             "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
+            "maximum": 1,
+            "minimum": 0,
             "title": "Confidence"
           },
           "impact_level": {
@@ -15343,7 +15812,7 @@
         "type": "object",
         "required": ["assessments"],
         "title": "SingleDocumentCoverage",
-        "description": "Single-document coverage: the six category assessments + preserved CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are\nNOT attributed to any canonical category \u2014 a CROSS finding spans two dimensions and\ncarries a composite ``clause_id``, so single-category attribution would fabricate\nevidence (INV-1)."
+        "description": "Single-document coverage: the six category assessments + preserved CROSS findings.\n\n``cross_findings`` holds the ``FindingSignal`` entries tagged ``CROSS``. They are\ncross-dimensional and CAN be produced from one document (``CROSS-BUDGET-SCOPE`` pairs\na BUDGET clause with a SCOPE clause; ``CROSS-SCHEDULE-DELIVERY`` pairs a TIME clause\nwith a TECHNICAL clause), so they are preserved verbatim rather than discarded, and are\nNOT attributed to any canonical category — a CROSS finding spans two dimensions and\ncarries a composite ``clause_id``, so single-category attribution would fabricate\nevidence (INV-1)."
       },
       "StakeholderCreateRequest": {
         "properties": {
@@ -15429,8 +15898,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10.0,
-                "minimum": 1.0
+                "maximum": 10,
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -15442,8 +15911,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10.0,
-                "minimum": 1.0
+                "maximum": 10,
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -15797,8 +16266,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10.0,
-                "minimum": 1.0
+                "maximum": 10,
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -15810,8 +16279,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 10.0,
-                "minimum": 1.0
+                "maximum": 10,
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -15990,7 +16459,7 @@
         "type": "string",
         "enum": ["free", "starter", "professional", "enterprise"],
         "title": "SubscriptionPlan",
-        "description": "Planes de suscripci\u00f3n disponibles."
+        "description": "Planes de suscripción disponibles."
       },
       "SystemStatusResponse": {
         "properties": {
@@ -16177,7 +16646,7 @@
           "updated_at"
         ],
         "title": "TenantResponse",
-        "description": "Response con informaci\u00f3n de Tenant."
+        "description": "Response con información de Tenant."
       },
       "TimelineItemResponse": {
         "properties": {
@@ -16380,7 +16849,7 @@
         "type": "object",
         "required": ["access_token", "expires_in"],
         "title": "TokenResponse",
-        "description": "Response con tokens de autenticaci\u00f3n.",
+        "description": "Response con tokens de autenticación.",
         "example": {
           "access_token": "example-access-token",
           "expires_in": 86400,
@@ -16536,7 +17005,7 @@
           "updated_at"
         ],
         "title": "UserResponse",
-        "description": "Response con informaci\u00f3n de Usuario."
+        "description": "Response con información de Usuario."
       },
       "UserRole": {
         "type": "string",
@@ -16612,7 +17081,7 @@
         "description": "Request para actualizar perfil de usuario.",
         "example": {
           "first_name": "Juan",
-          "last_name": "P\u00e9rez",
+          "last_name": "Pérez",
           "phone": "+34 600 000 000"
         }
       },
@@ -16677,14 +17146,14 @@
           },
           "limit": {
             "type": "integer",
-            "maximum": 1000.0,
-            "minimum": 1.0,
+            "maximum": 1000,
+            "minimum": 1,
             "title": "Limit",
             "default": 100
           },
           "offset": {
             "type": "integer",
-            "minimum": 0.0,
+            "minimum": 0,
             "title": "Offset",
             "default": 0
           }
@@ -17780,7 +18249,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -17823,7 +18292,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -17923,7 +18392,7 @@
         "properties": {
           "expected_revision": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Revision",
             "description": "the DRAFT revision the edit is based on"
           },
@@ -18052,7 +18521,7 @@
         "properties": {
           "expected_revision": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Revision",
             "description": "the submitted revision the reviewer looked at"
           },
@@ -18072,7 +18541,7 @@
         "properties": {
           "expected_revision": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Revision"
           }
         },
@@ -18117,7 +18586,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -18159,7 +18628,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -18255,7 +18724,7 @@
         "properties": {
           "expected_revision": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Expected Revision",
             "description": "the submitted revision the reviewer looked at"
           },
@@ -18309,7 +18778,7 @@
           },
           "position": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Position"
           }
         },
@@ -18670,7 +19139,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -19099,7 +19568,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "minimum": 1
               },
               {
                 "type": "null"
@@ -20118,6 +20587,802 @@
           "created_at"
         ],
         "title": "WBSImportResponse"
+      },
+      "TechnicalMappingDecision": {
+        "type": "string",
+        "enum": ["CONFIRMED_FOR_REVIEW", "REJECTED"],
+        "title": "TechnicalMappingDecision"
+      },
+      "TechnicalWBSReviewHistoryEntry": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/TechnicalMappingDecision"
+          },
+          "technical_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Document Id"
+          },
+          "technical_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Revision Id"
+          },
+          "source_clause_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Clause Id"
+          },
+          "source_section": {
+            "type": "string",
+            "title": "Source Section"
+          },
+          "proposed_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Baseline Id"
+          },
+          "proposed_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Node Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "state": {
+            "type": "string",
+            "const": "HISTORICAL_AUDIT_ONLY",
+            "title": "State",
+            "default": "HISTORICAL_AUDIT_ONLY"
+          },
+          "authority": {
+            "type": "string",
+            "const": "AUDIT_ONLY_NOT_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "AUDIT_ONLY_NOT_CANONICAL_LINK"
+          },
+          "technical_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Technical Assessment",
+            "default": "NOT_ASSESSED"
+          },
+          "approved_canonical_link": {
+            "type": "boolean",
+            "const": false,
+            "title": "Approved Canonical Link",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "occurred_at",
+          "decision",
+          "technical_document_id",
+          "technical_revision_id",
+          "source_clause_id",
+          "source_section",
+          "proposed_wbs_baseline_id",
+          "proposed_wbs_node_id",
+          "reason"
+        ],
+        "title": "TechnicalWBSReviewHistoryEntry"
+      },
+      "TechnicalWBSReviewRequest": {
+        "properties": {
+          "clause_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Clause Id"
+          },
+          "expected_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Revision Id"
+          },
+          "expected_blob_hash": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Blob Hash"
+          },
+          "expected_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Baseline Id"
+          },
+          "proposed_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Node Id"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/TechnicalMappingDecision"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "clause_id",
+          "expected_revision_id",
+          "expected_blob_hash",
+          "expected_wbs_baseline_id",
+          "proposed_wbs_node_id",
+          "decision",
+          "idempotency_key",
+          "reason"
+        ],
+        "title": "TechnicalWBSReviewRequest",
+        "description": "Never accept tenant, actor, project, or link-approval authority in JSON."
+      },
+      "TechnicalWBSReviewResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/TechnicalMappingDecision"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "technical_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Document Id"
+          },
+          "technical_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Revision Id"
+          },
+          "source_clause_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Clause Id"
+          },
+          "source_section": {
+            "type": "string",
+            "title": "Source Section"
+          },
+          "source_start_offset": {
+            "type": "integer",
+            "title": "Source Start Offset"
+          },
+          "source_end_offset": {
+            "type": "integer",
+            "title": "Source End Offset"
+          },
+          "proposed_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Baseline Id"
+          },
+          "proposed_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposed Wbs Node Id"
+          },
+          "state": {
+            "type": "string",
+            "const": "HUMAN_REVIEW_REQUIRED",
+            "title": "State",
+            "default": "HUMAN_REVIEW_REQUIRED"
+          },
+          "authority": {
+            "type": "string",
+            "const": "AUDIT_ONLY_NOT_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "AUDIT_ONLY_NOT_CANONICAL_LINK"
+          },
+          "technical_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Technical Assessment",
+            "default": "NOT_ASSESSED"
+          },
+          "approved_canonical_link": {
+            "type": "boolean",
+            "const": false,
+            "title": "Approved Canonical Link",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "decision",
+          "replayed",
+          "technical_document_id",
+          "technical_revision_id",
+          "source_clause_id",
+          "source_section",
+          "source_start_offset",
+          "source_end_offset",
+          "proposed_wbs_baseline_id",
+          "proposed_wbs_node_id"
+        ],
+        "title": "TechnicalWBSReviewResponse"
+      },
+      "CanonicalTechnicalWBSLinkRequest": {
+        "properties": {
+          "review_event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Review Event Id"
+          },
+          "expected_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Baseline Id"
+          },
+          "expected_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Node Id"
+          },
+          "approval": {
+            "type": "string",
+            "const": "APPROVE_CANONICAL_LINK",
+            "title": "Approval"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "review_event_id",
+          "expected_wbs_baseline_id",
+          "expected_wbs_node_id",
+          "approval",
+          "idempotency_key",
+          "reason"
+        ],
+        "title": "CanonicalTechnicalWBSLinkRequest",
+        "description": "The approval is explicit; actor, tenant and project stay server-owned."
+      },
+      "CanonicalTechnicalWBSLinkResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "technical_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Document Id"
+          },
+          "technical_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Technical Revision Id"
+          },
+          "source_clause_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Clause Id"
+          },
+          "source_section": {
+            "type": "string",
+            "title": "Source Section"
+          },
+          "source_start_offset": {
+            "type": "integer",
+            "title": "Source Start Offset"
+          },
+          "source_end_offset": {
+            "type": "integer",
+            "title": "Source End Offset"
+          },
+          "wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Wbs Baseline Id"
+          },
+          "wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Wbs Node Id"
+          },
+          "authority": {
+            "type": "string",
+            "const": "EXPLICIT_HUMAN_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "EXPLICIT_HUMAN_CANONICAL_LINK"
+          },
+          "approved_canonical_link": {
+            "type": "boolean",
+            "const": true,
+            "title": "Approved Canonical Link",
+            "default": true
+          },
+          "technical_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Technical Assessment",
+            "default": "NOT_ASSESSED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "replayed",
+          "technical_document_id",
+          "technical_revision_id",
+          "source_clause_id",
+          "source_section",
+          "source_start_offset",
+          "source_end_offset",
+          "wbs_baseline_id",
+          "wbs_node_id"
+        ],
+        "title": "CanonicalTechnicalWBSLinkResponse"
+      },
+      "CurrentCanonicalTechnicalWBSLinkResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "review_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Event Id"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "technical_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technical Document Id"
+          },
+          "technical_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technical Revision Id"
+          },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "source_section": {
+            "type": "string",
+            "title": "Source Section"
+          },
+          "source_blob_hash": {
+            "type": "string",
+            "title": "Source Blob Hash"
+          },
+          "wbs_baseline_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Baseline Id"
+          },
+          "wbs_node_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Node Id"
+          },
+          "wbs_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Code"
+          },
+          "wbs_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "STALE_SOURCE",
+              "STALE_WBS",
+              "STALE_BOTH",
+              "UNVERIFIED"
+            ],
+            "title": "State"
+          },
+          "authority": {
+            "type": "string",
+            "const": "EXPLICIT_HUMAN_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "EXPLICIT_HUMAN_CANONICAL_LINK"
+          },
+          "approved_canonical_link": {
+            "type": "boolean",
+            "const": true,
+            "title": "Approved Canonical Link",
+            "default": true
+          },
+          "technical_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Technical Assessment",
+            "default": "NOT_ASSESSED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "review_event_id",
+          "approved_at",
+          "technical_document_id",
+          "technical_revision_id",
+          "source_clause_id",
+          "source_section",
+          "source_blob_hash",
+          "wbs_baseline_id",
+          "wbs_node_id",
+          "wbs_code",
+          "wbs_name",
+          "state"
+        ],
+        "title": "CurrentCanonicalTechnicalWBSLinkResponse",
+        "description": "Durable approval event with current authority rederived on each GET."
+      },
+      "ApproveStructuredWBSLinkRequest": {
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": ["budget", "schedule"],
+            "title": "Family"
+          },
+          "source_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Document Id"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Revision Id"
+          },
+          "expected_blob_hash": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Blob Hash"
+          },
+          "source_locator": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Source Locator"
+          },
+          "expected_wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Baseline Id"
+          },
+          "expected_wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Wbs Node Id"
+          },
+          "approval": {
+            "type": "string",
+            "const": "APPROVE_CANONICAL_LINK",
+            "title": "Approval"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "family",
+          "source_document_id",
+          "source_revision_id",
+          "expected_blob_hash",
+          "source_locator",
+          "expected_wbs_baseline_id",
+          "expected_wbs_node_id",
+          "approval",
+          "idempotency_key",
+          "reason"
+        ],
+        "title": "ApproveStructuredWBSLinkRequest",
+        "description": "Client cannot supply actor or tenant; project is the authenticated URL scope."
+      },
+      "StructuredWBSLinkApprovalResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "family": {
+            "type": "string",
+            "enum": ["budget", "schedule"],
+            "title": "Family"
+          },
+          "source_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Document Id"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Revision Id"
+          },
+          "source_locator": {
+            "type": "string",
+            "title": "Source Locator"
+          },
+          "source_blob_hash": {
+            "type": "string",
+            "title": "Source Blob Hash"
+          },
+          "wbs_baseline_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Wbs Baseline Id"
+          },
+          "wbs_node_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Wbs Node Id"
+          },
+          "authority": {
+            "type": "string",
+            "const": "EXPLICIT_HUMAN_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "EXPLICIT_HUMAN_CANONICAL_LINK"
+          },
+          "source_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Source Assessment",
+            "default": "NOT_ASSESSED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "replayed",
+          "family",
+          "source_document_id",
+          "source_revision_id",
+          "source_locator",
+          "source_blob_hash",
+          "wbs_baseline_id",
+          "wbs_node_id"
+        ],
+        "title": "StructuredWBSLinkApprovalResponse"
+      },
+      "CurrentStructuredWBSLinkResponse": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "family": {
+            "type": "string",
+            "enum": ["budget", "schedule"],
+            "title": "Family"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "source_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Revision Id"
+          },
+          "source_locator": {
+            "type": "string",
+            "title": "Source Locator"
+          },
+          "source_blob_hash": {
+            "type": "string",
+            "title": "Source Blob Hash"
+          },
+          "wbs_baseline_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Baseline Id"
+          },
+          "wbs_node_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wbs Node Id"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "STALE_SOURCE",
+              "STALE_WBS",
+              "STALE_BOTH",
+              "UNVERIFIED"
+            ],
+            "title": "State"
+          },
+          "authority": {
+            "type": "string",
+            "const": "EXPLICIT_HUMAN_CANONICAL_LINK",
+            "title": "Authority",
+            "default": "EXPLICIT_HUMAN_CANONICAL_LINK"
+          },
+          "source_assessment": {
+            "type": "string",
+            "const": "NOT_ASSESSED",
+            "title": "Source Assessment",
+            "default": "NOT_ASSESSED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "family",
+          "approved_at",
+          "source_document_id",
+          "source_revision_id",
+          "source_locator",
+          "source_blob_hash",
+          "wbs_baseline_id",
+          "wbs_node_id",
+          "state"
+        ],
+        "title": "CurrentStructuredWBSLinkResponse"
       }
     },
     "securitySchemes": {

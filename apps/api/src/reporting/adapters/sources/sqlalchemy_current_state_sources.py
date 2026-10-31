@@ -12,10 +12,12 @@ from contextlib import AbstractAsyncContextManager
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.alerts.domain.models import Alert
+from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.config import get_settings
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
@@ -30,6 +32,7 @@ from src.procurement.adapters.persistence.wbs_repository import SQLAlchemyWBSRep
 from src.procurement.application.budget_use_cases import BudgetResponse, GetBudgetUseCase
 from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
 from src.reporting.application.ports import (
+    DocumentRevisionState,
     DocumentsInput,
     HitlInput,
     SourceUnavailableError,
@@ -44,6 +47,7 @@ from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixU
 from src.stakeholders.application.list_project_stakeholders_use_case import (
     ListProjectStakeholdersUseCase,
 )
+from src.temporal.adapters.persistence.models import DocumentRevisionORM
 from src.temporal.adapters.persistence.project_snapshot_repository import (
     SqlAlchemyProjectSnapshotRepository,
 )
@@ -86,6 +90,46 @@ async def _read_coherence_dashboard(project_id: UUID, current_user: User, sessio
     )
 
 
+async def _load_revision_states(
+    session: AsyncSession, tenant_id: UUID, project_id: UUID
+) -> dict[UUID, DocumentRevisionState]:
+    """Per document: the revision behind the trusted-current artifact and the pending proposal.
+
+    The trusted revision is the one the canonical state was built from; a pending revision is an
+    uploaded revision still waiting for human approval (persisted != trusted).
+    """
+    rows = await session.execute(
+        select(
+            DocumentArtifactORM.document_id,
+            DocumentArtifactORM.trust_state,
+            DocumentArtifactORM.lifecycle_status,
+            DocumentRevisionORM.revision_id,
+            DocumentRevisionORM.rev_no,
+            DocumentRevisionORM.blob_hash,
+        )
+        .join(
+            DocumentRevisionORM,
+            DocumentRevisionORM.revision_id == DocumentArtifactORM.document_revision_id,
+        )
+        .where(
+            DocumentArtifactORM.tenant_id == tenant_id,
+            DocumentArtifactORM.project_id == project_id,
+        )
+    )
+    trusted: dict[UUID, tuple[UUID, int, str]] = {}
+    pending: dict[UUID, tuple[UUID, int, str]] = {}
+    for document_id, trust_state, lifecycle_status, revision_id, rev_no, blob_hash in rows:
+        ref = (revision_id, rev_no, blob_hash)
+        if trust_state == "trusted" and lifecycle_status == "active":
+            trusted[document_id] = ref
+        elif trust_state == "proposed":
+            pending[document_id] = ref
+    return {
+        document_id: DocumentRevisionState(trusted=trusted.get(document_id), pending=pending.get(document_id))
+        for document_id in trusted.keys() | pending.keys()
+    }
+
+
 class SqlAlchemyCurrentStateSources:
     def __init__(
         self,
@@ -104,7 +148,11 @@ class SqlAlchemyCurrentStateSources:
             documents, total = await SqlAlchemyDocumentRepository(session).list_for_project(
                 scoped, project_id, 0, MAX_DOCUMENTS
             )
-            return DocumentsInput(documents=list(documents), total=total)
+            return DocumentsInput(
+                documents=list(documents),
+                total=total,
+                revisions=await _load_revision_states(session, scoped, project_id),
+            )
 
     async def load_health(self, project_id: UUID, tenant_id: UUID) -> ProjectSnapshot | None:
         scoped = require_tenant_id(tenant_id)

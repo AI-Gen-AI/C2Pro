@@ -1,10 +1,23 @@
 name: Nightly Full E2E
 
 on:
+  # Bounded S2 owner dispatch: only a change to this workflow on the
+  # isolated integration branch launches the existing Nightly suite.
+  # Ordinary product commits do not trigger extra Nightlies.
+  push:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - '.github/workflows/nightly-full-e2e.yml'
   schedule:
     # Run before the 04:00 I13 and 05:00 evaluation lanes.
     - cron: "30 1 * * *"
   workflow_dispatch:
+    inputs:
+      run_pj01:
+        description: "Also run the PJ-01 first-user journey (login, project, Contract A, Health, Evidence, revision B, What Changed?, Current State) against the same real local backend"
+        type: boolean
+        default: false
 
 concurrency:
   group: nightly-full-e2e-${{ github.ref }}
@@ -79,22 +92,25 @@ jobs:
       - name: Reconcile dedicated Clerk E2E Organization fixture
         run: python apps/api/scripts/provision_clerk_e2e_fixture.py
 
-      - name: Seed deterministic E2E auth tenancy
+      - name: Seed deterministic E2E auth tenancy and FRT-192 wedge
         working-directory: apps/api
         run: |
           python - <<'PY'
           import asyncio
 
           from src.core.database import close_db, get_raw_session, init_db
-          from tests.e2e_seed.seed_wedge import seed_e2e_auth_tenancy
+          from tests.e2e_seed.seed_wedge import seed_wedge_e2e
 
 
           async def main() -> None:
               await init_db()
               try:
                   async with get_raw_session() as db:
-                      ids = await seed_e2e_auth_tenancy(db)
-                  print(f"seeded tenant={ids['tenant_id']} user={ids['user_id']}")
+                      ids = await seed_wedge_e2e(db)
+                  print(
+                      f"seeded tenant={ids['tenant_id']} user={ids['user_id']} "
+                      f"project={ids['project_id']}"
+                  )
               finally:
                   await close_db()
 
@@ -124,6 +140,16 @@ jobs:
       # verify Clerk JWTs without a hard-coded Clerk host.
       - name: Start backend API
         working-directory: apps/api
+        # Every spec of this job signs in as the same E2E user of the same tenant. With ENVIRONMENT=test
+        # the API uses its in-memory limiter: a sliding 60 s window of RATE_LIMIT_PER_MINUTE (default 60)
+        # requests PER TENANT, answering 429 with "Retry-After: 60". Nightly 40228726004 / 40230538011:
+        # PJ-01 spends that budget, so the spec that follows it was refused (project creation, upload,
+        # isolation setup) and its outcome depended on spec order, not on the product. The limiter keeps
+        # its own tests (Backend Security Suite: test_clerk_auth_and_rate_limiter.py); the acceptance
+        # specs judge flows and authorization, not throttling, so their API gets a budget that one
+        # sequence of specs cannot exhaust.
+        env:
+          RATE_LIMIT_PER_MINUTE: "600"
         run: |
           python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
             > "$RUNNER_TEMP/c2pro-nightly-jwks.log" 2>&1 &
@@ -152,10 +178,93 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/nightly-results.json
         run: ./node_modules/.bin/playwright test --project=chromium --reporter=list,json
 
+      # TS-E2E-TRIPLET-001: the long three-document journey has its own step so its result is
+      # never mixed into the suite above. AI is mocked here (C2PRO_AI_MOCK=1) and the spec says so.
+      - name: Run triplet user journey (real backend, mock AI)
+        id: triplet_s2_journey
+        if: always()
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/triplet-results.json
+        # One worker: both triplet specs sign in as the same E2E user and create a project through the
+        # wizard; run side by side (Nightly 40224064215) both stalled at project creation, so they run
+        # one after the other. This isolates them; it is not a finding about the cause.
+        run: ./node_modules/.bin/playwright test --project=triplet-journey --workers=1 --reporter=list,json
+
+      # S2: a separate process reads the actual SQL tables of THIS Playwright
+      # project, before cleanup destroys the job's migrated PostgreSQL database.
+      # API/listing and browser screenshots alone are not an independent DB check.
+      - name: Verify S2 four-source ledger directly in PostgreSQL
+        if: always() && steps.triplet_s2_journey.outcome == 'success'
+        working-directory: apps/api
+        run: |
+          python scripts/verify_s2_triplet_pg.py \
+            --playwright-json ../web/playwright-report/triplet-results.json \
+            --manifest ../web/src/tests/e2e/test-data/triplet/triplet.manifest.json \
+            --fixture-dir ../web/src/tests/e2e/test-data/triplet \
+            --output ../web/playwright-report/s2-postgres-ledger.json
+
+      # Explicit dispatch only (inputs.run_pj01): the PJ-01 harness exercises revision B, What Changed?
+      # and Current State with hash-bound fixtures. Its result is reported on its own and never mixed
+      # into the suite above.
+      # PJ-01 judges whether the page reloads, refreshes and stays honest while a person waits. On
+      # `next dev` the dev server itself forces full reloads ("Fast Refresh had to perform a full
+      # reload") while it compiles routes on demand, which a journey cannot tell from an application
+      # reload (seen once in two otherwise identical runs). So it runs against the shipped runtime,
+      # exactly as the blocking E2E smoke in ci.yml does.
+      - name: Build frontend for PJ-01 (production runtime)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/web
+        run: pnpm build
+
+      - name: Run PJ-01 first user journey (real backend, mock AI)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/pj01-results.json
+          PLAYWRIGHT_WEBSERVER_MODE: production
+        # One worker: the journey and the isolation spec drive the same server one after the other.
+        run: ./node_modules/.bin/playwright test --project=pj01-acceptance --workers=1 --reporter=list,json
+
+      # Independent of the browser: re-read PostgreSQL and prove the journey's revision trace
+      # (A trusted then superseded, B the active trusted one, hashes = the committed fixtures).
+      - name: Verify PJ-01 revision trace in PostgreSQL (independent read)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/api
+        run: |
+          python scripts/verify_pj01_revision_trace.py --kind journey \
+            --run-dir ../web/playwright/.pj01 \
+            --contract-a ../web/src/tests/e2e/test-data/pj01/contract-a.pdf \
+            --contract-b ../web/src/tests/e2e/test-data/pj01/contract-b.pdf
+
+      # S5: what the browser rejected, read back from PostgreSQL (reason stored, nothing approved/trusted).
+      - name: Verify S5 rejection in PostgreSQL (independent read)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_pj01
+        working-directory: apps/api
+        run: python scripts/verify_pj01_revision_trace.py --kind reject --run-dir ../web/playwright/.pj01
+
+      - name: Summarize triplet journey result
+        if: always()
+        working-directory: apps/web
+        run: node scripts/playwright-summary.mjs playwright-report/triplet-results.json "Triplet user journey (real backend, mock AI)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summarize suite result
         if: always()
         working-directory: apps/web
         run: node scripts/playwright-summary.mjs playwright-report/nightly-results.json "Nightly executable E2E (real local backend)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Evidence for a red run without downloading the artifact: server-side errors the backend and
+      # the worker logged while the browser tests ran (an empty section means none were logged).
+      - name: Backend and worker errors during the run
+        if: always()
+        run: |
+          echo "== api: requests refused by the rate limiter =="
+          grep -c 'rate_limit_exceeded' "$RUNNER_TEMP/c2pro-nightly-api.log" || true
+          grep -n 'rate_limit_exceeded' "$RUNNER_TEMP/c2pro-nightly-api.log" | cut -c1-300 | tail -n 10 || true
+          for name in api worker; do
+            echo "== $name: 5xx responses / tracebacks / errors =="
+            grep -nE ' (5[0-9]{2}) |Traceback|\[error|ERROR' "$RUNNER_TEMP/c2pro-nightly-$name.log" | tail -n 40 || true
+          done
 
       - name: Upload Playwright diagnostics
         if: always()
@@ -165,6 +274,7 @@ jobs:
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
+            apps/web/playwright/.pj01/
             ${{ runner.temp }}/c2pro-nightly-api.log
             ${{ runner.temp }}/c2pro-nightly-worker.log
           if-no-files-found: warn

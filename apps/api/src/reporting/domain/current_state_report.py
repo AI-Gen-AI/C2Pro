@@ -105,6 +105,16 @@ class ReportSectionBase(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class DocumentRevisionRef(BaseModel):
+    """One immutable revision of a document, identified by its content hash."""
+
+    model_config = _CONTRACT
+
+    revision_id: UUID
+    rev_no: int = Field(description="Position in the document's revision history (1 = the first upload).")
+    blob_hash: str = Field(description="SHA-256 of the exact stored bytes of this revision.")
+
+
 class DocumentItem(BaseModel):
     model_config = _CONTRACT
 
@@ -124,6 +134,20 @@ class DocumentItem(BaseModel):
     version: int
     uploaded_at: datetime | None = None
     parsed_at: datetime | None = None
+    trusted_revision: DocumentRevisionRef | None = Field(
+        default=None,
+        description=(
+            "The revision a human approved and the project's trusted analysis (Health, Coherence) "
+            "rests on. Null until a revision has been approved."
+        ),
+    )
+    pending_revision: DocumentRevisionRef | None = Field(
+        default=None,
+        description=(
+            "A newer revision that has been analysed but not approved yet. Nothing in this report "
+            "is derived from it."
+        ),
+    )
 
 
 class DocumentsData(BaseModel):

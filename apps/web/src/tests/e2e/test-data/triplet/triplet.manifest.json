@@ -1,0 +1,40 @@
+{
+  "fixture_id": "triplet-v1",
+  "purpose": "Contract (.docx) + budget + schedule + technical specification (.docx): a deliberate budget excess and a late schedule",
+  "ai": "No AI is needed to derive these expectations; the journey declares whether the backend runs with C2PRO_AI_MOCK",
+  "sha256": {
+    "triplet-budget.xlsx": "aabcbf422887f5eaae0a4846019403d6f90cdf451e0fdc649487f9cba08847ac",
+    "triplet-schedule.xlsx": "7b05eb8c4c86e040ffea4010ffa8bfbdab7a43d011b04aaea6dc815d0ce37fee",
+    "triplet-contract.docx": "5d85acdfc54601e174383361acbb5ef4126a9d1a0b181d3bebeeb82371ff7c4a",
+    "triplet-specification.docx": "41120f87b1e7e1710396f1388e6ecff78f0eb64582de802077ccb27196dc11a0"
+  },
+  "contract": {
+    "price_eur": 1000000,
+    "completion_deadline": "2027-06-30",
+    "clause_sentence": "Plazo. La fecha de finalización de las obras será el 30 de junio de 2027."
+  },
+  "budget": {
+    "stated_total_eur": 1500000
+  },
+  "schedule": {
+    "planned_finish": "2027-09-30",
+    "source_locator": "Plan!4",
+    "activity": "Entrega y recepción"
+  },
+  "expected_rules": [
+    "DET-CRS-CONBUD",
+    "DET-CRS-NEGMARGIN"
+  ],
+  "expected_provisional": [
+    "ADV-SCHDEAD-PROVISIONAL"
+  ],
+  "note_schedule": "The schedule finish is a source observation (not an approved baseline): it raises a provisional advisory, never a confirmed DET-CRS-SCHDEAD finding",
+  "specification": {
+    "document_type": "technical_spec",
+    "sections": [
+      "4.1.2",
+      "4.2"
+    ],
+    "note": "Canonical technical_spec source is persisted as the fourth family; extraction and coherence evidence require separate acceptance, never inferred from upload."
+  }
+}

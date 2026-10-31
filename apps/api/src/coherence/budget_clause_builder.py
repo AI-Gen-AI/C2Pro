@@ -13,7 +13,7 @@ from src.coherence.domain.budget_line_availability import STRUCTURED_BUDGET_SOUR
 from src.coherence.models import Clause
 from src.documents.domain.revision_declarations import STATED_TOTAL_BY_REVISION_KEY
 from src.temporal.adapters.persistence.current_revision_sql import (
-    clause_in_current_scope,
+    canonical_clause_in_current_scope,
     current_revision_lateral,
 )
 
@@ -38,7 +38,7 @@ _CONTRACT_TOTAL_SQL = text(f"""
       AND p.tenant_id = CAST(:tenant_id AS uuid)
       AND d.document_type::text = 'contract'
       AND c.extracted_entities ? 'total_amount'
-      AND {clause_in_current_scope("c", "cur")}
+      AND {canonical_clause_in_current_scope("c", "cur")}
     ORDER BY amt DESC
     LIMIT 1
 """)
@@ -69,15 +69,9 @@ _BUDGET_DECLARATION_SQL = text(f"""
     WHERE d.project_id = CAST(:project_id AS uuid)
       AND d.tenant_id = CAST(:tenant_id AS uuid)
       AND d.document_type::text = 'budget'
-      AND cur.resolved
-      -- A revision resolved only by the single-revision fallback must not be one a human has yet
-      -- to accept: a pending (PROPOSED) artifact for it is not canonical input.
-      AND (cur.trusted OR NOT EXISTS (
-            SELECT 1 FROM public.document_artifacts pa
-            WHERE pa.document_id = d.id AND pa.tenant_id = d.tenant_id
-              AND (pa.document_revision_id = cur.revision_id
-                   OR (pa.document_revision_id IS NULL AND cur.single_revision))
-              AND pa.trust_state = 'proposed'))
+      -- ``canonical``: trusted, or resolved with no pending proposal (one definition for the
+      -- contract and the budget side, #1133).
+      AND cur.canonical
       AND e.entry->>'revision_id' = cur.revision_id::text
       AND jsonb_typeof(e.entry->'total') = 'number'
     ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC NULLS LAST
@@ -98,7 +92,7 @@ _CONTRACT_CURRENCIES_SQL = text(f"""
       AND c.extracted_entities ? 'total_amount'
       AND c.extracted_entities->>'currency_source' = 'explicit'
       AND length(btrim(coalesce(c.extracted_entities->>'currency', ''))) > 0
-      AND {clause_in_current_scope("c", "cur")}
+      AND {canonical_clause_in_current_scope("c", "cur")}
 """)
 
 

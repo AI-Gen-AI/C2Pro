@@ -4370,6 +4370,276 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/technical-wbs/reviews:
+    get:
+      tags:
+      - Technical WBS review
+      summary: List the current reviewer's historical, audit-only Technical WBS decisions
+      operationId: list_technical_wbs_reviews_api_v1_projects__project_id__technical_wbs_reviews_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 30
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TechnicalWBSReviewHistoryEntry'
+                title: Response List Technical Wbs Reviews Api V1 Projects  Project
+                  Id  Technical Wbs Reviews Get
+        '401':
+          description: Authentication required
+        '404':
+          description: Project not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Technical WBS review
+      summary: Record Technical Wbs Review
+      description: Explicit human review only; source and WBS authority rechecked
+        by service.
+      operationId: record_technical_wbs_review_api_v1_projects__project_id__technical_wbs_reviews_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicalWBSReviewRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicalWBSReviewResponse'
+        '401':
+          description: Authentication required
+        '403':
+          description: Reviewer access denied
+        '404':
+          description: Project or source not found
+        '409':
+          description: Stale revision, WBS or conflicting review
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/technical-wbs/canonical-links:
+    post:
+      tags:
+      - Technical WBS review
+      summary: Explicitly approve a current, canonical Technical to WBS association
+      description: Never infer final authority from an audit-only review event.
+      operationId: approve_canonical_technical_wbs_link_api_v1_projects__project_id__technical_wbs_canonical_links_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanonicalTechnicalWBSLinkRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalTechnicalWBSLinkResponse'
+        '401':
+          description: Authentication required
+        '403':
+          description: Human approver access denied
+        '404':
+          description: Project or audit review not found
+        '409':
+          description: Stale source or WBS authority, or conflicting approval
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Technical WBS review
+      summary: "Read persisted Technical\u2013WBS approvals with independently verified\
+        \ current authority"
+      description: No audit-only event is accepted as canonical, even after relogin.
+      operationId: list_canonical_technical_wbs_links_api_v1_projects__project_id__technical_wbs_canonical_links_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurrentCanonicalTechnicalWBSLinkResponse'
+                title: Response List Canonical Technical Wbs Links Api V1 Projects  Project
+                  Id  Technical Wbs Canonical Links Get
+        '401':
+          description: Authentication required
+        '404':
+          description: Project not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/structured-wbs/canonical-links:
+    post:
+      tags:
+      - Structured WBS links
+      summary: Explicitly approve one immutable Budget row or Schedule activity WBS
+        link
+      operationId: approve_structured_wbs_link_api_v1_projects__project_id__structured_wbs_canonical_links_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveStructuredWBSLinkRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuredWBSLinkApprovalResponse'
+        '401':
+          description: Authentication required
+        '403':
+          description: Human approver denied
+        '404':
+          description: Project or document not found
+        '409':
+          description: Stale source, altered XLSX row or WBS authority
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Structured WBS links
+      summary: Read durable approved Budget and Schedule WBS links with current authority
+      operationId: list_structured_wbs_links_api_v1_projects__project_id__structured_wbs_canonical_links_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 30
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CurrentStructuredWBSLinkResponse'
+                title: Response List Structured Wbs Links Api V1 Projects  Project
+                  Id  Structured Wbs Canonical Links Get
+        '401':
+          description: Authentication required
+        '404':
+          description: Project not found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/mcp/query-view:
     post:
       tags:
@@ -5587,6 +5857,71 @@ components:
         \ review for a newer candidate shares; without the row, a\ndecision from a\
         \ stale screen would land on a review the human never saw.\nA pinned row that\
         \ is no longer awaiting a decision fails closed."
+    ApproveStructuredWBSLinkRequest:
+      properties:
+        family:
+          type: string
+          enum:
+          - budget
+          - schedule
+          title: Family
+        source_document_id:
+          type: string
+          format: uuid
+          title: Source Document Id
+        source_revision_id:
+          type: string
+          format: uuid
+          title: Source Revision Id
+        expected_blob_hash:
+          type: string
+          maxLength: 64
+          minLength: 64
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Blob Hash
+        source_locator:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Source Locator
+        expected_wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Expected Wbs Baseline Id
+        expected_wbs_node_id:
+          type: string
+          format: uuid
+          title: Expected Wbs Node Id
+        approval:
+          type: string
+          const: APPROVE_CANONICAL_LINK
+          title: Approval
+        idempotency_key:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Idempotency Key
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - family
+      - source_document_id
+      - source_revision_id
+      - expected_blob_hash
+      - source_locator
+      - expected_wbs_baseline_id
+      - expected_wbs_node_id
+      - approval
+      - idempotency_key
+      - reason
+      title: ApproveStructuredWBSLinkRequest
+      description: Client cannot supply actor or tenant; project is the authenticated
+        URL scope.
     AttachEvidenceRequest:
       properties:
         type:
@@ -5966,6 +6301,111 @@ components:
       - alert_ids
       - decision
       title: BulkReviewRequest
+    CanonicalTechnicalWBSLinkRequest:
+      properties:
+        review_event_id:
+          type: string
+          format: uuid
+          title: Review Event Id
+        expected_wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Expected Wbs Baseline Id
+        expected_wbs_node_id:
+          type: string
+          format: uuid
+          title: Expected Wbs Node Id
+        approval:
+          type: string
+          const: APPROVE_CANONICAL_LINK
+          title: Approval
+        idempotency_key:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Idempotency Key
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - review_event_id
+      - expected_wbs_baseline_id
+      - expected_wbs_node_id
+      - approval
+      - idempotency_key
+      - reason
+      title: CanonicalTechnicalWBSLinkRequest
+      description: The approval is explicit; actor, tenant and project stay server-owned.
+    CanonicalTechnicalWBSLinkResponse:
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        replayed:
+          type: boolean
+          title: Replayed
+        technical_document_id:
+          type: string
+          format: uuid
+          title: Technical Document Id
+        technical_revision_id:
+          type: string
+          format: uuid
+          title: Technical Revision Id
+        source_clause_id:
+          type: string
+          format: uuid
+          title: Source Clause Id
+        source_section:
+          type: string
+          title: Source Section
+        source_start_offset:
+          type: integer
+          title: Source Start Offset
+        source_end_offset:
+          type: integer
+          title: Source End Offset
+        wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Wbs Baseline Id
+        wbs_node_id:
+          type: string
+          format: uuid
+          title: Wbs Node Id
+        authority:
+          type: string
+          const: EXPLICIT_HUMAN_CANONICAL_LINK
+          title: Authority
+          default: EXPLICIT_HUMAN_CANONICAL_LINK
+        approved_canonical_link:
+          type: boolean
+          const: true
+          title: Approved Canonical Link
+          default: true
+        technical_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Technical Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - event_id
+      - replayed
+      - technical_document_id
+      - technical_revision_id
+      - source_clause_id
+      - source_section
+      - source_start_offset
+      - source_end_offset
+      - wbs_baseline_id
+      - wbs_node_id
+      title: CanonicalTechnicalWBSLinkResponse
     CategoryAssessment:
       properties:
         category:
@@ -6796,6 +7236,110 @@ components:
       required:
       - document_id
       title: CreateWBSImportRequest
+    CurrentCanonicalTechnicalWBSLinkResponse:
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        review_event_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Review Event Id
+        approved_at:
+          type: string
+          format: date-time
+          title: Approved At
+        technical_document_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Technical Document Id
+        technical_revision_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Technical Revision Id
+        source_clause_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Clause Id
+        source_section:
+          type: string
+          title: Source Section
+        source_blob_hash:
+          type: string
+          title: Source Blob Hash
+        wbs_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wbs Baseline Id
+        wbs_node_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wbs Node Id
+        wbs_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Wbs Code
+        wbs_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Wbs Name
+        state:
+          type: string
+          enum:
+          - CURRENT
+          - STALE_SOURCE
+          - STALE_WBS
+          - STALE_BOTH
+          - UNVERIFIED
+          title: State
+        authority:
+          type: string
+          const: EXPLICIT_HUMAN_CANONICAL_LINK
+          title: Authority
+          default: EXPLICIT_HUMAN_CANONICAL_LINK
+        approved_canonical_link:
+          type: boolean
+          const: true
+          title: Approved Canonical Link
+          default: true
+        technical_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Technical Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - event_id
+      - review_event_id
+      - approved_at
+      - technical_document_id
+      - technical_revision_id
+      - source_clause_id
+      - source_section
+      - source_blob_hash
+      - wbs_baseline_id
+      - wbs_node_id
+      - wbs_code
+      - wbs_name
+      - state
+      title: CurrentCanonicalTechnicalWBSLinkResponse
+      description: Durable approval event with current authority rederived on each
+        GET.
     CurrentStateReport:
       properties:
         report_schema_version:
@@ -6877,6 +7421,84 @@ components:
       - schedule
       - evidence_quality
       title: CurrentStateSections
+    CurrentStructuredWBSLinkResponse:
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        family:
+          type: string
+          enum:
+          - budget
+          - schedule
+          title: Family
+        approved_at:
+          type: string
+          format: date-time
+          title: Approved At
+        source_document_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Document Id
+        source_revision_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Source Revision Id
+        source_locator:
+          type: string
+          title: Source Locator
+        source_blob_hash:
+          type: string
+          title: Source Blob Hash
+        wbs_baseline_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wbs Baseline Id
+        wbs_node_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wbs Node Id
+        state:
+          type: string
+          enum:
+          - CURRENT
+          - STALE_SOURCE
+          - STALE_WBS
+          - STALE_BOTH
+          - UNVERIFIED
+          title: State
+        authority:
+          type: string
+          const: EXPLICIT_HUMAN_CANONICAL_LINK
+          title: Authority
+          default: EXPLICIT_HUMAN_CANONICAL_LINK
+        source_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Source Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - event_id
+      - family
+      - approved_at
+      - source_document_id
+      - source_revision_id
+      - source_locator
+      - source_blob_hash
+      - wbs_baseline_id
+      - wbs_node_id
+      - state
+      title: CurrentStructuredWBSLinkResponse
     DLQEntryResponse:
       properties:
         id:
@@ -7360,7 +7982,9 @@ components:
           - type: 'null'
           title: Page
         confidence:
-          type: number
+          anyOf:
+          - type: number
+          - type: 'null'
           title: Confidence
         metadata:
           additionalProperties: true
@@ -7432,6 +8056,18 @@ components:
             format: date-time
           - type: 'null'
           title: Parsed At
+        trusted_revision:
+          anyOf:
+          - $ref: '#/components/schemas/DocumentRevisionRef'
+          - type: 'null'
+          description: The revision a human approved and the project's trusted analysis
+            (Health, Coherence) rests on. Null until a revision has been approved.
+        pending_revision:
+          anyOf:
+          - $ref: '#/components/schemas/DocumentRevisionRef'
+          - type: 'null'
+          description: A newer revision that has been analysed but not approved yet.
+            Nothing in this report is derived from it.
       additionalProperties: false
       type: object
       required:
@@ -7786,6 +8422,30 @@ components:
       - upload_status
       title: DocumentResponse
       description: Base response DTO for documents.
+    DocumentRevisionRef:
+      properties:
+        revision_id:
+          type: string
+          format: uuid
+          title: Revision Id
+        rev_no:
+          type: integer
+          title: Rev No
+          description: Position in the document's revision history (1 = the first
+            upload).
+        blob_hash:
+          type: string
+          title: Blob Hash
+          description: SHA-256 of the exact stored bytes of this revision.
+      additionalProperties: false
+      type: object
+      required:
+      - revision_id
+      - rev_no
+      - blob_hash
+      title: DocumentRevisionRef
+      description: One immutable revision of a document, identified by its content
+        hash.
     DocumentStatus:
       type: string
       enum:
@@ -10364,8 +11024,10 @@ components:
         reason:
           type: string
           maxLength: 2000
+          minLength: 1
           title: Reason
-          default: ''
+          description: 'Why the reviewer rejects the item. Required: a rejection without
+            a reason is not auditable.'
         row_id:
           anyOf:
           - type: string
@@ -10373,6 +11035,8 @@ components:
           - type: 'null'
           title: Row Id
       type: object
+      required:
+      - reason
       title: RejectRequest
       description: 'See ApproveRequest docstring: reviewer identity is server-derived,
 
@@ -10775,6 +11439,11 @@ components:
           type: string
           title: Current Basis
           default: unresolved
+        blob_hash:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blob Hash
         materialization:
           anyOf:
           - $ref: '#/components/schemas/MaterializationStatus'
@@ -11299,6 +11968,65 @@ components:
       - source_domain
       - evidence_tier
       title: StakeholdersSection
+    StructuredWBSLinkApprovalResponse:
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        replayed:
+          type: boolean
+          title: Replayed
+        family:
+          type: string
+          enum:
+          - budget
+          - schedule
+          title: Family
+        source_document_id:
+          type: string
+          format: uuid
+          title: Source Document Id
+        source_revision_id:
+          type: string
+          format: uuid
+          title: Source Revision Id
+        source_locator:
+          type: string
+          title: Source Locator
+        source_blob_hash:
+          type: string
+          title: Source Blob Hash
+        wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Wbs Baseline Id
+        wbs_node_id:
+          type: string
+          format: uuid
+          title: Wbs Node Id
+        authority:
+          type: string
+          const: EXPLICIT_HUMAN_CANONICAL_LINK
+          title: Authority
+          default: EXPLICIT_HUMAN_CANONICAL_LINK
+        source_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Source Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - event_id
+      - replayed
+      - family
+      - source_document_id
+      - source_revision_id
+      - source_locator
+      - source_blob_hash
+      - wbs_baseline_id
+      - wbs_node_id
+      title: StructuredWBSLinkApprovalResponse
     SubscriptionPlan:
       type: string
       enum:
@@ -11329,6 +12057,207 @@ components:
       - database_status
       - timestamp
       title: SystemStatusResponse
+    TechnicalMappingDecision:
+      type: string
+      enum:
+      - CONFIRMED_FOR_REVIEW
+      - REJECTED
+      title: TechnicalMappingDecision
+    TechnicalWBSReviewHistoryEntry:
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        occurred_at:
+          type: string
+          format: date-time
+          title: Occurred At
+        decision:
+          $ref: '#/components/schemas/TechnicalMappingDecision'
+        technical_document_id:
+          type: string
+          format: uuid
+          title: Technical Document Id
+        technical_revision_id:
+          type: string
+          format: uuid
+          title: Technical Revision Id
+        source_clause_id:
+          type: string
+          format: uuid
+          title: Source Clause Id
+        source_section:
+          type: string
+          title: Source Section
+        proposed_wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Proposed Wbs Baseline Id
+        proposed_wbs_node_id:
+          type: string
+          format: uuid
+          title: Proposed Wbs Node Id
+        reason:
+          type: string
+          title: Reason
+        state:
+          type: string
+          const: HISTORICAL_AUDIT_ONLY
+          title: State
+          default: HISTORICAL_AUDIT_ONLY
+        authority:
+          type: string
+          const: AUDIT_ONLY_NOT_CANONICAL_LINK
+          title: Authority
+          default: AUDIT_ONLY_NOT_CANONICAL_LINK
+        technical_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Technical Assessment
+          default: NOT_ASSESSED
+        approved_canonical_link:
+          type: boolean
+          const: false
+          title: Approved Canonical Link
+          default: false
+      type: object
+      required:
+      - event_id
+      - occurred_at
+      - decision
+      - technical_document_id
+      - technical_revision_id
+      - source_clause_id
+      - source_section
+      - proposed_wbs_baseline_id
+      - proposed_wbs_node_id
+      - reason
+      title: TechnicalWBSReviewHistoryEntry
+    TechnicalWBSReviewRequest:
+      properties:
+        clause_id:
+          type: string
+          format: uuid
+          title: Clause Id
+        expected_revision_id:
+          type: string
+          format: uuid
+          title: Expected Revision Id
+        expected_blob_hash:
+          type: string
+          maxLength: 64
+          minLength: 64
+          pattern: ^[0-9a-f]{64}$
+          title: Expected Blob Hash
+        expected_wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Expected Wbs Baseline Id
+        proposed_wbs_node_id:
+          type: string
+          format: uuid
+          title: Proposed Wbs Node Id
+        decision:
+          $ref: '#/components/schemas/TechnicalMappingDecision'
+        idempotency_key:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Idempotency Key
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - clause_id
+      - expected_revision_id
+      - expected_blob_hash
+      - expected_wbs_baseline_id
+      - proposed_wbs_node_id
+      - decision
+      - idempotency_key
+      - reason
+      title: TechnicalWBSReviewRequest
+      description: Never accept tenant, actor, project, or link-approval authority
+        in JSON.
+    TechnicalWBSReviewResponse:
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        decision:
+          $ref: '#/components/schemas/TechnicalMappingDecision'
+        replayed:
+          type: boolean
+          title: Replayed
+        technical_document_id:
+          type: string
+          format: uuid
+          title: Technical Document Id
+        technical_revision_id:
+          type: string
+          format: uuid
+          title: Technical Revision Id
+        source_clause_id:
+          type: string
+          format: uuid
+          title: Source Clause Id
+        source_section:
+          type: string
+          title: Source Section
+        source_start_offset:
+          type: integer
+          title: Source Start Offset
+        source_end_offset:
+          type: integer
+          title: Source End Offset
+        proposed_wbs_baseline_id:
+          type: string
+          format: uuid
+          title: Proposed Wbs Baseline Id
+        proposed_wbs_node_id:
+          type: string
+          format: uuid
+          title: Proposed Wbs Node Id
+        state:
+          type: string
+          const: HUMAN_REVIEW_REQUIRED
+          title: State
+          default: HUMAN_REVIEW_REQUIRED
+        authority:
+          type: string
+          const: AUDIT_ONLY_NOT_CANONICAL_LINK
+          title: Authority
+          default: AUDIT_ONLY_NOT_CANONICAL_LINK
+        technical_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Technical Assessment
+          default: NOT_ASSESSED
+        approved_canonical_link:
+          type: boolean
+          const: false
+          title: Approved Canonical Link
+          default: false
+      type: object
+      required:
+      - event_id
+      - decision
+      - replayed
+      - technical_document_id
+      - technical_revision_id
+      - source_clause_id
+      - source_section
+      - source_start_offset
+      - source_end_offset
+      - proposed_wbs_baseline_id
+      - proposed_wbs_node_id
+      title: TechnicalWBSReviewResponse
     TemporalEntityRef:
       properties:
         artifact_type:

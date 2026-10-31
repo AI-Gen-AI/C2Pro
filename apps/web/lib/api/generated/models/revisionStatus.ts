@@ -52,4 +52,5 @@ export interface RevisionStatus {
   current_basis?: string;
   materialization?: MaterializationStatus | null;
   reason?: string | null;
+  blob_hash?: string | null;
 }

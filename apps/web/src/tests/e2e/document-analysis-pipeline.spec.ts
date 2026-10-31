@@ -43,8 +43,20 @@ async function goToProjectDocuments(page: Page) {
   await expect(page.getByTestId("documents-page")).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * The alerts API is project-scoped and answers 404 for a project that does not
+ * exist, so the alerts tests target the deterministic FRT-192 wedge project
+ * (seeded with one alert by tests/e2e_seed/seed_wedge.py), not the fictional
+ * demo id above.
+ */
+const SEEDED_ALERTS_PROJECT_ID = "00000000-0000-0000-0000-00000000c303";
+// The alert tests/e2e_seed/seed_wedge.py creates (severity MEDIUM, status OPEN -> shown as "pending").
+const SEEDED_ALERT_TITLE = "Budget deviation has supporting evidence";
+const SEEDED_ALERT_SEVERITY = "medium";
+const SEEDED_ALERT_STATUS = "pending";
+
 async function goToProjectAlerts(page: Page) {
-  await page.goto(`/projects/${DEMO_PROJECT_ID}/alerts`);
+  await page.goto(`/projects/${SEEDED_ALERTS_PROJECT_ID}/alerts`);
   // Wait for page to stabilize
   await page.waitForLoadState("networkidle");
 }
@@ -122,44 +134,30 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     // One of these should be visible
     await expect(
-      heading.or(alertsList.first()).or(emptyState)
+      heading.or(alertsList.first()).or(emptyState).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("DAP-005: Alert detail shows severity and description", async ({ page }) => {
+  test("DAP-005: the seeded alert shows its title, severity and status in the alerts table", async ({
+    page,
+  }) => {
     await goToProjectAlerts(page);
-    await page.waitForLoadState("networkidle");
 
-    // Find alert rows or cards
-    const alertItems = page.locator(
-      "table tbody tr, [data-testid^='alert-'], [role='row']"
-    );
-    const count = await alertItems.count();
-
-    if (count === 0) {
-      test.skip(true, "TASK-QA-336: demo project has no seeded alerts");
-      return;
-    }
-
-    // Click first alert to view detail
-    await alertItems.first().click();
-
-    // Should show some detail view (dialog, drawer, or page)
-    const detailView = page.locator(
-      "[role='dialog'], [data-testid='alert-detail'], [data-testid='alert-drawer']"
-    );
-
-    // If the click opened a detail view, verify severity is shown
-    const detailCount = await detailView.count();
-    if (detailCount > 0) {
-      await expect(detailView.first()).toBeVisible();
-
-      // Severity should be displayed somewhere
-      const severityText = page.getByText(
-        /critical|high|medium|low|info/i
-      );
-      await expect(severityText.first()).toBeVisible();
-    }
+    // The review center presents an alert as a TABLE ROW (Title | Severity | Status | Clause |
+    // Evidence | Assignee | Actions); there is no detail view, and activating the row would open an
+    // action dialog, not a detail. Select the seeded alert by its title (tests/e2e_seed/seed_wedge.py)
+    // and check each column that carries a fact about it. A missing seeded alert is a failure:
+    // it must not be skipped as "no alerts".
+    const row = page.getByRole("row").filter({ hasText: SEEDED_ALERT_TITLE });
+    await expect(row, "the seeded alert is listed exactly once").toHaveCount(1, { timeout: 30_000 });
+    const cells = row.getByRole("cell");
+    await expect(cells.nth(0)).toHaveText(SEEDED_ALERT_TITLE);
+    await expect(cells.nth(1)).toHaveText(SEEDED_ALERT_SEVERITY);
+    await expect(cells.nth(2)).toHaveText(SEEDED_ALERT_STATUS);
+    // Clause and Evidence always render something: a link / text, or an explicit dash. An empty
+    // cell would be a rendering fault.
+    await expect(cells.nth(3)).not.toBeEmpty();
+    await expect(cells.nth(4)).not.toBeEmpty();
   });
 
   test("DAP-006: Alert approve/reject buttons are accessible", async ({ page }) => {
@@ -256,11 +254,10 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     if ((await alertsTab.count()) > 0) {
       await alertsTab.first().click();
-      await page.waitForLoadState("networkidle");
-
-      // Should now be on alerts page
-      const url = page.url();
-      expect(url).toContain("alerts");
+      // The destination is the contract of this test; "networkidle" never settles on a page that
+      // keeps polling (it timed out the whole test in Nightly 123), so wait for the URL itself.
+      await page.waitForURL(/alerts/, { timeout: 30_000 });
+      expect(page.url()).toContain("alerts");
     }
 
     // Navigate back to documents
@@ -270,10 +267,8 @@ test.describe("TS-E2E-DAP-001: Document Analysis Pipeline", () => {
 
     if ((await docsTab.count()) > 0) {
       await docsTab.first().click();
-      await page.waitForLoadState("networkidle");
-
-      const url = page.url();
-      expect(url).toContain("documents");
+      await page.waitForURL(/documents/, { timeout: 30_000 });
+      expect(page.url()).toContain("documents");
     }
   });
 

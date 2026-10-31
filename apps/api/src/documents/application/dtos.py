@@ -298,5 +298,5 @@ class DocumentEntityResponse(BaseModel):
     type: str
     text: str
     page: int | None = None
-    confidence: float
+    confidence: float | None
     metadata: JsonDict = Field(default_factory=dict)

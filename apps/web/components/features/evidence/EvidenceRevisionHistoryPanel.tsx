@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,8 +46,10 @@ function revisionLabel(revision: RevisionStatus): string {
  */
 export function EvidenceRevisionHistoryPanel({
   documentId,
+  projectId,
 }: {
   documentId: string | null;
+  projectId?: string;
 }) {
   const [selection, setSelection] = useState<SelectedRevision | null>(null);
   const revisionsQuery =
@@ -72,7 +75,23 @@ export function EvidenceRevisionHistoryPanel({
   const clauses = (clausesQuery.data ?? []).filter(
     (entity) => entity.type === "clause",
   );
-  const hasTrustedCurrent = revisions.some(isTrustedCurrent);
+  const trustedCurrentRevision = revisions.find(isTrustedCurrent);
+  const comparingProposal = selectedRevision?.trust_state === "proposed" &&
+    Boolean(trustedCurrentRevision && trustedCurrentRevision.revision_id !== selectedRevisionId);
+  const baselineRevisionId = comparingProposal ? trustedCurrentRevision?.revision_id ?? null : null;
+  // Read the approved A independently from the proposed B. This is a
+  // revision-scoped extracted-entity preview (a title can replace raw clause
+  // text), not a verified source quote, semantic diff or approval.
+  const baselineClausesQuery =
+    useGetDocumentEntitiesEndpointApiV1DocumentsDocumentIdEntitiesGet(
+      documentId ?? "",
+      { revision_id: baselineRevisionId },
+      { query: { enabled: Boolean(documentId && baselineRevisionId) } },
+    );
+  const baselineClauses = (baselineClausesQuery.data ?? []).filter(
+    (entity) => entity.type === "clause",
+  );
+  const hasTrustedCurrent = Boolean(trustedCurrentRevision);
 
   if (!documentId) return null;
 
@@ -128,6 +147,16 @@ export function EvidenceRevisionHistoryPanel({
                 </Button>
               ))}
             </div>
+            {selectedRevision?.trust_state === "proposed" ? (
+              <div data-testid="revision-proposal-warning" className="rounded-md border border-amber-500/30 p-3 text-sm">
+                Revision {selectedRevision.rev_no ?? "unknown"} is proposed and is not authorized for current Health, Coherence, alerts or exports.
+                {trustedCurrentRevision ? (
+                  <span> The approved revision {trustedCurrentRevision.rev_no ?? "unknown"} remains trusted current.</span>
+                ) : (
+                  <span> No trusted current revision can be verified; no approved baseline is assumed.</span>
+                )}
+              </div>
+            ) : null}
             {selectedRevision ? (
               <div
                 data-testid="revision-specific-preview"
@@ -139,6 +168,48 @@ export function EvidenceRevisionHistoryPanel({
                     Revision ID: {selectedRevision.revision_id}
                   </span>
                 </div>
+                {comparingProposal && trustedCurrentRevision ? (
+                  <div data-testid="revision-a-b-comparison" className="mt-3 space-y-2 rounded-md border p-3">
+                    <p className="font-medium">Approved A vs proposed B — extracted clause previews</p>
+                    <p className="text-xs text-muted-foreground">
+                      Read-only extracted clause labels; not a source-text verification or a computed change diff. Only an approved human decision can change the trusted current revision.
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div data-testid="revision-approved-baseline" className="rounded border p-2">
+                        <p className="mb-2 font-medium">Approved revision {trustedCurrentRevision.rev_no ?? "unknown"} (A)</p>
+                        {baselineClausesQuery.isLoading ? <p>Loading approved evidence…</p>
+                          : baselineClausesQuery.isError ? <p role="alert">Approved revision evidence unavailable.</p>
+                          : <>
+                            <p>{baselineClauses.length} stored extracted clauses</p>
+                            <ul className="mt-2 space-y-1">
+                              {baselineClauses.slice(0, 3).map((clause) => (
+                                <li key={clause.id} className="whitespace-pre-wrap rounded bg-muted/40 p-2">{clause.text}</li>
+                              ))}
+                            </ul>
+                          </>}
+                      </div>
+                      <div data-testid="revision-proposed-source" className="rounded border p-2">
+                        <p className="mb-2 font-medium">Proposed revision {selectedRevision.rev_no ?? "unknown"} (B)</p>
+                        {clausesQuery.isLoading ? <p>Loading proposed evidence…</p>
+                          : clausesQuery.isError ? <p role="alert">Proposed revision evidence unavailable.</p>
+                          : <>
+                            <p>{clauses.length} stored extracted clauses</p>
+                            <ul className="mt-2 space-y-1">
+                              {clauses.slice(0, 3).map((clause) => (
+                                <li key={clause.id} className="whitespace-pre-wrap rounded bg-muted/40 p-2">{clause.text}</li>
+                              ))}
+                            </ul>
+                          </>}
+                      </div>
+                    </div>
+                    {projectId ? (
+                      <Link className="inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+                        href={`/projects/${encodeURIComponent(projectId)}/changes`}>
+                        View recorded comparisons in What Changed
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : null}
                 {clausesQuery.isLoading ? (
                   <p className="mt-2 text-sm">Loading this revision’s clauses…</p>
                 ) : clausesQuery.isError ? (

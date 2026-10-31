@@ -294,6 +294,36 @@ describe("EvidencePage highlight mapping", () => {
     });
   });
 
+  it("S5 — returns from inspected source evidence to the exact review in the same project", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-1",
+        returnReviewItemId: "review-source-42",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-return-to-review")).toHaveAttribute(
+      "href",
+      "/projects/proj-1/review?itemId=review-source-42",
+    );
+    expect(screen.getByRole("link", { name: /back to this review/i })).toBeInTheDocument();
+  });
+
+  it("S5 — never accepts an external URL as a review return destination", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => key === "returnReviewItemId"
+        ? "https://outside.invalid/?jump=1"
+        : null,
+    });
+    render(<EvidencePage />);
+    const link = screen.getByTestId("evidence-return-to-review");
+    expect(link).toHaveAttribute(
+      "href",
+      "/projects/proj-1/review?itemId=https%3A%2F%2Foutside.invalid%2F%3Fjump%3D1",
+    );
+    expect(link.getAttribute("href")).not.toMatch(/^https?:/);
+  });
+
   it("blocks a stale A revision and never opens another/current PDF", () => {
     useSearchParamsMock.mockReturnValue({
       get: (key: string) => ({
@@ -529,6 +559,83 @@ describe("EvidencePage highlight mapping", () => {
         /exact highlight unavailable/i,
       );
       expect(screen.queryByTestId("evidence-link-unavailable")).not.toBeInTheDocument();
+    });
+
+    it("S4 — Health opens a DOCX original, shows the exact source quote and never pretends it is a PDF", async () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-b", origin: "health" });
+      useProjectDocumentsMock.mockReturnValue({
+        documents: documents.map((doc) => ({
+          ...doc, name: doc.id === "doc-b" ? "Contract B.docx" : doc.name,
+          extension: doc.id === "doc-b" ? "docx" : "pdf",
+        })),
+        loading: false, error: null, refetch: vi.fn(),
+      });
+      useDocumentDetailMock.mockImplementation((documentId: string) => ({
+        data: documentId === "doc-b" ? {
+          id: "doc-b",
+          project_id: "proj-1",
+          clauses: [{
+            id: "clause-b",
+            clause_code: "7.1",
+            title: "Delay penalties",
+            full_text: "The contractor shall pay a delay penalty after seven days.",
+            text_start_offset: 12,
+            text_end_offset: 77,
+            extracted_entities: { evidence_location: { page_number: 4 } },
+          }],
+        } : { id: documentId, project_id: "proj-1", clauses: [] },
+        isLoading: false,
+      }));
+
+      render(<EvidencePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("evidence-source-excerpt")).toHaveTextContent(
+          "The contractor shall pay a delay penalty after seven days.",
+        );
+      });
+      expect(screen.getByTestId("evidence-source-document")).toHaveTextContent("Contract B.docx");
+      expect(screen.getByTestId("evidence-native-document")).toHaveTextContent(
+        "Original DOCX document",
+      );
+      expect(screen.queryByTestId("viewer-file-url")).not.toBeInTheDocument();
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("clause-b");
+      expect(screen.queryByTestId("evidence-link-unavailable")).not.toBeInTheDocument();
+    });
+
+    it("S4 — Health source must not resolve to a matching semantic alias without a persisted source clause", async () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-b", origin: "health" });
+      // The semantic sidebar contains a matching id, but source clause metadata
+      // could not be retrieved from this document. Fail closed.
+      render(<EvidencePage />);
+      await waitFor(() => {
+        expect(screen.getByTestId("evidence-link-unavailable")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("evidence-exact-source")).not.toBeInTheDocument();
+      expect(screen.getByTestId("active-entity-id")).toHaveTextContent("none");
+    });
+
+    it("S4 — a source clause returned by an unrelated project never becomes Health evidence", async () => {
+      linkTo({ documentId: "doc-b", highlightId: "clause-b", origin: "health" });
+      useDocumentDetailMock.mockImplementation((documentId: string) => ({
+        data: {
+          id: documentId,
+          project_id: "unrelated-project",
+          clauses: [{
+            id: "clause-b",
+            clause_code: "1.1",
+            full_text: "Wrong tenant/project source",
+            extracted_entities: { evidence_location: { page_number: 1 } },
+          }],
+        },
+        isLoading: false,
+      }));
+      render(<EvidencePage />);
+      await waitFor(() => {
+        expect(screen.getByTestId("evidence-link-unavailable")).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId("evidence-source-excerpt")).not.toBeInTheDocument();
+      expect(screen.queryByText("Wrong tenant/project source")).not.toBeInTheDocument();
     });
 
     it("keeps the linked document selected with an explanation when a known source clause has no resolvable span", async () => {

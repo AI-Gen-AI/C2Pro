@@ -64,7 +64,25 @@ async def test_document_entities_route_returns_clause_derived_entities(
             }
         },
     )
-    db.add(clause)
+    unknown_confidence_clause = ClauseORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        project_id=project.id,
+        document_id=document.id,
+        clause_code="1.2",
+        clause_type=ClauseType.OTHER,
+        title="Source text only",
+        full_text="Section 1.2 Concrete strength shall exceed 35 MPa.",
+        extraction_confidence=None,
+        extracted_entities={
+            "technical_requirement": {
+                "source_section": "4.1.2",
+                "verification_status": "unverified",
+            },
+            "evidence_location": {"page_number": None, "bbox": None},
+        },
+    )
+    db.add_all([clause, unknown_confidence_clause])
     await db.commit()
 
     response = await client.get(
@@ -74,10 +92,18 @@ async def test_document_entities_route_returns_clause_derived_entities(
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 1
-    assert body[0]["id"] == str(clause.id)
-    assert body[0]["type"] == "clause"
-    assert body[0]["text"] == "Payment Terms"
-    assert body[0]["page"] == 3
-    assert body[0]["confidence"] == 0.92
-    assert body[0]["metadata"]["evidence_location"]["bbox"] == [0.1, 0.2, 0.5, 0.08]
+    assert len(body) == 2
+    by_id = {str(entity["id"]): entity for entity in body}
+    measured = by_id[str(clause.id)]
+    unknown = by_id[str(unknown_confidence_clause.id)]
+    assert measured["type"] == "clause"
+    assert measured["text"] == "Payment Terms"
+    assert measured["page"] == 3
+    assert measured["confidence"] == 0.92
+    assert measured["metadata"]["evidence_location"]["bbox"] == [0.1, 0.2, 0.5, 0.08]
+    assert unknown["confidence"] is None, "unknown cannot become 100% certainty"
+    assert unknown["page"] is None
+    assert unknown["metadata"]["technical_requirement"] == {
+        "source_section": "4.1.2",
+        "verification_status": "unverified",
+    }

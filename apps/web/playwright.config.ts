@@ -56,6 +56,12 @@ export default defineConfig({
         // directory may itself contain "pj01-".
         /(^|[\\/])pj01-[^\\/]*\.spec\.ts$/,
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
+        // Own project and Nightly step: a long journey that must not hide the rest of the suite.
+        /(^|[\\/])triplet-user-journey\.spec\.ts$/,
+        /(^|[\\/])s7-clerk-relogin\.spec\.ts$/,
+        // Opt-in integral S1-S8 UAT (own project, own workflow job).
+        /(^|[\\/])integral-s1-s8\.spec\.ts$/,
+        /(^|[\\/])integral-auth-preflight\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -88,6 +94,10 @@ export default defineConfig({
       testMatch: [
         /(^|[\\/])pj01-first-user-journey\.spec\.ts$/,
         /(^|[\\/])pj01-tenant-isolation\.spec\.ts$/,
+        // ACC-01 S5: UI rejection needs a reason. Same live Clerk login and production runtime as PJ-01.
+        /(^|[\\/])pj01-hitl-reject\.spec\.ts$/,
+        // ACC-01 S3: a contract awaiting approval is a stated state (not a 404, not a score). Same live Clerk login.
+        /(^|[\\/])pj01-contract-pending-approval\.spec\.ts$/,
       ],
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["global-setup"],
@@ -97,6 +107,43 @@ export default defineConfig({
         priority: "p0",
         description: "PJ-01 first real user journey (Login → Create → Upload A → Processing → Health → Evidence → Revision B → What Changed → Current State)",
       },
+    },
+    {
+      // S7 browser signout+fresh-context Clerk authentication. Run only by dedicated UAT.
+      name: "s7-clerk-uat",
+      testMatch: ["**/s7-clerk-relogin.spec.ts"],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "ACC-01-S7-CLERK-UAT",
+        type: "e2e",
+        priority: "p0",
+        description: "Real Clerk logout and fresh browser login with three typed human-approved source-to-WBS links",
+      },
+    },
+    {
+      // Integral ACC-01 S1-S8 UAT: ONE project from the first login to the relogin, two Clerk tenants. Opt-in
+      // only (INTEGRAL_UAT=1, set by the integral job of acc01-s2-live-ai-uat.yml); never part of another suite.
+      name: "integral-s1-s8",
+      testMatch: [/(^|[\\/])integral-s1-s8\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      // The scenario starts only if both identities authenticated against the local API (JWKS verified).
+      dependencies: ["global-setup", "integral-auth-preflight"],
+      metadata: {
+        suite: "TS-E2E-INTEGRAL-S1S8-001",
+        type: "e2e",
+        priority: "p0",
+        description: "One persisted project S1-S8, two Clerk Development tenants, fail-closed ledger",
+      },
+    },
+    {
+      // Authentication preflight of the integral UAT: both Clerk Development identities reach the local API with
+      // a real JWT. Read-only (GETs); opt-in (INTEGRAL_UAT=1) and run BEFORE the scenario.
+      name: "integral-auth-preflight",
+      testMatch: [/(^|[\\/])integral-auth-preflight\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: { suite: "TS-E2E-INTEGRAL-AUTH-001", type: "e2e", priority: "p0" },
     },
     {
       // Explicit-only focused diagnostics.  They retain their environment
@@ -275,6 +322,25 @@ export default defineConfig({
         task: "TASK-021",
         type: "visual-regression",
         scope: "core-pages",
+      },
+    },
+    {
+      // TS-E2E-TRIPLET-001: project → contract → HITL → budget + schedule → coherence →
+      // alerts/health/evidence → persistence, on the real local backend. The AI is mocked in
+      // the Nightly (C2PRO_AI_MOCK=1); the spec records and declares it. Explicit-only.
+      name: "triplet-journey",
+      testMatch: /(^|[\\/])triplet-user-journey\.spec\.ts$/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/user.json",
+      },
+      dependencies: ["setup"],
+      metadata: {
+        suite: "TS-E2E-TRIPLET-001",
+        type: "e2e",
+        priority: "p0",
+        ai: "mocked-in-nightly",
+        description: "Three-document journey; not PQ-HITL-09 S1-S8",
       },
     },
     {

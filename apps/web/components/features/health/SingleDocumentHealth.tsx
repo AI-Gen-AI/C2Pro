@@ -142,7 +142,7 @@ function EvidenceLinks({
         {documentId ? (
           <Link
             data-testid="health-evidence-link"
-            href={`/projects/${projectId}/evidence?documentId=${documentId}`}
+            href={`/projects/${projectId}/evidence?documentId=${encodeURIComponent(documentId)}&origin=health`}
             className={EVIDENCE_LINK_CLASS}
           >
             <FileText className="h-3 w-3" aria-hidden="true" />
@@ -166,7 +166,7 @@ function EvidenceLinks({
             key={clauseId}
             data-testid="health-evidence-link"
             data-clause-id={clauseId}
-            href={`/projects/${projectId}/evidence?documentId=${documentId}&highlightId=${clauseId}`}
+            href={`/projects/${projectId}/evidence?documentId=${encodeURIComponent(documentId)}&highlightId=${encodeURIComponent(clauseId)}&origin=health`}
             className={EVIDENCE_LINK_CLASS}
           >
             <FileText className="h-3 w-3" aria-hidden="true" />
@@ -298,7 +298,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export function SingleDocumentHealth({ projectId }: { projectId: string }) {
   const { data, isLoading, isError, error } =
-    useGetProjectHealthApiV1ProjectsProjectIdHealthGet(projectId);
+    // Health is derived from decisions made elsewhere (an approved revision), so it is revalidated
+    // every time the view opens instead of trusting a copy cached for minutes.
+    useGetProjectHealthApiV1ProjectsProjectIdHealthGet(projectId, { query: { refetchOnMount: "always" } });
 
   if (isLoading) {
     return (

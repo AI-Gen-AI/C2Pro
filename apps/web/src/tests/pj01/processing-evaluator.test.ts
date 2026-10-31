@@ -145,3 +145,63 @@ describe("evaluateProcessingTimeline", () => {
     expect(result.violations).toEqual([]);
   });
 });
+
+describe("evaluateProcessingTimeline — human-review gate (settlement: review_required)", () => {
+  const gate = { settlement: "review_required" as const };
+
+  it("accepts a run that stops at the durable review state with a matching label", () => {
+    const result = evaluateProcessingTimeline(
+      timeline({
+        polls: [
+          { atMs: 5_000, stage: "queued" },
+          { atMs: 10_000, stage: "processing" },
+          { atMs: 15_000, stage: "review_required" },
+        ],
+        uiSamples: [
+          { atMs: 6_000, label: "Uploaded" },
+          { atMs: 11_000, label: "Processing" },
+          { atMs: 16_000, label: "Review required" },
+        ],
+      }),
+      gate,
+    );
+    expect(result.outcome).toBe("review_required");
+    expect(result.violations).toEqual([]);
+  });
+
+  it("does not stop on the review state unless the caller expects the gate", () => {
+    const result = evaluateProcessingTimeline(
+      timeline({
+        polls: [{ atMs: 5_000, stage: "review_required" }],
+        uiSamples: [{ atMs: 6_000, label: "Review required" }],
+        timedOut: true,
+      }),
+    );
+    expect(result.outcome).toBe("timeout");
+  });
+
+  it("flags a label that never follows the backend into the review state", () => {
+    const result = evaluateProcessingTimeline(
+      timeline({
+        polls: [{ atMs: 10_000, stage: "review_required" }],
+        uiSamples: [
+          { atMs: 11_000, label: "Processing" },
+          { atMs: 40_000, label: "Processing" },
+        ],
+      }),
+      gate,
+    );
+    expect(codes(result)).toContain("MANUAL_REFRESH_REQUIRED");
+  });
+
+  it("flags success shown while the analysis still waits for a human", () => {
+    const result = evaluateProcessingTimeline(
+      timeline({
+        polls: [{ atMs: 10_000, stage: "review_required" }],
+        uiSamples: [{ atMs: 11_000, label: "Analyzed" }],
+      }),
+      gate,
+    );
+    expect(codes(result)).toContain("FALSE_SUCCESS");
+  });
+});

@@ -12,6 +12,8 @@ NOT_ASSESSED and raises no alert.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
@@ -26,10 +28,6 @@ from fastapi import UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.analysis.adapters.persistence.document_artifact_repository import (
-    SqlAlchemyDocumentArtifactRepository,
-)
-from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.coherence.router import CoherenceEvaluateRequest, evaluate_project_coherence
 from src.coherence.schedule_clause_builder import load_schedule_planned_finish
 from src.core.auth.models import SubscriptionPlan, Tenant
@@ -54,6 +52,9 @@ pytestmark = pytest.mark.asyncio
 
 RULE = "DET-CRS-SCHDEAD"
 PROVISIONAL_RULE = "ADV-SCHDEAD-PROVISIONAL"
+TRIPLET_DIR = (
+    Path(__file__).resolve().parents[4] / "web" / "src" / "tests" / "e2e" / "test-data" / "triplet"
+)
 COMPLETION_CLAUSE = "La fecha de finalización de las obras será el 30 de junio de 2027."
 DURATION_CLAUSE = "El plazo de ejecución de las obras será de dieciocho meses desde la firma."
 PRICE_CLAUSE = "El precio del contrato asciende a 1.000.000 euros."
@@ -215,10 +216,15 @@ async def _metadata(db: AsyncSession, document_id: UUID) -> dict[str, Any]:
     return dict(row.document_metadata or {})
 
 
-async def _trust(
+async def approve_document(
     db: AsyncSession, user: Any, project_id: UUID, document: Document, revision: Any
 ) -> None:
-    """Approval: a TRUSTED artifact bound to exactly ``revision`` (the state a HITL approval leaves)."""
+    """The human approval: a TRUSTED artifact bound to exactly ``revision`` (what HITL approval leaves)."""
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
+    from src.analysis.domain.contracts import DocumentArtifact, RiskItem
+
     await SqlAlchemyDocumentArtifactRepository(db).save(
         DocumentArtifact(
             document_id=str(document.id),
@@ -232,8 +238,12 @@ async def _trust(
     await db.commit()
 
 
+_trust = approve_document  # name used by the main-line revision-authority tests
+
+
 async def _scenario(
-    db: AsyncSession, worker: Any, user: Any, *, contract: list[str], schedule: list[list[Any]]
+    db: AsyncSession, worker: Any, user: Any, *, contract: list[str], schedule: list[list[Any]],
+    approve_contract: bool = False,
 ) -> tuple[UUID, Document, Any, Document, Any]:
     project_id = await _project(db, user.tenant_id)
     contract_doc, contract_rev = await _upload_and_ingest(
@@ -244,6 +254,8 @@ async def _scenario(
         db, worker, user, project_id, filename="schedule.xlsx",
         content=_xlsx(schedule), document_type=DocumentType.SCHEDULE,
     )
+    if approve_contract:
+        await approve_document(db, user, project_id, contract_doc, contract_rev)
     return project_id, contract_doc, contract_rev, schedule_doc, schedule_rev
 
 
@@ -354,27 +366,24 @@ async def test_the_provisional_advisory_does_not_move_the_score_or_the_scoring_s
 async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
     db: AsyncSession, worker: Any, test_user: Any
 ) -> None:
-    """Persistence of the advisory through the real alert mirror (a score is not needed to test it)."""
-    from src.coherence.router import (
-        _mirror_coherence_alerts_to_alerts_table,
-        get_clauses_from_rag,
+    """A scoreless /evaluate itself must commit the provisional advisory to Alerts."""
+    project_id, contract_doc, *_ = await _scenario(
+        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE,
+        approve_contract=True,  # the document link is only authorised by an approved contract (#1111)
     )
-
-    project_id, contract_doc, contract_rev, *_ = await _scenario(
-        db, worker, test_user, contract=[PRICE_CLAUSE, COMPLETION_CLAUSE], schedule=LATE_SCHEDULE
-    )
-    # A clause only earns a navigable document link once its contract is APPROVED (a TRUSTED artifact
-    # bound to the revision): the mirror fails closed on unverified document associations (#1111).
-    await _trust(db, test_user, project_id, contract_doc, contract_rev)
     result = await _evaluate(db, test_user, project_id)
+    assert result.overall_score is None, "this regression must exercise the score-withheld path"
     [advisory] = _schdead(result)
-    clauses = await get_clauses_from_rag(db, project_id, test_user.tenant_id)
 
-    await _mirror_coherence_alerts_to_alerts_table(
-        db=db, project_id=project_id, tenant_id=test_user.tenant_id,
-        alerts=[advisory], clauses=clauses,
-    )
-    await db.commit()
+    # Do NOT call the internal mirror directly: persistence is part of the API flow.
+    # Read after /evaluate's transaction boundary, not from an uncommitted fixture.
+    scored_rows = (
+        await db.execute(
+            text("SELECT count(*) FROM coherence_results WHERE project_id = :p"),
+            {"p": project_id},
+        )
+    ).scalar_one()
+    assert scored_rows == 0, "scoreless findings must not fabricate a scored snapshot"
 
     row = (
         await db.execute(
@@ -390,6 +399,18 @@ async def test_the_provisional_advisory_is_persisted_with_its_navigable_source(
     assert row.alert_metadata["detection_evidence"]["source_document_id"] == str(contract_doc.id)
     assert "Sheet!4" in row.alert_metadata["detection_evidence"]["claim"]  # the XLSX row is named in the evidence
     assert str(contract_doc.id) in row.affected_entities["documents"]
+
+    # A repeated scoreless evaluation must update the same durable finding, not
+    # create a second alert or fabricate a numeric score.
+    repeated = await _evaluate(db, test_user, project_id)
+    assert repeated.overall_score is None
+    alert_rows = (
+        await db.execute(
+            text("SELECT count(*) FROM alerts WHERE project_id = :p AND rule_id = :r"),
+            {"p": project_id, "r": PROVISIONAL_RULE},
+        )
+    ).scalar_one()
+    assert alert_rows == 1
 
 
 async def test_a_schedule_of_another_project_never_feeds_this_projects_comparison(
@@ -482,3 +503,57 @@ async def test_a_schedule_revision_that_is_not_current_is_not_assessed(
     assert loaded["reason"] == "schedule_revision_not_current"
     assert "date" not in loaded
     assert _schdead(await _evaluate(db, test_user, project_id)) == []
+
+
+# ── the browser journey's fixture files, through the same backend path ──────
+
+
+async def test_the_triplet_fixture_files_raise_the_budget_alerts_and_a_provisional_schedule_risk(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    """Grounds the E2E journey: its real fixture files, real worker, real evaluate; no AI."""
+    manifest = json.loads((TRIPLET_DIR / "triplet.manifest.json").read_text(encoding="utf-8"))
+    for name, expected in manifest["sha256"].items():
+        assert hashlib.sha256((TRIPLET_DIR / name).read_bytes()).hexdigest() == expected, name
+
+    project_id = await _project(db, test_user.tenant_id)
+    schedule_doc = schedule_rev = None
+    for filename, document_type in (
+        ("triplet-contract.docx", DocumentType.CONTRACT),
+        ("triplet-budget.xlsx", DocumentType.BUDGET),
+        ("triplet-schedule.xlsx", DocumentType.SCHEDULE),
+        ("triplet-specification.docx", DocumentType.TECHNICAL_SPEC),
+    ):
+        document, revision = await _upload_and_ingest(
+            db, worker, test_user, project_id, filename=filename,
+            content=(TRIPLET_DIR / filename).read_bytes(), document_type=document_type,
+        )
+        if document_type is DocumentType.SCHEDULE:
+            schedule_doc, schedule_rev = document, revision
+
+    finish = (await _metadata(db, schedule_doc.id))["schedule_planned_finish"]
+    assert finish["date"] == manifest["schedule"]["planned_finish"]
+    assert finish["source_locator"] == manifest["schedule"]["source_locator"]
+    assert finish["revision_id"] == str(schedule_rev.revision_id)
+
+    result = await _evaluate(db, test_user, project_id)
+
+    rules = {alert.rule_id for alert in result.alerts}
+    assert rules >= set(manifest["expected_rules"])
+    assert rules >= set(manifest["expected_provisional"])
+    assert RULE not in rules  # a submitted schedule never confirms a breach
+    [advisory] = _schdead(result)
+    assert manifest["contract"]["completion_deadline"] in advisory.message
+
+    # Four families, still no valid coverage: the score is withheld AND the findings are durable.
+    assert result.overall_score is None
+    await db.commit()
+    persisted = {
+        row.rule_id
+        for row in (
+            await db.execute(
+                text("SELECT rule_id FROM alerts WHERE project_id = :p"), {"p": project_id}
+            )
+        ).all()
+    }
+    assert persisted >= set(manifest["expected_rules"]) | set(manifest["expected_provisional"])

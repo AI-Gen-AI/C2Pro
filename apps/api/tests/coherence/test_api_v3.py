@@ -590,7 +590,14 @@ async def test_evaluate_fetches_from_rag_with_project_id(
         "src.coherence.router.evaluate_coherence_async",
         new_callable=AsyncMock,
     ) as mock_evaluate:
-        with patch("src.coherence.router.get_clauses_from_rag") as mock_rag:
+        # Explicitly model an approved current contract. An unconfigured Mock
+        # otherwise triggers the fail-closed pending-approval guard, correctly
+        # preventing both RAG access and relational scoring.
+        with patch(
+            "src.coherence.router._contracts_awaiting_approval",
+            new_callable=AsyncMock,
+            return_value=False,
+        ) as mock_contract_gate, patch("src.coherence.router.get_clauses_from_rag") as mock_rag:
             mock_evaluate.return_value = sample_enriched_result
             mock_rag.return_value = sample_clauses
 
@@ -612,6 +619,8 @@ async def test_evaluate_fetches_from_rag_with_project_id(
                 db=mock_db,
                 current_user=sample_current_user,
             )
+
+            mock_contract_gate.assert_awaited_once_with(mock_db, project_id, sample_current_user.tenant_id)
 
             # Verify RAG was called
             mock_rag.assert_called_once_with(mock_db, project_id, sample_current_user.tenant_id, 50)

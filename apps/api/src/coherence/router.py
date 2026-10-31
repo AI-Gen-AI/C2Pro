@@ -42,6 +42,7 @@ from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.current_revision_sql import (
     chunk_in_current_scope,
     clause_in_current_scope,
+    contract_input_in_current_scope,
     current_chunk_join,
     current_revision_lateral,
     parsed_text_in_current_scope,
@@ -243,6 +244,12 @@ def _convert_enriched_to_coherence_result(enriched: EnrichedCoherenceResult) -> 
         alerts=enriched.alerts,
         category_breakdown=enriched.category_breakdown,
         calculated_at=enriched.calculated_at,
+        # S3: Health must disclose why a dimension remains unassessed even
+        # through the default public endpoint (include_diagnostics=False).
+        # Dropping these nullable canonical fields turned a legitimate NULL
+        # score into an unexplained result with missingDimensions=[] in UI.
+        score_reason=enriched.score_reason,
+        score_missing_dimensions=enriched.score_missing_dimensions,
     )
 
 
@@ -264,7 +271,12 @@ _CLAUSES_PER_CATEGORY = 10
 _CURRENT_CLAUSE_JOIN = (
     f"CROSS JOIN LATERAL {current_revision_lateral('c.document_id', 'c.tenant_id')} AS cur"
 )
-_CLAUSE_IN_CURRENT_SCOPE = clause_in_current_scope("c", "cur")
+# A contract that still awaits approval (a PROPOSED artifact pending) is not canonical input: its clauses
+# feed neither the rules nor the completion-deadline comparison (#1133). Other document types keep the
+# plain current-revision scope.
+_CLAUSE_IN_CURRENT_SCOPE = (
+    f"{clause_in_current_scope('c', 'cur')} AND {contract_input_in_current_scope('d', 'cur')}"
+)
 _CURRENT_DOCUMENT_JOIN = (
     f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur"
 )
@@ -280,20 +292,50 @@ def _build_clause(row: Sequence[object]) -> Clause | None:
         return None
     extracted_dict = extracted if isinstance(extracted, dict) else {}
     affected_categories = extracted_dict.get("affected_categories")
+    # A technical specification is a document family, not a seventh Coherence
+    # dimension. Preserve its exact source family for evidence deep links while
+    # routing its numbered requirements into the canonical TECHNICAL category.
+    canonical_family_category = (
+        "TECHNICAL" if doc_type in {"technical_spec", "specification"} else doc_type.upper()
+    )
     if not isinstance(affected_categories, list) or not affected_categories:
-        fallback_category = extracted_dict.get("category", doc_type)
-        affected_categories = [str(fallback_category).upper()]
+        fallback_category = extracted_dict.get("category", canonical_family_category)
+        category = str(fallback_category).upper()
+        affected_categories = [
+            "TECHNICAL" if category in {"TECHNICAL_SPEC", "SPECIFICATION"} else category
+        ]
+    clause_data = {
+        "document_id": doc_id,
+        "source": "persisted_clause",
+        "source_document_type": doc_type,
+        "category": affected_categories[0],
+        "affected_categories": affected_categories,
+        **extracted_dict,
+    }
+    if doc_type in {"technical_spec", "specification"}:
+        # Metadata for N8 CategoryRouter is intentionally technical-only:
+        # do NOT reclassify any contract, budget, or schedule in this S3 PR.
+        clause_data["document_type"] = doc_type
+    if (
+        doc_type in {"technical_spec", "specification"}
+        and isinstance(extracted_dict.get("technical_requirement"), dict)
+    ):
+        # An approved SOURCE allows citation but does not prove the building
+        # meets that requirement. The deterministic extraction records only
+        # unverified obligations, even when the source artifact is trusted.
+        # The graph may show the exact evidence and findings, but TECHNICAL
+        # must remain unassessed (NULL) until an independent compliance
+        # assessment has its own authority. Never synthesize that authority
+        # from the section text or the source's HITL approval.
+        clause_data["category"] = "TECHNICAL"
+        clause_data["affected_categories"] = ["TECHNICAL"]
+        clause_data["assessment_unavailable"] = {
+            "TECHNICAL": "TECHNICAL_SOURCE_ONLY_COMPLIANCE_UNVERIFIED"
+        }
     return Clause(
         id=clause_id,
         text=text_value,
-        data={
-            "document_id": doc_id,
-            "source": "persisted_clause",
-            "source_document_type": doc_type,
-            "category": affected_categories[0],
-            "affected_categories": affected_categories,
-            **extracted_dict,
-        },
+        data=clause_data,
     )
 
 
@@ -405,6 +447,8 @@ async def _get_persisted_clause_candidates(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {_CLAUSE_IN_CURRENT_SCOPE}
+          -- A lone PROPOSED technical revision can be 'resolved' but untrusted.
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
           AND LOWER(c.full_text) LIKE ANY(CAST(:keyword_patterns AS text[]))
         ORDER BY c.created_at ASC
         LIMIT :limit
@@ -463,6 +507,7 @@ async def _load_fallback_clause_candidates(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {_CLAUSE_IN_CURRENT_SCOPE}
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
         ORDER BY c.created_at ASC
         LIMIT :limit
     """)
@@ -492,10 +537,13 @@ async def _get_rag_chunk_clauses(
         SELECT dc.content, dc.metadata, dc.document_id
         FROM document_chunks dc
         JOIN projects p ON dc.project_id = p.id
+        JOIN documents d ON d.id = dc.document_id AND d.tenant_id = dc.tenant_id
         {current_chunk_join("dc")}
         WHERE dc.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {chunk_in_current_scope("dc", "cur")}
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
+          AND {contract_input_in_current_scope("d", "cur")}
         ORDER BY dc.created_at DESC
         LIMIT :limit
     """)
@@ -540,6 +588,8 @@ async def _get_parsed_text_fallback_clauses(
         WHERE d.project_id = CAST(:project_id AS uuid)
           AND p.tenant_id = CAST(:tenant_id AS uuid)
           AND {parsed_text_in_current_scope("d", "cur")}
+          AND (d.document_type::text NOT IN ('technical_spec', 'specification') OR cur.trusted)
+          AND {contract_input_in_current_scope("d", "cur")}
           AND d.upload_status IN ('parsed', 'parsed_pending_analysis', 'analyzed')
         ORDER BY d.created_at DESC
     """)
@@ -759,6 +809,73 @@ async def _verified_persisted_clause_documents(
     return {row.id: row.document_id for row in rows}
 
 
+# A document the evaluation does not read -- it has no usable current revision (unresolved: several revisions
+# and none approved, with or without a pending proposal), or it is a contract/budget that is not canonical
+# input -- is NOT evaluated. "Not evaluated" is never "resolved": while one exists the evaluation is
+# incomplete and must not auto-resolve alerts (B1 spec 7.4, #1133). A WBS source is never analysed, so a second
+# revision of it can never be approved and is not counted. Coarse on purpose: it blocks resolving
+# for the whole project, which fails closed (an alert stays open until the revision question is settled).
+_DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL = text(f"""
+    SELECT count(*)
+    FROM documents d
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
+      AND ((NOT cur.resolved AND d.document_type::text <> 'wbs')
+           OR (d.document_type::text IN ('contract', 'budget') AND NOT cur.canonical))
+""")
+
+
+async def _documents_excluded_from_evaluation(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
+    count = await db.scalar(
+        _DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return bool(count)
+
+
+CONTRACT_PENDING_APPROVAL = "contract_pending_approval"
+
+# Contract documents that are not canonical input: awaiting a human decision (or without a usable
+# current revision). Only the contract is asked for; other types keep their own rules.
+_CONTRACTS_AWAITING_APPROVAL_SQL = text(f"""
+    SELECT count(*)
+    FROM documents d
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'contract'
+      AND NOT cur.canonical
+""")
+
+
+async def _contracts_awaiting_approval(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
+    count = await db.scalar(
+        _CONTRACTS_AWAITING_APPROVAL_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return bool(count)
+
+
+def _contract_pending_approval_result(
+    include_diagnostics: bool,
+) -> CoherenceResult | EnrichedCoherenceResult:
+    """Explicit state for a project whose only evidence is a contract awaiting approval."""
+    missing = sorted(_CATEGORY_KEYWORDS)
+    limitation = {"CONTRACT": "The contract is awaiting approval; nothing was evaluated."}
+    if include_diagnostics:
+        return EnrichedCoherenceResult(
+            overall_score=None,
+            score_reason=CONTRACT_PENDING_APPROVAL,
+            score_missing_dimensions=missing,
+            evidence_limitations=limitation,
+        )
+    return CoherenceResult(
+        overall_score=None,
+        alerts=[],
+        score_reason=CONTRACT_PENDING_APPROVAL,
+        score_missing_dimensions=missing,
+    )
+
+
 async def _mirror_coherence_alerts_to_alerts_table(
     *,
     db: AsyncSession,
@@ -766,6 +883,8 @@ async def _mirror_coherence_alerts_to_alerts_table(
     tenant_id: UUID,
     alerts: Sequence[Any],
     clauses: Sequence[Clause] = (),
+    auto_resolve: bool = True,
+    evaluation_complete: bool = True,
 ) -> _CoherenceAlertReconciliation:
     """Reconcile findings and return the durable disposition truth for this transaction.
 
@@ -797,7 +916,9 @@ async def _mirror_coherence_alerts_to_alerts_table(
         project_id=project_id,
         tenant_id=tenant_id,
         violations=payloads,
-        auto_resolve=True,
+        auto_resolve=auto_resolve
+        and evaluation_complete
+        and not await _documents_excluded_from_evaluation(db, project_id, tenant_id),
         commit=False,
     )
     finding_keys = tuple(service.finding_key(payload) for payload in payloads)
@@ -1019,6 +1140,18 @@ async def evaluate_project_coherence(
     if payload.clauses:
         clauses = payload.clauses
     elif payload.project_id:
+        # S3: a contract that has no canonical/approved current input blocks any
+        # relational Coherence Score, even if Budget/Schedule clauses are already
+        # searchable. The old check only ran when *no* RAG clauses existed, so it
+        # could score unrelated documents before a human approved the contract.
+        # A trusted revision A with proposed revision B remains canonical via
+        # current_revision_lateral, so normal S6 revision continuity is preserved.
+        if await _contracts_awaiting_approval(
+            db, payload.project_id, current_user.tenant_id
+        ):
+            # Pending is not an evaluation result: do not persist a Score or
+            # change the alert register before this human authority decision.
+            return _contract_pending_approval_result(include_diagnostics)
         clauses = await get_clauses_from_rag(
             db, payload.project_id, current_user.tenant_id, payload.max_chunks
         )
@@ -1065,6 +1198,7 @@ async def evaluate_project_coherence(
     # The schedule's observed planned finish (with its document/revision/row identity) for the
     # contract-completion comparator. Best-effort: a failure leaves the comparison absent.
     schedule_planned_finish: dict[str, Any] | None = None
+    schedule_assessable = True
     if payload.project_id:
         try:
             schedule_planned_finish = await load_schedule_planned_finish(
@@ -1072,6 +1206,11 @@ async def evaluate_project_coherence(
             )
         except Exception:
             logger.warning("coherence_schedule_planned_finish_load_failed", exc_info=True)
+            schedule_assessable = False
+        # A schedule the comparison could not read (stale revision stamp, several schedules, malformed
+        # observation) was not evaluated: that is not "fixed", so nothing may be auto-resolved.
+        if isinstance(schedule_planned_finish, dict) and "reason" in schedule_planned_finish:
+            schedule_assessable = False
 
     # Create evaluation config
     config = EvaluationConfig(
@@ -1102,15 +1241,24 @@ async def evaluate_project_coherence(
     # B1-09: durable human disposition is part of the scoring input authority.
     # Reconcile first (same transaction), then re-score the complete FindingSignals.
     # A validated false positive is excluded; ACKNOWLEDGED/accepted variance remains.
-    if payload.project_id and enriched_result.overall_score is not None:
+    # An incomplete audit may still surface evidence-backed findings. Preserve those
+    # in the Alert ledger without inventing a score or auto-resolving older findings
+    # that cannot be reassessed from the incomplete evidence.
+    if payload.project_id and (
+        enriched_result.overall_score is not None or enriched_result.alerts
+    ):
         reconciliation = await _mirror_coherence_alerts_to_alerts_table(
             db=db,
             project_id=payload.project_id,
             tenant_id=current_user.tenant_id,
             alerts=enriched_result.alerts,
             clauses=clauses,
+            auto_resolve=enriched_result.overall_score is not None,
+            evaluation_complete=schedule_assessable,
         )
-        if isinstance(reconciliation, _CoherenceAlertReconciliation):
+        if enriched_result.overall_score is not None and isinstance(
+            reconciliation, _CoherenceAlertReconciliation
+        ):
             enriched_result = _apply_disposition_aware_rescore(
                 enriched_result,
                 reconciliation,
@@ -1206,6 +1354,11 @@ async def evaluate_project_coherence(
         )
         # Alert lifecycle was reconciled before scoring with commit=False.
         # This one commit makes the disposition-aware score and Alert state durable together.
+        await db.commit()
+    elif payload.project_id and reconciliation is not None:
+        # A scoreless evaluation can still contain actionable findings. Persist the
+        # alert ledger without creating a fake CoherenceResult or changing trusted
+        # score authority. auto_resolve=False preserves older human dispositions.
         await db.commit()
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
@@ -1685,6 +1838,27 @@ async def get_coherence_dashboard(
         categories_v2=None,
     )
 
+    # S3: the early /coherence/evaluate guard returns contract_pending_approval
+    # without persisting a scored CoherenceResult. The dashboard is a separate
+    # GET and must independently derive the same trust state. Otherwise an old
+    # Analysis or project baseline can present a numeric Score to a user whose
+    # only current contract is not approved. The current_revision_lateral query
+    # distinguishes an unapproved first revision from an already trusted A with
+    # a proposed B: the latter retains A's canonical authority.
+    if document_count and await _contracts_awaiting_approval(db, project_id, tenant_id):
+        summary = summary.model_copy(
+            update={
+                "global_score": None,
+                "coherence_score": None,
+                "sub_scores": _empty_sub_scores(),
+                "score_version": None,
+                "score_reason": CONTRACT_PENDING_APPROVAL,
+                "score_missing_dimensions": sorted(_CATEGORY_KEYWORDS),
+            }
+        )
+
+    # No alerts are resolved or deleted by an unapproved contract. Existing
+    # alert counts remain visible as historical/open action signals.
     summary = await _attach_trusted_projection(summary, project_id, tenant_id, db)
 
     v2_enabled = await _v2_enabled_for(tenant_id, flags_service)

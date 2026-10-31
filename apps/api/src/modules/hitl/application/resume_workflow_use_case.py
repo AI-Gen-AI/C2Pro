@@ -125,6 +125,10 @@ class ResumeWorkflowUseCase:
     _ERR_ALREADY_CLAIMED = (
         "Review item {review_id} is already being resumed by another request"
     )
+    _ERR_CONTRADICTORY_DECISION = (
+        "Review item {review_id} was already {stored} by a human; a {requested} decision cannot "
+        "replace it"
+    )
     _ERR_OPERATOR_REQUIRED = (
         "Review item {review_id} needs operator intervention and will not be "
         "resumed automatically"
@@ -751,6 +755,18 @@ class ResumeWorkflowUseCase:
             if review_item.current_status not in AWAITING_DECISION_STATUSES:
                 # Check if already processed (idempotency)
                 if review_item.current_status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}:
+                    stored_is_approval = review_item.current_status is ReviewStatus.APPROVED
+                    if stored_is_approval != (request.decision is WorkflowDecision.APPROVE):
+                        # Only the SAME decision is an idempotent replay. The opposite one
+                        # changes nothing and must not be answered as if it had been applied.
+                        record_hitl_resume_error("contradictory_decision")
+                        raise ValueError(
+                            self._ERR_CONTRADICTORY_DECISION.format(
+                                review_id=review_id,
+                                stored=review_item.current_status.value.lower(),
+                                requested=request.decision.value,
+                            )
+                        )
                     status = "already_processed"
                     record_hitl_resume_attempt(decision, status)
                     duration = time.perf_counter() - start_time
@@ -911,6 +927,20 @@ class ResumeWorkflowUseCase:
                     phase=phase.value if phase is not None else None,
                     reason=refusal,
                 )
+                if (phase is Phase.FINALIZED_APPROVED and request.decision is WorkflowDecision.REJECT) or (
+                    phase is Phase.FINALIZED_REJECTED and request.decision is WorkflowDecision.APPROVE
+                ):
+                    # A replay repeats the SAME decision. The opposite one is a contradiction: it
+                    # changes nothing, and it must not be answered as if it had been applied
+                    # ("rejected (already completed)" for a review that is approved).
+                    record_hitl_resume_error("contradictory_decision")
+                    raise ValueError(
+                        self._ERR_CONTRADICTORY_DECISION.format(
+                            review_id=review_id,
+                            stored="approved" if phase is Phase.FINALIZED_APPROVED else "rejected",
+                            requested=request.decision.value,
+                        )
+                    )
                 if phase in {Phase.FINALIZED_APPROVED, Phase.FINALIZED_REJECTED}:
                     # Everything durable already landed (e.g. the process
                     # died after finalization but before the HTTP response).

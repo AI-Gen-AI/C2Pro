@@ -175,7 +175,7 @@ class TestDocumentUpload:
 
         response = client.post(f"/projects/{sample_document.project_id}/documents", files=files, data=data)
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
         assert ".exe" in response.json()["detail"]
 
     def test_doc_http_000c_upload_rejects_budget_docx(self, client, app, sample_document):
@@ -696,7 +696,7 @@ class TestDocumentHelpers:
         assert body[0]["metadata"]["evidence_location"]["normalized"] is False
         assert body[1]["text"] == "CLS-002"
         assert body[1]["page"] is None
-        assert body[1]["confidence"] == pytest.approx(1.0)
+        assert body[1]["confidence"] is None
         assert body[1]["metadata"]["clause_type"] is None
         assert body[1]["metadata"]["evidence_location"]["bbox"] is None
 

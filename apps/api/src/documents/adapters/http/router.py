@@ -191,8 +191,10 @@ def _validate_upload_extension(
     document_type: DocumentType | None = None,
 ) -> None:
     if file_extension not in ALLOWED_EXTENSIONS:
+        # PQ-HITL-09 S2: unknown media types are 415, while a valid extension
+        # assigned to the wrong structured document family remains 400.
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"File type '{file_extension}' is not allowed.",
         )
     if document_type is not None:
@@ -938,13 +940,33 @@ async def get_document_entities_endpoint(
                 "normalized": bool(evidence_location.get("normalized", True)),
             },
         }
+        # Surface the *literal* technical section ID to the evidence UI as
+        # unverified source metadata. This is not compliance, an approved WBS
+        # reference, a page coordinate or a scored assessment.
+        technical_source = (
+            clause.extracted_entities.get("technical_requirement")
+            if clause.extracted_entities
+            else None
+        )
+        if isinstance(technical_source, dict):
+            section = technical_source.get("source_section")
+            if (
+                isinstance(section, str)
+                and section
+                and all(part.isdigit() and 1 <= len(part) <= 3 for part in section.split("."))
+            ):
+                metadata["technical_requirement"] = {
+                    "source_section": section,
+                    "verification_status": "unverified",
+                }
         entities.append(
             DocumentEntityResponse(
                 id=clause.id,
                 type="clause",
                 text=clause.title or clause.full_text or clause.clause_code,
                 page=page_number,
-                confidence=float(clause.extraction_confidence or 1.0),
+                # Unknown extraction confidence must never become a fabricated 100%.
+                confidence=clause.extraction_confidence,
                 metadata=metadata,
             )
         )
