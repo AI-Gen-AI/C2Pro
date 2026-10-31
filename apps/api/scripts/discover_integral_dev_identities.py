@@ -156,8 +156,25 @@ def build_receipt(
         verdict = "DEV_B_PREPARABLE"
     else:
         verdict = "NO_AUTHORISED_CANDIDATE"
+    unmarked = discards.get("NOT_AUTHORISED_SYNTHETIC", 0)
+    # Creation is only the conclusion when NO other user could be authorised: existing but unmarked users are an
+    # owner decision (mark one as synthetic, or confirm none may be used) before anything is created.
+    creation_required = verdict == "NO_AUTHORISED_CANDIDATE" and a_known and unmarked == 0
+    next_step = {
+        "DEV_B_AVAILABLE": "select the valid candidate and set INTEGRAL_CLERK_DEV_B_EMAIL",
+        "DEV_B_PREPARABLE": "authorise the preparation of the candidate's Organization (integral-prepare-dev-b)",
+        "INVENTORY_INCOMPLETE": "repeat the read-only discovery; no conclusion is drawn",
+        "NO_AUTHORISED_CANDIDATE": (
+            "a new synthetic identity is needed"
+            if creation_required
+            else "owner decision: mark one unmarked user as synthetic (publicMetadata c2pro_synthetic=true or "
+            "INTEGRAL_SYNTHETIC_EMAIL_DOMAINS) or confirm none may be used; then repeat"
+        ),
+    }[verdict]
     return {
         "verdict": verdict,
+        "unmarked_users": unmarked,
+        "next_step": next_step,
         "inventory": {
             "complete": complete,
             "users_listed": listed,
@@ -166,7 +183,7 @@ def build_receipt(
         "identity_a_resolved": a_known,
         "discard_reasons": dict(sorted(discards.items())),
         "candidates": candidates,
-        "creation_required": verdict == "NO_AUTHORISED_CANDIDATE" and a_known,
+        "creation_required": creation_required,
     }
 
 

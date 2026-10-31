@@ -1202,3 +1202,19 @@ def test_the_separate_operations_never_start_the_paid_s2_job() -> None:
     condition = text[text.index("\n  s2-live-ai:") :].split("\n", 3)[2]
     for flag in ("integral_discover_dev_b", "integral_prepare_dev_a", "integral_prepare_dev_b"):
         assert f"github.event.inputs.{flag} != 'true'" in condition
+
+
+def test_unmarked_users_make_creation_an_owner_decision_not_a_conclusion() -> None:
+    from collections import Counter
+
+    receipt = discovery.build_receipt(
+        complete=True,
+        listed=3,
+        counted=3,
+        discards=Counter({"NOT_AUTHORISED_SYNTHETIC": 2, "IS_IDENTITY_A": 1}),
+        candidates=[],
+        a_known=True,
+    )
+    assert receipt["verdict"] == "NO_AUTHORISED_CANDIDATE"
+    assert receipt["creation_required"] is False and receipt["unmarked_users"] == 2
+    assert "owner decision" in receipt["next_step"]
