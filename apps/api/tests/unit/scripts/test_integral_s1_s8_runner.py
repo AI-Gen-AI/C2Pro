@@ -642,25 +642,35 @@ def test_collect_reads_only_and_assembles_the_facts() -> None:
         }
     )
     facts = asyncio.run(verifier.collect(conn, project_a, project_b))
-    assert facts.project_a["id"] == project_a and facts.project_b["id"] == project_b
+    assert facts.project_a["id"] == project_a
+    assert facts.project_b["id"] == project_b
     assert facts.clause_revisions == {str(clause): str(rev)}
     assert (facts.graph_events, facts.analyses, facts.six_dimension_snapshots) == (1, 2, 1)
-    assert facts.tenant_a_distinct_approver_required is False and facts.tenant_a_ai_spend == 1.5
+    assert facts.tenant_a_distinct_approver_required is False
+    assert facts.tenant_a_ai_spend == 1.5
     assert conn.statements, "something was read"
 
 
 def test_collect_stops_when_project_a_is_missing() -> None:
     conn = _FakeConnection({"FROM projects": []})
     facts = asyncio.run(verifier.collect(conn, uuid4(), uuid4()))
-    assert facts.project_a is None and facts.documents == []
+    assert facts.project_a is None
+    assert facts.documents == []
 
 
 # ── CLI hygiene ─────────────────────────────────────────────────────────────────────────────────────────────
-def test_cli_paths_must_stay_inside_the_repository() -> None:
-    inside = verifier.REPO_ROOT / "apps" / "web" / "playwright-report" / "x.json"
-    assert verifier._within_repo(inside) == inside.resolve()
-    with pytest.raises(SystemExit):
-        verifier._within_repo(verifier.REPO_ROOT.parent / "outside.json")
+def test_the_evidence_files_have_fixed_places_inside_the_checkout() -> None:
+    """No path comes from the command line: every read and write is at a fixed place of this checkout."""
+    for place in (
+        verifier.BROWSER_MANIFEST,
+        verifier.PROVIDER_RECEIPT,
+        verifier.MANIFEST_OUTPUT,
+        verifier.FIXTURE_DIR,
+    ):
+        assert place.is_relative_to(verifier.REPO_ROOT)
+    source = (Path(verifier.__file__)).read_text()
+    assert "--output" not in source
+    assert "--browser-manifest" not in source
 
 
 def test_database_urls_are_normalised_for_asyncpg() -> None:
@@ -715,7 +725,8 @@ def test_the_runner_row_locators_are_the_ones_the_product_parser_names() -> None
     assert budget.count("Presupuesto!2") == 1
     assert schedule.count("Plan!4") == 1
     source = (WEB / "src" / "tests" / "e2e" / "support" / "integral" / "fixtures.ts").read_text()
-    assert 'budget: "Presupuesto!2"' in source and 'schedule: "Plan!4"' in source
+    assert 'budget: "Presupuesto!2"' in source
+    assert 'schedule: "Plan!4"' in source
 
 
 # ── identity preflight ──────────────────────────────────────────────────────────────────────────────────────
@@ -737,7 +748,8 @@ def test_two_identities_in_two_tenants_are_ready() -> None:
 def test_a_missing_b_user_fails_with_a_reason() -> None:
     b = preflight.evaluate_identity("B", [], [])
     code, reasons = preflight.evaluate_pair(_ready("A", "u1", "o1", "t1"), b)
-    assert code == preflight.FAILED and any("0 Clerk user" in r for r in reasons)
+    assert code == preflight.FAILED
+    assert any("0 Clerk user" in r for r in reasons)
 
 
 def test_a_b_user_without_an_organization_asks_for_provisioning() -> None:
@@ -748,7 +760,8 @@ def test_a_b_user_without_an_organization_asks_for_provisioning() -> None:
 
 def test_an_ambiguous_email_fails() -> None:
     report = preflight.evaluate_identity("B", [{"id": "u2"}, {"id": "u3"}], [])
-    assert not report.ready and "exactly one" in report.problems[0]
+    assert not report.ready
+    assert "exactly one" in report.problems[0]
 
 
 def test_two_memberships_fail_because_the_tenant_would_be_ambiguous() -> None:
@@ -773,7 +786,8 @@ def test_an_organization_without_a_tenant_fails() -> None:
 )
 def test_shared_user_organization_or_tenant_fails(b: tuple[str, str, str], needle: str) -> None:
     code, reasons = preflight.evaluate_pair(_ready("A", "u1", "o1", "t1"), _ready("B", *b))
-    assert code == preflight.FAILED and any(needle in r for r in reasons)
+    assert code == preflight.FAILED
+    assert any(needle in r for r in reasons)
 
 
 def test_a_broken_a_fails_before_judging_b() -> None:
@@ -785,7 +799,8 @@ def test_a_broken_a_fails_before_judging_b() -> None:
 def test_the_public_report_holds_no_clerk_identifier() -> None:
     report = _ready("B", "user_secret_id", "org_secret_id", "tenant")
     text = json.dumps(report.public())
-    assert "user_secret_id" not in text and "org_secret_id" not in text
+    assert "user_secret_id" not in text
+    assert "org_secret_id" not in text
 
 
 # ── tenancy seed preconditions ──────────────────────────────────────────────────────────────────────────────
@@ -868,9 +883,8 @@ def test_the_receipt_matches_when_the_process_runs_the_candidate_sha(tmp_path: P
         and result["runtime_sha"] == sha
         and result["cwd_inside_workspace"] is True
     )
-    assert "cmdline" not in json.dumps(result) and "uvicorn" not in json.dumps(result), (
-        "the command line is never recorded"
-    )
+    assert "cmdline" not in json.dumps(result)
+    assert "uvicorn" not in json.dumps(result), "the command line is never recorded"
 
 
 def test_the_receipt_fails_for_another_sha(tmp_path: Path) -> None:
@@ -885,7 +899,8 @@ def test_the_receipt_fails_for_another_sha(tmp_path: Path) -> None:
         workspace=workspace,
         proc_root=proc,
     )
-    assert result["matches"] is False and result["process_found"] is True
+    assert result["matches"] is False
+    assert result["process_found"] is True
 
 
 def test_the_receipt_fails_for_a_process_outside_the_workspace(tmp_path: Path) -> None:
@@ -898,7 +913,8 @@ def test_the_receipt_fails_for_a_process_outside_the_workspace(tmp_path: Path) -
     result = receipt.build_receipt(
         role="backend", pattern="uvicorn", expected_sha=sha, workspace=workspace, proc_root=proc
     )
-    assert result["cwd_inside_workspace"] is False and result["matches"] is False
+    assert result["cwd_inside_workspace"] is False
+    assert result["matches"] is False
 
 
 def test_the_receipt_fails_when_there_is_no_such_process(tmp_path: Path) -> None:
@@ -909,4 +925,5 @@ def test_the_receipt_fails_when_there_is_no_such_process(tmp_path: Path) -> None
     result = receipt.build_receipt(
         role="frontend", pattern="next dev", expected_sha=sha, workspace=workspace, proc_root=proc
     )
-    assert result["process_found"] is False and result["matches"] is False
+    assert result["process_found"] is False
+    assert result["matches"] is False

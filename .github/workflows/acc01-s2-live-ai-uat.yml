@@ -547,9 +547,9 @@ jobs:
         run: |
           mkdir -p apps/web/playwright-report
           python apps/api/scripts/write_integral_runtime_receipt.py --role backend --process-pattern "uvicorn src.main:app" \
-            --expected-sha "${GITHUB_SHA}" --output apps/web/playwright-report/integral-runtime-backend.json
+            --expected-sha "${GITHUB_SHA}"
           python apps/api/scripts/write_integral_runtime_receipt.py --role worker --process-pattern "celery -A src.core.tasks.celery_app" \
-            --expected-sha "${GITHUB_SHA}" --output apps/web/playwright-report/integral-runtime-worker.json
+            --expected-sha "${GITHUB_SHA}"
 
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
@@ -566,8 +566,7 @@ jobs:
         run: |
           # The Next.js server is started by Playwright; its runtime SHA is read from the running process.
           ( python ../api/scripts/write_integral_runtime_receipt.py --role frontend --process-pattern "next dev" \
-              --expected-sha "${GITHUB_SHA}" --workspace "${GITHUB_WORKSPACE}" --wait-seconds 240 \
-              --output playwright-report/integral-runtime-frontend.json || true ) &
+              --expected-sha "${GITHUB_SHA}" --wait-seconds 240 || true ) &
           ./node_modules/.bin/playwright test --project=integral-s1-s8 --workers=1 --reporter=list,json
 
       - name: Provider call receipt (counts only; no prompt or completion is stored)
@@ -599,11 +598,7 @@ jobs:
         if: always() && hashFiles('apps/web/playwright-report/integral-browser-manifest.json') != ''
         working-directory: apps/api
         run: |
-          python scripts/verify_integral_s1_s8_pg.py \
-            --browser-manifest ../web/playwright-report/integral-browser-manifest.json \
-            --fixture-dir ../web/src/tests/e2e/test-data/triplet \
-            --provider-receipt ../web/playwright-report/integral-provider-receipt.json \
-            --output ../web/playwright-report/integral-manifest.json
+          python scripts/verify_integral_s1_s8_pg.py
 
       - name: Summarize the integral run
         if: always()

@@ -53,12 +53,11 @@ FAMILY_EVENTS = {
 }
 
 
-def _within_repo(path: Path) -> Path:
-    """A CLI path must resolve inside this repository checkout: no ``..``, absolute or symlink escape."""
-    resolved = path.resolve()
-    if not resolved.is_relative_to(REPO_ROOT):
-        raise SystemExit(f"FAIL: {path} resolves outside the repository")
-    return resolved
+REPORT_DIR = REPO_ROOT / "apps" / "web" / "playwright-report"
+FIXTURE_DIR = REPO_ROOT / "apps" / "web" / "src" / "tests" / "e2e" / "test-data" / "triplet"
+BROWSER_MANIFEST = REPORT_DIR / "integral-browser-manifest.json"
+PROVIDER_RECEIPT = REPORT_DIR / "integral-provider-receipt.json"
+MANIFEST_OUTPUT = REPORT_DIR / "integral-manifest.json"
 
 
 def _normalize_database_url(raw: str) -> str:
@@ -130,89 +129,132 @@ def _doc(key: str, browser: dict[str, Any]) -> str:
     return str((browser.get("documentIds") or {}).get(key) or "")
 
 
-def judge(facts: Facts, browser: dict[str, Any], expect: Expectations) -> list[Check]:  # noqa: C901, PLR0912, PLR0915
-    """Every claim of the run, as a named check. Pure: no I/O."""
-    checks: list[Check] = []
+@dataclass
+class _Ctx:
+    """The rows and derived views every stage judges, built once."""
 
-    def add(stage: str, name: str, ok: bool, detail: str = "") -> None:
-        checks.append(Check(stage, name, bool(ok), detail))
+    facts: Facts
+    browser: dict[str, Any]
+    expect: Expectations
+    checks: list[Check] = field(default_factory=list)
 
-    project_a, project_b = facts.project_a, facts.project_b
-    # ── S1 ────────────────────────────────────────────────────────────────────────────────────────────────
-    add("S1", "project A exists in PostgreSQL", project_a is not None)
-    add("S1", "project B exists in PostgreSQL", project_b is not None)
-    if project_a is None or project_b is None:
-        return checks
-    tenant_a, tenant_b = str(project_a["tenant_id"]), str(project_b["tenant_id"])
-    add("S1", "the two projects belong to two different tenants", tenant_a != tenant_b)
-    add(
-        "S1",
-        "project A is in the expected tenant A",
-        not expect.tenant_a or tenant_a == expect.tenant_a,
-    )
-    add(
-        "S1",
-        "project B is in the expected tenant B",
-        not expect.tenant_b or tenant_b == expect.tenant_b,
-    )
-    row_a, row_b = facts.tenants.get(tenant_a), facts.tenants.get(tenant_b)
-    add(
-        "S1",
-        "tenant A is bound to the Clerk Organization of identity A",
-        bool(row_a)
-        and bool(expect.clerk_org_a)
-        and row_a.get("clerk_org_id") == expect.clerk_org_a,
-    )
-    add(
-        "S1",
-        "tenant B is bound to the Clerk Organization of identity B",
-        bool(row_b)
-        and bool(expect.clerk_org_b)
-        and row_b.get("clerk_org_id") == expect.clerk_org_b,
-    )
+    def add(self, stage: str, name: str, ok: bool, detail: str = "") -> None:
+        self.checks.append(Check(stage, name, bool(ok), detail))
+
+    def doc(self, key: str) -> str:
+        return _doc(key, self.browser)
+
+    @property
+    def project_a(self) -> dict[str, Any]:
+        assert self.facts.project_a is not None
+        return self.facts.project_a
+
+    @property
+    def project_b(self) -> dict[str, Any]:
+        assert self.facts.project_b is not None
+        return self.facts.project_b
+
+    @property
+    def tenant_a(self) -> str:
+        return str(self.project_a["tenant_id"])
+
+    @property
+    def tenant_b(self) -> str:
+        return str(self.project_b["tenant_id"])
+
+    def users_of(self, tenant: str, clerk_user: str) -> list[dict[str, Any]]:
+        return [
+            u
+            for u in self.facts.users
+            if str(u["tenant_id"]) == tenant and u.get("clerk_user_id") == clerk_user
+        ]
+
+    @property
+    def documents(self) -> list[dict[str, Any]]:
+        return [
+            d for d in self.facts.documents if str(d["project_id"]) == str(self.project_a["id"])
+        ]
+
+    @property
+    def revisions_of(self) -> dict[str, list[dict[str, Any]]]:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for revision in self.facts.revisions:
+            grouped.setdefault(str(revision["document_id"]), []).append(revision)
+        for rows in grouped.values():
+            rows.sort(key=lambda r: int(r["rev_no"]))
+        return grouped
+
+    @property
+    def artifacts_of(self) -> dict[str, list[dict[str, Any]]]:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for artifact in self.facts.artifacts:
+            grouped.setdefault(str(artifact["document_id"]), []).append(artifact)
+        return grouped
+
+    @property
+    def alerts(self) -> list[dict[str, Any]]:
+        return [a for a in self.facts.alerts if str(a["project_id"]) == str(self.project_a["id"])]
+
+    @property
+    def reviews(self) -> list[dict[str, Any]]:
+        return [r for r in self.facts.reviews if str(r["project_id"]) == str(self.project_a["id"])]
+
+    @property
+    def actor_ids(self) -> set[str]:
+        return {str(u["id"]) for u in self.users_of(self.tenant_a, self.expect.clerk_user_a)}
+
+
+def _judge_s1(c: _Ctx) -> None:
+    e = c.expect
+    add = c.add
+    add("S1", "the two projects belong to two different tenants", c.tenant_a != c.tenant_b)
+    add("S1", "project A is in the expected tenant A", not e.tenant_a or c.tenant_a == e.tenant_a)
+    add("S1", "project B is in the expected tenant B", not e.tenant_b or c.tenant_b == e.tenant_b)
+    row_a, row_b = c.facts.tenants.get(c.tenant_a), c.facts.tenants.get(c.tenant_b)
+    org_a_bound = bool(row_a) and bool(e.clerk_org_a) and row_a.get("clerk_org_id") == e.clerk_org_a
+    org_b_bound = bool(row_b) and bool(e.clerk_org_b) and row_b.get("clerk_org_id") == e.clerk_org_b
+    add("S1", "tenant A is bound to the Clerk Organization of identity A", org_a_bound)
+    add("S1", "tenant B is bound to the Clerk Organization of identity B", org_b_bound)
     add(
         "S1",
         "the two identities live in two different Organizations",
-        bool(expect.clerk_org_a) and expect.clerk_org_a != expect.clerk_org_b,
+        bool(e.clerk_org_a) and e.clerk_org_a != e.clerk_org_b,
     )
-    users_a = [
-        u
-        for u in facts.users
-        if str(u["tenant_id"]) == tenant_a and u.get("clerk_user_id") == expect.clerk_user_a
-    ]
-    users_b = [
-        u
-        for u in facts.users
-        if str(u["tenant_id"]) == tenant_b and u.get("clerk_user_id") == expect.clerk_user_b
-    ]
+    users_a = c.users_of(c.tenant_a, e.clerk_user_a)
+    users_b = c.users_of(c.tenant_b, e.clerk_user_b)
     add(
         "S1",
         "identity A is an active user of tenant A",
-        bool(expect.clerk_user_a) and len(users_a) == 1 and bool(users_a[0].get("is_active")),
+        bool(e.clerk_user_a) and len(users_a) == 1 and bool(users_a[0].get("is_active")),
     )
     add(
         "S1",
         "identity B is an active user of tenant B",
-        bool(expect.clerk_user_b) and len(users_b) == 1 and bool(users_b[0].get("is_active")),
+        bool(e.clerk_user_b) and len(users_b) == 1 and bool(users_b[0].get("is_active")),
     )
-    add(
-        "S1",
-        "the browser recorded the same project ids",
-        str(project_a["id"]) == browser.get("projectIdA")
-        and str(project_b["id"]) == browser.get("projectIdB"),
+    same_ids = str(c.project_a["id"]) == c.browser.get("projectIdA") and str(
+        c.project_b["id"]
+    ) == c.browser.get("projectIdB")
+    add("S1", "the browser recorded the same project ids", same_ids)
+    ident = c.browser.get("clerkIdentityChecks") or {}
+    distinct = all(
+        ident.get(k) is True for k in ("distinctUsers", "distinctOrganizations", "distinctTenants")
     )
-    ident = browser.get("clerkIdentityChecks") or {}
-    add(
-        "S1",
-        "the browser saw distinct users, Organizations and tenants",
-        all(
-            ident.get(k) is True
-            for k in ("distinctUsers", "distinctOrganizations", "distinctTenants")
-        ),
-    )
+    add("S1", "the browser saw distinct users, Organizations and tenants", distinct)
 
-    # ── S2 ────────────────────────────────────────────────────────────────────────────────────────────────
-    documents = [d for d in facts.documents if str(d["project_id"]) == str(project_a["id"])]
+
+_FIXTURE_KEY_OF = {
+    "contract": "contractA",
+    "budget": "budget",
+    "schedule": "schedule",
+    "specification": "specification",
+    "rejectedCandidate": "specificationRejected",
+}
+
+
+def _judge_s2(c: _Ctx) -> None:
+    add = c.add
+    documents = c.documents
     add(
         "S2",
         "project A holds exactly five documents",
@@ -222,35 +264,21 @@ def judge(facts: Facts, browser: dict[str, Any], expect: Expectations) -> list[C
     add(
         "S2",
         "every document is of tenant A",
-        all(str(d["tenant_id"]) == tenant_a for d in documents),
+        all(str(d["tenant_id"]) == c.tenant_a for d in documents),
     )
     types = sorted(str(d["document_type"]).lower() for d in documents)
+    wanted_types = ["budget", "contract", "schedule", "technical_spec", "technical_spec"]
     add(
         "S2",
         "the document families are contract, budget, schedule and two technical specifications",
-        types == ["budget", "contract", "schedule", "technical_spec", "technical_spec"],
+        types == wanted_types,
         ",".join(types),
     )
-    revisions_of: dict[str, list[dict[str, Any]]] = {}
-    for revision in facts.revisions:
-        revisions_of.setdefault(str(revision["document_id"]), []).append(revision)
-    for rows in revisions_of.values():
-        rows.sort(key=lambda r: int(r["rev_no"]))
-    file_by_key = {
-        "contract": "contractA",
-        "budget": "budget",
-        "schedule": "schedule",
-        "specification": "specification",
-        "rejectedCandidate": "specificationRejected",
-    }
-    for key, fixture_key in file_by_key.items():
-        document_id = _doc(key, browser)
-        revs = revisions_of.get(document_id, [])
-        wanted = (
-            [expect.fixture_sha[fixture_key]]
-            if key != "contract"
-            else [expect.fixture_sha["contractA"], expect.fixture_sha["contractB"]]
-        )
+    revisions_of = c.revisions_of
+    sha = c.expect.fixture_sha
+    for key, fixture_key in _FIXTURE_KEY_OF.items():
+        revs = revisions_of.get(c.doc(key), [])
+        wanted = [sha["contractA"], sha["contractB"]] if key == "contract" else [sha[fixture_key]]
         add(
             "S2",
             f"{key}: stored revisions carry the pinned SHA-256 of the committed files",
@@ -258,248 +286,279 @@ def judge(facts: Facts, browser: dict[str, Any], expect: Expectations) -> list[C
             f"{len(revs)} revision(s)",
         )
 
-    # ── S3 ────────────────────────────────────────────────────────────────────────────────────────────────
+
+def _judge_s3(c: _Ctx) -> None:
+    add = c.add
+    f = c.facts
     add(
         "S3",
         "the worker completed the graph (graph.completed)",
-        facts.graph_events >= 1,
-        f"{facts.graph_events} event(s)",
+        f.graph_events >= 1,
+        f"{f.graph_events} event(s)",
     )
-    add("S3", "an analysis row exists", facts.analyses >= 1, f"{facts.analyses}")
+    add("S3", "an analysis row exists", f.analyses >= 1, f"{f.analyses}")
     add(
         "S3",
         "a project snapshot carries six Health assessments",
-        facts.six_dimension_snapshots >= 1,
-        f"{facts.six_dimension_snapshots}",
+        f.six_dimension_snapshots >= 1,
+        f"{f.six_dimension_snapshots}",
     )
-    alerts = [a for a in facts.alerts if str(a["project_id"]) == str(project_a["id"])]
+    alerts = c.alerts
     add(
         "S3",
         "alerts are persisted for project A, all of tenant A",
-        len(alerts) > 0 and all(str(a["tenant_id"]) == tenant_a for a in alerts),
+        len(alerts) > 0 and all(str(a["tenant_id"]) == c.tenant_a for a in alerts),
         f"{len(alerts)} alert(s)",
     )
     rules = {str(a["rule_code"]) for a in alerts}
-    for rule in expect.expected_rules:
+    for rule in c.expect.expected_rules:
         add("S3", f"{rule} is persisted", rule in rules)
-    if expect.real_ai:
-        add(
-            "S3",
-            "the worker made at least one real provider call",
-            expect.worker_provider_successes >= 1,
-            f"{expect.worker_provider_successes}",
-        )
+    if c.expect.real_ai:
+        calls = c.expect.worker_provider_successes
+        add("S3", "the worker made at least one real provider call", calls >= 1, f"{calls}")
         add(
             "S3",
             "the tenant's AI spend was recorded",
-            facts.tenant_a_ai_spend > 0,
-            f"{facts.tenant_a_ai_spend}",
+            f.tenant_a_ai_spend > 0,
+            f"{f.tenant_a_ai_spend}",
         )
 
-    # ── S4 ────────────────────────────────────────────────────────────────────────────────────────────────
-    contract_id = _doc("contract", browser)
-    contract_revisions = {str(r["revision_id"]) for r in revisions_of.get(contract_id, [])}
-    with_clause = [a for a in alerts if a.get("source_clause_id")]
+
+def _judge_s4(c: _Ctx) -> None:
+    contract_revisions = {str(r["revision_id"]) for r in c.revisions_of.get(c.doc("contract"), [])}
+    with_clause = [a for a in c.alerts if a.get("source_clause_id")]
     resolved = [
         a
         for a in with_clause
-        if facts.clause_revisions.get(str(a["source_clause_id"])) in contract_revisions
+        if c.facts.clause_revisions.get(str(a["source_clause_id"])) in contract_revisions
     ]
-    add("S4", "an alert cites a clause", len(with_clause) > 0, f"{len(with_clause)}/{len(alerts)}")
-    add(
+    c.add(
+        "S4", "an alert cites a clause", len(with_clause) > 0, f"{len(with_clause)}/{len(c.alerts)}"
+    )
+    c.add(
         "S4",
         "the clause belongs to a revision of the contract",
         len(resolved) > 0,
         f"{len(resolved)}/{len(with_clause)}",
     )
 
-    # ── S5 ────────────────────────────────────────────────────────────────────────────────────────────────
-    artifacts_of: dict[str, list[dict[str, Any]]] = {}
-    for artifact in facts.artifacts:
-        artifacts_of.setdefault(str(artifact["document_id"]), []).append(artifact)
-    reviews = [r for r in facts.reviews if str(r["project_id"]) == str(project_a["id"])]
 
-    def approved_for(artifact: dict[str, Any]) -> list[dict[str, Any]]:
-        return [
-            r
-            for r in reviews
-            if str(r["status"]).upper() == "APPROVED"
-            and ((r.get("review_metadata") or {}).get("candidate_binding") or {}).get("artifact_id")
-            == str(artifact["artifact_id"])
-        ]
+def _approved_reviews_of(c: _Ctx, artifact: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        r
+        for r in c.reviews
+        if str(r["status"]).upper() == "APPROVED"
+        and _binding(r).get("artifact_id") == str(artifact["artifact_id"])
+    ]
 
+
+def _binding(review: dict[str, Any]) -> dict[str, Any]:
+    return (review.get("review_metadata") or {}).get("candidate_binding") or {}
+
+
+def _judge_s5_approvals(c: _Ctx) -> None:
     for key in ("contract", "specification"):
-        document_id = _doc(key, browser)
-        trusted = [a for a in artifacts_of.get(document_id, []) if a["trust_state"] == "trusted"]
-        add("S5", f"{key}: a trusted artifact exists", len(trusted) >= 1)
+        trusted = [a for a in c.artifacts_of.get(c.doc(key), []) if a["trust_state"] == "trusted"]
+        c.add("S5", f"{key}: a trusted artifact exists", len(trusted) >= 1)
         for artifact in trusted:
-            approvals = approved_for(artifact)
-            named = approvals and all(
+            approvals = _approved_reviews_of(c, artifact)
+            named = bool(approvals) and all(
                 (r.get("approved_by") or "").strip() and r.get("approved_at") for r in approvals
             )
-            bound = approvals and all(
-                ((r.get("review_metadata") or {}).get("candidate_binding") or {}).get(
-                    "artifact_hash"
-                )
-                == artifact["artifact_hash"]
-                for r in approvals
+            bound = bool(approvals) and all(
+                _binding(r).get("artifact_hash") == artifact["artifact_hash"] for r in approvals
             )
-            add(
+            c.add(
                 "S5",
                 f"{key}: every trusted artifact has an approved review, bound to it, naming who and when",
-                bool(named and bound),
+                named and bound,
                 f"v{artifact.get('artifact_version')}",
             )
-    rejected_id = _doc("rejectedCandidate", browser)
-    rejected_reviews = [r for r in reviews if str(r["document_id"]) == rejected_id]
-    add(
+
+
+def _judge_s5(c: _Ctx) -> None:
+    _judge_s5_approvals(c)
+    rejected_id = c.doc("rejectedCandidate")
+    rejected = [r for r in c.reviews if str(r["document_id"]) == rejected_id]
+    c.add(
         "S5",
         "the draft specification has exactly one review and it is REJECTED",
-        [str(r["status"]).upper() for r in rejected_reviews] == ["REJECTED"],
+        [str(r["status"]).upper() for r in rejected] == ["REJECTED"],
     )
-    for review in rejected_reviews:
+    for review in rejected:
         reason = (review.get("review_metadata") or {}).get("rejection_reason")
-        add(
-            "S5",
-            "the stored rejection reason is the typed one",
+        typed = (
             isinstance(reason, str)
-            and hashlib.sha256(reason.encode()).hexdigest() == expect.reason_sha256,
+            and hashlib.sha256(reason.encode()).hexdigest() == c.expect.reason_sha256
         )
-        add(
+        c.add("S5", "the stored rejection reason is the typed one", typed)
+        c.add(
             "S5", "the rejection names who decided", bool((review.get("approved_by") or "").strip())
         )
-    add(
+    c.add(
         "S5",
         "nothing of the rejected draft is trusted",
-        all(a["trust_state"] != "trusted" for a in artifacts_of.get(rejected_id, [])),
+        all(a["trust_state"] != "trusted" for a in c.artifacts_of.get(rejected_id, [])),
     )
-    add(
+    statuses = sorted({str(r["status"]) for r in c.reviews})
+    final = {"APPROVED", "REJECTED", "CLOSED"}
+    c.add(
         "S5",
         "no review is left pending",
-        all(str(r["status"]).upper() in {"APPROVED", "REJECTED", "CLOSED"} for r in reviews),
-        ",".join(sorted({str(r["status"]) for r in reviews})),
+        all(str(r["status"]).upper() in final for r in c.reviews),
+        ",".join(statuses),
     )
 
-    # ── S6 ────────────────────────────────────────────────────────────────────────────────────────────────
-    contract_artifacts = {
-        str(a["document_revision_id"]): a for a in artifacts_of.get(contract_id, [])
-    }
-    revs = revisions_of.get(contract_id, [])
+
+def _judge_s6(c: _Ctx) -> None:
+    contract_id = c.doc("contract")
+    revs = c.revisions_of.get(contract_id, [])
     if len(revs) == 2:
-        a_artifact, b_artifact = (
-            contract_artifacts.get(str(revs[0]["revision_id"])),
-            contract_artifacts.get(str(revs[1]["revision_id"])),
+        by_revision = {
+            str(a["document_revision_id"]): a for a in c.artifacts_of.get(contract_id, [])
+        }
+        a_art = by_revision.get(str(revs[0]["revision_id"]))
+        b_art = by_revision.get(str(revs[1]["revision_id"]))
+        a_ok = bool(a_art) and (a_art["trust_state"], a_art["lifecycle_status"]) == (
+            "trusted",
+            "superseded",
         )
-        add(
-            "S6",
-            "revision A was trusted and is now superseded",
-            bool(a_artifact)
-            and (a_artifact["trust_state"], a_artifact["lifecycle_status"])
-            == ("trusted", "superseded"),
+        b_ok = bool(b_art) and (b_art["trust_state"], b_art["lifecycle_status"]) == (
+            "trusted",
+            "active",
         )
-        add(
-            "S6",
-            "revision B is the active trusted artifact",
-            bool(b_artifact)
-            and (b_artifact["trust_state"], b_artifact["lifecycle_status"])
-            == ("trusted", "active"),
-        )
+        c.add("S6", "revision A was trusted and is now superseded", a_ok)
+        c.add("S6", "revision B is the active trusted artifact", b_ok)
     else:
-        add("S6", "the contract has exactly two revisions", False, f"{len(revs)} revision(s)")
-    add(
+        c.add("S6", "the contract has exactly two revisions", False, f"{len(revs)} revision(s)")
+    c.add(
         "S6",
         "no artifact of the project is left proposed",
-        all(a["trust_state"] != "proposed" for a in facts.artifacts),
+        all(a["trust_state"] != "proposed" for a in c.facts.artifacts),
     )
     changes = [
         e
-        for e in facts.events
+        for e in c.facts.events
         if e["event_type"] == "revision.changed"
         and str(e.get("document_id") or "") in {contract_id, ""}
     ]
-    add(
+    c.add(
         "S6",
         "exactly one revision.changed exists for the contract",
         len(changes) == 1,
         f"{len(changes)} event(s)",
     )
 
-    # ── S7 ────────────────────────────────────────────────────────────────────────────────────────────────
-    baselines = [b for b in facts.baselines if str(b["project_id"]) == str(project_a["id"])]
-    add("S7", "exactly one approved WBS baseline exists", len(baselines) == 1, f"{len(baselines)}")
-    actor_ids = {str(u["id"]) for u in users_a}
-    baseline = baselines[0] if baselines else None
-    if baseline:
-        add(
-            "S7",
-            "the baseline was approved by the journey's human",
-            str(baseline["approved_by"]) in actor_ids,
-        )
-        change_set = next(
-            (c for c in facts.change_sets if str(c["id"]) == str(baseline["source_change_set_id"])),
-            None,
-        )
-        self_approved = bool(change_set and change_set.get("decided_self_approval"))
-        add(
-            "S7",
-            "the approval of the baseline is recorded (self-approval is reported, never hidden)",
-            change_set is not None and change_set.get("decided_self_approval") is not None,
-            f"self_approved={self_approved}",
-        )
-        if self_approved:
-            add(
-                "S7",
-                "a self-approval happened only because tenant A declares it",
-                facts.tenant_a_distinct_approver_required is False,
-            )
-        if expect.self_approved_declared is not None:
-            add(
-                "S7",
-                "the self-approval flag equals what the browser recorded",
-                self_approved == expect.self_approved_declared,
-            )
-    link_events = [e for e in facts.events if e["event_type"] in FAMILY_EVENTS.values()]
-    revision_by_id = {str(r["revision_id"]): r for rows in revisions_of.values() for r in rows}
-    for family, event_type in FAMILY_EVENTS.items():
-        rows = [e for e in link_events if e["event_type"] == event_type]
-        add("S7", f"exactly one approved {family} link exists", len(rows) == 1, f"{len(rows)}")
-        for event in rows:
-            payload = event.get("payload") or {}
-            revision = revision_by_id.get(
-                str(payload.get("source_revision_id") or payload.get("technical_revision_id") or "")
-            )
-            blob_hash = payload.get("source_blob_hash")
-            add(
-                "S7",
-                f"{family} link: actor is a human user of tenant A",
-                str(event.get("actor") or "").removeprefix("user:") in actor_ids
-                and str(event.get("actor") or "").startswith("user:"),
-            )
-            add(
-                "S7",
-                f"{family} link: it names a stored source revision and its blob hash",
-                bool(revision) and (blob_hash is None or blob_hash == revision["blob_hash"]),
-            )
-            add(
-                "S7",
-                f"{family} link: it names the approved baseline and node",
-                bool(baseline) and str(payload.get("wbs_baseline_id")) == str(baseline["id"]),
-            )
-            add(
-                "S7",
-                f"{family} link: it carries a locator",
-                bool(payload.get("source_locator") or payload.get("source_section")),
-            )
 
-    # ── S8 ────────────────────────────────────────────────────────────────────────────────────────────────
-    digests = browser.get("snapshotDigests") or {}
-    add(
+def _judge_s7_baseline(c: _Ctx) -> dict[str, Any] | None:
+    baselines = [b for b in c.facts.baselines if str(b["project_id"]) == str(c.project_a["id"])]
+    c.add(
+        "S7", "exactly one approved WBS baseline exists", len(baselines) == 1, f"{len(baselines)}"
+    )
+    if not baselines:
+        return None
+    baseline = baselines[0]
+    c.add(
+        "S7",
+        "the baseline was approved by the journey's human",
+        str(baseline["approved_by"]) in c.actor_ids,
+    )
+    change_set = next(
+        (x for x in c.facts.change_sets if str(x["id"]) == str(baseline["source_change_set_id"])),
+        None,
+    )
+    recorded = change_set is not None and change_set.get("decided_self_approval") is not None
+    self_approved = bool(change_set and change_set.get("decided_self_approval"))
+    c.add(
+        "S7",
+        "the approval of the baseline is recorded (self-approval is reported, never hidden)",
+        recorded,
+        f"self_approved={self_approved}",
+    )
+    if self_approved:
+        c.add(
+            "S7",
+            "a self-approval happened only because tenant A declares it",
+            c.facts.tenant_a_distinct_approver_required is False,
+        )
+    if c.expect.self_approved_declared is not None:
+        c.add(
+            "S7",
+            "the self-approval flag equals what the browser recorded",
+            self_approved == c.expect.self_approved_declared,
+        )
+    return baseline
+
+
+def _judge_s7_link(
+    c: _Ctx, family: str, event: dict[str, Any], baseline: dict[str, Any] | None
+) -> None:
+    revision_by_id = {str(r["revision_id"]): r for rows in c.revisions_of.values() for r in rows}
+    payload = event.get("payload") or {}
+    revision = revision_by_id.get(
+        str(payload.get("source_revision_id") or payload.get("technical_revision_id") or "")
+    )
+    blob_hash = payload.get("source_blob_hash")
+    actor = str(event.get("actor") or "")
+    c.add(
+        "S7",
+        f"{family} link: actor is a human user of tenant A",
+        actor.startswith("user:") and actor.removeprefix("user:") in c.actor_ids,
+    )
+    c.add(
+        "S7",
+        f"{family} link: it names a stored source revision and its blob hash",
+        bool(revision) and (blob_hash is None or blob_hash == revision["blob_hash"]),
+    )
+    c.add(
+        "S7",
+        f"{family} link: it names the approved baseline and node",
+        bool(baseline) and str(payload.get("wbs_baseline_id")) == str(baseline["id"]),
+    )
+    c.add(
+        "S7",
+        f"{family} link: it carries a locator",
+        bool(payload.get("source_locator") or payload.get("source_section")),
+    )
+
+
+def _judge_s7(c: _Ctx) -> None:
+    baseline = _judge_s7_baseline(c)
+    for family, event_type in FAMILY_EVENTS.items():
+        rows = [e for e in c.facts.events if e["event_type"] == event_type]
+        c.add("S7", f"exactly one approved {family} link exists", len(rows) == 1, f"{len(rows)}")
+        for event in rows:
+            _judge_s7_link(c, family, event, baseline)
+
+
+def _judge_s8(c: _Ctx) -> None:
+    digests = c.browser.get("snapshotDigests") or {}
+    c.add(
         "S8",
         "the browser's snapshots before and after the new login are identical",
         bool(digests.get("before")) and digests.get("before") == digests.get("after"),
     )
-    add("S8", "project A still exists with its five documents", len(documents) == 5)
-    return checks
+    c.add("S8", "project A still exists with its five documents", len(c.documents) == 5)
+
+
+def judge(facts: Facts, browser: dict[str, Any], expect: Expectations) -> list[Check]:
+    """Every claim of the run, as a named check. Pure: no I/O."""
+    ctx = _Ctx(facts=facts, browser=browser, expect=expect)
+    ctx.add("S1", "project A exists in PostgreSQL", facts.project_a is not None)
+    ctx.add("S1", "project B exists in PostgreSQL", facts.project_b is not None)
+    if facts.project_a is not None and facts.project_b is not None:
+        for stage in (
+            _judge_s1,
+            _judge_s2,
+            _judge_s3,
+            _judge_s4,
+            _judge_s5,
+            _judge_s6,
+            _judge_s7,
+            _judge_s8,
+        ):
+            stage(ctx)
+    return ctx.checks
 
 
 # ── collection (read-only) ──────────────────────────────────────────────────────────────────────────────────
@@ -607,6 +666,62 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
 
 
 # ── manifest ────────────────────────────────────────────────────────────────────────────────────────────────
+def _stage_verdict(browser_status: str, pg_status: str) -> str:
+    """FAIL beats everything; a stage nobody ran or checked is NOT_RUN, never a pass."""
+    if "FAIL" in (browser_status, pg_status):
+        return "FAIL"
+    if "NOT_RUN" in (browser_status, pg_status):
+        return "NOT_RUN"
+    return "PARTIAL" if browser_status == "PARTIAL" else "PASS"
+
+
+def _step_rows(browser: dict[str, Any], checks: list[Check]) -> dict[str, Any]:
+    stage_rows = {s["id"]: s for s in browser.get("stages", [])}
+    steps: dict[str, Any] = {}
+    for stage in STAGES:
+        mine = [c for c in checks if c.stage == stage]
+        row = stage_rows.get(stage) or {}
+        browser_status = row.get("status", "NOT_RUN")
+        pg_status = "NOT_RUN"
+        if mine:
+            pg_status = "PASS" if all(c.ok for c in mine) else "FAIL"
+        steps[stage] = {
+            "browser": browser_status,
+            "postgres": pg_status,
+            "verdict": _stage_verdict(browser_status, pg_status),
+            "declaredGaps": row.get("partial", []),
+            "failedChecks": [
+                f"{c.name}{': ' + c.detail if c.detail else ''}" for c in mine if not c.ok
+            ],
+        }
+    return steps
+
+
+def _overall_verdict(steps: dict[str, Any], mode: str | None) -> str:
+    verdicts = [steps[s]["verdict"] for s in STAGES]
+    if "FAIL" in verdicts:
+        return "FAILED"
+    if "NOT_RUN" in verdicts:
+        return "INCOMPLETE"
+    if mode != "real-ai-uat":
+        return "REHEARSAL_ONLY_NOT_UAT"
+    return (
+        "UAT_REAL_WITH_DECLARED_GAPS"
+        if any(steps[s]["declaredGaps"] for s in STAGES)
+        else "UAT_REAL_COMPLETE"
+    )
+
+
+def _first_failure(browser: dict[str, Any], steps: dict[str, Any]) -> dict[str, Any] | None:
+    if browser.get("firstFailure"):
+        return browser["firstFailure"]
+    for stage in STAGES:
+        if steps[stage]["verdict"] == "FAIL":
+            reasons = steps[stage]["failedChecks"]
+            return {"stage": stage, "message": reasons[0] if reasons else "failed"}
+    return None
+
+
 def build_manifest(
     browser: dict[str, Any],
     checks: list[Check],
@@ -614,57 +729,14 @@ def build_manifest(
     env: dict[str, str | None],
 ) -> dict[str, Any]:
     """One manifest tied to the project id: the browser half, the PostgreSQL verdicts and the first failure."""
-    stage_rows = {s["id"]: s for s in browser.get("stages", [])}
-    steps: dict[str, Any] = {}
-    for stage in STAGES:
-        mine = [c for c in checks if c.stage == stage]
-        browser_status = (stage_rows.get(stage) or {}).get("status", "NOT_RUN")
-        pg_status = "NOT_RUN" if not mine else ("PASS" if all(c.ok for c in mine) else "FAIL")
-        if browser_status == "FAIL" or pg_status == "FAIL":
-            combined = "FAIL"
-        elif browser_status == "NOT_RUN" or pg_status == "NOT_RUN":
-            combined = "NOT_RUN"
-        elif browser_status == "PARTIAL":
-            combined = "PARTIAL"
-        else:
-            combined = "PASS"
-        steps[stage] = {
-            "browser": browser_status,
-            "postgres": pg_status,
-            "verdict": combined,
-            "declaredGaps": (stage_rows.get(stage) or {}).get("partial", []),
-            "failedChecks": [
-                f"{c.name}{': ' + c.detail if c.detail else ''}" for c in mine if not c.ok
-            ],
-        }
-    failed = [s for s in STAGES if steps[s]["verdict"] == "FAIL"]
-    unfinished = [s for s in STAGES if steps[s]["verdict"] == "NOT_RUN"]
-    first = browser.get("firstFailure") or (
-        {
-            "stage": failed[0],
-            "message": steps[failed[0]]["failedChecks"][0]
-            if steps[failed[0]]["failedChecks"]
-            else "failed",
-        }
-        if failed
-        else None
-    )
-    mode = browser.get("mode")
-    if failed or unfinished:
-        verdict = "FAILED" if failed else "INCOMPLETE"
-    elif mode != "real-ai-uat":
-        verdict = "REHEARSAL_ONLY_NOT_UAT"
-    elif any(steps[s]["declaredGaps"] for s in STAGES):
-        verdict = "UAT_REAL_WITH_DECLARED_GAPS"
-    else:
-        verdict = "UAT_REAL_COMPLETE"
+    steps = _step_rows(browser, checks)
     return {
         "schema": "c2pro-integral-s1-s8-manifest/v1",
         "candidate_sha": env.get("candidate_sha") or browser.get("candidateSha"),
         "frontend_runtime_sha": env.get("frontend_runtime_sha")
         or browser.get("frontendRuntimeSha"),
         "backend_runtime_sha": env.get("backend_runtime_sha"),
-        "mode": mode,
+        "mode": browser.get("mode"),
         "evidence_class": browser.get("evidenceClass"),
         "project_id_A": browser.get("projectIdA"),
         "project_id_B": browser.get("projectIdB"),
@@ -680,22 +752,78 @@ def build_manifest(
         "postgres_checks": [
             {"stage": c.stage, "name": c.name, "ok": c.ok, "detail": c.detail} for c in checks
         ],
-        "first_failure": first,
-        "verdict": verdict,
+        "first_failure": _first_failure(browser, steps),
+        "verdict": _overall_verdict(steps, browser.get("mode")),
         "acceptance": "NOT_ACCEPTED_UNTIL_INDEPENDENT_REVIEW",
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--browser-manifest", type=Path, required=True)
-    parser.add_argument("--fixture-dir", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--provider-receipt",
-        type=Path,
-        help="JSON written by the workflow from the provider preflight and the worker log",
+def _fixture_expectations(fixture_dir: Path) -> tuple[dict[str, str], list[str]] | None:
+    """The committed fixtures' SHA-256 (proved against their pins) and the expected deterministic rules."""
+    triplet = json.loads((fixture_dir / "triplet.manifest.json").read_text(encoding="utf-8"))
+    extra = json.loads((fixture_dir / "integral.manifest.json").read_text(encoding="utf-8"))
+    files = {
+        "contractA": ("triplet-contract.docx", triplet["sha256"]["triplet-contract.docx"]),
+        "contractB": ("triplet-contract-b.docx", extra["contract_b"]["sha256"]),
+        "budget": ("triplet-budget.xlsx", triplet["sha256"]["triplet-budget.xlsx"]),
+        "schedule": ("triplet-schedule.xlsx", triplet["sha256"]["triplet-schedule.xlsx"]),
+        "specification": (
+            "triplet-specification.docx",
+            triplet["sha256"]["triplet-specification.docx"],
+        ),
+        "specificationRejected": (
+            "triplet-specification-rejected.docx",
+            extra["specification_rejected"]["sha256"],
+        ),
+    }
+    actual = {key: _sha256_file(fixture_dir / name) for key, (name, _) in files.items()}
+    if actual != {key: pinned for key, (_, pinned) in files.items()}:
+        return None
+    return actual, list(triplet["expected_rules"])
+
+
+def _expectations(
+    browser: dict[str, Any], receipt: dict[str, Any], fixtures: tuple[dict[str, str], list[str]]
+) -> Expectations:
+    stages = browser.get("stages") or []
+    rejection = (
+        ((stages[4].get("evidence") or {}).get("rejection") or {}) if len(stages) > 4 else {}
     )
+    wbs = ((stages[6].get("evidence") or {}).get("wbs") or {}) if len(stages) > 6 else {}
+    env = os.environ
+    return Expectations(
+        fixture_sha=fixtures[0],
+        expected_rules=fixtures[1],
+        clerk_user_a=env.get("CLERK_E2E_USER_ID", ""),
+        clerk_org_a=env.get("CLERK_E2E_ORG_ID", ""),
+        clerk_user_b=env.get("TENANT_B_CLERK_E2E_USER_ID", ""),
+        clerk_org_b=env.get("TENANT_B_CLERK_E2E_ORG_ID", ""),
+        tenant_a=env.get("E2E_EXPECTED_TENANT_ID", ""),
+        tenant_b=env.get("TENANT_B_E2E_EXPECTED_TENANT_ID", ""),
+        real_ai=browser.get("mode") == "real-ai-uat",
+        worker_provider_successes=int(receipt.get("worker_provider_successes") or 0),
+        reason_sha256=str(rejection.get("reasonSha256") or ""),
+        self_approved_declared=wbs.get("selfApproved"),
+    )
+
+
+async def _collect_facts(database_url: str, project_a: UUID, project_b: UUID) -> Facts:
+    engine = create_async_engine(_normalize_database_url(database_url))
+    try:
+        async with engine.connect() as conn:
+            return await collect(conn, project_a, project_b)
+    finally:
+        await engine.dispose()
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def main() -> int:
+    # The evidence files live at fixed places of the checkout: no path comes from the command line, so nothing
+    # a caller types can redirect a read or a write (Sonar S8707).
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--database-url", default=os.environ.get("DATABASE_URL", ""))
     parser.add_argument("--candidate-sha", default=os.environ.get("GITHUB_SHA"))
     parser.add_argument("--frontend-runtime-sha", default=os.environ.get("FRONTEND_RUNTIME_SHA"))
@@ -705,72 +833,21 @@ def main() -> int:
         print("FAIL: no database url (set DATABASE_URL or pass --database-url)")
         return 2
 
-    browser_path = _within_repo(args.browser_manifest)
-    fixture_dir = _within_repo(args.fixture_dir)
-    output = _within_repo(args.output)
-    browser = json.loads(browser_path.read_text(encoding="utf-8"))
+    browser = _read_json(BROWSER_MANIFEST)
     if not browser.get("projectIdA") or not browser.get("projectIdB"):
         print(
             "FAIL: the browser manifest records no project id (the run stopped before S1 created them)"
         )
         return 1
-
-    triplet = json.loads((fixture_dir / "triplet.manifest.json").read_text(encoding="utf-8"))
-    extra = json.loads((fixture_dir / "integral.manifest.json").read_text(encoding="utf-8"))
-    fixture_sha = {
-        "contractA": _sha256_file(fixture_dir / "triplet-contract.docx"),
-        "contractB": _sha256_file(fixture_dir / "triplet-contract-b.docx"),
-        "budget": _sha256_file(fixture_dir / "triplet-budget.xlsx"),
-        "schedule": _sha256_file(fixture_dir / "triplet-schedule.xlsx"),
-        "specification": _sha256_file(fixture_dir / "triplet-specification.docx"),
-        "specificationRejected": _sha256_file(fixture_dir / "triplet-specification-rejected.docx"),
-    }
-    pinned = {
-        "contractA": triplet["sha256"]["triplet-contract.docx"],
-        "contractB": extra["contract_b"]["sha256"],
-        "budget": triplet["sha256"]["triplet-budget.xlsx"],
-        "schedule": triplet["sha256"]["triplet-schedule.xlsx"],
-        "specification": triplet["sha256"]["triplet-specification.docx"],
-        "specificationRejected": extra["specification_rejected"]["sha256"],
-    }
-    if fixture_sha != pinned:
+    fixtures = _fixture_expectations(FIXTURE_DIR)
+    if fixtures is None:
         print("FAIL: a committed fixture no longer has its pinned SHA-256")
         return 1
-
-    receipt: dict[str, Any] = {}
-    if args.provider_receipt:
-        receipt = json.loads(_within_repo(args.provider_receipt).read_text(encoding="utf-8"))
-    rejection = ((browser.get("stages") or [{}] * 8)[4].get("evidence") or {}).get(
-        "rejection"
-    ) or {}
-    s7 = ((browser.get("stages") or [{}] * 8)[6].get("evidence") or {}).get("wbs") or {}
-    expect = Expectations(
-        fixture_sha=fixture_sha,
-        expected_rules=list(triplet["expected_rules"]),
-        clerk_user_a=os.environ.get("CLERK_E2E_USER_ID", ""),
-        clerk_org_a=os.environ.get("CLERK_E2E_ORG_ID", ""),
-        clerk_user_b=os.environ.get("TENANT_B_CLERK_E2E_USER_ID", ""),
-        clerk_org_b=os.environ.get("TENANT_B_CLERK_E2E_ORG_ID", ""),
-        tenant_a=os.environ.get("E2E_EXPECTED_TENANT_ID", ""),
-        tenant_b=os.environ.get("TENANT_B_E2E_EXPECTED_TENANT_ID", ""),
-        real_ai=browser.get("mode") == "real-ai-uat",
-        worker_provider_successes=int(receipt.get("worker_provider_successes") or 0),
-        reason_sha256=str(rejection.get("reasonSha256") or ""),
-        self_approved_declared=s7.get("selfApproved"),
+    receipt = _read_json(PROVIDER_RECEIPT)
+    facts = asyncio.run(
+        _collect_facts(args.database_url, UUID(browser["projectIdA"]), UUID(browser["projectIdB"]))
     )
-
-    async def run() -> list[Check]:
-        engine = create_async_engine(_normalize_database_url(args.database_url))
-        try:
-            async with engine.connect() as conn:
-                facts = await collect(
-                    conn, UUID(browser["projectIdA"]), UUID(browser["projectIdB"])
-                )
-        finally:
-            await engine.dispose()
-        return judge(facts, browser, expect)
-
-    checks = asyncio.run(run())
+    checks = judge(facts, browser, _expectations(browser, receipt, fixtures))
     manifest = build_manifest(
         browser,
         checks,
@@ -781,15 +858,14 @@ def main() -> int:
             "backend_runtime_sha": args.backend_runtime_sha,
         },
     )
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    MANIFEST_OUTPUT.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     failed = [c for c in checks if not c.ok]
     for check in failed:
         print(f"FAIL [{check.stage}] {check.name}{': ' + check.detail if check.detail else ''}")
-    print(
-        f"verdict={manifest['verdict']} stages="
-        + ",".join(f"{s}:{manifest['steps_S1_S8'][s]['verdict']}" for s in STAGES)
-    )
+    stages = ",".join(f"{s}:{manifest['steps_S1_S8'][s]['verdict']}" for s in STAGES)
+    print(f"verdict={manifest['verdict']} stages={stages}")
     print(
         f"postgres checks: {len(checks) - len(failed)}/{len(checks)} passed; first_failure={manifest['first_failure']}"
     )

@@ -22,6 +22,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+# The receipt of each role is written at a fixed place of the checkout (no path from the command line) and the
+# process must run inside that same checkout.
+WORKSPACE = Path(__file__).resolve().parents[3]
+REPORT_DIR = WORKSPACE / "apps" / "web" / "playwright-report"
+
 
 def find_pids(pattern: str, proc_root: Path = Path("/proc")) -> list[int]:
     """Pids whose command line contains ``pattern`` (this script's own process excluded)."""
@@ -82,10 +87,6 @@ def main() -> int:
     )
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument(
-        "--workspace", type=Path, default=Path(os.environ.get("GITHUB_WORKSPACE", "."))
-    )
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
         "--wait-seconds", type=int, default=0, help="keep looking for the process this long"
     )
     args = parser.parse_args()
@@ -96,13 +97,14 @@ def main() -> int:
             role=args.role,
             pattern=args.process_pattern,
             expected_sha=args.expected_sha,
-            workspace=args.workspace,
+            workspace=WORKSPACE,
         )
         if receipt["process_found"] or time.monotonic() >= deadline:
             break
         time.sleep(2)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output = REPORT_DIR / f"integral-runtime-{args.role}.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(
         f"{args.role}: found={receipt['process_found']} inside_workspace={receipt['cwd_inside_workspace']} "
         f"matches={receipt['matches']}"

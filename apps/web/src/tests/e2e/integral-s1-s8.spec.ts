@@ -139,7 +139,10 @@ async function denialsFor(page: Page, foreignProjectId: string): Promise<number[
 }
 
 test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () => {
-  test.skip(process.env.INTEGRAL_UAT !== "1", "Opt-in only: set INTEGRAL_UAT=1 (the integral UAT workflow does)");
+  test.beforeEach((_fixtures, testInfo) => {
+    // Opt-in only: the integral UAT workflow sets INTEGRAL_UAT=1; nothing else may run this journey by accident.
+    testInfo.skip(process.env.INTEGRAL_UAT !== "1", "set INTEGRAL_UAT=1 to run the integral S1-S8 UAT");
+  });
 
   test("S1–S8 in one persisted project, two tenants, real Clerk", async ({ browser, baseURL }) => {
     test.setTimeout(2_700_000);
