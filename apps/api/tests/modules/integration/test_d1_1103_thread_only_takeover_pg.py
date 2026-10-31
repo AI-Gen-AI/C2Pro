@@ -148,14 +148,19 @@ async def test_d1_1103_thread_only_crash_pre_n17_changed_decision_preserves_sour
     assert len(N17_RUNS) == 1, "no second N17 execution on REJECT"
     assert await _counts(db, document.project_id) == (0, 0)
     assert await _persisted_events(db, document.project_id) == 0
-    assert (await _reload(db, ReviewItemORM, review.id)).current_status == (
-        ReviewStatus.REJECTED.value
-    )
+    current = (await _reload(db, ReviewItemORM, review.id)).current_status
+    warnings.warn(f"D1REVIEW={current!r} EXPECTED={ReviewStatus.REJECTED.value!r}", UserWarning)
+    assert current == ReviewStatus.REJECTED.value
 
     # Replaying the first, now stale approval cannot produce an analysis.
-    stale = await _use_case(
-        db, tenant, saver, app, independent_sessions,
-    ).execute(review_id=review.item_id, request=_approve())
+    try:
+        stale = await _use_case(
+            db, tenant, saver, app, independent_sessions,
+        ).execute(review_id=review.item_id, request=_approve())
+    except Exception as exc:
+        warnings.warn(f"D1STALE_ERR={type(exc).__name__}: {exc}", UserWarning)
+        raise
+    warnings.warn(f"D1STALE_STATUS={stale.status!r}", UserWarning)
     assert stale.status == "rejected"
     assert await _counts(db, document.project_id) == (0, 0)
     assert len(N17_RUNS) == 1
