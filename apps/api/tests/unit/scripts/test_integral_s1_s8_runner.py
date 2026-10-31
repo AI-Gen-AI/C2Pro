@@ -797,24 +797,34 @@ def test_shared_user_organization_or_tenant_fails(b: tuple[str, str, str], needl
 
 def test_a_tenant_that_is_not_a_uuid_fails() -> None:
     report = preflight.evaluate_identity("B", [{"id": "u2"}], [_membership("o2", "not-a-uuid")])
-    assert not report.ready and "valid UUID" in report.problems[0]
+    assert not report.ready
+    assert "valid UUID" in report.problems[0]
 
 
 def test_the_dedicated_development_b_variable_wins_over_the_legacy_name() -> None:
-    env = {"INTEGRAL_CLERK_DEV_B_EMAIL": " dev-b@example.test ", "E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test"}
+    env = {
+        "INTEGRAL_CLERK_DEV_B_EMAIL": " dev-b@example.test ",
+        "E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test",
+    }
     assert preflight.resolve_b_email(env) == "dev-b@example.test"
-    assert preflight.resolve_b_email({"E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test"}) == "old@x.test"
+    assert (
+        preflight.resolve_b_email({"E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test"}) == "old@x.test"
+    )
     assert preflight.resolve_b_email({}) == ""
 
 
-def test_main_fails_closed_without_b_and_never_reaches_clerk(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_fails_closed_without_b_and_never_reaches_clerk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     for name in ("INTEGRAL_CLERK_DEV_B_EMAIL", "E2E_CLERK_TENANT_B_USER_EMAIL"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_x")
     assert preflight.main() == preflight.FAILED
 
 
-def test_main_refuses_a_production_key_before_any_clerk_call(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_refuses_a_production_key_before_any_clerk_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("CLERK_SECRET_KEY", "sk_live_x")
     monkeypatch.setenv("INTEGRAL_CLERK_DEV_B_EMAIL", "b@example.test")
     monkeypatch.setenv("E2E_CLERK_USER_EMAIL", "a@example.test")
