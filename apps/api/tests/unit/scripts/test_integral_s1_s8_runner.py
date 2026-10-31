@@ -1378,3 +1378,16 @@ def test_the_second_run_lessons_are_encoded_in_the_scenario() -> None:
     assert "no project tab leads to it" in wbs
     assert 'stage: "S7"' in wbs
     assert "readProjectTabs" in spec
+
+
+def test_third_run_lessons_current_state_names_the_current_file_and_the_session_is_awaited() -> (
+    None
+):
+    """Run 41242945525: the report lists the document under B's filename; a typed URL restarts Clerk."""
+    spec = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text(encoding="utf-8")
+    assert spec.count("d.filename === FILES.contractA || d.filename === FILES.contractB") == 2
+    api = (WEB / "src" / "tests" / "e2e" / "support" / "integral" / "api.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "!window.Clerk?.session" in api
+    assert api.index("!window.Clerk?.session") < api.index("getToken()")

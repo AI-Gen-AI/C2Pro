@@ -19,6 +19,10 @@ export async function callApi(
 ): Promise<ApiAnswer> {
   return page.evaluate(
     async ({ target, verb, payload }) => {
+      // A full page load (typed URL) restarts Clerk: wait for its session instead of failing on a race.
+      for (let waited = 0; waited < 150 && !window.Clerk?.session; waited += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
       const token = await window.Clerk?.session?.getToken();
       if (!token) throw new Error("INTEGRAL_CLERK_SESSION_TOKEN_MISSING");
       const response = await fetch(target, {

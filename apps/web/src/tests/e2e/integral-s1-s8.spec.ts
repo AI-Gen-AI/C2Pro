@@ -548,9 +548,10 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.evidence("whatChanged", { eventId: changed.changeEventId, cause: changed.changeCause, changes: changed.changeCount });
         if (changed.state === "ready") ledger.milestone("what-changed");
 
+        // The report names a document by its CURRENT file, which after revision B is B's filename.
         const currentBefore = await readCurrentState(pageA, recorder, projectId);
         ledger.evidence("currentStateBefore", currentBefore.map((d) => ({ filename: d.filename, lifecycle: d.lifecycle, trusted: Boolean(d.trustedRevision), pending: Boolean(d.pendingRevision) })));
-        const stateBefore = currentBefore.find((d) => d.filename === FILES.contractA);
+        const stateBefore = currentBefore.find((d) => d.filename === FILES.contractA || d.filename === FILES.contractB);
         const okPending = stateBefore?.trustedRevision?.revision_id === revA?.revisionId && stateBefore?.trustedRevision?.blob_hash === hashA && stateBefore?.pendingRevision?.revision_id === revB?.revisionId && stateBefore?.pendingRevision?.blob_hash === hashB;
         ledger.check("Current State shows A trusted and B pending", okPending, JSON.stringify(stateBefore ?? null));
         if (okPending) ledger.milestone("current-state-pending");
@@ -570,7 +571,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         if (trustedB) ledger.milestone("revision-b-approved");
         const currentAfter = await readCurrentState(pageA, recorder, projectId);
         ledger.evidence("currentStateAfter", currentAfter.map((d) => ({ filename: d.filename, lifecycle: d.lifecycle, trusted: Boolean(d.trustedRevision), pending: Boolean(d.pendingRevision) })));
-        const stateAfter = currentAfter.find((d) => d.filename === FILES.contractA);
+        const stateAfter = currentAfter.find((d) => d.filename === FILES.contractA || d.filename === FILES.contractB);
         const okApproved = stateAfter?.trustedRevision?.revision_id === revB?.revisionId && stateAfter?.trustedRevision?.blob_hash === hashB && !stateAfter?.pendingRevision;
         ledger.check("Current State rests on B with nothing pending", okApproved, JSON.stringify(stateAfter ?? null));
         if (okApproved) ledger.milestone("current-state-approved");
