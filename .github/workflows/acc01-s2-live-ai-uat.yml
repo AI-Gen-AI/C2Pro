@@ -18,6 +18,14 @@ on:
         description: "Integral UAT: only verify the two Clerk Development identities (read-only, no AI, no database)."
         type: boolean
         default: false
+      integral_prepare_dev_b:
+        description: "SEPARATE operation (not a UAT): reconcile the Organization of the EXISTING Clerk Development user B. Requires integral_confirm_prepare_dev_b_sha."
+        type: boolean
+        default: false
+      integral_confirm_prepare_dev_b_sha:
+        description: "integral_prepare_dev_b only: the full candidate SHA, typed to authorise the Clerk Development write."
+        type: string
+        default: ""
       integral_ai_mode:
         description: "Integral UAT: deterministic-rehearsal (no paid AI, never UAT) or real-ai (paid provider calls)."
         type: choice
@@ -318,7 +326,8 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL || secrets.E2E_CLERK_TENANT_B_USER_EMAIL || vars.E2E_CLERK_TENANT_B_USER_EMAIL }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -342,6 +351,32 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
 
+  integral-prepare-dev-b:
+    # Separate, authorised, Development-only. Never creates a user (B must exist); reconciles only B's own
+    # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_b == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_b_sha == github.sha
+    name: Integral UAT - prepare Clerk Development B (authorised write)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Reconcile the Organization of Clerk Development B
+        run: |
+          test -n "${INTEGRAL_CLERK_DEV_B_EMAIL:-}" || { echo '::error::INTEGRAL_CLERK_DEV_B_EMAIL is not configured.'; exit 2; }
+          python apps/api/scripts/provision_clerk_e2e_fixture.py \
+            --email "${INTEGRAL_CLERK_DEV_B_EMAIL}" \
+            --name "C2Pro E2E Tenant B" \
+            --tenant-id 00000000-0000-0000-0000-00000000a114 \
+            --export-prefix TENANT_B_
+
   integral-s1-s8:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only != 'true'
     name: Integral S1-S8 - one project, two Clerk tenants (${{ github.event.inputs.integral_ai_mode }})
@@ -352,7 +387,8 @@ jobs:
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
-      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL || secrets.E2E_CLERK_TENANT_B_USER_EMAIL || vars.E2E_CLERK_TENANT_B_USER_EMAIL }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       REDIS_URL: redis://localhost:6379/0
@@ -399,7 +435,7 @@ jobs:
           if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then
             echo '::error::Clerk Development test credentials are missing.'; missing=1
           fi
-          if [ -z "${E2E_CLERK_TENANT_B_USER_EMAIL:-}" ]; then
+          if [ -z "${INTEGRAL_CLERK_DEV_B_EMAIL:-}" ]; then
             echo '::error::Development identity B is not configured (INTEGRAL_CLERK_DEV_B_EMAIL; the Production B of #1144 does not count): the cross-tenant stages cannot run.'; missing=1
           fi
           if [ "${INTEGRAL_AI_MODE}" = "real-ai" ]; then
@@ -435,35 +471,19 @@ jobs:
       - name: Reconcile Clerk Development identity A and its Organization
         run: python apps/api/scripts/provision_clerk_e2e_fixture.py
 
-      # Identity B must already exist as a Clerk Development user (it is never created here). Only its OWN
-      # Organization (a different tenant) is reconciled when it has none.
-      - name: Check identity B and reconcile its own Organization
+      # Identity B (Clerk Development, INTEGRAL_CLERK_DEV_B_EMAIL) is READ ONLY here: it must already exist with
+      # its own Organization and a valid tenant. If not, the run FAILS CLOSED. Preparing B is the separate,
+      # authorised job `integral-prepare-dev-b`. Only B's identifiers are exported (GITHUB_ENV); Clerk is not written.
+      - name: Check identity B (read-only) and export its identifiers
         run: |
           set +e
-          python apps/api/scripts/preflight_integral_identities.py > "$RUNNER_TEMP/preflight-1.json"
+          python apps/api/scripts/preflight_integral_identities.py --export-github-env > "$RUNNER_TEMP/preflight.json"
           rc=$?
           set -e
-          if [ "$rc" -eq 3 ]; then
-            echo "Identity B exists without an Organization: reconciling its own tenant."
-            python apps/api/scripts/provision_clerk_e2e_fixture.py \
-              --email "${E2E_CLERK_TENANT_B_USER_EMAIL}" \
-              --name "C2Pro E2E Tenant B" \
-              --tenant-id 00000000-0000-0000-0000-00000000a114 \
-              --export-prefix TENANT_B_
-            python apps/api/scripts/preflight_integral_identities.py > "$RUNNER_TEMP/preflight-2.json"
-            rc=$?
-          else
-            cp "$RUNNER_TEMP/preflight-1.json" "$RUNNER_TEMP/preflight-2.json"
-          fi
-          cat "$RUNNER_TEMP/preflight-2.json"
-          if [ "$rc" -ne 0 ]; then echo "::error::Clerk identities A/B are not usable (preflight exit $rc)"; exit "$rc"; fi
-          # Identity B's exports come from the provisioner above, or from the existing membership.
-          if ! grep -q '^TENANT_B_CLERK_E2E_ORG_ID=' "$GITHUB_ENV"; then
-            python apps/api/scripts/provision_clerk_e2e_fixture.py \
-              --email "${E2E_CLERK_TENANT_B_USER_EMAIL}" \
-              --name "C2Pro E2E Tenant B" \
-              --tenant-id 00000000-0000-0000-0000-00000000a114 \
-              --export-prefix TENANT_B_
+          cat "$RUNNER_TEMP/preflight.json" 2>/dev/null || true
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Clerk Development identities A/B are not usable (preflight exit $rc). Nothing was changed in Clerk; B must be prepared by the separate authorised operation."
+            exit "$rc"
           fi
 
       - name: Prepare the two tenants in the isolated database (no journey data)

@@ -3,7 +3,7 @@
 
 It answers, before any browser or paid AI call, the question "can this run start?" for both humans:
 
-* identity A (``E2E_CLERK_USER_EMAIL``, default the E2E user) and identity B (``E2E_CLERK_TENANT_B_USER_EMAIL``)
+* identity A (``E2E_CLERK_USER_EMAIL``, default the E2E user) and identity B (``INTEGRAL_CLERK_DEV_B_EMAIL``)
   each resolve to EXACTLY ONE Clerk user of the Development instance;
 * each is a member of an Organization whose ``publicMetadata.tenant_id`` is set (the tenant the application resolves);
 * the two Organizations and the two tenant ids DIFFER, and the two users differ.
@@ -13,12 +13,14 @@ Development identification the fixture provisioner uses). It prints booleans and
 a Clerk id or a key -- and exits:
 
 * 0  both identities are ready;
-* 3  the only thing missing is B's Organization membership (B's user exists): run the provisioner for B, then re-run;
+* 3  the only thing missing is B's Organization membership (B's user exists). The run STOPS: preparing B is a
+     separate, explicitly authorised operation (workflow input ``integral_prepare_dev_b``), never part of a UAT;
 * 1  anything else (a missing user, an ambiguous email, a shared Organization or tenant, a Production key).
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import importlib.util
 import json
@@ -36,12 +38,11 @@ READY, NEEDS_B_ORGANIZATION, FAILED = 0, 3, 1
 # Identity B of THIS runner (#1112) is a Clerk DEVELOPMENT user. It is not the Production B of the read-only
 # validation lane (#1144): that identity lives in another Clerk instance and never counts here.
 DEV_B_EMAIL_ENV = "INTEGRAL_CLERK_DEV_B_EMAIL"
-LEGACY_B_EMAIL_ENV = "E2E_CLERK_TENANT_B_USER_EMAIL"
 
 
 def resolve_b_email(environ: dict[str, str] | os._Environ[str]) -> str:
-    """The dedicated Development-B variable wins; the legacy tenant-B name is only a fallback."""
-    return (environ.get(DEV_B_EMAIL_ENV) or environ.get(LEGACY_B_EMAIL_ENV) or "").strip()
+    """Only the dedicated Development-B variable: no legacy/Production name is ever read for this lane."""
+    return (environ.get(DEV_B_EMAIL_ENV) or "").strip()
 
 
 def _is_uuid(value: str) -> bool:
@@ -148,7 +149,29 @@ def evaluate_pair(a: IdentityReport, b: IdentityReport) -> tuple[int, list[str]]
     return (FAILED if reasons else READY), reasons
 
 
-def main() -> int:
+B_EXPORT_PREFIX = "TENANT_B_"
+
+
+def b_export_lines(b: IdentityReport) -> list[str]:
+    """Pure: the GITHUB_ENV lines the UAT needs about B, from a READY report (no Clerk write)."""
+    prefix = B_EXPORT_PREFIX
+    return [
+        f"{prefix}CLERK_E2E_ORG_ID={b.organization_id}",
+        f"{prefix}E2E_CLERK_ORGANIZATION_ID={b.organization_id}",
+        f"{prefix}CLERK_E2E_USER_ID={b.user_id}",
+        f"{prefix}E2E_EXPECTED_TENANT_ID={b.tenant_id}",
+        f"E2E_TENANT_B_ID={b.tenant_id}",
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--export-github-env",
+        action="store_true",
+        help="When BOTH identities are ready, append B's identifiers to $GITHUB_ENV (the only write; Clerk is read-only).",
+    )
+    args = parser.parse_args(argv)
     provisioner = _load_provisioner()
     secret_key = os.getenv("CLERK_SECRET_KEY", "")
     publishable = os.getenv("CLERK_PUBLISHABLE_KEY") or os.getenv(
@@ -161,7 +184,7 @@ def main() -> int:
         return FAILED
     if not email_b:
         print(
-            f"FAIL: {DEV_B_EMAIL_ENV} (or legacy {LEGACY_B_EMAIL_ENV}) is not configured: Development "
+            f"FAIL: {DEV_B_EMAIL_ENV} is not configured: Development "
             "identity B does not exist for this run. Nothing is created and nothing is faked.",
             file=sys.stderr,
         )
@@ -189,6 +212,19 @@ def main() -> int:
                 return FAILED
             reports.append(evaluate_identity(label, users, memberships))
     code, reasons = evaluate_pair(reports[0], reports[1])
+    if args.export_github_env and code == READY:
+        try:
+            target = provisioner.resolve_exact_path(
+                os.getenv("GITHUB_ENV", ""),
+                expected=provisioner.expected_github_env_path(),
+                option="--export-github-env",
+                requires="GITHUB_ENV",
+            )
+            with target.open("a", encoding="utf-8") as handle:
+                handle.write("\n".join(b_export_lines(reports[1])) + "\n")
+        except (provisioner.FixtureError, OSError) as exc:
+            print(f"FAIL: cannot export identity B: {str(exc)[:200]}", file=sys.stderr)
+            return FAILED
     print(
         json.dumps(
             {

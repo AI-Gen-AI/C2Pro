@@ -24,6 +24,7 @@ from scripts import seed_integral_uat as seed
 from scripts import verify_integral_s1_s8_pg as verifier
 
 WEB = Path(__file__).resolve().parents[4] / "web"
+REPO_ROOT = Path(__file__).resolve().parents[5]
 FIXTURES = WEB / "src" / "tests" / "e2e" / "test-data" / "triplet"
 TRIPLET = json.loads((FIXTURES / "triplet.manifest.json").read_text())
 EXTRA = json.loads((FIXTURES / "integral.manifest.json").read_text())
@@ -801,16 +802,60 @@ def test_a_tenant_that_is_not_a_uuid_fails() -> None:
     assert "valid UUID" in report.problems[0]
 
 
-def test_the_dedicated_development_b_variable_wins_over_the_legacy_name() -> None:
-    env = {
-        "INTEGRAL_CLERK_DEV_B_EMAIL": " dev-b@example.test ",
-        "E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test",
-    }
-    assert preflight.resolve_b_email(env) == "dev-b@example.test"
+def test_only_the_dedicated_development_b_variable_is_read() -> None:
     assert (
-        preflight.resolve_b_email({"E2E_CLERK_TENANT_B_USER_EMAIL": "old@x.test"}) == "old@x.test"
+        preflight.resolve_b_email({"INTEGRAL_CLERK_DEV_B_EMAIL": " dev-b@example.test "})
+        == "dev-b@example.test"
     )
+    assert preflight.resolve_b_email({"E2E_CLERK_TENANT_B_USER_EMAIL": "prod-b@x.test"}) == ""
     assert preflight.resolve_b_email({}) == ""
+
+
+def test_b_exports_come_from_the_report_and_name_the_seed_tenant() -> None:
+    lines = dict(
+        line.split("=", 1) for line in preflight.b_export_lines(_ready("B", "u2", "o2", "t2"))
+    )
+    assert (
+        lines["TENANT_B_CLERK_E2E_ORG_ID"] == "o2" and lines["TENANT_B_CLERK_E2E_USER_ID"] == "u2"
+    )
+    assert lines["E2E_TENANT_B_ID"] == lines["TENANT_B_E2E_EXPECTED_TENANT_ID"] == _tid(2)
+
+
+def test_exit_code_three_is_a_stop_not_a_repair() -> None:
+    b = preflight.evaluate_identity("B", [{"id": "u2"}], [])
+    code, _ = preflight.evaluate_pair(_ready("A", "u1", "o1", "t1"), b)
+    assert code == preflight.NEEDS_B_ORGANIZATION
+
+
+def _integral_job_text() -> str:
+    text = (REPO_ROOT / ".github" / "workflows" / "acc01-s2-live-ai-uat.yml").read_text()
+    return text[text.index("\n  integral-s1-s8:") :]
+
+
+def test_the_uat_job_never_writes_to_clerk_b() -> None:
+    job = _integral_job_text()
+    assert "--export-github-env" in job
+    assert job.count("provision_clerk_e2e_fixture.py") == 1  # identity A only
+    assert "--export-prefix" not in job
+    assert "E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL" not in job
+
+
+def test_no_workflow_env_reads_the_legacy_b_secret() -> None:
+    text = (REPO_ROOT / ".github" / "workflows" / "acc01-s2-live-ai-uat.yml").read_text()
+    assert (
+        "secrets.E2E_CLERK_TENANT_B_USER_EMAIL" not in text
+        and "vars.E2E_CLERK_TENANT_B_USER_EMAIL" not in text
+    )
+
+
+def test_preparing_b_is_a_separate_sha_confirmed_job_that_is_not_a_uat() -> None:
+    text = (REPO_ROOT / ".github" / "workflows" / "acc01-s2-live-ai-uat.yml").read_text()
+    job = text[text.index("\n  integral-prepare-dev-b:") : text.index("\n  integral-s1-s8:")]
+    assert (
+        "integral_uat != 'true'" in job
+        and "integral_confirm_prepare_dev_b_sha == github.sha" in job
+    )
+    assert "INTEGRAL_CLERK_DEV_B_EMAIL" in job
 
 
 def test_main_fails_closed_without_b_and_never_reaches_clerk(
@@ -819,7 +864,7 @@ def test_main_fails_closed_without_b_and_never_reaches_clerk(
     for name in ("INTEGRAL_CLERK_DEV_B_EMAIL", "E2E_CLERK_TENANT_B_USER_EMAIL"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_x")
-    assert preflight.main() == preflight.FAILED
+    assert preflight.main([]) == preflight.FAILED
 
 
 def test_main_refuses_a_production_key_before_any_clerk_call(
@@ -828,14 +873,14 @@ def test_main_refuses_a_production_key_before_any_clerk_call(
     monkeypatch.setenv("CLERK_SECRET_KEY", "sk_live_x")
     monkeypatch.setenv("INTEGRAL_CLERK_DEV_B_EMAIL", "b@example.test")
     monkeypatch.setenv("E2E_CLERK_USER_EMAIL", "a@example.test")
-    assert preflight.main() == preflight.FAILED
+    assert preflight.main([]) == preflight.FAILED
 
 
 def test_main_refuses_identical_a_and_b_emails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLERK_SECRET_KEY", "sk_test_x")
     monkeypatch.setenv("E2E_CLERK_USER_EMAIL", "Same@example.test")
     monkeypatch.setenv("INTEGRAL_CLERK_DEV_B_EMAIL", "same@example.test")
-    assert preflight.main() == preflight.FAILED
+    assert preflight.main([]) == preflight.FAILED
 
 
 def test_a_broken_a_fails_before_judging_b() -> None:
