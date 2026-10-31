@@ -79,17 +79,28 @@ interface Snapshot {
     missingDimensions: string[];
     categoryScores: Record<string, number | null>;
     evaluatedAt: string;
+    /** Everything else the persisted dashboard states about this evaluation. */
+    methodologyVersion: string | null;
+    trustedScore: number | null;
+    pendingReviewCount: number;
+    alertCount: number;
+    documentCount: number;
+    weights: Record<string, number>;
   };
+  /** The alert rows persisted for the project (what the evaluation's mirror wrote). */
+  alerts: Array<{ id: string; ruleCode: string; status: string; sourceClauseId: string | null }>;
 }
 
 async function snapshot(page: Page): Promise<Snapshot> {
   const root = `/api/v1/projects/${fixture.projectId}`;
-  const [structured, technical, health, dashboard] = await Promise.all([
+  const [structured, technical, health, dashboard, alertList] = await Promise.all([
     call(page, `${root}/structured-wbs/canonical-links`),
     call(page, `${root}/technical-wbs/canonical-links`),
     call(page, `${root}/health`),
     call(page, `/api/v1/coherence/dashboard/${fixture.projectId}`),
+    call(page, `/api/v1/alerts/projects/${fixture.projectId}`),
   ]);
+  expect(alertList.status, "authenticated persisted Alerts read").toBe(200);
   expect(health.status, "authenticated project Health read").toBe(200);
   expect(dashboard.status, "authenticated persisted Coherence dashboard read").toBe(200);
   expect(structured.status, "Clerk-authenticated structured WBS GET").toBe(200);
@@ -127,7 +138,15 @@ async function snapshot(page: Page): Promise<Snapshot> {
     score_missing_dimensions?: string[] | null;
     sub_scores?: Record<string, number | null>;
     last_updated?: string;
+    methodology_version?: string | null;
+    trusted_score?: number | null;
+    pending_review_count?: number;
+    alert_count?: number;
+    document_count?: number;
+    weights_used?: Record<string, number>;
   };
+  const alertRows = (alertList.data as { items?: Array<Record<string, unknown>> } | null)?.items ?? [];
+  for (const row of alertRows) expect(row.project_id, "every persisted alert belongs to this project").toBe(fixture.projectId);
   expect(healthBody.project_id).toBe(fixture.projectId);
   expect(scoreBody.project_id).toBe(fixture.projectId);
   const assessments = healthBody.single_document_coverage?.assessments ?? [];
@@ -159,7 +178,21 @@ async function snapshot(page: Page): Promise<Snapshot> {
         Object.entries(scoreBody.sub_scores ?? {}).sort(([a], [b]) => a.localeCompare(b)),
       ),
       evaluatedAt: scoreBody.last_updated ?? "",
+      methodologyVersion: scoreBody.methodology_version ?? null,
+      trustedScore: scoreBody.trusted_score ?? null,
+      pendingReviewCount: scoreBody.pending_review_count ?? 0,
+      alertCount: scoreBody.alert_count ?? 0,
+      documentCount: scoreBody.document_count ?? 0,
+      weights: Object.fromEntries(Object.entries(scoreBody.weights_used ?? {}).sort(([a], [b]) => a.localeCompare(b))),
     },
+    alerts: alertRows
+      .map((row) => ({
+        id: String(row.id ?? ""),
+        ruleCode: String(row.rule_code ?? ""),
+        status: String(row.status ?? ""),
+        sourceClauseId: typeof row.source_clause_id === "string" ? row.source_clause_id : null,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
   };
 }
 
@@ -342,6 +375,7 @@ test("S7 one canonical WBS: genuine Clerk approvals, signout and clean-context r
     overall_score?: number | null;
     score_reason?: string | null;
     score_missing_dimensions?: string[] | null;
+    alerts?: unknown[];
   };
   expect(
     evaluated.overall_score !== null && evaluated.overall_score !== undefined ||
@@ -352,6 +386,22 @@ test("S7 one canonical WBS: genuine Clerk approvals, signout and clean-context r
   const before = await snapshot(page);
   expect(before.coherence.globalScore, "stored Score agrees with the evaluation").toBe(evaluated.overall_score ?? null);
   expect(before.coherence.scoreReason, "stored Score reason agrees with the evaluation").toBe(evaluated.score_reason ?? null);
+  // What the evaluation reported must be what was persisted: findings are never silently dropped between
+  // the answer and the Alerts ledger. (An evaluation with no findings legitimately persists none.)
+  const reported = evaluated.alerts?.length ?? 0;
+  expect(before.alerts.length > 0 || reported === 0, `${reported} alert(s) reported by the evaluation, none persisted`).toBe(true);
+  test.info().annotations.push({
+    type: "s7-s8-persisted-state",
+    description: JSON.stringify({
+      evaluationAlerts: reported,
+      persistedAlerts: before.alerts.length,
+      globalScore: before.coherence.globalScore,
+      scoreReason: before.coherence.scoreReason,
+      missingDimensions: before.coherence.missingDimensions,
+      healthStates: before.health.assessments.map((a) => `${a.category}:${a.state}`),
+      evaluatedAt: before.coherence.evaluatedAt,
+    }),
+  });
   await page.getByRole("button", { name: "User menu" }).click();
   await page.getByRole("menuitem", { name: /sign out/i }).click();
   await expect(page).toHaveURL(/\/sign-in/, { timeout: 30_000 });
