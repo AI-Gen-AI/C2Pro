@@ -340,7 +340,7 @@ async def test_happy_path_reject_records_attempt_with_rejected_status(
 
 
 async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
-    use_case, review_queue_repo, checkpoint_service, monkeypatch
+    use_case, review_queue_repo, checkpoint_service, graph_app, monkeypatch
 ):
     """C2PRO P0b HITL resume hotfix: checkpoint_id is optional.
 
@@ -357,6 +357,16 @@ async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
         "id": "latest",
         "channel_values": {"__root__": {"foo": "bar"}},
     }
+    # The thread-only path now requires an attempt-isolated checkpoint.
+    # Model an actual async LangGraph fork rather than allowing the mock's
+    # non-awaitable MagicMock to bypass that safety requirement.
+    graph_app.aupdate_state = AsyncMock(return_value={
+        "configurable": {
+            "thread_id": "thr-no-checkpoint",
+            "checkpoint_ns": "",
+            "checkpoint_id": "cp-thread-only-fork",
+        }
+    })
 
     spy_warning = MagicMock()
     monkeypatch.setattr(
@@ -372,6 +382,7 @@ async def test_resume_succeeds_without_checkpoint_id_using_thread_id_only(
     )
 
     assert resp.status == "resumed"
+    graph_app.aupdate_state.assert_awaited_once()
     checkpoint_service.load_checkpoint.assert_called_once_with(
         thread_id="thr-no-checkpoint", checkpoint_id=None
     )
