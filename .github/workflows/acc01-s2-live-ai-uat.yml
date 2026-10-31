@@ -318,7 +318,7 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL || vars.E2E_CLERK_TENANT_B_USER_EMAIL }}
+      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL || secrets.E2E_CLERK_TENANT_B_USER_EMAIL || vars.E2E_CLERK_TENANT_B_USER_EMAIL }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -352,7 +352,7 @@ jobs:
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
-      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL || vars.E2E_CLERK_TENANT_B_USER_EMAIL }}
+      E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL || secrets.E2E_CLERK_TENANT_B_USER_EMAIL || vars.E2E_CLERK_TENANT_B_USER_EMAIL }}
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       REDIS_URL: redis://localhost:6379/0
@@ -400,7 +400,7 @@ jobs:
             echo '::error::Clerk Development test credentials are missing.'; missing=1
           fi
           if [ -z "${E2E_CLERK_TENANT_B_USER_EMAIL:-}" ]; then
-            echo '::error::Identity B is not configured (E2E_CLERK_TENANT_B_USER_EMAIL): the cross-tenant stages cannot run.'; missing=1
+            echo '::error::Development identity B is not configured (INTEGRAL_CLERK_DEV_B_EMAIL; the Production B of #1144 does not count): the cross-tenant stages cannot run.'; missing=1
           fi
           if [ "${INTEGRAL_AI_MODE}" = "real-ai" ]; then
             test "${C2PRO_AI_MOCK}" = '0'
