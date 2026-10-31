@@ -6,7 +6,7 @@
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import type { Browser, Page } from "@playwright/test";
 
-import { callApi } from "./api";
+import { callApi, itemsOf } from "./api";
 import { sha256Hex } from "./ledger";
 
 const EMPTY_SESSION = { cookies: [], origins: [] };
@@ -51,7 +51,13 @@ export async function signInTenantB(browser: Browser, baseURL: string, emailAddr
   return { page, close: () => context.close() };
 }
 
-export const DENIAL = [401, 403, 404];
+/**
+ * Acceptable answers about a project of ANOTHER tenant. 0 stands for "HTTP 200 with an EMPTY collection": the
+ * persisted-alerts list is tenant-scoped (RLS) and does not 404 on a foreign project, it simply holds nothing of it.
+ * That is not a leak, but it is not a denial either, so the scenario reports it as a product gap; a 200 that carries
+ * ANY row is a real leak and stays 200 (never accepted).
+ */
+export const DENIAL = [401, 403, 404, 0];
 
 /** What the application answers a signed-in user about a project of ANOTHER tenant: only denials are acceptable. */
 export async function denialsFor(page: Page, foreignProjectId: string): Promise<number[]> {
@@ -62,7 +68,11 @@ export async function denialsFor(page: Page, foreignProjectId: string): Promise<
     `/api/v1/projects/${foreignProjectId}/health`,
   ];
   const statuses: number[] = [];
-  for (const url of urls) statuses.push((await callApi(page, url)).status);
+  for (const url of urls) {
+    const answer = await callApi(page, url);
+    const emptyCollection = answer.status === 200 && url.includes("/alerts/") && itemsOf(answer.data).length === 0;
+    statuses.push(emptyCollection ? 0 : answer.status);
+  }
   return statuses;
 }
 

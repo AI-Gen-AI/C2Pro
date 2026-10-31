@@ -126,7 +126,8 @@ export default defineConfig({
       // only (INTEGRAL_UAT=1, set by the integral job of acc01-s2-live-ai-uat.yml); never part of another suite.
       name: "integral-s1-s8",
       testMatch: [/(^|[\\/])integral-s1-s8\.spec\.ts$/],
-      use: { ...devices["Desktop Chrome"] },
+      // A UI action that cannot complete must fail the STAGE in a minute, not hang the whole run to its timeout.
+      use: { ...devices["Desktop Chrome"], actionTimeout: 90_000, navigationTimeout: 90_000 },
       // The scenario starts only if both identities authenticated against the local API (JWKS verified).
       dependencies: ["global-setup", "integral-auth-preflight"],
       metadata: {

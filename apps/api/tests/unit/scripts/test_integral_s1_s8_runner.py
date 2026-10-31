@@ -1335,3 +1335,33 @@ def test_the_seed_fails_closed_without_the_dedicated_b_variable() -> None:
     env[LEGACY_B] = "prod-b@example.test"
     with pytest.raises(seed.SeedError, match="MISSING_CLERK_IDENTITY"):
         seed.require_environment(env)
+
+
+# ── lessons of the first deterministic run (41238524091) ──────────────────────────────────────────────────
+def test_the_verifier_reads_the_alert_rule_from_its_real_column() -> None:
+    """The table has rule_id (the API calls it rule_code); asking for rule_code broke the first real verification."""
+    source = Path(verifier.__file__).read_text(encoding="utf-8")
+    assert "rule_id AS rule_code" in source
+    assert "SELECT project_id, tenant_id, rule_code" not in source
+
+
+def test_a_foreign_project_may_answer_an_empty_alert_list_but_never_a_row() -> None:
+    identity = (WEB / "src" / "tests" / "e2e" / "support" / "integral" / "identity.ts").read_text(
+        encoding="utf-8"
+    )
+    assert "export const DENIAL = [401, 403, 404, 0];" in identity
+    assert 'url.includes("/alerts/")' in identity
+    assert "itemsOf(answer.data).length === 0" in identity, (
+        "only an EMPTY collection counts; a row is a leak"
+    )
+    spec = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text(encoding="utf-8")
+    assert 'stage: "S1"' in spec, "the 200-instead-of-404 behaviour is a declared product gap"
+
+
+def test_every_upload_starts_from_the_documents_tab_and_ui_actions_cannot_hang() -> None:
+    spec = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text(encoding="utf-8")
+    upload = spec.split("const upload = async", 1)[1].split("uploadDocumentThroughUi(", 1)[0]
+    assert 'openProjectTab(pageA, projectId, "documents")' in upload
+    config = (WEB / "playwright.config.ts").read_text(encoding="utf-8")
+    scenario = config[config.index('name: "integral-s1-s8"') :].split("metadata:", 1)[0]
+    assert "actionTimeout: 90_000" in scenario

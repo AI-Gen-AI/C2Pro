@@ -612,7 +612,7 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
     )
     facts.alerts = await _rows(
         conn,
-        "SELECT project_id, tenant_id, rule_code, status::text AS status, source_clause_id FROM alerts WHERE project_id = :p",
+        "SELECT project_id, tenant_id, rule_id AS rule_code, status::text AS status, source_clause_id FROM alerts WHERE project_id = :p",
         **pa,
     )
     clause_ids = [a["source_clause_id"] for a in facts.alerts if a["source_clause_id"]]
