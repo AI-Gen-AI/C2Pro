@@ -189,27 +189,27 @@ async function produceRealHealth(page: Page): Promise<void> {
   expect(uploaded.task_id, "real Celery analysis must be enqueued").toBeTruthy();
   await expect(page.getByTestId("document-upload-surface")).toBeHidden({ timeout: 60_000 });
 
-  let reviewItemId: string | null = null;
-  for (;;) {
-    expect(Date.now(), "real analysis did not reach a HITL review").toBeLessThan(deadline);
-    const docs = await call(page, `/api/v1/projects/${projectId}/documents`);
-    expect(docs.status, "same-project authenticated document read").toBe(200);
-    const data = docs.data as { items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
-    const items = Array.isArray(data) ? data : data.items ?? [];
-    const document = items.find((item) => item.id === documentId);
-    const state = String(document?.lifecycle_status ?? "");
-    if (state === "review_required") {
-      expect(document?.review_count).toBe(1);
-      reviewItemId = String(document?.review_item_id ?? "");
-      expect(reviewItemId).toBeTruthy();
-      break;
+  const item = await (async (): Promise<string> => {
+    for (;;) {
+      expect(Date.now(), "real analysis did not reach a HITL review").toBeLessThan(deadline);
+      const docs = await call(page, `/api/v1/projects/${projectId}/documents`);
+      expect(docs.status, "same-project authenticated document read").toBe(200);
+      const data = docs.data as { items?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+      const items = Array.isArray(data) ? data : data.items ?? [];
+      const document = items.find((record) => record.id === documentId);
+      const state = String(document?.lifecycle_status ?? "");
+      if (state === "review_required") {
+        expect(document?.review_count).toBe(1);
+        const id = String(document?.review_item_id ?? "");
+        expect(id).toBeTruthy();
+        return id;
+      }
+      if (["analyzed", "error", "failed_retryable", "needs_changes"].includes(state)) {
+        throw new Error(`S7_HEALTH_REAL_GRAPH_HITL_BYPASS_OR_FAILURE:${state}`);
+      }
+      await page.waitForTimeout(3_000);
     }
-    if (["analyzed", "error", "failed_retryable", "needs_changes"].includes(state)) {
-      throw new Error(`S7_HEALTH_REAL_GRAPH_HITL_BYPASS_OR_FAILURE:${state}`);
-    }
-    await page.waitForTimeout(3_000);
-  }
-  const item = reviewItemId!;
+  })();
   const queue = await call(page, `/api/v1/hitl/queue?project_id=${projectId}&limit=100`);
   expect(queue.status).toBe(200);
   const rows = (queue.data as { items?: Array<{ item_id: string; row_id?: string }> }).items ?? [];
