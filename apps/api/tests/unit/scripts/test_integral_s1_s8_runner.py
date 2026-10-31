@@ -1194,3 +1194,11 @@ def test_the_discovery_receipt_holds_no_email_or_identifier() -> None:
     )
     text = json.dumps(receipt)
     assert "user_secret" not in text and "b@x.test" not in text
+
+
+def test_the_separate_operations_never_start_the_paid_s2_job() -> None:
+    """A dispatch for discovery or for preparing A/B must not also launch the original live-AI S2 job."""
+    text = _workflow_text()
+    condition = text[text.index("\n  s2-live-ai:") :].split("\n", 3)[2]
+    for flag in ("integral_discover_dev_b", "integral_prepare_dev_a", "integral_prepare_dev_b"):
+        assert f"github.event.inputs.{flag} != 'true'" in condition

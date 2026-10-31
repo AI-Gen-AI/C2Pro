@@ -59,7 +59,7 @@ permissions:
 
 jobs:
   s2-live-ai:
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
+    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
     # Scheduled, so it never blocks a PR. Its status is the suite's real result.
     # Runs every "chromium" spec (the intentionally RED backlog is excluded in
     # playwright.config.ts) against a real local backend started exactly as the
