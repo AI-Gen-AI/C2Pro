@@ -521,7 +521,24 @@ def _judge_s7_link(
     )
 
 
+def _judge_s7_sources(c: _Ctx) -> None:
+    """The precondition of every structured canonical link: the source revision holds a TRUSTED, active artifact."""
+    for key in ("budget", "schedule"):
+        trusted = [
+            a
+            for a in c.artifacts_of.get(c.doc(key), [])
+            if a["trust_state"] == "trusted" and a["lifecycle_status"] == "active"
+        ]
+        c.add(
+            "S7",
+            f"{key}: the source revision holds a trusted artifact (precondition of a canonical link)",
+            len(trusted) >= 1,
+            f"{len(trusted)} trusted artifact(s)",
+        )
+
+
 def _judge_s7(c: _Ctx) -> None:
+    _judge_s7_sources(c)
     baseline = _judge_s7_baseline(c)
     for family, event_type in FAMILY_EVENTS.items():
         rows = [e for e in c.facts.events if e["event_type"] == event_type]

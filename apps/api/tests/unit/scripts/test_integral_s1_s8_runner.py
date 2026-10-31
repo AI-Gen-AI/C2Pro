@@ -92,7 +92,7 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
                 "blob_hash": shas[key],
             }
         )
-    art = {k: uuid4() for k in ("a", "b", "spec", "rej")}
+    art = {k: uuid4() for k in ("a", "b", "spec", "rej", "bud", "sch")}
     artifacts = [
         {
             "artifact_id": art["a"],
@@ -128,6 +128,26 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
             "artifact_version": 1,
             "artifact_hash": "h-r",
             "trust_state": "rejected",
+            "lifecycle_status": "active",
+        },
+    ]
+    artifacts += [
+        {
+            "artifact_id": art["bud"],
+            "document_id": docs["budget"],
+            "document_revision_id": revision_of["budget"],
+            "artifact_version": 1,
+            "artifact_hash": "h-bud",
+            "trust_state": "trusted",
+            "lifecycle_status": "active",
+        },
+        {
+            "artifact_id": art["sch"],
+            "document_id": docs["schedule"],
+            "document_revision_id": revision_of["schedule"],
+            "artifact_version": 1,
+            "artifact_hash": "h-sch",
+            "trust_state": "trusted",
             "lifecycle_status": "active",
         },
     ]
@@ -1391,3 +1411,19 @@ def test_third_run_lessons_current_state_names_the_current_file_and_the_session_
     )
     assert "!window.Clerk?.session" in api
     assert api.index("!window.Clerk?.session") < api.index("getToken()")
+
+
+def test_structured_sources_without_a_trusted_artifact_fail_s7_with_the_cause() -> None:
+    """The product gap found by the first full run: an uploaded budget/schedule never becomes a trusted source."""
+    facts, browser, expect = _world()
+    structured = {browser["documentIds"]["budget"], browser["documentIds"]["schedule"]}
+    facts.artifacts = [a for a in facts.artifacts if str(a["document_id"]) not in structured]
+    failed = _failed(facts, browser, expect)
+    assert (
+        "S7:budget: the source revision holds a trusted artifact (precondition of a canonical link)"
+        in failed
+    )
+    assert (
+        "S7:schedule: the source revision holds a trusted artifact (precondition of a canonical link)"
+        in failed
+    )
