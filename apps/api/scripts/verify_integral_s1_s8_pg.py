@@ -30,11 +30,11 @@ verdicts, the evidence class (a deterministic-AI rehearsal is never UAT) and the
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import hashlib
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -820,17 +820,21 @@ def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def _sha_from_env(name: str) -> str | None:
+    """A commit SHA from the environment, kept only when it really is one (never free text)."""
+    value = os.environ.get(name, "")
+    return value if _SHA.fullmatch(value) else None
+
+
 def main() -> int:
-    # The evidence files live at fixed places of the checkout: no path comes from the command line, so nothing
-    # a caller types can redirect a read or a write (Sonar S8707).
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--database-url", default=os.environ.get("DATABASE_URL", ""))
-    parser.add_argument("--candidate-sha", default=os.environ.get("GITHUB_SHA"))
-    parser.add_argument("--frontend-runtime-sha", default=os.environ.get("FRONTEND_RUNTIME_SHA"))
-    parser.add_argument("--backend-runtime-sha", default=os.environ.get("BACKEND_RUNTIME_SHA"))
-    args = parser.parse_args()
-    if not args.database_url:
-        print("FAIL: no database url (set DATABASE_URL or pass --database-url)")
+    # The evidence files live at fixed places of the checkout and the command line takes nothing: no argument
+    # can redirect a read or a write, or reach what is written (Sonar S8707).
+    database_url = os.environ.get("DATABASE_URL", "")
+    if not database_url:
+        print("FAIL: no database url (set DATABASE_URL)")
         return 2
 
     browser = _read_json(BROWSER_MANIFEST)
@@ -845,7 +849,7 @@ def main() -> int:
         return 1
     receipt = _read_json(PROVIDER_RECEIPT)
     facts = asyncio.run(
-        _collect_facts(args.database_url, UUID(browser["projectIdA"]), UUID(browser["projectIdB"]))
+        _collect_facts(database_url, UUID(browser["projectIdA"]), UUID(browser["projectIdB"]))
     )
     checks = judge(facts, browser, _expectations(browser, receipt, fixtures))
     manifest = build_manifest(
@@ -853,9 +857,9 @@ def main() -> int:
         checks,
         receipt,
         {
-            "candidate_sha": args.candidate_sha,
-            "frontend_runtime_sha": args.frontend_runtime_sha,
-            "backend_runtime_sha": args.backend_runtime_sha,
+            "candidate_sha": _sha_from_env("GITHUB_SHA"),
+            "frontend_runtime_sha": _sha_from_env("FRONTEND_RUNTIME_SHA"),
+            "backend_runtime_sha": _sha_from_env("BACKEND_RUNTIME_SHA"),
         },
     )
     MANIFEST_OUTPUT.write_text(

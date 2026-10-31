@@ -975,3 +975,21 @@ def test_the_receipt_fails_when_there_is_no_such_process(tmp_path: Path) -> None
     )
     assert result["process_found"] is False
     assert result["matches"] is False
+
+
+def test_a_sha_from_the_environment_is_kept_only_when_it_is_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GITHUB_SHA", "a" * 40)
+    monkeypatch.setenv("FRONTEND_RUNTIME_SHA", "not a sha; rm -rf /")
+    monkeypatch.delenv("BACKEND_RUNTIME_SHA", raising=False)
+    assert verifier._sha_from_env("GITHUB_SHA") == "a" * 40
+    assert verifier._sha_from_env("FRONTEND_RUNTIME_SHA") is None
+    assert verifier._sha_from_env("BACKEND_RUNTIME_SHA") is None
+
+
+def test_the_verifier_refuses_to_run_without_a_database_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert verifier.main() == 2
