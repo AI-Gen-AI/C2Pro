@@ -143,6 +143,6 @@ async def test_d1_1103_thread_only_crash_pre_n17_changed_decision_preserves_sour
     stale = await _use_case(
         db, tenant, saver, app, independent_sessions,
     ).execute(review_id=review.item_id, request=_approve())
-    assert stale.status == "rejected"
+    assert stale.status == ReviewStatus.REJECTED.value
     assert await _counts(db, document.project_id) == (0, 0)
     assert len(N17_RUNS) == 1
