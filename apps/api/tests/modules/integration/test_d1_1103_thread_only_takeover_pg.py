@@ -18,13 +18,13 @@ from src.modules.hitl.application.resume_workflow_use_case import (
     WorkflowDecision,
 )
 from src.modules.hitl.domain.entities import ReviewStatus
-from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
-    InjectedCrash,
+from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (  # noqa: F401
     N17_RUNS,
+    InjectedCrash,
     _approve,
+    _arrange,
     _build_graph_with_failing_n17,
     _build_real_graph,
-    _arrange,
     _counts,
     _initial_state,
     _operation_row,
