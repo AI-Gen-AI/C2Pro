@@ -150,6 +150,19 @@ def evaluate_pair(a: IdentityReport, b: IdentityReport) -> tuple[int, list[str]]
 
 
 B_EXPORT_PREFIX = "TENANT_B_"
+# The seed of the isolated database creates identity A's tenant under this fixed id (tests/e2e_seed).
+SEED_TENANT_A = "00000000-0000-0000-0000-00000000a113"
+
+
+def a_export_lines(a: IdentityReport) -> list[str]:
+    """Pure: the GITHUB_ENV lines the UAT needs about A, from a READY report (no Clerk write)."""
+    return [
+        f"CLERK_E2E_ORG_ID={a.organization_id}",
+        f"E2E_CLERK_ORGANIZATION_ID={a.organization_id}",
+        f"CLERK_E2E_USER_ID={a.user_id}",
+        f"E2E_EXPECTED_TENANT_ID={a.tenant_id}",
+        f"E2E_TENANT_ID={a.tenant_id}",
+    ]
 
 
 def b_export_lines(b: IdentityReport) -> list[str]:
@@ -169,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--export-github-env",
         action="store_true",
-        help="When BOTH identities are ready, append B's identifiers to $GITHUB_ENV (the only write; Clerk is read-only).",
+        help="When BOTH identities are ready, append A's and B's identifiers to $GITHUB_ENV and write the public JWKS (Clerk is only read).",
     )
     args = parser.parse_args(argv)
     provisioner = _load_provisioner()
@@ -211,7 +224,17 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 return FAILED
             reports.append(evaluate_identity(label, users, memberships))
+        jwks_document: dict[str, Any] = {}
+        if args.export_github_env:
+            try:
+                jwks_document = admin.jwks()
+            except provisioner.FixtureError as exc:
+                print(f"FAIL: cannot read the instance JWKS: {str(exc)[:200]}", file=sys.stderr)
+                return FAILED
     code, reasons = evaluate_pair(reports[0], reports[1])
+    if code == READY and reports[0].tenant_id != SEED_TENANT_A:
+        code = FAILED
+        reasons.append("A: its tenant is not the one the isolated seed creates for A")
     if args.export_github_env and code == READY:
         try:
             target = provisioner.resolve_exact_path(
@@ -220,10 +243,20 @@ def main(argv: list[str] | None = None) -> int:
                 option="--export-github-env",
                 requires="GITHUB_ENV",
             )
+            jwks_target = provisioner.resolve_exact_path(
+                str(provisioner.expected_jwks_path() or ""),
+                expected=provisioner.expected_jwks_path(),
+                option="--export-github-env (jwks)",
+                requires="RUNNER_TEMP",
+            )
+            # Public verification keys (GET /jwks): the backend cannot verify any Clerk JWT without them.
+            jwks_target.write_text(json.dumps(jwks_document), encoding="utf-8")
             with target.open("a", encoding="utf-8") as handle:
-                handle.write("\n".join(b_export_lines(reports[1])) + "\n")
+                handle.write(
+                    "\n".join(a_export_lines(reports[0]) + b_export_lines(reports[1])) + "\n"
+                )
         except (provisioner.FixtureError, OSError) as exc:
-            print(f"FAIL: cannot export identity B: {str(exc)[:200]}", file=sys.stderr)
+            print(f"FAIL: cannot export identities A/B: {str(exc)[:200]}", file=sys.stderr)
             return FAILED
     print(
         json.dumps(

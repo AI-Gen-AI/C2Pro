@@ -18,6 +18,18 @@ on:
         description: "Integral UAT: only verify the two Clerk Development identities (read-only, no AI, no database)."
         type: boolean
         default: false
+      integral_discover_dev_b:
+        description: "SEPARATE read-only operation: inventory the Clerk Development users and report which existing synthetic account could be identity B (counts and pseudonyms only)."
+        type: boolean
+        default: false
+      integral_prepare_dev_a:
+        description: "SEPARATE operation (not a UAT): reconcile the Organization of the EXISTING Clerk Development user A. Requires integral_confirm_prepare_dev_a_sha."
+        type: boolean
+        default: false
+      integral_confirm_prepare_dev_a_sha:
+        description: "integral_prepare_dev_a only: the full candidate SHA, typed to authorise the Clerk Development write."
+        type: string
+        default: ""
       integral_prepare_dev_b:
         description: "SEPARATE operation (not a UAT): reconcile the Organization of the EXISTING Clerk Development user B. Requires integral_confirm_prepare_dev_b_sha."
         type: boolean
@@ -351,6 +363,58 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
 
+  integral-prepare-dev-a:
+    # Separate, authorised, Development-only. Never creates a user (A must exist); reconciles only A's own
+    # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_a == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_a_sha == github.sha
+    name: Integral UAT - prepare Clerk Development A (authorised write)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Reconcile the Organization of Clerk Development A
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+  integral-discover-dev-b:
+    # Read-only inventory of the Clerk Development users: which EXISTING synthetic account could be identity B.
+    # Every Clerk call is a GET; counts and pseudonyms only (no email, no id, no key). Never part of a UAT.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_discover_dev_b == 'true' && github.event.inputs.integral_uat != 'true'
+    name: Integral UAT - discover an existing Clerk Development B (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      INTEGRAL_SYNTHETIC_EMAIL_DOMAINS: ${{ vars.INTEGRAL_SYNTHETIC_EMAIL_DOMAINS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Inventory Clerk Development (read-only)
+        run: |
+          set +e
+          python apps/api/scripts/discover_integral_dev_identities.py | tee "$RUNNER_TEMP/discovery.json"
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo '### Integral UAT - Development B discovery (read-only)'
+            echo
+            echo "Candidate SHA: \`${GITHUB_SHA}\`  exit code: \`${rc}\`"
+            echo '```json'
+            cat "$RUNNER_TEMP/discovery.json" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
   integral-prepare-dev-b:
     # Separate, authorised, Development-only. Never creates a user (B must exist); reconciles only B's own
     # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
@@ -467,14 +531,11 @@ jobs:
       - name: Bootstrap infrastructure (PostgreSQL + Redis)
         run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
-      # Identity A (the E2E user) and its Organization. Fails closed unless the credentials are Development.
-      - name: Reconcile Clerk Development identity A and its Organization
-        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
-
-      # Identity B (Clerk Development, INTEGRAL_CLERK_DEV_B_EMAIL) is READ ONLY here: it must already exist with
-      # its own Organization and a valid tenant. If not, the run FAILS CLOSED. Preparing B is the separate,
-      # authorised job `integral-prepare-dev-b`. Only B's identifiers are exported (GITHUB_ENV); Clerk is not written.
-      - name: Check identity B (read-only) and export its identifiers
+      # Identities A AND B (Clerk Development) are READ ONLY here: both must already exist, each in its own
+      # Organization with a valid tenant. If not, the run FAILS CLOSED. Preparing them is the separate, authorised
+      # jobs `integral-prepare-dev-a` / `integral-prepare-dev-b`. Only identifiers (GITHUB_ENV) and the public JWKS
+      # are taken; Clerk is not written.
+      - name: Check identities A and B (read-only), export their identifiers and the public JWKS
         run: |
           set +e
           python apps/api/scripts/preflight_integral_identities.py --export-github-env > "$RUNNER_TEMP/preflight.json"

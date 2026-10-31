@@ -19,6 +19,7 @@ from uuid import uuid4
 
 import pytest
 
+from scripts import discover_integral_dev_identities as discovery
 from scripts import preflight_integral_identities as preflight
 from scripts import seed_integral_uat as seed
 from scripts import verify_integral_s1_s8_pg as verifier
@@ -835,7 +836,9 @@ def _integral_job_text() -> str:
 def test_the_uat_job_never_writes_to_clerk_b() -> None:
     job = _integral_job_text()
     assert "--export-github-env" in job
-    assert job.count("provision_clerk_e2e_fixture.py") == 1  # identity A only
+    assert (
+        "provision_clerk_e2e_fixture" not in job
+    )  # neither A nor B is ever provisioned by the UAT
     assert "--export-prefix" not in job
     assert "E2E_CLERK_TENANT_B_USER_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL" not in job
 
@@ -1038,3 +1041,156 @@ def test_the_verifier_refuses_to_run_without_a_database_url(
 ) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert verifier.main() == 2
+
+
+# ── A is read-only too; discovery of an existing Development B ─────────────────────────────────────────────
+def _workflow_text() -> str:
+    return (REPO_ROOT / ".github" / "workflows" / "acc01-s2-live-ai-uat.yml").read_text()
+
+
+def _job(name: str) -> str:
+    text = _workflow_text()
+    start = text.index(f"\n  {name}:")
+    ends = [text.find("\n  integral-", start + 5), text.find("\n  s2-live-ai:", start + 5)]
+    stop = min((e for e in ends if e != -1), default=len(text))
+    return text[start:stop]
+
+
+@pytest.mark.parametrize(
+    "job", ["integral-s1-s8", "integral-clerk-preflight", "integral-discover-dev-b"]
+)
+def test_no_uat_or_read_only_job_invokes_any_provisioner(job: str) -> None:
+    assert "provision_clerk_e2e_fixture" not in _job(job)
+
+
+def test_only_the_two_prepare_jobs_invoke_the_provisioner_and_both_need_the_sha() -> None:
+    for name in ("integral-prepare-dev-a", "integral-prepare-dev-b"):
+        job = _job(name)
+        assert "provision_clerk_e2e_fixture" in job
+        assert "integral_uat != 'true'" in job and "_sha == github.sha" in job
+    assert (
+        _workflow_text().count("provision_clerk_e2e_fixture") == 3
+    )  # the original S2 job + the two prepare jobs
+
+
+def test_the_uat_keeps_the_isolated_postgres_bootstrap_and_uses_the_read_only_check() -> None:
+    job = _job("integral-s1-s8")
+    assert "bootstrap_test_infra.py --start-services --require-redis --recreate-db" in job
+    assert "preflight_integral_identities.py --export-github-env" in job
+
+
+def test_a_exports_name_the_seed_tenant_and_need_no_clerk_write() -> None:
+    lines = dict(
+        line.split("=", 1) for line in preflight.a_export_lines(_ready("A", "u1", "o1", "t1"))
+    )
+    assert lines["CLERK_E2E_ORG_ID"] == "o1" and lines["E2E_TENANT_ID"] == lines[
+        "E2E_EXPECTED_TENANT_ID"
+    ] == _tid(1)
+
+
+def test_the_seed_tenant_of_a_is_the_one_the_seed_creates() -> None:
+    assert str(seed.TENANT_ID) == preflight.SEED_TENANT_A
+
+
+def _user(uid: str, email: str, **extra: object) -> dict:
+    return {"id": uid, "email_addresses": [{"email_address": email}], **extra}
+
+
+def test_only_positively_marked_synthetic_users_are_authorised() -> None:
+    domains = frozenset({"synthetic.example"})
+    assert discovery.is_authorised_synthetic(_user("u", "x+clerk_test@any.com"), domains)
+    assert discovery.is_authorised_synthetic(_user("u", "x@synthetic.example"), domains)
+    assert discovery.is_authorised_synthetic(
+        _user("u", "x@a.com", public_metadata={"c2pro_synthetic": True}), domains
+    )
+    assert not discovery.is_authorised_synthetic(_user("u", "real.person@company.com"), domains)
+    assert not discovery.is_authorised_synthetic(
+        _user("u", "x@a.com", public_metadata={"c2pro_synthetic": "yes"}), domains
+    )
+
+
+def test_the_inventory_is_complete_only_when_clerks_count_is_matched() -> None:
+    users = [{"id": f"u{i}"} for i in range(250)]
+    pages = lambda offset: users[offset : offset + discovery.PAGE]  # noqa: E731
+    assert discovery.read_inventory(pages, 250) == (users, True)
+    assert discovery.read_inventory(pages, 251)[1] is False
+    assert discovery.read_inventory(pages, None)[1] is False
+
+
+def test_an_endless_inventory_is_declared_incomplete_not_guessed() -> None:
+    forever = lambda offset: [{"id": f"u{offset + i}"} for i in range(discovery.PAGE)]  # noqa: E731
+    assert discovery.read_inventory(forever, 10**9)[1] is False
+
+
+@pytest.mark.parametrize(
+    ("memberships", "reason"),
+    [
+        ([], "ZERO_MEMBERSHIP_PREPARABLE"),
+        ([_membership("o2", _tid(2)), _membership("o3", _tid(3))], "MULTIPLE_MEMBERSHIPS"),
+        ([_membership("o2", None)], "ORGANIZATION_WITHOUT_TENANT"),
+        ([_membership("o2", "nope")], "TENANT_NOT_UUID"),
+        ([_membership("o1", _tid(2))], "SHARES_ORGANIZATION_WITH_A"),
+        ([_membership("o2", _tid(1))], "SHARES_TENANT_WITH_A"),
+        ([_membership("o2", _tid(2))], "VALID"),
+    ],
+)
+def test_candidates_are_classified_by_reason(memberships: list[dict], reason: str) -> None:
+    assert discovery.classify_candidate(memberships, "o1", _tid(1))[0] == reason
+
+
+def _receipt(complete: bool, reasons: list[str], a_known: bool = True) -> dict:
+    from collections import Counter
+
+    return discovery.build_receipt(
+        complete=complete,
+        listed=3,
+        counted=3,
+        discards=Counter(),
+        candidates=[{"reason": r} for r in reasons],
+        a_known=a_known,
+    )
+
+
+def test_verdicts_never_conclude_creation_from_an_incomplete_inventory() -> None:
+    receipt = _receipt(False, [])
+    assert receipt["verdict"] == "INVENTORY_INCOMPLETE" and receipt["creation_required"] is False
+    assert _receipt(True, ["VALID"])["verdict"] == "DEV_B_AVAILABLE"
+    assert _receipt(True, ["ZERO_MEMBERSHIP_PREPARABLE"])["verdict"] == "DEV_B_PREPARABLE"
+    empty = _receipt(True, ["MULTIPLE_MEMBERSHIPS"])
+    assert empty["verdict"] == "NO_AUTHORISED_CANDIDATE" and empty["creation_required"] is True
+    assert _receipt(True, [], a_known=False)["creation_required"] is False
+
+
+def test_the_discovery_client_has_no_way_to_write() -> None:
+    clerk = discovery.ReadOnlyClerk(object(), "https://api.clerk.com/v1")  # type: ignore[arg-type]
+    for method in ("POST", "PATCH", "DELETE", "PUT"):
+        with pytest.raises(RuntimeError, match="read-only"):
+            clerk.request(method)
+    source = Path(discovery.__file__).read_text()
+    assert '"POST"' not in source and '"PATCH"' not in source and '"DELETE"' not in source
+
+
+def test_discovery_refuses_a_production_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLERK_SECRET_KEY", "sk_live_x")
+    assert discovery.main() == discovery.FAILED
+
+
+def test_the_discovery_receipt_holds_no_email_or_identifier() -> None:
+    from collections import Counter
+
+    receipt = discovery.build_receipt(
+        complete=True,
+        listed=1,
+        counted=1,
+        discards=Counter(),
+        candidates=[
+            {
+                "reason": "VALID",
+                "user": preflight._pseudonym("user_secret"),
+                "email_pseudonym": preflight._pseudonym("b@x.test"),
+            }
+        ],
+        a_known=True,
+    )
+    text = json.dumps(receipt)
+    assert "user_secret" not in text and "b@x.test" not in text
