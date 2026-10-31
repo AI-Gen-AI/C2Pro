@@ -612,13 +612,17 @@ jobs:
           PY
 
       # A separate process reads the actual SQL tables of THIS project (and tenant B's) before cleanup destroys the
-      # job's database, and writes the ONE manifest tied to the project id.
+      # job's database, and emits the ONE manifest tied to the project id (stdout, redirected by the step).
       - name: Independently verify the project in PostgreSQL and write the manifest
         id: integral_verify
         if: always() && hashFiles('apps/web/playwright-report/integral-browser-manifest.json') != ''
         working-directory: apps/api
         run: |
-          python scripts/verify_integral_s1_s8_pg.py
+          # The verifier writes no file: its stdout IS the manifest; diagnostics go to stderr.
+          rc=0
+          python scripts/verify_integral_s1_s8_pg.py > ../web/playwright-report/integral-manifest.json || rc=$?
+          if [ ! -s ../web/playwright-report/integral-manifest.json ]; then rm -f ../web/playwright-report/integral-manifest.json; fi
+          exit "$rc"
 
       - name: Summarize the integral run
         if: always()

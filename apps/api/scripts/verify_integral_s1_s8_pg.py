@@ -57,7 +57,6 @@ REPORT_DIR = REPO_ROOT / "apps" / "web" / "playwright-report"
 FIXTURE_DIR = REPO_ROOT / "apps" / "web" / "src" / "tests" / "e2e" / "test-data" / "triplet"
 BROWSER_MANIFEST = REPORT_DIR / "integral-browser-manifest.json"
 PROVIDER_RECEIPT = REPORT_DIR / "integral-provider-receipt.json"
-MANIFEST_OUTPUT = REPORT_DIR / "integral-manifest.json"
 
 
 def _normalize_database_url(raw: str) -> str:
@@ -834,18 +833,19 @@ def main() -> int:
     # can redirect a read or a write, or reach what is written (Sonar S8707).
     database_url = os.environ.get("DATABASE_URL", "")
     if not database_url:
-        print("FAIL: no database url (set DATABASE_URL)")
+        print("FAIL: no database url (set DATABASE_URL)", file=sys.stderr)
         return 2
 
     browser = _read_json(BROWSER_MANIFEST)
     if not browser.get("projectIdA") or not browser.get("projectIdB"):
         print(
-            "FAIL: the browser manifest records no project id (the run stopped before S1 created them)"
+            "FAIL: the browser manifest records no project id (the run stopped before S1 created them)",
+            file=sys.stderr,
         )
         return 1
     fixtures = _fixture_expectations(FIXTURE_DIR)
     if fixtures is None:
-        print("FAIL: a committed fixture no longer has its pinned SHA-256")
+        print("FAIL: a committed fixture no longer has its pinned SHA-256", file=sys.stderr)
         return 1
     receipt = _read_json(PROVIDER_RECEIPT)
     facts = asyncio.run(
@@ -862,16 +862,19 @@ def main() -> int:
             "backend_runtime_sha": _sha_from_env("BACKEND_RUNTIME_SHA"),
         },
     )
-    MANIFEST_OUTPUT.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    # The manifest goes to stdout (the workflow redirects it): this process writes no file at all.
+    sys.stdout.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     failed = [c for c in checks if not c.ok]
     for check in failed:
-        print(f"FAIL [{check.stage}] {check.name}{': ' + check.detail if check.detail else ''}")
+        print(
+            f"FAIL [{check.stage}] {check.name}{': ' + check.detail if check.detail else ''}",
+            file=sys.stderr,
+        )
     stages = ",".join(f"{s}:{manifest['steps_S1_S8'][s]['verdict']}" for s in STAGES)
-    print(f"verdict={manifest['verdict']} stages={stages}")
+    print(f"verdict={manifest['verdict']} stages={stages}", file=sys.stderr)
     print(
-        f"postgres checks: {len(checks) - len(failed)}/{len(checks)} passed; first_failure={manifest['first_failure']}"
+        f"postgres checks: {len(checks) - len(failed)}/{len(checks)} passed; first_failure={manifest['first_failure']}",
+        file=sys.stderr,
     )
     return 1 if failed else 0
 

@@ -665,11 +665,11 @@ def test_the_evidence_files_have_fixed_places_inside_the_checkout() -> None:
     for place in (
         verifier.BROWSER_MANIFEST,
         verifier.PROVIDER_RECEIPT,
-        verifier.MANIFEST_OUTPUT,
         verifier.FIXTURE_DIR,
     ):
         assert place.is_relative_to(verifier.REPO_ROOT)
     source = (Path(verifier.__file__)).read_text()
+    assert "MANIFEST_OUTPUT" not in source and "write_text" not in source and "open(" not in source
     assert "--output" not in source
     assert "--browser-manifest" not in source
 
