@@ -259,7 +259,7 @@ async def test_d1_1103_wrong_thread_only_identity_is_rejected(
     review.review_metadata = {**(review.review_metadata or {}), "tenant_id": str(tenant.id)}
     await db.commit()
     N17_RUNS.clear()
-    with pytest.raises(ValueError, match="checkpoint"):
+    with pytest.raises(ValueError, match="Checkpoint not found"):
         await _use_case(db, tenant, saver, app, independent_sessions).execute(
             review_id=review.item_id, request=_approve()
         )
