@@ -253,7 +253,8 @@ async def test_a_person_with_all_three_capabilities_finalizes_and_the_candidate_
     person = await actors.user(label="full")
     await actors.grant(person, READ, FIND, APPROVE)
     assert len((await _read(w, person)).findings) == 5
-    await _decide(w, person, ordinal=0, expected=0)
+    for ordinal in range(5):  # S5-04: under enforce every finding needs a decision before the approval
+        await _decide(w, person, ordinal=ordinal, expected=ordinal)
     await _final(w, request_sessions, "approve", person)
     after = await _footprint(db, w)
     assert after["review"] == "APPROVED"

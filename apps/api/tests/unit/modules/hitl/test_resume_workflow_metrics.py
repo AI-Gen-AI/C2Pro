@@ -165,6 +165,10 @@ def v3_ownership(monkeypatch):
     async def _renew(**kwargs):
         return True
 
+    async def _record_authority(**kwargs):
+        # S5-05: the approval authority is stored on the claimed operation (a database write: not part of these mechanics)
+        calls.setdefault("record_authority", []).append(kwargs)
+
     async def _verify_trust_binding(**kwargs):
         # C2PRO #714 approve pre-flight against the same durable store.
         calls["verify_trust_binding"].append(kwargs)
@@ -174,6 +178,7 @@ def v3_ownership(monkeypatch):
     monkeypatch.setattr(f"{module}.finalize_v3", _finalize)
     monkeypatch.setattr(f"{module}.record_failure", _fail)
     monkeypatch.setattr(f"{module}.renew", _renew)
+    monkeypatch.setattr(f"{module}.record_authority", _record_authority)
     monkeypatch.setattr(f"{module}.verify_trust_binding", _verify_trust_binding)
     monkeypatch.setattr(
         ResumeWorkflowUseCase,
