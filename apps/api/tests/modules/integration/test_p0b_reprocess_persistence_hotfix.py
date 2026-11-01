@@ -51,6 +51,9 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
 from tests.support.hitl_resume_fakes import ResumeGraphDouble
 from tests.support.processing_authority_fakes import install_permissive_authority
 
@@ -324,10 +327,9 @@ async def test_full_prod_shape_lifecycle_legacy_adoption_rag_idempotency_and_res
         SqlAlchemyReviewQueueRepository,
     )
     from src.modules.hitl.application.resume_workflow_use_case import (
-        ResumeWorkflowRequest,
-        ResumeWorkflowUseCase,
-        WorkflowDecision,
-    )
+    ResumeWorkflowUseCase,
+    WorkflowDecision,
+)
     from src.temporal.adapters.persistence.models import ProjectEventORM
 
     document = await _seed_document(db)

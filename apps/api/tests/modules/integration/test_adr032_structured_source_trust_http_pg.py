@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.http import structured_source_trust_router as routes
 from src.core.auth.dependencies import get_current_user
-from src.core.auth.models import Tenant, User
+from src.core.auth.models import Tenant, User, UserRole
 from tests.modules.integration.test_adr032_structured_source_trust_pg import (
     EXCEPTION,
     _approver,
@@ -168,7 +168,9 @@ async def test_legacy_hitl_routes_answer_409_and_expose_the_exact_candidate(
             notification_service=LogNotificationService(),
             confidence_router=ConfidenceRouter(),
         )
-        user = SimpleNamespace(id=w["actor"], full_name="Legacy Route User")
+        user = SimpleNamespace(
+            id=w["actor"], tenant_id=w["tenant"], role=UserRole.USER, is_active=True, full_name="Legacy Route User"
+        )
         with pytest.raises(HTTPException) as approve:
             await hitl_router.approve_item(
                 doc["document"], ApproveRequest(row_id=receipt.review_row_id), w["tenant"], user,

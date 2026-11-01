@@ -35,6 +35,11 @@ from src.modules.hitl.adapters.http.schemas import (
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
+from src.modules.hitl.application.final_decision_authorization import (
+    AuthorizedFinalDecider,
+    FinalDecisionNotAuthorized,
+    authorize_final_decider,
+)
 from src.modules.hitl.application.ports import HumanInTheLoopService
 from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
     ResumeWorkflowRequest as UseCaseResumeRequest,
@@ -108,6 +113,18 @@ async def _record_hitl_correction_snapshot(
             tenant_id=str(tenant_id),
             exc_info=True,
         )
+
+
+def _final_decider(current_user: Any, tenant_id: Any) -> AuthorizedFinalDecider:
+    """The server-authenticated human of THIS tenant, or 403 -- before any review state is read or changed."""
+    try:
+        return authorize_final_decider(current_user, tenant_id=tenant_id)
+    except FinalDecisionNotAuthorized as exc:
+        logger.warning("hitl_final_decision_denied", tenant_id=str(tenant_id))
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "final_decision_not_authorized", "message": str(exc)},
+        ) from exc
 
 
 def _exposed_binding(metadata: dict[str, Any]) -> dict[str, Any] | None:
@@ -240,6 +257,7 @@ async def _approve_and_resume_workflow(
     review_id: UUID | None = None,
     reviewer_name: str,
     resume_use_case: ResumeWorkflowUseCase,
+    decider: AuthorizedFinalDecider,
     row_id: str | None = None,
 ) -> ReviewItem:
     """Approve a graph-gated review (one carrying a real thread_id) by
@@ -268,6 +286,7 @@ async def _approve_and_resume_workflow(
                 decision=WorkflowDecision.APPROVE,
                 feedback="",
                 approved_by=reviewer_name,
+                decider=decider,
             ),
         )
     except ValueError as exc:
@@ -275,6 +294,11 @@ async def _approve_and_resume_workflow(
         if "not found" in error_msg:
             raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg) from exc
         raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg) from exc
+    except FinalDecisionNotAuthorized as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "final_decision_not_authorized", "message": str(exc)},
+        ) from exc
     except Exception as exc:  # noqa: BLE001
         # C2PRO P0b true-resume hotfix: a genuine resume failure now RAISES
         # out of the use case instead of being swallowed into a
@@ -337,6 +361,9 @@ async def approve_item(
     # authenticated session, never to client-supplied values — otherwise any
     # authenticated user could forge a review as another user. ApproveRequest
     # carries no reviewer fields by design.
+    # SECURITY (HIGH, S5): only an active human of the tenant may take the final decision (VIEWER/API/inactive: 403),
+    # decided BEFORE any review state is read.
+    decider = _final_decider(current_user, _tenant_id)
     existing = await _resolve_decision_row(service, item_id, payload.row_id)
 
     if existing.metadata.get("thread_id"):
@@ -353,6 +380,7 @@ async def approve_item(
             review_id=payload.row_id or item_id,
             reviewer_name=current_user.full_name,
             resume_use_case=resume_use_case,
+            decider=decider,
             row_id=existing.metadata.get("row_id"),
         )
     else:
@@ -399,6 +427,7 @@ async def reject_item(
     service: HumanInTheLoopService = Depends(get_hitl_service),
     resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ReviewItemResponse:
+    decider = _final_decider(current_user, _tenant_id)  # SECURITY (HIGH, S5): before any state is read
     existing = await _resolve_decision_row(service, item_id, payload.row_id)
 
     if existing.metadata.get("thread_id"):
@@ -412,8 +441,14 @@ async def reject_item(
                     decision=WorkflowDecision.REJECT,
                     feedback=payload.reason,
                     approved_by=current_user.full_name,
+                    decider=decider,
                 ),
             )
+        except FinalDecisionNotAuthorized as exc:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail={"code": "final_decision_not_authorized", "message": str(exc)},
+            ) from exc
         except ValueError as exc:
             error_msg = str(exc)
             if "not found" in error_msg:
@@ -606,6 +641,7 @@ async def resume_workflow(
     review_id: UUID,
     payload: ResumeWorkflowRequest,
     tenant_id: CurrentTenantId,
+    current_user: Annotated[User, Depends(get_current_user)],
     use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ResumeWorkflowResponse:
     """
@@ -625,6 +661,9 @@ async def resume_workflow(
         HTTPException 404: Review item not found
         HTTPException 400: Review item not in pending status or missing checkpoint
     """
+    # SECURITY (HIGH, S5): /resume used to carry NO actor at all. It now requires the same authenticated human of the
+    # tenant as /approve and /reject, before any state is read, and records who decided.
+    decider = _final_decider(current_user, tenant_id)
     try:
         # Convert string decision to enum
         decision = WorkflowDecision(payload.decision)
@@ -634,7 +673,12 @@ async def resume_workflow(
             ResumeWorkflowRequest as UseCaseRequest,
         )
 
-        request = UseCaseRequest(decision=decision, feedback=payload.feedback)
+        request = UseCaseRequest(
+            decision=decision,
+            feedback=payload.feedback,
+            approved_by=decider.display_name,
+            decider=decider,
+        )
 
         # Execute use case
         result = await use_case.execute(review_id=review_id, request=request)
@@ -656,6 +700,11 @@ async def resume_workflow(
             message=result.message,
         )
 
+    except FinalDecisionNotAuthorized as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "final_decision_not_authorized", "message": str(exc)},
+        ) from exc
     except ValueError as exc:
         error_msg = str(exc)
         if "not found" in error_msg:

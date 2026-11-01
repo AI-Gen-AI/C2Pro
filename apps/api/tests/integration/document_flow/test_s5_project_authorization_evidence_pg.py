@@ -8,10 +8,11 @@ that exist and the ones that do not, so a missing control is a reproducible fact
   on the review ledger is tenant-only. "Two users of one tenant with different permissions on two projects" cannot be
   expressed, so there is nothing the product could deny them with;
 * READING findings and RECORDING a provisional decision require an active human ADMIN/USER of the review's TENANT;
-* the FINAL approval route (``/hitl/queue/{id}/approve``) requires only an authenticated user of the tenant: it checks
-  NO role at all, so a VIEWER reaches the same decision (this is the existing, broader exposure, not new in S5).
+* the FINAL decision (``/hitl/queue/{id}/approve|reject`` and ``/hitl/resume/{id}``) used to check NO role at all: a
+  VIEWER reached TRUSTED and ``/resume`` carried no actor (HIGH, GAP-1). That is FIXED and now pinned by NEGATIVE
+  tests below (denial, and zero change of trust); the project-scope characterization remains a GAP until the ratified
+  D1-D8 model (S5-01/S5-02) is implemented.
 
-When the owner ratifies an authorization policy these tests are the ones to flip: until then they document the gap.
 Nothing here widens a permission, invents a role or adds a policy.
 """
 
@@ -29,9 +30,17 @@ from src.core.auth.models import UserRole
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 from src.modules.hitl.adapters.http import finding_decision_router as findings
 from src.modules.hitl.adapters.http import router as hitl_router
-from src.modules.hitl.adapters.http.schemas import ApproveRequest
+from src.modules.hitl.adapters.http.schemas import ApproveRequest, RejectRequest
+from src.modules.hitl.adapters.http.schemas import ResumeWorkflowRequest as ResumeBody
 from src.modules.hitl.adapters.persistence.repository import SqlAlchemyReviewQueueRepository
-from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowUseCase
+from src.modules.hitl.application.final_decision_authorization import FinalDecisionNotAuthorized
+from src.modules.hitl.application.resume_workflow_use_case import (
+    ResumeWorkflowRequest as RealResumeRequest,
+)
+from src.modules.hitl.application.resume_workflow_use_case import (
+    ResumeWorkflowUseCase,
+    WorkflowDecision,
+)
 from tests.integration.document_flow.test_758_checkpoint_lineage_authority_fence import (  # noqa: F401
     _clean_recovery_discovery_rows,
     real_saver,
@@ -151,13 +160,24 @@ async def test_findings_routes_deny_non_human_roles_and_inactive_members_which_i
     assert await _ledger(db, w) == []
 
 
-async def test_the_final_approval_route_checks_no_role_so_a_viewer_reaches_the_same_decision(
-    db: AsyncSession, controlled: Any, request_sessions: Any  # noqa: F811
-) -> None:
-    """GAP evidence (pre-existing, broader than S5): ``approve_item`` takes any authenticated user of the tenant."""
-    w = controlled
-    viewer = _member(w.tenant_id, UserRole.VIEWER, "Read-only viewer")
-    async with request_sessions() as session:
+async def _footprint(db: AsyncSession, w: Any) -> dict[str, Any]:
+    """Everything a final decision could leave behind for this review: trust, status, events, analyses, operations."""
+    await db.commit()
+    state = await _status(db, w)
+    counts = {}
+    for name, sql in {
+        "project_events": "SELECT count(*) FROM project_events WHERE project_id = :p",
+        "analyses": "SELECT count(*) FROM analyses WHERE project_id = :p",
+        "resume_operations": "SELECT count(*) FROM resume_operations WHERE review_row_id = :r",
+    }.items():
+        counts[name] = (await db.execute(text(sql), {"p": w.project_id, "r": w.review_row_id})).scalar_one()
+    return {"review": state["review"], "artifacts": state["artifacts"], **counts}
+
+
+async def _final(w: Any, maker: Any, route: str, user: Any, *, tenant_id: UUID | None = None) -> Any:
+    """ONE final-decision call on its own request-scoped session, through the real route handler."""
+    tenant = tenant_id or w.tenant_id
+    async with maker() as session:
         await session.execute(text("SELECT set_config('app.current_tenant', :t, true)"), {"t": str(w.tenant_id)})
         repo = SqlAlchemyReviewQueueRepository(session=session, tenant_id=w.tenant_id)
         use_case = ResumeWorkflowUseCase(
@@ -167,16 +187,119 @@ async def test_the_final_approval_route_checks_no_role_so_a_viewer_reaches_the_s
             claim_session_factory=w.sessions,
         )
         try:
-            response = await hitl_router.approve_item(
-                item_id=w.review_item_id,
-                payload=ApproveRequest(row_id=w.review_row_id),
-                _tenant_id=w.tenant_id,
-                current_user=viewer,
-                service=SimpleNamespace(review_queue_repo=repo),
-                resume_use_case=use_case,
+            if route == "approve":
+                return await hitl_router.approve_item(
+                    item_id=w.review_item_id, payload=ApproveRequest(row_id=w.review_row_id), _tenant_id=tenant,
+                    current_user=user, service=SimpleNamespace(review_queue_repo=repo), resume_use_case=use_case,
+                )
+            if route == "reject":
+                return await hitl_router.reject_item(
+                    item_id=w.review_item_id, payload=RejectRequest(reason="not acceptable", row_id=w.review_row_id),
+                    _tenant_id=tenant, current_user=user, service=SimpleNamespace(review_queue_repo=repo),
+                    resume_use_case=use_case,
+                )
+            return await hitl_router.resume_workflow(
+                review_id=w.review_row_id, payload=ResumeBody(decision="approve", feedback="fine"),
+                tenant_id=tenant, current_user=user, use_case=use_case,
             )
         finally:
             await session.commit()
-    assert response.current_status.value == "APPROVED", "a VIEWER approved: the route has no role gate"
-    state = await _status(db, w)
-    assert [t for _, t, *_ in state["artifacts"] if t == "trusted"] == ["trusted"]
+
+
+def _denied_principals(w: Any) -> dict[str, tuple[Any, UUID | None]]:
+    return {
+        "viewer": (_member(w.tenant_id, UserRole.VIEWER, "Read-only viewer"), None),
+        "api": (_member(w.tenant_id, UserRole.API, "Integration client"), None),
+        "inactive": (_inactive(w.tenant_id), None),
+        # A perfectly good USER of ANOTHER tenant naming this tenant's review.
+        "foreign-tenant-user": (_member(uuid4(), UserRole.USER, "Stranger"), w.tenant_id),
+    }
+
+
+def _inactive(tenant_id: UUID) -> Any:
+    user = _member(tenant_id, UserRole.USER, "Deactivated user")
+    user.is_active = False
+    return user
+
+
+@pytest.mark.parametrize("route", ["approve", "reject", "resume"])
+async def test_no_denied_principal_can_finalize_a_candidate_by_any_route_and_trust_never_moves(
+    db: AsyncSession, controlled: Any, request_sessions: Any, route: str  # noqa: F811
+) -> None:
+    """GAP-1 FIXED. A VIEWER used to reach TRUSTED here. Now: 403, and the candidate stays PROPOSED, byte for byte."""
+    from fastapi import HTTPException
+
+    w = controlled
+    before = await _footprint(db, w)
+    assert before["review"] == "PENDING_REVIEW_REQUIRED" and [t for _, t, *_ in before["artifacts"]].count("proposed") == 1
+
+    for name, (principal, tenant_context) in _denied_principals(w).items():
+        for attempt in range(2):  # an unauthorized retry stays denied
+            with pytest.raises(HTTPException) as denied:
+                await _final(w, request_sessions, route, principal, tenant_id=tenant_context)
+            assert denied.value.status_code == 403, (name, attempt)
+            assert denied.value.detail["code"] == "final_decision_not_authorized"
+            assert await _footprint(db, w) == before, f"{name}/{route}/{attempt}: something changed"
+
+    # No approval, completion, correction or canonical-projection event, no analysis, no claimed operation.
+    events = (
+        await db.execute(
+            text(
+                "SELECT event_type FROM project_events WHERE project_id = :p AND event_type IN "
+                "('analysis.persisted','graph.completed','hitl.correction','materialization.completed')"
+            ),
+            {"p": w.project_id},
+        )
+    ).scalars().all()
+    assert events == []
+
+
+async def test_the_use_case_boundary_refuses_a_request_without_a_decider_so_no_other_caller_can_bypass_the_routes(
+    db: AsyncSession, controlled: Any, request_sessions: Any  # noqa: F811
+) -> None:
+    w = controlled
+    before = await _footprint(db, w)
+    async with request_sessions() as session:
+        await session.execute(text("SELECT set_config('app.current_tenant', :t, true)"), {"t": str(w.tenant_id)})
+        repo = SqlAlchemyReviewQueueRepository(session=session, tenant_id=w.tenant_id)
+        use_case = ResumeWorkflowUseCase(
+            review_queue_repo=repo, checkpoint_service=CheckpointService(checkpointer=w.saver),
+            graph_app=w.app, claim_session_factory=w.sessions,
+        )
+        for decision in (WorkflowDecision.APPROVE, WorkflowDecision.REJECT):
+            with pytest.raises(FinalDecisionNotAuthorized):
+                await use_case.execute(
+                    w.review_row_id, RealResumeRequest(decision=decision, feedback="x", approved_by="Forged Admin")
+                )
+    assert await _footprint(db, w) == before
+
+
+@pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.USER])
+@pytest.mark.parametrize("route", ["approve", "resume"])
+async def test_admin_and_user_keep_exactly_the_capability_they_had_and_the_decider_is_recorded(
+    db: AsyncSession, controlled: Any, request_sessions: Any, role: UserRole, route: str  # noqa: F811
+) -> None:
+    w = controlled
+    decider = _member(w.tenant_id, role, f"{role.value.title()} Reviewer")
+    result = await _final(w, request_sessions, route, decider)
+    after = await _footprint(db, w)
+    assert after["review"] == "APPROVED"
+    assert [(v, t) for v, t, *_ in after["artifacts"] if t == "trusted"] == [(w.artifact_version, "trusted")]
+    approved_by = (
+        await db.execute(text("SELECT approved_by FROM review_items WHERE id = :r"), {"r": w.review_row_id})
+    ).scalar_one()
+    assert approved_by == f"{role.value.title()} Reviewer", "the final decision names its decider, /resume included"
+    assert result is not None
+
+
+async def test_a_denied_attempt_leaves_the_review_decidable_by_an_authorized_human_afterwards(
+    db: AsyncSession, controlled: Any, request_sessions: Any  # noqa: F811
+) -> None:
+    from fastapi import HTTPException
+
+    w = controlled
+    with pytest.raises(HTTPException):
+        await _final(w, request_sessions, "approve", _member(w.tenant_id, UserRole.VIEWER, "Viewer"))
+    assert (await _footprint(db, w))["review"] == "PENDING_REVIEW_REQUIRED"
+    await _final(w, request_sessions, "approve", _member(w.tenant_id, UserRole.USER, "Real Reviewer"))
+    assert (await _footprint(db, w))["review"] == "APPROVED"

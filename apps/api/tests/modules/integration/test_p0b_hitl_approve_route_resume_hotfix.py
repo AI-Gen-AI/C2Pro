@@ -44,6 +44,7 @@ from src.modules.hitl.adapters.persistence.repository import (
 from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowUseCase
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.modules.integration.hitl_actor import TEST_DECIDER
 from tests.support.hitl_resume_fakes import ResumeGraphDouble
 
 pytestmark = pytest.mark.asyncio
@@ -912,6 +913,7 @@ async def test_approve_and_resume_workflow_maps_not_found_to_404() -> None:
             item_id=uuid4(),
             reviewer_name="Reviewer",
             resume_use_case=_NotFoundUseCase(),
+            decider=TEST_DECIDER,
         )
     assert exc_info.value.status_code == 404
 
@@ -933,6 +935,7 @@ async def test_approve_and_resume_workflow_maps_other_value_error_to_400() -> No
             item_id=uuid4(),
             reviewer_name="Reviewer",
             resume_use_case=_NotPendingUseCase(),
+            decider=TEST_DECIDER,
         )
     assert exc_info.value.status_code == 400
 

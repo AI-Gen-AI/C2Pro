@@ -52,6 +52,10 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     acquire_for_reconciliation,
 )
+from src.modules.hitl.application.final_decision_authorization import (
+    AuthorizedFinalDecider,
+    FinalDecisionNotAuthorized,
+)
 from src.modules.hitl.domain.entities import (
     AWAITING_DECISION_STATUSES,
     ReviewItem,
@@ -95,6 +99,10 @@ class ResumeWorkflowRequest:
     # pre-existing /resume/{review_id} route (which has no user identity
     # today) keeps working unchanged.
     approved_by: str | None = None
+    # The server-authenticated human who takes this FINAL decision (HIGH finding: VIEWER/API could approve to TRUSTED,
+    # and /resume carried no actor). ``execute`` refuses any request without it; the reconciler's ``recover()`` does
+    # not use ``execute`` -- it completes a decision a human already recorded, it never creates one.
+    decider: AuthorizedFinalDecider | None = None
 
 
 @dataclass(frozen=True)
@@ -738,8 +746,11 @@ class ResumeWorkflowUseCase:
             ResumeWorkflowResponse with status and message
 
         Raises:
+            FinalDecisionNotAuthorized: no authenticated human decider (checked before ANY state is read)
             ValueError: If review item not found, not pending, or missing checkpoint
         """
+        if not isinstance(request.decider, AuthorizedFinalDecider):
+            raise FinalDecisionNotAuthorized("a final decision needs an authenticated human decider")
         start_time = time.perf_counter()
         decision = request.decision.value
         status = "unknown"

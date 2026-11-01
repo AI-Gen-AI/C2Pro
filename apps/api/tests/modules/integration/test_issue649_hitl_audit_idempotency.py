@@ -52,13 +52,18 @@ from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
 from src.modules.hitl.application.resume_workflow_use_case import (
-    ResumeWorkflowRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.temporal.adapters.persistence.models import ProjectEventORM
 from src.temporal.application import project_snapshot_trigger
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
+from tests.modules.integration.hitl_actor import (
+    human,
+)
 from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
     N17_RUNS,
     _arrange,
@@ -105,8 +110,8 @@ async def request_sessions(db):
         await engine.dispose()
 
 
-def _reviewer() -> Any:
-    return SimpleNamespace(id=uuid4(), full_name="Reviewer")
+def _reviewer(tenant_id: UUID) -> Any:
+    return human(tenant_id, name="Reviewer")
 
 
 async def _post_approve(
@@ -142,7 +147,7 @@ async def _post_approve(
                 item_id=item_id,
                 payload=ApproveRequest(row_id=row_id),
                 _tenant_id=tenant_id,
-                current_user=_reviewer(),
+                current_user=_reviewer(tenant_id),
                 service=SimpleNamespace(review_queue_repo=repo),
                 resume_use_case=use_case,
             )
@@ -179,7 +184,7 @@ async def _post_reject(
                 item_id=item_id,
                 payload=RejectRequest(reason=reason, row_id=row_id),
                 _tenant_id=tenant_id,
-                current_user=SimpleNamespace(id=uuid4(), full_name=reviewer_name),
+                current_user=human(tenant_id, name=reviewer_name),
                 service=SimpleNamespace(review_queue_repo=repo),
                 resume_use_case=use_case,
             )

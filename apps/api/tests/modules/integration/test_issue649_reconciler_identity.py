@@ -27,9 +27,11 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
     acquire_for_reconciliation,
 )
 from src.modules.hitl.application.resume_workflow_use_case import (
-    ResumeWorkflowRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
+)
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
 )
 from tests.modules.integration.test_issue649_hitl_audit_idempotency import (
     _events,

@@ -1,6 +1,7 @@
 # HITL authorization by project — evidence (PQ-HITL-04C5 / #980), 2026-11-01
 
-Status: **evidence only**. No permission was widened, no role or policy invented, no behaviour changed.
+Status: **GAP-1 FIXED (role gate on the final decision); GAP-2 open (project scope, proposal in
+`2026-11-01-hitl-project-authorization-s5-01-s5-02-proposal.md`)**. No permission was widened and no role or policy invented.
 Scope: #1112 head at the time of writing (`integration/acc01-e2e-20261025`). Owner ratification is required before any
 authorization policy is implemented; until then S5 is **not accepted on security**.
 
@@ -11,7 +12,8 @@ authorization policy is implemented; until then S5 is **not accepted on security
 | Read a pending review | `GET /hitl/queue/{item_id}` | authenticated tenant (RLS) | none |
 | Read findings + provisional decisions | `GET /hitl/reviews/{row}/findings` | active **human ADMIN/USER** of the review's tenant (`authorize_finding_reviewer`), RLS tenant | none |
 | Record a provisional decision | `POST /hitl/reviews/{row}/findings/decisions` | same as above + exact pins (artifact, hash, revision, generation, fencing token) | none |
-| FINAL approve / reject | `POST /hitl/queue/{item_id}/approve\|reject` | authenticated user of the tenant — **no role check** | none |
+| FINAL approve / reject | `POST /hitl/queue/{item_id}/approve\|reject` | ~~authenticated user of the tenant, no role check~~ **FIXED:** active human ADMIN/USER of the tenant, 403 before any state is read | none |
+| FINAL resume | `POST /hitl/resume/{review_id}` | ~~tenant only, no actor at all~~ **FIXED:** same gate, and the decider is recorded (`approved_by`) | none |
 
 * No membership, ACL, assignment or grant table exists: of 49 ORM tables only `disclaimer_acceptances` has both a project
   and a user column.
@@ -29,12 +31,15 @@ authorization policy is implemented; until then S5 is **not accepted on security
 2. ledger/review RLS policies are tenant-only;
 3. an ADMIN and a USER with no tie to the review's project read the findings and record decisions (attributed to them);
 4. VIEWER, API and inactive members are denied on the findings routes (403) — the only role gate that exists;
-5. **the final approval route accepts a VIEWER**, and the candidate becomes TRUSTED.
+5. ~~the final approval route accepts a VIEWER~~ — replaced by negative tests: VIEWER, API, inactive and foreign-tenant
+   principals get 403 on approve, reject and resume, repeatedly, and the candidate stays PROPOSED with no event,
+   analysis or claimed operation; the use case refuses a request without a decider.
 
 ## Classification
 
-* **GAP-1 (HIGH, pre-existing, outside the S5 code):** the final approval/rejection routes have no role check. A read-only
-  tenant member can turn a PROPOSED candidate into TRUSTED. The S5 routes are stricter than the act they feed.
+* **GAP-1 (HIGH) — FIXED:** the final approval/rejection/resume routes had no role check (a VIEWER reached TRUSTED) and
+  `/resume` carried no actor. Now enforced at the HTTP boundary (403 before any state is read) AND in
+  `ResumeWorkflowUseCase.execute` (refuses a request without a proven decider). Pinned by negative tests; see below.
 * **GAP-2 (MEDIUM, design):** no project-scoped authorization. Any ADMIN/USER of the tenant can read and record on any
   project's review. Consistent with the whole product; not introduced by S5.
 * Not a GAP: tenant isolation (cross-tenant read/record answer 404, proven in the S5 suites).

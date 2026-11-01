@@ -180,6 +180,7 @@ class CMReviewQueueService:
         reviewer_id: UUID,
         reviewer_name: str,
         model_version: str = "",
+        decider: Any = None,
     ) -> CMDecisionResult:
         """
         Record a CM decision and resume the LangGraph graph.
@@ -220,6 +221,8 @@ class CMReviewQueueService:
         resume_req = ResumeWorkflowRequest(
             decision=workflow_decision,
             feedback=request.reason,
+            approved_by=reviewer_name,
+            decider=decider,
         )
         await self._resume.execute(queue_entry_id, resume_req)
 

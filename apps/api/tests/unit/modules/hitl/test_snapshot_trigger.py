@@ -14,6 +14,7 @@ import pytest
 
 from src.modules.hitl.adapters.http.schemas import ApproveRequest
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
+from tests.modules.integration.hitl_actor import human
 
 
 @pytest.mark.asyncio
@@ -62,7 +63,7 @@ async def test_approval_of_project_review_emits_material_correction_snapshot(mon
         item_id=item.item_id,
         payload=ApproveRequest(),
         _tenant_id=tenant_id,
-        current_user=SimpleNamespace(id=uuid4(), full_name="Reviewer"),
+        current_user=human(tenant_id, name="Reviewer"),
         service=FakeService(),
         resume_use_case=SimpleNamespace(),  # unused: this review has no thread_id
     )
