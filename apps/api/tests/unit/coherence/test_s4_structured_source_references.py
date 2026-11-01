@@ -67,7 +67,7 @@ def test_the_revision_declaration_keeps_the_locator_only_with_a_total() -> None:
     assert meta["stated_total_by_revision"][REV]["source_locator"] == "S!3"
     other: dict = {}
     record_revision_stated_total(other, revision_id=REV, blob_hash=SHA, total=None, currencies=None, source_locator="S!3")
-    assert other["stated_total_by_revision"][REV]["source_locator"] is None
+    assert "source_locator" not in other["stated_total_by_revision"][REV]
 
 
 class _Result:
