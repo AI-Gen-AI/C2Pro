@@ -20,7 +20,7 @@ import {
 } from "@/lib/api/generated/hitl-findings/hitl-findings";
 import type { ReviewFindingResponse, ReviewFindingsResponse } from "@/lib/api/generated/models";
 import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDecisionAction";
-import { useReviewCapabilities } from "./useReviewCapabilities";
+import { reviewFindingsKey } from "./useReviewCapabilities";
 
 const ACTION_LABEL: Record<FindingDecisionAction, string> = {
   CONFIRMED: "Confirm",
@@ -68,7 +68,7 @@ type Draft = { action: FindingDecisionAction; reason: string; proposedText: stri
 export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
   const { orgId, userId, isLoaded } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ["review-findings", orgId ?? null, userId ?? null, reviewRowId];
+  const queryKey = reviewFindingsKey(orgId, userId, reviewRowId);
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => listReviewFindingsApiV1HitlReviewsReviewRowIdFindingsGet(reviewRowId, signal),
@@ -76,9 +76,8 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
     retry: false,
     staleTime: 0,
   });
-  // S5-02 (advisory): the server re-validates; the screen just stops offering what it would refuse.
-  const capabilities = useReviewCapabilities(reviewRowId);
-  const mayReview = capabilities?.review_finding !== false;
+  // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
+  const mayReview = query.data?.capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
 

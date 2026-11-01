@@ -156,7 +156,7 @@ the grant and its audit event in one transaction, forced RLS, REVOKE from PUBLIC
 `ProjectReviewAuthorizer` applied to findings read (READ_REVIEW), granular decisions (REVIEW_FINDING) and
 approve / reject / resume (APPROVE_CANDIDATE) at the application boundary (`ResumeWorkflowUseCase.execute`, the findings
 services) plus the non-graph decision path; 403 when the actor has other grants on the project, 404 when it has none;
-read-only `GET /hitl/reviews/{row}/capabilities` and advisory UI hiding; `scripts/grant_project_review_permissions.py`
+read-only `GET /hitl/reviews/{row}/capabilities` plus the same capabilities on the findings read, and advisory UI hiding that costs no extra request (the product's per-user rate limit is 60 requests/minute and the E2E smoke suite sits at its edge: a dedicated per-card call tipped it over, proven by a 429 in the E2E backend log); `scripts/grant_project_review_permissions.py`
 (dry-run by default; `--apply` only on a loopback test database with `ENVIRONMENT=test`).
 
 **Identity (precondition P1):** the principal is `(tenant_id, users.id)`. `get_current_user` reassigns the SAME

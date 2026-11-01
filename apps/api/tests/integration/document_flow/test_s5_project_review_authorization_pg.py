@@ -422,3 +422,19 @@ async def test_capabilities_report_only_the_callers_own_effective_capabilities(a
         "review_row_id", "mode", "read_review", "review_finding", "approve_candidate",
     }, "no grant ids, no names, nothing about other people"
     assert (await _caps(w, theirs)).approve_candidate is True
+
+
+async def test_the_findings_read_carries_the_callers_own_capabilities_so_the_screen_needs_no_extra_request(
+    actors: Actors,
+) -> None:
+    w = actors.w
+    reader = await actors.user(label="readonly")
+    await actors.grant(reader, READ)
+    view = await _read(w, reader)
+    assert view.capabilities is not None
+    assert (view.capabilities.mode, view.capabilities.read_review) == ("enforce", True)
+    assert (view.capabilities.review_finding, view.capabilities.approve_candidate) == (False, False)
+    full = await actors.user(label="fullcaps")
+    await actors.grant(full, READ, FIND, APPROVE)
+    caps = (await _read(w, full)).capabilities
+    assert caps is not None and (caps.review_finding, caps.approve_candidate) == (True, True)

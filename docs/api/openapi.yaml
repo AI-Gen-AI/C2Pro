@@ -11739,6 +11739,33 @@ components:
 
         report the legacy rule (nothing is hidden from a human of the tenant), ``enforce``
         reports explicit grants only.'
+    ReviewCapabilitiesSummary:
+      properties:
+        mode:
+          type: string
+          enum:
+          - 'off'
+          - audit
+          - enforce
+          title: Mode
+        read_review:
+          type: boolean
+          title: Read Review
+        review_finding:
+          type: boolean
+          title: Review Finding
+        approve_candidate:
+          type: boolean
+          title: Approve Candidate
+      type: object
+      required:
+      - mode
+      - read_review
+      - review_finding
+      - approve_candidate
+      title: ReviewCapabilitiesSummary
+      description: The caller's own effective capabilities on this review's project
+        (advisory; the server re-validates).
     ReviewDecisionDTO:
       properties:
         item_id:
@@ -11829,6 +11856,10 @@ components:
             $ref: '#/components/schemas/ReviewFindingResponse'
           type: array
           title: Findings
+        capabilities:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewCapabilitiesSummary'
+          - type: 'null'
         decision_scope:
           type: string
           const: PROVISIONAL_REVIEWER_INTENT

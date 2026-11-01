@@ -17,6 +17,7 @@ from src.core.auth.models import UserRole
 from src.modules.hitl.application.final_decision_authorization import AuthorizedFinalDecider
 from src.modules.hitl.application.project_review_authorization import (
     AuthorizationMode,
+    EffectiveCapabilities,
     ProjectAuthorization,
     ProjectCapability,
     ProjectReviewAuthorizer,
@@ -43,6 +44,12 @@ class PermissiveProjectAuthorizer(ProjectReviewAuthorizer):
         self, *, tenant_id: UUID, user_id: UUID, project_id: UUID | None, capability: ProjectCapability, lock: bool = False
     ) -> ProjectAuthorization:
         return ProjectAuthorization(tenant_id, project_id, user_id, capability, AuthorizationMode.OFF, None, enforced=False)
+
+
+    async def capabilities(  # type: ignore[override]
+        self, *, tenant_id: UUID, user_id: UUID, project_id: UUID | None
+    ) -> EffectiveCapabilities:
+        return EffectiveCapabilities(AuthorizationMode.OFF, project_id, True, True, True)
 
 
 def decided_request(*args: Any, **kwargs: Any) -> ResumeWorkflowRequest:

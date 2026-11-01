@@ -20,5 +20,6 @@ from tests.modules.integration.hitl_actor import PermissiveProjectAuthorizer
 def _permissive_project_authority(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     permissive = PermissiveProjectAuthorizer()
     monkeypatch.setattr(ProjectReviewAuthorizer, "require", type(permissive).require)
+    monkeypatch.setattr(ProjectReviewAuthorizer, "capabilities", type(permissive).capabilities)
     monkeypatch.setattr(ProjectReviewAuthorizer, "for_repository", classmethod(lambda cls, _repository: permissive))
     yield

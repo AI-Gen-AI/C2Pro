@@ -352,6 +352,8 @@ export * from "./reviewAlertRequest";
 export * from "./reviewAlertRequestDecision";
 export * from "./reviewCapabilitiesResponse";
 export * from "./reviewCapabilitiesResponseMode";
+export * from "./reviewCapabilitiesSummary";
+export * from "./reviewCapabilitiesSummaryMode";
 export * from "./reviewDecisionDTO";
 export * from "./reviewDecisionDTOAction";
 export * from "./reviewFindingResponse";

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.domain.trust import artifact_digest
 from src.modules.hitl.application.finding_review_authorization import authorize_finding_reviewer
 from src.modules.hitl.application.project_review_authorization import (
+    EffectiveCapabilities,
     ProjectCapability,
     ProjectReviewAuthorizer,
 )
@@ -108,6 +109,8 @@ class ReviewFindingsView:
     fencing_token: int
     ledger_revision: int
     findings: list[ReviewFinding]
+    # S5-02: the caller's own effective capabilities on this review's project, in the SAME read (advisory, for the UI).
+    capabilities: EffectiveCapabilities | None = None
 
 
 def _project(risk: dict[str, Any]) -> dict[str, Any]:
@@ -235,6 +238,9 @@ class ReviewFindingsViewService:
                 )
             )
 
+        capabilities = await self._authorizer.capabilities(
+            tenant_id=actor.tenant_id, user_id=actor.reviewer_id, project_id=review["project_id"]
+        )
         return ReviewFindingsView(
             review_row_id=review_row_id,
             artifact_id=artifact_id,
@@ -245,4 +251,5 @@ class ReviewFindingsViewService:
             fencing_token=identity.fencing_token,
             ledger_revision=max((int(e["ledger_revision"]) for e in events), default=0),
             findings=findings,
+            capabilities=capabilities,
         )

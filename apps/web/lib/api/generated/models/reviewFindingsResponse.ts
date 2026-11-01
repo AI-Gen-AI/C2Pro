@@ -37,6 +37,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { ReviewCapabilitiesSummary } from "./reviewCapabilitiesSummary";
 import type { ReviewFindingResponse } from "./reviewFindingResponse";
 
 export interface ReviewFindingsResponse {
@@ -49,6 +50,7 @@ export interface ReviewFindingsResponse {
   fencing_token: number;
   ledger_revision: number;
   findings: ReviewFindingResponse[];
+  capabilities?: ReviewCapabilitiesSummary | null;
   decision_scope?: "PROVISIONAL_REVIEWER_INTENT";
   final_approval?: "SEPARATE_ACT";
 }

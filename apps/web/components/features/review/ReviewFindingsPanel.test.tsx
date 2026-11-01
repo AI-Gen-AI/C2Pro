@@ -6,17 +6,15 @@ import { AxiosError } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewFindingsPanel } from "./ReviewFindingsPanel";
 
-const { list, record, capabilities, auth } = vi.hoisted(() => ({
+const { list, record, auth } = vi.hoisted(() => ({
   list: vi.fn(),
   record: vi.fn(),
-  capabilities: vi.fn(),
   auth: { orgId: "o", userId: "u", isLoaded: true },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 vi.mock("@/lib/api/generated/hitl-findings/hitl-findings", () => ({
   listReviewFindingsApiV1HitlReviewsReviewRowIdFindingsGet: (...args: unknown[]) => list(...args),
   recordFindingDecisionApiV1HitlReviewsReviewRowIdFindingsDecisionsPost: (...args: unknown[]) => record(...args),
-  getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet: (...args: unknown[]) => capabilities(...args),
 }));
 
 const ROW = "row-1";
@@ -58,23 +56,20 @@ describe("ReviewFindingsPanel", () => {
     vi.clearAllMocks();
     list.mockResolvedValue(view());
     record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
-    capabilities.mockResolvedValue({
-      review_row_id: ROW, mode: "enforce", read_review: true, review_finding: true, approve_candidate: false,
-    });
   });
 
   it("S5-02: a reader without REVIEW_FINDING sees the findings but cannot record decisions, and is told why", async () => {
-    capabilities.mockResolvedValue({
-      review_row_id: ROW, mode: "enforce", read_review: true, review_finding: false, approve_candidate: false,
-    });
+    list.mockResolvedValue(
+      view({ capabilities: { mode: "enforce", read_review: true, review_finding: false, approve_candidate: false } }),
+    );
     renderPanel();
     expect(await screen.findByTestId(`review-findings-readonly-${ROW}`)).toBeInTheDocument();
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
     expect(screen.getByTestId("finding-action-1-DISMISSED")).toBeDisabled();
   });
 
-  it("S5-02: a failed capabilities read hides nothing (it is only a hint; the server decides)", async () => {
-    capabilities.mockRejectedValue(new Error("boom"));
+  it("S5-02: a findings read without capabilities hides nothing (it is only a hint; the server decides)", async () => {
+    list.mockResolvedValue(view({ capabilities: null }));
     renderPanel();
     await screen.findByTestId("finding-0");
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();

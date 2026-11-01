@@ -68,19 +68,13 @@ class ReviewFindingResponse(BaseModel):
     history: list[FindingDecisionEntry]
 
 
-class ReviewFindingsResponse(BaseModel):
-    review_row_id: UUID
-    artifact_id: UUID
-    artifact_version: int
-    artifact_hash: str
-    document_revision_id: UUID
-    generation: int
-    fencing_token: int
-    ledger_revision: int
-    findings: list[ReviewFindingResponse]
-    # Said by the API so no screen can imply more: the ledger records intent, nothing else.
-    decision_scope: Literal["PROVISIONAL_REVIEWER_INTENT"] = "PROVISIONAL_REVIEWER_INTENT"
-    final_approval: Literal["SEPARATE_ACT"] = "SEPARATE_ACT"
+class ReviewCapabilitiesSummary(BaseModel):
+    """The caller's own effective capabilities on this review's project (advisory; the server re-validates)."""
+
+    mode: Literal["off", "audit", "enforce"]
+    read_review: bool
+    review_finding: bool
+    approve_candidate: bool
 
 
 class ReviewCapabilitiesResponse(BaseModel):
@@ -95,6 +89,23 @@ class ReviewCapabilitiesResponse(BaseModel):
     read_review: bool
     review_finding: bool
     approve_candidate: bool
+
+
+class ReviewFindingsResponse(BaseModel):
+    review_row_id: UUID
+    artifact_id: UUID
+    artifact_version: int
+    artifact_hash: str
+    document_revision_id: UUID
+    generation: int
+    fencing_token: int
+    ledger_revision: int
+    findings: list[ReviewFindingResponse]
+    # S5-02: lets the screen stop offering what the server would refuse, WITHOUT an extra request.
+    capabilities: ReviewCapabilitiesSummary | None = None
+    # Said by the API so no screen can imply more: the ledger records intent, nothing else.
+    decision_scope: Literal["PROVISIONAL_REVIEWER_INTENT"] = "PROVISIONAL_REVIEWER_INTENT"
+    final_approval: Literal["SEPARATE_ACT"] = "SEPARATE_ACT"
 
 
 class FindingDecisionReceipt(BaseModel):
@@ -184,6 +195,16 @@ async def list_review_findings(
             )
             for f in view.findings
         ],
+        capabilities=(
+            ReviewCapabilitiesSummary(
+                mode=view.capabilities.mode.value,
+                read_review=view.capabilities.read_review,
+                review_finding=view.capabilities.review_finding,
+                approve_candidate=view.capabilities.approve_candidate,
+            )
+            if view.capabilities is not None
+            else None
+        ),
     )
 
 
