@@ -81,20 +81,30 @@ const { alertsState } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/features/wbs/TechnicalWBSReviewPanel", () => ({
-  TechnicalWBSReviewPanel: () => <div data-testid="technical-wbs-review-mock" />,
+  TechnicalWBSReviewPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="technical-wbs-review-mock" data-project-id={projectId} />
+  ),
 }));
 vi.mock("@/components/features/wbs/CanonicalTechnicalWBSLinksPanel", () => ({
-  CanonicalTechnicalWBSLinksPanel: () => <div data-testid="technical-wbs-approved-mock" />,
+  CanonicalTechnicalWBSLinksPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="technical-wbs-approved-mock" data-project-id={projectId} />
+  ),
 }));
 
 vi.mock("@/components/features/wbs/CanonicalStructuredWBSLinksPanel", () => ({
-  CanonicalStructuredWBSLinksPanel: () => <div data-testid="structured-wbs-approved-mock" />,
+  CanonicalStructuredWBSLinksPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="structured-wbs-approved-mock" data-project-id={projectId} />
+  ),
 }));
 vi.mock("@/components/features/wbs/CanonicalWBSBaselinePanel", () => ({
-  CanonicalWBSBaselinePanel: () => <div data-testid="baseline-panel-mock" />,
+  CanonicalWBSBaselinePanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="baseline-panel-mock" data-project-id={projectId} />
+  ),
 }));
 vi.mock("@/components/features/wbs/CanonicalLinksOverview", () => ({
-  CanonicalLinksOverview: () => <div data-testid="links-overview-mock" />,
+  CanonicalLinksOverview: ({ projectId }: { projectId: string }) => (
+    <div data-testid="links-overview-mock" data-project-id={projectId} />
+  ),
 }));
 
 vi.mock("@/hooks/useProjectAlerts", () => ({
@@ -158,6 +168,20 @@ describe("ProjectWBSPage", () => {
     expect(screen.getByTestId("links-overview-mock")).toBeInTheDocument();
     expect(screen.getByTestId("technical-wbs-approved-mock")).toBeInTheDocument();
     expect(screen.getByTestId("structured-wbs-approved-mock")).toBeInTheDocument();
+  });
+
+  it("#1149: the page hands the SAME route project id to every canonical panel it mounts", () => {
+    hookState.authority = authority({ approved: true, display_state: "APPROVED_BASELINE", state: "APPROVED_BASELINE", baseline_no: 1 });
+    renderWithProviders(<ProjectWBSPage />);
+    for (const id of [
+      "baseline-panel-mock",
+      "links-overview-mock",
+      "technical-wbs-review-mock",
+      "technical-wbs-approved-mock",
+      "structured-wbs-approved-mock",
+    ]) {
+      expect(screen.getByTestId(id), id).toHaveAttribute("data-project-id", "proj-real-wbs");
+    }
   });
 
   it("renders the canonical WBS route", () => {

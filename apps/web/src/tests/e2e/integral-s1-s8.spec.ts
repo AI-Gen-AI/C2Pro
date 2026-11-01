@@ -56,6 +56,9 @@ import {
   approveTechnicalLink,
   approveThroughUi,
   decideFindingsThroughUi,
+  reviewRowIdOf,
+  seedControlledFindings,
+  type ControlledSeed,
   type FindingDecisionsOutcome,
   listDocuments,
   openProjectTab,
@@ -87,7 +90,8 @@ const TENANT_B_EMAIL = developmentBEmail();
 const REPORT_DIR = path.join(process.cwd(), "playwright-report");
 const BROWSER_MANIFEST = path.join(REPORT_DIR, "integral-browser-manifest.json");
 const EMPTY_SESSION = { cookies: [], origins: [] };
-const FINDING_DISMISS_REASON = "The clause was waived by the owner in the signed addendum.";
+// Deterministic rehearsal only: the provider extracts no risks, so a CONTROLLED candidate (authored findings) is used.
+const CONTROLLED_FINDINGS = process.env.C2PRO_AI_MOCK === "1" && process.env.INTEGRAL_CONTROLLED_FINDINGS !== "0";
 const REJECTION_REASON =
   "The draft sets a 5 MPa concrete strength: the figure is implausible for structural work. Re-issue the specification.";
 
@@ -319,11 +323,48 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             return;
           }
           // Per-finding decisions first (provisional, UI only), then the separate FINAL approval.
-          findingOutcome = await decideFindingsThroughUi(pageA, recorder, { projectId, documentId: contractId, dismissReason: FINDING_DISMISS_REASON });
+          let seeded: ControlledSeed | undefined;
+          if (CONTROLLED_FINDINGS) {
+            seeded = await seedControlledFindings(state.identityA!.tenantId, contractId);
+            ledger.check("the controlled candidate carries five authored findings", seeded.findings === 5, `${seeded.findings}`);
+          }
+          findingOutcome = await decideFindingsThroughUi(pageA, recorder, { projectId, documentId: contractId });
           ledger.check("the review card offers the per-finding surface", findingOutcome.surfaced);
           ledger.check("the surface states that its decisions are provisional and do not approve", findingOutcome.scopeStatesProvisional);
           ledger.check("per-finding decisions leave the final Approve available (nothing was approved)", findingOutcome.reviewStillPending);
-          ledger.evidence("findingDecisions", { surfaced: findingOutcome.surfaced, findings: findingOutcome.findings, decided: findingOutcome.decided.length, actions: findingOutcome.decided.map((d) => d.action) });
+          if (seeded) {
+            ledger.check("the four actions were taken through the UI", findingOutcome.decided.map((d) => d.action).join(",") === "CONFIRMED,DISMISSED,NEEDS_INFO,CORRECTION_PROPOSED", findingOutcome.decided.map((d) => d.action).join(","));
+            ledger.check("every decision is still shown after a full reload", findingOutcome.persistedAfterReload);
+            const rowId = await reviewRowIdOf(pageA, projectId, contractId);
+            ledger.check("the findings belong to the controlled candidate's review row", rowId === seeded.reviewRowId, rowId);
+            const view = await callApi(pageA, `/api/v1/hitl/reviews/${rowId}/findings`);
+            const body = view.data as Json;
+            ledger.check("the read model pins the controlled candidate's artifact and SHA-256", view.status === 200 && str(body.artifact_id) === seeded.artifactId && str(body.artifact_hash) === seeded.artifactHash, `HTTP ${view.status}`);
+            const rows = Array.isArray(body.findings) ? (body.findings as Json[]) : [];
+            const reviewers = new Set(rows.map((f) => str((f.current as Json | null)?.reviewer_id)).filter(Boolean));
+            ledger.check("the decider recorded is the single authenticated human, not client data", reviewers.size === 1 && !reviewers.has(""), `${reviewers.size} reviewer(s)`);
+            const stale = await callApi(pageA, `/api/v1/hitl/reviews/${rowId}/findings/decisions`, "POST", {
+              artifact_id: body.artifact_id, artifact_version: body.artifact_version, artifact_hash: body.artifact_hash,
+              document_revision_id: body.document_revision_id, generation: body.generation, fencing_token: body.fencing_token,
+              source_item_id: str((rows[4] ?? {}).source_item_id), ordinal: 4, action: "CONFIRMED",
+              expected_ledger_revision: 0, idempotency_key: `integral-stale-${Date.now()}`,
+            });
+            const staleCode = str(((stale.data as Json).detail as Json | undefined)?.code);
+            ledger.check("a decision built on a stale ledger revision is a 409", stale.status === 409 && staleCode === "stale_ledger_revision", `HTTP ${stale.status} ${staleCode}`);
+            const smuggled = await callApi(pageA, `/api/v1/hitl/reviews/${rowId}/findings/decisions`, "POST", { reviewer_id: "someone-else" });
+            ledger.check("a client-supplied actor is rejected before anything is written", smuggled.status === 422, `HTTP ${smuggled.status}`);
+            const foreignRead = await callApi(tenantB!.page, `/api/v1/hitl/reviews/${rowId}/findings`);
+            ledger.check("the other tenant cannot read this review's findings", foreignRead.status === 404, `HTTP ${foreignRead.status}`);
+            const foreignWrite = await callApi(tenantB!.page, `/api/v1/hitl/reviews/${rowId}/findings/decisions`, "POST", {
+              artifact_id: body.artifact_id, artifact_version: body.artifact_version, artifact_hash: body.artifact_hash,
+              document_revision_id: body.document_revision_id, generation: body.generation, fencing_token: body.fencing_token,
+              source_item_id: str((rows[4] ?? {}).source_item_id), ordinal: 4, action: "CONFIRMED",
+              expected_ledger_revision: 4, idempotency_key: `integral-foreign-${Date.now()}`,
+            });
+            ledger.check("the other tenant cannot record a decision on it", foreignWrite.status === 404, `HTTP ${foreignWrite.status}`);
+            ledger.evidence("controlledCandidate", { evidenceClass: seeded.evidenceClass, artifactId: seeded.artifactId, artifactHash: seeded.artifactHash, findings: seeded.findings });
+          }
+          ledger.evidence("findingDecisions", { surfaced: findingOutcome.surfaced, findings: findingOutcome.findings, decided: findingOutcome.decided.length, actions: findingOutcome.decided.map((d) => d.action), controlled: Boolean(seeded) });
           if (findingOutcome.decided.length > 0) ledger.milestone("finding-decided");
           const decision = await approveThroughUi(pageA, recorder, { projectId, documentId: contractId });
           ledger.check("the approval names who decided", decision.decidedBy.length > 0);
@@ -413,6 +454,8 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           // yielding findings. The deterministic provider extracts none, so S5 is not claimed complete there.
           if (findingOutcome && findingOutcome.findings === 0) {
             ledger.partial("granular per-finding decisions were not taken: the provider yielded no individual findings in this run (route, ledger and surface are covered by PostgreSQL and component tests; a real-AI run yields findings)");
+          } else if (CONTROLLED_FINDINGS) {
+            ledger.partial("granular per-finding decisions were exercised on a CONTROLLED candidate (five authored findings, DETERMINISTIC_CONTROLLED_CANDIDATE): the product path is proven, but no provider extracted these findings; S5 integral needs a real-AI run");
           }
         });
       });

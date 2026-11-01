@@ -457,6 +457,90 @@ async def test_use_case_approve_resumes_real_graph_to_n17_and_analyzed(
     assert len(all_rows) == 1, "the resumed interrupt node must not create another review"
 
 
+async def _persisted_footprint(db: AsyncSession, document: DocumentORM) -> dict[str, Any]:
+    """Everything N17 / graph completion would leave behind for this document."""
+    analyses = (
+        await db.execute(select(Analysis).where(Analysis.project_id == document.project_id))
+    ).scalars().all()
+    events = (
+        await db.execute(
+            select(ProjectEventORM.event_type).where(
+                ProjectEventORM.project_id == document.project_id,
+                ProjectEventORM.event_type.in_(("analysis.persisted", "graph.completed")),
+            )
+        )
+    ).scalars().all()
+    await db.refresh(document)
+    return {
+        "analyses": len(analyses),
+        "events": list(events),
+        "upload_status": document.upload_status,
+        "n17_runs": len(_DOWNSTREAM_RUNS),
+    }
+
+
+async def test_real_pause_persists_nothing_until_approval(
+    real_saver, db: AsyncSession, test_user: User
+) -> None:
+    """A durable HITL pause is NOT a completed analysis.
+
+    Real CompiledStateGraph + real human_interrupt_node + real AsyncPostgresSaver:
+    after the interrupt the graph is parked on N13 with a pending review and
+    N17 has left no analysis, no analysis.persisted / graph.completed event and
+    the document has not left parsed_pending_analysis. Only the approval
+    (Command(resume) at the exact checkpoint, via route_after_human_interrupt)
+    makes N17 persist, exactly once.
+    """
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    document = await _seed(db, tenant)
+    thread_id = register(f"document:{document.id}:analysis")
+    app = _build_real_graph(saver)
+    _DOWNSTREAM_RUNS.clear()
+
+    cfg, checkpoint_id = await _run_to_interrupt(app, document, tenant, thread_id, db=db)
+
+    # Paused on the real checkpointer, parked at the human gate -- not at N17/END.
+    snapshot = await app.aget_state(cfg)
+    assert snapshot.next == ("human_interrupt",)
+    assert snapshot.interrupts, "the pause must be a real interrupt() held in the checkpoint"
+    assert snapshot.values.get("human_decision") is None
+
+    # A pending canonical review exists and nothing is persisted.
+    reviews = (
+        await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
+    ).scalars().all()
+    assert len(reviews) == 1
+    assert reviews[0].current_status == ReviewStatus.PENDING_REVIEW_REQUIRED.value
+    assert await _persisted_footprint(db, document) == {
+        "analyses": 0,
+        "events": [],
+        "upload_status": "parsed_pending_analysis",
+        "n17_runs": 0,
+    }
+
+    # The pause is durable, not an in-memory artifact: a graph rebuilt over the
+    # same saver sees the same parked checkpoint, still with nothing persisted.
+    rebuilt = _build_real_graph(saver)
+    again = await rebuilt.aget_state(cfg)
+    assert again.next == ("human_interrupt",)
+    assert again.config["configurable"]["checkpoint_id"] == checkpoint_id
+    assert (await _persisted_footprint(db, document))["analyses"] == 0
+
+    # Approval is the only thing that releases N17.
+    restored = await CheckpointService(checkpointer=saver).restore_checkpoint(
+        thread_id=thread_id, checkpoint_id=checkpoint_id
+    )
+    out = await rebuilt.ainvoke(
+        Command(resume={"decision": "approve", "feedback": "ok"}), restored.config
+    )
+    assert "__interrupt__" not in out
+    footprint = await _persisted_footprint(db, document)
+    assert footprint["n17_runs"] == 1
+    assert footprint["analyses"] == 1
+    assert footprint["events"], "approval must leave a persistence/completion event"
+
+
 # ── 4. Exactly-once ──────────────────────────────────────────────────────────
 
 

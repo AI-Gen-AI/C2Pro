@@ -457,6 +457,13 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
             for r in rows
         ),
     )
+    if reported.get("controlled"):
+        c.add(
+            "S5",
+            "the controlled candidate's ledger holds the four actions CONFIRMED, DISMISSED, NEEDS_INFO and CORRECTION_PROPOSED",
+            {str(r["action"]) for r in rows} == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
+            ",".join(sorted({str(r["action"]) for r in rows})),
+        )
     first_approval = min((r["approved_at"] for r in contract_reviews if r.get("approved_at")), default=None)
     c.add(
         "S5",

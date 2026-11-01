@@ -52,6 +52,18 @@ def test_event_type_registry_accepts_known_and_reserved_namespaces() -> None:
     assert validate_event_type("stakeholder.owner.changed") == "stakeholder.owner.changed"
 
 
+def test_technical_wbs_review_is_audit_event_and_only_the_human_approval_is_canonical() -> None:
+    """S7: the audit observation and the separately authenticated human approval are the only registered facts.
+
+    ``technical.wbs_link_applied`` (an automatic/implicit application of a link) must stay unregistered: a link
+    becomes canonical only through ``technical.wbs_link_approved``, never through the audit-only review event.
+    """
+    assert validate_event_type("technical.wbs_link_reviewed") == "technical.wbs_link_reviewed"
+    assert validate_event_type("technical.wbs_link_approved") == "technical.wbs_link_approved"
+    with pytest.raises(ValueError, match="Unknown ProjectEvent event_type"):
+        validate_event_type("technical.wbs_link_applied")
+
+
 def test_event_type_registry_rejects_unknown_non_namespaced_type() -> None:
     with pytest.raises(ValueError, match="Unknown ProjectEvent event_type"):
         validate_event_type("unknown.created")

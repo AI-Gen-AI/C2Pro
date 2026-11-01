@@ -599,6 +599,21 @@ def test_a_finding_decision_missing_from_the_ledger_or_by_someone_else_fails() -
     )
 
 
+def test_a_controlled_candidate_must_show_all_four_actions_in_the_ledger() -> None:
+    facts, browser, expect = _with_finding_decisions()
+    browser["stages"][4]["evidence"]["findingDecisions"]["controlled"] = True
+    name = "S5:the controlled candidate's ledger holds the four actions CONFIRMED, DISMISSED, NEEDS_INFO and CORRECTION_PROPOSED"
+    assert name in _failed(facts, browser, expect), "two CONFIRMED rows are not the four actions"
+    for row, action in zip(facts.finding_decisions, ("CONFIRMED", "DISMISSED"), strict=False):
+        row["action"] = action
+    facts.finding_decisions += [
+        {**facts.finding_decisions[0], "action": "NEEDS_INFO"},
+        {**facts.finding_decisions[0], "action": "CORRECTION_PROPOSED"},
+    ]
+    browser["stages"][4]["evidence"]["findingDecisions"]["decided"] = 4
+    assert name not in _failed(facts, browser, expect)
+
+
 def test_a_finding_decision_recorded_after_the_final_approval_fails() -> None:
     facts, browser, expect = _with_finding_decisions(recorded_at="2026-10-31T11:00:00")
     assert "S5:the decisions were recorded before the final approval, which is a separate act" in _failed(

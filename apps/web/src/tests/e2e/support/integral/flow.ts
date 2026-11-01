@@ -2,6 +2,9 @@
  * Building blocks of the integral S1–S8 runner. Each one does what a signed-in person does (UI) or what the
  * application's own authenticated API answers; none writes to the database and none forges an event.
  */
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+
 import { expect, type Locator, type Page, type Response } from "@playwright/test";
 
 import { clickProjectTab, readProjectTabs } from "../pj01/health";
@@ -131,51 +134,148 @@ export interface FindingDecisionsOutcome {
   decided: Array<{ ordinal: number; action: string }>;
   scopeStatesProvisional: boolean;
   reviewStillPending: boolean;
+  /** After a full page reload every decision is still shown (it came from the ledger, not from client state). */
+  persistedAfterReload: boolean;
 }
 
+export const FINDING_TEXTS = {
+  dismissReason: "Superseded by change order 7: the price revision is capped there.",
+  needsInfoReason: "Ask legal whether the warranty cap exists in the annex.",
+  correctionReason: "The deemed-approval period is 14 days, not 30.",
+  correctionText: "Silence for 14 days is deemed approval of the proposed subcontractor.",
+} as const;
+
+const SHOWN: Record<string, string> = {
+  CONFIRMED: "Confirmed (provisional)",
+  DISMISSED: "Dismissed (provisional)",
+  NEEDS_INFO: "Needs more information (provisional)",
+  CORRECTION_PROPOSED: "Correction proposed (provisional)",
+};
+
 /**
- * S5 (granular): on the pending card, take one provisional decision per finding through the UI (Confirm the first,
- * Dismiss the second with a typed reason), WITHOUT touching Approve / Reject. When the provider yields no findings the
- * surface says so and nothing is decided: that is reported, never invented.
+ * S5 (granular): on the pending card, take one provisional decision per finding through the UI -- Confirm (0),
+ * Dismiss with a typed reason (1), Needs info with a typed reason (2), Propose correction with reason and text (3) --
+ * WITHOUT touching Approve / Reject, then reload the page and check that every decision is still shown.
+ * When the provider yields no findings the surface says so and nothing is decided: reported, never invented.
  */
 export async function decideFindingsThroughUi(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string; dismissReason: string },
+  options: { projectId: string; documentId: string },
 ): Promise<FindingDecisionsOutcome> {
   const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
-  const region = card.getByRole("region", { name: "Findings of this analysis" });
-  const surfaced = await region.isVisible({ timeout: 20_000 }).catch(() => false) || (await region.waitFor({ state: "visible", timeout: 20_000 }).then(() => true).catch(() => false));
-  if (!surfaced) return { surfaced: false, findings: 0, decided: [], scopeStatesProvisional: false, reviewStillPending: true };
+  const regionOf = (scope: Locator) => scope.getByRole("region", { name: "Findings of this analysis" });
+  let region = regionOf(card);
+  const surfaced = await region.waitFor({ state: "visible", timeout: 30_000 }).then(() => true).catch(() => false);
+  if (!surfaced) return { surfaced: false, findings: 0, decided: [], scopeStatesProvisional: false, reviewStillPending: true, persistedAfterReload: false };
   const findings = await region.locator("li[data-testid^='finding-']").count();
   const scope = ((await region.locator("[data-testid^='review-findings-scope-']").textContent()) ?? "").toLowerCase();
   const scopeStatesProvisional = scope.includes("provisional") && scope.includes("do not approve, reject or trust");
   const decided: Array<{ ordinal: number; action: string }> = [];
-  const post = (ordinal: number) =>
-    page.waitForResponse(
-      (response: Response) => response.request().method() === "POST" && /\/hitl\/reviews\/[^/]+\/findings\/decisions/.test(new URL(response.url()).pathname) && response.status() === 201,
-      { timeout: 60_000 },
-    ).then(() => ordinal);
+  const posted = (ordinal: number) =>
+    page
+      .waitForResponse(
+        (response: Response) => response.request().method() === "POST" && /\/hitl\/reviews\/[^/]+\/findings\/decisions/.test(new URL(response.url()).pathname) && response.status() === 201,
+        { timeout: 60_000 },
+      )
+      .then(() => ordinal);
+  const settled = async (ordinal: number, action: string) => {
+    await expect(region.getByTestId(`finding-current-${ordinal}`)).toContainText(SHOWN[action]!, { timeout: 30_000 });
+    decided.push({ ordinal, action });
+  };
+
   if (findings > 0) {
-    const first = post(0);
+    const wait = posted(0);
     await region.getByTestId("finding-action-0-CONFIRMED").click();
-    await first;
-    await expect(region.getByTestId("finding-current-0")).toContainText("Confirmed (provisional)", { timeout: 30_000 });
-    decided.push({ ordinal: 0, action: "CONFIRMED" });
+    await wait;
+    await settled(0, "CONFIRMED");
   }
-  if (findings > 1) {
-    await region.getByTestId("finding-action-1-DISMISSED").click();
-    await expect(region.getByTestId("finding-submit-1"), "a dismissal cannot be recorded without its reason").toBeDisabled();
-    await region.getByTestId("finding-reason-1").fill(options.dismissReason);
-    const second = post(1);
-    await region.getByTestId("finding-submit-1").click();
-    await second;
-    await expect(region.getByTestId("finding-current-1")).toContainText("Dismissed (provisional)", { timeout: 30_000 });
-    decided.push({ ordinal: 1, action: "DISMISSED" });
-  }
+  const typed = async (ordinal: number, action: "DISMISSED" | "NEEDS_INFO" | "CORRECTION_PROPOSED", reason: string, replacement?: string) => {
+    await region.getByTestId(`finding-action-${ordinal}-${action}`).click();
+    const submit = region.getByTestId(`finding-submit-${ordinal}`);
+    await expect(submit, "a decision other than Confirm cannot be recorded without its reason").toBeDisabled();
+    await region.getByTestId(`finding-reason-${ordinal}`).fill(reason);
+    if (action === "CORRECTION_PROPOSED") {
+      await expect(submit, "a correction also needs its replacement text").toBeDisabled();
+      await region.getByTestId(`finding-text-${ordinal}`).fill(replacement ?? "");
+    }
+    const wait = posted(ordinal);
+    await submit.click();
+    await wait;
+    await settled(ordinal, action);
+  };
+  if (findings > 1) await typed(1, "DISMISSED", FINDING_TEXTS.dismissReason);
+  if (findings > 2) await typed(2, "NEEDS_INFO", FINDING_TEXTS.needsInfoReason);
+  if (findings > 3) await typed(3, "CORRECTION_PROPOSED", FINDING_TEXTS.correctionReason, FINDING_TEXTS.correctionText);
+
   // A finding decision never decides the review: the final Approve / Reject stay available and untouched.
   const reviewStillPending = await card.getByTestId(`approve-${itemId}`).isEnabled({ timeout: 30_000 }).catch(() => false);
-  return { surfaced: true, findings, decided, scopeStatesProvisional, reviewStillPending };
+
+  // Persistence: a full reload shows the very same decisions (they live in the ledger, not in client state).
+  await page.reload();
+  await expect(page.getByTestId("review-page")).toBeVisible({ timeout: 60_000 });
+  region = regionOf(page.getByTestId(`review-item-${itemId}`));
+  let persistedAfterReload = decided.length > 0;
+  for (const { ordinal, action } of decided) {
+    const shown = await region.getByTestId(`finding-current-${ordinal}`).textContent({ timeout: 30_000 }).catch(() => "");
+    if (!(shown ?? "").includes(SHOWN[action]!)) persistedAfterReload = false;
+  }
+  return { surfaced: true, findings, decided, scopeStatesProvisional, reviewStillPending, persistedAfterReload };
+}
+
+/** The review ROW id of a document's pending review (the findings routes are addressed to the row). */
+export async function reviewRowIdOf(page: Page, projectId: string, documentId: string): Promise<string> {
+  const document = (await listDocuments(page, projectId)).find((item) => item.id === documentId);
+  const itemId = str(document?.review_item_id);
+  const queue = await callApi(page, `/api/v1/hitl/queue?project_id=${projectId}&limit=200`);
+  expect(queue.status, "review queue readable").toBe(200);
+  const row = itemsOf(queue.data).find((item) => str(item.item_id) === itemId);
+  const rowId = str(row?.row_id);
+  if (!rowId) throw new Error(`INTEGRAL_NO_REVIEW_ROW: ${documentId} has no exact review row (item ${itemId})`);
+  return rowId;
+}
+
+export interface ControlledSeed {
+  evidenceClass: string;
+  reviewRowId: string;
+  artifactId: string;
+  artifactHash: string;
+  findings: number;
+}
+
+/**
+ * NONPRODUCTION controlled candidate: the deterministic provider extracts no risks, so the pending candidate is
+ * replaced -- by the product's governed correction (`propose_correction`) -- with one carrying five AUTHORED risks.
+ * It writes the isolated test database of THIS run (never Clerk, never another tenant) and is NOT a real-AI result.
+ */
+export async function seedControlledFindings(tenantId: string, documentId: string): Promise<ControlledSeed> {
+  const apiDir = path.resolve(process.cwd(), "..", "api");
+  let lastError = "";
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      const out = execFileSync("python", ["-m", "scripts.seed_controlled_s5_findings", tenantId, documentId], {
+        cwd: apiDir,
+        env: { ...process.env, ENVIRONMENT: "test", C2PRO_AI_MOCK: "1" },
+        encoding: "utf8",
+        timeout: 120_000,
+      });
+      const report = JSON.parse(out.trim().split("\n").pop() ?? "{}") as Json;
+      return {
+        evidenceClass: str(report.evidence_class),
+        reviewRowId: str(report.review_row_id),
+        artifactId: str(report.artifact_id),
+        artifactHash: str(report.artifact_hash),
+        findings: Array.isArray(report.findings) ? report.findings.length : 0,
+      };
+    } catch (error) {
+      const stdout = (error as { stdout?: string }).stdout ?? "";
+      lastError = stdout.trim().split("\n").pop() || String(error);
+      // The candidate is bound to its review a moment after the review appears: retry that precondition only.
+      if (!/expected exactly one pending/.test(lastError)) break;
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+  }
+  throw new Error(`INTEGRAL_CONTROLLED_SEED_FAILED: ${lastError}`);
 }
 
 /** The FINAL human act on a pending review: approve it (confirm dialog), through the review page. */

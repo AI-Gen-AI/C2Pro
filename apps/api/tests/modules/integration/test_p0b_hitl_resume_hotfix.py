@@ -452,6 +452,29 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
     review_orm = rows[0]
     assert review_orm.thread_id and review_orm.checkpoint_id
 
+    # P0b regression: a durable HITL pause is not a completed analysis.
+    # The acceptance harness must explicitly resume this review before
+    # expecting either an analysis artifact or a graph.completed event.
+    from src.analysis.adapters.persistence.models import Analysis
+    from src.temporal.adapters.persistence.models import ProjectEventORM
+
+    async with get_session_with_tenant(document.tenant_id) as paused_session:
+        premature_analyses = (
+            await paused_session.execute(
+                select(Analysis).where(Analysis.project_id == document.project_id)
+            )
+        ).scalars().all()
+        premature_completions = (
+            await paused_session.execute(
+                select(ProjectEventORM).where(
+                    ProjectEventORM.project_id == document.project_id,
+                    ProjectEventORM.event_type == "graph.completed",
+                )
+            )
+        ).scalars().all()
+    assert premature_analyses == [], "HITL pause must not persist a completed analysis"
+    assert premature_completions == [], "HITL pause must not emit graph.completed"
+
     # 5. Approve through ResumeWorkflowUseCase -- the real use case, a real
     # tenant-scoped repository, and a graph_app that resumes into the real
     # N17 node.
