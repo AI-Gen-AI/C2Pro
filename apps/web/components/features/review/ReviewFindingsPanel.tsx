@@ -56,7 +56,9 @@ function refusalFrom(error: unknown): string {
 const needsReason = (action: FindingDecisionAction) => action !== "CONFIRMED";
 
 function newKey(): string {
-  return `finding-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return `finding-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 type Draft = { action: FindingDecisionAction; reason: string; proposedText: string; key: string };
