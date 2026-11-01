@@ -50,6 +50,8 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # evidence of the trust decision, never an analytic/graph/materialization fact.
         "structured_source.trust_requested",
         "structured_source.trust_decided",
+        # S3: an evaluation that withheld its Score keeps its reason durably (no CoherenceResult is invented).
+        "coherence.evaluation_withheld",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

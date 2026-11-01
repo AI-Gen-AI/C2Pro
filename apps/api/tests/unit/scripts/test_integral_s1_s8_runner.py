@@ -1503,8 +1503,11 @@ def test_every_upload_starts_from_the_documents_tab_and_ui_actions_cannot_hang()
 def test_the_second_run_lessons_are_encoded_in_the_scenario() -> None:
     """Run 41242458663: S3 reason dropped by the dashboard, Current State blind, no WBS tab. Each is stated, not hidden."""
     spec = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text(encoding="utf-8")
-    assert "reasonDropped" in spec
-    assert 'stage: "S3"' in spec
+    # The S3 gap of that run (dashboard dropped the reason of a scoreless evaluation) is CLOSED: the runner now
+    # requires the SAME reason from the persisted dashboard and again after a reload; it no longer declares it.
+    assert "reasonDropped" not in spec
+    assert "the dashboard reason is unchanged after a page reload" in spec
+    assert "score !== null || reasonKept" in spec
     assert 'ledger.evidence("currentStateBefore"' in spec
     assert 'ledger.evidence("currentStateAfter"' in spec
     # The WBS tab gap of that run is CLOSED: the runner now opens the WBS from the project's own navigation and

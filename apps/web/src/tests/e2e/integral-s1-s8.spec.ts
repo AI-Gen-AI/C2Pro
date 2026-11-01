@@ -445,23 +445,21 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         const honest = score === null ? Boolean(evaluated.score_reason) && missing.length > 0 : !(score === 0 && missing.length > 0);
         ledger.check("a null Score states its reason and what is missing; a Score is never 0 for missing evidence", honest, `score=${score} reason=${evaluated.score_reason ?? "none"} missing=${missing.join("|")}`);
         const dashboard = await readDashboard(pageA, projectId);
-        // The dashboard shows ONE generation and never an evaluation marked "insufficient_*" as the snapshot: it then
-        // states no Score AND no reason (router: result_scored). The evaluation's own answer keeps the reason.
+        // S3: the persisted dashboard carries the SAME reason as the evaluation answer when no Score is shown (a
+        // scoreless evaluation is recorded durably), and the reason survives a reload.
         const reasonKept = dashboard.scoreReason === (evaluated.score_reason ?? null);
-        const reasonDropped = !reasonKept && score === null && dashboard.globalScore === null && (evaluated.score_reason ?? "").startsWith("insufficient");
         ledger.check(
-          "the persisted dashboard states the same Score (with its reason, or no Score at all when the evidence is insufficient)",
-          dashboard.globalScore === score && (reasonKept || reasonDropped),
+          "the persisted dashboard states the same Score, and the same reason when there is none",
+          dashboard.globalScore === score && (score !== null || reasonKept),
           `${dashboard.globalScore}/${dashboard.scoreReason} vs ${score}/${evaluated.score_reason ?? "none"}`,
         );
-        if (reasonDropped) {
-          ledger.partial(`the persisted dashboard drops the reason of an insufficient evaluation (${evaluated.score_reason}): only the evaluation answer explains why there is no Score`);
-          state.dynamicGaps.push({
-            stage: "S3",
-            gap: `a null Score caused by insufficient evidence (${evaluated.score_reason}) is explained by the evaluation answer only: the persisted dashboard returns no Score and no reason, so a later visit cannot say why`,
-            minimalCorrection: "return score_reason and score_missing_dimensions of the latest persisted result in the dashboard even when no Score is shown",
-          });
-        }
+        await pageA.reload();
+        const reloadedDashboard = await readDashboard(pageA, projectId);
+        ledger.check(
+          "the dashboard reason is unchanged after a page reload",
+          reloadedDashboard.globalScore === dashboard.globalScore && reloadedDashboard.scoreReason === dashboard.scoreReason,
+          `${reloadedDashboard.scoreReason}`,
+        );
         ledger.evidence("score", { overall: score, reason: evaluated.score_reason ?? null, missing, version: dashboard.scoreVersion, evaluatedAt: dashboard.evaluatedAt });
         if (honest) ledger.milestone("score-honest");
 

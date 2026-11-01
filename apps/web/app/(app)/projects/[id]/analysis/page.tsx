@@ -73,7 +73,14 @@ function errorMessage(
  * reason_if_unavailable) is a governed P1 follow-up; until it exists this stays
  * neutral rather than asserting more than the contract proves.
  */
-type CoherenceSuppressionReason = "loading" | "unverified" | "coherence_unavailable" | "contract_pending_approval";
+type CoherenceSuppressionReason =
+  | "loading"
+  | "unverified"
+  | "coherence_unavailable"
+  | "contract_pending_approval"
+  | "contract_rejected"
+  | "insufficient_evidence"
+  | "not_evaluated";
 
 function resolveCoherenceSuppressionReason({
   loading,
@@ -89,6 +96,10 @@ function resolveCoherenceSuppressionReason({
   if (loading) return "loading";
   // Only an exact backend reason licenses naming an approval blocker.
   if (scoreReason === "contract_pending_approval") return "contract_pending_approval";
+  // S3: the persisted dashboard now carries WHY a Score is withheld; each reason has its own copy and none is a 0.
+  if (scoreReason === "contract_rejected") return "contract_rejected";
+  if (scoreReason === "not_evaluated") return "not_evaluated";
+  if (typeof scoreReason === "string" && scoreReason.startsWith("insufficient")) return "insufficient_evidence";
   if (!errored && hasVector) return "coherence_unavailable";
   return "unverified";
 }
@@ -102,6 +113,12 @@ const COHERENCE_SUPPRESSION_COPY: Record<CoherenceSuppressionReason, string> = {
     "having enough reconcilable evidence to evaluate consistency.",
   contract_pending_approval:
     "Contract awaiting approval. Coherence has not been evaluated and no Score is available until the contract is reviewed.",
+  contract_rejected:
+    "The contract source was rejected. Coherence has not been evaluated and no Score is available until a replacement is uploaded and approved.",
+  insufficient_evidence:
+    "Coherence was evaluated, but the evidence is not enough to support a Score. No Score is shown; it is not zero.",
+  not_evaluated:
+    "Coherence has not been evaluated for this project yet. No Score is available, and none is assumed.",
 };
 
 export default function AnalysisPage() {
@@ -128,7 +145,8 @@ export default function AnalysisPage() {
     typeof dashboard?.coherence_score === "number" && Number.isFinite(dashboard.coherence_score)
       ? dashboard.coherence_score
       : null;
-  const contractPendingApproval = dashboard?.score_reason === "contract_pending_approval";
+  const contractPendingApproval =
+    dashboard?.score_reason === "contract_pending_approval" || dashboard?.score_reason === "contract_rejected";
   const showCoherence =
     coherenceScore !== null &&
     !contractPendingApproval &&
@@ -312,6 +330,15 @@ export default function AnalysisPage() {
                 className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
               >
                 {COHERENCE_SUPPRESSION_COPY[coherenceSuppressionReason]}
+                {coherenceSuppressionReason === "contract_rejected" ? (
+                  <Link
+                    className="ml-2 font-medium underline underline-offset-2"
+                    href={`/projects/${id}/documents`}
+                    data-testid="analysis-replace-contract-link"
+                  >
+                    Open project documents
+                  </Link>
+                ) : null}
                 {coherenceSuppressionReason === "contract_pending_approval" ? (
                   <Link
                     className="ml-2 font-medium underline underline-offset-2"

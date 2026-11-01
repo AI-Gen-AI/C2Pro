@@ -397,6 +397,27 @@ describe("P0b-L4-5 — Health surface placement and Coherence suppression", () =
     expect(note).not.toHaveTextContent(/has not produced enough|insufficient evidence/i);
   });
 
+  it.each([
+    ["insufficient_active_weight", "insufficient_evidence", /not enough to support a score/i],
+    ["contract_rejected", "contract_rejected", /contract source was rejected/i],
+    ["not_evaluated", "not_evaluated", /has not been evaluated/i],
+  ])("S3 — the persisted reason %s is told apart and never becomes a number", (reason, expected, copy) => {
+    baseMocks();
+    getDashboardMock.mockReturnValue({
+      data: { coherence_score: null, score_reason: reason, sub_scores: {}, document_count: 1 },
+      isLoading: false,
+      error: null,
+    });
+    projectHealthMock.mockReturnValue({ data: vectorWithCoherence(true), isLoading: false, isError: false });
+
+    renderWithProviders(<AnalysisPage />);
+
+    const note = expectNoCoherenceNumber();
+    expect(note).toHaveAttribute("data-reason", expected);
+    expect(note).toHaveTextContent(copy as RegExp);
+    expect(note).not.toHaveTextContent(/contract awaiting approval/i);
+  });
+
   it("S3 — a pending contract has null Score, no budget subscore and a real review route", () => {
     baseMocks();
     getDashboardMock.mockReturnValue({

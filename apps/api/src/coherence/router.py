@@ -23,7 +23,16 @@ from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.application.dtos import AlertCreate
 from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType, AnalysisStatus
 from src.coherence.adapters.persistence.models import CoherenceResultORM
+from src.coherence.adapters.persistence.withheld_evaluation import (
+    latest_withheld_evaluation,
+    record_withheld_evaluation,
+)
 from src.coherence.application.disposition_review import build_scoring_snapshot
+from src.coherence.domain.score_reasons import (
+    CONTRACT_PENDING_APPROVAL,
+    CONTRACT_REJECTED,
+    NOT_EVALUATED,
+)
 from src.coherence.feature_flags import (
     coherence_canonical_canary_enabled_for_tenant,
     coherence_llm_crosscheck_enabled_for_tenant,
@@ -833,7 +842,6 @@ async def _documents_excluded_from_evaluation(db: AsyncSession, project_id: UUID
     return bool(count)
 
 
-CONTRACT_PENDING_APPROVAL = "contract_pending_approval"
 
 # Contract documents that are not canonical input: awaiting a human decision (or without a usable
 # current revision). Only the contract is asked for; other types keep their own rules.
@@ -855,23 +863,61 @@ async def _contracts_awaiting_approval(db: AsyncSession, project_id: UUID, tenan
     return bool(count)
 
 
+# Every contract that is not canonical input was REJECTED by a human (it has a rejected candidate and no proposed or
+# trusted one): that is a different state from "awaiting a decision" and is reported as such.
+_CONTRACTS_ALL_REJECTED_SQL = text(f"""
+    SELECT coalesce(bool_and(
+        EXISTS (SELECT 1 FROM document_artifacts a
+                WHERE a.document_id = d.id AND a.tenant_id = d.tenant_id AND a.trust_state = 'rejected')
+        AND NOT EXISTS (SELECT 1 FROM document_artifacts a
+                WHERE a.document_id = d.id AND a.tenant_id = d.tenant_id
+                  AND a.trust_state IN ('proposed', 'trusted'))
+    ), false)
+    FROM documents d
+    CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND d.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'contract'
+      AND NOT cur.canonical
+""")
+
+
+async def _contract_withheld_reason(db: AsyncSession | None, project_id: UUID, tenant_id: UUID) -> str:
+    """Given that the contract blocks a Score: REJECTED by a human, or still awaiting a decision.
+
+    Called only after ``_contracts_awaiting_approval`` answered True. Without a session the state cannot be
+    refined and stays "awaiting a decision" (the conservative reading).
+    """
+    if db is None:
+        return CONTRACT_PENDING_APPROVAL
+    rejected = await db.scalar(
+        _CONTRACTS_ALL_REJECTED_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+    )
+    return CONTRACT_REJECTED if rejected is True else CONTRACT_PENDING_APPROVAL
+
+
 def _contract_pending_approval_result(
     include_diagnostics: bool,
+    reason: str = CONTRACT_PENDING_APPROVAL,
 ) -> CoherenceResult | EnrichedCoherenceResult:
-    """Explicit state for a project whose only evidence is a contract awaiting approval."""
+    """Explicit state for a project whose contract is awaiting a decision (or was rejected): nothing is evaluated."""
     missing = sorted(_CATEGORY_KEYWORDS)
-    limitation = {"CONTRACT": "The contract is awaiting approval; nothing was evaluated."}
+    limitation = {
+        "CONTRACT": "The contract source was rejected; nothing was evaluated."
+        if reason == CONTRACT_REJECTED
+        else "The contract is awaiting approval; nothing was evaluated."
+    }
     if include_diagnostics:
         return EnrichedCoherenceResult(
             overall_score=None,
-            score_reason=CONTRACT_PENDING_APPROVAL,
+            score_reason=reason,
             score_missing_dimensions=missing,
             evidence_limitations=limitation,
         )
     return CoherenceResult(
         overall_score=None,
         alerts=[],
-        score_reason=CONTRACT_PENDING_APPROVAL,
+        score_reason=reason,
         score_missing_dimensions=missing,
     )
 
@@ -1149,9 +1195,12 @@ async def evaluate_project_coherence(
         if await _contracts_awaiting_approval(
             db, payload.project_id, current_user.tenant_id
         ):
-            # Pending is not an evaluation result: do not persist a Score or
+            # Pending (or rejected) is not an evaluation result: do not persist a Score or
             # change the alert register before this human authority decision.
-            return _contract_pending_approval_result(include_diagnostics)
+            return _contract_pending_approval_result(
+                include_diagnostics,
+                await _contract_withheld_reason(db, payload.project_id, current_user.tenant_id),
+            )
         clauses = await get_clauses_from_rag(
             db, payload.project_id, current_user.tenant_id, payload.max_chunks
         )
@@ -1355,10 +1404,22 @@ async def evaluate_project_coherence(
         # Alert lifecycle was reconciled before scoring with commit=False.
         # This one commit makes the disposition-aware score and Alert state durable together.
         await db.commit()
-    elif payload.project_id and reconciliation is not None:
+    elif payload.project_id and (reconciliation is not None or enriched_result.score_reason):
         # A scoreless evaluation can still contain actionable findings. Persist the
         # alert ledger without creating a fake CoherenceResult or changing trusted
         # score authority. auto_resolve=False preserves older human dispositions.
+        # S3: its REASON is kept as an append-only withheld-evaluation event so the persisted
+        # dashboard can repeat it after a reload or a new login (never a number in its place).
+        await record_withheld_evaluation(
+            db,
+            project_id=payload.project_id,
+            tenant_id=current_user.tenant_id,
+            actor_user_id=getattr(current_user, "id", None),
+            reason=enriched_result.score_reason,
+            missing_dimensions=list(enriched_result.score_missing_dimensions or []),
+            score_version=enriched_result.score_version,
+            alert_count=len(enriched_result.alerts),
+        )
         await db.commit()
 
     # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
@@ -1818,6 +1879,15 @@ async def get_coherence_dashboard(
         if snapshot == "result" or (snapshot is None and global_score is None)
         else None
     )
+    withheld = None
+    if snapshot is None and global_score is None:
+        # No Score is shown. A scoreless /evaluate persists no CoherenceResult, so its reason is read from the
+        # withheld-evaluation record when that evaluation is the newest knowledge about this project.
+        withheld = await latest_withheld_evaluation(db, project_id=project_id, tenant_id=tenant_id)
+        if withheld is not None and result_at is not None:
+            withheld_at = _normalize_utc_datetime(withheld.evaluated_at)
+            if withheld_at is not None and withheld_at <= result_at:
+                withheld = None  # a newer persisted result already speaks for the project
 
     summary = DashboardSummary(
         project_id=str(project_id),
@@ -1829,10 +1899,16 @@ async def get_coherence_dashboard(
         alert_count=alert_count,
         document_count=document_count,
         methodology_version="3.0",
-        score_version=metadata_source.score_version if metadata_source else None,
-        score_reason=metadata_source.score_reason if metadata_source else None,
+        score_version=(
+            withheld.score_version if withheld else (metadata_source.score_version if metadata_source else None)
+        ),
+        score_reason=(
+            withheld.reason if withheld else (metadata_source.score_reason if metadata_source else None)
+        ),
         score_missing_dimensions=(
-            metadata_source.score_missing_dimensions if metadata_source else None
+            withheld.missing_dimensions
+            if withheld
+            else (metadata_source.score_missing_dimensions if metadata_source else None)
         ),
         last_updated=last_updated,
         categories_v2=None,
@@ -1845,17 +1921,26 @@ async def get_coherence_dashboard(
     # only current contract is not approved. The current_revision_lateral query
     # distinguishes an unapproved first revision from an already trusted A with
     # a proposed B: the latter retains A's canonical authority.
-    if document_count and await _contracts_awaiting_approval(db, project_id, tenant_id):
+    contract_reason = (
+        await _contract_withheld_reason(db, project_id, tenant_id)
+        if document_count and await _contracts_awaiting_approval(db, project_id, tenant_id)
+        else None
+    )
+    if contract_reason is not None:
         summary = summary.model_copy(
             update={
                 "global_score": None,
                 "coherence_score": None,
                 "sub_scores": _empty_sub_scores(),
                 "score_version": None,
-                "score_reason": CONTRACT_PENDING_APPROVAL,
+                "score_reason": contract_reason,
                 "score_missing_dimensions": sorted(_CATEGORY_KEYWORDS),
             }
         )
+    elif summary.global_score is None and not summary.score_reason:
+        # Nothing was ever evaluated (no snapshot, no withheld evaluation): say so instead of staying silent,
+        # and never let that silence read as "evaluated, and zero".
+        summary = summary.model_copy(update={"score_reason": NOT_EVALUATED})
 
     # No alerts are resolved or deleted by an unapproved contract. Existing
     # alert counts remain visible as historical/open action signals.

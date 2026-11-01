@@ -14,6 +14,12 @@ const REASON_COPY: Record<string, string> = {
     "Upload the project documents to begin the analysis.",
   no_v1_data:
     "No prior coherence run is available for this project yet.",
+  contract_pending_approval:
+    "The contract is awaiting approval. Nothing was evaluated, and no Score exists until it is decided.",
+  contract_rejected:
+    "The contract source was rejected. Nothing was evaluated; upload and approve a replacement to get a Score.",
+  not_evaluated:
+    "This project has not been evaluated yet. No Score exists, and none is assumed.",
   scored_categories_only:
     "Coherence has been computed only on the categories that meet the evidence threshold.",
 };
