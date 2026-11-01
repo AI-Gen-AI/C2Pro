@@ -42,6 +42,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -435,6 +436,13 @@ def _judge_s5_approvals(c: _Ctx) -> None:
             )
 
 
+def _utc_naive(value: Any) -> Any:
+    """``review_items.approved_at`` is a naive UTC timestamp, the ledger's ``recorded_at`` is timezone-aware: compare like with like."""
+    if isinstance(value, datetime) and value.tzinfo is not None:
+        return value.astimezone(UTC).replace(tzinfo=None)
+    return value
+
+
 def _judge_s5_finding_decisions(c: _Ctx) -> None:
     """Per-finding decisions the browser took are ledger rows of tenant A by the approving human, and approved nothing."""
     stages = c.browser.get("stages") or []
@@ -464,11 +472,11 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
             {str(r["action"]) for r in rows} == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
             ",".join(sorted({str(r["action"]) for r in rows})),
         )
-    first_approval = min((r["approved_at"] for r in contract_reviews if r.get("approved_at")), default=None)
+    first_approval = min((_utc_naive(r["approved_at"]) for r in contract_reviews if r.get("approved_at")), default=None)
     c.add(
         "S5",
         "the decisions were recorded before the final approval, which is a separate act",
-        first_approval is not None and all(r["recorded_at"] <= first_approval for r in rows),
+        first_approval is not None and all(_utc_naive(r["recorded_at"]) <= first_approval for r in rows),
     )
 
 

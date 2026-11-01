@@ -759,6 +759,9 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         // links; the same after a reload (nothing lives only in the client).
         const budgetRevision = budget;
         const scheduleRevision = schedule;
+        // The trust and link steps above travelled through Documents and Review: come back to the WBS page the way a
+        // person does (its tab), so the panels read below are the ones of the WBS page, after the links exist.
+        await openProjectTab(pageA, projectId, "wbs");
         const view = await readWbsCanonicalView(pageA);
         state.wbsView = view;
         ledger.check("the WBS page shows the approved baseline and its revision", /Approved WBS Baseline #\d+/.test(view.baselineLabel) && /baseline #\d+/.test(view.baselineRevision), `${view.baselineLabel} | ${view.baselineRevision}`);

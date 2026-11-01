@@ -599,6 +599,23 @@ def test_a_finding_decision_missing_from_the_ledger_or_by_someone_else_fails() -
     )
 
 
+def test_real_database_timestamps_are_compared_like_with_like() -> None:
+    """Regression of run 41311082065: ``recorded_at`` is timezone-aware, ``approved_at`` a naive UTC timestamp."""
+    from datetime import UTC, datetime
+
+    facts, browser, expect = _with_finding_decisions()
+    approved = datetime(2026, 11, 1, 13, 29, 0)  # naive UTC, as review_items.approved_at
+    for review in facts.reviews:
+        review["approved_at"] = approved
+    for row in facts.finding_decisions:
+        row["recorded_at"] = datetime(2026, 11, 1, 13, 28, 0, tzinfo=UTC)
+    name = "S5:the decisions were recorded before the final approval, which is a separate act"
+    assert name not in _failed(facts, browser, expect)
+    for row in facts.finding_decisions:
+        row["recorded_at"] = datetime(2026, 11, 1, 13, 30, 0, tzinfo=UTC)
+    assert name in _failed(facts, browser, expect)
+
+
 def test_a_controlled_candidate_must_show_all_four_actions_in_the_ledger() -> None:
     facts, browser, expect = _with_finding_decisions()
     browser["stages"][4]["evidence"]["findingDecisions"]["controlled"] = True
