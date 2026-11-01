@@ -62,6 +62,7 @@ import {
   readDashboard,
   readHealth,
   readLinks,
+  readWbsCanonicalView,
   readRevisions,
   readWhatChanged,
   rejectThroughUi,
@@ -71,11 +72,11 @@ import {
   type StructuredTrustDecision,
   type StructuredTrustRequest,
   type WbsBaseline,
+  type WbsCanonicalView,
 } from "./support/integral/flow";
 import { IntegralLedger, digestOf, sha256Hex, type StageId } from "./support/integral/ledger";
 import { Pj01RunRecorder } from "./support/pj01/run-recorder";
 import { uploadNewVersionThroughUi } from "./support/pj01/revision";
-import { readProjectTabs } from "./support/pj01/health";
 import { createProjectThroughUi, signInAsJourneyUser } from "./support/pj01/session";
 import { uploadDocumentThroughUi } from "./support/pj01/upload";
 
@@ -127,8 +128,8 @@ const REQUIRED: Partial<Record<StageId, string[]>> = {
   S4: ["alert-opened", "source-resolved"],
   S5: ["contract-approved", "specification-approved", "candidate-rejected", "rejected-never-trusted"],
   S6: ["revision-b-pending", "a-still-trusted", "what-changed", "current-state-pending", "revision-b-approved", "current-state-approved"],
-  S7: ["wbs-approved", "trust-budget", "trust-schedule", "link-budget", "link-schedule", "link-technical", "links-current"],
-  S8: ["signed-out", "relogin-same-user", "state-identical", "a-to-b-denied-after", "b-to-a-denied-after"],
+  S7: ["wbs-approved", "trust-budget", "trust-schedule", "link-budget", "link-schedule", "link-technical", "links-current", "wbs-view-persisted"],
+  S8: ["signed-out", "relogin-same-user", "state-identical", "wbs-view-after-relogin", "a-to-b-denied-after", "b-to-a-denied-after"],
 };
 
 test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () => {
@@ -157,6 +158,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
       rejected?: { documentId: string };
       documentIds: Record<string, string>;
       wbs?: WbsBaseline;
+      wbsView?: WbsCanonicalView;
       structuredTrust: Partial<Record<"budget" | "schedule", { request: StructuredTrustRequest; decision: StructuredTrustDecision }>>;
       reviewIds: Record<string, string>;
       eventIds: Record<string, string>;
@@ -605,20 +607,9 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         if (state.wbs.selfApproved) {
           ledger.partial("the WBS baseline was approved by the same human who submitted it: this tenant has ONE human, so separation of duties is relaxed by tenant setting (declared, recorded as self_approved)");
         }
-        const tabs = await readProjectTabs(pageA);
-        const wbsTab = tabs.find((tab) => new RegExp(`/projects/${projectId}/wbs(?:[/?#]|$)`).test(tab.href));
-        if (wbsTab) {
-          await openProjectTab(pageA, projectId, "wbs");
-        } else {
-          ledger.partial("the canonical WBS page is not reachable from the project navigation (no WBS tab)");
-          state.dynamicGaps.push({
-            stage: "S7",
-            gap: `the approved canonical WBS page (/projects/{id}/wbs) exists but no project tab leads to it (tabs: ${tabs.map((tab) => tab.name).join(", ")})`,
-            minimalCorrection: "add a WBS entry to the project navigation so the baseline and the canonical links are reachable by a person",
-          });
-          await pageA.goto(`/projects/${projectId}/wbs`);
-          await expect(pageA).toHaveURL(new RegExp(`/projects/${projectId}/wbs`), { timeout: 30_000 });
-        }
+        // The canonical WBS is reachable from the project's own navigation (a tab), not by a typed URL.
+        await openProjectTab(pageA, projectId, "wbs");
+        ledger.check("the canonical WBS page is reachable from the project navigation", true);
         await recorder.screenshot(pageA, "s7-wbs");
 
         // ADR-032: a Budget/Schedule file becomes a trusted source only through two explicit human acts made in the
@@ -676,6 +667,32 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         const current = links.filter((l) => l.state === "CURRENT" && l.authority === "EXPLICIT_HUMAN_CANONICAL_LINK" && l.baselineId === state.wbs!.baselineId && l.nodeId === state.wbs!.childNodeId);
         ledger.check("three CURRENT human-approved links on the approved baseline and node", current.length === 3 && new Set(current.map((l) => l.family)).size === 3, `${current.length} current link(s)`);
         if (current.length === 3) ledger.milestone("links-current");
+
+        // What a person sees on the WBS page (opened from the WBS tab): the baseline, who approved it and the three
+        // links; the same after a reload (nothing lives only in the client).
+        const budgetRevision = budget;
+        const scheduleRevision = schedule;
+        const view = await readWbsCanonicalView(pageA);
+        state.wbsView = view;
+        ledger.check("the WBS page shows the approved baseline and its revision", /Approved WBS Baseline #\d+/.test(view.baselineLabel) && /baseline #\d+/.test(view.baselineRevision), `${view.baselineLabel} | ${view.baselineRevision}`);
+        ledger.check(
+          "the WBS page identifies the baseline approval authority (a self-approval is SELF_APPROVED_NOT_INDEPENDENT)",
+          state.wbs!.selfApproved ? view.approvalText.includes("SELF_APPROVED_NOT_INDEPENDENT") : /independent approval/.test(view.approvalText),
+          view.approvalText.slice(0, 120),
+        );
+        ledger.check("the WBS page shows the three CURRENT canonical links", view.overviewCount.startsWith("3 of 3") && Object.values(view.families).every((f) => f.includes("CURRENT")), `${view.overviewCount} | ${JSON.stringify(view.families)}`);
+        const byFamily = Object.fromEntries(view.structuredLinks.map((l) => [l.family, l]));
+        ledger.check(
+          "Budget and Schedule links show the exact locator, the stored SHA-256 and lead to the original revision",
+          byFamily.budget?.locator === LOCATORS.budget && byFamily.budget?.blobHash === budgetRevision.blobHash && (byFamily.budget?.href ?? "").includes(`revisionId=${budgetRevision.revisionId}`) &&
+            byFamily.schedule?.locator === LOCATORS.schedule && byFamily.schedule?.blobHash === scheduleRevision.blobHash && (byFamily.schedule?.href ?? "").includes(`revisionId=${scheduleRevision.revisionId}`),
+          JSON.stringify(view.structuredLinks),
+        );
+        await pageA.reload();
+        const reloaded = await readWbsCanonicalView(pageA);
+        ledger.check("the WBS view is identical after a page reload", JSON.stringify(reloaded) === JSON.stringify(view));
+        if (JSON.stringify(reloaded) === JSON.stringify(view) && view.overviewCount.startsWith("3 of 3")) ledger.milestone("wbs-view-persisted");
+        await recorder.screenshot(pageA, "s7-wbs-canonical-view");
       });
 
       // ═══ S8: a real sign-out, a NEW login, identical persisted state, tenants denied both ways ═════════════
@@ -737,6 +754,12 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           const identical = JSON.stringify(JSON.parse(JSON.stringify(afterSnapshot))) === JSON.stringify(JSON.parse(JSON.stringify(before)));
           ledger.check("documents, revisions, decisions, alerts, links, Health, Score and WBS authority are identical after the new login", identical, `${state.snapshotDigests.before?.slice(0, 12)} vs ${state.snapshotDigests.after?.slice(0, 12)}`);
           if (identical) ledger.milestone("state-identical");
+          // The WBS page, opened from the tab after the NEW login, shows the same baseline and links as before.
+          await openProjectTab(again, projectId, "wbs");
+          const viewAfter = await readWbsCanonicalView(again);
+          const sameView = JSON.stringify(viewAfter) === JSON.stringify(state.wbsView);
+          ledger.check("the WBS page shows the same baseline, authority and three links after the new login", sameView, viewAfter.overviewCount);
+          if (sameView) ledger.milestone("wbs-view-after-relogin");
           const links = (afterSnapshot as { links: unknown[] }).links;
           const linksBefore = (before as { links: unknown[] }).links.length;
           ledger.check("every canonical link that existed before leaving is there after the new login", links.length === linksBefore, `${links.length}/${linksBefore} link(s)`);

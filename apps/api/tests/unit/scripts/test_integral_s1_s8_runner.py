@@ -1507,10 +1507,11 @@ def test_the_second_run_lessons_are_encoded_in_the_scenario() -> None:
     assert 'stage: "S3"' in spec
     assert 'ledger.evidence("currentStateBefore"' in spec
     assert 'ledger.evidence("currentStateAfter"' in spec
-    wbs = spec.split("const wbsTab", 1)[1].split("s7-wbs", 1)[0]
-    assert "no project tab leads to it" in wbs
-    assert 'stage: "S7"' in wbs
-    assert "readProjectTabs" in spec
+    # The WBS tab gap of that run is CLOSED: the runner now opens the WBS from the project's own navigation and
+    # reads what the page shows; it no longer declares a missing tab.
+    assert "no project tab leads to it" not in spec
+    assert 'await openProjectTab(pageA, projectId, "wbs");' in spec
+    assert "readWbsCanonicalView" in spec and '"wbs-view-persisted"' in spec and '"wbs-view-after-relogin"' in spec
 
 
 def test_third_run_lessons_current_state_names_the_current_file_and_the_session_is_awaited() -> (

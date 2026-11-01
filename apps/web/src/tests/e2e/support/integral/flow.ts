@@ -272,6 +272,54 @@ export async function approveStructuredTrustThroughUi(
   };
 }
 
+// ── the canonical WBS page, as a person reads it (S7) ───────────────────────────────────────────────────────
+export interface WbsCanonicalView {
+  baselineLabel: string;
+  baselineRevision: string;
+  approvalText: string;
+  overviewCount: string;
+  families: Record<"budget" | "schedule" | "technical", string>;
+  structuredLinks: Array<{ family: string; locator: string; blobHash: string; href: string | null }>;
+}
+
+/**
+ * Read what the WBS page (opened from the project's WBS tab) shows about the approved baseline, who approved it and
+ * the three canonical links. Waits for the page to finish verifying: it never reads a "verifying" placeholder as a
+ * result.
+ */
+export async function readWbsCanonicalView(page: Page): Promise<WbsCanonicalView> {
+  await expect(page.getByTestId("s7-baseline-panel")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("s7-links-overview-count"), "the canonical links finished verifying").toBeVisible({
+    timeout: 90_000,
+  });
+  const text = async (testId: string): Promise<string> =>
+    ((await page.getByTestId(testId).first().textContent({ timeout: 30_000 })) ?? "").replace(/\s+/g, " ").trim();
+  const structuredLinks: WbsCanonicalView["structuredLinks"] = [];
+  for (const family of ["budget", "schedule"] as const) {
+    const card = page.getByTestId(`s7-current-structured-link-${family}`);
+    if ((await card.count()) === 0) continue;
+    const body = ((await card.first().textContent()) ?? "").replace(/\s+/g, " ");
+    structuredLinks.push({
+      family,
+      locator: body.match(/Locator:\s*(\S+)/)?.[1] ?? "",
+      blobHash: body.match(/SHA-256\s*([0-9a-f]{64})/)?.[1] ?? "",
+      href: await card.first().locator("a").first().getAttribute("href"),
+    });
+  }
+  return {
+    baselineLabel: await text("s7-baseline-label"),
+    baselineRevision: (await page.getByTestId("s7-baseline-revision").count()) ? await text("s7-baseline-revision") : "",
+    approvalText: (await page.getByTestId("s7-baseline-approval").count()) ? await text("s7-baseline-approval") : "",
+    overviewCount: await text("s7-links-overview-count"),
+    families: {
+      budget: await text("s7-overview-budget"),
+      schedule: await text("s7-overview-schedule"),
+      technical: await text("s7-overview-technical"),
+    },
+    structuredLinks,
+  };
+}
+
 // ── Health, Coherence ──────────────────────────────────────────────────────────────────────────────────────
 export interface HealthRead {
   computedAt: string;

@@ -87,6 +87,16 @@ vi.mock("@/components/features/wbs/CanonicalTechnicalWBSLinksPanel", () => ({
   CanonicalTechnicalWBSLinksPanel: () => <div data-testid="technical-wbs-approved-mock" />,
 }));
 
+vi.mock("@/components/features/wbs/CanonicalStructuredWBSLinksPanel", () => ({
+  CanonicalStructuredWBSLinksPanel: () => <div data-testid="structured-wbs-approved-mock" />,
+}));
+vi.mock("@/components/features/wbs/CanonicalWBSBaselinePanel", () => ({
+  CanonicalWBSBaselinePanel: () => <div data-testid="baseline-panel-mock" />,
+}));
+vi.mock("@/components/features/wbs/CanonicalLinksOverview", () => ({
+  CanonicalLinksOverview: () => <div data-testid="links-overview-mock" />,
+}));
+
 vi.mock("@/hooks/useProjectAlerts", () => ({
   useProjectAlerts: () => ({
     alerts: alertsState.alerts,
@@ -139,6 +149,15 @@ describe("ProjectWBSPage", () => {
     alertsState.alerts = [];
     alertsState.loading = false;
     alertsState.error = null;
+  });
+
+  it("S7: the page carries the baseline authority, the three-family overview and both link panels, with no Phase 2 flag", () => {
+    hookState.authority = authority({ approved: true, display_state: "APPROVED_BASELINE", state: "APPROVED_BASELINE", baseline_no: 1 });
+    renderWithProviders(<ProjectWBSPage />);
+    expect(screen.getByTestId("baseline-panel-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("links-overview-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("technical-wbs-approved-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("structured-wbs-approved-mock")).toBeInTheDocument();
   });
 
   it("renders the canonical WBS route", () => {

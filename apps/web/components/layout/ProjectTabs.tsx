@@ -43,7 +43,8 @@ export function ProjectTabs({ projectId }: ProjectTabsProps) {
   return (
     <nav className="mt-3 flex flex-wrap gap-1" aria-label="Project tabs">
       {tabs.filter(tab => {
-        if (tab.href === "/stakeholders" || tab.href === "/wbs") {
+        // The canonical WBS is a shipped, governed surface (ADR-029): always reachable. Only Stakeholders is Phase 2.
+        if (tab.href === "/stakeholders") {
           return env.FEATURE_PHASE2_MODULES;
         }
         return true;

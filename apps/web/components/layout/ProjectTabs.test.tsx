@@ -20,15 +20,17 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/generated", () => ({}));
 
 describe("ProjectTabs", () => {
-  it("renders the Level-1 project tabs (incl. report) with phase2 modules gated off", () => {
+  it("renders the Level-1 project tabs (incl. report and the canonical WBS) with phase2 modules gated off", () => {
     renderWithProviders(<ProjectTabs projectId="proj_demo_001" />);
 
     const nav = screen.getByRole("navigation", { name: /project tabs/i });
     const links = screen.getAllByRole("link");
 
     expect(nav).toBeInTheDocument();
-    // 13 defined tabs minus the two phase2 tabs (Stakeholders, WBS) gated off by default.
-    expect(links).toHaveLength(11);
+    // 13 defined tabs minus the one phase2 tab (Stakeholders) gated off by default: the canonical WBS is not gated.
+    expect(links).toHaveLength(12);
+    expect(screen.getByRole("link", { name: /^wbs$/i })).toHaveAttribute("href", "/projects/proj_demo_001/wbs");
+    expect(screen.queryByRole("link", { name: /stakeholders/i })).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /overview/i }),
     ).toHaveAttribute("href", "/projects/proj_demo_001");
@@ -64,7 +66,7 @@ describe("ProjectTabs", () => {
     ).toHaveAttribute("href", "/projects/proj_demo_001/report");
 
     expect(screen.queryByRole("link", { name: /stakeholders/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /wbs/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /wbs/i })).toBeInTheDocument();
   });
 
   it("sets aria-current='page' on the active tab", () => {
