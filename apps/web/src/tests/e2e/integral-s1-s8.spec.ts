@@ -55,6 +55,8 @@ import {
   approveStructuredLink,
   approveTechnicalLink,
   approveThroughUi,
+  decideFindingsThroughUi,
+  type FindingDecisionsOutcome,
   listDocuments,
   openProjectTab,
   readAlerts,
@@ -85,6 +87,7 @@ const TENANT_B_EMAIL = developmentBEmail();
 const REPORT_DIR = path.join(process.cwd(), "playwright-report");
 const BROWSER_MANIFEST = path.join(REPORT_DIR, "integral-browser-manifest.json");
 const EMPTY_SESSION = { cookies: [], origins: [] };
+const FINDING_DISMISS_REASON = "The clause was waived by the owner in the signed addendum.";
 const REJECTION_REASON =
   "The draft sets a 5 MPa concrete strength: the figure is implausible for structural work. Re-issue the specification.";
 
@@ -93,11 +96,6 @@ const REJECTION_REASON =
  * correction. A gap is never turned into a PASS; closing one is a product change with its own review.
  */
 const PRODUCT_GAPS = [
-  {
-    stage: "S5",
-    gap: "granular per-finding decisions (CONFIRMED / DISMISSED) exist as a use case over an append-only ledger but have no HTTP route and no UI control",
-    minimalCorrection: "expose RecordFindingDecisionUseCase as POST /hitl/queue/{item}/findings/{finding}/decision and add the controls to the review card; a run also needs a provider that yields findings",
-  },
   {
     stage: "S7",
     gap: "the WBS baseline is approved by the same human who submitted it (a tenant with one human): separation of duties is not satisfied",
@@ -314,11 +312,19 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         if (str(gate.lifecycle_status) !== "review_required") ledger.partial("the contract finished analysis without a human review gate (real AI may not require one)");
         await recorder.screenshot(pageA, "s2-contract-gate");
 
+        let findingOutcome: FindingDecisionsOutcome | undefined;
         await ledger.stage("S5", async () => {
           if (str(gate.lifecycle_status) !== "review_required") {
             ledger.milestone("contract-approved");
             return;
           }
+          // Per-finding decisions first (provisional, UI only), then the separate FINAL approval.
+          findingOutcome = await decideFindingsThroughUi(pageA, recorder, { projectId, documentId: contractId, dismissReason: FINDING_DISMISS_REASON });
+          ledger.check("the review card offers the per-finding surface", findingOutcome.surfaced);
+          ledger.check("the surface states that its decisions are provisional and do not approve", findingOutcome.scopeStatesProvisional);
+          ledger.check("per-finding decisions leave the final Approve available (nothing was approved)", findingOutcome.reviewStillPending);
+          ledger.evidence("findingDecisions", { surfaced: findingOutcome.surfaced, findings: findingOutcome.findings, decided: findingOutcome.decided.length, actions: findingOutcome.decided.map((d) => d.action) });
+          if (findingOutcome.decided.length > 0) ledger.milestone("finding-decided");
           const decision = await approveThroughUi(pageA, recorder, { projectId, documentId: contractId });
           ledger.check("the approval names who decided", decision.decidedBy.length > 0);
           ledger.check("the approval is of analysis generation 1", decision.generation === 1, String(decision.generation));
@@ -403,9 +409,11 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           const rejectedRevisions = await readRevisions(pageA, rejectedId);
           ledger.check("no revision of the rejected proposal is trusted", rejectedRevisions.every((r) => r.trustState !== "trusted"), JSON.stringify(rejectedRevisions.map((r) => r.trustState)));
           if (rejectedRevisions.every((r) => r.trustState !== "trusted")) ledger.milestone("rejected-never-trusted");
-          // Honest scope: an individual finding decision (CONFIRMED / DISMISSED) exists only as a use case
-          // over the append-only ledger; it has no HTTP route and no UI control, so a browser cannot take it.
-          ledger.partial("granular per-finding decisions are not exercised: no HTTP route or UI control exists for them (use case + ledger are covered by PostgreSQL integration tests)");
+          // Honest scope: the route and the surface exist; whether this run could USE them depends on the provider
+          // yielding findings. The deterministic provider extracts none, so S5 is not claimed complete there.
+          if (findingOutcome && findingOutcome.findings === 0) {
+            ledger.partial("granular per-finding decisions were not taken: the provider yielded no individual findings in this run (route, ledger and surface are covered by PostgreSQL and component tests; a real-AI run yields findings)");
+          }
         });
       });
 

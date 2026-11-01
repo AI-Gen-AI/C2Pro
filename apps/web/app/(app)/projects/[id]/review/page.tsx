@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { severityToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
+import { ReviewFindingsPanel } from '@/components/features/review/ReviewFindingsPanel';
 import { ReviewItemCard } from '@/components/features/review/ReviewItemCard';
 import {
   Dialog,
@@ -507,6 +508,9 @@ export default function ReviewPage() {
               projectId={projectId}
               reviewerIdentityReady={reviewerIdentityReady}
               actionsLocked={decidedKeys.has(decisionKey(item))}
+              renderFindings={(reviewItem) =>
+                reviewItem.row_id ? <ReviewFindingsPanel reviewRowId={reviewItem.row_id} /> : null
+              }
               onApprove={(reviewItem) => {
                 setActionError(null);
                 setModal({ kind: 'approve', item: reviewItem });

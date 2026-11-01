@@ -8060,6 +8060,123 @@
           }
         }
       }
+    },
+    "/api/v1/hitl/reviews/{review_row_id}/findings": {
+      "get": {
+        "tags": ["HITL findings"],
+        "summary": "List the findings of a pending analysis review with their provisional decisions",
+        "operationId": "list_review_findings_api_v1_hitl_reviews__review_row_id__findings_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Review Row Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewFindingsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An active human reviewer of the tenant is required"
+          },
+          "404": {
+            "description": "No actionable analysis review of this tenant"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hitl/reviews/{review_row_id}/findings/decisions": {
+      "post": {
+        "tags": ["HITL findings"],
+        "summary": "Record ONE provisional decision on ONE finding of a pending analysis review",
+        "operationId": "record_finding_decision_api_v1_hitl_reviews__review_row_id__findings_decisions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Review Row Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindingDecisionSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingDecisionReceipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An active human reviewer of the tenant is required"
+          },
+          "404": {
+            "description": "No actionable analysis review of this tenant"
+          },
+          "409": {
+            "description": "Stale candidate/authority/ledger revision, unbound finding or conflicting replay"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -21991,6 +22108,316 @@
           "row"
         ],
         "title": "StructuredSourceRowResponse"
+      },
+      "ReviewFindingsResponse": {
+        "properties": {
+          "review_row_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Review Row Id"
+          },
+          "artifact_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Artifact Id"
+          },
+          "artifact_version": {
+            "type": "integer",
+            "title": "Artifact Version"
+          },
+          "artifact_hash": {
+            "type": "string",
+            "title": "Artifact Hash"
+          },
+          "document_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Revision Id"
+          },
+          "generation": {
+            "type": "integer",
+            "title": "Generation"
+          },
+          "fencing_token": {
+            "type": "integer",
+            "title": "Fencing Token"
+          },
+          "ledger_revision": {
+            "type": "integer",
+            "title": "Ledger Revision"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFindingResponse"
+            },
+            "type": "array",
+            "title": "Findings"
+          },
+          "decision_scope": {
+            "type": "string",
+            "const": "PROVISIONAL_REVIEWER_INTENT",
+            "title": "Decision Scope",
+            "default": "PROVISIONAL_REVIEWER_INTENT"
+          },
+          "final_approval": {
+            "type": "string",
+            "const": "SEPARATE_ACT",
+            "title": "Final Approval",
+            "default": "SEPARATE_ACT"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_row_id",
+          "artifact_id",
+          "artifact_version",
+          "artifact_hash",
+          "document_revision_id",
+          "generation",
+          "fencing_token",
+          "ledger_revision",
+          "findings"
+        ],
+        "title": "ReviewFindingsResponse"
+      },
+      "FindingDecisionSubmission": {
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Artifact Id"
+          },
+          "artifact_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Artifact Version"
+          },
+          "artifact_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Artifact Hash"
+          },
+          "document_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Revision Id"
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Generation"
+          },
+          "fencing_token": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Fencing Token"
+          },
+          "source_item_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Source Item Id"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Ordinal"
+          },
+          "action": {
+            "$ref": "#/components/schemas/FindingDecisionAction"
+          },
+          "expected_ledger_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Ledger Revision"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "proposed_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "artifact_id",
+          "artifact_version",
+          "artifact_hash",
+          "document_revision_id",
+          "generation",
+          "fencing_token",
+          "source_item_id",
+          "ordinal",
+          "action",
+          "expected_ledger_revision",
+          "idempotency_key"
+        ],
+        "title": "FindingDecisionSubmission",
+        "description": "Client may pin the candidate and propose an action; never the actor.\n\nServer must reconstruct the exact CandidateReviewIdentity from the\ntenant-scoped review row, artifact and processing authority in the same\ntransaction. This payload is only an optimistic-concurrency expectation."
+      },
+      "FindingDecisionReceipt": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "ledger_revision": {
+            "type": "integer",
+            "title": "Ledger Revision"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          },
+          "decision_scope": {
+            "type": "string",
+            "const": "PROVISIONAL_REVIEWER_INTENT",
+            "title": "Decision Scope",
+            "default": "PROVISIONAL_REVIEWER_INTENT"
+          }
+        },
+        "type": "object",
+        "required": ["event_id", "ledger_revision", "replayed"],
+        "title": "FindingDecisionReceipt"
+      },
+      "ReviewFindingResponse": {
+        "properties": {
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "source_item_id": {
+            "type": "string",
+            "title": "Source Item Id"
+          },
+          "finding_id": {
+            "type": "string",
+            "title": "Finding Id"
+          },
+          "risk": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Risk"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FindingDecisionEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/FindingDecisionEntry"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ordinal",
+          "source_item_id",
+          "finding_id",
+          "risk",
+          "history"
+        ],
+        "title": "ReviewFindingResponse"
+      },
+      "FindingDecisionAction": {
+        "type": "string",
+        "enum": ["CONFIRMED", "CORRECTION_PROPOSED", "DISMISSED", "NEEDS_INFO"],
+        "title": "FindingDecisionAction"
+      },
+      "FindingDecisionEntry": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "ledger_revision": {
+            "type": "integer",
+            "title": "Ledger Revision"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "CONFIRMED",
+              "CORRECTION_PROPOSED",
+              "DISMISSED",
+              "NEEDS_INFO"
+            ],
+            "title": "Action"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "proposed_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Text"
+          },
+          "reviewer_id": {
+            "type": "string",
+            "title": "Reviewer Id"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          }
+        },
+        "type": "object",
+        "required": ["event_id", "ledger_revision", "action", "reviewer_id"],
+        "title": "FindingDecisionEntry"
       }
     },
     "securitySchemes": {

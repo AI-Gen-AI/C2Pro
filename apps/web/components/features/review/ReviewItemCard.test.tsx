@@ -356,3 +356,23 @@ describe('ReviewItemCard structured-source trust review', () => {
     expect(screen.getByText(/stays untrusted and cannot be linked to the WBS/i)).toBeInTheDocument();
   });
 });
+
+describe('ReviewItemCard - per-finding surface (S5)', () => {
+  const pending: ReviewItemResponse = { ...item, row_id: 'row-9', resumable: true, decision_ready: true };
+
+  it('renders the findings surface only for a pending, candidate-bound analysis review', () => {
+    const renderFindings = vi.fn(() => <div data-testid="findings-slot" />);
+    const props = { projectId: 'project-1', reviewerIdentityReady: true, onApprove: vi.fn(), onReject: vi.fn(), renderFindings };
+    const { rerender } = render(<ReviewItemCard item={pending} {...props} />);
+    expect(screen.getByTestId('findings-slot')).toBeInTheDocument();
+
+    rerender(<ReviewItemCard item={{ ...pending, trust_kind: 'structured_source' }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+    rerender(<ReviewItemCard item={{ ...pending, row_id: null }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+    rerender(<ReviewItemCard item={{ ...pending, decision_ready: false }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+    rerender(<ReviewItemCard item={{ ...pending, current_status: ReviewStatus.APPROVED }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+  });
+});

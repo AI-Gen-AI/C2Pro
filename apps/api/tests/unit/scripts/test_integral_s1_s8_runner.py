@@ -567,6 +567,45 @@ def test_an_approval_that_names_nobody_fails() -> None:
     )
 
 
+def _with_finding_decisions(recorded_at: str = "2026-10-31T09:00:00", by: str = "reviewer", count: int = 2):
+    facts, browser, expect = _world()
+    browser["stages"][4]["evidence"]["findingDecisions"] = {"decided": count}
+    facts.finding_decisions = [
+        {
+            "tenant_id": facts.project_a["tenant_id"],
+            "review_row_id": uuid4(),
+            "finding_id": f"f{i}",
+            "action": "CONFIRMED",
+            "reviewer_id": by,
+            "created_by": by,
+            "recorded_at": recorded_at,
+        }
+        for i in range(2)
+    ]
+    return facts, browser, expect
+
+
+def test_finding_decisions_taken_in_the_browser_must_be_ledger_rows_of_the_approving_human() -> None:
+    facts, browser, expect = _with_finding_decisions()
+    assert _failed(facts, browser, expect) == []
+
+
+def test_a_finding_decision_missing_from_the_ledger_or_by_someone_else_fails() -> None:
+    facts, browser, expect = _with_finding_decisions(count=3)
+    assert "S5:every finding decision taken in the browser is a ledger row" in _failed(facts, browser, expect)
+    facts, browser, expect = _with_finding_decisions(by="a stranger")
+    assert "S5:each finding decision is attributed to the human who approved the contract, in tenant A" in _failed(
+        facts, browser, expect
+    )
+
+
+def test_a_finding_decision_recorded_after_the_final_approval_fails() -> None:
+    facts, browser, expect = _with_finding_decisions(recorded_at="2026-10-31T11:00:00")
+    assert "S5:the decisions were recorded before the final approval, which is a separate act" in _failed(
+        facts, browser, expect
+    )
+
+
 def test_a_rejected_draft_that_became_trusted_fails() -> None:
     facts, browser, expect = _world()
     facts.artifacts[3]["trust_state"] = "trusted"
@@ -1455,9 +1494,13 @@ def test_product_gaps_travel_into_the_manifest_next_to_their_stage() -> None:
 
 def test_the_spec_states_the_known_product_gaps_and_never_hides_them() -> None:
     source = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text()
-    for stage in ("S5", "S7"):
-        assert f'stage: "{stage}"' in source
-    assert "RecordFindingDecisionUseCase" in source
+    # S4 (original rows) and S5 (per-finding route + surface) are closed as product gaps; S7 separation of duties remains.
+    assert 'stage: "S7"' in source
+    for closed in ('stage: "S4"', 'stage: "S5"'):
+        assert closed not in source
+    # S5 is never PASSED for a run whose provider yielded no findings to decide.
+    assert "the provider yielded no individual findings in this run" in source
+    assert "decideFindingsThroughUi" in source
     assert "ADR-032" in source
 
 

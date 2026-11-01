@@ -124,6 +124,60 @@ const decisionFrom = async (response: Response): Promise<HumanDecision> => {
   };
 };
 
+export interface FindingDecisionsOutcome {
+  /** The review card offers the per-finding surface (it only does for a candidate-bound analysis review). */
+  surfaced: boolean;
+  findings: number;
+  decided: Array<{ ordinal: number; action: string }>;
+  scopeStatesProvisional: boolean;
+  reviewStillPending: boolean;
+}
+
+/**
+ * S5 (granular): on the pending card, take one provisional decision per finding through the UI (Confirm the first,
+ * Dismiss the second with a typed reason), WITHOUT touching Approve / Reject. When the provider yields no findings the
+ * surface says so and nothing is decided: that is reported, never invented.
+ */
+export async function decideFindingsThroughUi(
+  page: Page,
+  recorder: Pj01RunRecorder,
+  options: { projectId: string; documentId: string; dismissReason: string },
+): Promise<FindingDecisionsOutcome> {
+  const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
+  const region = card.getByRole("region", { name: "Findings of this analysis" });
+  const surfaced = await region.isVisible({ timeout: 20_000 }).catch(() => false) || (await region.waitFor({ state: "visible", timeout: 20_000 }).then(() => true).catch(() => false));
+  if (!surfaced) return { surfaced: false, findings: 0, decided: [], scopeStatesProvisional: false, reviewStillPending: true };
+  const findings = await region.locator("li[data-testid^='finding-']").count();
+  const scope = ((await region.locator("[data-testid^='review-findings-scope-']").textContent()) ?? "").toLowerCase();
+  const scopeStatesProvisional = scope.includes("provisional") && scope.includes("do not approve, reject or trust");
+  const decided: Array<{ ordinal: number; action: string }> = [];
+  const post = (ordinal: number) =>
+    page.waitForResponse(
+      (response: Response) => response.request().method() === "POST" && /\/hitl\/reviews\/[^/]+\/findings\/decisions/.test(new URL(response.url()).pathname) && response.status() === 201,
+      { timeout: 60_000 },
+    ).then(() => ordinal);
+  if (findings > 0) {
+    const first = post(0);
+    await region.getByTestId("finding-action-0-CONFIRMED").click();
+    await first;
+    await expect(region.getByTestId("finding-current-0")).toContainText("Confirmed (provisional)", { timeout: 30_000 });
+    decided.push({ ordinal: 0, action: "CONFIRMED" });
+  }
+  if (findings > 1) {
+    await region.getByTestId("finding-action-1-DISMISSED").click();
+    await expect(region.getByTestId("finding-submit-1"), "a dismissal cannot be recorded without its reason").toBeDisabled();
+    await region.getByTestId("finding-reason-1").fill(options.dismissReason);
+    const second = post(1);
+    await region.getByTestId("finding-submit-1").click();
+    await second;
+    await expect(region.getByTestId("finding-current-1")).toContainText("Dismissed (provisional)", { timeout: 30_000 });
+    decided.push({ ordinal: 1, action: "DISMISSED" });
+  }
+  // A finding decision never decides the review: the final Approve / Reject stay available and untouched.
+  const reviewStillPending = await card.getByTestId(`approve-${itemId}`).isEnabled({ timeout: 30_000 }).catch(() => false);
+  return { surfaced: true, findings, decided, scopeStatesProvisional, reviewStillPending };
+}
+
 /** The FINAL human act on a pending review: approve it (confirm dialog), through the review page. */
 export async function approveThroughUi(
   page: Page,

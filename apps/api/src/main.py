@@ -67,6 +67,7 @@ from src.modules.decision_intelligence.adapters.http.router import (
 from src.modules.decision_intelligence.runtime import (
     build_decision_intelligence_services,
 )
+from src.modules.hitl.adapters.http.finding_decision_router import router as hitl_finding_router
 from src.modules.hitl.adapters.http.notification_settings_router import (
     router as notification_settings_router,  # TASK-BCK-025
 )
@@ -339,6 +340,7 @@ def create_application() -> FastAPI:
     app.include_router(frontend_support_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)
+    app.include_router(hitl_finding_router, prefix=api_v1_prefix)  # S5 provisional per-finding decisions
     app.include_router(notification_settings_router, prefix=api_v1_prefix)  # TASK-BCK-025
     app.include_router(analysis_router, prefix=api_v1_prefix)  # LangGraph orchestration
     app.include_router(technical_wbs_review_router, prefix=api_v1_prefix)  # S7 explicit technical-to-WBS review and persisted links

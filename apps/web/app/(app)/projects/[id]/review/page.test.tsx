@@ -38,6 +38,12 @@ const mockApproveMutate = vi.fn();
 const mockRejectMutate = vi.fn();
 const mockShowToast = vi.fn();
 
+vi.mock('@/components/features/review/ReviewFindingsPanel', () => ({
+  ReviewFindingsPanel: ({ reviewRowId }: { reviewRowId: string }) => (
+    <div data-testid={`findings-panel-${reviewRowId}`} />
+  ),
+}));
+
 vi.mock('@/hooks/useProject', () => ({
   useProject: () => ({
     data: { name: 'Test Project' },

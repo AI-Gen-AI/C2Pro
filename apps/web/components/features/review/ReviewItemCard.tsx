@@ -13,7 +13,7 @@ import {
   Clock,
   XCircle,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { reviewSourceLinks } from './review-source-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,8 @@ type ReviewItemCardProps = {
   actionsLocked?: boolean;
   onApprove: (item: ReviewItemResponse) => void;
   onReject: (item: ReviewItemResponse) => void;
+  /** S5: the per-finding decision surface of a pending analysis review (provided by the page). */
+  renderFindings?: (item: ReviewItemResponse) => ReactNode;
 };
 
 function statusLabel(status: string): string {
@@ -161,6 +163,7 @@ export function ReviewItemCard({
   actionsLocked = false,
   onApprove,
   onReject,
+  renderFindings,
 }: ReviewItemCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
@@ -333,6 +336,10 @@ export function ReviewItemCard({
               </Link>
             ))}
           </div>
+
+          {isPending && !structuredSource && item.row_id && !candidatePending && renderFindings
+            ? renderFindings(item)
+            : null}
 
           {isPending && (approveMeaning || rejectMeaning) ? (
             <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">

@@ -89,7 +89,7 @@ Declared limits (reported in every manifest, never hidden):
   `trust_governance.structured_source_self_approval = {enabled, reason, granted_by, granted_at}` written by the seed to
   tenant A's row only; each decision is recorded as `self_approved` and the manifest reports
   `structured_trust_independence = SELF_APPROVED_NOT_INDEPENDENT`;
-* granular per-finding decisions have no HTTP route or UI, so they are not exercised in the browser (S5 is `PARTIAL`);
+* granular per-finding decisions have a route (`GET /hitl/reviews/{row}/findings`, `POST .../findings/decisions`) and a review-card surface; they are PROVISIONAL (append-only ledger, never approve/reject/trust, not read by the final approval). The runner takes them through the UI when the provider yields findings; the deterministic provider extracts none, so S5 stays `PARTIAL` there and a real-AI run is what exercises them;
 * the alert → source link covers the contract clause AND the original Budget row (S4 `PASS` requires a Budget pointer whose SHA-256 equals the stored revision; a Schedule pointer exists only when a finding rests on an activity);
 * the verdict `NOT_ACCEPTED_UNTIL_INDEPENDENT_REVIEW` is fixed: the runner never accepts itself.
 

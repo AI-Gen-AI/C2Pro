@@ -133,6 +133,7 @@ class Facts:
     change_sets: list[dict[str, Any]] = field(default_factory=list)
     tenant_a_distinct_approver_required: bool | None = None
     tenant_a_ai_spend: float = 0.0
+    finding_decisions: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _doc(key: str, browser: dict[str, Any]) -> str:
@@ -434,8 +435,39 @@ def _judge_s5_approvals(c: _Ctx) -> None:
             )
 
 
+def _judge_s5_finding_decisions(c: _Ctx) -> None:
+    """Per-finding decisions the browser took are ledger rows of tenant A by the approving human, and approved nothing."""
+    stages = c.browser.get("stages") or []
+    reported = ((stages[4].get("evidence") or {}).get("findingDecisions") or {}) if len(stages) > 4 else {}
+    decided = int(reported.get("decided") or 0)
+    if decided <= 0:
+        return
+    rows = c.facts.finding_decisions
+    contract_reviews = [r for r in c.reviews if str(r["document_id"]) == c.doc("contract")]
+    approvers = {str(r.get("approved_by")) for r in contract_reviews if r.get("approved_by")}
+    c.add("S5", "every finding decision taken in the browser is a ledger row", len(rows) == decided, f"{len(rows)}/{decided}")
+    c.add(
+        "S5",
+        "each finding decision is attributed to the human who approved the contract, in tenant A",
+        bool(rows)
+        and all(
+            str(r["tenant_id"]) == c.tenant_a
+            and r["created_by"] == r["reviewer_id"]
+            and r["reviewer_id"] in approvers
+            for r in rows
+        ),
+    )
+    first_approval = min((r["approved_at"] for r in contract_reviews if r.get("approved_at")), default=None)
+    c.add(
+        "S5",
+        "the decisions were recorded before the final approval, which is a separate act",
+        first_approval is not None and all(r["recorded_at"] <= first_approval for r in rows),
+    )
+
+
 def _judge_s5(c: _Ctx) -> None:
     _judge_s5_approvals(c)
+    _judge_s5_finding_decisions(c)
     rejected_id = c.doc("rejectedCandidate")
     rejected = [r for r in c.reviews if str(r["document_id"]) == rejected_id]
     c.add(
@@ -895,6 +927,11 @@ async def _rows(conn: AsyncConnection, sql: str, **params: Any) -> list[dict[str
     return [dict(row._mapping) for row in (await conn.execute(text(sql), params)).all()]
 
 
+async def _scalar_exists(conn: AsyncConnection, relation: str) -> bool:
+    rows = (await conn.execute(text("SELECT to_regclass(:r) IS NOT NULL AS present"), {"r": relation})).all()
+    return bool(rows and rows[0][0])
+
+
 async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Facts:
     facts = Facts()
     projects = await _rows(
@@ -939,6 +976,15 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
         conn,
         "SELECT project_id, document_id, item_id, id, upper(current_status::text) AS status, approved_by, approved_at, review_metadata FROM review_items WHERE project_id = :p",
         **pa,
+    )
+    facts.finding_decisions = (
+        await _rows(
+            conn,
+            "SELECT tenant_id, review_row_id, finding_id, action, reviewer_id, created_by, recorded_at FROM public.hitl_finding_decisions WHERE project_id = :p ORDER BY ledger_revision",
+            **pa,
+        )
+        if await _scalar_exists(conn, "public.hitl_finding_decisions")
+        else []
     )
     facts.alerts = await _rows(
         conn,
