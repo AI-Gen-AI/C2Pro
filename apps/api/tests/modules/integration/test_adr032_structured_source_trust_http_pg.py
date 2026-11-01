@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.adapters.http import structured_source_trust_router as routes
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import Tenant, User
-from tests.integration.analysis.test_adr032_structured_source_trust_pg import (
+from tests.modules.integration.test_adr032_structured_source_trust_pg import (
     _approver,
     _document,
     _Storage,
