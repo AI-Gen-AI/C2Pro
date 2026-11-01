@@ -1875,10 +1875,12 @@ def test_the_seed_grants_the_complete_audited_exception_to_tenant_a_only() -> No
     )
     assert datetime.fromisoformat(exception["granted_at"]).tzinfo is not None
     source = Path(seed.__file__).read_text(encoding="utf-8")
-    # Only tenant A's row is written with it; tenant B's upsert never touches settings.
+    # Only tenant A's row is written with it; tenant B never gets the trust exception. Its settings carry nothing but
+    # the explicit transitional HITL project-authorization marker (S5-02).
     assert "trust_governance" in source
     b_block = source[source.index("async def _upsert_tenant_b") : source.index("async def seed")]
-    assert "settings" not in b_block and "trust_governance" not in b_block
+    assert "trust_governance" not in b_block and "structured_source_self_approval" not in b_block
+    assert b_block.count("settings") == b_block.count("SETTINGS_KEY") == 1
 
 
 def test_the_spec_requests_and_decides_both_structured_sources_through_the_application() -> None:

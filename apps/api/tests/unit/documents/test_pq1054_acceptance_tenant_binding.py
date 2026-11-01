@@ -46,7 +46,8 @@ def test_single_linear_alembic_chain_after_pq939() -> None:
         path.name for path in SOURCE.parent.glob("*.py")
         if f'down_revision = "{m.revision}"' in path.read_text()
     }
-    assert heads == set(), "a later migration must chain after 20261022_0001 explicitly"
+    # S5-01 is the one deliberate successor; any other migration must chain after IT explicitly.
+    assert heads == {"20261101_0001_s5_project_review_grants.py"}, "a later migration must chain explicitly"
 
 
 def test_exactly_the_twelve_catalogued_relations_in_python_and_sql() -> None:
