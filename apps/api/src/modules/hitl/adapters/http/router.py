@@ -35,6 +35,10 @@ from src.modules.hitl.adapters.http.schemas import (
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
+from src.modules.hitl.application.approval_authority import (
+    PromotionNotAuthorized,
+    ReconciliationBlocksApproval,
+)
 from src.modules.hitl.application.final_decision_authorization import (
     AuthorizedFinalDecider,
     FinalDecisionNotAuthorized,
@@ -169,6 +173,27 @@ async def _require_project_approval_for_legacy_row(
         )
     except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
         raise _project_refusal(exc) from exc
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        raise _reconciliation_refusal(exc) from exc
+
+
+def _reconciliation_refusal(exc: ReconciliationBlocksApproval | PromotionNotAuthorized) -> HTTPException:
+    """S5-04 / S5-05. 409 when the candidate cannot be approved as it stands; 403 when the approver's authority is
+    gone at the moment of the promotion (the whole promotion transaction was rolled back)."""
+    if isinstance(exc, ReconciliationBlocksApproval):
+        return HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "reconciliation_blocks_approval",
+                "message": str(exc),
+                "blockers": list(exc.blockers),
+                "derivations": list(exc.derivations),
+                "inconsistencies": list(exc.inconsistencies),
+            },
+        )
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, detail={"code": "promotion_not_authorized", "message": str(exc)}
+    )
 
 
 def _exposed_binding(metadata: dict[str, Any]) -> dict[str, Any] | None:
@@ -345,6 +370,8 @@ async def _approve_and_resume_workflow(
         ) from exc
     except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
         raise _project_refusal(exc) from exc
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        raise _reconciliation_refusal(exc) from exc
     except Exception as exc:  # noqa: BLE001
         # C2PRO P0b true-resume hotfix: a genuine resume failure now RAISES
         # out of the use case instead of being swallowed into a
@@ -498,6 +525,8 @@ async def reject_item(
             ) from exc
         except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
             raise _project_refusal(exc) from exc
+        except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+            raise _reconciliation_refusal(exc) from exc
         except ValueError as exc:
             error_msg = str(exc)
             if "not found" in error_msg:
@@ -757,6 +786,8 @@ async def resume_workflow(
         ) from exc
     except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
         raise _project_refusal(exc) from exc
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        raise _reconciliation_refusal(exc) from exc
     except ValueError as exc:
         error_msg = str(exc)
         if "not found" in error_msg:

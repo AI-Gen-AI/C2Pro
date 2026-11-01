@@ -111,6 +111,10 @@ class ProjectReviewAuthorizer:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    @property
+    def session(self) -> AsyncSession:
+        return self._session
+
     @classmethod
     def for_repository(cls, repository: Any) -> ProjectReviewAuthorizer:
         session = getattr(repository, "session", None)

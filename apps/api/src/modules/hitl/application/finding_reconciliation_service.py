@@ -24,7 +24,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.domain.trust import artifact_digest
-from src.modules.hitl.application.finding_review_authorization import authorize_finding_reviewer
+from src.modules.hitl.application.finding_review_authorization import (
+    AuthorizedFindingReviewer,
+    FindingReviewerNotAuthorized,
+    authorize_finding_reviewer,
+)
 from src.modules.hitl.application.project_review_authorization import (
     ProjectCapability,
     ProjectReviewAuthorizer,
@@ -64,6 +68,11 @@ FROM public.hitl_finding_decisions
 WHERE tenant_id = cast(:tenant_id as uuid) AND review_row_id = cast(:review_row_id as uuid)
 ORDER BY ledger_revision, event_id
 """)
+
+
+_MEMBER = text(
+    "SELECT role::text, is_active FROM public.users WHERE id = cast(:user_id as uuid) AND tenant_id = cast(:tenant_id as uuid)"
+)
 
 
 class CritiqueSource(Protocol):
@@ -112,6 +121,33 @@ class FindingReconciliationService:
         on the review's project) or ``ReviewFindingsUnavailable`` (no actionable candidate-bound review) -- before any
         ledger row is read."""
         actor = authorize_finding_reviewer(user, tenant_id=tenant_id)
+        return await self._reconcile_actor(actor, review_row_id, capability, lock)
+
+    async def reconcile_for_member(
+        self,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        review_row_id: UUID,
+        capability: ProjectCapability = ProjectCapability.READ_REVIEW,
+        lock: bool = False,
+    ) -> ReconciliationResult:
+        """Same as ``reconcile`` for a principal known only by id (the promotion transaction has no request user).
+
+        The human gate is re-read from the database: the member must STILL be an active ADMIN/USER of the tenant.
+        """
+        row = (
+            await self._session.execute(
+                _MEMBER, {"user_id": str(user_id), "tenant_id": str(tenant_id)}
+            )
+        ).first()
+        if row is None or not row[1] or str(row[0]).lower() not in {"admin", "user"}:
+            raise FindingReviewerNotAuthorized("active human reviewer of current tenant required")
+        return await self._reconcile_actor(AuthorizedFindingReviewer(tenant_id=tenant_id, reviewer_id=user_id), review_row_id, capability, lock)
+
+    async def _reconcile_actor(
+        self, actor: AuthorizedFindingReviewer, review_row_id: UUID, capability: ProjectCapability, lock: bool
+    ) -> ReconciliationResult:
         review_sql = text(_REVIEW.text + (" FOR SHARE" if lock else ""))
         review = (
             await self._session.execute(review_sql, {"tenant_id": actor.tenant_id, "review_row_id": review_row_id})
@@ -211,12 +247,35 @@ class FindingReconciliationService:
             )
         except ReviewFindingsUnavailable as exc:
             raise ReconciliationStale(f"the reconciled candidate is no longer the review's: {exc}") from exc
+        return self._same_or_stale(receipt, fresh)
+
+    async def verify_current_for_member(
+        self,
+        receipt: ReconciliationReceipt,
+        *,
+        tenant_id: UUID,
+        user_id: UUID,
+        capability: ProjectCapability = ProjectCapability.APPROVE_CANDIDATE,
+        lock: bool = True,
+    ) -> ReconciliationResult:
+        """``verify_current`` for a principal known by id (the first-TRUSTED transaction has no request user)."""
+        try:
+            fresh = await self.reconcile_for_member(
+                tenant_id=tenant_id, user_id=user_id, review_row_id=receipt.review_row_id, capability=capability, lock=lock
+            )
+        except ReviewFindingsUnavailable as exc:
+            raise ReconciliationStale(f"the reconciled candidate is no longer the review's: {exc}") from exc
+        return self._same_or_stale(receipt, fresh)
+
+    @staticmethod
+    def _same_or_stale(receipt: ReconciliationReceipt, fresh: ReconciliationResult) -> ReconciliationResult:
         if fresh.digest != receipt.digest or fresh.project_id != receipt.project_id:
             raise ReconciliationStale("the ledger, the candidate or its processing authority changed since the reconciliation")
         return fresh
 
 
 __all__ = [
+    "AuthorizedFindingReviewer",
     "CritiqueSource",
     "FindingReconciliationService",
     "MetadataCritiqueSource",

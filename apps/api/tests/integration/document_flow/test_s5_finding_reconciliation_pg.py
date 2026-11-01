@@ -1,8 +1,8 @@
 """S5-03 on PostgreSQL: the reconciler over the REAL ledger, behind the REAL per-project authority, under concurrency.
 
 Read-only by construction: every test that reconciles also proves the review stays PENDING and nothing becomes TRUSTED.
-What it does NOT prove (and the code does not claim): the transactional revalidation of the grant at the first TRUSTED
-(S5-05) and the use of the result by the final signature (S5-04) -- the last test pins that gap as a fact.
+The use of the result by the final approval (S5-04) and the revalidation of the grant at the first TRUSTED (S5-05) are
+proven in ``test_s5_reconciled_approval_pg.py``; the last test here records that the former gap is closed.
 """
 
 from __future__ import annotations
@@ -362,15 +362,18 @@ async def test_a_tampered_ledger_is_inconsistent_and_concludes_nothing(
     assert r.outcomes == () and r.retained == ()
 
 
-# ── the gap this increment does NOT close ────────────────────────────────────────────────────────────────────
-async def test_GAP_the_final_approval_does_not_consult_the_reconciliation_yet_that_is_s5_04(
+# ── S5-04 closed the gap S5-03 pinned ───────────────────────────────────────────────────────────────────────
+async def test_the_gap_s503_pinned_is_closed_the_final_approval_now_depends_on_the_reconciliation(
     db: AsyncSession, actors: Actors, request_sessions: Any  # noqa: F811
 ) -> None:
-    """Pinned as a FACT, not a feature: with a material NEEDS_INFO on the ledger the reconciler says "do not sign", yet
-    today's final approval (unchanged by S5-03) still commits the candidate. S5-04 must make the signature depend on
-    ``signable_as_is`` and on the receipt's digest; until then S5 stays PARTIAL. This test must be FLIPPED by S5-04."""
+    """S5-03 pinned (as a fact) that a NEEDS_INFO on the ledger did not stop today's approval. S5-04 flipped it: under
+    enforce the approval is refused while the reconciliation blocks it (full matrix: test_s5_reconciled_approval_pg)."""
+    from fastapi import HTTPException
+
     w, person = actors.w, await _signer(actors)
     await _decide(w, person, 0, 0, A.NEEDS_INFO)
     assert not (await _reconcile(w, person, capability=APPROVE)).signable_as_is
-    await _final(w, request_sessions, "approve", person)
-    assert (await _footprint(db, w))["review"] == "APPROVED", "S5-04 gap: the reconciliation is not yet a precondition"
+    with pytest.raises(HTTPException) as refused:
+        await _final(w, request_sessions, "approve", person)
+    assert refused.value.status_code == 409 and refused.value.detail["code"] == "reconciliation_blocks_approval"
+    assert (await _footprint(db, w))["review"] == "PENDING_REVIEW_REQUIRED"

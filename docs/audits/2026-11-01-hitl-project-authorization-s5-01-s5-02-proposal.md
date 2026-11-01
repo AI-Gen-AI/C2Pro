@@ -225,8 +225,8 @@ policy version `s5-03/v1`).
 `ProjectReviewAuthorizer.revalidate`. A digest difference is `ReconciliationStale`; a revoked grant is a denial, not "stale".
 **This atomicity is S5-05's and is NOT claimed solved by S5-03.**
 
-**Pinned gap.** `test_GAP_the_final_approval_does_not_consult_the_reconciliation_yet_that_is_s5_04`: with a NEEDS_INFO on the
-ledger the reconciler says "do not sign" but today's final approval still commits. S5-04 must flip that test.
+**Pinned gap (closed by S5-04, see below).** `test_GAP_…` pinned that with a NEEDS_INFO on the ledger the final approval still
+committed; it is now `test_the_gap_s503_pinned_is_closed_…` and asserts the refusal.
 
 **Critique coverage (honest limit).** Critique has no typed persisted envelope (`finding_decision_writer` refuses CRITIQUE
 decisions). The service therefore reports `critique_coverage`: `NONE_PRESENT`, or `UNSTRUCTURED_NOT_EVALUATED` when
@@ -237,3 +237,35 @@ production producer exists until a typed critique envelope does.
 grant + digest at the first TRUSTED) are not implemented; the derived-candidate (Vn+1) producer for DISMISSED/CORRECTION does not
 exist; critique has no typed source; real grants on real tenants and `enforce` in Production need separate approval; an integral
 run under `enforce` with independent real-AI UAT has not been executed; `off`/`audit` tenants remain non-secure.
+
+
+## S5-04 and S5-05 — implementation status (third increment)
+
+**S5-04 — the final approval is bound to a CURRENT reconciliation.** `application/approval_authority.py`,
+called from `ResumeWorkflowUseCase.execute` right after the #714 pre-flight and BEFORE any resume operation exists: under
+`enforce`, an approval of a candidate-bound analysis review needs `signable_as_is` (consistent ledger, no NEEDS_INFO, no
+undecided finding, no material verified open critique, no derived candidate required). Otherwise
+`ReconciliationBlocksApproval` -> HTTP 409 `reconciliation_blocks_approval` (with blocker / derivation codes); nothing is
+created, nothing is recorded. Consequence to state plainly: under `enforce`, a reviewer who DISMISSES or proposes a
+CORRECTION for a finding cannot approve the current candidate, because the derived candidate (Vn+1) that would carry that
+content does not exist (NOT_IMPLEMENTED); they can reject, or decide the findings differently. Provisional decisions, the
+approval and the TRUSTED promotion remain three acts; rejection never needs the reconciliation. `off` keeps the legacy rule;
+`audit` logs `hitl_reconciliation_would_block_approval` and allows (both transitional, NOT secure).
+
+**S5-05 — revalidation inside the first-TRUSTED transaction.** The approver, grant and receipt digest are stored on the
+claimed operation (`resume_operations.operation_metadata.authority`; an explicit JSON null for any decision taken under the
+legacy rule, so an earlier attempt's authority is never inherited). `revalidate_at_promotion` runs from
+`_apply_trust_decision` immediately before `commit_candidate` -- the single place both N17 and finalization promote from, and
+therefore also the reconciler's recovery path -- and only when the candidate is still PROPOSED (a first promotion).
+It re-reads the approver as an active human member, takes the APPROVE_CANDIDATE grant `FOR SHARE` (a revocation waits for the
+transaction or is seen), re-reconciles with the review row `FOR SHARE` (the ledger writer's `FOR UPDATE` conflicts) and requires
+the approved digest. Failure raises `PromotionNotAuthorized` and rolls the transaction back: no TRUSTED state, no analysis, the
+review stays pending and retryable. Under `enforce` a promotion with NO recorded authority fails closed. Because N17 runs inside
+the graph's save node, the HTTP surface of a promotion-time refusal is the generic 502 "workflow failed; review unchanged"; the
+safety property is the state and is asserted (and the refusal is attributed to S5-05 by a spy on the revalidation).
+No SQL privilege was widened and no migration was added.
+
+**Not resolved by S5-04 / S5-05 (independent gaps, kept open):** P1 SQL administrative authority = NOT_VERIFIED (a grant's
+existence is not proof that an authenticated human administrator issued it); critique without a typed source = UNEVALUATED;
+derived-candidate (Vn+1) producer = NOT_IMPLEMENTED; S5 as a whole = PARTIAL / NOT_ACCEPTED; no integral run under `enforce`
+with the real browser has been executed.

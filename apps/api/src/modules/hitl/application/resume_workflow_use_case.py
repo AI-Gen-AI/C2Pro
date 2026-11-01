@@ -39,6 +39,7 @@ from src.modules.hitl.adapters.persistence.resume_ownership import (
     finalize_v3,
     get_graph_completed_marker,
     mark_graph_completed,
+    record_authority,
     record_failure,
     renew,
     verify_trust_binding,
@@ -51,6 +52,10 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
 )
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     acquire_for_reconciliation,
+)
+from src.modules.hitl.application.approval_authority import (
+    ApprovalAuthority,
+    require_reconciled_approval,
 )
 from src.modules.hitl.application.final_decision_authorization import (
     AuthorizedFinalDecider,
@@ -238,6 +243,19 @@ class ResumeWorkflowUseCase:
             user_id=decider.user_id,
             project_id=project_id,
             capability=ProjectCapability.APPROVE_CANDIDATE,
+        )
+
+    async def _require_reconciled_approval(
+        self, review_item: Any, request: ResumeWorkflowRequest, row_id: UUID
+    ) -> ApprovalAuthority | None:
+        if request.decision is not WorkflowDecision.APPROVE or not isinstance(request.decider, AuthorizedFinalDecider):
+            return None
+        authorizer = self._project_authorizer or ProjectReviewAuthorizer.for_repository(self.review_queue_repo)
+        if not hasattr(authorizer, "session"):  # an injected authorizer without a database (mechanics-only suites)
+            return None
+        return await require_reconciled_approval(
+            authorizer, tenant_id=request.decider.tenant_id, user_id=request.decider.user_id,
+            review_row_id=row_id, review_metadata=getattr(review_item, "metadata", None),
         )
 
     async def _heartbeat_loop(self, ownership: Ownership) -> None:
@@ -936,6 +954,10 @@ class ResumeWorkflowUseCase:
                 approve=request.decision == WorkflowDecision.APPROVE,
             )
 
+            # S5-04: under enforce, an approval of a candidate-bound analysis review needs a CURRENT, clean
+            # reconciliation of the finding decisions. Refused here -- BEFORE any resume operation exists.
+            authority = await self._require_reconciled_approval(review_item, request, row_id)
+
             ownership, phase, refusal = await acquire(
                 review_row_id=row_id,
                 tenant_id=tenant_id,
@@ -1008,6 +1030,14 @@ class ResumeWorkflowUseCase:
                     )
                 record_hitl_resume_error("already_claimed")
                 raise ValueError(self._ERR_ALREADY_CLAIMED.format(review_id=review_id))
+
+            # S5-05: the proof (who approves, under which grant, against which reconciliation digest) rides on the
+            # claimed operation to the transaction that materializes the first TRUSTED. An explicit null for any other
+            # decision keeps an earlier attempt's authority from being inherited.
+            await record_authority(
+                ownership=ownership, authority=authority.to_json() if authority else None,
+                session_factory=self._claim_session_factory,
+            )
 
             return await self._execute_owned(
                 ownership=ownership, review_item=review_item, review_id=review_id,

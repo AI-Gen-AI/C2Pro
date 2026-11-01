@@ -46,6 +46,9 @@ class PermissiveProjectAuthorizer(ProjectReviewAuthorizer):
         return ProjectAuthorization(tenant_id, project_id, user_id, capability, AuthorizationMode.OFF, None, enforced=False)
 
 
+    async def mode(self, tenant_id: UUID) -> AuthorizationMode:  # noqa: ARG002
+        return AuthorizationMode.OFF
+
     async def capabilities(  # type: ignore[override]
         self, *, tenant_id: UUID, user_id: UUID, project_id: UUID | None
     ) -> EffectiveCapabilities:

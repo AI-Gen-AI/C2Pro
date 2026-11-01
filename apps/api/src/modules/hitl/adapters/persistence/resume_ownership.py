@@ -562,6 +562,50 @@ async def load(
         ).first()
 
 
+_RECORD_AUTHORITY_SQL = text(
+    """
+    UPDATE resume_operations
+       SET operation_metadata = coalesce(operation_metadata, '{}'::jsonb)
+                                || jsonb_build_object('authority', cast(:authority as jsonb)),
+           updated_at = clock_timestamp()
+     WHERE id = cast(:operation_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
+       AND current_attempt_id = cast(:attempt_id as uuid)
+       AND owner_token = cast(:owner_token as uuid)
+       AND fencing_token = :fencing_token
+    """
+)
+
+
+async def record_authority(
+    *, ownership: Ownership, authority: dict[str, Any] | None, session_factory: Any = None
+) -> None:
+    """S5-05: store WHO is approving and against WHICH reconciliation on the claimed operation (fenced CAS).
+
+    ``None`` is stored as an explicit JSON null so that an earlier attempt's authority can never be inherited by a
+    later attempt that took the decision under the legacy rule. The promotion transaction reads it back.
+    """
+    import json
+
+    async with _session(session_factory, ownership.tenant_id) as session:
+        result = await session.execute(
+            _RECORD_AUTHORITY_SQL,
+            {
+                "authority": json.dumps(authority),
+                "operation_id": str(ownership.operation_id),
+                "tenant_id": str(ownership.tenant_id),
+                "attempt_id": str(ownership.attempt_id),
+                "owner_token": str(ownership.owner_token),
+                "fencing_token": ownership.fencing_token,
+            },
+        )
+        if getattr(result, "rowcount", 0) != 1:
+            raise OwnershipError(
+                f"Cannot record the approval authority: operation {ownership.operation_id} is no longer owned by this attempt"
+            )
+        await session.commit()
+
+
 async def renew(
     *, ownership: Ownership, lease_seconds: int, session_factory: Any = None
 ) -> bool:
@@ -1359,6 +1403,14 @@ async def _apply_trust_decision(
     if not approved:
         await repo.reject_candidate(binding, tenant_id=tenant)
         return None
+    # S5-05: revalidate the approver's grant, membership and the reconciliation digest INSIDE this transaction, right
+    # before the statement that materializes the first TRUSTED state (no-op for an already TRUSTED candidate, for the
+    # legacy `off` / `audit` modes and for non-analysis candidates).
+    from src.modules.hitl.application.approval_authority import revalidate_at_promotion
+
+    await revalidate_at_promotion(
+        session, tenant_id=tenant_id, review_row_id=review_row_id, artifact_id=binding.artifact_id
+    )
     return await repo.commit_candidate(binding, tenant_id=tenant)
 
 

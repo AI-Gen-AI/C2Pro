@@ -515,3 +515,13 @@ def _synthetic_test_decider_has_no_project_authority_to_check(monkeypatch: pytes
         return await original(self, tenant_id=tenant_id, user_id=user_id, project_id=project_id, capability=capability, lock=lock)
 
     monkeypatch.setattr(ProjectReviewAuthorizer, "require", require)
+
+    original_mode = ProjectReviewAuthorizer.mode
+
+    async def mode(self, tenant_id):  # type: ignore[no-untyped-def]
+        # the synthetic tenant has no `tenants` row: the legacy rule applies (S5-04 / S5-05 do not engage)
+        if tenant_id == TEST_DECIDER.tenant_id:
+            return AuthorizationMode.OFF
+        return await original_mode(self, tenant_id)
+
+    monkeypatch.setattr(ProjectReviewAuthorizer, "mode", mode)
