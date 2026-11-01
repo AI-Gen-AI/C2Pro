@@ -38,6 +38,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ImpactLevel } from "./impactLevel";
+import type { ReviewItemResponseCandidateBinding } from "./reviewItemResponseCandidateBinding";
 import type { ReviewItemResponseItemData } from "./reviewItemResponseItemData";
 import type { ReviewStatus } from "./reviewStatus";
 
@@ -55,4 +56,6 @@ export interface ReviewItemResponse {
   row_id?: string | null;
   resumable?: boolean;
   decision_ready?: boolean;
+  trust_kind?: "structured_source" | null;
+  candidate_binding?: ReviewItemResponseCandidateBinding;
 }

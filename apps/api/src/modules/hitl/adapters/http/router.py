@@ -9,7 +9,11 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.analysis.domain.trust import review_decision_ready
+from src.analysis.domain.trust import (
+    BoundReviewRequiresTrustDecision,
+    ensure_legacy_decision_allowed,
+    review_decision_ready,
+)
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.observability.monitoring import record_hitl_decision
@@ -106,6 +110,14 @@ async def _record_hitl_correction_snapshot(
         )
 
 
+def _exposed_binding(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    """The exact candidate a structured-source review gates (shown to the reviewer)."""
+    if metadata.get("trust_kind") != "structured_source":
+        return None
+    binding = metadata.get("candidate_binding")
+    return dict(binding) if isinstance(binding, dict) else None
+
+
 def _to_review_item_response(item: ReviewItem) -> ReviewItemResponse:
     row_id_raw = item.metadata.get("row_id")
     return ReviewItemResponse(
@@ -122,6 +134,10 @@ def _to_review_item_response(item: ReviewItem) -> ReviewItemResponse:
         row_id=UUID(str(row_id_raw)) if row_id_raw else None,
         resumable=bool(item.metadata.get("thread_id")),
         decision_ready=review_decision_ready(item.metadata),
+        trust_kind="structured_source"
+        if item.metadata.get("trust_kind") == "structured_source"
+        else None,
+        candidate_binding=_exposed_binding(item.metadata),
     )
 
 
@@ -346,6 +362,13 @@ async def approve_item(
                 reviewer_id=current_user.id,
                 reviewer_name=current_user.full_name,
             )
+        except BoundReviewRequiresTrustDecision as exc:
+            logger.warning(
+                "hitl_legacy_decision_refused_bound_review",
+                item_id=str(item_id),
+                operation="approve",
+            )
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
 
@@ -417,6 +440,15 @@ async def reject_item(
                 status.HTTP_400_BAD_REQUEST,
                 f"Item {item_id} cannot be rejected from status {existing.current_status.value}.",
             )
+        try:
+            ensure_legacy_decision_allowed(existing.metadata)
+        except BoundReviewRequiresTrustDecision as exc:
+            logger.warning(
+                "hitl_legacy_decision_refused_bound_review",
+                item_id=str(item_id),
+                operation="reject",
+            )
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         item = existing
         item.current_status = ReviewStatus.REJECTED
         # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to

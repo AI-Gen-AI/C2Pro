@@ -25,6 +25,8 @@ import {
   useRejectItemApiV1HitlQueueItemIdRejectPost,
 } from '@/lib/api/generated/hitl/hitl';
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
+import { useDecideStructuredSourceTrustApiV1StructuredSourceTrustDecisionsPost } from '@/lib/api/generated/structured-source-trust/structured-source-trust';
+import { DecideStructuredSourceTrustBodyDecision } from '@/lib/api/generated/models/decideStructuredSourceTrustBodyDecision';
 import { ReviewStatus } from '@/lib/api/generated/models/reviewStatus';
 import { getGetProjectHealthApiV1ProjectsProjectIdHealthGetQueryKey } from '@/lib/api/generated/project-health/project-health';
 import {
@@ -134,6 +136,10 @@ export default function ReviewPage() {
 
   const approveMutation = useApproveItemApiV1HitlQueueItemIdApprovePost();
   const rejectMutation = useRejectItemApiV1HitlQueueItemIdRejectPost();
+  // ADR-032: a Budget/Schedule trust candidate is decided ONLY here, bound to the exact
+  // id/version/hash the reviewer sees. The legacy approve/reject routes answer 409 for it.
+  const structuredDecisionMutation =
+    useDecideStructuredSourceTrustApiV1StructuredSourceTrustDecisionsPost();
 
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
   const [rejectReason, setRejectReason] = useState('');
@@ -246,6 +252,33 @@ export default function ReviewPage() {
     setDecidedKeys((current) => new Set(current).add(decisionKey(item)));
   };
 
+  const decideStructuredSource = async (
+    item: ReviewItemResponse,
+    reviewRowId: string,
+    decision: DecideStructuredSourceTrustBodyDecision,
+    reason: string,
+  ) => {
+    const binding = item.candidate_binding as
+      | { artifact_id?: string; artifact_version?: number; artifact_hash?: string }
+      | null
+      | undefined;
+    if (!binding?.artifact_id || !binding.artifact_version || !binding.artifact_hash) {
+      throw new Error('The exact candidate is unavailable. Refresh the queue before deciding.');
+    }
+    await structuredDecisionMutation.mutateAsync({
+      data: {
+        review_row_id: reviewRowId,
+        artifact_id: binding.artifact_id,
+        artifact_version: binding.artifact_version,
+        artifact_hash: binding.artifact_hash,
+        decision,
+        // Deterministic per review row + decision: a retried request is an idempotent replay.
+        idempotency_key: `ui-${decision.toLowerCase()}-${reviewRowId}`,
+        reason,
+      },
+    });
+  };
+
   const handleApprove = async () => {
     if (modal.kind !== 'approve' || !reviewerName) return;
     if (!beginSubmit('approve')) return;
@@ -260,10 +293,19 @@ export default function ReviewPage() {
       // review row, never the reusable business item_id. A stale V1 modal
       // therefore reaches V1 (now CLOSED) and fails closed instead of
       // resolving onto an unseen V2 review for the same document.
-      await approveMutation.mutateAsync({
-        itemId: reviewRowId,
-        data: {},
-      });
+      if (modal.item.trust_kind === 'structured_source') {
+        await decideStructuredSource(
+          modal.item,
+          reviewRowId,
+          DecideStructuredSourceTrustBodyDecision.APPROVE,
+          'Human approval of the exact structured source (id, version and hash shown in the review).',
+        );
+      } else {
+        await approveMutation.mutateAsync({
+          itemId: reviewRowId,
+          data: {},
+        });
+      }
       markDecided(modal.item);
       setDecisionReceipt({ rowId: reviewRowId, action: 'approve', uncertain: false });
       closeModal();
@@ -294,12 +336,21 @@ export default function ReviewPage() {
           'Exact review identity is unavailable. Refresh the queue before deciding.',
         );
       }
-      await rejectMutation.mutateAsync({
-        itemId: reviewRowId,
-        data: {
-          reason: rejectReason.trim(),
-        },
-      });
+      if (modal.item.trust_kind === 'structured_source') {
+        await decideStructuredSource(
+          modal.item,
+          reviewRowId,
+          DecideStructuredSourceTrustBodyDecision.REJECT,
+          rejectReason.trim(),
+        );
+      } else {
+        await rejectMutation.mutateAsync({
+          itemId: reviewRowId,
+          data: {
+            reason: rejectReason.trim(),
+          },
+        });
+      }
       markDecided(modal.item);
       setDecisionReceipt({ rowId: reviewRowId, action: 'reject', uncertain: false });
       closeModal();
@@ -320,8 +371,10 @@ export default function ReviewPage() {
     }
   };
 
-  const approving = submitting === 'approve' || approveMutation.isPending;
-  const rejecting = submitting === 'reject' || rejectMutation.isPending;
+  const approving =
+    submitting === 'approve' || approveMutation.isPending || structuredDecisionMutation.isPending;
+  const rejecting =
+    submitting === 'reject' || rejectMutation.isPending || structuredDecisionMutation.isPending;
 
   const setFilter = (filter: string) => {
     setStatusFilter(filter);

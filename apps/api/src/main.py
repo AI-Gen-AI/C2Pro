@@ -26,6 +26,9 @@ from src.analysis.adapters.graph.workflow import (
     ensure_checkpointer_ready,
 )
 from src.analysis.adapters.http.router import router as analysis_router  # LangGraph orchestration
+from src.analysis.adapters.http.structured_source_trust_router import (
+    router as structured_source_trust_router,
+)
 from src.analysis.adapters.http.structured_wbs_link_router import (
     router as structured_wbs_link_router,
 )
@@ -337,6 +340,7 @@ def create_application() -> FastAPI:
     app.include_router(analysis_router, prefix=api_v1_prefix)  # LangGraph orchestration
     app.include_router(technical_wbs_review_router, prefix=api_v1_prefix)  # S7 explicit technical-to-WBS review and persisted links
     app.include_router(structured_wbs_link_router, prefix=api_v1_prefix)  # S7 human-approved Budget/Schedule source-row links
+    app.include_router(structured_source_trust_router, prefix=api_v1_prefix)  # ADR-032 structured-source trust request/decision
 
     try:
         app.include_router(_load_mcp_router(), prefix=api_v1_prefix)

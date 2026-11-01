@@ -27,6 +27,7 @@ from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.trust import (
     REVIEW_BINDING_KEY,
+    STRUCTURED_SOURCE_KEY,
     TRUST_CANDIDATE_REQUIRED_KEY,
     CandidateBinding,
     CandidateScoring,
@@ -34,7 +35,9 @@ from src.analysis.domain.trust import (
     TrustedCommit,
     TrustedCommitOutcome,
     TrustState,
+    WrongTrustOperationError,
     artifact_digest,
+    is_structured_payload,
 )
 from src.analysis.ports.document_artifact_repository import IDocumentArtifactRepository
 from src.core.tenants.types import TenantId
@@ -159,6 +162,35 @@ _OPEN_MINIMAL_REVIEW_SQL = text(
 )
 
 
+# ADR-032: a structured-source trust candidate gets its own minimal review. It has no graph
+# thread (nothing to resume), is bound to the exact candidate from birth and is decided only
+# through the dedicated trust-decision command (the legacy route refuses it).
+_OPEN_STRUCTURED_REVIEW_SQL = text(
+    """
+    INSERT INTO review_items (
+        id, item_id, item_type, current_status, confidence, impact_level,
+        tenant_id, sla_due_date, item_data, review_metadata, thread_id,
+        project_id, document_id, review_type, created_at, updated_at
+    )
+    VALUES (
+        cast(:new_id as uuid), cast(:document_id as uuid), cast(:doc_type as varchar),
+        'PENDING_REVIEW_REQUIRED', 1.0, 'MEDIUM', cast(:tenant_id as uuid),
+        (now() AT TIME ZONE 'utc') + interval '3 days',
+        jsonb_build_object(
+            'project_id', cast(:project_id as text), 'document_id', cast(:document_id as text),
+            'doc_type', cast(:doc_type as text), 'trust_kind', 'structured_source',
+            'reason', 'Structured source awaits an explicit human trust decision.'),
+        jsonb_build_object(
+            'tenant_id', cast(:tenant_id as text), 'project_id', cast(:project_id as text),
+            'document_id', cast(:document_id as text), 'review_type', 'analysis_critique',
+            'trust_kind', 'structured_source',
+            cast(:bkey as text), cast(:binding as jsonb), cast(:mkey as text), true),
+        NULL, cast(:project_id as uuid), cast(:document_id as uuid),
+        'analysis_critique', (now() AT TIME ZONE 'utc'), (now() AT TIME ZONE 'utc')
+    )
+    """
+)
+
 _ACTIONABLE_PENDING_SQL = text(
     f"""
     SELECT DISTINCT ON (a.artifact_id) a.artifact_id, r.id AS review_id
@@ -172,6 +204,7 @@ _ACTIONABLE_PENDING_SQL = text(
      WHERE a.project_id = cast(:project_id as uuid)
        AND a.tenant_id = cast(:tenant_id as uuid)
        AND a.trust_state = 'proposed'
+       AND (a.payload -> 'structured_source') IS NULL
      ORDER BY a.artifact_id, r.created_at DESC
     """
 )
@@ -242,6 +275,10 @@ _MARK_PROJECTED_SQL = text(
 )
 
 
+# ADR-032: structured-source candidates are never ProjectGraph / Coherence / analytic input.
+_NOT_STRUCTURED = ~DocumentArtifactORM.payload.has_key(STRUCTURED_SOURCE_KEY)
+
+
 @dataclass(frozen=True)
 class PendingCandidate:
     """A PROPOSED candidate as the projection sees it."""
@@ -290,6 +327,9 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
     ) -> DocumentArtifactORM:
         document_id = self._artifact_document_id(artifact)
         payload = artifact.model_dump(mode="json")
+        if payload.get(STRUCTURED_SOURCE_KEY) is None:
+            # ADR-032: the optional field must not change legacy payloads/digests.
+            payload.pop(STRUCTURED_SOURCE_KEY, None)
         row = DocumentArtifactORM(
             artifact_id=uuid4(),
             document_id=document_id,
@@ -325,6 +365,22 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             .where(
                 DocumentArtifactORM.document_id == document_id,
                 DocumentArtifactORM.trust_state == TrustState.PROPOSED.value,
+            )
+            .values(
+                trust_state=TrustState.SUPERSEDED.value,
+                lifecycle_status="superseded",
+            )
+            .returning(DocumentArtifactORM.artifact_id)
+        )
+        return list(result.scalars().all())
+
+    async def _supersede_proposed_structured(self, document_id: UUID) -> list[UUID]:
+        result = await self._session.execute(
+            update(DocumentArtifactORM)
+            .where(
+                DocumentArtifactORM.document_id == document_id,
+                DocumentArtifactORM.trust_state == TrustState.PROPOSED.value,
+                ~_NOT_STRUCTURED,
             )
             .values(
                 trust_state=TrustState.SUPERSEDED.value,
@@ -546,6 +602,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 DocumentArtifactORM.tenant_id == tenant_id,
                 DocumentArtifactORM.lifecycle_status == "active",
                 DocumentArtifactORM.trust_state == TrustState.TRUSTED.value,
+                _NOT_STRUCTURED,
             )
             .order_by(DocumentArtifactORM.created_at.asc())
         )
@@ -580,6 +637,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 DocumentArtifactORM.document_id == document_id,
                 DocumentArtifactORM.lifecycle_status == "superseded",
                 DocumentArtifactORM.trust_state == TrustState.TRUSTED.value,
+                _NOT_STRUCTURED,
             )
             .order_by(DocumentArtifactORM.created_at.desc())
         )
@@ -680,6 +738,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 f"Candidate {binding.artifact_id} v{binding.artifact_version} does not "
                 "match the reviewed version; refusing to commit"
             )
+        _refuse_structured(row, "commit_candidate")
         if row.trust_state == TrustState.TRUSTED.value:
             return TrustedCommit(
                 outcome=TrustedCommitOutcome.ALREADY_TRUSTED,
@@ -762,6 +821,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         """
         row = await self._lock(binding.artifact_id, tenant_id)
         if row is not None and self._matches(row, binding):
+            _refuse_structured(row, "reject_candidate")
             if row.trust_state == TrustState.REJECTED.value:
                 return False
             if row.trust_state == TrustState.PROPOSED.value:
@@ -804,6 +864,7 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 f"Candidate {binding.artifact_id} is not the current proposal; "
                 "refusing to correct a stale version"
             )
+        _refuse_structured(row, "propose_correction")
         if UUID(corrected.document_id) != binding.document_id:
             raise ValueError("A correction must target the same document")
         await self._supersede_proposed(binding.document_id)
@@ -834,6 +895,126 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
             )
         return new_binding
 
+    async def save_structured_candidate(
+        self,
+        artifact: DocumentArtifact,
+        *,
+        project_id: UUID,
+        tenant_id: TenantId,
+    ) -> tuple[CandidateBinding, UUID]:
+        """ADR-032: persist a structured-source PROPOSED candidate and its bound review.
+
+        Not a graph completion: no thread, no projection/materialization obligation.
+        An older pending proposal of the document (analysis or structured) is retired
+        and its review closed -- the same monotonicity as :meth:`save`.
+        """
+        if artifact.structured_source is None:
+            raise WrongTrustOperationError("save_structured_candidate requires structured_source")
+        document_id = self._artifact_document_id(artifact)
+        # Only a previous STRUCTURED proposal is retired: a pending graph-gated analysis
+        # candidate (and its review/thread) is never touched by this operation.
+        superseded = await self._supersede_proposed_structured(document_id)
+        row = await self._insert(
+            artifact,
+            project_id=project_id,
+            tenant_id=tenant_id,
+            trust_state=TrustState.PROPOSED,
+            scoring=None,
+        )
+        binding = _binding_of(row)
+        await self._close_superseded_reviews(
+            superseded, tenant_id=tenant_id, superseded_by=row.artifact_id
+        )
+        review_id = uuid4()
+        await self._session.execute(
+            _OPEN_STRUCTURED_REVIEW_SQL,
+            {
+                "new_id": str(review_id),
+                "tenant_id": str(tenant_id),
+                "document_id": str(document_id),
+                "project_id": str(project_id),
+                "doc_type": artifact.doc_type,
+                "bkey": REVIEW_BINDING_KEY,
+                "mkey": TRUST_CANDIDATE_REQUIRED_KEY,
+                "binding": _json(binding.as_json()),
+            },
+        )
+        return binding, review_id
+
+    async def commit_structured_candidate(
+        self,
+        binding: CandidateBinding,
+        *,
+        tenant_id: TenantId,
+    ) -> TrustedCommit:
+        """ADR-032: PROPOSED -> TRUSTED for EXACTLY the bound structured candidate.
+
+        Same compare-and-set as :meth:`commit_candidate` under the row lock, but a typed,
+        separate operation: it records NO projection obligation and NO materialization
+        obligation (the structured source is evidence for revision authority and WBS links,
+        never ProjectGraph/Coherence/analytic input). It refuses analysis candidates.
+        """
+        row = await self._lock(binding.artifact_id, tenant_id)
+        if row is None or not self._matches(row, binding):
+            raise StaleCandidateError(
+                f"Candidate {binding.artifact_id} v{binding.artifact_version} does not "
+                "match the reviewed version; refusing to commit"
+            )
+        if not is_structured_payload(row.payload):
+            raise WrongTrustOperationError(
+                "commit_structured_candidate only promotes structured-source candidates"
+            )
+        if row.trust_state == TrustState.TRUSTED.value:
+            return TrustedCommit(
+                outcome=TrustedCommitOutcome.ALREADY_TRUSTED,
+                binding=binding,
+                project_id=row.project_id,
+                tenant_id=row.tenant_id,
+            )
+        if row.trust_state != TrustState.PROPOSED.value:
+            raise StaleCandidateError(
+                f"Candidate {binding.artifact_id} is {row.trust_state}; only a "
+                "PROPOSED candidate can become trusted"
+            )
+        await self._supersede_active_trusted(binding.document_id)
+        await self._session.execute(
+            update(DocumentArtifactORM)
+            .where(
+                DocumentArtifactORM.artifact_id == binding.artifact_id,
+                DocumentArtifactORM.trust_state == TrustState.PROPOSED.value,
+            )
+            .values(trust_state=TrustState.TRUSTED.value, lifecycle_status="active")
+        )
+        await self._session.flush()
+        return TrustedCommit(
+            outcome=TrustedCommitOutcome.COMMITTED,
+            binding=binding,
+            project_id=row.project_id,
+            tenant_id=row.tenant_id,
+        )
+
+    async def reject_structured_candidate(
+        self,
+        binding: CandidateBinding,
+        *,
+        tenant_id: TenantId,
+    ) -> bool:
+        """ADR-032: PROPOSED -> REJECTED for exactly the bound structured candidate."""
+        row = await self._lock(binding.artifact_id, tenant_id)
+        if row is not None and self._matches(row, binding):
+            if not is_structured_payload(row.payload):
+                raise WrongTrustOperationError(
+                    "reject_structured_candidate only rejects structured-source candidates"
+                )
+            if row.trust_state == TrustState.REJECTED.value:
+                return False
+            if row.trust_state == TrustState.PROPOSED.value:
+                return await self._mark_rejected(binding)
+        raise StaleCandidateError(
+            f"Candidate {binding.artifact_id} v{binding.artifact_version} is no longer "
+            "the reviewed proposal; refusing to record a rejection against it"
+        )
+
     async def has_proposed_candidate(
         self, *, document_id: UUID, tenant_id: TenantId
     ) -> bool:
@@ -845,10 +1026,20 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                     DocumentArtifactORM.document_id == document_id,
                     DocumentArtifactORM.tenant_id == tenant_id,
                     DocumentArtifactORM.trust_state == TrustState.PROPOSED.value,
+                    _NOT_STRUCTURED,
                 )
             )
         ).scalar_one()
         return count > 0
+
+
+def _refuse_structured(row: DocumentArtifactORM, operation: str) -> None:
+    """ADR-032: analysis trust operations never touch a structured-source candidate."""
+    if is_structured_payload(row.payload):
+        raise WrongTrustOperationError(
+            f"{operation} cannot be applied to a structured-source candidate; "
+            "use the structured trust-decision command"
+        )
 
 
 def _binding_of(row: DocumentArtifactORM) -> CandidateBinding:

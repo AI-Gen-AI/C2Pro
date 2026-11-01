@@ -325,3 +325,34 @@ describe('PQ-HITL-06 review item source navigation', () => {
   });
 
 });
+
+// ADR-032: a Budget/Schedule trust candidate is decided only as a source-trust decision.
+describe('ReviewItemCard structured-source trust review', () => {
+  const structured: ReviewItemResponse = {
+    item_id: 'doc-budget',
+    row_id: 'row-trust',
+    item_type: 'budget',
+    current_status: ReviewStatus.PENDING_REVIEW_REQUIRED,
+    confidence: 1,
+    impact_level: ImpactLevel.MEDIUM,
+    approved_by: null,
+    approved_at: null,
+    sla_due_date: '2026-12-31T00:00:00Z',
+    created_at: '2026-11-01T10:00:00Z',
+    item_data: { trust_kind: 'structured_source', reason: 'Structured source awaits an explicit human trust decision.' },
+    resumable: false,
+    decision_ready: true,
+    trust_kind: 'structured_source',
+    candidate_binding: { artifact_id: 'a-1', artifact_version: 1, artifact_hash: 'f'.repeat(64) },
+  };
+
+  it('says exactly what approving a structured source does and does not do', () => {
+    render(
+      <ReviewItemCard item={structured} projectId="project-1" reviewerIdentityReady onApprove={vi.fn()} onReject={vi.fn()} />,
+    );
+
+    expect(screen.getByText('Trust structured source (budget)')).toBeInTheDocument();
+    expect(screen.getByText(/does not approve costs, dates, a WBS baseline, Health or Coherence/i)).toBeInTheDocument();
+    expect(screen.getByText(/stays untrusted and cannot be linked to the WBS/i)).toBeInTheDocument();
+  });
+});

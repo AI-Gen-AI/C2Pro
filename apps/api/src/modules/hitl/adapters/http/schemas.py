@@ -82,6 +82,11 @@ class ReviewItemResponse(BaseModel):
     # analysis candidate to be persisted and bound. Clients must not offer a
     # decision then; the backend refuses one regardless (fail closed).
     decision_ready: bool = True
+    # ADR-032: "structured_source" when the review gates a Budget/Schedule trust candidate. Such a
+    # review is decided ONLY through POST /structured-source-trust/decisions (the legacy approve/
+    # reject routes answer 409); ``candidate_binding`` is the exact id/version/hash to decide.
+    trust_kind: Literal["structured_source"] | None = None
+    candidate_binding: dict[str, Any] | None = None
 
     class Config:
         from_attributes = True

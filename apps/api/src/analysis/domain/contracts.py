@@ -27,7 +27,7 @@ Conventions:
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Final
+from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -148,6 +148,24 @@ class CoherenceFinding(BaseModel):
     evidence_ref: str | None = None
 
 
+class StructuredSource(BaseModel):
+    """Frozen identity of the structured (XLSX) source a candidate speaks for (ADR-032).
+
+    Present only on a structured trust candidate (Budget/Schedule); it pins the immutable
+    revision bytes and the parser output the human decision applies to. A candidate that
+    carries it is never ProjectGraph, Coherence or analytic-materialization input.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    family: Literal["budget", "schedule"]
+    blob_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    parser_id: str = Field(min_length=1, max_length=120)
+    parser_version: str = Field(min_length=1, max_length=40)
+    row_count: int = Field(ge=0)
+    content_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class DocumentArtifact(BaseModel):
     """Typed Tier-1 → Tier-2 contract (ADR-017): the analysis output for ONE
     document, consumed by the ProjectGraph and immutable once emitted."""
@@ -170,6 +188,8 @@ class DocumentArtifact(BaseModel):
     documentation_health_signal: DocumentationHealthSignal | None = None
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     pii_redaction_count: int = Field(default=0, ge=0)
+    # ADR-032 (additive, optional): structured-source trust candidate identity.
+    structured_source: StructuredSource | None = None
 
 
 __all__ = [
@@ -181,5 +201,6 @@ __all__ = [
     "BudgetItem",
     "Citation",
     "CoherenceFinding",
+    "StructuredSource",
     "DocumentArtifact",
 ]

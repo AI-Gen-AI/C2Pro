@@ -57,6 +57,14 @@ vi.mock('@/lib/api/generated/hitl/hitl', () => ({
   }),
 }));
 
+const mockStructuredDecide = vi.fn();
+vi.mock('@/lib/api/generated/structured-source-trust/structured-source-trust', () => ({
+  useDecideStructuredSourceTrustApiV1StructuredSourceTrustDecisionsPost: () => ({
+    mutateAsync: mockStructuredDecide,
+    isPending: false,
+  }),
+}));
+
 vi.mock('@/lib/ui/toast', () => ({
   showToast: (...args: unknown[]) => mockShowToast(...args),
 }));
@@ -386,6 +394,68 @@ describe('ReviewPage', () => {
         expect.anything(),
       );
     });
+  });
+
+  const STRUCTURED_ITEM = {
+    ...MOCK_ITEMS[0],
+    item_id: 'doc-budget',
+    row_id: 'row-trust-1',
+    item_type: 'budget',
+    resumable: false,
+    trust_kind: 'structured_source',
+    candidate_binding: { artifact_id: 'art-1', artifact_version: 2, artifact_hash: 'a'.repeat(64) },
+  };
+
+  it('ADR-032: approving a structured-source review decides the exact bound candidate, never the legacy route', async () => {
+    setupMock({ data: { items: [STRUCTURED_ITEM], total: 1 } });
+    mockStructuredDecide.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-doc-budget'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => {
+      expect(mockStructuredDecide).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          review_row_id: 'row-trust-1',
+          artifact_id: 'art-1',
+          artifact_version: 2,
+          artifact_hash: 'a'.repeat(64),
+          decision: 'APPROVE',
+          idempotency_key: 'ui-approve-row-trust-1',
+        }),
+      });
+    });
+    expect(mockApproveMutate).not.toHaveBeenCalled();
+  });
+
+  it('ADR-032: rejecting a structured-source review sends the reason through the trust-decision endpoint', async () => {
+    setupMock({ data: { items: [STRUCTURED_ITEM], total: 1 } });
+    mockStructuredDecide.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-doc-budget'));
+    await userEvent.type(screen.getByRole('textbox'), 'Wrong file');
+    await userEvent.click(screen.getByText('Confirm Reject'));
+
+    await waitFor(() => {
+      expect(mockStructuredDecide).toHaveBeenCalledWith({
+        data: expect.objectContaining({ decision: 'REJECT', reason: 'Wrong file', artifact_id: 'art-1' }),
+      });
+    });
+    expect(mockRejectMutate).not.toHaveBeenCalled();
+  });
+
+  it('ADR-032: a structured review without its exact binding fails closed and calls nothing', async () => {
+    setupMock({ data: { items: [{ ...STRUCTURED_ITEM, candidate_binding: null }], total: 1 } });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-doc-budget'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    expect(mockStructuredDecide).not.toHaveBeenCalled();
+    expect(mockApproveMutate).not.toHaveBeenCalled();
   });
 
   it('targets the exact row_id rather than reusable item_id on approve', async () => {

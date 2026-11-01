@@ -115,6 +115,11 @@ function hasData(data: ReviewItemResponse['item_data']): boolean {
 // whose approve/reject meanings always come from the backend.
 const DEFAULT_APPROVE_MEANING = 'Mark this item as approved.';
 const DEFAULT_REJECT_MEANING = 'Mark this item as rejected and record the reason given.';
+// ADR-032: a structured-source review gates trust in ONE immutable Budget/Schedule file only.
+const STRUCTURED_APPROVE_MEANING =
+  'Trust this exact Budget/Schedule file as an approved source. It does not approve costs, dates, a WBS baseline, Health or Coherence, and it creates no WBS link.';
+const STRUCTURED_REJECT_MEANING =
+  'Reject this source: it stays untrusted and cannot be linked to the WBS. The reason is recorded.';
 
 /** Why Approve/Reject are disabled, first reason wins; undefined when enabled. */
 function actionsBlockedReason(state: {
@@ -184,14 +189,25 @@ export function ReviewItemCard({
   const reason = getString(item.item_data, 'reason');
   const modelConclusion = getString(item.item_data, 'critique_notes');
   const critiqueObservations = modelConclusion ? parseCritiqueObservations(modelConclusion) : null;
+  const structuredSource = item.trust_kind === 'structured_source';
   const approveMeaning =
     getString(item.item_data, 'approve_meaning') ??
-    (item.resumable ? null : DEFAULT_APPROVE_MEANING);
+    (structuredSource
+      ? STRUCTURED_APPROVE_MEANING
+      : item.resumable
+        ? null
+        : DEFAULT_APPROVE_MEANING);
   const rejectMeaning =
     getString(item.item_data, 'reject_meaning') ??
-    (item.resumable ? null : DEFAULT_REJECT_MEANING);
+    (structuredSource
+      ? STRUCTURED_REJECT_MEANING
+      : item.resumable
+        ? null
+        : DEFAULT_REJECT_MEANING);
 
-  const title = documentFilename
+  const title = structuredSource
+    ? `Trust structured source (${item.item_type})`
+    : documentFilename
     ? `Approve analysis of ${documentFilename}`
     : (firstString(item.item_data, ['title', 'summary', 'message', 'description', 'category']) ??
       item.item_type);

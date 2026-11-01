@@ -4640,6 +4640,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents/{document_id}/revisions/{revision_id}/trust-candidate:
+    post:
+      tags:
+      - Structured source trust
+      summary: Explicitly request a human trust decision for the current Budget/Schedule
+        revision
+      operationId: request_structured_source_trust_api_v1_documents__document_id__revisions__revision_id__trust_candidate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      - name: revision_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Revision Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestStructuredSourceTrustBody'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuredSourceTrustRequestResponse'
+        '401':
+          description: Authentication required
+        '403':
+          description: Human requester denied
+        '404':
+          description: Document or revision not found
+        '409':
+          description: Not the current revision, or an analysis artifact owns the
+            document
+        '422':
+          description: Immutable structured source unavailable or unreadable
+  /api/v1/structured-source-trust/decisions:
+    post:
+      tags:
+      - Structured source trust
+      summary: Human approve/reject the exact bound structured-source trust candidate
+      operationId: decide_structured_source_trust_api_v1_structured_source_trust_decisions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideStructuredSourceTrustBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuredSourceTrustDecisionResponse'
+        '401':
+          description: Authentication required
+        '403':
+          description: Human approver denied or separation of duties
+        '404':
+          description: Review not found
+        '409':
+          description: Stale candidate, revision or source content
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/mcp/query-view:
     post:
       tags:
@@ -6019,9 +6102,11 @@ components:
           title: Item Count
         total_budget:
           type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Total Budget
         spent_amount:
           type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Spent Amount
         spend_recorded:
           type: boolean
@@ -6031,6 +6116,7 @@ components:
         remaining_budget:
           anyOf:
           - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Remaining Budget
           description: Null when no spend has been recorded, because remaining would
@@ -6088,6 +6174,7 @@ components:
           title: Code
         amount:
           type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Amount
       additionalProperties: false
       type: object
@@ -7776,6 +7863,53 @@ components:
       description: "Consolidated view of project coherence for the dashboard.\n\n\
         ECOA v2 (ADR-009 \xA77.2 step 1): the optional `categories_v2` field carries\n\
         the locked v2 contract. Defaults to None so v1 clients are unaffected."
+    DecideStructuredSourceTrustBody:
+      properties:
+        review_row_id:
+          type: string
+          format: uuid
+          title: Review Row Id
+        artifact_id:
+          type: string
+          format: uuid
+          title: Artifact Id
+        artifact_version:
+          type: integer
+          minimum: 1.0
+          title: Artifact Version
+        artifact_hash:
+          type: string
+          maxLength: 64
+          minLength: 64
+          pattern: ^[0-9a-f]{64}$
+          title: Artifact Hash
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+          title: Decision
+        idempotency_key:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Idempotency Key
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - review_row_id
+      - artifact_id
+      - artifact_version
+      - artifact_hash
+      - decision
+      - idempotency_key
+      - reason
+      title: DecideStructuredSourceTrustBody
     DecideWBSIntelligenceRequest:
       properties:
         change_set_id:
@@ -11078,6 +11212,26 @@ components:
       - unavailable
       title: ReportEvidenceTier
       description: How well a section's facts trace back to source evidence.
+    RequestStructuredSourceTrustBody:
+      properties:
+        idempotency_key:
+          type: string
+          maxLength: 128
+          minLength: 8
+          title: Idempotency Key
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - idempotency_key
+      - reason
+      title: RequestStructuredSourceTrustBody
+      description: The client cannot supply tenant or actor; the revision is the URL
+        scope.
     RequestWBSIntelligenceRunRequest:
       properties:
         target_kind:
@@ -11291,6 +11445,18 @@ components:
           type: boolean
           title: Decision Ready
           default: true
+        trust_kind:
+          anyOf:
+          - type: string
+            const: structured_source
+          - type: 'null'
+          title: Trust Kind
+        candidate_binding:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Candidate Binding
       type: object
       required:
       - item_id
@@ -11968,6 +12134,125 @@ components:
       - source_domain
       - evidence_tier
       title: StakeholdersSection
+    StructuredSourceTrustDecisionResponse:
+      properties:
+        artifact_id:
+          type: string
+          format: uuid
+          title: Artifact Id
+        artifact_version:
+          type: integer
+          title: Artifact Version
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+          title: Decision
+        trust_state:
+          type: string
+          enum:
+          - trusted
+          - rejected
+          title: Trust State
+        review_status:
+          type: string
+          title: Review Status
+        self_approved:
+          type: boolean
+          title: Self Approved
+        replayed:
+          type: boolean
+          title: Replayed
+        event_id:
+          type: string
+          format: uuid
+          title: Event Id
+        authority:
+          type: string
+          const: EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST
+          title: Authority
+          default: EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST
+        source_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Source Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - artifact_id
+      - artifact_version
+      - decision
+      - trust_state
+      - review_status
+      - self_approved
+      - replayed
+      - event_id
+      title: StructuredSourceTrustDecisionResponse
+    StructuredSourceTrustRequestResponse:
+      properties:
+        artifact_id:
+          type: string
+          format: uuid
+          title: Artifact Id
+        artifact_version:
+          type: integer
+          title: Artifact Version
+        artifact_hash:
+          type: string
+          title: Artifact Hash
+        review_row_id:
+          type: string
+          format: uuid
+          title: Review Row Id
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        revision_id:
+          type: string
+          format: uuid
+          title: Revision Id
+        family:
+          type: string
+          enum:
+          - budget
+          - schedule
+          title: Family
+        trust_state:
+          type: string
+          enum:
+          - proposed
+          - trusted
+          title: Trust State
+        replayed:
+          type: boolean
+          title: Replayed
+        row_count:
+          type: integer
+          title: Row Count
+        content_digest:
+          type: string
+          title: Content Digest
+        source_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Source Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - artifact_id
+      - artifact_version
+      - artifact_hash
+      - review_row_id
+      - document_id
+      - revision_id
+      - family
+      - trust_state
+      - replayed
+      - row_count
+      - content_digest
+      title: StructuredSourceTrustRequestResponse
     StructuredWBSLinkApprovalResponse:
       properties:
         event_id:
@@ -14800,6 +15085,7 @@ components:
         budget_allocated:
           anyOf:
           - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Budget Allocated
         evidence_tier:

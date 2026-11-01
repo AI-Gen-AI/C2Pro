@@ -46,6 +46,10 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # S7: separately human-approved row/activity associations; no TIME/BUDGET score authority.
         "budget.wbs_link_approved",
         "schedule.wbs_link_approved",
+        # ADR-032: structured (Budget/Schedule XLSX) source trust -- requested and decided by humans;
+        # evidence of the trust decision, never an analytic/graph/materialization fact.
+        "structured_source.trust_requested",
+        "structured_source.trust_decided",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")
