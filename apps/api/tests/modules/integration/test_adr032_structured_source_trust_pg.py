@@ -167,6 +167,27 @@ async def _reupload(db: AsyncSession, w: dict, tmp_path: Path, storage: _Storage
     return revision_id
 
 
+EXCEPTION = {
+    "enabled": True,
+    "reason": "Synthetic single-human tenant; no second approver exists.",
+    "granted_by": "operator:synthetic-tenant-a",
+    "granted_at": "2026-11-01T10:00:00+00:00",
+}
+
+
+async def _grant(db: AsyncSession, tenant, **override) -> dict:
+    """Set the audited exception on ONE tenant (``override`` values of None drop the key)."""
+    value = {**EXCEPTION, **override}
+    value = {k: v for k, v in value.items() if v is not None}
+    await db.execute(
+        update(Tenant).where(Tenant.id == tenant).values(
+            settings={"trust_governance": {"structured_source_self_approval": value}}
+        )
+    )
+    await db.commit()
+    return value
+
+
 def _verifier(storage: _Storage) -> ImmutableStructuredSourceVerifier:
     return ImmutableStructuredSourceVerifier(storage, ExcelFileParser())  # type: ignore[arg-type]
 
@@ -587,16 +608,11 @@ async def test_self_approval_needs_an_audited_tenant_exception(
     other = await _document(db, w, tmp_path, storage, family="schedule")
     to_reject = await _request(test_session_factory, storage, w, other, key=f"{KEY}rej")
     rejected = await _decide(test_session_factory, storage, w, to_reject, "REJECT", actor=w["actor"], key=f"{KEY}rj")
-    assert rejected.trust_state == "rejected" and rejected.self_approved
+    assert rejected.trust_state == "rejected" and not rejected.self_approved and not rejected.independent
     # The explicit, audited tenant exception.
-    await db.execute(
-        update(Tenant).where(Tenant.id == w["tenant"]).values(
-            settings={"trust_governance": {"structured_source_self_approval": True}}
-        )
-    )
-    await db.commit()
+    await _grant(db, w["tenant"])
     out = await _decide(test_session_factory, storage, w, receipt, "APPROVE", actor=w["actor"], key=f"{KEY}self")
-    assert out.self_approved and out.trust_state == "trusted"
+    assert out.self_approved and not out.independent and out.trust_state == "trusted"
     async with test_session_factory() as session:
         event = await session.scalar(
             select(ProjectEventORM).where(
@@ -606,6 +622,8 @@ async def test_self_approval_needs_an_audited_tenant_exception(
         )
         assert event is not None and event.payload["self_approved"] is True
         assert event.payload["separation_of_duties"] == "SELF_APPROVAL_TENANT_EXCEPTION"
+        assert event.payload["independent_approval"] is False
+        assert event.payload["self_approval_exception"] == EXCEPTION
 
 
 # Authority separation -----------------------------------------------------------------------

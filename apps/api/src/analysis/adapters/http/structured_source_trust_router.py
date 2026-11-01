@@ -71,6 +71,7 @@ class StructuredSourceTrustDecisionResponse(BaseModel):
     trust_state: Literal["trusted", "rejected"]
     review_status: str
     self_approved: bool
+    independent: bool
     replayed: bool
     event_id: UUID
     authority: Literal["EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST"] = (
@@ -182,6 +183,7 @@ async def decide_structured_source_trust(
         trust_state=receipt.trust_state,  # type: ignore[arg-type]
         review_status=receipt.review_status,
         self_approved=receipt.self_approved,
+        independent=receipt.independent,
         replayed=receipt.replayed,
         event_id=receipt.event_id,
     )

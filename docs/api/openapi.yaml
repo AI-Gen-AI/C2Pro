@@ -12157,6 +12157,9 @@ components:
         self_approved:
           type: boolean
           title: Self Approved
+        independent:
+          type: boolean
+          title: Independent
         replayed:
           type: boolean
           title: Replayed
@@ -12182,6 +12185,7 @@ components:
       - trust_state
       - review_status
       - self_approved
+      - independent
       - replayed
       - event_id
       title: StructuredSourceTrustDecisionResponse

@@ -94,6 +94,10 @@ class StructuredTrustForbidden(StructuredTrustError):
     code = "forbidden"
     status = 403
 
+    def __init__(self, message: str, *, code: str = "forbidden") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class StructuredTrustInvalid(StructuredTrustError):
     code = "invalid_request"
@@ -134,6 +138,7 @@ class TrustDecisionReceipt:
     self_approved: bool
     replayed: bool
     event_id: UUID
+    independent: bool = True
 
 
 def content_digest_of(rows: list[dict[str, Any]]) -> str:
@@ -210,12 +215,53 @@ def _bounded(idempotency_key: str, reason: str) -> str:
     return reason.strip()
 
 
-async def _self_approval_allowed(session: AsyncSession, *, tenant_id: UUID) -> bool:
+@dataclass(frozen=True)
+class SelfApprovalException:
+    """The audited per-tenant exception that lets a requester approve their own request (Q1)."""
+
+    reason: str
+    granted_by: str
+    granted_at: str
+
+    def as_json(self) -> dict[str, Any]:
+        return {
+            "enabled": True,
+            "reason": self.reason,
+            "granted_by": self.granted_by,
+            "granted_at": self.granted_at,
+        }
+
+
+def parse_self_approval_exception(raw: Any) -> SelfApprovalException | None:
+    """A complete, attributable exception or nothing.
+
+    A bare ``true`` (anonymous), ``enabled`` other than ``true``, a blank reason or grantor, or an
+    unparseable ``granted_at`` all yield ``None``: the exception is then NOT in force.
+    """
+    if not isinstance(raw, dict) or raw.get("enabled") is not True:
+        return None
+    reason, granted_by, granted_at = raw.get("reason"), raw.get("granted_by"), raw.get("granted_at")
+    if not (isinstance(reason, str) and reason.strip() and len(reason.strip()) <= 2000):
+        return None
+    if not (isinstance(granted_by, str) and granted_by.strip() and len(granted_by.strip()) <= 200):
+        return None
+    if not isinstance(granted_at, str):
+        return None
+    try:
+        datetime.fromisoformat(granted_at.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return SelfApprovalException(reason.strip(), granted_by.strip(), granted_at.strip())
+
+
+async def _self_approval_exception(
+    session: AsyncSession, *, tenant_id: UUID
+) -> SelfApprovalException | None:
     settings = await session.scalar(select(Tenant.settings).where(Tenant.id == tenant_id))
     node: Any = settings or {}
     for key in SELF_APPROVAL_SETTING:
         node = node.get(key) if isinstance(node, dict) else None
-    return node is True
+    return parse_self_approval_exception(node)
 
 
 def _event(
@@ -517,24 +563,32 @@ class DecideStructuredSourceTrustService:
                     self_approved=bool(previous.get("self_approved")),
                     replayed=True,
                     event_id=UUID(str(previous["event_id"])),
+                    independent=not bool(previous.get("requester_is_decider")),
                 )
             raise StructuredTrustConflict(
                 "the review was already decided", code="already_decided"
             )
 
-        requested_by = await self._requested_by(
-            tenant_id=tenant_id, project_id=project_id, artifact_id=artifact_id
+        requested_by = await self._verified_requester(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=document_id,
+            review_row_id=review_row_id,
+            row=row,
+            binding=binding,
         )
-        self_approved = requested_by is not None and requested_by == str(actor_user_id)
-        if (
-            decision == "APPROVE"
-            and self_approved
-            and not await _self_approval_allowed(self.session, tenant_id=tenant_id)
-        ):
-            raise StructuredTrustForbidden(
-                "the requester cannot approve their own request "
-                "(separation of duties); a tenant exception is not configured"
-            )
+        same_person = requested_by == str(actor_user_id)
+        self_approved = same_person and decision == "APPROVE"
+        exception: SelfApprovalException | None = None
+        if self_approved:
+            exception = await _self_approval_exception(self.session, tenant_id=tenant_id)
+            if exception is None:
+                raise StructuredTrustForbidden(
+                    "the requester cannot approve their own request (separation of duties); "
+                    "no complete audited tenant exception (enabled, reason, granted_by, "
+                    "granted_at) is configured",
+                    code="SEPARATION_OF_DUTIES_REQUIRED",
+                )
 
         source = (row.payload or {}).get("structured_source", {})
         repo = SqlAlchemyDocumentArtifactRepository(self.session)
@@ -592,10 +646,17 @@ class DecideStructuredSourceTrustService:
                 "review_row_id": str(review_row_id),
                 "requested_by": requested_by,
                 "decided_by": str(actor_user_id),
+                "requester_is_decider": same_person,
                 "self_approved": self_approved,
-                "separation_of_duties": "SELF_APPROVAL_TENANT_EXCEPTION"
-                if self_approved
-                else "SEPARATED",
+                "independent_approval": not same_person,
+                "self_approval_exception": exception.as_json() if exception else None,
+                "separation_of_duties": (
+                    "SELF_APPROVAL_TENANT_EXCEPTION"
+                    if self_approved
+                    else "SELF_REJECTION"
+                    if same_person
+                    else "SEPARATED"
+                ),
                 "idempotency_key": idempotency_key,
                 "reason": reason,
                 "authority": "EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST",
@@ -611,6 +672,7 @@ class DecideStructuredSourceTrustService:
             "decision": decision,
             "decided_by": str(actor_user_id),
             "self_approved": self_approved,
+            "requester_is_decider": same_person,
             "idempotency_key": idempotency_key,
             "event_id": str(event.event_id),
         }
@@ -626,26 +688,81 @@ class DecideStructuredSourceTrustService:
             self_approved=self_approved,
             replayed=False,
             event_id=event.event_id,
+            independent=not same_person,
         )
 
-    async def _requested_by(
-        self, *, tenant_id: UUID, project_id: UUID, artifact_id: UUID
-    ) -> str | None:
-        event = await self.session.scalar(
-            select(ProjectEventORM)
-            .where(
-                ProjectEventORM.tenant_id == tenant_id,
-                ProjectEventORM.project_id == project_id,
-                ProjectEventORM.event_type == REQUESTED_EVENT,
-                ProjectEventORM.payload["artifact_id"].astext == str(artifact_id),
+    async def _verified_requester(
+        self,
+        *,
+        tenant_id: UUID,
+        project_id: UUID,
+        document_id: UUID,
+        review_row_id: UUID,
+        row: DocumentArtifactORM,
+        binding: CandidateBinding,
+    ) -> str:
+        """The identified requester from exactly ONE consistent ``trust_requested`` event.
+
+        FAIL CLOSED: a missing event, several events, a payload that disagrees with the bound
+        candidate, an actor that is not the stated requester, or a requester that is not an
+        active human of the tenant all refuse the decision (409): without a verifiable requester
+        separation of duties cannot be established, so no decision (approve OR reject) is taken.
+        """
+        events = (
+            await self.session.scalars(
+                select(ProjectEventORM).where(
+                    ProjectEventORM.tenant_id == tenant_id,
+                    ProjectEventORM.project_id == project_id,
+                    ProjectEventORM.event_type == REQUESTED_EVENT,
+                    ProjectEventORM.payload["artifact_id"].astext == str(binding.artifact_id),
+                )
             )
-            .order_by(ProjectEventORM.occurred_at.desc())
-            .limit(1)
+        ).all()
+        if len(events) != 1:
+            raise StructuredTrustConflict(
+                "no single trust_requested event identifies the requester of this candidate",
+                code="request_event_missing" if not events else "request_event_inconsistent",
+            )
+        event = events[0]
+        payload = event.payload or {}
+        requester = payload.get("requested_by")
+        expected = {
+            "document_id": str(document_id),
+            "artifact_version": binding.artifact_version,
+            "artifact_hash": binding.artifact_hash,
+            "review_row_id": str(review_row_id),
+            "revision_id": str(row.document_revision_id) if row.document_revision_id else None,
+        }
+        consistent = (
+            isinstance(requester, str)
+            and event.actor == f"user:{requester}"
+            and all(payload.get(key) == value for key, value in expected.items())
+            and event.source_revision_id == row.document_revision_id
         )
-        if event is None:
-            return None
-        value = (event.payload or {}).get("requested_by")
-        return str(value) if value else None
+        if consistent:
+            try:
+                requester_id = UUID(str(requester))
+            except ValueError:
+                consistent = False
+            else:
+                consistent = (
+                    await self.session.scalar(
+                        select(User.id).where(
+                            User.id == requester_id,
+                            User.tenant_id == tenant_id,
+                            User.role.in_([UserRole.ADMIN, UserRole.USER]),
+                            User.clerk_user_id.is_not(None),
+                            User.clerk_user_id != "",
+                        )
+                    )
+                    is not None
+                )
+        if not consistent:
+            raise StructuredTrustConflict(
+                "the trust_requested event is inconsistent with the bound candidate",
+                code="request_event_inconsistent",
+            )
+        return str(requester)
 
 
 __all__ = [
@@ -654,6 +771,8 @@ __all__ = [
     "DecideStructuredSourceTrustService",
     "ImmutableStructuredSourceVerifier",
     "RequestStructuredSourceTrustService",
+    "SelfApprovalException",
+    "parse_self_approval_exception",
     "StructuredTrustConflict",
     "StructuredTrustError",
     "StructuredTrustForbidden",

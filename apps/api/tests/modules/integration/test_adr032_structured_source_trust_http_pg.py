@@ -17,6 +17,7 @@ from src.analysis.adapters.http import structured_source_trust_router as routes
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import Tenant, User
 from tests.modules.integration.test_adr032_structured_source_trust_pg import (
+    EXCEPTION,
     _approver,
     _document,
     _Storage,
@@ -69,7 +70,7 @@ async def test_http_request_decide_and_error_mapping(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # Self-approval without the audited exception -> 403 with the separation reason.
         own = await client.post("/api/v1/structured-source-trust/decisions", json=decision)
-        assert own.status_code == 403 and "separation of duties" in own.json()["detail"]["message"]
+        assert own.status_code == 403 and own.json()["detail"]["code"] == "SEPARATION_OF_DUTIES_REQUIRED"
         app.dependency_overrides[get_current_user] = lambda: approver
         stale = await client.post(
             "/api/v1/structured-source-trust/decisions", json={**decision, "artifact_version": 99}
@@ -78,6 +79,7 @@ async def test_http_request_decide_and_error_mapping(
         ok = await client.post("/api/v1/structured-source-trust/decisions", json=decision)
         assert ok.status_code == 200, ok.text
         assert ok.json()["trust_state"] == "trusted" and ok.json()["self_approved"] is False
+        assert ok.json()["independent"] is True
         assert ok.json()["authority"] == "EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST"
         again = await client.post("/api/v1/structured-source-trust/decisions", json=decision)
         assert again.status_code == 200 and again.json()["replayed"] is True
@@ -108,7 +110,7 @@ async def test_http_self_approval_exception_is_honoured_and_recorded(
     doc = await _document(db, w, tmp_path, storage)
     await db.execute(
         update(Tenant).where(Tenant.id == w["tenant"]).values(
-            settings={"trust_governance": {"structured_source_self_approval": True}}
+            settings={"trust_governance": {"structured_source_self_approval": EXCEPTION}}
         )
     )
     await db.commit()
@@ -127,6 +129,7 @@ async def test_http_self_approval_exception_is_honoured_and_recorded(
             "decision": "APPROVE", "idempotency_key": "http-adr032-self-dec", "reason": "Self approval, audited",
         })
     assert out.status_code == 200 and out.json()["self_approved"] is True
+    assert out.json()["independent"] is False
     assert (await db.scalar(select(Tenant.settings).where(Tenant.id == w["tenant"])))["trust_governance"]
 
 

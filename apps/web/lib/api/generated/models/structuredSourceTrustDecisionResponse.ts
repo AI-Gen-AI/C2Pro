@@ -47,6 +47,7 @@ export interface StructuredSourceTrustDecisionResponse {
   trust_state: StructuredSourceTrustDecisionResponseTrustState;
   review_status: string;
   self_approved: boolean;
+  independent: boolean;
   replayed: boolean;
   event_id: string;
   authority?: "EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST";

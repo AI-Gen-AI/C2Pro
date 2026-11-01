@@ -21640,6 +21640,10 @@
             "type": "boolean",
             "title": "Self Approved"
           },
+          "independent": {
+            "type": "boolean",
+            "title": "Independent"
+          },
           "replayed": {
             "type": "boolean",
             "title": "Replayed"
@@ -21670,6 +21674,7 @@
           "trust_state",
           "review_status",
           "self_approved",
+          "independent",
           "replayed",
           "event_id"
         ],
