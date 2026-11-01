@@ -13,7 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from scripts import seed_integral_uat as seed
@@ -61,12 +61,6 @@ async def test_s7_chain_on_isolated_postgres_passes_the_integral_verifier(
                 "trust_governance": {"structured_source_self_approval": exception},
             }
         )
-    )
-    # The baseline of the fixture is approved by the journey's human (as in the single-human tenant).
-    await db.execute(text("SET LOCAL session_replication_role = replica"))
-    await db.execute(
-        text("UPDATE wbs_baselines SET approved_by = cast(:a as uuid) WHERE id = cast(:b as uuid)"),
-        {"a": str(w["actor"]), "b": str(w["baseline"])},
     )
     await db.commit()
     actor = await db.get(User, w["actor"])
@@ -137,8 +131,16 @@ async def test_s7_chain_on_isolated_postgres_passes_the_integral_verifier(
     ctx = verifier._Ctx(facts, browser, expect)  # S7 only: the other stages need the full journey
     verifier._judge_s7(ctx)
     checks = ctx.checks
-    failed = [f"{c.name}: {c.detail}" for c in checks if not c.ok]
+    # The fixture baseline was applied by the tenant's ADMIN (a different human than the one who requested and
+    # decided the trust), through the governed fixture -- no row is rewritten and no trigger is bypassed. The
+    # verifier's single "approved by the journey's human" check is the one the integral run (one human) satisfies;
+    # here it must fail for exactly that reason and no other.
+    baseline_check = "the baseline was approved by the journey's human"
+    failed = [f"{c.name}: {c.detail}" for c in checks if not c.ok and c.name != baseline_check]
     assert failed == []
+    approver = next(b["approved_by"] for b in facts.baselines if str(b["project_id"]) == str(w["project"]))
+    baseline_approver = await db.get(User, approver)  # an active user of tenant A (just not the journey's human)
+    assert baseline_approver is not None and baseline_approver.tenant_id == w["tenant"] and baseline_approver.is_active
     assert len(checks) >= 40  # the structured-trust chain is actually judged, not skipped
     manifest = verifier.build_manifest(browser, checks, {}, {"candidate_sha": "a" * 40})
     assert manifest["structured_trust_independence"] == "SELF_APPROVED_NOT_INDEPENDENT"
