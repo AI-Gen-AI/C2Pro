@@ -11,7 +11,8 @@ application, for the SAME project id the browser recorded (and for the second te
       contract has exactly revisions A and B;
 * S3  the worker completed the graph, a project snapshot carries six Health assessments, and the persisted alerts
       include the expected deterministic findings;
-* S4  an alert's source clause belongs to a revision of the contract document;
+* S4  an alert's source clause belongs to a revision of the contract document, and a Budget pointer names the exact
+      stored row (document, revision, locator, SHA-256);
 * S5  the contract and the specification were APPROVED by a named human on a review bound to the exact artifact;
       the draft specification review is REJECTED with the typed reason (by SHA-256) and nothing of it is trusted;
 * S6  revision A is trusted-and-superseded, revision B is the active trusted artifact, nothing is left proposed and
@@ -361,6 +362,43 @@ def _judge_s4(c: _Ctx) -> None:
         len(resolved) > 0,
         f"{len(resolved)}/{len(with_clause)}",
     )
+    # A finding that rests on a Budget row points at the EXACT stored row: the budget document, one of ITS revisions,
+    # an exact "Sheet!row" locator and the SHA-256 of that revision's stored bytes.
+    budget_id = c.doc("budget")
+    budget_revisions = {
+        str(r["revision_id"]): str(r["blob_hash"]) for r in c.revisions_of.get(budget_id, [])
+    }
+    pointers = [
+        p
+        for a in c.alerts
+        for p in _structured_pointers(a)
+        if p.get("family") == "budget"
+    ]
+    exact = [
+        p
+        for p in pointers
+        if str(p.get("document_id")) == budget_id
+        and budget_revisions.get(str(p.get("revision_id"))) == p.get("blob_sha256")
+        and "!" in str(p.get("source_locator", ""))
+    ]
+    c.add(
+        "S4",
+        "an alert points at the exact Budget row (document, revision, locator, SHA-256)",
+        len(exact) > 0,
+        f"{len(exact)}/{len(pointers)}",
+    )
+
+
+def _structured_pointers(alert: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = alert.get("alert_metadata")
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except ValueError:
+            return []
+    evidence = (metadata or {}).get("detection_evidence") if isinstance(metadata, dict) else None
+    sources = evidence.get("structured_sources") if isinstance(evidence, dict) else None
+    return [p for p in (sources or []) if isinstance(p, dict)]
 
 
 def _approved_reviews_of(c: _Ctx, artifact: dict[str, Any]) -> list[dict[str, Any]]:
@@ -904,7 +942,7 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
     )
     facts.alerts = await _rows(
         conn,
-        "SELECT project_id, tenant_id, rule_id AS rule_code, status::text AS status, source_clause_id FROM alerts WHERE project_id = :p",
+        "SELECT project_id, tenant_id, rule_id AS rule_code, status::text AS status, source_clause_id, alert_metadata FROM alerts WHERE project_id = :p",
         **pa,
     )
     clause_ids = [a["source_clause_id"] for a in facts.alerts if a["source_clause_id"]]

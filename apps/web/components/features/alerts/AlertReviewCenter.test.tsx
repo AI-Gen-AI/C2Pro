@@ -40,6 +40,47 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     expect(screen.getByRole("columnheader", { name: /assignee/i })).toBeInTheDocument();
   });
 
+  it("[S4] links an alert to the exact original Budget row / Schedule activity with its locator and SHA-256", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj 1"
+        alerts={[
+          {
+            id: "a-s4",
+            title: "Budget exceeds contract",
+            severity: "high",
+            status: "pending",
+            structuredSources: [
+              { family: "budget", documentId: "doc-b", revisionId: "rev-b", sourceLocator: "Presupuesto!3", blobSha256: "a".repeat(64) },
+              { family: "schedule", documentId: "doc-s", revisionId: "rev-s", sourceLocator: "Plan!4" },
+            ],
+          },
+        ]}
+      />,
+    );
+    const list = screen.getByTestId("alert-structured-sources-a-s4");
+    const budget = screen.getByRole("link", { name: "View original budget row Presupuesto!3" });
+    expect(budget).toHaveAttribute(
+      "href",
+      "/projects/proj%201/evidence?documentId=doc-b&revisionId=rev-b&locator=Presupuesto!3&expectedHash=" + "a".repeat(64),
+    );
+    expect(screen.getByRole("link", { name: "View original schedule activity Plan!4" })).toHaveAttribute(
+      "href",
+      "/projects/proj%201/evidence?documentId=doc-s&revisionId=rev-s&locator=Plan!4",
+    );
+    expect(list).toHaveTextContent("Budget row Presupuesto!3");
+  });
+
+  it("[S4] an alert without any structured pointer shows none and invents none", () => {
+    render(
+      <AlertReviewCenter
+        projectId="p"
+        alerts={[{ id: "a-plain", title: "Clause only", severity: "low", status: "pending" }]}
+      />,
+    );
+    expect(screen.queryByTestId("alert-structured-sources-a-plain")).not.toBeInTheDocument();
+  });
+
   it("[TASK-FRT-178] renders honest placeholders when backend alerts have no clause or assignee", () => {
     render(
       <AlertReviewCenter

@@ -142,6 +142,7 @@ def assemble_cross_doc_inputs(
     """
     contract_totals: list[float] = []
     budget_totals: list[float] = []
+    budget_total_sources: list[tuple[float, Mapping[str, str]]] = []
     leaf_sum = 0.0
     leaf_seen = False
     currency: str | None = None
@@ -167,6 +168,14 @@ def assemble_cross_doc_inputs(
         stated_total = _num(data.get("stated_total"))
         if stated_total is not None:
             budget_totals.append(stated_total)
+            declared_source = data.get("stated_total_source")
+            if isinstance(declared_source, Mapping) and all(
+                isinstance(declared_source.get(k), str) and declared_source.get(k)
+                for k in ("family", "document_id", "revision_id", "source_locator")
+            ):
+                budget_total_sources.append(
+                    (stated_total, {k: str(v) for k, v in declared_source.items() if isinstance(v, str)})
+                )
             budget_currencies |= _side_currencies(data, "budget_currencies", clause_currency)
 
         items = data.get("budget_items")
@@ -187,6 +196,14 @@ def assemble_cross_doc_inputs(
     return ProjectCrossDocInputs(
         contract_total=max(contract_totals) if contract_totals else None,
         budget_total=max(budget_totals) if budget_totals else None,
+        # The source row belongs to the SAME clause whose figure is the maximum used by the comparators.
+        budget_total_source=(
+            max(budget_total_sources, key=lambda pair: pair[0])[1]
+            if budget_total_sources
+            and budget_totals
+            and max(budget_total_sources, key=lambda pair: pair[0])[0] == max(budget_totals)
+            else None
+        ),
         budget_leaf_sum=leaf_sum if leaf_seen else None,
         currency=currency,
         contract_currencies=frozenset(contract_currencies),

@@ -39,6 +39,7 @@ from src.coherence.feature_flags import (
     coherence_v2_enabled_for_tenant,
 )
 from src.coherence.graph.nodes import v1_unassessed_reasons
+from src.coherence.models import structured_source_refs
 from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
@@ -709,16 +710,27 @@ def _coherence_alert_to_create(
     # document association. A stale, external or synthetic locator must not
     # promote caller-supplied clause.data["document_id"] into alert provenance.
     source_document_id = verified_document_ids[0] if verified_document_ids else None
-    detection_evidence = (
-        {
+    detection_evidence: dict[str, Any] | None = None
+    if evidence is not None:
+        detection_evidence = {
             "source_clause_id": source_locator or None,
             "source_document_id": source_document_id,
             "claim": str(getattr(evidence, "claim", "") or ""),
             "quote": str(getattr(evidence, "quote", "") or ""),
         }
-        if evidence is not None
-        else None
-    )
+        # S4: pointers to the original Budget rows / Schedule activities the finding rests on; they come from the
+        # parser's own observation, and every reader re-verifies them (tenant, bytes, authority) before showing a cell.
+        pointers = [
+            ref.model_dump(mode="json")
+            for ref in structured_source_refs(
+                [
+                    s.model_dump(mode="json") if hasattr(s, "model_dump") else s
+                    for s in (getattr(evidence, "structured_sources", None) or [])
+                ]
+            )
+        ]
+        if pointers:
+            detection_evidence["structured_sources"] = pointers
     affected_entities: dict[str, Any] = {}
     if verified_document_ids:
         affected_entities["documents"] = verified_document_ids

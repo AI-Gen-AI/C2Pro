@@ -1823,6 +1823,7 @@ async def _ingest_owned(
             currencies=(
                 _extract_budget_currencies(parsed_payload) if stated_total is not None else None
             ),
+            source_locator=getattr(parsed_payload.get("budget"), "stated_total_locator", None),
         )
     if document.document_type == DocumentType.SCHEDULE:
         # The schedule's planned finish as a sourced observation of THIS pinned revision (or

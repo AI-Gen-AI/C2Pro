@@ -104,6 +104,16 @@ class BulkResolveRequest(BaseModel):
     root_cause: str | None = None
 
 
+class StructuredSourceReference(BaseModel):
+    """S4: ONE original Budget row / Schedule activity a finding rests on (revision-bound, hash-carrying)."""
+
+    family: str
+    document_id: str
+    revision_id: str
+    source_locator: str
+    blob_sha256: str | None = None
+
+
 class DetectionEvidenceResponse(BaseModel):
     """Detector-produced provenance; distinct from reviewer-attached evidence."""
 
@@ -111,6 +121,7 @@ class DetectionEvidenceResponse(BaseModel):
     source_document_id: str | None = None
     claim: str = ""
     quote: str = ""
+    structured_sources: list[StructuredSourceReference] = Field(default_factory=list)
 
 
 class AlertResponse(BaseModel):

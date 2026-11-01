@@ -35,6 +35,11 @@ class BudgetRows(list[dict[str, Any]]):
     ) -> None:
         super().__init__(rows or [])
         self.stated_total = stated_total
+        # S4: WHERE the declared total sits in the source (``Sheet!row``), so a finding that rests on it can point at
+        # the exact original row. ``declared_total_rows`` keeps every such row (the declared-total row is not a line
+        # item and is not among the rows), each with its label and cell values as parsed.
+        self.stated_total_locator: str | None = None
+        self.declared_total_rows: list[dict[str, Any]] = []
         # Denominations stated in the Currency column (lines and declared total),
         # so a stated total is never compared across currencies without one.
         self.currencies: set[str] = set()
@@ -394,6 +399,21 @@ class ExcelFileParser:
                 stated_total = self._extract_declared_total(row_data)
                 if stated_total is not None:
                     budget_data.stated_total = stated_total
+                    declared_locator = f"{sheet.title}!{row_index}"
+                    budget_data.stated_total_locator = declared_locator
+                    budget_data.declared_total_rows.append(
+                        {
+                            "source_locator": declared_locator,
+                            "kind": "declared_total",
+                            "item": str(row_data.get("item") or "").strip(),
+                            "total": stated_total,
+                            "currency": (
+                                str(row_data.get("currency")).strip().upper()
+                                if isinstance(row_data.get("currency"), str) and str(row_data.get("currency")).strip()
+                                else None
+                            ),
+                        }
+                    )
                     continue
                 quantity: float | Decimal | None
                 unit_price: float | Decimal | None

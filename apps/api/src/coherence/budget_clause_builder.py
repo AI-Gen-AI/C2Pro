@@ -60,7 +60,11 @@ async def load_contract_total(db: AsyncSession, project_id: UUID, tenant_id: UUI
 # not count (B1 canonical-alert spec §3: PROPOSED evidence never moves canonical alerts or score).
 _BUDGET_DECLARATION_SQL = text(f"""
     SELECT (e.entry->>'total')::numeric AS amt,
-           e.entry->'currencies' AS currencies
+           e.entry->'currencies' AS currencies,
+           d.id AS document_id,
+           cur.revision_id AS revision_id,
+           e.entry->>'blob_hash' AS blob_hash,
+           e.entry->>'source_locator' AS source_locator
     FROM documents d
     CROSS JOIN LATERAL {current_revision_lateral("d.id", "d.tenant_id")} AS cur
     CROSS JOIN LATERAL (
@@ -138,6 +142,17 @@ async def build_budget_clauses(
         # total-level rule pass) must not make BUDGET read as assessed / clean.
         "assessment_unavailable": {"BUDGET": STRUCTURED_BUDGET_SOURCE_UNAVAILABLE},
     }
+    # S4: where the declared total sits in the trusted-current revision's ORIGINAL bytes. Present only when the parser
+    # observed the row; a figure without a locator keeps no pointer (nothing is guessed).
+    declared_locator = declaration[5] if declaration is not None and len(declaration) > 5 else None
+    if declaration is not None and declared_locator:
+        data["stated_total_source"] = {
+            "family": "budget",
+            "document_id": str(declaration[2]),
+            "revision_id": str(declaration[3]),
+            "blob_sha256": declaration[4],
+            "source_locator": str(declared_locator),
+        }
     contract_total = await load_contract_total(db, project_id, tenant_id)
     if contract_total is not None:
         data["contract_total"] = contract_total

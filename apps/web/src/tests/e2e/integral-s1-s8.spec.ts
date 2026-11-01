@@ -94,11 +94,6 @@ const REJECTION_REASON =
  */
 const PRODUCT_GAPS = [
   {
-    stage: "S4",
-    gap: "an alert leads to its contract clause; the Budget row and the Schedule activity it also rests on are named in the evidence text, not linked",
-    minimalCorrection: "carry the source locator (sheet!row) of each cited structured row in detection_evidence and render it as a link to the revision",
-  },
-  {
     stage: "S5",
     gap: "granular per-finding decisions (CONFIRMED / DISMISSED) exist as a use case over an append-only ledger but have no HTTP route and no UI control",
     minimalCorrection: "expose RecordFindingDecisionUseCase as POST /hitl/queue/{item}/findings/{finding}/decision and add the controls to the review card; a run also needs a provider that yields findings",
@@ -114,7 +109,7 @@ const TITLES: Record<StageId, string> = {
   S1: "Two Clerk identities in different tenants; project created through the UI; foreign tenant denied",
   S2: "Four sources uploaded through the dialog with pinned bytes; unsupported file refused",
   S3: "Six-dimension Health, honest Score with reason, persisted alerts",
-  S4: "An alert leads to its trusted source revision",
+  S4: "An alert leads to its trusted source revision and the exact original Budget/Schedule row",
   S5: "Human decisions: final approvals, a rejection with a reason, a rejected proposal never trusted",
   S6: "Contract revision B: pending next to trusted A, What Changed, Current State, approval",
   S7: "Approved canonical WBS, human trust decisions on Budget and Schedule, three human-approved source links",
@@ -125,7 +120,7 @@ const REQUIRED: Partial<Record<StageId, string[]>> = {
   S1: ["tenant-a-identity", "tenant-b-identity", "tenants-differ", "project-a-created", "project-b-created", "a-to-b-denied", "b-to-a-denied"],
   S2: ["unsupported-refused", "contract-uploaded", "budget-uploaded", "schedule-uploaded", "specification-uploaded", "rejected-candidate-uploaded", "bytes-pinned"],
   S3: ["health-six-dimensions", "evaluated", "score-honest", "alerts-persisted"],
-  S4: ["alert-opened", "source-resolved"],
+  S4: ["alert-opened", "source-resolved", "budget-row-opened", "budget-row-verified"],
   S5: ["contract-approved", "specification-approved", "candidate-rejected", "rejected-never-trusted"],
   S6: ["revision-b-pending", "a-still-trusted", "what-changed", "current-state-pending", "revision-b-approved", "current-state-approved"],
   S7: ["wbs-approved", "trust-budget", "trust-schedule", "link-budget", "link-schedule", "link-technical", "links-current", "wbs-view-persisted"],
@@ -496,8 +491,51 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.check("that clause belongs to the TRUSTED revision of the contract", resolved.length > 0, `${resolved.length}/${withClause.length} resolved`);
         ledger.evidence("provenance", { alerts: withClause.length, resolvedToTrustedRevision: resolved.length, trustedRevisionId: revisionA });
         if (resolved.length > 0) ledger.milestone("source-resolved");
-        // Honest scope: only the clause is a first-class link; the budget/schedule row is named in the evidence text.
-        ledger.partial("alert → source is a clause link; the budget/schedule row is named in the evidence text, not linked");
+        // S4 (Budget / Schedule): the finding points at the EXACT original row, through the product UI, verified server-side.
+        const pointers = alerts.flatMap((a) => a.structuredSources.map((p) => ({ alertId: a.id, ...p })));
+        const budgetPointers = pointers.filter((p) => p.family === "budget");
+        ledger.check("an alert points at the original Budget row", budgetPointers.length > 0, `${pointers.length} pointer(s), ${budgetPointers.length} budget`);
+        const budgetSha = pinnedSha(FILES.budget);
+        const pointer = budgetPointers[0];
+        if (pointer) {
+          ledger.check(
+            "the pointer names the stored Budget document, its revision, the exact locator and the pinned SHA-256",
+            pointer.documentId === state.budget?.documentId && pointer.revisionId.length > 0 && /^[^!]+![0-9]+$/.test(pointer.sourceLocator) && pointer.blobSha256 === budgetSha,
+            `${pointer.sourceLocator} ${pointer.blobSha256 ?? "no-sha"}`,
+          );
+          await openProjectTab(pageA, projectId, "alerts");
+          const link = pageA.getByRole("link", { name: `View original budget row ${pointer.sourceLocator}` }).first();
+          await expect(link, "the Alerts screen links the Budget row").toBeVisible({ timeout: 30_000 });
+          await link.click();
+          await pageA.waitForURL(new RegExp(`/projects/${projectId}/evidence\\?documentId=.*locator=`), { timeout: 30_000 });
+          const panel = pageA.getByTestId("structured-source-row");
+          await expect(panel, "the exact original row is shown").toBeVisible({ timeout: 30_000 });
+          await expect(pageA.getByTestId("structured-source-refused")).toHaveCount(0);
+          const shown = ((await pageA.getByTestId("structured-source-sha").textContent()) ?? "").toLowerCase();
+          const cells = ((await pageA.getByTestId("structured-source-cells").textContent()) ?? "").trim();
+          ledger.check("the panel shows the pinned SHA-256 and the row's cells", shown.includes(budgetSha) && cells.length > 0, `${cells.length} chars of cells`);
+          await recorder.screenshot(pageA, "s4-budget-row");
+          ledger.milestone("budget-row-opened");
+
+          // The server re-verifies every read: the same pointer answers 200 for A, and is refused without content otherwise.
+          const url = `/api/v1/documents/${pointer.documentId}/revisions/${pointer.revisionId}/structured-source-rows`;
+          const query = `locator=${encodeURIComponent(pointer.sourceLocator)}`;
+          const ok = await callApi(pageA, `${url}?${query}&expected_blob_hash=${budgetSha}`);
+          ledger.check("the row endpoint serves the verified row to its own tenant", ok.status === 200, `HTTP ${ok.status}`);
+          const stale = await callApi(pageA, `${url}?${query}&expected_blob_hash=${"0".repeat(64)}`);
+          ledger.check("a stale pointer (other bytes) is refused with no row content", stale.status === 409 && !JSON.stringify(stale.data).includes('"row"'), `HTTP ${stale.status}`);
+          const foreign = await callApi(tenantB!.page, `${url}?${query}&expected_blob_hash=${budgetSha}`);
+          ledger.check("the other tenant gets 404 and no row content", foreign.status === 404 && !JSON.stringify(foreign.data).includes('"row"'), `HTTP ${foreign.status}`);
+          const missing = await callApi(pageA, `${url}?locator=${encodeURIComponent("NoSuchSheet!999")}`);
+          ledger.check("a locator that names no row is refused", missing.status === 409 || missing.status === 404, `HTTP ${missing.status}`);
+          if (ok.status === 200 && stale.status === 409 && foreign.status === 404) ledger.milestone("budget-row-verified");
+        }
+        const schedulePointers = pointers.filter((p) => p.family === "schedule");
+        ledger.evidence("structured_sources", { total: pointers.length, budget: budgetPointers.length, schedule: schedulePointers.length });
+        if (schedulePointers.length === 0) {
+          // A Schedule pointer exists only when a finding actually rests on an activity; the fixtures decide, not the runner.
+          ledger.evidence("schedule_pointer_scope", "no alert rests on a Schedule activity in this run; the Schedule pointer path is covered by the parser/PG tests");
+        }
       });
 
       // ═══ S6: revision B ═════════════════════════════════════════════════════════════════════════════════

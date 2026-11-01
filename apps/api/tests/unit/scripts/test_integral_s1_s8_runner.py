@@ -371,6 +371,19 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
                 "rule_code": rule,
                 "status": "open",
                 "source_clause_id": clause,
+                "alert_metadata": {
+                    "detection_evidence": {
+                        "structured_sources": [
+                            {
+                                "family": "budget",
+                                "document_id": docs["budget"],
+                                "revision_id": str(revision_of["budget"]),
+                                "source_locator": "Budget!7",
+                                "blob_sha256": shas["budget"],
+                            }
+                        ]
+                    }
+                },
             }
             for rule in TRIPLET["expected_rules"]
         ],
@@ -494,6 +507,25 @@ def test_an_alert_clause_outside_the_contract_fails_s4() -> None:
     facts, browser, expect = _world()
     facts.clause_revisions = {key: str(uuid4()) for key in facts.clause_revisions}
     assert "S4:the clause belongs to a revision of the contract" in _failed(facts, browser, expect)
+
+
+def test_an_alert_without_an_exact_budget_pointer_fails_s4() -> None:
+    facts, browser, expect = _world()
+    for alert in facts.alerts:
+        alert["alert_metadata"] = {}
+    assert "S4:an alert points at the exact Budget row (document, revision, locator, SHA-256)" in _failed(
+        facts, browser, expect
+    )
+
+
+def test_a_budget_pointer_with_other_bytes_fails_s4() -> None:
+    facts, browser, expect = _world()
+    for alert in facts.alerts:
+        for pointer in alert["alert_metadata"]["detection_evidence"]["structured_sources"]:
+            pointer["blob_sha256"] = "0" * 64
+    assert "S4:an alert points at the exact Budget row (document, revision, locator, SHA-256)" in _failed(
+        facts, browser, expect
+    )
 
 
 def test_real_mode_demands_a_provider_call_and_recorded_spend() -> None:
@@ -1423,7 +1455,7 @@ def test_product_gaps_travel_into_the_manifest_next_to_their_stage() -> None:
 
 def test_the_spec_states_the_known_product_gaps_and_never_hides_them() -> None:
     source = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text()
-    for stage in ("S4", "S5", "S7"):
+    for stage in ("S5", "S7"):
         assert f'stage: "{stage}"' in source
     assert "RecordFindingDecisionUseCase" in source
     assert "ADR-032" in source

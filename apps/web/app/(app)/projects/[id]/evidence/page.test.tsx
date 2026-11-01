@@ -60,6 +60,18 @@ vi.mock("@/lib/api/generated/documents/documents", () => ({
 
 // The revision inspector has independent hook/authority tests; keep this
 // existing canonical-graph test focused on its trusted-current projection.
+vi.mock("@/components/features/evidence/StructuredSourceRowPanel", () => ({
+  StructuredSourceRowPanel: (props: { documentId: string; revisionId: string; locator: string; expectedBlobHash?: string | null }) => (
+    <div
+      data-testid="structured-source-row-mock"
+      data-document={props.documentId}
+      data-revision={props.revisionId}
+      data-locator={props.locator}
+      data-hash={props.expectedBlobHash ?? ""}
+    />
+  ),
+}));
+
 vi.mock("@/components/features/evidence/EvidenceRevisionHistoryPanel", () => ({
   EvidenceRevisionHistoryPanel: () => null,
 }));
@@ -292,6 +304,28 @@ describe("EvidencePage highlight mapping", () => {
       severity: "high",
       status: "resolved",
     });
+  });
+
+  it("S4 — a Budget/Schedule reference opens the verified original row with its exact locator and hash", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-b", revisionId: "rev-b", locator: "Presupuesto!3", expectedHash: "a".repeat(64),
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    const panel = screen.getByTestId("structured-source-row-mock");
+    expect(panel).toHaveAttribute("data-document", "doc-b");
+    expect(panel).toHaveAttribute("data-revision", "rev-b");
+    expect(panel).toHaveAttribute("data-locator", "Presupuesto!3");
+    expect(panel).toHaveAttribute("data-hash", "a".repeat(64));
+  });
+
+  it("S4 — a locator without its revision opens no row (nothing is guessed from a partial reference)", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({ documentId: "doc-b", locator: "Presupuesto!3" } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.queryByTestId("structured-source-row-mock")).not.toBeInTheDocument();
   });
 
   it("S5 — returns from inspected source evidence to the exact review in the same project", () => {

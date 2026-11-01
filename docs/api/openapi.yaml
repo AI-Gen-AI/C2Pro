@@ -4640,6 +4640,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/documents/{document_id}/revisions/{revision_id}/structured-source-rows:
+    get:
+      tags:
+      - Structured source rows
+      summary: Read the exact original Budget row / Schedule activity a reference
+        names
+      operationId: read_structured_source_row_api_v1_documents__document_id__revisions__revision_id__structured_source_rows_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Document Id
+      - name: revision_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Revision Id
+      - name: locator
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 500
+          title: Locator
+      - name: expected_blob_hash
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^[0-9a-f]{64}$
+          - type: 'null'
+          title: Expected Blob Hash
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuredSourceRowResponse'
+        '401':
+          description: Authentication required
+        '404':
+          description: Unknown document/revision, or one of another tenant
+        '409':
+          description: Stale reference (other bytes or not the current revision) or
+            unreadable original
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/documents/{document_id}/revisions/{revision_id}/trust-candidate:
     post:
       tags:
@@ -7982,6 +8043,11 @@ components:
           type: string
           title: Quote
           default: ''
+        structured_sources:
+          items:
+            $ref: '#/components/schemas/StructuredSourceReference'
+          type: array
+          title: Structured Sources
       type: object
       title: DetectionEvidenceResponse
       description: Detector-produced provenance; distinct from reviewer-attached evidence.
@@ -8863,6 +8929,11 @@ components:
           type: string
           title: Quote
           description: The direct quote from the clause text that serves as evidence.
+        structured_sources:
+          items:
+            $ref: '#/components/schemas/StructuredSourceRef'
+          type: array
+          title: Structured Sources
       type: object
       required:
       - source_clause_id
@@ -12130,6 +12201,123 @@ components:
       - source_domain
       - evidence_tier
       title: StakeholdersSection
+    StructuredSourceRef:
+      properties:
+        family:
+          type: string
+          enum:
+          - budget
+          - schedule
+          title: Family
+        document_id:
+          type: string
+          title: Document Id
+        revision_id:
+          type: string
+          title: Revision Id
+        source_locator:
+          type: string
+          title: Source Locator
+        blob_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blob Sha256
+      type: object
+      required:
+      - family
+      - document_id
+      - revision_id
+      - source_locator
+      title: StructuredSourceRef
+      description: 'S4: a pointer to ONE original Budget row / Schedule activity a
+        deterministic finding rests on.
+
+
+        Built only from what the parser observed in an immutable revision (document,
+        revision, ``Sheet!row``, SHA-256),
+
+        never from model text. It is verified again, in the reader''s tenant, before
+        any cell is shown.'
+    StructuredSourceReference:
+      properties:
+        family:
+          type: string
+          title: Family
+        document_id:
+          type: string
+          title: Document Id
+        revision_id:
+          type: string
+          title: Revision Id
+        source_locator:
+          type: string
+          title: Source Locator
+        blob_sha256:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Blob Sha256
+      type: object
+      required:
+      - family
+      - document_id
+      - revision_id
+      - source_locator
+      title: StructuredSourceReference
+      description: 'S4: ONE original Budget row / Schedule activity a finding rests
+        on (revision-bound, hash-carrying).'
+    StructuredSourceRowResponse:
+      properties:
+        family:
+          type: string
+          enum:
+          - budget
+          - schedule
+          title: Family
+        document_id:
+          type: string
+          format: uuid
+          title: Document Id
+        revision_id:
+          type: string
+          format: uuid
+          title: Revision Id
+        rev_no:
+          type: integer
+          title: Rev No
+        source_locator:
+          type: string
+          title: Source Locator
+        blob_sha256:
+          type: string
+          title: Blob Sha256
+        authority:
+          type: string
+          enum:
+          - TRUSTED_CURRENT
+          - UNTRUSTED_SINGLE_REVISION
+          title: Authority
+        row:
+          additionalProperties: true
+          type: object
+          title: Row
+        source_assessment:
+          type: string
+          const: NOT_ASSESSED
+          title: Source Assessment
+          default: NOT_ASSESSED
+      type: object
+      required:
+      - family
+      - document_id
+      - revision_id
+      - rev_no
+      - source_locator
+      - blob_sha256
+      - authority
+      - row
+      title: StructuredSourceRowResponse
     StructuredSourceTrustDecisionResponse:
       properties:
         artifact_id:

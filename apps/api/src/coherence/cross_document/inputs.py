@@ -10,6 +10,7 @@ Refers to Suite ID: TS-UD-COH-XDOC-INPUTS-001.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 # Date kinds. Only a contractual COMPLETION deadline is comparable with the schedule's
@@ -48,6 +49,8 @@ class ProjectCrossDocInputs:
 
     contract_total: float | None = None  # contractual price (from the contract)
     budget_total: float | None = None  # stated total (from the budget)
+    # S4: the exact original row the stated total was read from (family, document, revision, SHA-256, ``Sheet!row``).
+    budget_total_source: Mapping[str, str] | None = None
     budget_leaf_sum: float | None = None  # sum of budget line items
     wbs_total: float | None = None  # sum of WBS work-package costs
     bom_total: float | None = None  # sum of BOM line costs

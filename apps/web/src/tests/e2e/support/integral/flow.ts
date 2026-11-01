@@ -408,6 +408,28 @@ export interface AlertRow {
   ruleCode: string;
   status: string;
   sourceClauseId: string | null;
+  /** Pointers to the original Budget rows / Schedule activities the finding rests on (S4). */
+  structuredSources: StructuredSourcePointer[];
+}
+
+export interface StructuredSourcePointer {
+  family: string;
+  documentId: string;
+  revisionId: string;
+  sourceLocator: string;
+  blobSha256: string | null;
+}
+
+function pointersOf(raw: unknown): StructuredSourcePointer[] {
+  const evidence = (raw ?? {}) as Json;
+  const list = Array.isArray(evidence.structured_sources) ? (evidence.structured_sources as Json[]) : [];
+  return list.map((item) => ({
+    family: str(item.family),
+    documentId: str(item.document_id),
+    revisionId: str(item.revision_id),
+    sourceLocator: str(item.source_locator),
+    blobSha256: strOrNull(item.blob_sha256),
+  }));
 }
 
 export async function readAlerts(page: Page, projectId: string): Promise<AlertRow[]> {
@@ -419,6 +441,7 @@ export async function readAlerts(page: Page, projectId: string): Promise<AlertRo
       ruleCode: str(row.rule_code),
       status: str(row.status),
       sourceClauseId: strOrNull(row.source_clause_id),
+      structuredSources: pointersOf(row.detection_evidence),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 }

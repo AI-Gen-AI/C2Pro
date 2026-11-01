@@ -9,6 +9,7 @@ import { type ExtractedEntity } from "@/components/evidence";
 import { EvidenceActionDialog } from "@/components/features/evidence/EvidenceActionDialog";
 import { EvidenceDocumentsCard } from "@/components/features/evidence/EvidenceDocumentsCard";
 import { EvidenceHeader } from "@/components/features/evidence/EvidenceHeader";
+import { StructuredSourceRowPanel } from "@/components/features/evidence/StructuredSourceRowPanel";
 import { EvidenceRevisionHistoryPanel } from "@/components/features/evidence/EvidenceRevisionHistoryPanel";
 import { EvidenceTemplateDialog } from "@/components/features/evidence/EvidenceTemplateDialog";
 import { EvidenceWorkspace } from "@/components/features/evidence/EvidenceWorkspace";
@@ -99,6 +100,9 @@ export default function EvidencePage() {
   const requestedDocumentId = searchParams.get("documentId");
   const requestedHighlightId = searchParams.get("highlightId");
   const requestedRevisionId = searchParams.get("revisionId");
+  // S4: a Budget row / Schedule activity reference (exact locator + the SHA-256 the finding was raised on).
+  const requestedLocator = searchParams.get("locator");
+  const requestedExpectedHash = searchParams.get("expectedHash");
   // Return path is constructed locally from the authenticated project scope,
   // never from a user-supplied full URL (no open redirects or cross-project jump).
   const returnReviewItemId = searchParams.get("returnReviewItemId");
@@ -977,6 +981,15 @@ export default function EvidencePage() {
         >
           Back to this review
         </Link>
+      ) : null}
+
+      {requestedDocumentId && requestedRevisionId && requestedLocator ? (
+        <StructuredSourceRowPanel
+          documentId={requestedDocumentId}
+          revisionId={requestedRevisionId}
+          locator={requestedLocator}
+          expectedBlobHash={requestedExpectedHash}
+        />
       ) : null}
 
       <EvidenceRevisionHistoryPanel documentId={selectedDocumentId} projectId={id} />

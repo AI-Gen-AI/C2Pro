@@ -37,6 +37,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { StructuredSourceRef } from "./structuredSourceRef";
 
 /**
  * Represents the specific evidence supporting an alert.
@@ -48,4 +49,5 @@ export interface Evidence {
   claim: string;
   /** The direct quote from the clause text that serves as evidence. */
   quote: string;
+  structured_sources?: StructuredSourceRef[];
 }

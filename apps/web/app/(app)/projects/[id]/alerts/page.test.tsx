@@ -156,6 +156,44 @@ describe("Project alerts route", () => {
     expect(screen.queryByText(/clause-alert-1/i)).not.toBeInTheDocument();
   });
 
+  it("S4: carries only well-formed Budget/Schedule source pointers from the persisted detection evidence", async () => {
+    useProjectAlertsQueryMock.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "alert-s4",
+            project_id: "proj-real-42",
+            tenant_id: "tenant-1",
+            rule_code: "DET-CRS-CONBUD",
+            category: "BUDGET",
+            severity: "high",
+            message: "Budget exceeds contract",
+            status: "open",
+            detection_evidence: {
+              claim: "budget_total exceeds contract_total",
+              structured_sources: [
+                { family: "budget", document_id: "d-1", revision_id: "r-1", source_locator: "Presupuesto!3", blob_sha256: "a".repeat(64) },
+                { family: "contract", document_id: "d-2", revision_id: "r-2", source_locator: "x" },
+                { family: "budget", document_id: "d-1", revision_id: "r-1", source_locator: "" },
+              ],
+            },
+            created_at: "2026-11-01T00:00:00Z",
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    renderWithProviders(<AlertsPage />);
+
+    await waitFor(() => expect(alertReviewCenterMock).toHaveBeenCalled());
+    const [mapped] = alertReviewCenterMock.mock.calls[0][0].alerts;
+    expect(mapped.structuredSources).toEqual([
+      { family: "budget", documentId: "d-1", revisionId: "r-1", sourceLocator: "Presupuesto!3", blobSha256: "a".repeat(64) },
+    ]);
+  });
+
   it("maps canonical persisted alert states after reload", () => {
     useProjectAlertsQueryMock.mockReturnValue({
       data: {

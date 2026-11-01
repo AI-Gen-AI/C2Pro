@@ -36,7 +36,7 @@ A step is **PASS** only with evidence of the class named in the verdict, tied to
 | S1 | Log in with Clerk; create the project. | Session after login, project id, tenant id; tenant B cannot read the project (401/403/404). |
 | S2 | Upload the four documents through the dialog; upload the unsupported file. | Four document ids with revision ids and SHA-256 of stored bytes (database read); the backend rejects the unsupported format. |
 | S3 | Evaluate. | Six-dimension Health with unmeasured dimensions `null/UNKNOWN`; Score `null` with a reason when evidence is insufficient (e.g. `contract_pending_approval`, TECHNICAL unmeasured); alerts persisted; no invented value; Score and Alerts unchanged by a pending contract. |
-| S4 | Open an alert, follow its source link. | Link resolves to the trusted revision of the right project/tenant; where no row-level link exists the UI states the limitation. |
+| S4 | Open an alert, follow its source link. | Link resolves to the trusted revision of the right project/tenant; a Budget/Schedule finding also links the exact original row (document, revision, `Sheet!row`, SHA-256), re-verified by the API on every read; stale or foreign pointers are refused without content. |
 | S5 | Review each item (granular), then the separate final human act; also reject one item. | Per-item decisions with decider and reason; final approval is a distinct act; the rejected item leaves no trusted artifact. |
 | S6 | Upload revision B of a document; do not approve; then approve. | What Changed and Current State while B is pending (A trusted, B pending) and after approval; hashes match the fixtures. |
 | S7 | Approved WBS; Budget, Schedule, Technical linked to it. | Each link names source revision, row/activity/clause locator and the approved WBS baseline and node, with the human approver. Until the canonical link writer exists this step is `PARTIAL` at best. |
@@ -90,7 +90,7 @@ Declared limits (reported in every manifest, never hidden):
   tenant A's row only; each decision is recorded as `self_approved` and the manifest reports
   `structured_trust_independence = SELF_APPROVED_NOT_INDEPENDENT`;
 * granular per-finding decisions have no HTTP route or UI, so they are not exercised in the browser (S5 is `PARTIAL`);
-* the alert → source link is the contract clause; budget/schedule rows are named in the evidence text (S4 is `PARTIAL`);
+* the alert → source link covers the contract clause AND the original Budget row (S4 `PASS` requires a Budget pointer whose SHA-256 equals the stored revision; a Schedule pointer exists only when a finding rests on an activity);
 * the verdict `NOT_ACCEPTED_UNTIL_INDEPENDENT_REVIEW` is fixed: the runner never accepts itself.
 
 Another tenant's project answers 404 on every persisted-alerts read (an own project without alerts answers 200 with an

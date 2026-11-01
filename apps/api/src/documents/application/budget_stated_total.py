@@ -29,6 +29,7 @@ def record_revision_stated_total(
     blob_hash: str | None,
     total: float | int | None,
     currencies: Sequence[str] | None,
+    source_locator: str | None = None,
 ) -> None:
     """Record this revision's declaration in ``metadata`` (in place), keeping other revisions'.
 
@@ -46,6 +47,8 @@ def record_revision_stated_total(
         "blob_hash": blob_hash,
         "total": total,
         "currencies": list(currencies) if currencies and total is not None else [],
+        # S4: where in THIS revision's bytes the total was declared (``Sheet!row``); absent when none was observed.
+        "source_locator": source_locator if total is not None and source_locator else None,
     }
     metadata[STATED_TOTAL_BY_REVISION_KEY] = entries
 

@@ -112,6 +112,26 @@ function WBSAlertsPanel({ projectId }: { projectId: string }) {
                   )
                 ) : null}
               </div>
+              {alert.structuredSources?.length ? (
+                <ul className="mt-1 space-y-0.5 text-xs" data-testid={`wbs-alert-${alert.id}-sources`}>
+                  {alert.structuredSources.map((source) => (
+                    <li key={`${source.family}${source.revisionId}${source.sourceLocator}`}>
+                      <Link
+                        className="font-mono underline"
+                        href={
+                          `/projects/${encodeURIComponent(projectId)}/evidence` +
+                          `?documentId=${encodeURIComponent(source.documentId)}` +
+                          `&revisionId=${encodeURIComponent(source.revisionId)}` +
+                          `&locator=${encodeURIComponent(source.sourceLocator)}` +
+                          (source.blobSha256 ? `&expectedHash=${encodeURIComponent(source.blobSha256)}` : "")
+                        }
+                      >
+                        {source.family === "budget" ? "Budget row" : "Schedule activity"} {source.sourceLocator}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ))
         )}
