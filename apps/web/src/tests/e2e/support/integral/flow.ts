@@ -455,7 +455,8 @@ export async function readWbsCanonicalView(page: Page): Promise<WbsCanonicalView
     const body = ((await card.first().textContent()) ?? "").replace(/\s+/g, " ");
     structuredLinks.push({
       family,
-      locator: body.match(/Locator:\s*(\S+)/)?.[1] ?? "",
+      // textContent glues the next <p> ("Presupuesto!2Revision ..."): take exactly Sheet!row, nothing after it.
+      locator: body.match(/Locator:\s*([^\s!]+!\d+)/)?.[1] ?? "",
       blobHash: body.match(/SHA-256\s*([0-9a-f]{64})/)?.[1] ?? "",
       href: await card.first().locator("a").first().getAttribute("href"),
     });

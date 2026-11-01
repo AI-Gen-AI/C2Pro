@@ -567,8 +567,10 @@ def test_an_approval_that_names_nobody_fails() -> None:
     )
 
 
-def _with_finding_decisions(recorded_at: str = "2026-10-31T09:00:00", by: str = "reviewer", count: int = 2):
+def _with_finding_decisions(recorded_at: str = "2026-10-31T09:00:00", by: str | None = None, count: int = 2):
     facts, browser, expect = _world()
+    # The ledger records the USER ID; the review records the approver's DISPLAY NAME (run 41315342087 compared them).
+    by = by or str(next(iter(verifier._Ctx(facts, browser, expect).actor_ids)))
     browser["stages"][4]["evidence"]["findingDecisions"] = {"decided": count}
     facts.finding_decisions = [
         {
@@ -594,9 +596,22 @@ def test_a_finding_decision_missing_from_the_ledger_or_by_someone_else_fails() -
     facts, browser, expect = _with_finding_decisions(count=3)
     assert "S5:every finding decision taken in the browser is a ledger row" in _failed(facts, browser, expect)
     facts, browser, expect = _with_finding_decisions(by="a stranger")
-    assert "S5:each finding decision is attributed to the human who approved the contract, in tenant A" in _failed(
+    assert "S5:each finding decision is attributed to the authenticated Clerk user of tenant A (ledger: user id)" in _failed(
         facts, browser, expect
     )
+
+
+def test_a_decision_is_attributed_by_user_id_not_by_the_approvers_display_name() -> None:
+    """Regression of run 41315342087: the review's approved_by is a DISPLAY NAME, the ledger's reviewer_id a user id."""
+    facts, browser, expect = _with_finding_decisions()
+    name = "S5:each finding decision is attributed to the authenticated Clerk user of tenant A (ledger: user id)"
+    assert name not in _failed(facts, browser, expect)
+    for review in facts.reviews:
+        review["approved_by"] = "Test User"  # what the approve route stores (full_name)
+    assert name not in _failed(facts, browser, expect), "the display name is irrelevant to the attribution"
+    for row in facts.finding_decisions:
+        row["reviewer_id"] = row["created_by"] = str(uuid4())  # some other id
+    assert name in _failed(facts, browser, expect)
 
 
 def test_real_database_timestamps_are_compared_like_with_like() -> None:

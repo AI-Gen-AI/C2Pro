@@ -452,16 +452,15 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
         return
     rows = c.facts.finding_decisions
     contract_reviews = [r for r in c.reviews if str(r["document_id"]) == c.doc("contract")]
-    approvers = {str(r.get("approved_by")) for r in contract_reviews if r.get("approved_by")}
     c.add("S5", "every finding decision taken in the browser is a ledger row", len(rows) == decided, f"{len(rows)}/{decided}")
     c.add(
         "S5",
-        "each finding decision is attributed to the human who approved the contract, in tenant A",
+        "each finding decision is attributed to the authenticated Clerk user of tenant A (ledger: user id)",
         bool(rows)
         and all(
             str(r["tenant_id"]) == c.tenant_a
             and r["created_by"] == r["reviewer_id"]
-            and r["reviewer_id"] in approvers
+            and r["reviewer_id"] in c.actor_ids
             for r in rows
         ),
     )
