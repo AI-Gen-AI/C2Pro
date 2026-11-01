@@ -170,6 +170,108 @@ export async function rejectThroughUi(
   return decisionFrom(await rejected);
 }
 
+// ── structured-source trust (ADR-032): request on the Documents row, decide on the review card ──────────────
+export interface StructuredTrustRequest {
+  documentId: string;
+  revisionId: string;
+  artifactId: string;
+  artifactVersion: number;
+  artifactHash: string;
+  reviewRowId: string;
+  family: string;
+  trustState: string;
+  replayed: boolean;
+  rowCount: number;
+  contentDigest: string;
+}
+
+export interface StructuredTrustDecision {
+  artifactId: string;
+  artifactVersion: number;
+  decision: string;
+  trustState: string;
+  reviewStatus: string;
+  selfApproved: boolean;
+  independent: boolean;
+  replayed: boolean;
+  eventId: string;
+}
+
+/**
+ * Ask, from the document's own row, for a human trust decision on the CURRENT revision of a Budget/Schedule
+ * (the button the product offers). The application answers with the PROPOSED candidate and its bound review and
+ * leads the person to the review queue. Nothing is trusted by this step.
+ */
+export async function requestStructuredTrustThroughUi(
+  page: Page,
+  recorder: Pj01RunRecorder,
+  options: { projectId: string; documentId: string },
+): Promise<StructuredTrustRequest> {
+  await clickProjectTab(page, recorder, options.projectId, "documents", "DOCUMENTS_TAB_NOT_NAVIGABLE");
+  await page.waitForURL(new RegExp(`/projects/${options.projectId}/documents`), { timeout: 30_000 });
+  const row = page.getByTestId(`document-row-${options.documentId}`);
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await row.getByTestId("document-request-trust").click();
+  const dialog = page.getByTestId("document-request-trust-dialog");
+  await expect(dialog).toBeVisible();
+  const created = page.waitForResponse(
+    (response: Response) =>
+      response.request().method() === "POST" &&
+      /\/documents\/[^/]+\/revisions\/[^/]+\/trust-candidate$/.test(new URL(response.url()).pathname),
+    { timeout: 120_000 },
+  );
+  await dialog.getByTestId("document-request-trust-confirm").click();
+  const response = await created;
+  expect(response.status(), await response.text().catch(() => "")).toBe(201);
+  const body = (await response.json()) as Json;
+  await expect(page.getByTestId("review-page"), "the request leads to the review queue").toBeVisible({ timeout: 60_000 });
+  return {
+    documentId: str(body.document_id),
+    revisionId: str(body.revision_id),
+    artifactId: str(body.artifact_id),
+    artifactVersion: Number(body.artifact_version),
+    artifactHash: str(body.artifact_hash),
+    reviewRowId: str(body.review_row_id),
+    family: str(body.family),
+    trustState: str(body.trust_state),
+    replayed: body.replayed === true,
+    rowCount: Number(body.row_count),
+    contentDigest: str(body.content_digest),
+  };
+}
+
+/** APPROVE the structured-source candidate from its review card (the decision binds the exact id/version/hash). */
+export async function approveStructuredTrustThroughUi(
+  page: Page,
+  options: { documentId: string },
+): Promise<StructuredTrustDecision> {
+  const approve = page.getByTestId(`approve-${options.documentId}`);
+  await expect(approve, "the pending trust review of this source").toBeEnabled({ timeout: 60_000 });
+  await approve.click();
+  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  await expect(dialog).toBeVisible();
+  const decided = page.waitForResponse(
+    (response: Response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/structured-source-trust/decisions"),
+    { timeout: 120_000 },
+  );
+  await dialog.getByRole("button", { name: /confirm approve/i }).click();
+  const response = await decided;
+  expect(response.status(), await response.text().catch(() => "")).toBe(200);
+  const body = (await response.json()) as Json;
+  return {
+    artifactId: str(body.artifact_id),
+    artifactVersion: Number(body.artifact_version),
+    decision: str(body.decision),
+    trustState: str(body.trust_state),
+    reviewStatus: str(body.review_status),
+    selfApproved: body.self_approved === true,
+    independent: body.independent === true,
+    replayed: body.replayed === true,
+    eventId: str(body.event_id),
+  };
+}
+
 // ── Health, Coherence ──────────────────────────────────────────────────────────────────────────────────────
 export interface HealthRead {
   computedAt: string;

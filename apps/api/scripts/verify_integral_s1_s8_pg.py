@@ -19,6 +19,10 @@ application, for the SAME project id the browser recorded (and for the second te
 * S7  one approved WBS baseline whose approver is the journey's human (self-approval, when it happened, is REPORTED),
       and exactly one approved canonical link per family on that baseline and node, each carrying the source
       revision, the stored blob hash, the locator and a ``user:`` actor;
+      Before the links (ADR-032) the Budget and the Schedule each hold exactly one TRUSTED structured-source candidate
+      bound to the stored revision and bytes, one ``trust_requested`` and one ``trust_decided`` event naming an
+      identified human requester and decider, a review APPROVED on the exact candidate, NO projection obligation,
+      and the self-approval (when requester == decider) recorded as NOT independent with the audited tenant exception;
 * S8  the snapshot digests taken by the browser before and after the new login are identical.
 
 It never mutates. It prints and stores pseudonymous ids, statuses, counts and SHA-256 digests only (no Clerk id,
@@ -45,6 +49,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+TRUST_REQUESTED = "structured_source.trust_requested"
+TRUST_DECIDED = "structured_source.trust_decided"
+EXCEPTION_FIELDS = ("enabled", "reason", "granted_by", "granted_at")
 STAGES = ("S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8")
 FAMILY_EVENTS = {
     "budget": "budget.wbs_link_approved",
@@ -118,6 +125,9 @@ class Facts:
     graph_events: int = 0
     analyses: int = 0
     six_dimension_snapshots: int = 0
+    projection_artifacts: list[str] = field(
+        default_factory=list
+    )  # artifact ids with a projection obligation
     baselines: list[dict[str, Any]] = field(default_factory=list)
     change_sets: list[dict[str, Any]] = field(default_factory=list)
     tenant_a_distinct_approver_required: bool | None = None
@@ -197,6 +207,17 @@ class _Ctx:
     @property
     def reviews(self) -> list[dict[str, Any]]:
         return [r for r in self.facts.reviews if str(r["project_id"]) == str(self.project_a["id"])]
+
+    @property
+    def tenant_a_human_ids(self) -> set[str]:
+        """Every active Clerk-linked user of tenant A (an independent decider is a DIFFERENT human)."""
+        return {
+            str(u["id"])
+            for u in self.facts.users
+            if str(u["tenant_id"]) == self.tenant_a
+            and u.get("clerk_user_id")
+            and u.get("is_active")
+        }
 
     @property
     def actor_ids(self) -> set[str]:
@@ -514,11 +535,267 @@ def _judge_s7_link(
         f"{family} link: it names the approved baseline and node",
         bool(baseline) and str(payload.get("wbs_baseline_id")) == str(baseline["id"]),
     )
+    if family in ("budget", "schedule"):
+        trusted_revisions = {
+            str(a["document_revision_id"])
+            for a in c.artifacts_of.get(c.doc(family), [])
+            if a.get("structured_source")
+            and a["trust_state"] == "trusted"
+            and a["lifecycle_status"] == "active"
+        }
+        c.add(
+            "S7",
+            f"{family} link: it rests on the revision whose structured source a human trusted",
+            str(payload.get("source_revision_id")) in trusted_revisions,
+        )
     c.add(
         "S7",
         f"{family} link: it carries a locator",
         bool(payload.get("source_locator") or payload.get("source_section")),
     )
+
+
+def _exception_complete(raw: Any) -> bool:
+    return (
+        isinstance(raw, dict)
+        and raw.get("enabled") is True
+        and all(isinstance(raw.get(k), str) and str(raw[k]).strip() for k in EXCEPTION_FIELDS[1:])
+    )
+
+
+def _events_of(c: _Ctx, event_type: str, artifact_id: str) -> list[dict[str, Any]]:
+    return [
+        e
+        for e in c.facts.events
+        if e["event_type"] == event_type
+        and (e.get("payload") or {}).get("artifact_id") == artifact_id
+    ]
+
+
+def _judge_s7_trust_events(
+    c: _Ctx,
+    key: str,
+    artifact: dict[str, Any],
+    review: dict[str, Any] | None,
+    browser_trust: dict[str, Any],
+) -> None:
+    artifact_id = str(artifact["artifact_id"])
+    requests = _events_of(c, TRUST_REQUESTED, artifact_id)
+    decisions = _events_of(c, TRUST_DECIDED, artifact_id)
+    c.add(
+        "S7",
+        f"{key}: exactly one trust_requested event names the candidate",
+        len(requests) == 1,
+        f"{len(requests)}",
+    )
+    c.add(
+        "S7",
+        f"{key}: exactly one trust_decided event names the candidate",
+        len(decisions) == 1,
+        f"{len(decisions)}",
+    )
+    if len(requests) != 1 or len(decisions) != 1:
+        return
+    request, decision = requests[0], decisions[0]
+    rp, dp = request["payload"], decision["payload"]
+    requester, decider = str(rp.get("requested_by") or ""), str(dp.get("decided_by") or "")
+    c.add(
+        "S7",
+        f"{key}: the requester is an identified human of tenant A",
+        bool(requester)
+        and requester in c.actor_ids
+        and str(request.get("actor")) == f"user:{requester}",
+    )
+    c.add(
+        "S7",
+        f"{key}: the decider is an identified human of tenant A",
+        bool(decider)
+        and decider in c.tenant_a_human_ids
+        and str(decision.get("actor")) == f"user:{decider}",
+    )
+    bound = (
+        rp.get("artifact_version") == artifact["artifact_version"]
+        and rp.get("artifact_hash") == artifact["artifact_hash"]
+        and dp.get("artifact_version") == artifact["artifact_version"]
+        and dp.get("artifact_hash") == artifact["artifact_hash"]
+        and str(rp.get("revision_id")) == str(artifact["document_revision_id"])
+        and str(request.get("source_revision_id")) == str(artifact["document_revision_id"])
+    )
+    c.add(
+        "S7",
+        f"{key}: request and decision both name the exact candidate version, hash and revision",
+        bound,
+    )
+    c.add(
+        "S7",
+        f"{key}: the decision follows the request",
+        decision["occurred_at"] >= request["occurred_at"],
+    )
+    c.add(
+        "S7",
+        f"{key}: the decision is an APPROVE recorded as explicit human trust",
+        dp.get("decision") == "APPROVE"
+        and dp.get("authority") == "EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST"
+        and dp.get("source_assessment") == "NOT_ASSESSED",
+    )
+    c.add(
+        "S7",
+        f"{key}: the decision names the requester it was separated from",
+        str(dp.get("requested_by")) == requester,
+    )
+    same = bool(requester) and requester == decider
+    c.add(
+        "S7",
+        f"{key}: self_approved equals requester == decider",
+        dp.get("self_approved") is same,
+        f"requester==decider is {same}",
+    )
+    c.add(
+        "S7",
+        f"{key}: independence is reported honestly (independent_approval = not requester==decider)",
+        dp.get("independent_approval") is (not same),
+    )
+    tenant_exception = (
+        ((c.facts.tenants.get(c.tenant_a) or {}).get("settings") or {})
+        .get("trust_governance", {})
+        .get("structured_source_self_approval")
+    )
+    if same:
+        used = dp.get("self_approval_exception")
+        c.add(
+            "S7",
+            f"{key}: a self-approval carries the complete audited exception (enabled, reason, granted_by, granted_at)",
+            _exception_complete(used),
+        )
+        c.add(
+            "S7",
+            f"{key}: the recorded exception equals tenant A's configured exception",
+            _exception_complete(tenant_exception) and used == tenant_exception,
+        )
+        c.add(
+            "S7",
+            f"{key}: the self-approval is reported as SELF_APPROVAL_TENANT_EXCEPTION, not independent",
+            dp.get("separation_of_duties") == "SELF_APPROVAL_TENANT_EXCEPTION",
+        )
+    else:
+        c.add(
+            "S7",
+            f"{key}: an independent approval used no exception",
+            dp.get("self_approval_exception") is None
+            and dp.get("separation_of_duties") == "SEPARATED",
+        )
+    c.add(
+        "S7",
+        f"{key}: the review is bound to the candidate and names the same decision event",
+        bool(review)
+        and str(
+            (review.get("review_metadata") or {})
+            .get("structured_trust_decision", {})
+            .get("event_id")
+        )
+        == str(decision["event_id"]),
+    )
+    c.add(
+        "S7",
+        f"{key}: the browser recorded the same artifact, decision event and independence",
+        str(browser_trust.get("artifactId")) == artifact_id
+        and str(browser_trust.get("decisionEventId")) == str(decision["event_id"])
+        and browser_trust.get("selfApproved") is dp.get("self_approved")
+        and browser_trust.get("independent") is dp.get("independent_approval"),
+    )
+
+
+def _judge_s7_trust(c: _Ctx) -> None:
+    """ADR-032: each structured source is TRUSTED only by an explicit, audited, bound human decision."""
+    browser_trust = c.browser.get("structuredTrust") or {}
+    tenant_b_settings = (c.facts.tenants.get(c.tenant_b) or {}).get("settings") or {}
+    c.add(
+        "S7",
+        "tenant B carries no self-approval exception (the exception is tenant A's alone)",
+        "structured_source_self_approval" not in (tenant_b_settings.get("trust_governance") or {}),
+    )
+    for key in ("budget", "schedule"):
+        doc_id = c.doc(key)
+        candidates = [a for a in c.artifacts_of.get(doc_id, []) if a.get("structured_source")]
+        trusted = [
+            a
+            for a in candidates
+            if a["trust_state"] == "trusted" and a["lifecycle_status"] == "active"
+        ]
+        c.add(
+            "S7",
+            f"{key}: exactly one TRUSTED active structured-source candidate",
+            len(trusted) == 1,
+            f"{len(trusted)} of {len(candidates)}",
+        )
+        c.add(
+            "S7",
+            f"{key}: no structured candidate is left PROPOSED",
+            not any(a["trust_state"] == "proposed" for a in candidates),
+        )
+        if len(trusted) != 1:
+            continue
+        artifact = trusted[0]
+        source = artifact["structured_source"] or {}
+        revisions = c.revisions_of.get(doc_id, [])
+        revision = next(
+            (
+                r
+                for r in revisions
+                if str(r["revision_id"]) == str(artifact["document_revision_id"])
+            ),
+            None,
+        )
+        c.add(
+            "S7",
+            f"{key}: the candidate is bound to the document's current stored revision",
+            bool(revision) and revision is revisions[-1],
+        )
+        c.add(
+            "S7",
+            f"{key}: structured_source names family, the stored bytes and the fixture SHA-256",
+            source.get("family") == key
+            and bool(revision)
+            and source.get("blob_sha256")
+            == revision["blob_hash"]
+            == c.expect.fixture_sha.get(key, revision["blob_hash"]),
+        )
+        c.add(
+            "S7",
+            f"{key}: structured_source carries parser identity, row count and a content digest",
+            bool(source.get("parser_id"))
+            and bool(source.get("parser_version"))
+            and int(source.get("row_count") or 0) >= 1
+            and bool(re.fullmatch(r"[0-9a-f]{64}", str(source.get("content_digest") or ""))),
+        )
+        c.add(
+            "S7",
+            f"{key}: the trust left NO projection obligation (not ProjectGraph, Coherence or analytic input)",
+            str(artifact["artifact_id"]) not in c.facts.projection_artifacts,
+        )
+        reviews = _approved_reviews_of(c, artifact)
+        c.add(
+            "S7",
+            f"{key}: one review APPROVED on the exact candidate by a named human",
+            len(reviews) == 1 and bool(reviews[0].get("approved_by")),
+            f"{len(reviews)} review(s)",
+        )
+        review = reviews[0] if len(reviews) == 1 else None
+        if review is not None:
+            binding = _binding(review)
+            c.add(
+                "S7",
+                f"{key}: the review binding equals the candidate id, version and hash",
+                binding.get("artifact_id") == str(artifact["artifact_id"])
+                and binding.get("artifact_version") == artifact["artifact_version"]
+                and binding.get("artifact_hash") == artifact["artifact_hash"],
+            )
+            c.add(
+                "S7",
+                f"{key}: the review is a structured-source trust review",
+                (review.get("review_metadata") or {}).get("trust_kind") == "structured_source",
+            )
+        _judge_s7_trust_events(c, key, artifact, review, browser_trust.get(key) or {})
 
 
 def _judge_s7_sources(c: _Ctx) -> None:
@@ -539,6 +816,7 @@ def _judge_s7_sources(c: _Ctx) -> None:
 
 def _judge_s7(c: _Ctx) -> None:
     _judge_s7_sources(c)
+    _judge_s7_trust(c)
     baseline = _judge_s7_baseline(c)
     for family, event_type in FAMILY_EVENTS.items():
         rows = [e for e in c.facts.events if e["event_type"] == event_type]
@@ -619,7 +897,7 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
     )
     facts.artifacts = await _rows(
         conn,
-        "SELECT artifact_id, document_id, document_revision_id, artifact_version, artifact_hash, trust_state, lifecycle_status FROM document_artifacts WHERE project_id = :p",
+        "SELECT artifact_id, document_id, document_revision_id, artifact_version, artifact_hash, trust_state, lifecycle_status, payload -> 'structured_source' AS structured_source FROM document_artifacts WHERE project_id = :p",
         **pa,
     )
     facts.reviews = await _rows(
@@ -640,7 +918,7 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
             facts.clause_revisions[str(row["id"])] = str(row["revision_id"])
     facts.events = await _rows(
         conn,
-        "SELECT event_id, event_type, actor, payload, source_revision_id, payload->>'document_id' AS document_id "
+        "SELECT event_id, event_type, actor, payload, source_revision_id, occurred_at, payload->>'document_id' AS document_id "
         "FROM project_events WHERE project_id = :p",
         **pa,
     )
@@ -661,6 +939,14 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
             )
         ).scalar_one()
     )
+    facts.projection_artifacts = [
+        str(row["artifact_id"])
+        for row in await _rows(
+            conn,
+            "SELECT artifact_id FROM system_recovery.trusted_projection_index WHERE project_id = :p",
+            **pa,
+        )
+    ]
     facts.baselines = await _rows(
         conn,
         "SELECT id, project_id, baseline_no, approved_by, source_change_set_id FROM wbs_baselines WHERE project_id = :p",
@@ -738,6 +1024,16 @@ def _first_failure(browser: dict[str, Any], steps: dict[str, Any]) -> dict[str, 
     return None
 
 
+def _trust_independence(trust: dict[str, Any] | None) -> str:
+    """Whether the structured-source trust decisions were independent of their requesters (reported, never implied)."""
+    entries = [v for v in (trust or {}).values() if v]
+    if not entries:
+        return "NOT_RECORDED"
+    if all(e.get("independent") is True for e in entries):
+        return "INDEPENDENT"
+    return "SELF_APPROVED_NOT_INDEPENDENT"
+
+
 def build_manifest(
     browser: dict[str, Any],
     checks: list[Check],
@@ -761,6 +1057,8 @@ def build_manifest(
         "review_item_ids": browser.get("reviewItemIds"),
         "event_ids": browser.get("eventIds"),
         "wbs": browser.get("wbs"),
+        "structured_trust": browser.get("structuredTrust"),
+        "structured_trust_independence": _trust_independence(browser.get("structuredTrust")),
         "provider_real_call_receipt": receipt,
         "clerk_identity_checks": browser.get("clerkIdentityChecks"),
         "snapshot_digests": browser.get("snapshotDigests"),

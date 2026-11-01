@@ -12,6 +12,12 @@ What it prepares (nothing of the journey itself -- no project, document, review,
   application as a SELF-approval (``decided_self_approval = true``) and the verifier reports it; it is never hidden.
   A tenant with two humans keeps the default (distinct approver required).
 
+* ONE more declared relaxation of the same kind (ADR-032, Q1): tenant A carries the AUDITED exception
+  ``settings.trust_governance.structured_source_self_approval = {enabled, reason, granted_by, granted_at}``, so the
+  single human may approve the trust of a Budget/Schedule source they requested. Every such decision is recorded as
+  ``self_approved`` and NOT an independent approval. Only tenant A's row in PostgreSQL is written: tenant B and Clerk
+  are never touched, and a bare boolean would not be an exception at all.
+
 It fails closed: it refuses to run outside ``ENVIRONMENT=test`` with local storage, without both Clerk identities, or
 when A and B are not different identities in different Organizations.
 """
@@ -21,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -33,6 +40,23 @@ from tests.e2e_seed.seed_wedge import TENANT_ID, TEST_PASSWORD_HASH, seed_wedge_
 
 TENANT_B_ID = UUID(os.getenv("E2E_TENANT_B_ID", "00000000-0000-0000-0000-00000000a114"))
 USER_B_ID = UUID("00000000-0000-0000-0000-00000000b114")
+
+
+SELF_APPROVAL_REASON = (
+    "Synthetic integral-UAT tenant A has exactly one human: the Budget/Schedule trust decision can only be "
+    "taken by the person who requested it. Nonproduction, recorded as a non-independent approval."
+)
+SELF_APPROVAL_GRANTED_BY = "seed_integral_uat (nonproduction, synthetic tenant A only)"
+
+
+def self_approval_exception(now: datetime | None = None) -> dict[str, Any]:
+    """The complete, attributable exception (never a bare boolean)."""
+    return {
+        "enabled": True,
+        "reason": SELF_APPROVAL_REASON,
+        "granted_by": SELF_APPROVAL_GRANTED_BY,
+        "granted_at": (now or datetime.now(UTC)).isoformat(),
+    }
 
 
 class SeedError(RuntimeError):
@@ -122,6 +146,9 @@ async def seed() -> dict[str, Any]:
             governance = dict(settings.get("wbs_governance") or {})
             governance["require_distinct_approver"] = False
             settings["wbs_governance"] = governance
+            trust_governance = dict(settings.get("trust_governance") or {})
+            trust_governance["structured_source_self_approval"] = self_approval_exception()
+            settings["trust_governance"] = trust_governance
             await db.execute(update(Tenant).where(Tenant.id == TENANT_ID).values(settings=settings))
             await _upsert_tenant_b(db, ids)
             await db.commit()
@@ -129,6 +156,7 @@ async def seed() -> dict[str, Any]:
             "tenant_a": str(TENANT_ID),
             "tenant_b": str(TENANT_B_ID),
             "wbs_distinct_approver_required_tenant_a": False,
+            "structured_source_self_approval_tenant_a": True,
         }
     finally:
         await close_db()
@@ -143,5 +171,6 @@ if __name__ == "__main__":
     print(
         "integral UAT tenancy prepared: tenants differ="
         f"{result['tenant_a'] != result['tenant_b']} "
-        f"wbs_distinct_approver_required_tenant_a={result['wbs_distinct_approver_required_tenant_a']}"
+        f"wbs_distinct_approver_required_tenant_a={result['wbs_distinct_approver_required_tenant_a']} "
+        f"structured_source_self_approval_tenant_a={result['structured_source_self_approval_tenant_a']}"
     )

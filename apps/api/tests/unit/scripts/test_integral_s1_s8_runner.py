@@ -13,6 +13,7 @@ import copy
 import hashlib
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -42,6 +43,13 @@ SHA = {
 
 
 _LAST: list = []
+
+SELF_APPROVAL_EXCEPTION = {
+    "enabled": True,
+    "reason": "Synthetic tenant A has one human.",
+    "granted_by": "seed_integral_uat",
+    "granted_at": "2026-11-01T09:00:00+00:00",
+}
 
 
 def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
@@ -140,6 +148,14 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
             "artifact_hash": "h-bud",
             "trust_state": "trusted",
             "lifecycle_status": "active",
+            "structured_source": {
+                "family": "budget",
+                "blob_sha256": SHA["budget"],
+                "parser_id": "excel_file_parser",
+                "parser_version": "1",
+                "row_count": 1,
+                "content_digest": "c" * 64,
+            },
         },
         {
             "artifact_id": art["sch"],
@@ -149,6 +165,14 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
             "artifact_hash": "h-sch",
             "trust_state": "trusted",
             "lifecycle_status": "active",
+            "structured_source": {
+                "family": "schedule",
+                "blob_sha256": SHA["schedule"],
+                "parser_id": "excel_file_parser",
+                "parser_version": "1",
+                "row_count": 1,
+                "content_digest": "c" * 64,
+            },
         },
     ]
 
@@ -173,6 +197,84 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
         review("specification", "APPROVED", str(art["spec"]), "h-s"),
         review("rejectedCandidate", "REJECTED", str(art["rej"]), "h-r", rejection_reason=REASON),
     ]
+    # ADR-032: the Budget and the Schedule are trusted by a requested + decided structured-source trust review.
+    t0 = datetime(2026, 11, 1, 10, 0, 0)
+    trust_events: list[dict] = []
+    browser_trust: dict[str, dict] = {}
+    for step, (key, fam) in enumerate((("budget", "bud"), ("schedule", "sch"))):
+        review_row = uuid4()
+        binding = {
+            "artifact_id": str(art[fam]),
+            "document_id": str(docs[key]),
+            "artifact_version": 1,
+            "artifact_hash": f"h-{fam}",
+        }
+        decision_id = uuid4()
+        reviews.append(
+            {
+                "project_id": project_a,
+                "document_id": docs[key],
+                "item_id": docs[key],
+                "id": review_row,
+                "status": "APPROVED",
+                "approved_by": "reviewer",
+                "approved_at": "2026-11-01T10:05:00",
+                "review_metadata": {
+                    "candidate_binding": binding,
+                    "trust_kind": "structured_source",
+                    "structured_trust_decision": {"event_id": str(decision_id)},
+                },
+            }
+        )
+        common = {
+            "family": key,
+            "document_id": str(docs[key]),
+            "revision_id": str(revision_of[key]),
+            "artifact_id": str(art[fam]),
+            "artifact_version": 1,
+            "artifact_hash": f"h-{fam}",
+            "review_row_id": str(review_row),
+            "requested_by": str(user_a),
+        }
+        trust_events.append(
+            {
+                "event_id": uuid4(),
+                "event_type": "structured_source.trust_requested",
+                "actor": f"user:{user_a}",
+                "source_revision_id": revision_of[key],
+                "occurred_at": t0.replace(minute=step),
+                "document_id": str(docs[key]),
+                "payload": dict(common),
+            }
+        )
+        trust_events.append(
+            {
+                "event_id": decision_id,
+                "event_type": "structured_source.trust_decided",
+                "actor": f"user:{user_a}",
+                "source_revision_id": revision_of[key],
+                "occurred_at": t0.replace(minute=step + 5),
+                "document_id": str(docs[key]),
+                "payload": {
+                    **common,
+                    "decision": "APPROVE",
+                    "decided_by": str(user_a),
+                    "requester_is_decider": True,
+                    "self_approved": True,
+                    "independent_approval": False,
+                    "self_approval_exception": dict(SELF_APPROVAL_EXCEPTION),
+                    "separation_of_duties": "SELF_APPROVAL_TENANT_EXCEPTION",
+                    "authority": "EXPLICIT_HUMAN_STRUCTURED_SOURCE_TRUST",
+                    "source_assessment": "NOT_ASSESSED",
+                },
+            }
+        )
+        browser_trust[key] = {
+            "artifactId": str(art[fam]),
+            "decisionEventId": str(decision_id),
+            "selfApproved": True,
+            "independent": False,
+        }
     clause = uuid4()
     baseline, change_set, node = uuid4(), uuid4(), uuid4()
     events = [
@@ -230,12 +332,21 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
             },
         },
     ]
+    events += trust_events
     facts = verifier.Facts(
         project_a={"id": project_a, "tenant_id": tenant_a, "name": "A"},
         project_b={"id": project_b, "tenant_id": tenant_b, "name": "B"},
         tenants={
-            str(tenant_a): {"id": tenant_a, "clerk_org_id": "org_a"},
-            str(tenant_b): {"id": tenant_b, "clerk_org_id": "org_b"},
+            str(tenant_a): {
+                "id": tenant_a,
+                "clerk_org_id": "org_a",
+                "settings": {
+                    "trust_governance": {
+                        "structured_source_self_approval": dict(SELF_APPROVAL_EXCEPTION)
+                    }
+                },
+            },
+            str(tenant_b): {"id": tenant_b, "clerk_org_id": "org_b", "settings": {}},
         },
         users=[
             {"id": user_a, "tenant_id": tenant_a, "clerk_user_id": "user_a", "is_active": True},
@@ -300,6 +411,7 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
             "distinctTenants": True,
         },
         "snapshotDigests": {"before": "d" * 64, "after": "d" * 64},
+        "structuredTrust": browser_trust,
         "stages": [
             {"id": f"S{i}", "status": "PASS", "partial": [], "evidence": {}} for i in range(1, 9)
         ],
@@ -1314,7 +1426,7 @@ def test_the_spec_states_the_known_product_gaps_and_never_hides_them() -> None:
     for stage in ("S4", "S5", "S7"):
         assert f'stage: "{stage}"' in source
     assert "RecordFindingDecisionUseCase" in source
-    assert "N17" in source
+    assert "ADR-032" in source
 
 
 # ── identity B comes from ONE variable, everywhere (no legacy fallback) ───────────────────────────────────
@@ -1427,3 +1539,228 @@ def test_structured_sources_without_a_trusted_artifact_fail_s7_with_the_cause() 
         "S7:schedule: the source revision holds a trusted artifact (precondition of a canonical link)"
         in failed
     )
+
+
+# ── ADR-032: the structured-source trust chain, judged from PostgreSQL ────────────────────────────────────
+def _decision_event(facts: verifier.Facts, key: str) -> dict:
+    document = str(_LAST[1]["documentIds"][key])
+    return next(
+        e
+        for e in facts.events
+        if e["event_type"] == "structured_source.trust_decided" and e["document_id"] == document
+    )
+
+
+def _request_event(facts: verifier.Facts, key: str) -> dict:
+    document = str(_LAST[1]["documentIds"][key])
+    return next(
+        e
+        for e in facts.events
+        if e["event_type"] == "structured_source.trust_requested" and e["document_id"] == document
+    )
+
+
+def test_the_honest_run_reports_the_self_approval_as_not_independent() -> None:
+    facts, browser, expect = _world()
+    assert _failed(facts, browser, expect) == []
+    manifest = verifier.build_manifest(
+        browser, verifier.judge(facts, browser, expect), {}, {"candidate_sha": "a" * 40}
+    )
+    assert manifest["structured_trust_independence"] == "SELF_APPROVED_NOT_INDEPENDENT"
+    assert set(manifest["structured_trust"]) == {"budget", "schedule"}
+
+
+def test_an_independent_decision_is_reported_as_independent() -> None:
+    facts, browser, expect = _world()
+    approver = uuid4()
+    facts.users.append(
+        {
+            "id": approver,
+            "tenant_id": facts.project_a["tenant_id"],
+            "clerk_user_id": "user_a2",
+            "is_active": True,
+        }
+    )
+    for key in ("budget", "schedule"):
+        payload = _decision_event(facts, key)["payload"]
+        payload.update(
+            decided_by=str(facts.users[-1]["id"]),
+            requester_is_decider=False,
+            self_approved=False,
+            independent_approval=True,
+            self_approval_exception=None,
+            separation_of_duties="SEPARATED",
+        )
+        # requester stays the first human; the decision event is authored by the second.
+        _decision_event(facts, key)["actor"] = f"user:{approver}"
+        browser["structuredTrust"][key].update(selfApproved=False, independent=True)
+    assert _failed(facts, browser, expect) == []
+    manifest = verifier.build_manifest(
+        browser, verifier.judge(facts, browser, expect), {}, {"candidate_sha": "a" * 40}
+    )
+    assert manifest["structured_trust_independence"] == "INDEPENDENT"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("no_request", "exactly one trust_requested event names the candidate"),
+        ("no_decision", "exactly one trust_decided event names the candidate"),
+        ("duplicate_decision", "exactly one trust_decided event names the candidate"),
+        ("proposed_left", "no structured candidate is left PROPOSED"),
+        ("untrusted", "exactly one TRUSTED active structured-source candidate"),
+        ("wrong_bytes", "structured_source names family, the stored bytes and the fixture SHA-256"),
+        ("no_digest", "structured_source carries parser identity, row count and a content digest"),
+        (
+            "projection",
+            "the trust left NO projection obligation (not ProjectGraph, Coherence or analytic input)",
+        ),
+        ("not_approved", "one review APPROVED on the exact candidate by a named human"),
+        ("review_other_candidate", "the review binding equals the candidate id, version and hash"),
+        ("decision_before_request", "the decision follows the request"),
+        ("anonymous_requester", "the requester is an identified human of tenant A"),
+        ("stranger_decider", "the decider is an identified human of tenant A"),
+        (
+            "stale_hash",
+            "request and decision both name the exact candidate version, hash and revision",
+        ),
+        ("reject", "the decision is an APPROVE recorded as explicit human trust"),
+        ("hidden_self_approval", "self_approved equals requester == decider"),
+        (
+            "claims_independent",
+            "independence is reported honestly (independent_approval = not requester==decider)",
+        ),
+        (
+            "no_exception",
+            "a self-approval carries the complete audited exception (enabled, reason, granted_by, granted_at)",
+        ),
+        (
+            "bare_exception",
+            "a self-approval carries the complete audited exception (enabled, reason, granted_by, granted_at)",
+        ),
+        ("exception_differs", "the recorded exception equals tenant A's configured exception"),
+        (
+            "browser_disagrees",
+            "the browser recorded the same artifact, decision event and independence",
+        ),
+        (
+            "tenant_b_exception",
+            "tenant B carries no self-approval exception (the exception is tenant A's alone)",
+        ),
+        (
+            "link_on_other_revision",
+            "link: it rests on the revision whose structured source a human trusted",
+        ),
+    ],
+)
+def test_each_break_in_the_structured_trust_chain_fails_its_own_check(
+    mutation: str, expected: str
+) -> None:
+    facts, browser, expect = _world()
+    key = "budget"
+    artifact = next(
+        a
+        for a in facts.artifacts
+        if a.get("structured_source") and str(a["document_id"]) == browser["documentIds"][key]
+    )
+    review = next(
+        r
+        for r in facts.reviews
+        if (r["review_metadata"] or {}).get("trust_kind") == "structured_source"
+        and str(r["document_id"]) == browser["documentIds"][key]
+    )
+    decision, request = _decision_event(facts, key), _request_event(facts, key)
+    if mutation == "no_request":
+        facts.events.remove(request)
+    elif mutation == "no_decision":
+        facts.events.remove(decision)
+    elif mutation == "duplicate_decision":
+        facts.events.append(copy.deepcopy(decision))
+    elif mutation == "proposed_left":
+        facts.artifacts.append(
+            {
+                **artifact,
+                "artifact_id": uuid4(),
+                "trust_state": "proposed",
+                "lifecycle_status": "active",
+            }
+        )
+    elif mutation == "untrusted":
+        artifact["trust_state"] = "proposed"
+    elif mutation == "wrong_bytes":
+        artifact["structured_source"] = {**artifact["structured_source"], "blob_sha256": "0" * 64}
+    elif mutation == "no_digest":
+        artifact["structured_source"] = {**artifact["structured_source"], "content_digest": ""}
+    elif mutation == "projection":
+        facts.projection_artifacts.append(str(artifact["artifact_id"]))
+    elif mutation == "not_approved":
+        review["status"] = "PENDING_REVIEW_REQUIRED"
+    elif mutation == "review_other_candidate":
+        review["review_metadata"]["candidate_binding"]["artifact_hash"] = "other"
+    elif mutation == "decision_before_request":
+        decision["occurred_at"] = request["occurred_at"].replace(year=2020)
+    elif mutation == "anonymous_requester":
+        request["payload"]["requested_by"] = ""
+        request["actor"] = "system"
+    elif mutation == "stranger_decider":
+        decision["actor"] = f"user:{uuid4()}"
+        decision["payload"]["decided_by"] = str(uuid4())
+    elif mutation == "stale_hash":
+        decision["payload"]["artifact_hash"] = "stale"
+    elif mutation == "reject":
+        decision["payload"]["decision"] = "REJECT"
+    elif mutation == "hidden_self_approval":
+        decision["payload"]["self_approved"] = False
+    elif mutation == "claims_independent":
+        decision["payload"]["independent_approval"] = True
+    elif mutation == "no_exception":
+        decision["payload"]["self_approval_exception"] = None
+    elif mutation == "bare_exception":
+        decision["payload"]["self_approval_exception"] = {"enabled": True}
+    elif mutation == "exception_differs":
+        decision["payload"]["self_approval_exception"] = {
+            **decision["payload"]["self_approval_exception"],
+            "reason": "edited",
+        }
+    elif mutation == "browser_disagrees":
+        browser["structuredTrust"][key]["decisionEventId"] = str(uuid4())
+    elif mutation == "tenant_b_exception":
+        facts.tenants[str(facts.project_b["tenant_id"])]["settings"] = {
+            "trust_governance": {"structured_source_self_approval": dict(SELF_APPROVAL_EXCEPTION)}
+        }
+    else:
+        facts.events = [
+            {**e, "payload": {**e["payload"], "source_revision_id": str(uuid4())}}
+            if e["event_type"] == "budget.wbs_link_approved"
+            else e
+            for e in facts.events
+        ]
+    failed = _failed(facts, browser, expect)
+    assert any(expected in item for item in failed), failed
+
+
+def test_the_seed_grants_the_complete_audited_exception_to_tenant_a_only() -> None:
+    exception = seed.self_approval_exception()
+    assert exception["enabled"] is True
+    assert all(
+        isinstance(exception[k], str) and exception[k].strip()
+        for k in ("reason", "granted_by", "granted_at")
+    )
+    assert datetime.fromisoformat(exception["granted_at"]).tzinfo is not None
+    source = Path(seed.__file__).read_text(encoding="utf-8")
+    # Only tenant A's row is written with it; tenant B's upsert never touches settings.
+    assert "trust_governance" in source
+    b_block = source[source.index("async def _upsert_tenant_b") : source.index("async def seed")]
+    assert "settings" not in b_block and "trust_governance" not in b_block
+
+
+def test_the_spec_requests_and_decides_both_structured_sources_through_the_application() -> None:
+    source = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text()
+    flow = (WEB / "src" / "tests" / "e2e" / "support" / "integral" / "flow.ts").read_text()
+    assert (
+        "requestStructuredTrustThroughUi" in source and "approveStructuredTrustThroughUi" in source
+    )
+    assert '"trust-budget"' in source and '"trust-schedule"' in source
+    # The runner never writes a database row nor forges an event for the trust: it clicks the product's controls.
+    assert "document-request-trust" in flow and "structured-source-trust/decisions" in flow
+    assert "INSERT" not in flow.upper().replace("INSERTION", "")

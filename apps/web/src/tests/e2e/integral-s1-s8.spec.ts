@@ -51,6 +51,7 @@ import {
 } from "./support/integral/fixtures";
 import {
   approveCanonicalWbs,
+  approveStructuredTrustThroughUi,
   approveStructuredLink,
   approveTechnicalLink,
   approveThroughUi,
@@ -64,8 +65,11 @@ import {
   readRevisions,
   readWhatChanged,
   rejectThroughUi,
+  requestStructuredTrustThroughUi,
   waitForDocument,
   waitForSixDimensionHealth,
+  type StructuredTrustDecision,
+  type StructuredTrustRequest,
   type WbsBaseline,
 } from "./support/integral/flow";
 import { IntegralLedger, digestOf, sha256Hex, type StageId } from "./support/integral/ledger";
@@ -117,7 +121,7 @@ const TITLES: Record<StageId, string> = {
   S4: "An alert leads to its trusted source revision",
   S5: "Human decisions: final approvals, a rejection with a reason, a rejected proposal never trusted",
   S6: "Contract revision B: pending next to trusted A, What Changed, Current State, approval",
-  S7: "Approved canonical WBS and three human-approved source links",
+  S7: "Approved canonical WBS, human trust decisions on Budget and Schedule, three human-approved source links",
   S8: "Real sign-out, new login of the same user, identical persisted state, tenants denied both ways",
 };
 
@@ -128,7 +132,7 @@ const REQUIRED: Partial<Record<StageId, string[]>> = {
   S4: ["alert-opened", "source-resolved"],
   S5: ["contract-approved", "specification-approved", "candidate-rejected", "rejected-never-trusted"],
   S6: ["revision-b-pending", "a-still-trusted", "what-changed", "current-state-pending", "revision-b-approved", "current-state-approved"],
-  S7: ["wbs-approved", "link-budget", "link-schedule", "link-technical", "links-current"],
+  S7: ["wbs-approved", "trust-budget", "trust-schedule", "link-budget", "link-schedule", "link-technical", "links-current"],
   S8: ["signed-out", "relogin-same-user", "state-identical", "a-to-b-denied-after", "b-to-a-denied-after"],
 };
 
@@ -158,11 +162,12 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
       rejected?: { documentId: string };
       documentIds: Record<string, string>;
       wbs?: WbsBaseline;
+      structuredTrust: Partial<Record<"budget" | "schedule", { request: StructuredTrustRequest; decision: StructuredTrustDecision }>>;
       reviewIds: Record<string, string>;
       eventIds: Record<string, string>;
       snapshotDigests: { before?: string; after?: string };
       dynamicGaps: Array<{ stage: string; gap: string; minimalCorrection: string }>;
-    } = { projectA: "", projectB: "", documentIds: {}, reviewIds: {}, eventIds: {}, snapshotDigests: {}, dynamicGaps: [] };
+    } = { projectA: "", projectB: "", documentIds: {}, structuredTrust: {}, reviewIds: {}, eventIds: {}, snapshotDigests: {}, dynamicGaps: [] };
 
     // The page of user A; replaced by the page of the NEW login at S8.
     const contextA = await browser.newContext({ baseURL: base, storageState: EMPTY_SESSION });
@@ -192,6 +197,24 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
               selfApproved: state.wbs.selfApproved,
             }
           : null,
+        structuredTrust: Object.fromEntries(
+          Object.entries(state.structuredTrust).map(([family, trust]) => [
+            family,
+            trust
+              ? {
+                  artifactId: trust.request.artifactId,
+                  artifactVersion: trust.request.artifactVersion,
+                  artifactHash: trust.request.artifactHash,
+                  reviewRowId: trust.request.reviewRowId,
+                  revisionId: trust.request.revisionId,
+                  decisionEventId: trust.decision.eventId,
+                  trustState: trust.decision.trustState,
+                  selfApproved: trust.decision.selfApproved,
+                  independent: trust.decision.independent,
+                }
+              : null,
+          ]),
+        ),
         clerkIdentityChecks: {
           a: state.identityA
             ? { user: pseudonym(state.identityA.userId), organization: pseudonym(state.identityA.organizationId), tenant: state.identityA.tenantId }
@@ -603,6 +626,25 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         }
         await recorder.screenshot(pageA, "s7-wbs");
 
+        // ADR-032: a Budget/Schedule file becomes a trusted source only through two explicit human acts made in the
+        // application: ask for the decision on the document's row, then decide on the review card.
+        for (const family of ["budget", "schedule"] as const) {
+          const documentId = state[family]!.documentId;
+          const requested = await requestStructuredTrustThroughUi(pageA, recorder, { projectId, documentId });
+          ledger.check(`${family}: the request creates a PROPOSED candidate with its bound review`, requested.trustState === "proposed" && requested.reviewRowId.length > 0 && requested.artifactHash.length === 64, `${requested.trustState} v${requested.artifactVersion}`);
+          const decided = await approveStructuredTrustThroughUi(pageA, { documentId });
+          const exact = decided.artifactId === requested.artifactId && decided.artifactVersion === requested.artifactVersion;
+          ledger.check(`${family}: the human decision binds exactly the requested candidate`, exact, `${decided.artifactId} v${decided.artifactVersion}`);
+          ledger.check(`${family}: the candidate is TRUSTED after the decision`, decided.trustState === "trusted" && decided.reviewStatus === "APPROVED", `${decided.trustState}/${decided.reviewStatus}`);
+          if (exact && decided.trustState === "trusted") ledger.milestone(`trust-${family}`);
+          state.structuredTrust[family] = { request: requested, decision: decided };
+          state.eventIds[`trust.${family}.decision`] = decided.eventId;
+          if (!decided.independent) {
+            ledger.partial(`${family}: the trust decision was taken by the same human who requested it (tenant A has ONE human; audited tenant exception): self_approved=${decided.selfApproved}, NOT an independent approval`);
+          }
+          await recorder.screenshot(pageA, `s7-trust-${family}`);
+        }
+
         const trustedRevision = async (documentId: string): Promise<{ revisionId: string; blobHash: string }> => {
           const revisions = await readRevisions(pageA, documentId);
           const chosen = revisions.find((r) => r.isCurrent) ?? revisions.at(-1);
@@ -630,8 +672,8 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         if (untrusted.length > 0) {
           state.dynamicGaps.push({
             stage: "S7",
-            gap: `${untrusted.map((a) => a.family).join(" and ")} source revision(s) uploaded through the UI are not TRUSTED (the API answers 409 Canonical source or WBS authority changed, and PostgreSQL holds no trusted artifact for them): only the N17 graph writes trusted artifacts and structured workbooks never pass through it, so no canonical link can rest on them`,
-            minimalCorrection: "give a structured revision an explicit human trust approval (a proposed artifact + review, then commit_candidate) without touching N17; until then S7 fails honestly here",
+            gap: `${untrusted.map((a) => a.family).join(" and ")} canonical link(s) were refused with 409 although the source revision was explicitly trusted by a human: the revision, the blob hash, the WBS baseline or the node changed between the trust decision and the link`,
+            minimalCorrection: "read the 409 detail and the revision/baseline state; the link services were not modified by ADR-032",
           });
         }
 
