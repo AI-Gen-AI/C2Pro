@@ -85,9 +85,22 @@ Declared limits (reported in every manifest, never hidden):
 
 * the canonical WBS baseline is approved by the same human who submitted it (tenant A has one human), under the
   tenant setting `wbs_governance.require_distinct_approver=false` set by the seed; it is recorded as `self_approved`;
+* the Budget and Schedule sources are trusted by their requester (ADR-032): tenant A carries the audited exception
+  `trust_governance.structured_source_self_approval = {enabled, reason, granted_by, granted_at}` written by the seed to
+  tenant A's row only; each decision is recorded as `self_approved` and the manifest reports
+  `structured_trust_independence = SELF_APPROVED_NOT_INDEPENDENT`;
 * granular per-finding decisions have no HTTP route or UI, so they are not exercised in the browser (S5 is `PARTIAL`);
 * the alert → source link is the contract clause; budget/schedule rows are named in the evidence text (S4 is `PARTIAL`);
 * the verdict `NOT_ACCEPTED_UNTIL_INDEPENDENT_REVIEW` is fixed: the runner never accepts itself.
+
+Another tenant's project answers 404 on every persisted-alerts read (an own project without alerts answers 200 with an
+empty list); the runner accepts only 401/403/404 for a foreign project, never an empty 200.
+
+Static-typing debt of `apps/api/scripts/verify_integral_s1_s8_pg.py` (outside the CI mypy ratchet, which covers `src`):
+mypy reports 7 errors that PRE-DATE ADR-032, all of one kind (`dict | None` used without a guard, plus one `Any` return):
+lines 234-235 (`_judge_s1`), 442 and 446 (`_judge_s6`), 531 and 536 (`_judge_s7_link`: `baseline` optional), 1016
+(`_first_failure`: `Any` return). The three errors introduced by the ADR-032 chain were fixed; the
+seven remain recorded here, unchanged, rather than hidden.
 
 ## Rules
 

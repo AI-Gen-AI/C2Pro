@@ -98,11 +98,6 @@ const PRODUCT_GAPS = [
     minimalCorrection: "carry the source locator (sheet!row) of each cited structured row in detection_evidence and render it as a link to the revision",
   },
   {
-    stage: "S1",
-    gap: "the persisted-alerts list answers HTTP 200 with an empty list for another tenant's project (nothing leaks: RLS scopes the rows) instead of a 404, so it cannot tell a foreign project from an empty one",
-    minimalCorrection: "check that the project belongs to the caller's tenant in the alerts list route and answer 404 otherwise",
-  },
-  {
     stage: "S5",
     gap: "granular per-finding decisions (CONFIRMED / DISMISSED) exist as a use case over an append-only ledger but have no HTTP route and no UI control",
     minimalCorrection: "expose RecordFindingDecisionUseCase as POST /hitl/queue/{item}/findings/{finding}/decision and add the controls to the review card; a run also needs a provider that yields findings",

@@ -1477,17 +1477,18 @@ def test_the_verifier_reads_the_alert_rule_from_its_real_column() -> None:
     assert "SELECT project_id, tenant_id, rule_code" not in source
 
 
-def test_a_foreign_project_may_answer_an_empty_alert_list_but_never_a_row() -> None:
+def test_a_foreign_project_is_only_ever_a_denial_even_for_an_empty_alert_list() -> None:
     identity = (WEB / "src" / "tests" / "e2e" / "support" / "integral" / "identity.ts").read_text(
         encoding="utf-8"
     )
-    assert "export const DENIAL = [401, 403, 404, 0];" in identity
-    assert 'url.includes("/alerts/")' in identity
-    assert "itemsOf(answer.data).length === 0" in identity, (
-        "only an EMPTY collection counts; a row is a leak"
+    assert "export const DENIAL = [401, 403, 404];" in identity
+    assert "emptyCollection" not in identity and "itemsOf" not in identity, (
+        "no special acceptance of an empty 200 for another tenant's project"
     )
     spec = (WEB / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text(encoding="utf-8")
-    assert 'stage: "S1"' in spec, "the 200-instead-of-404 behaviour is a declared product gap"
+    assert "answers HTTP 200 with an empty list for another tenant" not in spec, (
+        "the S1 product gap is closed by the 404, not declared any more"
+    )
 
 
 def test_every_upload_starts_from_the_documents_tab_and_ui_actions_cannot_hang() -> None:

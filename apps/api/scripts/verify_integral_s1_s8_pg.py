@@ -684,16 +684,13 @@ def _judge_s7_trust_events(
             dp.get("self_approval_exception") is None
             and dp.get("separation_of_duties") == "SEPARATED",
         )
+    recorded_decision = ((review or {}).get("review_metadata") or {}).get(
+        "structured_trust_decision"
+    ) or {}
     c.add(
         "S7",
         f"{key}: the review is bound to the candidate and names the same decision event",
-        bool(review)
-        and str(
-            (review.get("review_metadata") or {})
-            .get("structured_trust_decision", {})
-            .get("event_id")
-        )
-        == str(decision["event_id"]),
+        bool(review) and str(recorded_decision.get("event_id")) == str(decision["event_id"]),
     )
     c.add(
         "S7",
@@ -755,7 +752,7 @@ def _judge_s7_trust(c: _Ctx) -> None:
             "S7",
             f"{key}: structured_source names family, the stored bytes and the fixture SHA-256",
             source.get("family") == key
-            and bool(revision)
+            and revision is not None
             and source.get("blob_sha256")
             == revision["blob_hash"]
             == c.expect.fixture_sha.get(key, revision["blob_hash"]),
