@@ -1,11 +1,23 @@
 # ADR-032: Explicit Human Trust Approval of Structured Sources (Budget and Schedule)
 
-**Status:** Proposed — design direction accepted by the owner (2026-11-01); technical design awaiting approval. **No code, no migration, no UAT until this ADR is approved.**
-**Date:** 2026-11-01
+**Status:** Accepted with conditions (owner, 2026-11-01). Implementation bounded to #1112 by the single writer; no integral UAT and no paid AI until the focused S7 increment is evidenced.
+**Date:** 2026-11-01 (amended 2026-11-01 with the owner's decisions Q1–Q4 and conditions C1–C5)
 **Decision class:** Trust / HITL / canonical-source architecture
 **Conforms to:** ADR-026 (trusted-state commit boundary, #714), ADR-027 (processing authority), ADR-025 / ADR-029 (canonical WBS; `SCHEDULE ACTIVITY != WBS NODE`), ADR-031 (a schedule *baseline* approval is a different fact), ADR-020 (HITL)
 **Amends:** nothing. It adds a second *entry point* to the existing trust authority; it creates no second authority.
 **Evidence:** integral S1–S8 deterministic rehearsal `41243943437` on `964c08f23` (#1112), independent PostgreSQL read.
+
+## Owner decisions and conditions (binding, 2026-11-01)
+
+- **Q1 — separation of duties ON by default.** A requester cannot approve their own candidate. The only exception is an explicit, audited, per-tenant setting (never implicit): `trust_governance.structured_source_self_approval = {enabled, reason, granted_by, granted_at}`. Every decision that uses it records `self_approved = true`, `self_approval_exception = true` and the reason in the audit event; it is reported as *not an independent approval*.
+- **Q2 — no automatic candidates at ingestion** in this increment.
+- **Q3 — API and UI.** The request and the human decision ship with an interface (Documents row action and review-card decision); S7 is not complete without them.
+- **Q4 — legacy route.** `/hitl/queue/{id}/approve|reject` refuses every review that carries a `candidate_binding` and has no graph `thread_id`; legacy reviews without a binding behave as before.
+- **C1 — visibility.** Structured artifacts are outside ProjectGraph input, the projected-Coherence input and analytic materialization, but remain visible to the revision authority (resolver, Current State, What Changed) and to the WBS link services.
+- **C2 — typed commit.** No free-form flag on `commit_candidate`. A separate, typed and validated operation commits structured candidates; the graph operation refuses structured artifacts and the structured operation refuses everything else.
+- **C3 — distinct states.** *Unevaluated source*, *absence of amounts*, *rejected source* and *resolved alert* stay distinct; their observable effects are documented (table below) and asserted by tests.
+- **C4 — no APPROVED-while-PROPOSED.** A bound, thread-less review cannot end APPROVED while its artifact is PROPOSED, and legitimate recovery is never silently blocked (the refusal names the correct endpoint, is logged, and the decision endpoint is the recovery path).
+- **C5 — the 409s stay.** Stale versions, hashes or authorities keep answering 409 in the trust endpoints and in the unchanged link services.
 
 ## Context
 
@@ -40,7 +52,7 @@ structured_source: { family: "budget"|"schedule",
                      content_digest }        # SHA-256 of the canonical JSON of the parser-observed rows incl. source_locator
 ```
 
-`artifact_hash` (already `sha256(canonical payload)`) therefore binds document, revision, bytes and parsed content. `PAYLOAD_CONTRACT_VERSION` is bumped (additive; absent ⇒ `None`). Tenant and project are the artifact row's own scoped columns (RLS), as for every artifact. The rows themselves are **not** copied into the payload: the bytes are immutable, the parse is deterministic, and the link services already re-parse the verified bytes by locator.
+`artifact_hash` (already `sha256(canonical payload)`) therefore binds document, revision, bytes and parsed content. The change is additive and optional (absent ⇒ `None`), so `PAYLOAD_CONTRACT_VERSION` stays `v1` and every persisted payload still validates; the cost is that code older than this change cannot read a payload carrying the field (`extra="forbid"`), which matters only for a rollback after a candidate was requested. Tenant and project are the artifact row's own scoped columns (RLS), as for every artifact. The rows themselves are **not** copied into the payload: the bytes are immutable, the parse is deterministic, and the link services already re-parse the verified bytes by locator.
 
 ### D2 — Upload creates an untrusted source; a candidate exists only on explicit request
 
@@ -51,18 +63,18 @@ body `{ idempotency_key }` → `201 { artifact_id, artifact_version, artifact_ha
 
 The service (one tenant-scoped transaction): authenticates a human user (same predicate as the link services: active, role admin/user, bound `clerk_user_id`); locks DOCUMENT → PROJECT; re-reads the stored bytes and **re-verifies `blob_hash`** (`read_verified_revision_file`); parses with the existing `ExcelFileParser`; builds the candidate; calls the existing `repository.save(artifact, trust_state=PROPOSED)` (which supersedes older proposals, closes their reviews, and opens a review **bound to exactly this artifact id/version/hash**). Replays with the same `(revision, content_digest, idempotency_key)` return the same candidate; a different key for an identical pending candidate is also a replay (never a second candidate). Non-XLSX, unparsable, or empty sources are refused (422) before anything is written.
 
-*Why on request and not at ingestion:* proposing at ingestion changes the evaluation semantics of every existing budget upload (see E5) and every existing journey. It is the natural end state, but it is a separate, later amendment; this increment must not move any score or alert that is not explicitly under review.
+*Owner decision Q2: no automatic creation in this increment. Why on request and not at ingestion:* proposing at ingestion changes the evaluation semantics of every existing budget upload (see E5) and every existing journey. It is the natural end state, but it is a separate, later amendment; this increment must not move any score or alert that is not explicitly under review.
 
 ### D3 — The decision is a dedicated command that commits in the same transaction
 
 `POST /api/v1/documents/{document_id}/revisions/{revision_id}/trust-decision`
 body `{ artifact_id, artifact_version, artifact_hash, decision: "APPROVE"|"REJECT", reason, idempotency_key }`.
 
-One transaction, canonical lock order **DOCUMENT → PROJECT → ARTIFACT** (as `materialize_in_transaction`): verify the review row bound to exactly this binding is pending and `decision_ready`; verify the artifact is still the current PROPOSED version with that digest; re-verify the revision bytes; record the review decision (`approved_by`, `approved_at`, rejection reason); then `repository.commit_candidate` (APPROVE) or `reject_candidate` (REJECT); append the audit event (D6). APPROVE and the commit cannot be separated: there is no state "approved but not trusted".
+One transaction, canonical lock order **DOCUMENT → PROJECT → ARTIFACT** (as `materialize_in_transaction`): verify the review row bound to exactly this binding is pending and `decision_ready`; verify the artifact is still the current PROPOSED version with that digest; re-verify the revision bytes; record the review decision (`approved_by`, `approved_at`, rejection reason); then the **typed** structured operations `commit_structured_candidate` (APPROVE) or `reject_candidate` (REJECT); append the audit event (D6). `commit_structured_candidate` accepts only an artifact whose payload carries a valid `structured_source` (family budget/schedule) and performs the same compare-and-set as `commit_candidate` with its own, fixed effect set (no projection obligation, `materialization = not_required`); `commit_candidate` in turn refuses a structured artifact. There is no parameter that selects effects. APPROVE and the commit cannot be separated: there is no state "approved but not trusted".
 
 Replays return the stored decision; a changed replay (other decision, reason or binding) is refused; a binding that no longer matches the current PROPOSED version (superseded by a newer request, rejected, already trusted with other content) fails closed with **409** (`StaleCandidateError`), exactly as in #714.
 
-The legacy `/hitl/queue/{id}/approve|reject` threadless branch **refuses** a review that carries a `candidate_binding` (400 "decide this review through its trust-decision endpoint"). This closes a latent hole: today a bound, thread-less review (e.g. the minimal review opened when HITL routing degrades) can be flipped to APPROVED while its artifact stays PROPOSED.
+The refusal is enforced **in the service layer** (`HumanInTheLoopService.approve_item` and the route's thread-less reject branch), not only in HTTP, so no caller can reach it: a review that carries a `candidate_binding` and no graph `thread_id` is refused with a typed `BoundReviewRequiresTrustDecision` (HTTP 409, logged, message naming the trust-decision endpoint). Reviews without a binding (legacy) and graph reviews with a thread are unaffected. The trust-decision endpoint records its own decision through the review repository inside its own transaction; it is the legitimate recovery path for a bound thread-less review. This closes a latent hole: today a bound, thread-less review (e.g. the minimal review opened when HITL routing degrades) can be flipped to APPROVED while its artifact stays PROPOSED.
 
 ### D4 — Materialization effects, resolved one by one (E1–E9)
 
@@ -80,24 +92,34 @@ The legacy `/hitl/queue/{id}/approve|reject` threadless branch **refuses** a rev
 
 Net effect of an approved structured trust: one `document_artifacts` row `trusted/active`, the previous trusted one `superseded`, one review decision, one audit event. No Health, Coherence, ProjectGraph, Alert, WBS or Score row changes.
 
+
+### D4b — Observable distinctions (C3), asserted by tests
+
+| State | How it arises | Evaluation / alerts / score (observable) |
+|---|---|---|
+| **Unevaluated source** | A budget with a pending candidate (not `canonical`), or an unresolved document | The evaluation reports the document as not evaluated (`evaluation_complete = false`); the alert mirror never auto-resolves anything on its account; the dimension is *missing*, never zero |
+| **Absence of amounts** | A trusted or single budget whose workbook declares no stated total | No budget declaration (`stated_total` absent) → the BUDGET dimension is not assessed; **not** a total of 0 and **not** a rejection |
+| **Rejected source** | A candidate that a human rejected (`rejected_only`, single revision) | The revision stays unresolved/untrusted; nothing trusted; alerts preserved; it is never read as current |
+| **Resolved alert** | An evaluated finding no longer holds on evaluated evidence | The only state that may resolve an alert; requires the sources to have been evaluated |
+
 ### D5 — Linking stays a separate, stricter act (unchanged services)
 
 A TRUSTED, current source only **enables requesting** a link. The link approval remains the existing explicit human act with full revalidation of baseline, node, revision, blob hash and locator, and keeps its **409** for stale sources or authorities. No check of `ApproveStructuredWBSLinkService` or the technical equivalent is relaxed or bypassed. Trust approval never creates, implies or pre-approves a link, and a link approval never trusts a source.
 
 ### D6 — Audit and self-approval
 
-Two new `ProjectEvent` types (registry `KNOWN_EVENT_TYPES`): `structured_source.trust_requested` and `structured_source.trust_decided`. Payload: family, document, revision, artifact id/version/hash, `blob_sha256`, `content_digest`, row count, actor (`user:<id>`), decision, reason, idempotency key, and for the decision `requested_by`, `decided_by`, **`self_approved`** (`requested_by == decided_by`). A self-approval is always recorded and reported by the verifier and the manifest as *not an independent approval*; it is never presented as separation of duties. Enforcing distinct approvers (a tenant setting analogous to `wbs_governance.require_distinct_approver`) is **Open question Q1**.
+Two new `ProjectEvent` types (registry `KNOWN_EVENT_TYPES`): `structured_source.trust_requested` and `structured_source.trust_decided`. Payload: family, document, revision, artifact id/version/hash, `blob_sha256`, `content_digest`, row count, actor (`user:<id>`), decision, reason, idempotency key, and for the decision `requested_by`, `decided_by`, **`self_approved`** (`requested_by == decided_by`). Separation of duties is **enforced by default** (Q1): `decided_by == requested_by` is refused (HTTP 403 `SEPARATION_OF_DUTIES_REQUIRED`) unless the tenant carries the explicit exception setting above. A decision under the exception is recorded with `self_approval_exception = true` and the reason, and the verifier and the manifest report it as *not an independent approval*.
 
 ### D7 — Persistence
 
 No new table and no new RLS surface: candidates are `document_artifacts` rows, reviews are `review_items` rows, audit is `project_events`. `trusted_projection_index` is not touched for structured sources (E1/E3). The one DB-visible change is verified to be only code-level (event types are validated in the domain registry); if a database CHECK on `event_type` exists it gets one Alembic migration plus the Supabase CLI sync (the two migration systems must stay aligned).
 
-## Pre-implementation verification gates (must be resolved before coding)
+## Pre-implementation verification gates (results recorded 2026-11-01)
 
-- **G1.** Confirm that `list_pending_candidates` and `project_pending_coherence` tolerate an artifact filtered out by `structured_source` (E2/E9).
-- **G2.** Confirm that the resolver keeps `trusted` for the revision of a structured artifact without a graph run having ever loaded it.
-- **G3.** Confirm that the legacy-approve guard (D3) breaks no existing journey (PJ-01, triplet, S5): run those suites against PostgreSQL.
-- **G4.** Confirm that `PAYLOAD_CONTRACT_VERSION` and the `DocumentArtifact` JSON schema are not part of the generated OpenAPI (if they are, regenerate with `make openapi`).
+- **G1.** `list_pending_candidates` and `project_pending_coherence` tolerate an artifact filtered out by `structured_source` (E2/E9). **Result: PASS (code read).** `list_pending_candidates` builds its result from `_ACTIONABLE_PENDING_SQL` rows and a second `select`; filtering the built list cannot break the projection, which treats an empty list as "no pending". The dashboard's `pending_review_count` is derived from that same pending-candidate list, so it too excludes structured candidates (it counts analysis proposals feeding the projection); a pending structured candidate is visible as a review item in the Review queue and as a state of its Documents row, not in the Coherence pending count. Asserted by test 10.
+- **G2.** The resolver keeps `trusted` for the revision of a structured artifact without a graph run ever loading it. **Result: PASS (code read).** `current_revision_lateral` reads `document_artifacts` only (`trust_state='trusted' AND lifecycle_status='active' AND document_revision_id IS NOT NULL`); it never consults `trusted_projection_index` or a graph run. Asserted by test 4.
+- **G3.** The legacy-approve guard breaks no existing journey. **Result: see the delivery report** (the PJ-01 / triplet / S5 / S7 suites are run against PostgreSQL after the guard lands; a graph review always carries a `thread_id`, so the guard cannot reach it).
+- **G4.** `PAYLOAD_CONTRACT_VERSION` / the `DocumentArtifact` schema are not part of the generated OpenAPI. **Result: PASS.** Neither `docs/api/openapi.yaml` nor `apps/web/schema/api.json` mentions `DocumentArtifact` or `x-contract-version`. The new endpoints and the additive review-response field are, so OpenAPI and the web client are regenerated.
 
 ## PostgreSQL test plan (REAL database, real repositories, no mocks of the trust authority)
 
@@ -139,13 +161,10 @@ No new table and no new RLS surface: candidates are `document_artifacts` rows, r
 
 **Costs / constraints.** One additive contract field with a version bump; two endpoints, one use case, one repository variant, two event types; a documented evaluation pause for a budget while its candidate is pending; a UI entry ("request trust approval" on the Budget/Schedule row, and the decision on the review card) that the first increment may deliver as API-only if the owner prefers.
 
-## Open questions for the owner
+## Open questions
 
-- **Q1.** Enforce distinct requester/approver by tenant setting (default off, recorded) or on? (The existing contract approvals by the same E2E user are already allowed.)
-- **Q2.** Is a later amendment to propose automatically at ingestion desired, accepting E5 for every budget upload?
-- **Q3.** Is an API-only first increment acceptable (UI in a follow-up), or must the Documents row and review card ship together?
-- **Q4.** Scope of the legacy-approve guard (D3): refuse every bound thread-less review (recommended), or only structured ones?
+None open: Q1–Q4 were decided by the owner (see *Owner decisions and conditions*).
 
 ## Validation status
 
-Proposed. Not implemented. Evidence cited above is from the integral deterministic rehearsal (AI mocked), which is not UAT and not production evidence.
+Accepted with conditions; implementation in progress on #1112 (see the delivery report for evidence). Evidence cited above is from the integral deterministic rehearsal (AI mocked), which is not UAT and not production evidence.
