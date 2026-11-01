@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,10 @@ from src.core.auth.service import hash_password
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.application.project_review_authorization import (
+    SETTINGS_KEY,
+    transitional_off_setting,
+)
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -61,6 +66,21 @@ def _utcnow_naive() -> datetime:
 # ── Upsert helpers ─────────────────────────────────────────────────
 
 
+def _with_transitional_project_authorization(settings: dict[str, Any] | None) -> dict[str, Any]:
+    """Synthetic nonproduction tenants keep the legacy HITL rule EXPLICITLY (S5-02), never by omission.
+
+    A tenant without the marker is ``enforce`` and the seeded journey creates its project only afterwards, so no
+    per-project grant can exist at seed time. This is the declared transitional relaxation (``off``): it is NOT a secure
+    state and S5 is not accepted while a tenant sits in it.
+    """
+    merged = dict(settings or {})
+    merged.setdefault(
+        SETTINGS_KEY,
+        transitional_off_setting("synthetic nonproduction E2E tenant: project grants cannot precede the project"),
+    )
+    return merged
+
+
 async def _upsert_tenant(db: AsyncSession) -> None:
     """Idempotent tenant upsert — mirrors seeded_auth_context logic."""
     existing = await db.get(Tenant, TENANT_ID)
@@ -68,6 +88,7 @@ async def _upsert_tenant(db: AsyncSession) -> None:
         existing.is_active = True
         existing.subscription_status = "active"
         existing.clerk_org_id = CLERK_E2E_ORG_ID
+        existing.settings = _with_transitional_project_authorization(existing.settings)
         return
     db.add(
         Tenant(
@@ -83,6 +104,7 @@ async def _upsert_tenant(db: AsyncSession) -> None:
             max_storage_gb=100,
             is_active=True,
             clerk_org_id=CLERK_E2E_ORG_ID,
+            settings=_with_transitional_project_authorization(None),
         )
     )
 
@@ -104,6 +126,7 @@ async def _upsert_foreign_tenant_project(db: AsyncSession) -> None:
                 max_storage_gb=100,
                 is_active=True,
                 clerk_org_id="org_acc01_foreign_isolation_tenant",
+                settings=_with_transitional_project_authorization(None),
             )
         )
         await db.flush()

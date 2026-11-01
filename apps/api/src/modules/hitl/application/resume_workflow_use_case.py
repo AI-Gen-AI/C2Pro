@@ -56,6 +56,10 @@ from src.modules.hitl.application.final_decision_authorization import (
     AuthorizedFinalDecider,
     FinalDecisionNotAuthorized,
 )
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.domain.entities import (
     AWAITING_DECISION_STATUSES,
     ReviewItem,
@@ -196,6 +200,7 @@ class ResumeWorkflowUseCase:
         claim_session_factory: Any = None,
         lease_seconds: int = DEFAULT_LEASE_SECONDS,
         fault: Any = None,
+        project_authorizer: ProjectReviewAuthorizer | None = None,
     ) -> None:
         """
         Initialize use case with dependencies.
@@ -216,6 +221,24 @@ class ResumeWorkflowUseCase:
         # named checkpoint; raising from it simulates hard process loss at
         # that exact durability boundary.
         self._fault = fault
+        # S5-02: the ONE per-project authority. Built lazily from the repository's own request-scoped session unless a
+        # caller injects one; with neither, a final decision FAILS CLOSED (ProjectAuthorizationUnavailable).
+        self._project_authorizer = project_authorizer
+
+    async def _require_project_approval(self, review_item: Any, decider: AuthorizedFinalDecider) -> None:
+        """APPROVE_CANDIDATE on the review row's OWN project (read from the row, never from the request)."""
+        authorizer = self._project_authorizer or ProjectReviewAuthorizer.for_repository(self.review_queue_repo)
+        raw = (review_item.metadata or {}).get("project_id")
+        try:
+            project_id = UUID(str(raw)) if raw else None
+        except ValueError:
+            project_id = None
+        await authorizer.require(
+            tenant_id=decider.tenant_id,
+            user_id=decider.user_id,
+            project_id=project_id,
+            capability=ProjectCapability.APPROVE_CANDIDATE,
+        )
 
     async def _heartbeat_loop(self, ownership: Ownership) -> None:
         """Renew the lease while the graph runs.
@@ -761,6 +784,9 @@ class ResumeWorkflowUseCase:
             if not review_item:
                 record_hitl_resume_error("not_found")
                 raise ValueError(self._ERR_NOT_FOUND.format(review_id=review_id))
+
+            # 1b. S5-02: per-project authority, BEFORE any status/replay/contradiction detail is disclosed.
+            await self._require_project_approval(review_item, request.decider)
 
             # 2. Validate review item is in pending status
             if review_item.current_status not in AWAITING_DECISION_STATUSES:

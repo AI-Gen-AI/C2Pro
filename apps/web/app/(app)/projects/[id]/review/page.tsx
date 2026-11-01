@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { severityToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
 import { ReviewFindingsPanel } from '@/components/features/review/ReviewFindingsPanel';
+import { useReviewCapabilities } from '@/components/features/review/useReviewCapabilities';
 import { ReviewItemCard } from '@/components/features/review/ReviewItemCard';
 import {
   Dialog,
@@ -99,6 +100,13 @@ function outcomeMayAlreadyBeRecorded(error: unknown): boolean {
     if (response?.status === 502) return true;
   }
   return error instanceof Error && /\b502\b|review approved, but resuming/i.test(error.message);
+}
+
+
+/** S5-02: asks the server what the caller may do on THIS review's project, and stops offering what would be refused. */
+function ReviewItemWithCapabilities(props: ComponentProps<typeof ReviewItemCard>) {
+  const capabilities = useReviewCapabilities(props.item.row_id);
+  return <ReviewItemCard {...props} finalDecisionNotGranted={capabilities?.approve_candidate === false} />;
 }
 
 export default function ReviewPage() {
@@ -503,7 +511,7 @@ export default function ReviewPage() {
                   : undefined
               }
             >
-            <ReviewItemCard
+            <ReviewItemWithCapabilities
               item={item}
               projectId={projectId}
               reviewerIdentityReady={reviewerIdentityReady}

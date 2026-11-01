@@ -44,6 +44,14 @@ vi.mock('@/components/features/review/ReviewFindingsPanel', () => ({
   ),
 }));
 
+// S5-02: the advisory capabilities of the review's project (undefined = not loaded / unavailable: nothing is hidden).
+const { mockCapabilities } = vi.hoisted(() => ({
+  mockCapabilities: vi.fn<() => { approve_candidate: boolean } | undefined>(() => undefined),
+}));
+vi.mock('@/components/features/review/useReviewCapabilities', () => ({
+  useReviewCapabilities: () => mockCapabilities(),
+}));
+
 vi.mock('@/hooks/useProject', () => ({
   useProject: () => ({
     data: { name: 'Test Project' },
@@ -136,6 +144,7 @@ describe('ReviewPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSearchParams.mockReturnValue(new URLSearchParams());
+    mockCapabilities.mockReturnValue(undefined);
   });
 
   it('labels the queue as project-scoped because the API now supports project filtering', () => {
@@ -220,6 +229,32 @@ describe('ReviewPage', () => {
     // item-1 is pending - should have approve/reject
     expect(screen.getByTestId('approve-item-1')).toBeInTheDocument();
     expect(screen.getByTestId('reject-item-1')).toBeInTheDocument();
+  });
+
+  it('S5-02: without APPROVE_CANDIDATE on the project, Approve and Reject are not offered and say why', () => {
+    mockCapabilities.mockReturnValue({ approve_candidate: false });
+    setupMock();
+    render(<ReviewPage />);
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(screen.getByTestId('reject-item-1')).toBeDisabled();
+    expect(screen.getByTestId('approve-item-1')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/do not have permission to approve or reject/i),
+    );
+  });
+
+  it('S5-02: an unavailable capabilities hint never hides the actions (the server decides)', () => {
+    mockCapabilities.mockReturnValue(undefined);
+    setupMock();
+    render(<ReviewPage />);
+    expect(screen.getByTestId('approve-item-1')).toBeEnabled();
+  });
+
+  it('S5-02: with APPROVE_CANDIDATE the actions stay available', () => {
+    mockCapabilities.mockReturnValue({ approve_candidate: true });
+    setupMock();
+    render(<ReviewPage />);
+    expect(screen.getByTestId('approve-item-1')).toBeEnabled();
   });
 
   it('expands item detail on click', async () => {

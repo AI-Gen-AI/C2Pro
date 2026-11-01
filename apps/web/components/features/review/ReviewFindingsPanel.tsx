@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/generated/hitl-findings/hitl-findings";
 import type { ReviewFindingResponse, ReviewFindingsResponse } from "@/lib/api/generated/models";
 import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDecisionAction";
+import { useReviewCapabilities } from "./useReviewCapabilities";
 
 const ACTION_LABEL: Record<FindingDecisionAction, string> = {
   CONFIRMED: "Confirm",
@@ -42,6 +43,7 @@ const REFUSAL: Record<string, string> = {
   idempotency_conflict: "That request was already used with different content. Nothing was recorded.",
   ledger_guard_refused: "The review is no longer pending. Nothing was recorded.",
   reviewer_not_authorized: "Only an active human reviewer of this workspace can record decisions.",
+  project_capability_required: "You do not have permission to record decisions on this project's review.",
   review_unavailable: "This review is no longer open. Nothing was recorded.",
 };
 
@@ -74,6 +76,9 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
     retry: false,
     staleTime: 0,
   });
+  // S5-02 (advisory): the server re-validates; the screen just stops offering what it would refuse.
+  const capabilities = useReviewCapabilities(reviewRowId);
+  const mayReview = capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
 
@@ -127,6 +132,11 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
           This candidate lists no individual findings to decide.
         </p>
       ) : null}
+      {!mayReview ? (
+        <p className="mt-2 text-xs text-muted-foreground" data-testid={`review-findings-readonly-${reviewRowId}`}>
+          You can read these findings but you do not have permission to record decisions on this project.
+        </p>
+      ) : null}
       {refusal ? (
         <p role="alert" className="mt-2 text-destructive" data-testid={`review-findings-refused-${reviewRowId}`}>
           {refusal}
@@ -176,7 +186,7 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                     key={action}
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
-                    disabled={record.isPending}
+                    disabled={record.isPending || !mayReview}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);

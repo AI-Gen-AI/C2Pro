@@ -57,6 +57,7 @@ import type {
   FindingDecisionReceipt,
   FindingDecisionSubmission,
   HTTPValidationError,
+  ReviewCapabilitiesResponse,
   ReviewFindingsResponse,
 } from "../models";
 
@@ -434,3 +435,246 @@ export const useRecordFindingDecisionApiV1HitlReviewsReviewRowIdFindingsDecision
       queryClient,
     );
   };
+/**
+ * @summary What the signed-in user may do on the project of this review (advisory; every action re-validates)
+ */
+export const getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet = (
+  reviewRowId: string,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<ReviewCapabilitiesResponse>({
+    url: `/api/v1/hitl/reviews/${reviewRowId}/capabilities`,
+    method: "GET",
+    signal,
+  });
+};
+
+export const getGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGetQueryKey =
+  (reviewRowId: string) => {
+    return [`/api/v1/hitl/reviews/${reviewRowId}/capabilities`] as const;
+  };
+
+export const getGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+      >
+    >,
+    TError = void | HTTPValidationError,
+  >(
+    reviewRowId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGetQueryKey(
+        reviewRowId,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+        >
+      >
+    > = ({ signal }) =>
+      getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet(
+        reviewRowId,
+        signal,
+      );
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: reviewRowId !== null && reviewRowId !== undefined,
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type GetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+      >
+    >
+  >;
+export type GetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGetQueryError =
+  void | HTTPValidationError;
+
+export function useGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  reviewRowId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  reviewRowId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  reviewRowId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary What the signed-in user may do on the project of this review (advisory; every action re-validates)
+ */
+
+export function useGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+    >
+  >,
+  TError = void | HTTPValidationError,
+>(
+  reviewRowId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getGetReviewCapabilitiesApiV1HitlReviewsReviewRowIdCapabilitiesGetQueryOptions(
+      reviewRowId,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

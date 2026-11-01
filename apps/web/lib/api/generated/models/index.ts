@@ -350,6 +350,8 @@ export * from "./resumeWorkflowResponse";
 export * from "./retrySampleProjectApiV1OnboardingSampleProjectRetryPost200";
 export * from "./reviewAlertRequest";
 export * from "./reviewAlertRequestDecision";
+export * from "./reviewCapabilitiesResponse";
+export * from "./reviewCapabilitiesResponseMode";
 export * from "./reviewDecisionDTO";
 export * from "./reviewDecisionDTOAction";
 export * from "./reviewFindingResponse";

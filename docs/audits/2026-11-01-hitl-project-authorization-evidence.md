@@ -1,7 +1,8 @@
 # HITL authorization by project — evidence (PQ-HITL-04C5 / #980), 2026-11-01
 
-Status: **GAP-1 FIXED (role gate on the final decision); GAP-2 open (project scope, proposal in
-`2026-11-01-hitl-project-authorization-s5-01-s5-02-proposal.md`)**. No permission was widened and no role or policy invented.
+Status: **GAP-1 FIXED (role gate on the final decision); GAP-2 mitigated by S5-01/S5-02 (per-project grants, `enforce`
+for new tenants) but OPEN for any tenant still in the transitional `off`/`audit` mode — see the implementation status in
+`2026-11-01-hitl-project-authorization-s5-01-s5-02-proposal.md`. The characterization below describes the legacy (`off`) behaviour.** No permission was widened and no role or policy invented.
 Scope: #1112 head at the time of writing (`integration/acc01-e2e-20261025`). Owner ratification is required before any
 authorization policy is implemented; until then S5 is **not accepted on security**.
 

@@ -8095,7 +8095,7 @@
             }
           },
           "403": {
-            "description": "An active human reviewer of the tenant is required"
+            "description": "An active human reviewer of the tenant, holding the project capability, is required"
           },
           "404": {
             "description": "No actionable analysis review of this tenant"
@@ -8157,13 +8157,65 @@
             }
           },
           "403": {
-            "description": "An active human reviewer of the tenant is required"
+            "description": "An active human reviewer of the tenant, holding the project capability, is required"
           },
           "404": {
             "description": "No actionable analysis review of this tenant"
           },
           "409": {
             "description": "Stale candidate/authority/ledger revision, unbound finding or conflicting replay"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hitl/reviews/{review_row_id}/capabilities": {
+      "get": {
+        "tags": ["HITL findings"],
+        "summary": "What the signed-in user may do on the project of this review (advisory; every action re-validates)",
+        "operationId": "get_review_capabilities_api_v1_hitl_reviews__review_row_id__capabilities_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "review_row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Review Row Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCapabilitiesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An active human reviewer of the tenant is required"
+          },
+          "404": {
+            "description": "No review of this tenant visible to the caller"
           },
           "422": {
             "description": "Validation Error",
@@ -22418,6 +22470,42 @@
         "type": "object",
         "required": ["event_id", "ledger_revision", "action", "reviewer_id"],
         "title": "FindingDecisionEntry"
+      },
+      "ReviewCapabilitiesResponse": {
+        "properties": {
+          "review_row_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Review Row Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["off", "audit", "enforce"],
+            "title": "Mode"
+          },
+          "read_review": {
+            "type": "boolean",
+            "title": "Read Review"
+          },
+          "review_finding": {
+            "type": "boolean",
+            "title": "Review Finding"
+          },
+          "approve_candidate": {
+            "type": "boolean",
+            "title": "Approve Candidate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "review_row_id",
+          "mode",
+          "read_review",
+          "review_finding",
+          "approve_candidate"
+        ],
+        "title": "ReviewCapabilitiesResponse",
+        "description": "What the CALLER may do on this review's project. Read-only and advisory: the server re-validates every action.\n\nNever lists other people's grants. ``mode`` is the tenant's rollout mode; ``off`` / ``audit`` are transitional and\nreport the legacy rule (nothing is hidden from a human of the tenant), ``enforce`` reports explicit grants only."
       }
     },
     "securitySchemes": {

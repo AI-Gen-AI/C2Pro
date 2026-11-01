@@ -29,6 +29,11 @@ from src.modules.hitl.adapters.persistence.finding_decision_writer import (
 from src.modules.hitl.application.finding_review_authorization import (
     FindingDecisionSubmission,
     FindingReviewerNotAuthorized,
+    authorize_finding_reviewer,
+)
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectAuthorizationDenied,
+    ProjectReviewAuthorizer,
 )
 from src.modules.hitl.application.record_finding_decision_use_case import (
     RecordFindingDecisionUseCase,
@@ -78,6 +83,20 @@ class ReviewFindingsResponse(BaseModel):
     final_approval: Literal["SEPARATE_ACT"] = "SEPARATE_ACT"
 
 
+class ReviewCapabilitiesResponse(BaseModel):
+    """What the CALLER may do on this review's project. Read-only and advisory: the server re-validates every action.
+
+    Never lists other people's grants. ``mode`` is the tenant's rollout mode; ``off`` / ``audit`` are transitional and
+    report the legacy rule (nothing is hidden from a human of the tenant), ``enforce`` reports explicit grants only.
+    """
+
+    review_row_id: UUID
+    mode: Literal["off", "audit", "enforce"]
+    read_review: bool
+    review_finding: bool
+    approve_candidate: bool
+
+
 class FindingDecisionReceipt(BaseModel):
     event_id: UUID
     ledger_revision: int
@@ -108,11 +127,22 @@ def _refusal(code: str, message: str, http_status: int) -> HTTPException:
     return HTTPException(status_code=http_status, detail={"code": code, "message": message})
 
 
+def _project_denied(exc: ProjectAuthorizationDenied) -> HTTPException:
+    """403 when the actor can already see the project's review (it lacks THIS capability); 404 when it cannot."""
+    if exc.visible:
+        return _refusal(
+            "project_capability_required",
+            f"{exc.capability.value} on this review's project is required",
+            status.HTTP_403_FORBIDDEN,
+        )
+    return _refusal("review_unavailable", "no actionable review for tenant", status.HTTP_404_NOT_FOUND)
+
+
 @router.get(
     "/reviews/{review_row_id}/findings",
     response_model=ReviewFindingsResponse,
     responses={
-        403: {"description": "An active human reviewer of the tenant is required"},
+        403: {"description": "An active human reviewer of the tenant, holding the project capability, is required"},
         404: {"description": "No actionable analysis review of this tenant"},
     },
     summary="List the findings of a pending analysis review with their provisional decisions",
@@ -130,6 +160,8 @@ async def list_review_findings(
         )
     except FindingReviewerNotAuthorized as exc:
         raise _refusal("reviewer_not_authorized", str(exc), status.HTTP_403_FORBIDDEN) from exc
+    except ProjectAuthorizationDenied as exc:
+        raise _project_denied(exc) from exc
     except ReviewFindingsUnavailable as exc:
         raise _refusal("review_unavailable", str(exc), status.HTTP_404_NOT_FOUND) from exc
     return ReviewFindingsResponse(
@@ -160,7 +192,7 @@ async def list_review_findings(
     response_model=FindingDecisionReceipt,
     status_code=status.HTTP_201_CREATED,
     responses={
-        403: {"description": "An active human reviewer of the tenant is required"},
+        403: {"description": "An active human reviewer of the tenant, holding the project capability, is required"},
         404: {"description": "No actionable analysis review of this tenant"},
         409: {"description": "Stale candidate/authority/ledger revision, unbound finding or conflicting replay"},
     },
@@ -181,6 +213,8 @@ async def record_finding_decision(
         )
     except FindingReviewerNotAuthorized as exc:
         raise _refusal("reviewer_not_authorized", str(exc), status.HTTP_403_FORBIDDEN) from exc
+    except ProjectAuthorizationDenied as exc:
+        raise _project_denied(exc) from exc
     except FindingDecisionIdentityError as exc:
         if str(exc) in _NO_REVIEW:
             raise _refusal("review_unavailable", str(exc), status.HTTP_404_NOT_FOUND) from exc
@@ -198,4 +232,37 @@ async def record_finding_decision(
         ) from exc
     return FindingDecisionReceipt(
         event_id=receipt.event_id, ledger_revision=receipt.ledger_revision, replayed=receipt.replayed
+    )
+
+
+@router.get(
+    "/reviews/{review_row_id}/capabilities",
+    response_model=ReviewCapabilitiesResponse,
+    responses={
+        403: {"description": "An active human reviewer of the tenant is required"},
+        404: {"description": "No review of this tenant visible to the caller"},
+    },
+    summary="What the signed-in user may do on the project of this review (advisory; every action re-validates)",
+)
+async def get_review_capabilities(
+    review_row_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_finding_session),
+) -> ReviewCapabilitiesResponse:
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    try:
+        actor = authorize_finding_reviewer(current_user, tenant_id=tenant_id)
+        caps = await ProjectReviewAuthorizer(session).capabilities_for_review(
+            tenant_id=actor.tenant_id, user_id=actor.reviewer_id, review_row_id=review_row_id
+        )
+    except FindingReviewerNotAuthorized as exc:
+        raise _refusal("reviewer_not_authorized", str(exc), status.HTTP_403_FORBIDDEN) from exc
+    except ProjectAuthorizationDenied as exc:
+        raise _project_denied(exc) from exc
+    return ReviewCapabilitiesResponse(
+        review_row_id=review_row_id,
+        mode=caps.mode.value,
+        read_review=caps.read_review,
+        review_finding=caps.review_finding,
+        approve_candidate=caps.approve_candidate,
     )

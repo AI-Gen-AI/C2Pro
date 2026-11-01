@@ -271,6 +271,26 @@ def _auth_user_trigger_enabled(session: Session) -> bool:
 
 
 @event.listens_for(Session, "before_flush")
+def _mark_fixture_tenants_as_legacy_for_project_authorization(session: Session, _flush_context, _instances) -> None:
+    """Fixture tenants are the test equivalent of tenants that existed before S5-01.
+
+    Production resolves a tenant WITHOUT ``settings.hitl_project_authorization`` as ``enforce`` (fail closed); the S5-01
+    migration marks every pre-existing tenant ``off`` (transitional). Test tenants created through the ORM get the same
+    explicit marker, so the legacy HITL suites keep exercising resume mechanics. A test that exercises project
+    authorization sets ``mode`` itself (``enforce`` / ``audit``); it is never inferred.
+    """
+    from src.core.auth.models import Tenant
+
+    for tenant in (obj for obj in session.new if isinstance(obj, Tenant)):
+        settings_value = dict(tenant.settings or {})
+        settings_value.setdefault(
+            "hitl_project_authorization",
+            {"mode": "off", "transitional": True, "reason": "test fixture tenant (legacy)"},
+        )
+        tenant.settings = settings_value
+
+
+@event.listens_for(Session, "before_flush")
 def _ensure_auth_users(session: Session, _flush_context, _instances) -> None:
     import json
 

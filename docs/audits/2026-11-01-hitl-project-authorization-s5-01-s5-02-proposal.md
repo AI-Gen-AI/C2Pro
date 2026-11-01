@@ -1,7 +1,8 @@
 # HITL authorization by project — technical proposal for S5-01 / S5-02, 2026-11-01
 
-Status: **PROPOSAL, not implemented.** No table, migration, bootstrap or grant was created. It needs the owner's
-authorization (section 6) before any of it is built. Role gate on the final decision (GAP-1) is already fixed and is
+Status: **S5-01 / S5-02 IMPLEMENTED (owner decision D-1…D-7 of 2026-11-01); see "Implementation status" at the end.**
+The text below is the original proposal, kept for rationale. Where it differs from what was built, the implementation
+status section wins (notably: the FK to `users` is on `users(id)` alone, the tenant is proved at check time). Role gate on the final decision (GAP-1) is already fixed and is
 a prerequisite, not part of this proposal. The ratified D1–D8 text was not supplied to the implementer: the mapping
 below follows the requirements stated in the commission and must be checked against it.
 
@@ -146,3 +147,35 @@ existing P0b / trusted-state suites unchanged (decider carries the project permi
 authenticate but do not require the human gate; they move no candidate to TRUSTED and are left unchanged. The legacy
 `approve_item`/`reject_item` service path for non-graph reviews is reached only through the guarded routes and is refused
 for any review bound to a candidate (`BoundReviewRequiresTrustDecision`).
+
+## Implementation status (S5-01 + S5-02, bounded) — added 2026-11-01
+
+**Built:** Alembic `20261101_0001` + Supabase mirror `20261101000100_s5_project_review_grants.sql` (additive; downgrade
+provided); `project_review_grants` (append-only, single revocation, guard trigger, SECURITY DEFINER writers that write
+the grant and its audit event in one transaction, forced RLS, REVOKE from PUBLIC/anon/authenticated); one
+`ProjectReviewAuthorizer` applied to findings read (READ_REVIEW), granular decisions (REVIEW_FINDING) and
+approve / reject / resume (APPROVE_CANDIDATE) at the application boundary (`ResumeWorkflowUseCase.execute`, the findings
+services) plus the non-graph decision path; 403 when the actor has other grants on the project, 404 when it has none;
+read-only `GET /hitl/reviews/{row}/capabilities` and advisory UI hiding; `scripts/grant_project_review_permissions.py`
+(dry-run by default; `--apply` only on a loopback test database with `ENVIRONMENT=test`).
+
+**Identity (precondition P1):** the principal is `(tenant_id, users.id)`. `get_current_user` reassigns the SAME
+`users` row to the new tenant on a Clerk organization switch, so a composite FK `(tenant_id, user_id) → users(tenant_id,id)`
+would break sign-in (proven by `test_s5_org_switch_principal_pg.py`). The FK is therefore on `users(id)` and the tenant
+is proved at check time (`users.tenant_id = grants.tenant_id AND is_active`): a grant of A is dormant while the user is in
+B and applies again in A. No auth refactor was needed.
+
+**Modes and the retirement gate for permissive modes.** `off` and `audit` are TRANSITIONAL, not secure. The migration marks
+every pre-existing tenant `off` (transitional) so nobody is locked out and nobody self-grants; a tenant WITHOUT the marker
+(every new tenant) is `enforce`, as is an unknown value. **No date is invented.** A tenant leaves `off` only when: (1) its
+real grants exist and were reviewed by its owner, (2) a period in `audit` shows no unexpected
+`hitl_project_authorization_would_deny`, (3) the negatives (no-grant, partial-capability, other-project) pass for it.
+S5 is NOT declared secure while any operative tenant sits in `off`/`audit`. Synthetic nonproduction tenants (E2E and the
+integral UAT seeds) carry an explicit transitional `off` marker with its reason, because their project is created by the
+journey after the seed.
+
+**Not done / residual:** real grants on real tenants and `enforce` in Production (need separate per-environment approval);
+concurrent revocation is *prepared* (`revalidate()` locks the grant `FOR SHARE`, proven by a PostgreSQL concurrency test)
+but is not wired into the first-TRUSTED transaction — that is S5-05; queue list/get are not project-filtered; `release` /
+`escalate` lack the human gate; grants are dormant, not auto-revoked, when a user leaves a tenant; the legacy characterization
+tests in `test_s5_project_authorization_evidence_pg.py` describe the transitional `off` behaviour, not the secure one.

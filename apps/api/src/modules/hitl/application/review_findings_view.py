@@ -23,6 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.domain.trust import artifact_digest
 from src.modules.hitl.application.finding_review_authorization import authorize_finding_reviewer
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.domain.finding_decision import (
     CandidateReviewIdentity,
     FindingDecisionKind,
@@ -119,8 +123,9 @@ def _project(risk: dict[str, Any]) -> dict[str, Any]:
 
 
 class ReviewFindingsViewService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, authorizer: ProjectReviewAuthorizer | None = None) -> None:
         self._session = session
+        self._authorizer = authorizer or ProjectReviewAuthorizer(session)
 
     async def execute(self, *, tenant_id: UUID, user: object, review_row_id: UUID) -> ReviewFindingsView:
         actor = authorize_finding_reviewer(user, tenant_id=tenant_id)
@@ -128,6 +133,13 @@ class ReviewFindingsViewService:
         review = (await self._session.execute(_REVIEW, params)).mappings().first()
         if review is None:
             raise ReviewFindingsUnavailable("no actionable review for tenant")
+        # S5-02: the project is the review row's OWN project (never a client value). Raises ProjectAuthorizationDenied.
+        await self._authorizer.require(
+            tenant_id=actor.tenant_id,
+            user_id=actor.reviewer_id,
+            project_id=review["project_id"],
+            capability=ProjectCapability.READ_REVIEW,
+        )
 
         metadata = review.get("review_metadata")
         bound = metadata.get("candidate_binding") if isinstance(metadata, dict) else None

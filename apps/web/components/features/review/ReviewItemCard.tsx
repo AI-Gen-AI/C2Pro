@@ -28,6 +28,11 @@ type ReviewItemCardProps = {
   reviewerIdentityReady: boolean;
   /** A decision for this row was already submitted; wait for the refreshed queue. */
   actionsLocked?: boolean;
+  /**
+   * S5-02: the server says this user lacks APPROVE_CANDIDATE on the review's project. Approve/Reject are then not
+   * offered (the server refuses them anyway; this is not the security boundary).
+   */
+  finalDecisionNotGranted?: boolean;
   onApprove: (item: ReviewItemResponse) => void;
   onReject: (item: ReviewItemResponse) => void;
   /** S5: the per-finding decision surface of a pending analysis review (provided by the page). */
@@ -129,7 +134,11 @@ function actionsBlockedReason(state: {
   exactIdentityMissing: boolean;
   candidatePending: boolean;
   reviewerIdentityReady: boolean;
+  finalDecisionNotGranted: boolean;
 }): string | undefined {
+  if (state.finalDecisionNotGranted) {
+    return 'You do not have permission to approve or reject this project\'s review. Ask a project administrator for the approval capability.';
+  }
   if (state.actionsLocked) return 'Decision submitted. Refreshing the queue...';
   if (state.exactIdentityMissing) {
     return 'Exact review identity unavailable. Refresh the queue before deciding.';
@@ -161,6 +170,7 @@ export function ReviewItemCard({
   projectId,
   reviewerIdentityReady,
   actionsLocked = false,
+  finalDecisionNotGranted = false,
   onApprove,
   onReject,
   renderFindings,
@@ -238,12 +248,13 @@ export function ReviewItemCard({
 
   const exactIdentityMissing = !item.row_id;
   const actionsDisabled =
-    !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing;
+    !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing || finalDecisionNotGranted;
   const actionsTitle = actionsBlockedReason({
     actionsLocked,
     exactIdentityMissing,
     candidatePending,
     reviewerIdentityReady,
+    finalDecisionNotGranted,
   });
 
   return (

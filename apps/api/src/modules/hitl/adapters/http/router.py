@@ -41,6 +41,12 @@ from src.modules.hitl.application.final_decision_authorization import (
     authorize_final_decider,
 )
 from src.modules.hitl.application.ports import HumanInTheLoopService
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectAuthorizationDenied,
+    ProjectAuthorizationUnavailable,
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
     ResumeWorkflowRequest as UseCaseResumeRequest,
 )
@@ -125,6 +131,44 @@ def _final_decider(current_user: Any, tenant_id: Any) -> AuthorizedFinalDecider:
             status.HTTP_403_FORBIDDEN,
             detail={"code": "final_decision_not_authorized", "message": str(exc)},
         ) from exc
+
+
+def _project_refusal(exc: Exception) -> HTTPException:
+    """S5-02 denial mapping. 403 when the actor can already see the project's review (it lacks APPROVE_CANDIDATE);
+    404 when it cannot (no existence leak); 403 fail-closed when the authorizer cannot even be built."""
+    if isinstance(exc, ProjectAuthorizationDenied) and not exc.visible:
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND, detail={"code": "review_unavailable", "message": "no actionable review for tenant"}
+        )
+    if isinstance(exc, ProjectAuthorizationDenied):
+        return HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "project_capability_required", "message": f"{exc.capability.value} on this review's project is required"},
+        )
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        detail={"code": "project_authorization_unavailable", "message": str(exc)},
+    )
+
+
+async def _require_project_approval_for_legacy_row(
+    service: Any, existing: ReviewItem, decider: AuthorizedFinalDecider
+) -> None:
+    """The non-graph decision path (no thread) does not pass through ``ResumeWorkflowUseCase``: same authority here."""
+    raw = (existing.metadata or {}).get("project_id")
+    try:
+        project_id = UUID(str(raw)) if raw else None
+    except ValueError:
+        project_id = None
+    try:
+        await ProjectReviewAuthorizer.for_repository(service.review_queue_repo).require(
+            tenant_id=decider.tenant_id,
+            user_id=decider.user_id,
+            project_id=project_id,
+            capability=ProjectCapability.APPROVE_CANDIDATE,
+        )
+    except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+        raise _project_refusal(exc) from exc
 
 
 def _exposed_binding(metadata: dict[str, Any]) -> dict[str, Any] | None:
@@ -299,6 +343,8 @@ async def _approve_and_resume_workflow(
             status.HTTP_403_FORBIDDEN,
             detail={"code": "final_decision_not_authorized", "message": str(exc)},
         ) from exc
+    except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+        raise _project_refusal(exc) from exc
     except Exception as exc:  # noqa: BLE001
         # C2PRO P0b true-resume hotfix: a genuine resume failure now RAISES
         # out of the use case instead of being swallowed into a
@@ -384,6 +430,7 @@ async def approve_item(
             row_id=existing.metadata.get("row_id"),
         )
     else:
+        await _require_project_approval_for_legacy_row(service, existing, decider)
         try:
             item = await service.approve_item(
                 item_id=payload.row_id or item_id,
@@ -449,6 +496,8 @@ async def reject_item(
                 status.HTTP_403_FORBIDDEN,
                 detail={"code": "final_decision_not_authorized", "message": str(exc)},
             ) from exc
+        except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+            raise _project_refusal(exc) from exc
         except ValueError as exc:
             error_msg = str(exc)
             if "not found" in error_msg:
@@ -470,6 +519,7 @@ async def reject_item(
         if item is None:  # pragma: no cover - execute() above already confirmed the row exists
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
     else:
+        await _require_project_approval_for_legacy_row(service, existing, decider)
         if existing.current_status not in AWAITING_DECISION_STATUSES:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -705,6 +755,8 @@ async def resume_workflow(
             status.HTTP_403_FORBIDDEN,
             detail={"code": "final_decision_not_authorized", "message": str(exc)},
         ) from exc
+    except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+        raise _project_refusal(exc) from exc
     except ValueError as exc:
         error_msg = str(exc)
         if "not found" in error_msg:

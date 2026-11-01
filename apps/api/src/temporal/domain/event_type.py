@@ -52,6 +52,10 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "structured_source.trust_decided",
         # S3: an evaluation that withheld its Score keeps its reason durably (no CoherenceResult is invented).
         "coherence.evaluation_withheld",
+        # S5-01: explicit per-project HITL review grants -- who granted/revoked which capability to whom and why.
+        # Written by the governed SQL functions in the same transaction as the grant (never by application code).
+        "hitl.project_grant_created",
+        "hitl.project_grant_revoked",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

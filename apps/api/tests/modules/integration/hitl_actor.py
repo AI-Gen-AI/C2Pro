@@ -15,11 +15,34 @@ from uuid import UUID, uuid4
 
 from src.core.auth.models import UserRole
 from src.modules.hitl.application.final_decision_authorization import AuthorizedFinalDecider
+from src.modules.hitl.application.project_review_authorization import (
+    AuthorizationMode,
+    ProjectAuthorization,
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowRequest
 
 TEST_DECIDER = AuthorizedFinalDecider(
     tenant_id=UUID(int=0xA11CE), user_id=UUID(int=0xB0B), display_name="Test Reviewer"
 )
+
+
+class PermissiveProjectAuthorizer(ProjectReviewAuthorizer):
+    """For suites whose session is a hand-written fake (no ``tenants`` / ``project_review_grants`` tables).
+
+    These suites exercise the mechanics of the review/resume code, not the per-project authority; that is proven, with
+    denials, against PostgreSQL in ``test_s5_project_review_authorization_pg.py``. Never use it where the real
+    authorizer can run.
+    """
+
+    def __init__(self) -> None:  # no session on purpose
+        pass
+
+    async def require(  # type: ignore[override]
+        self, *, tenant_id: UUID, user_id: UUID, project_id: UUID | None, capability: ProjectCapability, lock: bool = False
+    ) -> ProjectAuthorization:
+        return ProjectAuthorization(tenant_id, project_id, user_id, capability, AuthorizationMode.OFF, None, enforced=False)
 
 
 def decided_request(*args: Any, **kwargs: Any) -> ResumeWorkflowRequest:

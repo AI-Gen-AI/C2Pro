@@ -36,6 +36,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.auth.models import SubscriptionPlan, Tenant, User, UserRole
 from src.core.database import close_db, get_raw_session, init_db
+from src.modules.hitl.application.project_review_authorization import (
+    SETTINGS_KEY,
+    transitional_off_setting,
+)
 from tests.e2e_seed.seed_wedge import TENANT_ID, TEST_PASSWORD_HASH, seed_wedge_e2e
 
 TENANT_B_ID = UUID(os.getenv("E2E_TENANT_B_ID", "00000000-0000-0000-0000-00000000a114"))
@@ -105,6 +109,9 @@ async def _upsert_tenant_b(db: AsyncSession, ids: dict[str, str]) -> None:
                 max_storage_gb=100,
                 is_active=True,
                 clerk_org_id=ids["TENANT_B_CLERK_E2E_ORG_ID"],
+                settings={
+                    SETTINGS_KEY: transitional_off_setting("integral UAT synthetic tenant B: isolation target only")
+                },
             )
         )
     else:
@@ -149,6 +156,12 @@ async def seed() -> dict[str, Any]:
             trust_governance = dict(settings.get("trust_governance") or {})
             trust_governance["structured_source_self_approval"] = self_approval_exception()
             settings["trust_governance"] = trust_governance
+            # S5-02: the journey creates its project AFTER this seed, so explicit per-project grants cannot exist yet.
+            # Tenant A keeps the legacy HITL rule as a DECLARED, transitional relaxation (never a secure state).
+            settings[SETTINGS_KEY] = transitional_off_setting(
+                "integral UAT synthetic tenant A: single human, project created by the journey; grants cannot precede "
+                "the project. Transitional; S5 is not accepted while a tenant is in this mode."
+            )
             await db.execute(update(Tenant).where(Tenant.id == TENANT_ID).values(settings=settings))
             await _upsert_tenant_b(db, ids)
             await db.commit()
