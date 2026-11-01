@@ -57,6 +57,7 @@ import {
   approveThroughUi,
   decideFindingsThroughUi,
   reviewRowIdOf,
+  grantProjectAuthority,
   seedControlledFindings,
   type ControlledSeed,
   type FindingDecisionsOutcome,
@@ -119,7 +120,7 @@ const TITLES: Record<StageId, string> = {
 };
 
 const REQUIRED: Partial<Record<StageId, string[]>> = {
-  S1: ["tenant-a-identity", "tenant-b-identity", "tenants-differ", "project-a-created", "project-b-created", "a-to-b-denied", "b-to-a-denied"],
+  S1: ["tenant-a-identity", "tenant-b-identity", "tenants-differ", "project-a-created", "project-a-grants-enforce", "project-b-created", "a-to-b-denied", "b-to-a-denied"],
   S2: ["unsupported-refused", "contract-uploaded", "budget-uploaded", "schedule-uploaded", "specification-uploaded", "rejected-candidate-uploaded", "bytes-pinned"],
   S3: ["health-six-dimensions", "evaluated", "score-honest", "alerts-persisted"],
   S4: ["alert-opened", "source-resolved", "budget-row-opened", "budget-row-verified"],
@@ -242,6 +243,18 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         ledger.milestone("project-a-created");
         ledger.evidence("projectA", state.projectA);
         await recorder.screenshot(pageA, "s1-project-a-created");
+
+        // D1: explicit per-project grants + `enforce`, once the project exists and BEFORE any HITL operation.
+        const grants = await grantProjectAuthority(state.projectA);
+        ledger.check(
+          "the three review capabilities are granted on THIS project through the governed function",
+          grants.grants.join(",") === "APPROVE_CANDIDATE,READ_REVIEW,REVIEW_FINDING",
+          grants.grants.join(","),
+        );
+        ledger.check("tenants A and B are in enforce before any HITL operation", grants.enforcedTenants.length === 2, grants.enforcedTenants.join(","));
+        ledger.check("the single human's grants are declared SELF_GRANTED_NOT_INDEPENDENT", grants.grantKind === "SELF_GRANTED_NOT_INDEPENDENT", grants.grantKind);
+        ledger.evidence("projectGrants", grants);
+        ledger.milestone("project-a-grants-enforce");
 
         tenantB = await signInTenantB(browser, base, TENANT_B_EMAIL);
         state.identityB = await clerkIdentity(tenantB.page);

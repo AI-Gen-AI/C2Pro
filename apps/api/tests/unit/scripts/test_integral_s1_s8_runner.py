@@ -333,7 +333,23 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
         },
     ]
     events += trust_events
+    grants = [
+        {
+            "grant_id": uuid4(), "tenant_id": tenant_a, "project_id": project_a, "user_id": user_a,
+            "permission": capability, "granted_by": user_a, "grant_reason": "integral UAT: explicit grant",
+            "self_grant_exception": True, "revoked_at": None,
+        }
+        for capability in ("APPROVE_CANDIDATE", "READ_REVIEW", "REVIEW_FINDING")
+    ]
+    events += [
+        {
+            "event_id": uuid4(), "event_type": "hitl.project_grant_created", "actor": f"user:{user_a}",
+            "document_id": None, "payload": {"grant_id": str(g["grant_id"]), "permission": g["permission"]},
+        }
+        for g in grants
+    ]
     facts = verifier.Facts(
+        project_grants=grants,
         project_a={"id": project_a, "tenant_id": tenant_a, "name": "A"},
         project_b={"id": project_b, "tenant_id": tenant_b, "name": "B"},
         tenants={
@@ -343,10 +359,18 @@ def _world() -> tuple[verifier.Facts, dict, verifier.Expectations]:
                 "settings": {
                     "trust_governance": {
                         "structured_source_self_approval": dict(SELF_APPROVAL_EXCEPTION)
-                    }
+                    },
+                    "hitl_project_authorization": {
+                        "mode": "enforce",
+                        "single_person_exception": dict(SELF_APPROVAL_EXCEPTION),
+                    },
                 },
             },
-            str(tenant_b): {"id": tenant_b, "clerk_org_id": "org_b", "settings": {}},
+            str(tenant_b): {
+                "id": tenant_b,
+                "clerk_org_id": "org_b",
+                "settings": {"hitl_project_authorization": {"mode": "enforce"}},
+            },
         },
         users=[
             {"id": user_a, "tenant_id": tenant_a, "clerk_user_id": "user_a", "is_active": True},
@@ -1893,3 +1917,46 @@ def test_the_spec_requests_and_decides_both_structured_sources_through_the_appli
     # The runner never writes a database row nor forges an event for the trust: it clicks the product's controls.
     assert "document-request-trust" in flow and "structured-source-trust/decisions" in flow
     assert "INSERT" not in flow.upper().replace("INSERTION", "")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("tenant_a_off", "tenant A runs HITL project authorization in enforce"),
+        ("tenant_b_audit", "tenant B runs HITL project authorization in enforce"),
+        ("missing_capability", "exactly the three review capabilities"),
+        ("revoked_capability", "exactly the three review capabilities"),
+        ("grant_of_a_stranger", "authenticated Clerk user of tenant A"),
+        ("no_reason", "carries its actor and a reason"),
+        ("self_grant_without_exception", "only with the complete audited single-person exception"),
+        ("tenant_b_grant", "tenant B has no single-person exception and no grant"),
+        ("no_audit_event", "each grant has its audit event"),
+    ],
+)
+def test_the_run_is_held_to_enforce_and_explicit_audited_grants(mutation: str, expected: str) -> None:
+    facts, browser, expect = _world()
+    a = str(facts.project_a["tenant_id"])
+    b = str(facts.project_b["tenant_id"])
+    if mutation == "tenant_a_off":
+        facts.tenants[a]["settings"]["hitl_project_authorization"] = {"mode": "off", "transitional": True}
+    elif mutation == "tenant_b_audit":
+        facts.tenants[b]["settings"]["hitl_project_authorization"] = {"mode": "audit"}
+    elif mutation == "missing_capability":
+        facts.project_grants = facts.project_grants[:2]
+        facts.events = [e for e in facts.events if e["event_type"] != "hitl.project_grant_created"] + [
+            e for e in facts.events if e["event_type"] == "hitl.project_grant_created"
+        ][:2]
+    elif mutation == "revoked_capability":
+        facts.project_grants[0] = {**facts.project_grants[0], "revoked_at": "2026-11-01T00:00:00+00:00"}
+    elif mutation == "grant_of_a_stranger":
+        facts.project_grants[0] = {**facts.project_grants[0], "user_id": uuid4()}
+    elif mutation == "no_reason":
+        facts.project_grants[0] = {**facts.project_grants[0], "grant_reason": "  "}
+    elif mutation == "self_grant_without_exception":
+        facts.tenants[a]["settings"]["hitl_project_authorization"].pop("single_person_exception")
+    elif mutation == "tenant_b_grant":
+        facts.project_grants.append({**facts.project_grants[0], "grant_id": uuid4(), "tenant_id": facts.project_b["tenant_id"]})
+    else:
+        facts.events = [e for e in facts.events if e["event_type"] != "hitl.project_grant_created"]
+    failed = _failed(facts, browser, expect)
+    assert any(expected in item for item in failed), failed

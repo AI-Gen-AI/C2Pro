@@ -278,6 +278,40 @@ export async function seedControlledFindings(tenantId: string, documentId: strin
   throw new Error(`INTEGRAL_CONTROLLED_SEED_FAILED: ${lastError}`);
 }
 
+export interface ProjectGrantsReport {
+  grantKind: string;
+  grants: string[];
+  enforcedTenants: string[];
+}
+
+/**
+ * Owner decision D1 (nonproduction, isolated database of THIS run): the explicit grants step, run once the journey's
+ * project exists. It never creates a Clerk identity: it grants the three review capabilities on THIS project to the
+ * existing user of tenant A through the governed SQL function (actor, reason and audit event) and switches the two
+ * synthetic tenants to `enforce` BEFORE any HITL operation. The single human of tenant A uses the documented, limited
+ * single-person exception, so the grants are labelled SELF_GRANTED_NOT_INDEPENDENT. Fails closed on any refusal.
+ */
+export async function grantProjectAuthority(projectId: string): Promise<ProjectGrantsReport> {
+  const apiDir = path.resolve(process.cwd(), "..", "api");
+  try {
+    const out = execFileSync("python", ["-m", "scripts.grant_integral_uat_project", projectId], {
+      cwd: apiDir,
+      env: { ...process.env, ENVIRONMENT: "test" },
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+    const report = JSON.parse(out.trim().split("\n").pop() ?? "{}") as Json;
+    return {
+      grantKind: str(report.grant_kind),
+      grants: Object.keys((report.grants as Json) ?? {}).sort(),
+      enforcedTenants: Array.isArray(report.enforced_tenants) ? (report.enforced_tenants as string[]) : [],
+    };
+  } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr ?? "";
+    throw new Error(`INTEGRAL_PROJECT_GRANTS_FAILED: ${stderr.trim().split("\n").pop() || String(error)}`, { cause: error });
+  }
+}
+
 /** The FINAL human act on a pending review: approve it (confirm dialog), through the review page. */
 export async function approveThroughUi(
   page: Page,

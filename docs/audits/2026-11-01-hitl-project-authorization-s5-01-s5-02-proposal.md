@@ -179,3 +179,61 @@ concurrent revocation is *prepared* (`revalidate()` locks the grant `FOR SHARE`,
 but is not wired into the first-TRUSTED transaction — that is S5-05; queue list/get are not project-filtered; `release` /
 `escalate` lack the human gate; grants are dormant, not auto-revoked, when a user leaves a tenant; the legacy characterization
 tests in `test_s5_project_authorization_evidence_pg.py` describe the transitional `off` behaviour, not the secure one.
+
+## D1 and S5-03 — implementation status (owner decision of 2026-11-01, second increment)
+
+**D1 — explicit grants after the project exists (nonproduction, isolated database only).** `scripts/grant_integral_uat_project.py`
+runs once the journey's project (and the Clerk Development identities A/B, which it never creates) exist: it refuses outside
+`ENVIRONMENT=test` on a loopback database; grants READ_REVIEW / REVIEW_FINDING / APPROVE_CANDIDATE through the governed SQL
+function (actor, reason, audit event); and switches tenant A and tenant B to `enforce` before any HITL operation. The single
+human of tenant A cannot be granted by anyone else, so the step uses the documented, limited, audited single-person exception
+(tenant A only; every grant labelled `SELF_GRANTED_NOT_INDEPENDENT`); an independent ADMIN (`--grantor`) needs no exception. The
+integral spec calls it right after "project A created" (milestone `project-a-grants-enforce`) and the independent verifier
+now holds the run to: both tenants in `enforce`, exactly the three active grants of the authenticated user of tenant A, an actor
+and reason on each, the exception complete when a self-grant exists, no exception/grant for tenant B, one audit event per grant.
+The earlier rehearsal under `off` keeps its historical value; it does not prove security under `enforce`. **No integral run was
+executed for this increment.** PostgreSQL tests (`test_s5_integral_grants_step_pg.py`) demonstrate enforce before/after, denial
+between two projects of the same tenant, revocation, A/B isolation and fail-closed behaviour.
+
+**S5-03 — deterministic reconciliation (C+B).** `domain/finding_reconciliation.py` (pure) and
+`application/finding_reconciliation_service.py` (loads the exact candidate and the COMPLETE ledger under the caller's project
+authority). It is NOT a signature and NOT a promotion: it neither approves, rejects, trusts nor writes anything.
+
+Meaning of each decision (latest decision on a finding wins; the ledger is append-only):
+
+| Ledger state of a finding | Resolution | Effect |
+|---|---|---|
+| CONFIRMED | RETAINED | valid decision, kept with its evidence (event, reviewer, reason) |
+| DISMISSED | EXCLUDED | out of the effective content, history kept; announces DISMISSED_EXCLUSION (a derived Vn+1 is required) |
+| NEEDS_INFO | BLOCKED_NEEDS_INFO | blocks the signature until a LATER decision supersedes it |
+| CORRECTION_PROPOSED | CORRECTION_PENDING | announces CORRECTION_PROPOSED (a NEW candidate and its own signature); never applied |
+| none | UNDECIDED | blocks (fail closed) |
+| critique | — | blocks only if MATERIAL, evidence VERIFIED and OPEN; otherwise advisory |
+
+`signable_as_is` is true only when nothing blocks and no derived candidate is required. A ledger that is not contiguous from
+revision 1, whose CAS chain is broken, that holds an event of another tenant/review, a duplicate event, or a decision on a
+finding outside the candidate is INCONSISTENT and concludes nothing. Decisions recorded against another artifact hash,
+document revision, generation or fence are STALE: ignored, reported, never applied.
+
+**Contract for S5-04 (signature).** Call `reconcile(tenant_id, user, review_row_id, capability=APPROVE_CANDIDATE)`; sign only
+if `result.signable_as_is` (else produce the derived candidate and reconcile that one); bind the act to `result.receipt()`
+(`digest`, review/project/artifact id-version-hash, generation, fencing token, ledger revision, effective-content digest,
+policy version `s5-03/v1`).
+
+**Contract for S5-05 (first TRUSTED).** Inside the transaction that commits TRUSTED call
+`verify_current(receipt, ..., lock=True)` (FOR SHARE on the review row; the ledger writer's FOR UPDATE then waits) together with
+`ProjectReviewAuthorizer.revalidate`. A digest difference is `ReconciliationStale`; a revoked grant is a denial, not "stale".
+**This atomicity is S5-05's and is NOT claimed solved by S5-03.**
+
+**Pinned gap.** `test_GAP_the_final_approval_does_not_consult_the_reconciliation_yet_that_is_s5_04`: with a NEEDS_INFO on the
+ledger the reconciler says "do not sign" but today's final approval still commits. S5-04 must flip that test.
+
+**Critique coverage (honest limit).** Critique has no typed persisted envelope (`finding_decision_writer` refuses CRITIQUE
+decisions). The service therefore reports `critique_coverage`: `NONE_PRESENT`, or `UNSTRUCTURED_NOT_EVALUATED` when
+`critique_notes` prose exists (an advisory). The material+verified+open rule is implemented and tested on typed input, but no
+production producer exists until a typed critique envelope does.
+
+**Residual risks / conditions for S5 acceptance.** S5-04 (signature bound to the receipt) and S5-05 (transactional revalidation of
+grant + digest at the first TRUSTED) are not implemented; the derived-candidate (Vn+1) producer for DISMISSED/CORRECTION does not
+exist; critique has no typed source; real grants on real tenants and `enforce` in Production need separate approval; an integral
+run under `enforce` with independent real-AI UAT has not been executed; `off`/`audit` tenants remain non-secure.

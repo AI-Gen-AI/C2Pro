@@ -135,6 +135,8 @@ class Facts:
     tenant_a_distinct_approver_required: bool | None = None
     tenant_a_ai_spend: float = 0.0
     finding_decisions: list[dict[str, Any]] = field(default_factory=list)
+    # D1: every grant row of the two projects (active and revoked), read from the table itself
+    project_grants: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _doc(key: str, browser: dict[str, Any]) -> str:
@@ -264,6 +266,34 @@ def _judge_s1(c: _Ctx) -> None:
         ident.get(k) is True for k in ("distinctUsers", "distinctOrganizations", "distinctTenants")
     )
     add("S1", "the browser saw distinct users, Organizations and tenants", distinct)
+
+
+GRANTED_CAPABILITIES = ("APPROVE_CANDIDATE", "READ_REVIEW", "REVIEW_FINDING")
+
+
+def _judge_s1_authority(c: _Ctx) -> None:
+    """D1: the per-project authority the run's HITL operations were taken under (enforce, explicit grants, audit)."""
+    add = c.add
+    for label, tenant in (("A", c.tenant_a), ("B", c.tenant_b)):
+        marker = ((c.facts.tenants.get(tenant) or {}).get("settings") or {}).get("hitl_project_authorization") or {}
+        add("S1", f"tenant {label} runs HITL project authorization in enforce (not the transitional off/audit)", marker.get("mode") == "enforce" and not marker.get("transitional"))
+    grants = [g for g in c.facts.project_grants if str(g["project_id"]) == str(c.project_a["id"])]
+    active = [g for g in grants if g.get("revoked_at") is None]
+    humans = {str(u["id"]) for u in c.users_of(c.tenant_a, c.expect.clerk_user_a)}
+    add("S1", "project A holds exactly the three review capabilities, once each, as active grants", sorted(g["permission"] for g in active) == list(GRANTED_CAPABILITIES))
+    add("S1", "every grant of project A belongs to tenant A and to the authenticated Clerk user of tenant A", bool(active) and all(str(g["tenant_id"]) == c.tenant_a and str(g["user_id"]) in humans for g in active))
+    add("S1", "every grant carries its actor and a reason", bool(active) and all(g.get("granted_by") and str(g.get("grant_reason") or "").strip() for g in active))
+    self_granted = [g for g in active if str(g["granted_by"]) == str(g["user_id"])]
+    exception = (((c.facts.tenants.get(c.tenant_a) or {}).get("settings") or {}).get("hitl_project_authorization") or {}).get("single_person_exception")
+    add(
+        "S1",
+        "a self-grant exists only with the complete audited single-person exception of tenant A and is labelled",
+        not self_granted or (_exception_complete(exception) and all(g.get("self_grant_exception") is True for g in self_granted)),
+    )
+    b_exception = (((c.facts.tenants.get(c.tenant_b) or {}).get("settings") or {}).get("hitl_project_authorization") or {}).get("single_person_exception")
+    add("S1", "tenant B has no single-person exception and no grant on project A or B", b_exception is None and not [g for g in c.facts.project_grants if str(g["tenant_id"]) == c.tenant_b])
+    created = [e for e in c.facts.events if e["event_type"] == "hitl.project_grant_created"]
+    add("S1", "each grant has its audit event, written with it", len(created) == len(grants) and {str((e.get("payload") or {}).get("grant_id")) for e in created} == {str(g["grant_id"]) for g in grants})
 
 
 _FIXTURE_KEY_OF = {
@@ -924,6 +954,7 @@ def judge(facts: Facts, browser: dict[str, Any], expect: Expectations) -> list[C
     if facts.project_a is not None and facts.project_b is not None:
         for stage in (
             _judge_s1,
+            _judge_s1_authority,
             _judge_s2,
             _judge_s3,
             _judge_s4,
@@ -998,6 +1029,18 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
             **pa,
         )
         if await _scalar_exists(conn, "public.hitl_finding_decisions")
+        else []
+    )
+    facts.project_grants = (
+        await _rows(
+            conn,
+            "SELECT grant_id, tenant_id, project_id, user_id, permission, granted_by, grant_reason, self_grant_exception, revoked_at "
+            "FROM public.project_review_grants WHERE project_id IN (:a, :b) OR tenant_id = ANY(:ids) ORDER BY granted_at, grant_id",
+            a=project_a,
+            b=project_b,
+            ids=tenant_ids,
+        )
+        if await _scalar_exists(conn, "public.project_review_grants")
         else []
     )
     facts.alerts = await _rows(
