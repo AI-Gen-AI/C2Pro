@@ -63,6 +63,8 @@ export default defineConfig({
         /(^|[\\/])integral-s1-s8\.spec\.ts$/,
         /(^|[\\/])integral-auth-preflight\.spec\.ts$/,
         /(^|[\\/])integral-runner-panel-wait\.spec\.ts$/,
+        // Opt-in real-AI vertical (own project, manual job only: it spends a provider budget).
+        /(^|[\\/])real-ai-hitl-vertical\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -136,6 +138,20 @@ export default defineConfig({
         type: "e2e",
         priority: "p0",
         description: "One persisted project S1-S8, two Clerk Development tenants, fail-closed ledger",
+      },
+    },
+    {
+      // Second functional pilot: REAL AI + browser + human review + PostgreSQL on one project. Opt-in only (manual job of
+      // real-document-operability.yml, behind the AI call governor). Live Clerk sign-in like P0b: no stored session.
+      name: "real-ai-hitl",
+      testMatch: [/(^|[\\/])real-ai-hitl-vertical\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"], actionTimeout: 90_000, navigationTimeout: 90_000 },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "TS-E2E-REAL-AI-HITL-001",
+        type: "e2e",
+        priority: "p0",
+        description: "Real provider + browser + per-finding human decisions + relogin, one project",
       },
     },
     {

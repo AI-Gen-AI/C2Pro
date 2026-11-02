@@ -93,7 +93,7 @@ export interface HumanDecision {
  * Open the document's review from its row (as a person does) and return the card of THAT document's item: the
  * queue may hold other documents' items, so the decision is always addressed to the card of this item.
  */
-async function openReviewCard(
+export async function openReviewCard(
   page: Page,
   recorder: Pj01RunRecorder,
   projectId: string,
@@ -193,14 +193,14 @@ export async function awaitFindingsPanel(
   return { reviewRowId, findings: expected.findings };
 }
 
-interface FindingsReadback {
+export interface FindingsReadback {
   artifactHash: string;
   ledgerRevision: number | null;
   actions: Array<string | null>;
 }
 
 /** The server's own read model of a review's findings: the pins and what the ledger holds per ordinal. */
-async function readFindingsBack(page: Page, reviewRowId: string): Promise<FindingsReadback> {
+export async function readFindingsBack(page: Page, reviewRowId: string): Promise<FindingsReadback> {
   const answer = await callApi(page, `/api/v1/hitl/reviews/${reviewRowId}/findings`);
   if (answer.status !== 200) throw new Error(`INTEGRAL_FINDINGS_READBACK_FAILED: HTTP ${answer.status} reading the findings of review row ${reviewRowId}`);
   const body = answer.data as Json;
@@ -226,7 +226,12 @@ export const FINDING_TEXTS = {
  * Which provisional decisions a run takes on a review. `four-actions` is the NEGATIVE scenario (it leaves a finding
  * undecided on purpose, so the approval gate must refuse); `confirm` is the POSITIVE one (only CONFIRMED, only the listed ordinals).
  */
-export type FindingPlan = { kind: "four-actions" } | { kind: "confirm"; ordinals: number[] };
+export type FindingPlan =
+  | { kind: "four-actions" }
+  | { kind: "confirm"; ordinals: number[] }
+  // Real-AI vertical: ONE finding confirmed as it stands and ONE dismissed with a typed reason. Nothing else is decided
+  // and the review itself is neither approved nor rejected.
+  | { kind: "confirm-and-dismiss"; confirm: number; dismiss: number; dismissReason: string };
 
 const SHOWN: Record<string, string> = {
   CONFIRMED: "Confirmed (provisional)",
@@ -266,6 +271,8 @@ export async function decideFindingsThroughUi(
     return { surfaced: false, findings: 0, decided: [], scopeStatesProvisional: false, reviewStillPending: true, persistedAfterReload: false, reviewRowId: "", artifactHash: "", ledgerRevision: null, persistedActions: [] };
   }
   const findings = await region.locator("li[data-testid^='finding-']").count();
+  // Without a seed the panel itself says which review row it is bound to: read it so the persisted decisions can be read back.
+  if (!reviewRowId) reviewRowId = ((await region.getAttribute("data-testid")) ?? "").replace(/^review-findings-/, "");
   const scope = ((await region.locator("[data-testid^='review-findings-scope-']").textContent()) ?? "").toLowerCase();
   const scopeStatesProvisional = scope.includes("provisional") && scope.includes("do not approve, reject or trust");
   const decided: Array<{ ordinal: number; action: string }> = [];
@@ -291,6 +298,14 @@ export async function decideFindingsThroughUi(
       await wait;
       await settled(ordinal, "CONFIRMED");
     }
+  } else if (plan.kind === "confirm-and-dismiss") {
+    if (plan.confirm >= findings || plan.dismiss >= findings) {
+      throw new Error(`INTEGRAL_FINDINGS_PLAN_NEEDS_MORE_FINDINGS: the plan decides ordinals ${plan.confirm} and ${plan.dismiss} but the panel shows ${findings} finding(s)`);
+    }
+    const wait = posted(plan.confirm);
+    await region.getByTestId(`finding-action-${plan.confirm}-CONFIRMED`).click();
+    await wait;
+    await settled(plan.confirm, "CONFIRMED");
   } else if (findings > 0) {
     const wait = posted(0);
     await region.getByTestId("finding-action-0-CONFIRMED").click();
@@ -311,6 +326,7 @@ export async function decideFindingsThroughUi(
     await wait;
     await settled(ordinal, action);
   };
+  if (plan.kind === "confirm-and-dismiss") await typed(plan.dismiss, "DISMISSED", plan.dismissReason);
   if (plan.kind === "four-actions") {
     if (findings > 1) await typed(1, "DISMISSED", FINDING_TEXTS.dismissReason);
     if (findings > 2) await typed(2, "NEEDS_INFO", FINDING_TEXTS.needsInfoReason);
@@ -341,7 +357,12 @@ export async function decideFindingsThroughUi(
   }
   if (expected) {
     // Never a success with fewer decisions than the plan takes: that is the failure this guard exists for.
-    const planned = plan.kind === "confirm" ? plan.ordinals.filter((o) => o < expected.findings).length : Math.min(4, expected.findings);
+    const planned =
+      plan.kind === "confirm"
+        ? plan.ordinals.filter((o) => o < expected.findings).length
+        : plan.kind === "confirm-and-dismiss"
+          ? 2
+          : Math.min(4, expected.findings);
     if (decided.length !== planned) {
       throw new Error(`INTEGRAL_FINDINGS_DECISIONS_INCOMPLETE: ${decided.length} of ${planned} planned decision(s) were taken through the UI (panel showed ${findings} finding(s), seed created ${expected.findings})`);
     }

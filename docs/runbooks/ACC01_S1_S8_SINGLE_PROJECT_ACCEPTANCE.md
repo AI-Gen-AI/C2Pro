@@ -142,6 +142,54 @@ tenant AI budget, and the run records `tenant_a_ai_spend` so the real figure rep
 7. A pilot-user review of the outputs (usefulness of findings, alerts and Health) recorded separately from the technical verdict;
    independent security review and S7 independent approval remain explicit open items unless they were actually performed.
 
+## Second functional pilot: REAL AI + browser + human review + PostgreSQL (prepared, not executed)
+
+One project, one existing Clerk Development identity, one synthetic contract (PJ-01 Contract A), nothing integral. It proves that a
+person can WORK with real findings, not that the provider answers. Spec `real-ai-hitl-vertical.spec.ts` (Playwright project
+`real-ai-hitl`), independent verifier `apps/api/scripts/verify_real_ai_hitl_pg.py`, job `real-ai-hitl-vertical` of
+`real-document-operability.yml` (already registered on `main`, manual only, independent of the required CI).
+
+**Path (every step is judged; the first failing step names itself).** Clerk login -> project created in the browser -> explicit
+per-project grants + `enforce` (the current review rules; the single human is declared `SELF_GRANTED_NOT_INDEPENDENT`) -> upload
+-> real processing in the Celery worker -> findings in the review UI -> ONE finding CONFIRMED and ONE DISMISSED with a typed reason
+(no final Approve/Reject) -> reload -> sign out and a NEW login -> the decisions are still there -> PostgreSQL read by a separate
+process: document, candidate (`proposed`), review (still pending), exactly two ledger events, grants, tenant, and the provider
+ledger. Verdict `PASS` / `PARTIAL` (a capability is missing, with its concrete blocker) / `FAIL`; only `FAIL` exits non-zero.
+
+**What is already known to be PARTIAL (not hidden, not built around).** The review UI renders title, category, severity and
+description of a finding; it does NOT render the contract reference (`clause_ref` is in the server read model) nor the quoted
+source text (`source_quote` stays in the candidate artifact and is not in the read model). The spec records
+`CONTRACT_REFERENCE_NOT_SHOWN_IN_REVIEW_UI` / `SOURCE_QUOTE_NOT_SHOWN_IN_REVIEW_UI` and the verdict is therefore `PARTIAL` even if
+everything else passes. In the P0b lane the provider is mocked and the risk extractor reports an honest failure with no risks,
+which is why no deterministic lane shows real findings.
+
+**Cost control: `C2PRO_AI_MOCK=0` switches EVERY AI-capable node, so a flag is not a control.** All of them reach Anthropic through
+`Messages.create`; `apps/api/scripts/real_ai_governor/` wraps it in the API and the worker (loaded through `PYTHONPATH`, checked
+by a self-check step before either process starts) and enforces across processes, through one ledger file: a maximum number of
+calls (default 12, ceiling 20), a maximum spend (default USD 1.00, ceiling 2.00, worst case of each call checked BEFORE it is made),
+SDK retries forced to 0, streaming and the embeddings provider refused, a fail-closed refusal if a limit is missing. Embeddings stay
+mocked and the job has no OpenAI credential. The ledger records calls, models, provider message ids, tokens and cost; never a prompt
+or a completion. The product's own tenant budget (`CostController`) is enforced at two call sites only, so it is not relied on.
+
+**Dispatch (needs the owner's express authorization of THIS run; the first pilot's authorization was for one run and is spent).**
+`real-document-operability.yml` with `run_real_ai_hitl_vertical=true`, `confirm_candidate_sha=<full 40-hex SHA>` and
+`owner_authorization=OWNER-AUTHORIZED-REAL-AI-HITL-VERTICAL`; optional `governor_max_calls`, `governor_max_usd`. Without all three
+the job does not exist for that run. No retry is automatic: a failure is the finding.
+
+## Owner path to a Development/Test instance (minimum, current state)
+
+Inventory (read-only): Railway project `c2pro-api` has ONE environment, `production` (API, Worker, Scheduler, Redis); Vercel has the
+web project `v0-c2-pro` (production + branch previews). There is no hosted Development/Test back end, and a preview of the web
+alone has nothing to talk to except Production, which this work must not touch.
+
+| Option | What it needs | Cost / risk | Verdict |
+|---|---|---|---|
+| A. Local stack on the owner's machine (`make setup-local`: Docker PostgreSQL + Redis, `make dev`), Clerk **Development** keys | Docker; the Development publishable/secret keys in ignored `.env` files; the E2E Organization reconciled by `provision_clerk_e2e_fixture.py` (fails closed unless the keys are Development) and the tenant seeded by `seed_e2e_auth_tenancy`; **the owner's own Clerk Development user as a member of that Organization** | Zero hosting cost; AI mocked, or the owner's own key for a real run; nothing near Production | **Minimum path.** Blocker: a Clerk Development identity for the owner does not exist yet; creating it is an identity creation that is not authorized |
+| B. Hosted Development environment | A second Railway environment (API + Worker + Redis) with an isolated database, a Vercel preview scoped to the branch with the Development Clerk keys, CORS and JWKS for that origin | Recurring hosting cost, secrets management, and an isolated database to provision | Next step after A shows the experience is worth hosting; needs owner decisions on cost and database |
+
+Until the owner's Development identity exists, the closest thing to "entering personally" is the evidence this pilot produces
+(manifest + verdict + ledger) and the existing Development E2E identity driven by the spec.
+
 ## Rules
 
 - No merge, deployment, production SQL/DDL, bypass of a human approval, or automatic change to MASTER as part of a run.
