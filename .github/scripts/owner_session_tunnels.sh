@@ -17,7 +17,9 @@ echo "${SHA256}  ${BIN}" | sha256sum -c -
 chmod +x "$BIN"
 
 start_tunnel() {
-  local name="$1" port="$2" log="${RUNNER_TEMP}/cf-${name}.log"
+  local name="$1"
+  local port="$2"
+  local log="${RUNNER_TEMP}/cf-${name}.log"
   nohup "$BIN" tunnel --no-autoupdate --url "http://localhost:${port}" > "$log" 2>&1 &
   echo $! > "${RUNNER_TEMP}/cf-${name}.pid"
   for _ in $(seq 1 60); do
