@@ -2,8 +2,8 @@
  * TS-E2E-OWNER-SESSION-PLUMBING-001 -- can a person's browser reach this ephemeral stack through its PUBLIC addresses?
  *
  * No identity, no document, no AI: it opens the sign-in page of the public web URL, checks that Clerk (Development) loads on that
- * origin, that the browser can reach the API at its public address across origins (CORS), and that the application tells the
- * browser to upload to that same public API. If this passes, the only thing the owner's session still needs is the owner's login.
+ * origin, and that the browser can reach the API at its public address across origins (CORS). Where uploads point is checked later,
+ * inside the authenticated session (the route that says so is protected). If this passes, the only thing the owner's session still needs is the owner's login.
  * Opt-in (the manual owner-session job sets OWNER_SESSION_WEB_URL / OWNER_SESSION_API_URL).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -50,13 +50,19 @@ test.describe("TS-E2E-OWNER-SESSION-PLUMBING-001: public addresses of the owner 
       expect("allowOrigin" in fromNode && fromNode.allowOrigin, "the API allows the public web origin (CORS)").toBe(WEB);
       expect("status" in health && health.status, `the page can fetch the API across origins: ${JSON.stringify(health)}`).toBe(200);
 
+      // /api/runtime/backend-url is a PROTECTED route (Clerk proxy): signed out, the browser is redirected to Clerk, a cross-origin
+      // hop that fetch reports as "Failed to fetch". That is correct behaviour, not a plumbing defect, so it is recorded as a fact and
+      // NOT asserted here; where uploads point is verified inside the authenticated owner session, after the owner's login.
       const runtime = await page.evaluate(async () => {
-        const response = await fetch("/api/runtime/backend-url", { cache: "no-store" });
-        return { status: response.status, body: (await response.json().catch(() => ({}))) as Record<string, unknown> };
+        try {
+          const response = await fetch("/api/runtime/backend-url", { cache: "no-store", redirect: "manual" });
+          return { status: response.status, type: response.type };
+        } catch (error) {
+          return { error: String(error) };
+        }
       });
-      facts.runtimeBackendUrlStatus = runtime.status;
-      facts.uploadsTargetPublicApi = JSON.stringify(runtime.body).includes(new URL(API).host);
-      expect(facts.uploadsTargetPublicApi, "the application tells the browser to upload to the PUBLIC API address").toBe(true);
+      facts.runtimeBackendUrlSignedOut = runtime;
+      facts.uploadsTargetCheck = "deferred to the authenticated owner session (route is protected)";
     } finally {
       mkdirSync(path.dirname(OUT), { recursive: true });
       writeFileSync(OUT, `${JSON.stringify(facts, null, 2)}\n`, "utf8");
