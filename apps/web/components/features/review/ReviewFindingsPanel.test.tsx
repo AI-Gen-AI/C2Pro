@@ -85,6 +85,43 @@ describe("ReviewFindingsPanel", () => {
     expect(screen.getByTestId("finding-current-1")).toHaveTextContent("No decision yet");
   });
 
+  describe("contract traceability (clause reference and quoted text, apart from the generated description)", () => {
+    const QUOTE = "The Contractor shall achieve the structural milestone within 120 days of commencement.";
+    const traced = (risk: object) => view({ findings: [finding(0, { risk: { title: "Milestone", description: "A generated summary.", category: "SCHEDULE", ...risk } })] });
+
+    it("shows the clause reference and the verified quote, each apart from the AI-generated description", async () => {
+      list.mockResolvedValue(traced({ clause_ref: "3.2", source_quote: QUOTE, source_quote_status: "VERIFIED" }));
+      renderPanel();
+      await screen.findByTestId("finding-0");
+      expect(screen.getByTestId("finding-clause-0")).toHaveTextContent("Contract reference: Clause 3.2");
+      expect(screen.getByTestId("finding-quote-0")).toHaveTextContent(QUOTE);
+      expect(screen.getByTestId("finding-description-0")).toHaveTextContent("Analysis (AI-generated): A generated summary.");
+      expect(screen.getByTestId("finding-description-0")).not.toHaveTextContent(QUOTE);
+      expect(screen.getByTestId("finding-trace-0")).toHaveTextContent(/found verbatim in the document/i);
+      expect(screen.queryByTestId("finding-quote-missing-0")).toBeNull();
+    });
+
+    it("never shows text as a quotation unless the server verified it: a withheld quote says so", async () => {
+      list.mockResolvedValue(
+        traced({ clause_ref: "3.1", source_quote: "Sneaked in by a client bug", source_quote_status: "NOT_FOUND_IN_DOCUMENT" }),
+      );
+      renderPanel();
+      await screen.findByTestId("finding-0");
+      expect(screen.queryByTestId("finding-quote-0")).toBeNull();
+      expect(screen.getByTestId("finding-quote-missing-0")).toHaveTextContent(/not found verbatim in the document/i);
+      expect(screen.getByTestId("finding-trace-0")).not.toHaveTextContent("Sneaked in by a client bug");
+    });
+
+    it("a quote without a VERIFIED status is not shown either, and a missing clause reference is stated, not invented", async () => {
+      list.mockResolvedValue(traced({ source_quote: QUOTE }));
+      renderPanel();
+      await screen.findByTestId("finding-0");
+      expect(screen.queryByTestId("finding-quote-0")).toBeNull();
+      expect(screen.getByTestId("finding-quote-missing-0")).toHaveTextContent("No quote available for this finding.");
+      expect(screen.getByTestId("finding-clause-0")).toHaveTextContent("none given by the analysis");
+    });
+  });
+
   it("confirms a finding with the server's own pins and no actor field", async () => {
     renderPanel();
     await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));

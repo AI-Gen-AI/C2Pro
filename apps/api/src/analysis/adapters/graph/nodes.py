@@ -53,6 +53,7 @@ from src.analysis.domain.ai_extraction import (
 from src.analysis.domain.contracts import RiskItem, WbsActivity
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
+from src.analysis.domain.risk_provenance import classify_quote
 from src.core.database import get_session_with_tenant
 from src.core.processing_authority import fence_current
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
@@ -135,7 +136,6 @@ _RISK_LEGACY_KEYS = {
     "summary",
     "probability",
     "mitigation_suggestion",
-    "source_quote",
     "source_text_snippet",
     "risk_score",
     "immediate_alert",
@@ -152,7 +152,7 @@ def _unexpected_contract_keys(
     return set(item) - allowed - legacy
 
 
-def _risk_contract_item(item: RiskItem | dict[str, Any]) -> RiskItem:
+def _risk_contract_item(item: RiskItem | dict[str, Any], document_text: str | None = None) -> RiskItem:
     if isinstance(item, RiskItem):
         return item
     unknown = _unexpected_contract_keys(
@@ -171,11 +171,15 @@ def _risk_contract_item(item: RiskItem | dict[str, Any]) -> RiskItem:
         data["source"] = item.get("source_quote") or item.get("source_text_snippet")
     if not data.get("likelihood") and item.get("probability"):
         data["likelihood"] = item["probability"]
+    # The model's quote is a claim: it is stored as a citation only if it is found verbatim in the document (never invented).
+    data["source_quote"], data["source_quote_status"] = classify_quote(
+        item.get("source_quote") or item.get("source_text_snippet"), document_text
+    )
     return RiskItem.model_validate(data)
 
 
-def _risk_contract_payload(item: RiskItem | dict[str, Any]) -> dict[str, Any]:
-    return _risk_contract_item(item).model_dump(mode="python")
+def _risk_contract_payload(item: RiskItem | dict[str, Any], document_text: str | None = None) -> dict[str, Any]:
+    return _risk_contract_item(item, document_text).model_dump(mode="python")
 
 
 def _wbs_contract_item(item: WbsActivity | dict[str, Any]) -> WbsActivity:
@@ -298,7 +302,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         original_chars = len(state.get("document_text", "") or "")
         updated_state = await get_tool("risk_extraction", version="1.0")(state)
         risks = [
-            _risk_contract_payload(item)
+            _risk_contract_payload(item, state.get("document_text"))
             for item in (updated_state.get("extracted_risks") or [])
         ]
         updated_state["extracted_risks"] = risks

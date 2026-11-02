@@ -137,25 +137,15 @@ def test_a_missing_capability_is_partial_with_its_blocker_never_a_pass() -> None
     assert result["verdict"] == "PARTIAL" and result["blocker"].startswith("FEWER_THAN_TWO_FINDINGS")
 
 
-def test_the_quality_measurements_separate_contiguous_quotes_from_stitched_ones_and_do_not_confuse_categories_with_risks() -> None:
+def test_the_quality_measurements_count_only_verified_quotes_and_do_not_confuse_categories_with_risks() -> None:
     contract = "A. The price is fixed.\nB. Completion by 31/12/2025.\nC. Liability is capped."
     risks = [
-        {"category": "BUDGET", "clause_ref": "A", "source_quote": "The price is fixed."},
-        {"category": "TIME", "clause_ref": "B", "source_quote": "The price is fixed. Completion by 31/12/2025."},  # two sentences joined
-        {"category": "LEGAL", "clause_ref": None, "source_quote": ""},
+        {"category": "BUDGET", "clause_ref": "A", "source_quote": "The price is fixed.", "source_quote_status": "VERIFIED"},
+        {"category": "TIME", "clause_ref": "B", "source_quote": None, "source_quote_status": "NOT_FOUND_IN_DOCUMENT"},
+        {"category": "LEGAL", "clause_ref": None, "source_quote": "Liability is capped.", "source_quote_status": None},  # unverified string: not a citation
     ]
     q = verifier.quality_measurements(risks, contract, {"BUDGET", "SCHEDULE", "LEGAL", "SCOPE"})
-    assert q["quotes_contiguous_in_contract"] == 1 and q["quotes_not_contiguous"] == 1 and q["with_clause_ref"] == 2
+    assert q["with_source_quote"] == 1 and q["quotes_contiguous_in_contract"] == 1 and q["quotes_not_contiguous"] == 0
+    assert q["quotes_withheld_as_not_in_document"] == 1 and q["with_clause_ref"] == 2
     assert q["missing_categories"] == ["SCOPE"] and q["category_coverage_is_not_risk_coverage"] is True
     assert q["title_wording"] == "REQUIRES_HUMAN_REVIEW"
-
-
-async def test_findings_without_a_persisted_source_quote_are_a_named_gap_not_a_silent_pass(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
-    await _two_decisions(actors)
-    facts = await _collect(db, actors.w)
-    verdict = verifier.judge(manifest_for(actors.w), facts, LEDGER_OK, LIMITS)
-    codes = {g["code"] for g in verdict["gaps"]}
-    assert verdict["failed_checks"] == []
-    quoted = verifier.quality_measurements(facts["candidate"]["risks"], facts["contract_text"], set())["with_source_quote"]
-    assert ("SOURCE_QUOTE_NOT_PERSISTED_IN_CANDIDATE" in codes) == (quoted == 0)
-    assert verdict["verdict"] == ("PARTIAL" if quoted == 0 else "PASS")

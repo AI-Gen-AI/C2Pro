@@ -78,6 +78,11 @@ class RiskItem(BaseModel):
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     clause_ref: str | None = None
     source: str | None = None
+    # Traceability (separate from the generated ``description``): the exact contract text a finding rests on. ``source_quote`` is
+    # set ONLY when ``source_quote_status`` is VERIFIED (found verbatim in the document, see risk_provenance); otherwise it is None
+    # and the status says why. ``clause_ref`` stays the extractor's own clause label.
+    source_quote: str | None = None
+    source_quote_status: str | None = None
 
     @model_validator(mode="before")
     @classmethod

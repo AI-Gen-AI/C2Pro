@@ -59,8 +59,10 @@ def quality_measurements(risks: list[dict[str, Any]], contract_text: str, expect
     """Measurements, not a verdict: what the findings rest on. Title wording is left to a human reviewer."""
     from src.analysis.domain.risk_categories import normalize_category
 
-    quotes = [(r.get("source_quote") or r.get("source_text_snippet") or "").strip() for r in risks]
-    contiguous = sum(1 for q in quotes if q and q in contract_text)
+    # Only a VERIFIED quote counts as a citation; a legacy/unchecked string never does.
+    quotes = [(r.get("source_quote") or "").strip() if r.get("source_quote_status") == "VERIFIED" else "" for r in risks]
+    squashed = " ".join(contract_text.split())
+    contiguous = sum(1 for q in quotes if q and q in squashed)
     categories = {str(getattr(normalize_category(str(r.get("category"))), "value", r.get("category"))) for r in risks if r.get("category")}
     return {
         "risk_count": len(risks),
@@ -68,6 +70,7 @@ def quality_measurements(risks: list[dict[str, Any]], contract_text: str, expect
         "with_source_quote": sum(1 for q in quotes if q),
         "quotes_contiguous_in_contract": contiguous,
         "quotes_not_contiguous": sum(1 for q in quotes if q) - contiguous,
+        "quotes_withheld_as_not_in_document": sum(1 for r in risks if r.get("source_quote_status") == "NOT_FOUND_IN_DOCUMENT"),
         "categories": sorted(categories),
         "expected_categories": sorted(expected_categories),
         "missing_categories": sorted(expected_categories - categories),

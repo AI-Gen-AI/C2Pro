@@ -65,6 +65,39 @@ function newKey(): string {
 
 type Draft = { action: FindingDecisionAction; reason: string; proposedText: string; key: string };
 
+/**
+ * Where in the contract a finding comes from, kept apart from the generated description above it: the clause label the analysis
+ * assigned and the contract text it rests on. The quote is shown only when the server verified it verbatim against the document;
+ * otherwise the reviewer is told there is none and why, never a paraphrase presented as a citation.
+ */
+function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string, unknown> }) {
+  const clause = typeof risk.clause_ref === "string" ? risk.clause_ref.trim() : "";
+  const quote = typeof risk.source_quote === "string" ? risk.source_quote.trim() : "";
+  const status = typeof risk.source_quote_status === "string" ? risk.source_quote_status : "";
+  const verified = status === "VERIFIED" && quote.length > 0;
+  return (
+    <div className="mt-2 rounded border border-dashed p-2 text-xs" data-testid={`finding-trace-${ordinal}`}>
+      <p data-testid={`finding-clause-${ordinal}`}>
+        <span className="font-medium">Contract reference:</span> {clause ? `Clause ${clause}` : "none given by the analysis"}
+      </p>
+      {verified ? (
+        <figure className="mt-1">
+          <blockquote className="border-l-2 pl-2 italic" data-testid={`finding-quote-${ordinal}`}>
+            {quote}
+          </blockquote>
+          <figcaption className="mt-0.5 text-muted-foreground">Quoted from the contract (found verbatim in the document)</figcaption>
+        </figure>
+      ) : (
+        <p className="mt-1 text-muted-foreground" data-testid={`finding-quote-missing-${ordinal}`}>
+          {status === "NOT_FOUND_IN_DOCUMENT"
+            ? "No verified quote: the text the analysis proposed was not found verbatim in the document, so it is not shown."
+            : "No quote available for this finding."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
   const { orgId, userId, isLoaded } = useAuth();
   const queryClient = useQueryClient();
@@ -166,8 +199,12 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                 )}
               </div>
               {finding.risk.description ? (
-                <p className="mt-1 text-muted-foreground">{String(finding.risk.description)}</p>
+                <p className="mt-1 text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
+                  <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
+                  {String(finding.risk.description)}
+                </p>
               ) : null}
+              <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
               {finding.current?.reason ? (
                 <p className="mt-1 text-xs">Reason: {finding.current.reason}</p>
               ) : null}

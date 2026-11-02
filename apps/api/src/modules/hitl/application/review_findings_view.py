@@ -74,7 +74,8 @@ WHERE tenant_id = cast(:tenant_id as uuid)
 ORDER BY ledger_revision
 """)
 
-_RISK_FIELDS = ("title", "description", "category", "severity", "likelihood", "clause_ref")
+# clause_ref and source_quote(+status) are the traceability to the contract; the description is generated text and stays separate.
+_RISK_FIELDS = ("title", "description", "category", "severity", "likelihood", "clause_ref", "source_quote", "source_quote_status")
 
 
 @dataclass(frozen=True)
