@@ -14,6 +14,18 @@ on:
         options:
           - "false"
           - "true"
+      # ACC-01 partial S1-S2 pilot (owner-authorized, one paid extraction). Reuses this manually registered workflow so the
+      # branch definition is dispatchable before any new workflow file exists on the default branch.
+      run_s1_s2_real_ai_pilot:
+        description: "Run ONLY the single real-AI risk extraction (no gates). Needs confirm_candidate_sha."
+        required: false
+        default: false
+        type: boolean
+      confirm_candidate_sha:
+        description: "Full SHA being dispatched; prevents an accidental paid run."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -26,6 +38,7 @@ env:
 jobs:
   real-document-gate:
     name: Real Document Flow, Coverage, Golden Corpus, and Lint
+    if: ${{ !inputs.run_s1_s2_real_ai_pilot }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -163,3 +176,45 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
+
+  s1-s2-real-ai-pilot:
+    # Manual-only, double-confirmed, one provider call. NEVER part of CI. Proves the real-AI extractor only, not S1-S2.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_s1_s2_real_ai_pilot == true && inputs.confirm_candidate_sha == github.sha }}
+    name: One real C2Pro risk extraction (synthetic EPC contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: acc01-s1-s2-real-ai-pilot
+      cancel-in-progress: false
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      # The tool accepts at most 5,000 characters; Contract A is 2,415.
+      RISK_EXTRACTION_MAX_CHARS: "5000"
+      ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout dispatched candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require dedicated nonproduction provider credential
+        run: |
+          set -euo pipefail
+          test "${C2PRO_AI_MOCK}" = "0"
+          test -n "${ANTHROPIC_API_KEY:-}" || { echo '::error::S2_E2E_ANTHROPIC_API_KEY is unavailable; nothing was sent to a provider.'; exit 2; }
+          echo 'Dedicated provider credential is present; its value is never printed.'
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Run exactly one C2Pro extraction without automatic retries
+        working-directory: apps/api
+        run: python scripts/acc01_real_ai_pilot.py --out ../web/playwright-report/acc01-s1-s2-real-ai-pilot.json
+
+      - name: Upload sanitized pilot evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acc01-s1-s2-real-ai-pilot
+          path: apps/web/playwright-report/acc01-s1-s2-real-ai-pilot.json
+          if-no-files-found: warn
+          retention-days: 7
