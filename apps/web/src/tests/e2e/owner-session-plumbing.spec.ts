@@ -29,12 +29,26 @@ test.describe("TS-E2E-OWNER-SESSION-PLUMBING-001: public addresses of the owner 
       await expect(page.getByText(/sign in/i).first()).toBeVisible({ timeout: 60_000 });
       facts.signInFormVisible = true;
 
+      // Three questions, asked apart so a failure says which one it is: is the API tunnel reachable at all (from Node), does the API
+      // allow the web origin (CORS header), and can the page itself fetch it.
+      const fromNode = await page.request
+        .get(`${API}/health/live`, { headers: { Origin: WEB }, timeout: 30_000 })
+        .then((r) => ({ status: r.status(), allowOrigin: r.headers()["access-control-allow-origin"] ?? null }))
+        .catch((error: unknown) => ({ error: String(error) }));
+      facts.apiFromNode = fromNode;
       const health = await page.evaluate(async (api) => {
-        const response = await fetch(`${api}/health/live`, { mode: "cors" });
-        return { status: response.status };
+        try {
+          const response = await fetch(`${api}/health/live`, { mode: "cors" });
+          return { status: response.status };
+        } catch (error) {
+          return { error: String(error) };
+        }
       }, API);
-      facts.apiReachableFromWebOrigin = health.status === 200;
-      expect(health.status, "the API answers the browser at its public address (CORS allows the web origin)").toBe(200);
+      facts.apiFromBrowser = health;
+      facts.apiReachableFromWebOrigin = "status" in health && health.status === 200;
+      expect("status" in fromNode && fromNode.status, `the API tunnel answers at all: ${JSON.stringify(fromNode)}`).toBe(200);
+      expect("allowOrigin" in fromNode && fromNode.allowOrigin, "the API allows the public web origin (CORS)").toBe(WEB);
+      expect("status" in health && health.status, `the page can fetch the API across origins: ${JSON.stringify(health)}`).toBe(200);
 
       const runtime = await page.evaluate(async () => {
         const response = await fetch("/api/runtime/backend-url", { cache: "no-store" });

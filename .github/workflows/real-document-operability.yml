@@ -756,6 +756,14 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Public addresses answer (curl, diagnostic)
+        run: |
+          for url in "${OWNER_SESSION_WEB_URL}/sign-in" "${OWNER_SESSION_API_URL}/health/live"; do
+            echo "== ${url}"
+            curl --silent --show-error --max-time 30 --dump-header - --output /dev/null -H "Origin: ${OWNER_SESSION_WEB_URL}" "${url}" | head -12 || echo "NO ANSWER"
+          done
+          tail -n 5 "$RUNNER_TEMP/cf-api.log" "$RUNNER_TEMP/cf-web.log" || true
+
       - name: Public-address plumbing (no identity, no AI)
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test --project=owner-session-plumbing --workers=1 --retries=0 --reporter=list
