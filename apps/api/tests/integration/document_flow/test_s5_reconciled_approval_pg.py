@@ -24,6 +24,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.auth.models import Tenant
 from src.modules.hitl.application import resume_workflow_use_case as resume_module
 from src.modules.hitl.domain.finding_decision import FindingDecisionAction as A
 from tests.integration.document_flow.test_758_checkpoint_lineage_authority_fence import (  # noqa: F401
@@ -56,6 +57,7 @@ from tests.modules.integration.test_issue649_hitl_audit_idempotency import (
     request_sessions,  # noqa: F401
 )
 from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
+    _sweep,
     independent_sessions,  # noqa: F401
 )
 
@@ -334,6 +336,66 @@ async def test_s505_under_enforce_a_promotion_without_a_recorded_authority_fails
     assert [type(o).__name__ for o in outcomes] == ["PromotionNotAuthorized"] and "no approval authority was recorded" in str(outcomes[0])
     after = await _footprint(db, w)
     assert _trusted(after) == 0 and after["review"] == "PENDING_REVIEW_REQUIRED"
+
+
+async def test_rel01_crash_after_acquire_recovers_the_original_enforce_authority(
+    db: AsyncSession, actors: Actors, request_sessions: Any, monkeypatch: pytest.MonkeyPatch  # noqa: F811
+) -> None:
+    """A hard death after ``acquire`` must leave the original receipt durable for recovery.
+
+    The fault is deliberately at the old ``acquire() -> record_authority()``
+    boundary.  The reconciler is real and runs only after the database lease
+    expires, so this proves the committed state rather than a mocked handoff.
+    """
+    from src.core.tasks import hitl_resume_reconciler as reconciler
+
+    w = actors.w
+    person = await actors.user(label="rel01-signer")
+    grants = await actors.grant(person, READ, FIND, APPROVE)
+    await _confirm_all(w, person)
+    real_acquire = resume_module.acquire
+    crashed = False
+
+    async def acquire_then_crash(**kwargs: Any) -> Any:
+        nonlocal crashed
+        await real_acquire(**kwargs)
+        crashed = True
+        raise BaseException("REL-01 simulated power loss after acquire")  # noqa: TRY002
+
+    monkeypatch.setattr(resume_module, "acquire", acquire_then_crash)
+    with pytest.raises(BaseException, match="REL-01 simulated power loss"):
+        await _final(w, request_sessions, "approve", person)
+    assert crashed, "the operation was acquired before the simulated crash"
+
+    async with w.sessions(w.tenant_id) as session:
+        await session.execute(
+            text(
+                "UPDATE resume_operations "
+                "SET lease_expires_at = clock_timestamp() - interval '1 hour', "
+                "    heartbeat_at = clock_timestamp() - interval '1 hour' "
+                "WHERE review_row_id = cast(:r as uuid)"
+            ),
+            {"r": str(w.review_row_id)},
+        )
+
+    tenant = await db.get(Tenant, w.tenant_id)
+    assert tenant is not None
+    swept = await _sweep(reconciler, w.sessions, tenant, w.saver, w.app)
+    assert swept["scanned"] == 1 and swept["recovered"] == 1, swept
+
+    after = await _footprint(db, w)
+    assert after["review"] == "APPROVED" and _trusted(after) == 1
+    authority = (
+        await db.execute(
+            text(
+                "SELECT operation_metadata -> 'authority' "
+                "FROM resume_operations WHERE review_row_id = cast(:r as uuid)"
+            ),
+            {"r": str(w.review_row_id)},
+        )
+    ).scalar_one()
+    assert authority["user_id"] == str(person.id)
+    assert authority["grant_id"] == str(grants[APPROVE])
 
 
 # ═══ the receipt is persisted with the claimed operation ═══════════════════════════════════════════════════════

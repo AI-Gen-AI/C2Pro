@@ -37,6 +37,7 @@ request commits).
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -196,7 +197,15 @@ _ACQUIRE_SQL = text(
            -- with empty feedback -- which would read as a NEW revision and
            -- finalize a reason the human never gave.
            operation_metadata = coalesce(operation_metadata, '{}'::jsonb)
-                                || jsonb_build_object('feedback', cast(:feedback as text)),
+                                || jsonb_build_object(
+                                    'feedback', cast(:feedback as text),
+                                    -- S5-05: the authority receipt is part of
+                                    -- the fenced acquisition.  A crash after
+                                    -- this CAS therefore leaves recovery the
+                                    -- exact authority of the original
+                                    -- decision, never a claim without proof.
+                                    'authority', cast(:authority as jsonb)
+                                ),
            -- Taking ownership must not erase durable progress. A takeover
            -- of an operation whose N17 already committed, or which already
            -- reached a verified terminal checkpoint, inherits that phase;
@@ -378,6 +387,7 @@ async def acquire(
     decision: str,
     feedback: str,
     reviewer: str | None,
+    authority: dict[str, Any] | None = None,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     session_factory: Any = None,
 ) -> tuple[Ownership | None, Phase, str | None]:
@@ -481,6 +491,7 @@ async def acquire(
                     "decision_hash": new_hash,
                     "reviewer": reviewer,
                     "feedback": feedback,
+                    "authority": json.dumps(authority),
                     "lease_seconds": lease_seconds,
                     "force_revision": decision_changed,
                     "adopt_lineage": decided.adopt_operation_lineage,
@@ -560,50 +571,6 @@ async def load(
                 {"review_row_id": str(review_row_id), "tenant_id": str(tenant_id)},
             )
         ).first()
-
-
-_RECORD_AUTHORITY_SQL = text(
-    """
-    UPDATE resume_operations
-       SET operation_metadata = coalesce(operation_metadata, '{}'::jsonb)
-                                || jsonb_build_object('authority', cast(:authority as jsonb)),
-           updated_at = clock_timestamp()
-     WHERE id = cast(:operation_id as uuid)
-       AND tenant_id = cast(:tenant_id as uuid)
-       AND current_attempt_id = cast(:attempt_id as uuid)
-       AND owner_token = cast(:owner_token as uuid)
-       AND fencing_token = :fencing_token
-    """
-)
-
-
-async def record_authority(
-    *, ownership: Ownership, authority: dict[str, Any] | None, session_factory: Any = None
-) -> None:
-    """S5-05: store WHO is approving and against WHICH reconciliation on the claimed operation (fenced CAS).
-
-    ``None`` is stored as an explicit JSON null so that an earlier attempt's authority can never be inherited by a
-    later attempt that took the decision under the legacy rule. The promotion transaction reads it back.
-    """
-    import json
-
-    async with _session(session_factory, ownership.tenant_id) as session:
-        result = await session.execute(
-            _RECORD_AUTHORITY_SQL,
-            {
-                "authority": json.dumps(authority),
-                "operation_id": str(ownership.operation_id),
-                "tenant_id": str(ownership.tenant_id),
-                "attempt_id": str(ownership.attempt_id),
-                "owner_token": str(ownership.owner_token),
-                "fencing_token": ownership.fencing_token,
-            },
-        )
-        if getattr(result, "rowcount", 0) != 1:
-            raise OwnershipError(
-                f"Cannot record the approval authority: operation {ownership.operation_id} is no longer owned by this attempt"
-            )
-        await session.commit()
 
 
 async def renew(

@@ -39,7 +39,6 @@ from src.modules.hitl.adapters.persistence.resume_ownership import (
     finalize_v3,
     get_graph_completed_marker,
     mark_graph_completed,
-    record_authority,
     record_failure,
     renew,
     verify_trust_binding,
@@ -968,6 +967,7 @@ class ResumeWorkflowUseCase:
                 decision=request.decision.value,
                 feedback=request.feedback,
                 reviewer=request.approved_by,
+                authority=authority.to_json() if authority else None,
                 lease_seconds=self._lease_seconds,
                 session_factory=self._claim_session_factory,
             )
@@ -1030,14 +1030,6 @@ class ResumeWorkflowUseCase:
                     )
                 record_hitl_resume_error("already_claimed")
                 raise ValueError(self._ERR_ALREADY_CLAIMED.format(review_id=review_id))
-
-            # S5-05: the proof (who approves, under which grant, against which reconciliation digest) rides on the
-            # claimed operation to the transaction that materializes the first TRUSTED. An explicit null for any other
-            # decision keeps an earlier attempt's authority from being inherited.
-            await record_authority(
-                ownership=ownership, authority=authority.to_json() if authority else None,
-                session_factory=self._claim_session_factory,
-            )
 
             return await self._execute_owned(
                 ownership=ownership, review_item=review_item, review_id=review_id,
