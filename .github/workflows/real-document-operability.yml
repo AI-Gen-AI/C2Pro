@@ -43,6 +43,52 @@ on:
         required: false
         default: false
         type: boolean
+      # Owner's own browser session on an EPHEMERAL Development/Test stack (no Production, no recurring infrastructure).
+      run_owner_session:
+        description: "Bring up the stack with public addresses for the owner's browser (needs confirm_candidate_sha; plumbing-check needs nothing else)."
+        required: false
+        default: false
+        type: boolean
+      owner_session_mode:
+        description: "plumbing-check = stack + public addresses + sign-in page, NO identity, NO AI. session = the owner works in the browser (needs the owner's phrase)."
+        required: false
+        default: "plumbing-check"
+        type: choice
+        options:
+          - "plumbing-check"
+          - "session"
+      owner_session_ai:
+        description: "mock (the extractor finds nothing) or real (governed by governor_max_calls / governor_max_usd; needs the REAL-AI phrase)."
+        required: false
+        default: "mock"
+        type: choice
+        options:
+          - "mock"
+          - "real"
+      owner_session_minutes:
+        description: "How long the session stays open (1..120)."
+        required: false
+        default: "60"
+        type: string
+      owner_session_email:
+        description: "The owner's Clerk Development email (e.g. name+clerk_test@domain: code 424242, no inbox needed)."
+        required: false
+        default: ""
+        type: string
+      owner_clerk_user_action:
+        description: "none | dry-run (reads Clerk Development, writes NOTHING) | apply (creates the owner's Development user; needs owner_clerk_user_authorization)."
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - "none"
+          - "dry-run"
+          - "apply"
+      owner_clerk_user_authorization:
+        description: "Type exactly: OWNER-AUTHORIZED-CLERK-DEV-USER (only for owner_clerk_user_action=apply)."
+        required: false
+        default: ""
+        type: string
       governor_max_calls:
         description: "Hard cap on provider calls across API and worker (default 12, ceiling 20)."
         required: false
@@ -65,7 +111,7 @@ env:
 jobs:
   real-document-gate:
     name: Real Document Flow, Coverage, Golden Corpus, and Lint
-    if: ${{ !inputs.run_s1_s2_real_ai_pilot && !inputs.run_real_ai_hitl_vertical }}
+    if: ${{ !inputs.run_s1_s2_real_ai_pilot && !inputs.run_real_ai_hitl_vertical && !inputs.run_owner_session && inputs.owner_clerk_user_action == 'none' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -491,4 +537,299 @@ jobs:
             if [ -f "$RUNNER_TEMP/c2pro-real-ai-$name.pid" ]; then
               kill "$(cat "$RUNNER_TEMP/c2pro-real-ai-$name.pid")" || true
             fi
+          done
+
+  owner-clerk-user:
+    # Prepares (dry-run: READS Clerk Development only) or, with the owner's phrase, creates the Development user the owner signs in with.
+    # Never touches the automated E2E identity or Production (the script refuses a non-Development key and the E2E email).
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.owner_clerk_user_action != 'none' && inputs.confirm_candidate_sha == github.sha && (inputs.owner_clerk_user_action == 'dry-run' || inputs.owner_clerk_user_authorization == 'OWNER-AUTHORIZED-CLERK-DEV-USER') }}
+    name: Owner Clerk Development user (${{ inputs.owner_clerk_user_action }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      OWNER_DEV_EMAIL: ${{ inputs.owner_session_email }}
+      OWNER_CLERK_ACTION: ${{ inputs.owner_clerk_user_action }}
+      OWNER_CLERK_AUTH: ${{ inputs.owner_clerk_user_authorization }}
+    steps:
+      - name: Checkout dispatched candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Plan or apply (dry-run writes nothing)
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          if [ -z "${OWNER_DEV_EMAIL}" ]; then echo '::error::owner_session_email is required'; exit 2; fi
+          if [ "${OWNER_CLERK_ACTION}" = "apply" ]; then
+            python scripts/provision_owner_dev_user.py --apply --authorization "${OWNER_CLERK_AUTH}"
+          else
+            python scripts/provision_owner_dev_user.py
+          fi
+
+  owner-session:
+    # Manual only. The owner opens the printed address in a normal browser, signs in with their Clerk Development user and works
+    # with a synthetic contract. EPHEMERAL: runner + isolated database + two random public addresses that die with the job.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_owner_session == true && inputs.confirm_candidate_sha == github.sha && (inputs.owner_session_mode == 'plumbing-check' || inputs.owner_authorization == 'OWNER-AUTHORIZED-OWNER-SESSION' || inputs.owner_authorization == 'OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI') }}
+    name: Owner browser session (${{ inputs.owner_session_mode }}, AI ${{ inputs.owner_session_ai }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    concurrency:
+      group: owner-session
+      cancel-in-progress: false
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      STORAGE_PROVIDER: local
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      C2PRO_AI_MOCK: ${{ inputs.owner_session_mode == 'session' && inputs.owner_session_ai == 'real' && '0' || '1' }}
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      C2PRO_SKIP_HITL: "0"
+      ANTHROPIC_API_KEY: ${{ inputs.owner_session_mode == 'session' && inputs.owner_session_ai == 'real' && secrets.S2_E2E_ANTHROPIC_API_KEY || '' }}
+      AI_MAX_TOKENS_OUTPUT: "4096"
+      C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/web/playwright-report/real-ai-governor-ledger.jsonl
+      C2PRO_AI_GOVERNOR_MAX_CALLS: ${{ inputs.governor_max_calls }}
+      C2PRO_AI_GOVERNOR_MAX_USD: ${{ inputs.governor_max_usd }}
+      OWNER_SESSION_EMAIL: ${{ inputs.owner_session_email }}
+      OWNER_SESSION_MINUTES: ${{ inputs.owner_session_minutes }}
+      OWNER_AUTH: ${{ inputs.owner_authorization }}
+      NEXT_PUBLIC_API_URL: /api
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout dispatched candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Enforce the guards (fail closed before anything starts)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, sys
+          minutes = int(os.environ["OWNER_SESSION_MINUTES"])
+          calls, usd = int(os.environ["C2PRO_AI_GOVERNOR_MAX_CALLS"]), float(os.environ["C2PRO_AI_GOVERNOR_MAX_USD"])
+          if not 1 <= minutes <= 120: sys.exit(f"::error::session minutes out of bounds: {minutes} (1..120)")
+          if not (1 <= calls <= 20 and 0 < usd <= 2.0): sys.exit(f"::error::governor caps out of bounds: {calls} calls, {usd} USD")
+          PY
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then echo '::error::Clerk Development credentials are missing.'; exit 2; fi
+          if [ "${{ inputs.owner_session_mode }}" = "session" ]; then
+            if [ -z "${OWNER_SESSION_EMAIL}" ]; then echo '::error::owner_session_email is required for a session.'; exit 2; fi
+            if [ "${{ inputs.owner_session_ai }}" = "real" ]; then
+              test "${OWNER_AUTH}" = "OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI" || { echo '::error::a REAL-AI session needs the phrase OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI'; exit 2; }
+              test -n "${ANTHROPIC_API_KEY:-}" || { echo '::error::S2_E2E_ANTHROPIC_API_KEY is unavailable.'; exit 2; }
+              test "${C2PRO_AI_MOCK}" = "0"
+            fi
+          fi
+          echo 'Guards hold. Credential values are never printed.'
+
+      - name: Generate ephemeral test JWT secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap infrastructure (PostgreSQL + Redis, isolated and recreated)
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      - name: Reconcile dedicated Clerk E2E Organization fixture
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+      - name: Seed deterministic E2E auth tenancy
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+
+          from src.core.database import close_db, get_raw_session, init_db
+          from tests.e2e_seed.seed_wedge import seed_e2e_auth_tenancy
+
+
+          async def main() -> None:
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      await seed_e2e_auth_tenancy(db)
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
+      - name: Resolve the owner's Clerk user (read-only) and seed the local row
+        if: ${{ inputs.owner_session_mode == 'session' }}
+        working-directory: apps/api
+        run: python -m scripts.owner_session_support seed
+
+      - name: Public addresses (pinned cloudflared, two quick tunnels)
+        run: bash .github/scripts/owner_session_tunnels.sh 3100 8000
+
+      - name: AI call governor self-check (no provider call)
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          python - <<'PY'
+          from anthropic.resources.messages import AsyncMessages, Messages
+          assert getattr(Messages.create, "_c2pro_governed", False) and getattr(AsyncMessages.create, "_c2pro_governed", False)
+          print("AI call governor is installed")
+          PY
+
+      - name: Start Celery worker (document_parsing), governed
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker --loglevel=info --queues=document_parsing --concurrency=1 \
+            > "$RUNNER_TEMP/owner-session-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/owner-session-worker.pid"
+          python - <<'PY'
+          import time
+          from src.core.tasks.celery_app import celery_app
+
+          deadline = time.monotonic() + 45
+          while time.monotonic() < deadline:
+              queues = celery_app.control.inspect(timeout=3).active_queues() or {}
+              if any(any(q.get("name") == "document_parsing" for q in qs) for qs in queues.values()):
+                  print("Celery document_parsing consumer READY")
+                  break
+              time.sleep(2)
+          else:
+              raise SystemExit("::error::No Celery consumer for document_parsing after 45s")
+          PY
+
+      - name: Start backend API, governed, allowing the public web origin
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" > "$RUNNER_TEMP/owner-session-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/owner-session-jwks.pid"
+          CORS_ORIGINS="[\"${OWNER_SESSION_WEB_URL}\"]" CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+            python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 > "$RUNNER_TEMP/owner-session-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/owner-session-api.pid"
+          for _ in {1..45}; do
+            if curl --fail --silent http://localhost:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/owner-session-api.log"
+          exit 1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Build and start the web app (production build)
+        working-directory: apps/web
+        env:
+          BACKEND_URL: ${{ env.OWNER_SESSION_API_URL }}
+        run: |
+          pnpm build
+          nohup pnpm start --hostname 0.0.0.0 --port 3100 > "$RUNNER_TEMP/owner-session-web.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/owner-session-web.pid"
+          for _ in {1..60}; do
+            if curl --silent --output /dev/null --fail "http://localhost:3100/sign-in"; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/owner-session-web.log"
+          exit 1
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Public-address plumbing (no identity, no AI)
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test --project=owner-session-plumbing --workers=1 --retries=0 --reporter=list
+
+      - name: Review capabilities for the owner on each new project (enforce stays on)
+        if: ${{ inputs.owner_session_mode == 'session' }}
+        working-directory: apps/api
+        run: |
+          nohup python -m scripts.owner_session_support grants > "$RUNNER_TEMP/owner-session-grants.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/owner-session-grants.pid"
+
+      - name: THE SESSION - open the address, sign in, work
+        if: ${{ inputs.owner_session_mode == 'session' }}
+        run: |
+          deadline=$(( $(date +%s) + OWNER_SESSION_MINUTES * 60 ))
+          echo "::notice title=C2Pro owner session::Open ${OWNER_SESSION_WEB_URL}/sign-in and sign in with the Clerk Development email you provided. Open until $(date -u -d @${deadline} +%H:%M)Z. AI: ${{ inputs.owner_session_ai }}. Upload a synthetic contract (apps/web/src/tests/e2e/test-data/pj01/contract-a.pdf)."
+          echo "SESSION ADDRESS: ${OWNER_SESSION_WEB_URL}"
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            curl --silent --output /dev/null --fail "http://localhost:3100/sign-in" || echo "web not answering"
+            echo "session open, $(( (deadline - $(date +%s)) / 60 )) min left"
+            sleep 240
+          done
+          echo "session time is over"
+
+      - name: What the session did (counts only; no content)
+        if: ${{ always() && inputs.owner_session_mode == 'session' }}
+        working-directory: apps/api
+        run: |
+          python - <<'PY' | tee ../web/playwright-report/owner-session-summary.json
+          import asyncio, json
+          from sqlalchemy import text
+          from src.core.database import close_db, get_raw_session, init_db
+
+          async def main():
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      q = lambda sql: db.execute(text(sql))
+                      out = {
+                          "projects": (await q("SELECT count(*) FROM projects WHERE tenant_id = cast('00000000-0000-0000-0000-00000000a113' as uuid)")).scalar(),
+                          "documents": (await q("SELECT count(*) FROM documents")).scalar(),
+                          "finding_decisions": {r[0]: r[1] for r in (await q("SELECT action, count(*) FROM public.hitl_finding_decisions GROUP BY action")).all()},
+                      }
+              finally:
+                  await close_db()
+              try:
+                  import sys; sys.path.insert(0, "scripts/real_ai_governor")
+                  from real_ai_governor import read_events, summarize
+                  out["provider"] = summarize(read_events(__import__("pathlib").Path("../web/playwright-report/real-ai-governor-ledger.jsonl")))
+              except Exception as exc:
+                  out["provider"] = f"no ledger: {type(exc).__name__}"
+              print(json.dumps(out, indent=2, sort_keys=True, default=str))
+
+          asyncio.run(main())
+          PY
+
+      - name: "Upload sanitized evidence (JSON only)"
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: owner-session
+          path: |
+            apps/web/playwright-report/owner-session-plumbing.json
+            apps/web/playwright-report/owner-session-summary.json
+            apps/web/playwright-report/real-ai-governor-ledger.jsonl
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: |
+          for name in worker api jwks web grants; do
+            if [ -f "$RUNNER_TEMP/owner-session-$name.pid" ]; then kill "$(cat "$RUNNER_TEMP/owner-session-$name.pid")" || true; fi
+          done
+          for name in web api; do
+            if [ -f "$RUNNER_TEMP/cf-$name.pid" ]; then kill "$(cat "$RUNNER_TEMP/cf-$name.pid")" || true; fi
           done

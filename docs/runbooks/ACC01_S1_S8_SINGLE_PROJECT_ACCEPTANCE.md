@@ -176,19 +176,38 @@ or a completion. The product's own tenant budget (`CostController`) is enforced 
 `owner_authorization=OWNER-AUTHORIZED-REAL-AI-HITL-VERTICAL`; optional `governor_max_calls`, `governor_max_usd`. Without all three
 the job does not exist for that run. No retry is automatic: a failure is the finding.
 
-## Owner path to a Development/Test instance (minimum, current state)
+## Owner session: the owner works in C2Pro in their own browser (prepared; identity NOT created)
 
-Inventory (read-only): Railway project `c2pro-api` has ONE environment, `production` (API, Worker, Scheduler, Redis); Vercel has the
-web project `v0-c2-pro` (production + branch previews). There is no hosted Development/Test back end, and a preview of the web
-alone has nothing to talk to except Production, which this work must not touch.
+Next milestone: not more automated tests, a functional session of the owner in the real interface. Nothing recurring is needed: the
+existing GitHub Actions + Clerk Development + isolated PostgreSQL/Redis are reused, and the stack lives only while the job runs.
 
-| Option | What it needs | Cost / risk | Verdict |
-|---|---|---|---|
-| A. Local stack on the owner's machine (`make setup-local`: Docker PostgreSQL + Redis, `make dev`), Clerk **Development** keys | Docker; the Development publishable/secret keys in ignored `.env` files; the E2E Organization reconciled by `provision_clerk_e2e_fixture.py` (fails closed unless the keys are Development) and the tenant seeded by `seed_e2e_auth_tenancy`; **the owner's own Clerk Development user as a member of that Organization** | Zero hosting cost; AI mocked, or the owner's own key for a real run; nothing near Production | **Minimum path.** Blocker: a Clerk Development identity for the owner does not exist yet; creating it is an identity creation that is not authorized |
-| B. Hosted Development environment | A second Railway environment (API + Worker + Redis) with an isolated database, a Vercel preview scoped to the branch with the Development Clerk keys, CORS and JWKS for that origin | Recurring hosting cost, secrets management, and an isolated database to provision | Next step after A shows the experience is worth hosting; needs owner decisions on cost and database |
+**Method (manual job `owner-session` of `real-document-operability.yml`, ephemeral).** The job brings up the same stack as the P0b
+journey (isolated PostgreSQL, Redis, Celery worker, API, the production build of the web app) and gives the web app and the API a
+public https address each (two account-less Cloudflare quick tunnels; the binary is pinned by version and SHA-256; the addresses are
+random and die with the job). The owner opens `<address>/sign-in` in a normal browser, signs in with their own Clerk Development
+user, creates a project and uploads a synthetic contract (`apps/web/src/tests/e2e/test-data/pj01/contract-a.pdf`). The review rules
+stay in `enforce`: a loop gives that one user the three review capabilities on each project they create (declared
+`SELF_GRANTED_NOT_INDEPENDENT`, exactly the step the automated runs use). Open time 1-120 minutes (default 60); cancel the run to end it.
 
-Until the owner's Development identity exists, the closest thing to "entering personally" is the evidence this pilot produces
-(manifest + verdict + ledger) and the existing Development E2E identity driven by the spec.
+| Mode | What it does | What it needs |
+|---|---|---|
+| `plumbing-check` (default) | stack + public addresses + a headless browser proving that Clerk loads on the public origin, that the API answers it across origins and that uploads point at the public API. **No identity, no AI.** | the flag and the exact SHA |
+| `session`, AI `mock` | the owner's session; the extractor finds nothing (mock), so it shows the empty/honest-failure path | the owner's email + phrase `OWNER-AUTHORIZED-OWNER-SESSION` |
+| `session`, AI `real` | the owner's session with real findings, behind the AI call governor (default 12 calls / 1.00 USD, embeddings mocked) | the owner's email + phrase `OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI` |
+
+**The owner's Clerk Development user (prepared, NOT created).** `owner-clerk-user` with `owner_clerk_user_action=dry-run` only READS
+Clerk Development and prints the plan. `apply` creates exactly one user and adds it to the dedicated E2E Organization as a plain
+member (`org:member`), and needs the phrase `OWNER-AUTHORIZED-CLERK-DEV-USER`. It refuses a production key, the automated E2E email
+(that identity is never reused, replaced or altered), a missing Organization, ambiguity, and a user that belongs to another Organization.
+Easiest login: an email of the form `name+clerk_test@domain` (Clerk Development accepts the fixed code 424242: no inbox needed).
+
+**Honest limits.** The session data is ephemeral (the database dies with the job). The tunnel is a third-party relay for a Development
+stack protected by Clerk sign-in; do not upload anything real. Plumbing through the tunnel (Clerk on a foreign origin, direct uploads
+to the API address) is verified by `plumbing-check`, not assumed. AI `mock` shows no findings by design.
+
+**Fallback (no GitHub Actions): local stack** on the owner's machine (`make setup-local` + `make dev`) with the Clerk Development
+keys; same Clerk user and Organization. Zero hosting cost, more setup. A hosted Development environment (second Railway environment +
+Vercel preview) is a later decision: Railway has only `production` today and the Vercel project has no back end of its own.
 
 ## Rules
 

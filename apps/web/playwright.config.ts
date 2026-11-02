@@ -65,6 +65,7 @@ export default defineConfig({
         /(^|[\\/])integral-runner-panel-wait\.spec\.ts$/,
         // Opt-in real-AI vertical (own project, manual job only: it spends a provider budget).
         /(^|[\\/])real-ai-hitl-vertical\.spec\.ts$/,
+        /(^|[\\/])owner-session-plumbing\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -153,6 +154,14 @@ export default defineConfig({
         priority: "p0",
         description: "Real provider + browser + per-finding human decisions + relogin, one project",
       },
+    },
+    {
+      // Public-address plumbing of the owner's browser session (no identity, no AI). Opt-in: manual owner-session job only.
+      name: "owner-session-plumbing",
+      testMatch: [/(^|[\\/])owner-session-plumbing\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"], actionTimeout: 90_000, navigationTimeout: 120_000 },
+      dependencies: ["global-setup"],
+      metadata: { suite: "TS-E2E-OWNER-SESSION-PLUMBING-001", type: "e2e", priority: "p1" },
     },
     {
       // Self-test of the integral runner's findings-panel wait: static pages only (no Clerk, no backend). Explicit-only.

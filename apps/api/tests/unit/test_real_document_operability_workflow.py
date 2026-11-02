@@ -108,3 +108,61 @@ def test_the_gate_job_is_skipped_for_either_paid_pilot() -> None:
 def test_no_paid_job_is_reachable_from_a_push_or_a_pull_request() -> None:
     for name in ("s1-s2-real-ai-pilot", "real-ai-hitl-vertical"):
         assert "workflow_dispatch" in _jobs()[name]["if"], name
+
+
+# ── the owner's own browser session (ephemeral Development/Test stack) ────────────────────────────────────────────────────
+TUNNELS = WORKFLOW_PATH.parents[1] / "scripts" / "owner_session_tunnels.sh"
+
+
+def test_the_owner_session_needs_the_flag_the_exact_sha_and_a_phrase_unless_it_is_only_a_plumbing_check() -> None:
+    condition = _jobs()["owner-session"]["if"]
+    assert "inputs.run_owner_session == true" in condition and "inputs.confirm_candidate_sha == github.sha" in condition
+    assert "inputs.owner_session_mode == 'plumbing-check'" in condition
+    assert "'OWNER-AUTHORIZED-OWNER-SESSION'" in condition and "'OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI'" in condition
+    assert yaml_inputs()["owner_session_mode"]["default"] == "plumbing-check", "the safe mode is the default"
+    assert yaml_inputs()["owner_session_ai"]["default"] == "mock"
+
+
+def test_the_owner_session_has_no_provider_credential_unless_the_real_ai_session_was_authorized() -> None:
+    env = _jobs()["owner-session"]["env"]
+    assert env["C2PRO_AI_MOCK"].startswith("${{ inputs.owner_session_mode == 'session' && inputs.owner_session_ai == 'real'")
+    assert env["ANTHROPIC_API_KEY"].startswith("${{ inputs.owner_session_mode == 'session' && inputs.owner_session_ai == 'real'")
+    assert "OPENAI_API_KEY" not in env and env["C2PRO_EMBEDDINGS_MOCK"] == "1" and env["C2PRO_SKIP_HITL"] == "0"
+    guard = {s["name"]: s for s in _steps(_jobs()["owner-session"])}["Enforce the guards (fail closed before anything starts)"]["run"]
+    assert "OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI" in guard and "1 <= minutes <= 120" in guard and "0 < usd <= 2.0" in guard
+    assert "${{ inputs.owner_authorization }}" not in guard, "free text goes through the environment, never into the script body"
+
+
+def test_the_owner_session_runs_governed_processes_and_proves_the_public_addresses_before_the_session() -> None:
+    steps = [s["name"] for s in _steps(_jobs()["owner-session"])]
+    governed = {s["name"]: s for s in _steps(_jobs()["owner-session"])}
+    for name in ("AI call governor self-check (no provider call)", "Start Celery worker (document_parsing), governed", "Start backend API, governed, allowing the public web origin"):
+        assert governed[name]["env"]["PYTHONPATH"].endswith("apps/api/scripts/real_ai_governor"), name
+    assert steps.index("Public addresses (pinned cloudflared, two quick tunnels)") < steps.index("Start backend API, governed, allowing the public web origin")
+    assert steps.index("Public-address plumbing (no identity, no AI)") < steps.index("THE SESSION - open the address, sign in, work")
+    assert governed["THE SESSION - open the address, sign in, work"]["if"] == "${{ inputs.owner_session_mode == 'session' }}"
+    assert governed["Resolve the owner's Clerk user (read-only) and seed the local row"]["if"] == "${{ inputs.owner_session_mode == 'session' }}"
+
+
+def test_the_tunnel_binary_is_pinned_by_version_and_checked_by_sha256() -> None:
+    script = TUNNELS.read_text(encoding="utf-8")
+    import re
+
+    assert re.search(r'^VERSION="\d{4}\.\d+\.\d+"$', script, re.M) and re.search(r'^SHA256="[0-9a-f]{64}"$', script, re.M)
+    assert "sha256sum -c -" in script and "releases/download/${VERSION}/" in script and "releases/latest" not in script
+
+
+def test_the_owner_clerk_user_is_read_only_unless_applied_with_the_express_phrase() -> None:
+    job = _jobs()["owner-clerk-user"]
+    assert "inputs.owner_clerk_user_action == 'dry-run' || inputs.owner_clerk_user_authorization == 'OWNER-AUTHORIZED-CLERK-DEV-USER'" in job["if"]
+    assert yaml_inputs()["owner_clerk_user_action"]["default"] == "none"
+    run = {s["name"]: s for s in _steps(job)}["Plan or apply (dry-run writes nothing)"]["run"]
+    assert 'if [ "${OWNER_CLERK_ACTION}" = "apply" ]' in run and "--apply --authorization" in run
+    assert "--apply" not in run.split("else", 1)[1], "the dry-run branch never applies"
+    assert "${{ inputs." not in run, "free text goes through the environment, never into the script body"
+
+
+def test_the_gate_job_is_skipped_for_every_manual_paid_or_session_mode() -> None:
+    condition = _jobs()["real-document-gate"]["if"]
+    for token in ("run_owner_session", "owner_clerk_user_action == 'none'"):
+        assert token in condition
