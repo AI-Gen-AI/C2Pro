@@ -38,6 +38,11 @@ on:
         required: false
         default: ""
         type: string
+      infrastructure_check_only:
+        description: "Bring the whole stack up (guards, Clerk fixture, tenancy, governor self-check, worker, API, browser) and STOP before the scenario: no provider call, no spend. Needs only the flag and the SHA."
+        required: false
+        default: false
+        type: boolean
       governor_max_calls:
         description: "Hard cap on provider calls across API and worker (default 12, ceiling 20)."
         required: false
@@ -252,7 +257,7 @@ jobs:
     # One project, one Clerk Development identity that already exists, one document: browser -> REAL provider -> human
     # decisions -> PostgreSQL -> reload/relogin. Every provider call in the API and in the Celery worker goes through the AI
     # call governor (hard cap on calls and USD, no SDK retries, no streaming, no embeddings provider) and is written to a ledger.
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_real_ai_hitl_vertical == true && inputs.confirm_candidate_sha == github.sha && inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-AI-HITL-VERTICAL' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_real_ai_hitl_vertical == true && inputs.confirm_candidate_sha == github.sha && (inputs.infrastructure_check_only == true || inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-AI-HITL-VERTICAL') }}
     name: Real AI + browser + HITL + PostgreSQL (one project, governed)
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -312,6 +317,7 @@ jobs:
           print(f"governor caps accepted: {calls} calls, {usd} USD")
           PY
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then echo '::error::S2_E2E_ANTHROPIC_API_KEY is unavailable; nothing was sent to a provider.'; exit 2; fi
+          if [ "${{ inputs.infrastructure_check_only }}" = "true" ]; then echo 'Infrastructure check only: the scenario will not run and no provider call can be made.'; fi
           if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then echo '::error::Clerk Development credentials are missing.'; exit 2; fi
           echo 'Guards hold. Credential values are never printed.'
 
@@ -426,13 +432,14 @@ jobs:
       # No retries: --retries=0 is explicit. A failure is the finding; it is never re-run here.
       - name: Run the real-AI vertical (browser, REAL provider, human decisions, relogin)
         id: vertical
+        if: ${{ inputs.infrastructure_check_only != true }}
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test --project=real-ai-hitl --workers=1 --retries=0 --reporter=list
 
       # A separate process reads PostgreSQL, the manifest and the governor ledger. It runs even if the browser failed: the
       # verdict (and what was spent) must be known either way.
       - name: Verify independently in PostgreSQL and against the provider ledger
-        if: always()
+        if: ${{ always() && inputs.infrastructure_check_only != true }}
         working-directory: apps/api
         run: python scripts/verify_real_ai_hitl_pg.py
 
@@ -443,6 +450,8 @@ jobs:
           import json, pathlib
           report = pathlib.Path("apps/web/playwright-report")
           print("### Real-AI vertical (nonproduction)")
+          if pathlib.Path("apps/web/playwright-report/real-ai-governor-ledger.jsonl").exists() is False and "${{ inputs.infrastructure_check_only }}" == "true":
+              print("Infrastructure check only: the stack came up, the governor is installed, NO provider call was made (no ledger exists).")
           try:
               verdict = json.loads((report / "real-ai-hitl-verdict.json").read_text())
               print(f"**Verdict: {verdict['verdict']}** - blocker: {verdict.get('blocker')}")

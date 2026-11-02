@@ -51,7 +51,17 @@ def test_the_real_ai_vertical_needs_the_flag_the_exact_sha_and_the_owners_phrase
     assert "github.event_name == 'workflow_dispatch'" in condition
     assert "inputs.run_real_ai_hitl_vertical == true" in condition
     assert "inputs.confirm_candidate_sha == github.sha" in condition
-    assert "inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-AI-HITL-VERTICAL'" in condition
+    # The owner's phrase is mandatory for the paid run; only the no-spend infrastructure check may skip it.
+    assert "(inputs.infrastructure_check_only == true || inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-AI-HITL-VERTICAL')" in condition
+
+
+def test_the_infrastructure_check_cannot_reach_the_scenario_or_the_provider() -> None:
+    steps = {s["name"]: s for s in _steps(_jobs()["real-ai-hitl-vertical"])}
+    for name in (
+        "Run the real-AI vertical (browser, REAL provider, human decisions, relogin)",
+        "Verify independently in PostgreSQL and against the provider ledger",
+    ):
+        assert "inputs.infrastructure_check_only != true" in steps[name]["if"], name
 
 
 def test_the_real_ai_vertical_is_real_for_inference_and_mocked_for_embeddings_and_cannot_skip_the_human_gate() -> None:
@@ -79,7 +89,7 @@ def test_the_caps_have_hard_ceilings_and_the_verifier_runs_even_when_the_browser
     guards = steps["Enforce the experiment guards (fail closed before anything starts)"]["run"]
     assert "1 <= calls <= 20" in guards and "0 < usd <= 2.0" in guards
     verify = steps["Verify independently in PostgreSQL and against the provider ledger"]
-    assert verify["if"] == "always()"
+    assert verify["if"].startswith("${{ always()"), "runs even when the browser step failed"
     inputs = yaml_inputs()
     assert inputs["governor_max_calls"]["default"] == "12" and inputs["governor_max_usd"]["default"] == "1.00"
 
