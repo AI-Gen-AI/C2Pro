@@ -23,6 +23,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Run as `python scripts/acc01_real_ai_pilot.py` the interpreter puts scripts/ on sys.path, not apps/api, so `src` is not
+# importable (the first CI dispatch failed exactly there, before any provider call). Make the package root explicit.
+API_ROOT = Path(__file__).resolve().parents[1]
+if str(API_ROOT) not in sys.path:
+    sys.path.insert(0, str(API_ROOT))
+
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "web" / "src" / "tests" / "e2e" / "test-data" / "pj01"
 INPUT_CHAR_LIMIT = 5_000  # the tool never sends more than this when RISK_EXTRACTION_MAX_CHARS=5000
 # Enough room for eight structured risks. 512 (the first draft) would truncate the JSON and waste the single run.

@@ -189,6 +189,12 @@ jobs:
     env:
       ENVIRONMENT: test
       C2PRO_AI_MOCK: "0"
+      # Settings validation requires these in ENVIRONMENT=test. Non-secret placeholders (same as the gate job): the pilot
+      # opens no database or Redis connection, the response cache is disabled.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
       # The tool accepts at most 5,000 characters; Contract A is 2,415.
       RISK_EXTRACTION_MAX_CHARS: "5000"
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}

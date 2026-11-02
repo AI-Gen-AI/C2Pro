@@ -79,3 +79,23 @@ def test_the_recorder_counts_every_provider_call() -> None:
 
     asyncio.run(two())
     assert recorder.requests == 2 and wrapper.seen == 2
+
+
+def test_the_script_imports_the_package_when_run_the_way_ci_runs_it() -> None:
+    """The first CI dispatch died with ModuleNotFoundError: src (scripts/ on sys.path, apps/api not) before any provider call.
+
+    pytest puts apps/api on sys.path, which hid it. ``-I`` ignores PYTHONPATH and the cwd, like a bare ``python scripts/x.py``.
+    """
+    import subprocess
+
+    api_root = Path(__file__).resolve().parents[3]
+    code = (
+        "import importlib.util;"
+        "s=importlib.util.spec_from_file_location('p','scripts/acc01_real_ai_pilot.py');"
+        "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
+        "import src.analysis.domain.risk_categories as r;print('IMPORT_OK', m.expected_categories())"
+    )
+    out = subprocess.run(
+        [sys.executable, "-I", "-c", code], cwd=api_root, capture_output=True, text=True, timeout=120, check=False
+    )
+    assert out.returncode == 0 and "IMPORT_OK" in out.stdout, out.stderr[-500:]
