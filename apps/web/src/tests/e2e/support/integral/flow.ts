@@ -145,6 +145,12 @@ export const FINDING_TEXTS = {
   correctionText: "Silence for 14 days is deemed approval of the proposed subcontractor.",
 } as const;
 
+/**
+ * Which provisional decisions a run takes on a review. `four-actions` is the NEGATIVE scenario (it leaves a finding
+ * undecided on purpose, so the approval gate must refuse); `confirm` is the POSITIVE one (only CONFIRMED, only the listed ordinals).
+ */
+export type FindingPlan = { kind: "four-actions" } | { kind: "confirm"; ordinals: number[] };
+
 const SHOWN: Record<string, string> = {
   CONFIRMED: "Confirmed (provisional)",
   DISMISSED: "Dismissed (provisional)",
@@ -161,8 +167,9 @@ const SHOWN: Record<string, string> = {
 export async function decideFindingsThroughUi(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string },
+  options: { projectId: string; documentId: string; plan?: FindingPlan },
 ): Promise<FindingDecisionsOutcome> {
+  const plan: FindingPlan = options.plan ?? { kind: "four-actions" };
   const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
   const regionOf = (scope: Locator) => scope.getByRole("region", { name: "Findings of this analysis" });
   let region = regionOf(card);
@@ -184,7 +191,17 @@ export async function decideFindingsThroughUi(
     decided.push({ ordinal, action });
   };
 
-  if (findings > 0) {
+  if (plan.kind === "confirm") {
+    // Positive route: every listed finding is CONFIRMED, as it stands, through the UI. Nothing is dismissed,
+    // corrected or parked as "needs info" to get past the gate.
+    for (const ordinal of plan.ordinals) {
+      if (ordinal >= findings) continue;
+      const wait = posted(ordinal);
+      await region.getByTestId(`finding-action-${ordinal}-CONFIRMED`).click();
+      await wait;
+      await settled(ordinal, "CONFIRMED");
+    }
+  } else if (findings > 0) {
     const wait = posted(0);
     await region.getByTestId("finding-action-0-CONFIRMED").click();
     await wait;
@@ -204,9 +221,11 @@ export async function decideFindingsThroughUi(
     await wait;
     await settled(ordinal, action);
   };
-  if (findings > 1) await typed(1, "DISMISSED", FINDING_TEXTS.dismissReason);
-  if (findings > 2) await typed(2, "NEEDS_INFO", FINDING_TEXTS.needsInfoReason);
-  if (findings > 3) await typed(3, "CORRECTION_PROPOSED", FINDING_TEXTS.correctionReason, FINDING_TEXTS.correctionText);
+  if (plan.kind === "four-actions") {
+    if (findings > 1) await typed(1, "DISMISSED", FINDING_TEXTS.dismissReason);
+    if (findings > 2) await typed(2, "NEEDS_INFO", FINDING_TEXTS.needsInfoReason);
+    if (findings > 3) await typed(3, "CORRECTION_PROPOSED", FINDING_TEXTS.correctionReason, FINDING_TEXTS.correctionText);
+  }
 
   // A finding decision never decides the review: the final Approve / Reject stay available and untouched.
   const reviewStillPending = await card.getByTestId(`approve-${itemId}`).isEnabled({ timeout: 30_000 }).catch(() => false);
@@ -310,6 +329,63 @@ export async function grantProjectAuthority(projectId: string): Promise<ProjectG
     const stderr = (error as { stderr?: string }).stderr ?? "";
     throw new Error(`INTEGRAL_PROJECT_GRANTS_FAILED: ${stderr.trim().split("\n").pop() || String(error)}`, { cause: error });
   }
+}
+
+/** What the approval gate answered (S5-04). `status` 409 + `code` reconciliation_blocks_approval is a CORRECT refusal. */
+export interface ApprovalAttempt {
+  status: number;
+  code: string;
+  blockers: string[];
+  derivations: string[];
+}
+
+/**
+ * Press Approve (and confirm) on a review and report what the gate answered WITHOUT requiring success: used to
+ * show that a candidate with unresolved or dismissed findings is refused, and that the refusal is a business 409.
+ */
+export async function attemptApproveThroughUi(
+  page: Page,
+  recorder: Pj01RunRecorder,
+  options: { projectId: string; documentId: string },
+): Promise<ApprovalAttempt> {
+  const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
+  const approve = card.getByTestId(`approve-${itemId}`);
+  await expect(approve).toBeEnabled({ timeout: 120_000 });
+  await approve.click();
+  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  await expect(dialog).toBeVisible();
+  const answered = page.waitForResponse(
+    (response: Response) =>
+      response.request().method() === "POST" && /\/hitl\/queue\/[^/]+\/approve/.test(new URL(response.url()).pathname),
+    { timeout: 120_000 },
+  );
+  await dialog.getByRole("button", { name: /confirm approve/i }).click();
+  const response = await answered;
+  const body = (await response.json().catch(() => ({}))) as Json;
+  const detail = (body.detail && typeof body.detail === "object" ? body.detail : {}) as Json;
+  const list = (value: unknown): string[] => (Array.isArray(value) ? value.map((v) => str(v)) : []);
+  if (await dialog.isVisible().catch(() => false)) await page.keyboard.press("Escape");
+  return { status: response.status(), code: str(detail.code), blockers: list(detail.blockers), derivations: list(detail.derivations) };
+}
+
+/** CONFIRM one more finding of the pending review through its card (UI only), waiting for the ledger write. */
+export async function confirmFindingThroughUi(
+  page: Page,
+  recorder: Pj01RunRecorder,
+  options: { projectId: string; documentId: string; ordinal: number },
+): Promise<void> {
+  const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
+  const region = card.getByRole("region", { name: "Findings of this analysis" });
+  await expect(region).toBeVisible({ timeout: 30_000 });
+  const wait = page.waitForResponse(
+    (response: Response) =>
+      response.request().method() === "POST" && /\/hitl\/reviews\/[^/]+\/findings\/decisions/.test(new URL(response.url()).pathname) && response.status() === 201,
+    { timeout: 60_000 },
+  );
+  await region.getByTestId(`finding-action-${options.ordinal}-CONFIRMED`).click();
+  await wait;
+  await expect(region.getByTestId(`finding-current-${options.ordinal}`)).toContainText(SHOWN.CONFIRMED!, { timeout: 30_000 });
+  expect(itemId).not.toBe("");
 }
 
 /** The FINAL human act on a pending review: approve it (confirm dialog), through the review page. */

@@ -677,6 +677,142 @@ def test_a_finding_decision_recorded_after_the_final_approval_fails() -> None:
     )
 
 
+# ── S5 corrected runner: a legitimate positive route and a separate negative route ──────────────────────────────
+
+
+def _routes():
+    """An honest run of the corrected S5: the contract reaches TRUSTED with five CONFIRMED decisions; the draft specification
+    takes the four actions, is refused by the approval gate (409) and is then REJECTED."""
+    facts, browser, expect = _world()
+    user = str(next(iter(verifier._Ctx(facts, browser, expect).actor_ids)))
+    contract_review = next(r for r in facts.reviews if r["document_id"] == _doc_id(browser, "contract"))
+    rejected_review = next(r for r in facts.reviews if r["document_id"] == _doc_id(browser, "rejectedCandidate"))
+    tenant = facts.project_a["tenant_id"]
+
+    def row(review: dict, index: int, action: str, revision: int, at: str) -> dict:
+        return {
+            "tenant_id": tenant, "review_row_id": review["id"], "finding_id": f"{review['id']}-f{index}",
+            "action": action, "reviewer_id": user, "created_by": user, "recorded_at": at, "ledger_revision": revision,
+        }
+
+    facts.finding_decisions = [row(contract_review, i, "CONFIRMED", i + 1, "2026-10-31T09:00:00") for i in range(5)] + [
+        row(rejected_review, i, action, i + 1, "2026-10-31T09:30:00")
+        for i, action in enumerate(("CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"))
+    ]
+    trusted = next(a for a in facts.artifacts if str(a["artifact_id"]) == contract_review["review_metadata"]["candidate_binding"]["artifact_id"])
+    grant = next(g for g in facts.project_grants if g["permission"] == "APPROVE_CANDIDATE")
+    facts.resume_operations = [
+        {
+            "tenant_id": tenant, "review_row_id": contract_review["id"], "decision": "APPROVE", "phase": "COMPLETED",
+            "authority": {
+                "version": 1, "tenant_id": str(tenant), "user_id": user, "project_id": str(facts.project_a["id"]),
+                "review_row_id": str(contract_review["id"]), "grant_id": str(grant["grant_id"]),
+                "receipt": {
+                    "digest": "d" * 64, "signable_as_is": True, "artifact_id": str(trusted["artifact_id"]),
+                    "artifact_hash": trusted["artifact_hash"], "ledger_revision": 5,
+                },
+            },
+        },
+        {"tenant_id": tenant, "review_row_id": rejected_review["id"], "decision": "REJECT", "phase": "COMPLETED", "authority": None},
+    ]
+    evidence = browser["stages"][4]["evidence"]
+    evidence["findingDecisions"] = {
+        "decided": 5, "controlled": True, "route": "positive",
+        "prematureApproval": {"status": 409, "code": "reconciliation_blocks_approval", "blockers": ["UNDECIDED_FINDING"], "derivations": []},
+    }
+    evidence["negativeRoute"] = {
+        "decided": 4,
+        "approvalAttempt": {
+            "status": 409, "code": "reconciliation_blocks_approval",
+            "blockers": ["NEEDS_INFO", "UNDECIDED_FINDING"], "derivations": ["DISMISSED_EXCLUSION", "CORRECTION_PROPOSED"],
+        },
+    }
+    return facts, browser, expect
+
+
+def _doc_id(browser: dict, key: str):
+    from uuid import UUID
+
+    return UUID(browser["documentIds"][key])
+
+
+def test_the_corrected_s5_positive_and_negative_routes_pass() -> None:
+    facts, browser, expect = _routes()
+    assert _failed(facts, browser, expect) == []
+
+
+def test_the_positive_route_needs_five_confirmed_decisions_and_nothing_else() -> None:
+    facts, browser, expect = _routes()
+    # A finding flipped to DISMISSED to get past the gate is not the positive route.
+    facts.finding_decisions[1]["action"] = "DISMISSED"
+    assert any(n.startswith("S5:the positive route: the contract's ledger holds five CONFIRMED") for n in _failed(facts, browser, expect))
+
+
+def test_the_premature_approval_must_be_a_409_naming_only_the_undecided_finding() -> None:
+    name = "S5:S5-04: approving with one finding undecided is a business 409 naming only UNDECIDED_FINDING"
+    for mutate in (
+        lambda p: p.update(status=200),
+        lambda p: p.update(blockers=["NEEDS_INFO"]),
+        lambda p: p.update(blockers=["UNDECIDED_FINDING", "NEEDS_INFO"]),
+        lambda p: p.update(code="something_else"),
+    ):
+        facts, browser, expect = _routes()
+        mutate(browser["stages"][4]["evidence"]["findingDecisions"]["prematureApproval"])
+        assert name in _failed(facts, browser, expect)
+
+
+def test_the_approval_must_leave_one_operation_with_the_authority_and_receipt() -> None:
+    contract_op = lambda facts: facts.resume_operations[0]  # noqa: E731
+    cases = {
+        "S5:S5-05: that review's approval created exactly one resume operation": lambda f: f.resume_operations.pop(0),
+        "S5:S5-05: the authority recorded on the operation names tenant A, the project, the review row and an active human": lambda f: contract_op(f)["authority"].update(user_id=str(uuid4())),
+        "S5:S5-05: the authority points at an active APPROVE_CANDIDATE grant of that user on this project": lambda f: contract_op(f)["authority"].update(grant_id=str(uuid4())),
+        "S5:S5-03/04: the stored receipt is signable as is, names the trusted artifact and covers the whole ledger": lambda f: contract_op(f)["authority"]["receipt"].update(ledger_revision=4),
+    }
+    for name, mutate in cases.items():
+        facts, browser, expect = _routes()
+        mutate(facts)
+        assert name in _failed(facts, browser, expect), name
+
+
+def test_a_revoked_grant_is_not_an_active_authority() -> None:
+    facts, browser, expect = _routes()
+    for g in facts.project_grants:
+        if g["permission"] == "APPROVE_CANDIDATE":
+            g["revoked_at"] = "2026-11-01T00:00:00+00:00"
+    assert "S5:S5-05: the authority points at an active APPROVE_CANDIDATE grant of that user on this project" in _failed(facts, browser, expect)
+
+
+def test_the_negative_route_must_be_refused_and_must_leave_no_approve_operation() -> None:
+    facts, browser, expect = _routes()
+    browser["stages"][4]["evidence"]["negativeRoute"]["approvalAttempt"]["status"] = 200
+    assert any(n.startswith("S5:S5-04: the candidate with a parked, dismissed and corrected finding is refused") for n in _failed(facts, browser, expect))
+    facts, browser, expect = _routes()
+    facts.resume_operations[1]["decision"] = "APPROVE"
+    assert "S5:S5-04: the refused approval created no approve operation and promoted nothing" in _failed(facts, browser, expect)
+
+
+def test_the_negative_route_needs_the_four_actions_in_its_own_ledger() -> None:
+    facts, browser, expect = _routes()
+    facts.finding_decisions[-1]["action"] = "CONFIRMED"
+    assert any(n.startswith("S5:the negative route: the rejected candidate's ledger holds the four actions") for n in _failed(facts, browser, expect))
+
+
+def test_the_runner_takes_the_positive_route_on_the_contract_and_the_four_actions_on_the_rejected_draft() -> None:
+    spec = (Path(__file__).resolve().parents[4] / "web" / "src" / "tests" / "e2e" / "integral-s1-s8.spec.ts").read_text()
+    flow = (Path(__file__).resolve().parents[4] / "web" / "src" / "tests" / "e2e" / "support" / "integral" / "flow.ts").read_text()
+    contract_block = spec[spec.index("POSITIVE route (S5-04)"): spec.index("NEGATIVE route (S5-04)")]
+    assert '{ kind: "confirm", ordinals: [0, 1, 2, 3] }' in contract_block
+    assert "attemptApproveThroughUi" in contract_block and "confirmFindingThroughUi" in contract_block
+    # The positive route confirms; it never dismisses, parks or corrects a finding to get past the gate.
+    for forbidden in ("DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"):
+        assert forbidden not in contract_block, forbidden
+    negative_block = spec[spec.index("NEGATIVE route (S5-04)"): spec.index("rejectThroughUi(pageA")]
+    assert 'seedControlledFindings(state.identityA!.tenantId, rejectedId)' in negative_block
+    assert '{ kind: "four-actions" }' in negative_block and "attemptApproveThroughUi" in negative_block
+    assert "export async function attemptApproveThroughUi" in flow and "export async function confirmFindingThroughUi" in flow
+
+
 def test_a_rejected_draft_that_became_trusted_fails() -> None:
     facts, browser, expect = _world()
     facts.artifacts[3]["trust_state"] = "trusted"

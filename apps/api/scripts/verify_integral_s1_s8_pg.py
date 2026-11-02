@@ -135,6 +135,8 @@ class Facts:
     tenant_a_distinct_approver_required: bool | None = None
     tenant_a_ai_spend: float = 0.0
     finding_decisions: list[dict[str, Any]] = field(default_factory=list)
+    # S5-04/S5-05: the resume operations of the project's reviews, with the authority stored on each (operation_metadata.authority)
+    resume_operations: list[dict[str, Any]] = field(default_factory=list)
     # D1: every grant row of the two projects (active and revoked), read from the table itself
     project_grants: list[dict[str, Any]] = field(default_factory=list)
 
@@ -473,15 +475,33 @@ def _utc_naive(value: Any) -> Any:
     return value
 
 
+def _evidence_of(c: _Ctx, key: str) -> dict[str, Any]:
+    """The browser's evidence block ``key`` from whichever stage reported it."""
+    for stage in c.browser.get("stages") or []:
+        value = (stage.get("evidence") or {}).get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
+def _rows_of(c: _Ctx, document: str) -> list[dict[str, Any]]:
+    """The ledger rows that belong to the review(s) of one document."""
+    review_rows = {str(r["id"]) for r in c.reviews if str(r["document_id"]) == c.doc(document)}
+    return [r for r in c.facts.finding_decisions if str(r["review_row_id"]) in review_rows]
+
+
+def _first_final_act(c: _Ctx, document: str) -> Any:
+    return min((_utc_naive(r["approved_at"]) for r in c.reviews if str(r["document_id"]) == c.doc(document) and r.get("approved_at")), default=None)
+
+
 def _judge_s5_finding_decisions(c: _Ctx) -> None:
     """Per-finding decisions the browser took are ledger rows of tenant A by the approving human, and approved nothing."""
-    stages = c.browser.get("stages") or []
-    reported = ((stages[4].get("evidence") or {}).get("findingDecisions") or {}) if len(stages) > 4 else {}
-    decided = int(reported.get("decided") or 0)
+    positive = _evidence_of(c, "findingDecisions")
+    negative = _evidence_of(c, "negativeRoute")
+    decided = int(positive.get("decided") or 0) + int(negative.get("decided") or 0)
     if decided <= 0:
         return
     rows = c.facts.finding_decisions
-    contract_reviews = [r for r in c.reviews if str(r["document_id"]) == c.doc("contract")]
     c.add("S5", "every finding decision taken in the browser is a ledger row", len(rows) == decided, f"{len(rows)}/{decided}")
     c.add(
         "S5",
@@ -494,24 +514,137 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
             for r in rows
         ),
     )
-    if reported.get("controlled"):
+    if positive.get("route") == "positive":
+        mine = _rows_of(c, "contract")
+        c.add(
+            "S5",
+            "the positive route: the contract's ledger holds five CONFIRMED decisions on five distinct findings and nothing else",
+            len(mine) == 5 and {str(r["action"]) for r in mine} == {"CONFIRMED"} and len({str(r["finding_id"]) for r in mine}) == 5,
+            ",".join(str(r["action"]) for r in mine),
+        )
+    elif positive.get("controlled"):
         c.add(
             "S5",
             "the controlled candidate's ledger holds the four actions CONFIRMED, DISMISSED, NEEDS_INFO and CORRECTION_PROPOSED",
             {str(r["action"]) for r in rows} == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
             ",".join(sorted({str(r["action"]) for r in rows})),
         )
-    first_approval = min((_utc_naive(r["approved_at"]) for r in contract_reviews if r.get("approved_at")), default=None)
+    if negative:
+        mine = _rows_of(c, "rejectedCandidate")
+        c.add(
+            "S5",
+            "the negative route: the rejected candidate's ledger holds the four actions CONFIRMED, DISMISSED, NEEDS_INFO and CORRECTION_PROPOSED",
+            len(mine) == 4 and {str(r["action"]) for r in mine} == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
+            ",".join(str(r["action"]) for r in mine),
+        )
+        first_rejection = _first_final_act(c, "rejectedCandidate")
+        c.add(
+            "S5",
+            "the negative route's decisions were recorded before the rejection, which is a separate act",
+            first_rejection is not None and all(_utc_naive(r["recorded_at"]) <= first_rejection for r in mine),
+        )
+    first_approval = _first_final_act(c, "contract")
+    contract_rows = _rows_of(c, "contract") if positive.get("route") == "positive" else rows
     c.add(
         "S5",
         "the decisions were recorded before the final approval, which is a separate act",
-        first_approval is not None and all(_utc_naive(r["recorded_at"]) <= first_approval for r in rows),
+        first_approval is not None and all(_utc_naive(r["recorded_at"]) <= first_approval for r in contract_rows),
+    )
+
+
+_UNDECIDED_ONLY = ["UNDECIDED_FINDING"]
+_NEGATIVE_BLOCKERS = {"NEEDS_INFO", "UNDECIDED_FINDING"}
+_NEGATIVE_DERIVATIONS = {"CORRECTION_PROPOSED", "DISMISSED_EXCLUSION"}
+
+
+def _judge_s5_reconciled_approval(c: _Ctx) -> None:
+    """S5-03/04/05, read from PostgreSQL: the approval is bound to a current reconciliation and a revalidated grant."""
+    positive = _evidence_of(c, "findingDecisions")
+    negative = _evidence_of(c, "negativeRoute")
+    if positive.get("route") == "positive":
+        premature = positive.get("prematureApproval") or {}
+        c.add(
+            "S5",
+            "S5-04: approving with one finding undecided is a business 409 naming only UNDECIDED_FINDING",
+            premature.get("status") == 409
+            and premature.get("code") == "reconciliation_blocks_approval"
+            and list(premature.get("blockers") or []) == _UNDECIDED_ONLY,
+            json.dumps(premature, sort_keys=True),
+        )
+        _judge_s5_authority(c)
+    if negative:
+        attempt = negative.get("approvalAttempt") or {}
+        c.add(
+            "S5",
+            "S5-04: the candidate with a parked, dismissed and corrected finding is refused with a business 409",
+            attempt.get("status") == 409
+            and attempt.get("code") == "reconciliation_blocks_approval"
+            and set(attempt.get("blockers") or []) == _NEGATIVE_BLOCKERS
+            and set(attempt.get("derivations") or []) == _NEGATIVE_DERIVATIONS,
+            json.dumps(attempt, sort_keys=True),
+        )
+        rejected_rows = {str(r["id"]) for r in c.reviews if str(r["document_id"]) == c.doc("rejectedCandidate")}
+        approving = [
+            o for o in c.facts.resume_operations if str(o["review_row_id"]) in rejected_rows and str(o["decision"]).startswith("APPROVE")
+        ]
+        c.add("S5", "S5-04: the refused approval created no approve operation and promoted nothing", not approving)
+
+
+def _judge_s5_authority(c: _Ctx) -> None:
+    """The review that holds the contract's ledger (revision A) -- not the later approval of revision B -- carries the authority."""
+    ledger = _rows_of(c, "contract")
+    holders = {str(r["review_row_id"]) for r in ledger}
+    c.add("S5", "S5-03: the contract's decisions belong to exactly one review row", len(holders) == 1, str(len(holders)))
+    operations = [o for o in c.facts.resume_operations if str(o["review_row_id"]) in holders]
+    c.add("S5", "S5-05: that review's approval created exactly one resume operation", len(operations) == 1, str(len(operations)))
+    authority = (operations[0].get("authority") if len(operations) == 1 else None) or {}
+    receipt = authority.get("receipt") or {}
+    review = next((r for r in c.reviews if str(r["id"]) in holders), {})
+    bound = _binding(review).get("artifact_id")
+    trusted = [
+        a for a in c.artifacts_of.get(c.doc("contract"), []) if a["trust_state"] == "trusted" and str(a["artifact_id"]) == str(bound)
+    ]
+    grant = next(
+        (
+            g
+            for g in c.facts.project_grants
+            if str(g["grant_id"]) == str(authority.get("grant_id"))
+            and str(g["project_id"]) == str(c.project_a["id"])
+            and str(g["permission"]).upper() == "APPROVE_CANDIDATE"
+            and g.get("revoked_at") is None
+            and str(g["user_id"]) == str(authority.get("user_id"))
+        ),
+        None,
+    )
+    c.add(
+        "S5",
+        "S5-05: the authority recorded on the operation names tenant A, the project, the review row and an active human",
+        authority.get("version") == 1
+        and str(authority.get("tenant_id")) == c.tenant_a
+        and str(authority.get("project_id")) == str(c.project_a["id"])
+        and str(authority.get("review_row_id")) in holders
+        and str(authority.get("user_id")) in c.actor_ids,
+    )
+    c.add("S5", "S5-05: the authority points at an active APPROVE_CANDIDATE grant of that user on this project", grant is not None)
+    digest = str(receipt.get("digest") or "")
+    c.add(
+        "S5",
+        "S5-03/04: the stored receipt is signable as is, names the trusted artifact and covers the whole ledger",
+        receipt.get("signable_as_is") is True
+        and len(digest) == 64
+        and len(trusted) == 1
+        and str(receipt.get("artifact_id")) == str(trusted[0]["artifact_id"])
+        and receipt.get("artifact_hash") == trusted[0]["artifact_hash"]
+        and bool(ledger)
+        and int(receipt.get("ledger_revision") or -1) == max(int(r["ledger_revision"]) for r in ledger),
+        f"digest={digest[:12]} ledger_revision={receipt.get('ledger_revision')}",
     )
 
 
 def _judge_s5(c: _Ctx) -> None:
     _judge_s5_approvals(c)
     _judge_s5_finding_decisions(c)
+    _judge_s5_reconciled_approval(c)
     rejected_id = c.doc("rejectedCandidate")
     rejected = [r for r in c.reviews if str(r["document_id"]) == rejected_id]
     c.add(
@@ -1025,10 +1158,20 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
     facts.finding_decisions = (
         await _rows(
             conn,
-            "SELECT tenant_id, review_row_id, finding_id, action, reviewer_id, created_by, recorded_at FROM public.hitl_finding_decisions WHERE project_id = :p ORDER BY ledger_revision",
+            "SELECT tenant_id, review_row_id, finding_id, action, reviewer_id, created_by, recorded_at, ledger_revision FROM public.hitl_finding_decisions WHERE project_id = :p ORDER BY ledger_revision",
             **pa,
         )
         if await _scalar_exists(conn, "public.hitl_finding_decisions")
+        else []
+    )
+    facts.resume_operations = (
+        await _rows(
+            conn,
+            "SELECT tenant_id, review_row_id, upper(coalesce(decision, '')) AS decision, phase, operation_metadata -> 'authority' AS authority "
+            "FROM public.resume_operations WHERE review_row_id IN (SELECT id FROM review_items WHERE project_id = :p)",
+            **pa,
+        )
+        if await _scalar_exists(conn, "public.resume_operations")
         else []
     )
     facts.project_grants = (

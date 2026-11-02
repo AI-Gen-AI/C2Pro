@@ -55,10 +55,13 @@ import {
   approveStructuredLink,
   approveTechnicalLink,
   approveThroughUi,
+  attemptApproveThroughUi,
+  confirmFindingThroughUi,
   decideFindingsThroughUi,
   reviewRowIdOf,
   grantProjectAuthority,
   seedControlledFindings,
+  type ApprovalAttempt,
   type ControlledSeed,
   type FindingDecisionsOutcome,
   listDocuments,
@@ -341,12 +344,22 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             seeded = await seedControlledFindings(state.identityA!.tenantId, contractId);
             ledger.check("the controlled candidate carries five authored findings", seeded.findings === 5, `${seeded.findings}`);
           }
-          findingOutcome = await decideFindingsThroughUi(pageA, recorder, { projectId, documentId: contractId });
+          // POSITIVE route (S5-04): the contract's controlled candidate is reviewed to a state the gate can approve --
+          // every finding CONFIRMED as it stands, nothing dismissed, corrected or parked to get past the gate. The first
+          // four are confirmed, the approval is tried with the fifth still undecided (a business 409 that names only
+          // that finding), then the fifth is confirmed and the human approves. The four-action scenario is NOT repeated
+          // here: it runs on the draft specification that is rejected (the negative route, below).
+          findingOutcome = await decideFindingsThroughUi(pageA, recorder, {
+            projectId,
+            documentId: contractId,
+            plan: seeded ? { kind: "confirm", ordinals: [0, 1, 2, 3] } : { kind: "four-actions" },
+          });
           ledger.check("the review card offers the per-finding surface", findingOutcome.surfaced);
           ledger.check("the surface states that its decisions are provisional and do not approve", findingOutcome.scopeStatesProvisional);
           ledger.check("per-finding decisions leave the final Approve available (nothing was approved)", findingOutcome.reviewStillPending);
+          let prematureApproval: ApprovalAttempt | undefined;
           if (seeded) {
-            ledger.check("the four actions were taken through the UI", findingOutcome.decided.map((d) => d.action).join(",") === "CONFIRMED,DISMISSED,NEEDS_INFO,CORRECTION_PROPOSED", findingOutcome.decided.map((d) => d.action).join(","));
+            ledger.check("four findings were confirmed through the UI", findingOutcome.decided.map((d) => d.action).join(",") === "CONFIRMED,CONFIRMED,CONFIRMED,CONFIRMED", findingOutcome.decided.map((d) => d.action).join(","));
             ledger.check("every decision is still shown after a full reload", findingOutcome.persistedAfterReload);
             const rowId = await reviewRowIdOf(pageA, projectId, contractId);
             ledger.check("the findings belong to the controlled candidate's review row", rowId === seeded.reviewRowId, rowId);
@@ -375,9 +388,36 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
               expected_ledger_revision: 4, idempotency_key: `integral-foreign-${Date.now()}`,
             });
             ledger.check("the other tenant cannot record a decision on it", foreignWrite.status === 404, `HTTP ${foreignWrite.status}`);
+
+            // S5-04: one finding is still undecided, so the gate refuses the approval -- a business 409, not a defect.
+            prematureApproval = await attemptApproveThroughUi(pageA, recorder, { projectId, documentId: contractId });
+            ledger.check(
+              "approving with one finding undecided is refused (409 reconciliation_blocks_approval, UNDECIDED_FINDING only)",
+              prematureApproval.status === 409 && prematureApproval.code === "reconciliation_blocks_approval" && prematureApproval.blockers.join(",") === "UNDECIDED_FINDING" && prematureApproval.derivations.length === 0,
+              JSON.stringify(prematureApproval),
+            );
+            const stillGated = await waitForDocument(pageA, projectId, contractId, ["review_required"]);
+            ledger.check("the refused approval left the contract waiting for its review", str(stillGated.lifecycle_status) === "review_required", str(stillGated.lifecycle_status));
+            ledger.check("no revision of the contract is trusted yet", (await readRevisions(pageA, contractId)).every((r) => r.trustState !== "trusted"));
+
+            await confirmFindingThroughUi(pageA, recorder, { projectId, documentId: contractId, ordinal: 4 });
+            const completed = (await callApi(pageA, `/api/v1/hitl/reviews/${rowId}/findings`)).data as Json;
+            const completedRows = Array.isArray(completed.findings) ? (completed.findings as Json[]) : [];
+            ledger.check(
+              "all five findings are CONFIRMED in the ledger's current state",
+              completedRows.length === 5 && completedRows.every((f) => str((f.current as Json | null)?.action) === "CONFIRMED"),
+              completedRows.map((f) => str((f.current as Json | null)?.action)).join(","),
+            );
             ledger.evidence("controlledCandidate", { evidenceClass: seeded.evidenceClass, artifactId: seeded.artifactId, artifactHash: seeded.artifactHash, findings: seeded.findings });
           }
-          ledger.evidence("findingDecisions", { surfaced: findingOutcome.surfaced, findings: findingOutcome.findings, decided: findingOutcome.decided.length, actions: findingOutcome.decided.map((d) => d.action), controlled: Boolean(seeded) });
+          ledger.evidence("findingDecisions", {
+            surfaced: findingOutcome.surfaced,
+            findings: findingOutcome.findings,
+            decided: findingOutcome.decided.length + (seeded ? 1 : 0),
+            actions: [...findingOutcome.decided.map((d) => d.action), ...(seeded ? ["CONFIRMED"] : [])],
+            controlled: Boolean(seeded),
+            ...(seeded ? { route: "positive", prematureApproval } : {}),
+          });
           if (findingOutcome.decided.length > 0) ledger.milestone("finding-decided");
           const decision = await approveThroughUi(pageA, recorder, { projectId, documentId: contractId });
           ledger.check("the approval names who decided", decision.decidedBy.length > 0);
@@ -452,6 +492,24 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           if (str(rejectedGate.lifecycle_status) !== "review_required") {
             throw new Error(`S5_REJECTION_NOT_POSSIBLE: the draft specification reached ${str(rejectedGate.lifecycle_status)} without a review to reject`);
           }
+          // NEGATIVE route (S5-04), on the draft specification that is about to be rejected: the four actions are taken
+          // on a controlled candidate (CONFIRMED, DISMISSED, NEEDS_INFO, CORRECTION_PROPOSED; the fifth finding stays
+          // undecided) and the approval is tried. The gate must refuse it with a business 409; the reviewer then
+          // REJECTS the draft, so nothing of it is ever trusted.
+          if (CONTROLLED_FINDINGS) {
+            const seededRejected = await seedControlledFindings(state.identityA!.tenantId, rejectedId);
+            ledger.check("the draft specification's controlled candidate carries five authored findings", seededRejected.findings === 5, `${seededRejected.findings}`);
+            const negative = await decideFindingsThroughUi(pageA, recorder, { projectId, documentId: rejectedId, plan: { kind: "four-actions" } });
+            ledger.check("the negative route took the four actions through the UI", negative.decided.map((d) => d.action).join(",") === "CONFIRMED,DISMISSED,NEEDS_INFO,CORRECTION_PROPOSED", negative.decided.map((d) => d.action).join(","));
+            ledger.check("the negative route's decisions are still shown after a full reload", negative.persistedAfterReload);
+            const approvalAttempt = await attemptApproveThroughUi(pageA, recorder, { projectId, documentId: rejectedId });
+            ledger.check(
+              "approving a candidate with parked, dismissed and corrected findings is refused (409 reconciliation_blocks_approval)",
+              approvalAttempt.status === 409 && approvalAttempt.code === "reconciliation_blocks_approval" && [...approvalAttempt.blockers].sort().join(",") === "NEEDS_INFO,UNDECIDED_FINDING" && [...approvalAttempt.derivations].sort().join(",") === "CORRECTION_PROPOSED,DISMISSED_EXCLUSION",
+              JSON.stringify(approvalAttempt),
+            );
+            ledger.evidence("negativeRoute", { decided: negative.decided.length, actions: negative.decided.map((d) => d.action), approvalAttempt, evidenceClass: seededRejected.evidenceClass });
+          }
           const rejected = await rejectThroughUi(pageA, recorder, { projectId, documentId: rejectedId, reason: REJECTION_REASON });
           ledger.check("the rejection names who decided", rejected.decidedBy.length > 0);
           ledger.check("the review ends REJECTED", rejected.status.toUpperCase() === "REJECTED", rejected.status);
@@ -468,7 +526,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           if (findingOutcome && findingOutcome.findings === 0) {
             ledger.partial("granular per-finding decisions were not taken: the provider yielded no individual findings in this run (route, ledger and surface are covered by PostgreSQL and component tests; a real-AI run yields findings)");
           } else if (CONTROLLED_FINDINGS) {
-            ledger.partial("granular per-finding decisions were exercised on a CONTROLLED candidate (five authored findings, DETERMINISTIC_CONTROLLED_CANDIDATE): the product path is proven, but no provider extracted these findings; S5 integral needs a real-AI run");
+            ledger.partial("granular per-finding decisions were exercised on CONTROLLED candidates (five authored findings, DETERMINISTIC_CONTROLLED_CANDIDATE): the product path is proven, but no provider extracted these findings; S5 integral needs a real-AI run");
           }
         });
       });
