@@ -53,6 +53,11 @@ from src.documents.application.document_source import (
 from src.documents.domain.models import DocumentType
 from src.documents.ports.storage_service import IStorageService
 from src.modules.hitl.adapters.persistence.repository import SqlAlchemyReviewQueueRepository
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectAuthorizationDenied,
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.domain.entities import AWAITING_DECISION_STATUSES, ReviewStatus
 from src.temporal.adapters.persistence.document_revision_repository import (
     SqlAlchemyDocumentRevisionRepository,
@@ -476,6 +481,14 @@ class RequestStructuredSourceTrustService:
         )
 
 
+def _capability_required() -> StructuredTrustForbidden:
+    # ``peek`` is already tenant-scoped, so a foreign tenant never gets here (it receives the existing non-disclosing 404).
+    # A tenant member attempting a final decision without this project's explicit capability gets a stable 403.
+    return StructuredTrustForbidden(
+        "APPROVE_CANDIDATE on this structured source's project is required", code="project_capability_required"
+    )
+
+
 @dataclass
 class DecideStructuredSourceTrustService:
     session: AsyncSession
@@ -514,6 +527,18 @@ class DecideStructuredSourceTrustService:
         actor = await _require_human_actor(
             self.session, tenant_id=tenant_id, actor_user_id=actor_user_id
         )
+        # First check (fail fast, no grant lock): a member without the project's explicit capability never reaches the
+        # row locks or the source parse. It is NOT the authority for the promotion: see the revalidation below.
+        authorizer = ProjectReviewAuthorizer(self.session)
+        try:
+            proof = await authorizer.require(
+                tenant_id=tenant_id,
+                user_id=actor.id,
+                project_id=project_id,
+                capability=ProjectCapability.APPROVE_CANDIDATE,
+            )
+        except ProjectAuthorizationDenied as exc:
+            raise _capability_required() from exc
         review = await reviews.get_review_item_by_row_id(review_row_id, for_update=True)
         if review is None:
             raise StructuredTrustNotFound("structured trust review unavailable")
@@ -617,6 +642,16 @@ class DecideStructuredSourceTrustService:
                     "the parsed source content changed since it was proposed",
                     code="source_changed",
                 )
+            # Second check, TIME-OF-USE: the source parse above can take seconds, and a revocation committed meanwhile
+            # must not be honoured late. Re-checking the SAME capability reads the grant FOR SHARE inside this
+            # transaction: a concurrent revocation (an UPDATE of that row) either was committed before this read and is
+            # seen here, or waits until this transaction commits (the promotion then happened under a grant that was
+            # valid inside its own transaction). The lock is taken only now, next to the TRUSTED write, so a slow parse
+            # never holds the grant row; lock order document -> project -> review -> artifact -> grant, like S5-05.
+            try:
+                await authorizer.revalidate(proof)
+            except ProjectAuthorizationDenied as exc:
+                raise _capability_required() from exc
             try:
                 commit = await repo.commit_structured_candidate(binding, tenant_id=tenant_id)  # type: ignore[arg-type]
             except StaleCandidateError as exc:

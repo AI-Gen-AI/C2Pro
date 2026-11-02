@@ -10,12 +10,21 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.http import structured_source_trust_router as routes
+from src.analysis.adapters.persistence.models import DocumentArtifactORM
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import Tenant, User, UserRole
+from src.modules.hitl.adapters.persistence.project_review_grants import (
+    ProjectReviewGrantRepository,
+)
+from src.modules.hitl.adapters.persistence.repository import SqlAlchemyReviewQueueRepository
+from src.modules.hitl.application.project_review_authorization import ProjectCapability
+from src.modules.hitl.domain.entities import ReviewStatus
+from src.temporal.adapters.persistence.models import ProjectEventORM
+from tests.modules.integration.grants_world import apply_grants_schema
 from tests.modules.integration.test_adr032_structured_source_trust_pg import (
     EXCEPTION,
     _approver,
@@ -26,6 +35,103 @@ from tests.modules.integration.test_adr032_structured_source_trust_pg import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_status"),
+    [("off", 200), ("audit", 200), ("enforce", 403)],
+)
+async def test_http_structured_source_approval_requires_project_approve_capability_only_in_enforce(
+    db: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_status: int,
+) -> None:
+    """A visible reviewer without APPROVE_CANDIDATE cannot mutate a structured candidate in enforce mode.
+
+    Removing the application-boundary ProjectReviewAuthorizer check must make the enforce case
+    return 200 and promote the candidate, so this is a regression test for the authorization bug.
+    """
+    w, storage = await _world(db, tmp_path), _Storage()
+    requester = await db.get(User, w["actor"])
+    approver_id = await _approver(db, w)
+    approver = await db.get(User, approver_id)
+    assert requester is not None and approver is not None
+    doc = await _document(db, w, tmp_path, storage)
+
+    await apply_grants_schema(db)
+    await db.execute(
+        update(Tenant)
+        .where(Tenant.id == w["tenant"])
+        .values(settings={"hitl_project_authorization": {"mode": mode}})
+    )
+    if mode == "enforce":
+        grantor = await db.scalar(
+            select(User.id).where(
+                User.tenant_id == w["tenant"],
+                User.role == UserRole.ADMIN,
+                User.id != approver.id,
+            )
+        )
+        assert grantor is not None
+        await ProjectReviewGrantRepository(db).grant(
+            tenant_id=w["tenant"],
+            project_id=w["project"],
+            user_id=approver.id,
+            capability=ProjectCapability.READ_REVIEW,
+            granted_by=grantor,
+            reason="The reviewer may see this candidate but may not approve it.",
+        )
+    await db.commit()
+
+    monkeypatch.setattr(routes, "_verifier", lambda: _verifier(storage))
+    app = FastAPI()
+    app.include_router(routes.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: requester
+    request_url = f"/api/v1/documents/{doc['document']}/revisions/{doc['revision']}/trust-candidate"
+    request_body = {"idempotency_key": f"http-project-auth-{mode}-request", "reason": "Please consider this source"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(request_url, json=request_body)
+        assert created.status_code == 201, created.text
+        decision = {
+            "review_row_id": created.json()["review_row_id"],
+            "artifact_id": created.json()["artifact_id"],
+            "artifact_version": created.json()["artifact_version"],
+            "artifact_hash": created.json()["artifact_hash"],
+            "decision": "APPROVE",
+            "idempotency_key": f"http-project-auth-{mode}-decision",
+            "reason": "Independent human approval",
+        }
+        app.dependency_overrides[get_current_user] = lambda: approver
+        response = await client.post("/api/v1/structured-source-trust/decisions", json=decision)
+
+    assert response.status_code == expected_status, response.text
+    if mode != "enforce":
+        assert response.json()["trust_state"] == "trusted"
+        return
+
+    assert response.json()["detail"]["code"] == "project_capability_required"
+    artifact = await db.scalar(
+        select(DocumentArtifactORM).where(
+            DocumentArtifactORM.artifact_id == created.json()["artifact_id"]
+        )
+    )
+    assert artifact is not None and artifact.trust_state == "proposed"
+    review = await SqlAlchemyReviewQueueRepository(db, w["tenant"]).get_review_item_by_row_id(
+        created.json()["review_row_id"]
+    )
+    assert review is not None and review.current_status is ReviewStatus.PENDING_REVIEW_REQUIRED
+    assert "structured_trust_decision" not in review.metadata
+    decided = await db.scalar(
+        select(func.count())
+        .select_from(ProjectEventORM)
+        .where(
+            ProjectEventORM.project_id == w["project"],
+            ProjectEventORM.event_type == "structured_source.trust_decided",
+        )
+    )
+    assert decided == 0
 
 
 async def test_http_request_decide_and_error_mapping(
@@ -110,7 +216,10 @@ async def test_http_self_approval_exception_is_honoured_and_recorded(
     doc = await _document(db, w, tmp_path, storage)
     await db.execute(
         update(Tenant).where(Tenant.id == w["tenant"]).values(
-            settings={"trust_governance": {"structured_source_self_approval": EXCEPTION}}
+            settings={
+                "hitl_project_authorization": {"mode": "off"},
+                "trust_governance": {"structured_source_self_approval": EXCEPTION},
+            }
         )
     )
     await db.commit()

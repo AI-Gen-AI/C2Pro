@@ -83,6 +83,14 @@ async def _world(db: AsyncSession, tmp_path: Path) -> dict:
     """The shared S7 world minus its synthetic technical artifact (irrelevant here, and its
     stub payload is not a valid DocumentArtifact for the canonical readers)."""
     w = await _technical_world(db, tmp_path)
+    # ADR-032's existing behavioral tests exercise the structured-source decision rules, not the
+    # per-project authorization rollout.  Keep their legacy fixture explicitly transitional; the
+    # enforce/audit/off authorization contract is covered at the HTTP boundary in its own test.
+    await db.execute(
+        update(Tenant)
+        .where(Tenant.id == w["tenant"])
+        .values(settings={"hitl_project_authorization": {"mode": "off"}})
+    )
     await db.execute(text("DELETE FROM document_artifacts WHERE document_id = cast(:d as uuid)"), {"d": str(w["document"])})
     await db.commit()
     return w
@@ -181,7 +189,10 @@ async def _grant(db: AsyncSession, tenant, **override) -> dict:
     value = {k: v for k, v in value.items() if v is not None}
     await db.execute(
         update(Tenant).where(Tenant.id == tenant).values(
-            settings={"trust_governance": {"structured_source_self_approval": value}}
+            settings={
+                "hitl_project_authorization": {"mode": "off"},
+                "trust_governance": {"structured_source_self_approval": value},
+            }
         )
     )
     await db.commit()

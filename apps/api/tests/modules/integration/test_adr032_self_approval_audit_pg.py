@@ -91,7 +91,10 @@ async def test_a_bare_boolean_exception_is_anonymous_and_refused(
     receipt = await _request(test_session_factory, storage, w, doc)
     await db.execute(
         update(Tenant).where(Tenant.id == w["tenant"]).values(
-            settings={"trust_governance": {"structured_source_self_approval": True}}
+            settings={
+                "hitl_project_authorization": {"mode": "off"},
+                "trust_governance": {"structured_source_self_approval": True},
+            }
         )
     )
     await db.commit()

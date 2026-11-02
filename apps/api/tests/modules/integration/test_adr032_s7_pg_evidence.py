@@ -57,6 +57,9 @@ async def test_s7_chain_on_isolated_postgres_passes_the_integral_verifier(
     await db.execute(
         update(Tenant).where(Tenant.id == w["tenant"]).values(
             settings={
+                # This chain proves ADR-032 trust and the S7 links, not the per-project authorization rollout
+                # (covered at the structured-source boundary in its own tests): keep the fixture explicitly transitional.
+                "hitl_project_authorization": {"mode": "off"},
                 "wbs_governance": {"require_distinct_approver": False},
                 "trust_governance": {"structured_source_self_approval": exception},
             }
