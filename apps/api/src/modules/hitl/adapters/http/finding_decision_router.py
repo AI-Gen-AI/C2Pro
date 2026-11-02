@@ -26,6 +26,10 @@ from src.modules.hitl.adapters.persistence.finding_decision_writer import (
     FindingDecisionIdentityError,
     FindingDecisionRevisionConflict,
 )
+from src.modules.hitl.application.derived_candidate_service import (
+    DerivationRefused,
+    DerivedCandidateService,
+)
 from src.modules.hitl.application.finding_review_authorization import (
     FindingDecisionSubmission,
     FindingReviewerNotAuthorized,
@@ -113,6 +117,34 @@ class FindingDecisionReceipt(BaseModel):
     ledger_revision: int
     replayed: bool
     decision_scope: Literal["PROVISIONAL_REVIEWER_INTENT"] = "PROVISIONAL_REVIEWER_INTENT"
+
+
+class DerivedCandidateRequest(BaseModel):
+    """What the reviewer saw when asking for the derived candidate: the candidate (by SHA-256) and the ledger head."""
+
+    source_artifact_hash: str
+    expected_ledger_revision: int
+
+
+class DerivedCandidateResponse(BaseModel):
+    """The new PROPOSED candidate Vn+1 and where it came from. Deriving approves, rejects and trusts NOTHING."""
+
+    review_row_id: UUID
+    source_artifact_id: UUID
+    source_artifact_version: int
+    source_artifact_hash: str
+    derived_artifact_id: UUID
+    derived_artifact_version: int
+    derived_artifact_hash: str
+    reconciliation_digest: str
+    source_ledger_revision: int
+    retained: int
+    excluded: int
+    corrected: int
+    replayed: bool
+    derived_state: Literal["PROPOSED"] = "PROPOSED"
+    # Said by the API so no screen can imply more: Vn+1 starts with every finding undecided and needs its own approval.
+    final_approval: Literal["SEPARATE_ACT"] = "SEPARATE_ACT"
 
 
 async def get_finding_session(
@@ -254,6 +286,48 @@ async def record_finding_decision(
     return FindingDecisionReceipt(
         event_id=receipt.event_id, ledger_revision=receipt.ledger_revision, replayed=receipt.replayed
     )
+
+
+@router.post(
+    "/reviews/{review_row_id}/derived-candidate",
+    response_model=DerivedCandidateResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        403: {"description": "An active human reviewer of the tenant, holding REVIEW_FINDING on the project, is required"},
+        404: {"description": "No actionable analysis review of this tenant"},
+        409: {"description": "Blocked or incomplete decisions, nothing to derive, stale candidate/ledger, or a gated correction"},
+    },
+    summary="Derive the candidate Vn+1 that the DISMISSED / CORRECTION_PROPOSED decisions of a pending review call for",
+)
+async def derive_candidate(
+    review_row_id: UUID,
+    body: DerivedCandidateRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_finding_session),
+) -> DerivedCandidateResponse:
+    try:
+        outcome = await DerivedCandidateService(session).execute(
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            user=current_user,
+            review_row_id=review_row_id,
+            source_artifact_hash=body.source_artifact_hash,
+            expected_ledger_revision=body.expected_ledger_revision,
+        )
+    except FindingReviewerNotAuthorized as exc:
+        raise _refusal("reviewer_not_authorized", str(exc), status.HTTP_403_FORBIDDEN) from exc
+    except ProjectAuthorizationDenied as exc:
+        raise _project_denied(exc) from exc
+    except ReviewFindingsUnavailable as exc:
+        raise _refusal("review_unavailable", str(exc), status.HTTP_404_NOT_FOUND) from exc
+    except DerivationRefused as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": exc.code, "message": str(exc),
+                "blockers": list(exc.blockers), "derivations": list(exc.derivations),
+            },
+        ) from exc
+    return DerivedCandidateResponse(**{**outcome.__dict__})
 
 
 @router.get(

@@ -102,6 +102,46 @@ lines 234-235 (`_judge_s1`), 442 and 446 (`_judge_s6`), 531 and 536 (`_judge_s7_
 (`_first_failure`: `Any` return). The three errors introduced by the ADR-032 chain were fixed; the
 seven remain recorded here, unchanged, rather than hidden.
 
+## Real-AI pilot UAT — preparation (NOT executed; nothing here activates a provider or creates an identity)
+
+Purpose: ONE UAT by a pilot user over four representative documents, with a real provider and persisted evidence, so that S5
+(and the evidence class `UAT_REAL`) can be judged for the first time. The deterministic rehearsal of 2026-11-02
+(`DETERMINISTIC_REHEARSAL_COMPLETE_WITH_LIMITATIONS`) is not a substitute and is never counted as one.
+
+**Blocking gates (each needs its own authorization/decision; none is solved by this preparation).**
+
+| # | Gate | Why it blocks | Needed |
+|---|---|---|---|
+| G1 | Runner policy for REAL findings under `enforce` | With `C2PRO_AI_MOCK=0` the controlled candidate is off; the spec then takes the four-action scenario on the provider's findings and tries to approve, which S5-04 refuses (`409 reconciliation_blocks_approval`) because some findings stay undecided | An authorized runner change: confirm EVERY real finding (positive route), or derive Vn+1 for dismissals; the number of findings is not five and not known in advance |
+| G2 | Pilot document set | The runner pins six synthetic fixtures by name and SHA-256 (`support/integral/fixtures.ts`) | Four owner-supplied documents (contract, budget, schedule, specification), sanitized, with their SHA-256 pinned BEFORE the run, and a documented right to send them to the provider (the N2 anonymizer runs before Claude, but it is not a consent) |
+| G3 | Provider credentials | The job refuses `real-ai` unless the dedicated test-only secrets `S2_E2E_ANTHROPIC_API_KEY` and `S2_E2E_OPENAI_API_KEY` (embeddings) exist, and `integral_confirm_real_ai_sha` equals the full candidate SHA | The owner confirms the secrets exist and are test-only; this preparation did not read or create any secret |
+| G4 | Clerk Development identities | A and B pass the read-only preflight today; S7 independence needs a SECOND human in tenant A | Creating one is an owner decision (no identity was created); without it S7 stays `PARTIAL` (`SELF_APPROVED_NOT_INDEPENDENT`) |
+| G5 | Derived-candidate semantics (only if the pilot dismisses or corrects findings) | Exclusions are implemented; corrections are gated (`CORRECTIONS_RATIFIED`, which field they replace) and the review card has no "Derive candidate" action | Owner ratification of A1/A2 of the S5 audit note and a UI increment |
+| G6 | CI headroom | `Backend Modules Tests` runs ~19 of its 20 minutes and timed out once at 100 % pass | A separate infrastructure task; a UAT needs a green exact-HEAD CI first |
+| G7 | Open security/authority gaps | P1 SQL administrative authority NOT_VERIFIED, typed critique UNEVALUATED, independent security review PENDING | They do not block running a UAT, but they keep S5 `PARTIAL / NOT_ACCEPTED` whatever its result |
+
+**Dispatch (when authorized, one run).** `acc01-s2-live-ai-uat.yml` with `integral_uat=true`, `integral_ai_mode=real-ai`,
+`integral_confirm_real_ai_sha=<full 40-hex candidate SHA>`, preceded by the read-only identity preflight and an exact-HEAD
+green CI. Isolated PostgreSQL and Redis, Clerk Development only, no Production data, no merge, no deploy.
+
+**Cost estimate (an estimate, not a measurement).** Routing is `core/ai/model_routing.yaml`: Haiku 4.5 USD 1/5, Sonnet 4.6
+USD 3/15, Opus 4.7 USD 15/75 per million input/output tokens. For four documents of 20-100 pages plus the revision B and the
+rejected draft (six analyses), with the extraction, WBS/BOM generation and coherence passes, the expected range is **USD 10-40**
+(most of it from the Opus-routed generation tasks), plus under USD 1 of embeddings. Recommended hard cap: USD 50 through the
+tenant AI budget, and the run records `tenant_a_ai_spend` so the real figure replaces this estimate.
+
+**Acceptance criteria (all must hold; the runner never accepts itself).**
+1. HEAD, backend/worker/frontend runtime SHAs and the dispatched SHA are identical; evidence class `UAT_REAL`, not `REHEARSAL`.
+2. Provider receipt: `ai_mock=false`, `worker_provider_successes >= 1`, zero provider errors, nonzero tokens, spend recorded.
+3. The four pinned documents are stored with the expected SHA-256 and exactly one genesis revision each.
+4. S1-S8 each `PASS` or an honestly declared `PARTIAL`; no `FAIL`/`NOT_RUN`; PostgreSQL verification all green.
+5. S5: every real finding decided through the UI by the authenticated human; the approval accepted by S5-04; one resume operation
+   whose authority names an active `APPROVE_CANDIDATE` grant and the reconciliation digest; the TRUSTED artifact is exactly the
+   approved candidate (or its derived Vn+1 with the provenance recorded).
+6. Relogin A -> B: identical persisted state and 404 in both directions.
+7. A pilot-user review of the outputs (usefulness of findings, alerts and Health) recorded separately from the technical verdict;
+   independent security review and S7 independent approval remain explicit open items unless they were actually performed.
+
 ## Rules
 
 - No merge, deployment, production SQL/DDL, bypass of a human approval, or automatic change to MASTER as part of a run.

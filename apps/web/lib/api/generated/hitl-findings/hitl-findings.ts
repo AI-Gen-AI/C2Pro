@@ -54,6 +54,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  DerivedCandidateRequest,
+  DerivedCandidateResponse,
   FindingDecisionReceipt,
   FindingDecisionSubmission,
   HTTPValidationError,
@@ -430,6 +432,123 @@ export const useRecordFindingDecisionApiV1HitlReviewsReviewRowIdFindingsDecision
   > => {
     return useMutation(
       getRecordFindingDecisionApiV1HitlReviewsReviewRowIdFindingsDecisionsPostMutationOptions(
+        options,
+      ),
+      queryClient,
+    );
+  };
+/**
+ * @summary Derive the candidate Vn+1 that the DISMISSED / CORRECTION_PROPOSED decisions of a pending review call for
+ */
+export const deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost = (
+  reviewRowId: string,
+  derivedCandidateRequest: DerivedCandidateRequest,
+  signal?: AbortSignal,
+) => {
+  return orvalApiClient<DerivedCandidateResponse>({
+    url: `/api/v1/hitl/reviews/${reviewRowId}/derived-candidate`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: derivedCandidateRequest,
+    signal,
+  });
+};
+
+export const getDeriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePostMutationOptions =
+  <TError = void | HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost
+        >
+      >,
+      TError,
+      { reviewRowId: string; data: DerivedCandidateRequest },
+      TContext
+    >;
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost
+      >
+    >,
+    TError,
+    { reviewRowId: string; data: DerivedCandidateRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      "deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost",
+    ];
+    const { mutation: mutationOptions } = options
+      ? options.mutation &&
+        "mutationKey" in options.mutation &&
+        options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } };
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost
+        >
+      >,
+      { reviewRowId: string; data: DerivedCandidateRequest }
+    > = (props) => {
+      const { reviewRowId, data } = props ?? {};
+
+      return deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost(
+        reviewRowId,
+        data,
+      );
+    };
+
+    return { mutationFn, ...mutationOptions };
+  };
+
+export type DeriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost
+      >
+    >
+  >;
+export type DeriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePostMutationBody =
+  DerivedCandidateRequest;
+export type DeriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePostMutationError =
+  void | HTTPValidationError;
+
+/**
+ * @summary Derive the candidate Vn+1 that the DISMISSED / CORRECTION_PROPOSED decisions of a pending review call for
+ */
+export const useDeriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost =
+  <TError = void | HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost
+          >
+        >,
+        TError,
+        { reviewRowId: string; data: DerivedCandidateRequest },
+        TContext
+      >;
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost
+      >
+    >,
+    TError,
+    { reviewRowId: string; data: DerivedCandidateRequest },
+    TContext
+  > => {
+    return useMutation(
+      getDeriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePostMutationOptions(
         options,
       ),
       queryClient,

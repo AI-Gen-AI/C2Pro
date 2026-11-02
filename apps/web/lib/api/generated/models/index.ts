@@ -152,6 +152,8 @@ export * from "./decideStructuredSourceTrustBody";
 export * from "./decideStructuredSourceTrustBodyDecision";
 export * from "./decideWBSIntelligenceRequest";
 export * from "./decideWBSIntelligenceResponse";
+export * from "./derivedCandidateRequest";
+export * from "./derivedCandidateResponse";
 export * from "./detectionEvidenceResponse";
 export * from "./disclaimerAcceptRequest";
 export * from "./dLQEntryResponse";

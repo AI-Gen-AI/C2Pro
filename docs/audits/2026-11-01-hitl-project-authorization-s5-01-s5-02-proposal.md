@@ -269,3 +269,67 @@ No SQL privilege was widened and no migration was added.
 existence is not proof that an authenticated human administrator issued it); critique without a typed source = UNEVALUATED;
 derived-candidate (Vn+1) producer = NOT_IMPLEMENTED; S5 as a whole = PARTIAL / NOT_ACCEPTED; no integral run under `enforce`
 with the real browser has been executed.
+
+
+## Milestone — deterministic rehearsal complete, with limitations (2026-11-02)
+
+`DETERMINISTIC_REHEARSAL_COMPLETE_WITH_LIMITATIONS`. Integral run 41418544161 (HEAD `36cba4dc0667d9dd6fb5b45907f1d8f152e5fd9c`,
+`deterministic-rehearsal`, tenants A/B in `enforce`, Clerk Development, mock AI, zero paid calls): browser S1, S2, S3, S4, S6 and
+S8 PASS; S5 and S7 PARTIAL as declared; independent PostgreSQL verification 140/140; no first failure. The positive S5 route
+(five CONFIRMED -> UI approval -> one resume operation with authority, an active APPROVE_CANDIDATE grant and the digest -> TRUSTED)
+and the negative route (four decisions persisted, `409 reconciliation_blocks_approval`, rejection with no approve operation and
+nothing promoted) were both exercised. The earlier failure (run 41404854469, zero decisions on the draft) was a runner read race
+(stale React Query cache read at first paint), closed in the runner only. **This is not a UAT**: the findings are authored
+(`DETERMINISTIC_CONTROLLED_CANDIDATE`), not extracted by a provider, and S7 relies on a single human. No claim of acceptance is made.
+
+
+## S5 Vn+1 — the derived-candidate producer (fourth increment)
+
+**Contract reused, not redesigned.** S5-03 already says what each decision means: DISMISSED -> EXCLUDED ("a derived candidate is
+required"); CORRECTION_PROPOSED -> "a NEW candidate and its own signature, never applied"; S5-04 refuses to sign a candidate that
+needs one. Nothing could produce it. The ratified D1-D8 text was never supplied to the implementer, so this increment is bounded to
+those statements and to the product's own governed operation `propose_correction` (Vn SUPERSEDED, Vn+1 inserted PROPOSED with the
+next version, the review rebinds compare-and-set from the exact candidate it replaces).
+
+**What was built** (`domain/derived_candidate.py` pure; `application/derived_candidate_service.py`; route
+`POST /hitl/reviews/{review_row_id}/derived-candidate` with `{source_artifact_hash, expected_ledger_revision}`):
+
+1. Authorize the human (`REVIEW_FINDING` on the review's own project) and lock the review row `FOR UPDATE` (the ledger writer's lock).
+2. Reconcile the CURRENT candidate. Refuse (409, nothing written) when the candidate in the request is not the review's, when the
+   ledger head differs from `expected_ledger_revision`, when the ledger is INCONSISTENT, when anything blocks (NEEDS_INFO, an
+   undecided finding, a material verified open critique), or when no derivation is needed (`no_derivation_required`).
+3. Materialize: CONFIRMED findings are carried byte-for-byte; DISMISSED ones are left out; a correction replaces ONE field with the
+   reviewer's own text (see A2). The source payload is never mutated; no text is generated.
+4. Create Vn+1 through `propose_correction` and append the provenance to `review_items.review_metadata.candidate_derivations`
+   (policy `s5-derive/v1`; source candidate id/version/SHA-256 and document revision; ledger head; reconciliation digest; every
+   excluded/corrected finding with its decision event id and digests; the deriving human). One transaction: any failure rolls
+   back the new candidate, the rebinding and the provenance together.
+5. Idempotent: the same `(source_artifact_hash, expected_ledger_revision)` replays the recorded result (`replayed: true`) even after
+   Vn+1 has received decisions; two concurrent requests produce one candidate.
+
+**What deriving does NOT do.** It approves, rejects and trusts nothing; it creates no resume operation, event or analysis; it does
+not touch a TRUSTED artifact; it carries no decision over - every finding of Vn+1 is undecided, so a human must decide them again
+and approve explicitly, and S5-04 (a CURRENT reconciliation of Vn+1) and S5-05 (grant + digest inside the first-TRUSTED
+transaction) apply to Vn+1 unchanged. A decision still aimed at the superseded Vn is refused by the existing pin check.
+
+**Open points (documented, not decided here).**
+* **A1 - authority.** `REVIEW_FINDING` was used because it is the capability that takes the decisions this materializes and the act only
+  PROPOSES. If the owner prefers `APPROVE_CANDIDATE`, it is a one-constant change in the service and its tests.
+* **A2 - which field a correction replaces.** The contract does not name it. `description` (the only free-text body of a risk, and
+  what the screen's "Proposed replacement text" is shown against) is the implemented interpretation, but it is **gated**:
+  `CORRECTIONS_RATIFIED = False` makes the service answer `409 correction_semantics_not_ratified`. Exclusions are unambiguous and not gated.
+* **A3 - provenance store.** The provenance lives in `review_metadata` (no migration, no new event type, no temporal-projection side
+  effect). That column is mutable JSON; an append-only table would be the hardening, and needs a migration decision.
+* **A4 - scoring.** Vn+1 inherits the source candidate's N8 scoring (the repository's default for a correction); it is not recomputed.
+* **No screen yet.** The route and the generated client exist; the review card has no "Derive candidate" action.
+
+**Tests.** `tests/unit/modules/hitl/test_derived_candidate.py` (pure) and `tests/integration/document_flow/test_s5_derived_candidate_pg.py`
+(PostgreSQL, 19 tests): original candidate unchanged; exclusion and (ratified) correction applied only as specified; NEEDS_INFO and
+incomplete decisions blocked; no promotion without a valid human approval; capability required / revoked grant; another tenant;
+stale ledger/candidate; idempotent retry; concurrent requests; rollback and recovery; a pre-existing TRUSTED artifact untouched.
+Seven deliberate mutations of the implementation each turned a test RED.
+
+**Status.** Derived-candidate (Vn+1) producer: IMPLEMENTED for exclusions, GATED for corrections (A2), without UI. S5 as a whole remains
+PARTIAL / NOT_ACCEPTED; P1 SQL administrative authority NOT_VERIFIED; typed critique UNEVALUATED; independent security review PENDING;
+S7 independent approval absent.
+

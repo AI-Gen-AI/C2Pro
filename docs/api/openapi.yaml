@@ -4341,6 +4341,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/hitl/reviews/{review_row_id}/derived-candidate:
+    post:
+      tags:
+      - HITL findings
+      summary: Derive the candidate Vn+1 that the DISMISSED / CORRECTION_PROPOSED
+        decisions of a pending review call for
+      operationId: derive_candidate_api_v1_hitl_reviews__review_row_id__derived_candidate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: review_row_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Review Row Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DerivedCandidateRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DerivedCandidateResponse'
+        '403':
+          description: An active human reviewer of the tenant, holding REVIEW_FINDING
+            on the project, is required
+        '404':
+          description: No actionable analysis review of this tenant
+        '409':
+          description: Blocked or incomplete decisions, nothing to derive, stale candidate/ledger,
+            or a gated correction
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/hitl/reviews/{review_row_id}/capabilities:
     get:
       tags:
@@ -6276,9 +6320,11 @@ components:
           title: Item Count
         total_budget:
           type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Total Budget
         spent_amount:
           type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Spent Amount
         spend_recorded:
           type: boolean
@@ -6288,6 +6334,7 @@ components:
         remaining_budget:
           anyOf:
           - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Remaining Budget
           description: Null when no spend has been recorded, because remaining would
@@ -6345,6 +6392,7 @@ components:
           title: Code
         amount:
           type: string
+          pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           title: Amount
       additionalProperties: false
       type: object
@@ -8136,6 +8184,93 @@ components:
       - change_set_id
       - change_set_revision
       title: DecideWBSIntelligenceResponse
+    DerivedCandidateRequest:
+      properties:
+        source_artifact_hash:
+          type: string
+          title: Source Artifact Hash
+        expected_ledger_revision:
+          type: integer
+          title: Expected Ledger Revision
+      type: object
+      required:
+      - source_artifact_hash
+      - expected_ledger_revision
+      title: DerivedCandidateRequest
+      description: 'What the reviewer saw when asking for the derived candidate: the
+        candidate (by SHA-256) and the ledger head.'
+    DerivedCandidateResponse:
+      properties:
+        review_row_id:
+          type: string
+          format: uuid
+          title: Review Row Id
+        source_artifact_id:
+          type: string
+          format: uuid
+          title: Source Artifact Id
+        source_artifact_version:
+          type: integer
+          title: Source Artifact Version
+        source_artifact_hash:
+          type: string
+          title: Source Artifact Hash
+        derived_artifact_id:
+          type: string
+          format: uuid
+          title: Derived Artifact Id
+        derived_artifact_version:
+          type: integer
+          title: Derived Artifact Version
+        derived_artifact_hash:
+          type: string
+          title: Derived Artifact Hash
+        reconciliation_digest:
+          type: string
+          title: Reconciliation Digest
+        source_ledger_revision:
+          type: integer
+          title: Source Ledger Revision
+        retained:
+          type: integer
+          title: Retained
+        excluded:
+          type: integer
+          title: Excluded
+        corrected:
+          type: integer
+          title: Corrected
+        replayed:
+          type: boolean
+          title: Replayed
+        derived_state:
+          type: string
+          const: PROPOSED
+          title: Derived State
+          default: PROPOSED
+        final_approval:
+          type: string
+          const: SEPARATE_ACT
+          title: Final Approval
+          default: SEPARATE_ACT
+      type: object
+      required:
+      - review_row_id
+      - source_artifact_id
+      - source_artifact_version
+      - source_artifact_hash
+      - derived_artifact_id
+      - derived_artifact_version
+      - derived_artifact_hash
+      - reconciliation_digest
+      - source_ledger_revision
+      - retained
+      - excluded
+      - corrected
+      - replayed
+      title: DerivedCandidateResponse
+      description: The new PROPOSED candidate Vn+1 and where it came from. Deriving
+        approves, rejects and trusts NOTHING.
     DetectionEvidenceResponse:
       properties:
         source_clause_id:
@@ -15697,6 +15832,7 @@ components:
         budget_allocated:
           anyOf:
           - type: string
+            pattern: ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$
           - type: 'null'
           title: Budget Allocated
         evidence_tier:
