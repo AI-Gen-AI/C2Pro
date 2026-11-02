@@ -191,7 +191,7 @@ stay in `enforce`: a loop gives that one user the three review capabilities on e
 
 | Mode | What it does | What it needs |
 |---|---|---|
-| `plumbing-check` (default) | stack + public addresses + a headless browser proving that Clerk loads on the public origin, that the API answers it across origins and that uploads point at the public API. **No identity, no AI.** | the flag and the exact SHA |
+| `plumbing-check` (default) | stack + public addresses + a headless browser proving that Clerk loads on the public origin, and that the API answers it across origins (CORS). Where uploads point is NOT proven here: that route is protected, so it can only be read inside the owner's signed-in session. **No identity, no AI.** | the flag and the exact SHA |
 | `session`, AI `mock` | the owner's session; the extractor finds nothing (mock), so it shows the empty/honest-failure path | the owner's email + phrase `OWNER-AUTHORIZED-OWNER-SESSION` |
 | `session`, AI `real` | the owner's session with real findings, behind the AI call governor (default 12 calls / 1.00 USD, embeddings mocked) | the owner's email + phrase `OWNER-AUTHORIZED-OWNER-SESSION-REAL-AI` |
 
@@ -202,8 +202,8 @@ member (`org:member`), and needs the phrase `OWNER-AUTHORIZED-CLERK-DEV-USER`. I
 Easiest login: an email of the form `name+clerk_test@domain` (Clerk Development accepts the fixed code 424242: no inbox needed).
 
 **Honest limits.** The session data is ephemeral (the database dies with the job). The tunnel is a third-party relay for a Development
-stack protected by Clerk sign-in; do not upload anything real. Plumbing through the tunnel (Clerk on a foreign origin, direct uploads
-to the API address) is verified by `plumbing-check`, not assumed. AI `mock` shows no findings by design.
+stack protected by Clerk sign-in; do not upload anything real. Plumbing through the tunnel (Clerk on a foreign origin, the API across origins) is verified by `plumbing-check`, not assumed;
+the first upload through the API address is the first thing the owner's session proves. AI `mock` shows no findings by design.
 
 **Fallback (no GitHub Actions): local stack** on the owner's machine (`make setup-local` + `make dev`) with the Clerk Development
 keys; same Clerk user and Organization. Zero hosting cost, more setup. A hosted Development environment (second Railway environment +
