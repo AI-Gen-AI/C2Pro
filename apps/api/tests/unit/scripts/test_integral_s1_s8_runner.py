@@ -813,6 +813,52 @@ def test_the_runner_takes_the_positive_route_on_the_contract_and_the_four_action
     assert "export async function attemptApproveThroughUi" in flow and "export async function confirmFindingThroughUi" in flow
 
 
+def _e2e(*parts: str) -> str:
+    return (Path(__file__).resolve().parents[4].joinpath("web", "src", "tests", "e2e", *parts)).read_text()
+
+
+def test_the_runner_waits_for_the_seeded_findings_and_never_succeeds_with_zero_decisions() -> None:
+    """Run 41404854469: the panel first painted a cached empty read and the runner took ZERO decisions without failing."""
+    flow = _e2e("support", "integral", "flow.ts")
+    helper = flow[flow.index("export async function awaitFindingsPanel"): flow.index("interface FindingsReadback")]
+    # waits through the assertion's own retry, bounded by one 30 s ceiling -- no fixed sleeps, no workflow retries
+    assert "toHaveCount(expected.findings" in helper
+    assert "FINDINGS_PANEL_BUDGET_MS = 30_000" in flow
+    for forbidden in ("waitForTimeout", "setTimeout", "sleep("):
+        assert forbidden not in helper, forbidden
+    # explicit failures with their cause
+    for code in ("INTEGRAL_FINDINGS_PANEL_NOT_SURFACED", "INTEGRAL_FINDINGS_PANEL_ROW_MISMATCH", "INTEGRAL_FINDINGS_PANEL_COUNT_MISMATCH"):
+        assert code in helper, code
+    # the row of the panel must be the row the seed returned; the pins must be the seed's
+    assert "review-findings-" in helper and "expected.reviewRowId" in helper
+    decide = flow[flow.index("export async function decideFindingsThroughUi"): flow.index("/** The review ROW id of a document")]
+    assert "INTEGRAL_FINDINGS_ARTIFACT_MISMATCH" in decide
+    # fewer decisions than planned, or fewer persisted than taken, is a FAIL, not a success
+    assert "INTEGRAL_FINDINGS_DECISIONS_INCOMPLETE" in decide and "INTEGRAL_FINDINGS_NOT_PERSISTED" in decide
+    # the fifth confirmation of the positive route gets the same control
+    confirm = flow[flow.index("export async function confirmFindingThroughUi"): flow.index("/** The FINAL human act on a pending review")]
+    assert "awaitFindingsPanel(card, options.expected)" in confirm
+
+
+def test_both_routes_pass_the_seed_to_the_runner_and_record_what_was_persisted() -> None:
+    spec = _e2e("integral-s1-s8.spec.ts")
+    positive = spec[spec.index("POSITIVE route (S5-04)"): spec.index("NEGATIVE route (S5-04)")]
+    negative = spec[spec.index("NEGATIVE route (S5-04)"): spec.index("rejectThroughUi(pageA")]
+    assert positive.count("findings: seeded.findings, reviewRowId: seeded.reviewRowId, artifactHash: seeded.artifactHash") >= 2  # 4 + the fifth
+    assert "findings: seededRejected.findings, reviewRowId: seededRejected.reviewRowId, artifactHash: seededRejected.artifactHash" in negative
+    for key in ("surfaced:", "findings:", "reviewRowId:", "artifactHash:"):
+        assert key in positive and key in negative, key
+    assert "persistedActions" in negative and "persistedActionsFinal" in positive
+    # the decisions and their semantics are unchanged
+    assert '{ kind: "confirm", ordinals: [0, 1, 2, 3] }' in positive and '{ kind: "four-actions" }' in negative
+
+
+def test_the_runner_selftest_is_its_own_explicit_project_and_stays_out_of_the_smoke_suite() -> None:
+    config = (Path(__file__).resolve().parents[4] / "web" / "playwright.config.ts").read_text()
+    assert 'name: "integral-runner-selftest"' in config
+    assert config.count("integral-runner-panel-wait") >= 2  # its own project + ignored by "chromium"
+
+
 def test_a_rejected_draft_that_became_trusted_fails() -> None:
     facts, browser, expect = _world()
     facts.artifacts[3]["trust_state"] = "trusted"

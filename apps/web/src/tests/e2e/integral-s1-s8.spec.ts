@@ -29,7 +29,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { callApi, itemsOf, str, type Json } from "./support/integral/api";
+import { callApi, itemsOf, str, strOrNull, type Json } from "./support/integral/api";
 import {
   DENIAL,
   DEV_B_EMAIL_ENV,
@@ -353,11 +353,13 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             projectId,
             documentId: contractId,
             plan: seeded ? { kind: "confirm", ordinals: [0, 1, 2, 3] } : { kind: "four-actions" },
+            expected: seeded ? { findings: seeded.findings, reviewRowId: seeded.reviewRowId, artifactHash: seeded.artifactHash } : undefined,
           });
           ledger.check("the review card offers the per-finding surface", findingOutcome.surfaced);
           ledger.check("the surface states that its decisions are provisional and do not approve", findingOutcome.scopeStatesProvisional);
           ledger.check("per-finding decisions leave the final Approve available (nothing was approved)", findingOutcome.reviewStillPending);
           let prematureApproval: ApprovalAttempt | undefined;
+          let finalActions: Array<string | null> = [];
           if (seeded) {
             ledger.check("four findings were confirmed through the UI", findingOutcome.decided.map((d) => d.action).join(",") === "CONFIRMED,CONFIRMED,CONFIRMED,CONFIRMED", findingOutcome.decided.map((d) => d.action).join(","));
             ledger.check("every decision is still shown after a full reload", findingOutcome.persistedAfterReload);
@@ -400,9 +402,15 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             ledger.check("the refused approval left the contract waiting for its review", str(stillGated.lifecycle_status) === "review_required", str(stillGated.lifecycle_status));
             ledger.check("no revision of the contract is trusted yet", (await readRevisions(pageA, contractId)).every((r) => r.trustState !== "trusted"));
 
-            await confirmFindingThroughUi(pageA, recorder, { projectId, documentId: contractId, ordinal: 4 });
+            await confirmFindingThroughUi(pageA, recorder, {
+              projectId,
+              documentId: contractId,
+              ordinal: 4,
+              expected: { findings: seeded.findings, reviewRowId: seeded.reviewRowId, artifactHash: seeded.artifactHash },
+            });
             const completed = (await callApi(pageA, `/api/v1/hitl/reviews/${rowId}/findings`)).data as Json;
             const completedRows = Array.isArray(completed.findings) ? (completed.findings as Json[]) : [];
+            finalActions = completedRows.map((f) => strOrNull((f.current as Json | null)?.action));
             ledger.check(
               "all five findings are CONFIRMED in the ledger's current state",
               completedRows.length === 5 && completedRows.every((f) => str((f.current as Json | null)?.action) === "CONFIRMED"),
@@ -416,7 +424,22 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             decided: findingOutcome.decided.length + (seeded ? 1 : 0),
             actions: [...findingOutcome.decided.map((d) => d.action), ...(seeded ? ["CONFIRMED"] : [])],
             controlled: Boolean(seeded),
-            ...(seeded ? { route: "positive", prematureApproval } : {}),
+            ...(seeded
+              ? {
+                  route: "positive",
+                  prematureApproval,
+                  panel: {
+                    surfaced: findingOutcome.surfaced,
+                    findings: findingOutcome.findings,
+                    reviewRowId: findingOutcome.reviewRowId,
+                    seededReviewRowId: seeded.reviewRowId,
+                    artifactHash: findingOutcome.artifactHash,
+                    seededArtifactHash: seeded.artifactHash,
+                    persistedActionsBeforeFifth: findingOutcome.persistedActions,
+                    persistedActionsFinal: finalActions,
+                  },
+                }
+              : {}),
           });
           if (findingOutcome.decided.length > 0) ledger.milestone("finding-decided");
           const decision = await approveThroughUi(pageA, recorder, { projectId, documentId: contractId });
@@ -499,7 +522,12 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           if (CONTROLLED_FINDINGS) {
             const seededRejected = await seedControlledFindings(state.identityA!.tenantId, rejectedId);
             ledger.check("the draft specification's controlled candidate carries five authored findings", seededRejected.findings === 5, `${seededRejected.findings}`);
-            const negative = await decideFindingsThroughUi(pageA, recorder, { projectId, documentId: rejectedId, plan: { kind: "four-actions" } });
+            const negative = await decideFindingsThroughUi(pageA, recorder, {
+              projectId,
+              documentId: rejectedId,
+              plan: { kind: "four-actions" },
+              expected: { findings: seededRejected.findings, reviewRowId: seededRejected.reviewRowId, artifactHash: seededRejected.artifactHash },
+            });
             ledger.check("the negative route took the four actions through the UI", negative.decided.map((d) => d.action).join(",") === "CONFIRMED,DISMISSED,NEEDS_INFO,CORRECTION_PROPOSED", negative.decided.map((d) => d.action).join(","));
             ledger.check("the negative route's decisions are still shown after a full reload", negative.persistedAfterReload);
             const approvalAttempt = await attemptApproveThroughUi(pageA, recorder, { projectId, documentId: rejectedId });
@@ -508,7 +536,22 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
               approvalAttempt.status === 409 && approvalAttempt.code === "reconciliation_blocks_approval" && [...approvalAttempt.blockers].sort().join(",") === "NEEDS_INFO,UNDECIDED_FINDING" && [...approvalAttempt.derivations].sort().join(",") === "CORRECTION_PROPOSED,DISMISSED_EXCLUSION",
               JSON.stringify(approvalAttempt),
             );
-            ledger.evidence("negativeRoute", { decided: negative.decided.length, actions: negative.decided.map((d) => d.action), approvalAttempt, evidenceClass: seededRejected.evidenceClass });
+            ledger.evidence("negativeRoute", {
+              decided: negative.decided.length,
+              actions: negative.decided.map((d) => d.action),
+              approvalAttempt,
+              evidenceClass: seededRejected.evidenceClass,
+              panel: {
+                surfaced: negative.surfaced,
+                findings: negative.findings,
+                reviewRowId: negative.reviewRowId,
+                seededReviewRowId: seededRejected.reviewRowId,
+                artifactHash: negative.artifactHash,
+                seededArtifactHash: seededRejected.artifactHash,
+                ledgerRevision: negative.ledgerRevision,
+                persistedActions: negative.persistedActions,
+              },
+            });
           }
           const rejected = await rejectThroughUi(pageA, recorder, { projectId, documentId: rejectedId, reason: REJECTION_REASON });
           ledger.check("the rejection names who decided", rejected.decidedBy.length > 0);

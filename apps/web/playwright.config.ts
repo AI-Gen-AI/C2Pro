@@ -62,6 +62,7 @@ export default defineConfig({
         // Opt-in integral S1-S8 UAT (own project, own workflow job).
         /(^|[\\/])integral-s1-s8\.spec\.ts$/,
         /(^|[\\/])integral-auth-preflight\.spec\.ts$/,
+        /(^|[\\/])integral-runner-panel-wait\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -136,6 +137,13 @@ export default defineConfig({
         priority: "p0",
         description: "One persisted project S1-S8, two Clerk Development tenants, fail-closed ledger",
       },
+    },
+    {
+      // Self-test of the integral runner's findings-panel wait: static pages only (no Clerk, no backend). Explicit-only.
+      name: "integral-runner-selftest",
+      testMatch: [/(^|[\\/])integral-runner-panel-wait\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"] },
+      metadata: { suite: "TS-E2E-INTEGRAL-RUNNER-SELFTEST", type: "unit", priority: "p0" },
     },
     {
       // Authentication preflight of the integral UAT: both Clerk Development identities reach the local API with

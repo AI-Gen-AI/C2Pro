@@ -136,6 +136,83 @@ export interface FindingDecisionsOutcome {
   reviewStillPending: boolean;
   /** After a full page reload every decision is still shown (it came from the ledger, not from client state). */
   persistedAfterReload: boolean;
+  /** The review row the panel is bound to (read from the panel itself) and the pins the server's read model reports. */
+  reviewRowId: string;
+  artifactHash: string;
+  ledgerRevision: number | null;
+  /** What the ledger actually holds per finding ordinal after the decisions (null = undecided), read back from the API. */
+  persistedActions: Array<string | null>;
+}
+
+/** What a controlled candidate was seeded with: the panel must show exactly this, or the run fails with the cause. */
+export interface ExpectedFindings {
+  findings: number;
+  reviewRowId: string;
+  artifactHash: string;
+}
+
+/** The hard ceiling of every wait on the findings panel (an assertion timeout, never a fixed sleep). */
+export const FINDINGS_PANEL_BUDGET_MS = 30_000;
+
+export interface FindingsPanelReading {
+  reviewRowId: string;
+  findings: number;
+}
+
+/**
+ * The panel can first paint from a cached read taken BEFORE the candidate was replaced (stale-while-revalidate) and
+ * only then show the fresh one. A controlled candidate therefore must not be read at the first paint: wait -- with the
+ * assertion's own retry, at most FINDINGS_PANEL_BUDGET_MS in total -- until the panel shows exactly the findings the
+ * seed created, for the very review row the seed returned. Anything else is an explicit failure with its cause; a
+ * run never "succeeds" with zero decisions when findings were expected.
+ */
+export async function awaitFindingsPanel(
+  card: Locator,
+  expected: Pick<ExpectedFindings, "findings" | "reviewRowId">,
+  budgetMs: number = FINDINGS_PANEL_BUDGET_MS,
+): Promise<FindingsPanelReading> {
+  const deadline = Date.now() + Math.min(budgetMs, FINDINGS_PANEL_BUDGET_MS);
+  const left = () => Math.max(1, deadline - Date.now());
+  const region = card.getByRole("region", { name: "Findings of this analysis" });
+  try {
+    await expect(region).toBeVisible({ timeout: left() });
+  } catch (error) {
+    throw new Error(`INTEGRAL_FINDINGS_PANEL_NOT_SURFACED: the card shows no findings panel within ${budgetMs} ms (the read failed or the review is not candidate-bound)`, { cause: error });
+  }
+  const reviewRowId = ((await region.getAttribute("data-testid")) ?? "").replace(/^review-findings-/, "");
+  if (reviewRowId !== expected.reviewRowId) {
+    throw new Error(`INTEGRAL_FINDINGS_PANEL_ROW_MISMATCH: the panel is bound to review row "${reviewRowId}" but the seed created the candidate on "${expected.reviewRowId}"`);
+  }
+  const items = region.locator("li[data-testid^='finding-']");
+  try {
+    await expect(items).toHaveCount(expected.findings, { timeout: left() });
+  } catch (error) {
+    const shown = await items.count().catch(() => -1);
+    throw new Error(`INTEGRAL_FINDINGS_PANEL_COUNT_MISMATCH: the panel shows ${shown} finding(s) but the seed created ${expected.findings} on review row ${expected.reviewRowId} (waited ${budgetMs} ms for the fresh read)`, { cause: error });
+  }
+  return { reviewRowId, findings: expected.findings };
+}
+
+interface FindingsReadback {
+  artifactHash: string;
+  ledgerRevision: number | null;
+  actions: Array<string | null>;
+}
+
+/** The server's own read model of a review's findings: the pins and what the ledger holds per ordinal. */
+async function readFindingsBack(page: Page, reviewRowId: string): Promise<FindingsReadback> {
+  const answer = await callApi(page, `/api/v1/hitl/reviews/${reviewRowId}/findings`);
+  if (answer.status !== 200) throw new Error(`INTEGRAL_FINDINGS_READBACK_FAILED: HTTP ${answer.status} reading the findings of review row ${reviewRowId}`);
+  const body = answer.data as Json;
+  const findings = Array.isArray(body.findings) ? (body.findings as Json[]) : [];
+  const revision = Number(body.ledger_revision);
+  return {
+    artifactHash: str(body.artifact_hash),
+    ledgerRevision: Number.isNaN(revision) ? null : revision,
+    actions: [...findings]
+      .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
+      .map((f) => strOrNull((f.current as Json | null)?.action)),
+  };
 }
 
 export const FINDING_TEXTS = {
@@ -167,14 +244,27 @@ const SHOWN: Record<string, string> = {
 export async function decideFindingsThroughUi(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string; plan?: FindingPlan },
+  options: { projectId: string; documentId: string; plan?: FindingPlan; expected?: ExpectedFindings },
 ): Promise<FindingDecisionsOutcome> {
   const plan: FindingPlan = options.plan ?? { kind: "four-actions" };
+  const { expected } = options;
   const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
   const regionOf = (scope: Locator) => scope.getByRole("region", { name: "Findings of this analysis" });
   let region = regionOf(card);
-  const surfaced = await region.waitFor({ state: "visible", timeout: 30_000 }).then(() => true).catch(() => false);
-  if (!surfaced) return { surfaced: false, findings: 0, decided: [], scopeStatesProvisional: false, reviewStillPending: true, persistedAfterReload: false };
+  let reviewRowId = "";
+  if (expected) {
+    // A controlled candidate: the panel must show exactly what the seed created, for the seed's own review row.
+    reviewRowId = (await awaitFindingsPanel(card, expected)).reviewRowId;
+    const pins = await readFindingsBack(page, reviewRowId);
+    if (pins.artifactHash !== expected.artifactHash) {
+      throw new Error(`INTEGRAL_FINDINGS_ARTIFACT_MISMATCH: the read model pins artifact ${pins.artifactHash} but the seed created ${expected.artifactHash}`);
+    }
+  }
+  const surfaced = await region.waitFor({ state: "visible", timeout: FINDINGS_PANEL_BUDGET_MS }).then(() => true).catch(() => false);
+  if (!surfaced) {
+    if (expected) throw new Error("INTEGRAL_FINDINGS_PANEL_NOT_SURFACED: the findings panel disappeared after it had shown the seeded findings");
+    return { surfaced: false, findings: 0, decided: [], scopeStatesProvisional: false, reviewStillPending: true, persistedAfterReload: false, reviewRowId: "", artifactHash: "", ledgerRevision: null, persistedActions: [] };
+  }
   const findings = await region.locator("li[data-testid^='finding-']").count();
   const scope = ((await region.locator("[data-testid^='review-findings-scope-']").textContent()) ?? "").toLowerCase();
   const scopeStatesProvisional = scope.includes("provisional") && scope.includes("do not approve, reject or trust");
@@ -239,7 +329,28 @@ export async function decideFindingsThroughUi(
     const shown = await region.getByTestId(`finding-current-${ordinal}`).textContent({ timeout: 30_000 }).catch(() => "");
     if (!(shown ?? "").includes(SHOWN[action]!)) persistedAfterReload = false;
   }
-  return { surfaced: true, findings, decided, scopeStatesProvisional, reviewStillPending, persistedAfterReload };
+  // What is actually persisted, read back from the server (not from the client state).
+  let artifactHash = "";
+  let ledgerRevision: number | null = null;
+  let persistedActions: Array<string | null> = [];
+  if (reviewRowId) {
+    const back = await readFindingsBack(page, reviewRowId);
+    artifactHash = back.artifactHash;
+    ledgerRevision = back.ledgerRevision;
+    persistedActions = back.actions;
+  }
+  if (expected) {
+    // Never a success with fewer decisions than the plan takes: that is the failure this guard exists for.
+    const planned = plan.kind === "confirm" ? plan.ordinals.filter((o) => o < expected.findings).length : Math.min(4, expected.findings);
+    if (decided.length !== planned) {
+      throw new Error(`INTEGRAL_FINDINGS_DECISIONS_INCOMPLETE: ${decided.length} of ${planned} planned decision(s) were taken through the UI (panel showed ${findings} finding(s), seed created ${expected.findings})`);
+    }
+    const stored = persistedActions.filter((a) => a !== null).length;
+    if (stored !== planned) {
+      throw new Error(`INTEGRAL_FINDINGS_NOT_PERSISTED: the ledger holds ${stored} decision(s) for review row ${reviewRowId}, ${planned} were taken`);
+    }
+  }
+  return { surfaced: true, findings, decided, scopeStatesProvisional, reviewStillPending, persistedAfterReload, reviewRowId, artifactHash, ledgerRevision, persistedActions };
 }
 
 /** The review ROW id of a document's pending review (the findings routes are addressed to the row). */
@@ -372,11 +483,12 @@ export async function attemptApproveThroughUi(
 export async function confirmFindingThroughUi(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string; ordinal: number },
+  options: { projectId: string; documentId: string; ordinal: number; expected?: ExpectedFindings },
 ): Promise<void> {
   const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
   const region = card.getByRole("region", { name: "Findings of this analysis" });
-  await expect(region).toBeVisible({ timeout: 30_000 });
+  if (options.expected) await awaitFindingsPanel(card, options.expected);
+  else await expect(region).toBeVisible({ timeout: FINDINGS_PANEL_BUDGET_MS });
   const wait = page.waitForResponse(
     (response: Response) =>
       response.request().method() === "POST" && /\/hitl\/reviews\/[^/]+\/findings\/decisions/.test(new URL(response.url()).pathname) && response.status() === 201,

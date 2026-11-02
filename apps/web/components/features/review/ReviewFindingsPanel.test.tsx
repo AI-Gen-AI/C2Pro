@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { AxiosError } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewFindingsPanel } from "./ReviewFindingsPanel";
+import { reviewFindingsKey } from "./useReviewCapabilities";
 
 const { list, record, auth } = vi.hoisted(() => ({
   list: vi.fn(),
@@ -170,5 +171,27 @@ describe("ReviewFindingsPanel", () => {
     list.mockResolvedValue(view({ findings: [] }));
     renderPanel();
     expect(await screen.findByTestId(`review-findings-empty-${ROW}`)).toHaveTextContent(/lists no individual findings/i);
+  });
+
+  it("S5 runner race: a card mounted before the candidate was replaced first paints the CACHED empty read, then the fresh findings", async () => {
+    // Hypothesis of run 41404854469: the review was painted while its candidate listed no findings (read cached), the
+    // controlled candidate was seeded afterwards, and the panel is mounted again with the stale read still cached.
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(reviewFindingsKey(auth.orgId, auth.userId, ROW), view({ findings: [] }));
+    let fresh: (value: unknown) => void = () => undefined;
+    list.mockImplementation(() => new Promise((resolve) => { fresh = resolve; }));
+    render(
+      <QueryClientProvider client={client}>
+        <ReviewFindingsPanel reviewRowId={ROW} />
+      </QueryClientProvider>,
+    );
+    // First paint: the panel is already visible (not loading) and shows ZERO findings -- the state a runner must not trust.
+    expect(await screen.findByTestId(`review-findings-empty-${ROW}`)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Findings of this analysis" })).toBeInTheDocument();
+    expect(screen.queryAllByTestId(/^finding-\d+$/)).toHaveLength(0);
+    // The fresh read (five findings) arrives while the panel is on screen and replaces it.
+    fresh(view({ findings: [finding(0), finding(1), finding(2), finding(3), finding(4)] }));
+    await waitFor(() => expect(screen.getAllByTestId(/^finding-\d+$/)).toHaveLength(5));
+    expect(screen.queryByTestId(`review-findings-empty-${ROW}`)).toBeNull();
   });
 });
