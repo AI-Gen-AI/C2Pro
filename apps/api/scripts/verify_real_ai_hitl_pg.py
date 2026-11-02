@@ -150,6 +150,11 @@ def judge(manifest: dict[str, Any], db: dict[str, Any], ledger: dict[str, Any], 
     quality = quality_measurements(
         risks, db.get("contract_text", ""), set(db.get("expected_categories", []))
     )
+    if risks and quality["with_source_quote"] == 0:
+        gaps.append({
+            "code": "SOURCE_QUOTE_NOT_PERSISTED_IN_CANDIDATE",
+            "detail": f"none of the {len(risks)} persisted findings carries the contract text it rests on (the extractor can return it: first pilot, 6/8 contiguous)",
+        })
     verdict = "FAIL" if c.failed else ("PARTIAL" if gaps else "PASS")
     return _result(verdict, c, gaps, blocker, quality)
 

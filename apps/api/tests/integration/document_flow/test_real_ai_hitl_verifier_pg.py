@@ -84,7 +84,7 @@ async def _collect(db: AsyncSession, w: Any) -> dict[str, Any]:
     return await verifier.collect(conn, w.project_id)
 
 
-async def test_collect_reads_the_real_schema_and_a_complete_world_is_a_pass(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
+async def test_collect_reads_the_real_schema_and_every_guarantee_holds(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
     await _two_decisions(actors)
     w = actors.w
     facts = await _collect(db, w)
@@ -92,7 +92,9 @@ async def test_collect_reads_the_real_schema_and_a_complete_world_is_a_pass(db: 
     assert len(facts["candidate"]["risks"]) == 5 and facts["authorization_mode"] == "enforce"
     assert {d["action"] for d in facts["decisions"]} == {"CONFIRMED", "DISMISSED"} and set(facts["active_grants"]) >= CAPS
     verdict = verifier.judge(manifest_for(w), {**facts, "documents": facts["documents"]}, LEDGER_OK, LIMITS)
-    assert verdict["failed_checks"] == [] and verdict["verdict"] == "PASS", verdict["failed_checks"]
+    # Every guarantee holds; the controlled candidate carries no source quote, which is a named gap, not a silent pass.
+    assert verdict["failed_checks"] == [] and verdict["verdict"] == "PARTIAL", verdict["failed_checks"]
+    assert [g["code"] for g in verdict["gaps"]] == ["SOURCE_QUOTE_NOT_PERSISTED_IN_CANDIDATE"]
     names = {c["check"]: c["ok"] for c in verdict["checks"]}
     assert names["pg: ordinal 0 is CONFIRMED"] and names["pg: ordinal 1 is DISMISSED with a non-empty typed reason"]
     assert names["pg: the review is still pending (a finding decision never decides the review)"]
@@ -146,3 +148,14 @@ def test_the_quality_measurements_separate_contiguous_quotes_from_stitched_ones_
     assert q["quotes_contiguous_in_contract"] == 1 and q["quotes_not_contiguous"] == 1 and q["with_clause_ref"] == 2
     assert q["missing_categories"] == ["SCOPE"] and q["category_coverage_is_not_risk_coverage"] is True
     assert q["title_wording"] == "REQUIRES_HUMAN_REVIEW"
+
+
+async def test_findings_without_a_persisted_source_quote_are_a_named_gap_not_a_silent_pass(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
+    await _two_decisions(actors)
+    facts = await _collect(db, actors.w)
+    verdict = verifier.judge(manifest_for(actors.w), facts, LEDGER_OK, LIMITS)
+    codes = {g["code"] for g in verdict["gaps"]}
+    assert verdict["failed_checks"] == []
+    quoted = verifier.quality_measurements(facts["candidate"]["risks"], facts["contract_text"], set())["with_source_quote"]
+    assert ("SOURCE_QUOTE_NOT_PERSISTED_IN_CANDIDATE" in codes) == (quoted == 0)
+    assert verdict["verdict"] == ("PARTIAL" if quoted == 0 else "PASS")

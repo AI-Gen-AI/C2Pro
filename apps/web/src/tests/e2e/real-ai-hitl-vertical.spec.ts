@@ -68,7 +68,7 @@ interface Facts {
   persistedActionsAfterRelogin: Array<string | null>;
   persistedAfterReload: boolean;
   reviewStillPending: boolean;
-  findingsShown: Array<{ ordinal: number; title: string; category: string; apiClauseRef: string | null; clauseRefVisibleInUi: boolean; sourceQuoteVisibleInUi: boolean }>;
+  findingsShown: Array<{ ordinal: number; title: string; category: string; apiClauseRef: string | null; clauseRefTextInRow: boolean; clauseRefRenderedAsField: boolean; sourceQuoteVisibleInUi: boolean }>;
   relogin: { sameUser: boolean; decisionsVisible: boolean };
 }
 
@@ -113,7 +113,10 @@ async function readFindingsShown(page: Page, reviewRowId: string): Promise<Facts
       title: str(risk.title) || str(risk.summary),
       category: str(risk.category),
       apiClauseRef: clauseRef,
-      clauseRefVisibleInUi: Boolean(clauseRef) && rowText.includes(clauseRef!.toLowerCase()),
+      // Two different facts. The number may appear INSIDE the model-written description (substring); that is not the product
+      // showing the contract reference. Only a dedicated element in the row is the product rendering the field.
+      clauseRefTextInRow: Boolean(clauseRef) && rowText.includes(clauseRef!.toLowerCase()),
+      clauseRefRenderedAsField: (await region.getByTestId(`finding-${ordinal}`).locator("[data-testid^='finding-clause']").count()) > 0,
       sourceQuoteVisibleInUi: quote.length > 20 && rowText.includes(quote.slice(0, 40).toLowerCase()),
     });
   }
@@ -210,18 +213,18 @@ test.describe("TS-E2E-REAL-AI-HITL-001: real AI + browser + human review + Postg
         await expect(card).toBeVisible();
         facts.findingsShown = await readFindingsShown(page, facts.reviewRowId);
         const withRef = facts.findingsShown.filter((f) => f.apiClauseRef);
-        const refsShown = withRef.filter((f) => f.clauseRefVisibleInUi).length;
+        const refsShown = withRef.filter((f) => f.clauseRefRenderedAsField).length;
         const quotesShown = facts.findingsShown.filter((f) => f.sourceQuoteVisibleInUi).length;
         if (withRef.length > 0 && refsShown < withRef.length) {
           facts.gaps.push({
             code: "CONTRACT_REFERENCE_NOT_SHOWN_IN_REVIEW_UI",
-            detail: `${withRef.length} finding(s) carry a clause reference in the server read model; the review UI shows it for ${refsShown}. The panel renders title, category, severity and description only.`,
+            detail: `${withRef.length} finding(s) carry a clause reference in the server read model; the review UI renders it as a field for ${refsShown} (${withRef.filter((f) => f.clauseRefTextInRow).length} show the number only as text inside the description). The panel renders title, category, severity and description.`,
           });
         }
         if (quotesShown === 0) {
           facts.gaps.push({
             code: "SOURCE_QUOTE_NOT_SHOWN_IN_REVIEW_UI",
-            detail: "no finding shows the contract text it rests on: the findings read model exposes title, description, category, severity, likelihood and clause_ref only (source_quote stays in the candidate artifact)",
+            detail: "no finding shows the contract text it rests on: the findings read model exposes title, description, category, severity, likelihood and clause_ref only (the verifier measures whether the persisted candidate carries it)",
           });
         }
       });
