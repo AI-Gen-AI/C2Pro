@@ -142,6 +142,10 @@ class DerivedCandidateResponse(BaseModel):
     excluded: int
     corrected: int
     replayed: bool
+    # The append-only project event that is the canonical evidence of this derivation.
+    event_id: UUID
+    # Vn+1 has NO score: the source's is kept as history and no evaluation of Vn+1 exists yet.
+    scoring_state: Literal["PENDING_REEVALUATION"] = "PENDING_REEVALUATION"
     derived_state: Literal["PROPOSED"] = "PROPOSED"
     # Said by the API so no screen can imply more: Vn+1 starts with every finding undecided and needs its own approval.
     final_approval: Literal["SEPARATE_ACT"] = "SEPARATE_ACT"

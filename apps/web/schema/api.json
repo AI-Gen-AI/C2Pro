@@ -11231,6 +11231,17 @@
             "type": "boolean",
             "title": "Replayed"
           },
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "scoring_state": {
+            "type": "string",
+            "const": "PENDING_REEVALUATION",
+            "title": "Scoring State",
+            "default": "PENDING_REEVALUATION"
+          },
           "derived_state": {
             "type": "string",
             "const": "PROPOSED",
@@ -11258,7 +11269,8 @@
           "retained",
           "excluded",
           "corrected",
-          "replayed"
+          "replayed",
+          "event_id"
         ],
         "title": "DerivedCandidateResponse",
         "description": "The new PROPOSED candidate Vn+1 and where it came from. Deriving approves, rejects and trusts NOTHING."

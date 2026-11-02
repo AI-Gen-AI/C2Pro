@@ -131,19 +131,38 @@ class CandidateBinding:
             return None
 
 
+SCORING_PENDING_REEVALUATION = "PENDING_REEVALUATION"
+
+
 @dataclass(frozen=True)
 class CandidateScoring:
     """The canonical engine's (N8) output for one analysis run.
 
     Stored on the artifact envelope so a pending candidate can be projected
     with the SAME engine output and score_version -- never recomputed ad hoc.
+
+    A candidate DERIVED from another (S5 Vn+1) changes the effective risks, so the source's score does not describe it:
+    it carries ``coherence_score=None`` and ``evaluation=PENDING_REEVALUATION`` (``derived_from_artifact_id`` names the
+    source whose score is kept, untouched, as history). Both extra keys are written only when set, so every legacy
+    envelope serializes exactly as before.
     """
 
     coherence_score: float | None
     score_version: str | None
+    evaluation: str | None = None
+    derived_from_artifact_id: str | None = None
 
     def as_json(self) -> dict[str, Any]:
-        return {"coherence_score": self.coherence_score, "score_version": self.score_version}
+        out: dict[str, Any] = {"coherence_score": self.coherence_score, "score_version": self.score_version}
+        if self.evaluation is not None:
+            out["evaluation"] = self.evaluation
+        if self.derived_from_artifact_id is not None:
+            out["derived_from_artifact_id"] = self.derived_from_artifact_id
+        return out
+
+    @classmethod
+    def pending_reevaluation(cls, source_artifact_id: UUID) -> CandidateScoring:
+        return cls(None, None, SCORING_PENDING_REEVALUATION, str(source_artifact_id))
 
     @classmethod
     def from_state(cls, state: Mapping[str, Any]) -> CandidateScoring:
@@ -163,9 +182,13 @@ class CandidateScoring:
             return None
         score = raw.get("coherence_score")
         version = raw.get("score_version")
+        evaluation = raw.get("evaluation")
+        derived_from = raw.get("derived_from_artifact_id")
         return cls(
             coherence_score=float(score) if isinstance(score, int | float) else None,
             score_version=str(version) if version else None,
+            evaluation=str(evaluation) if evaluation else None,
+            derived_from_artifact_id=str(derived_from) if derived_from else None,
         )
 
 

@@ -56,6 +56,9 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # Written by the governed SQL functions in the same transaction as the grant (never by application code).
         "hitl.project_grant_created",
         "hitl.project_grant_revoked",
+        # S5 Vn+1: a derived candidate was produced from the finding decisions of a pending review. Append-only evidence
+        # of WHO derived WHAT from WHICH candidate on WHICH reconciliation; written with the candidate in one transaction.
+        "hitl.candidate_derived",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

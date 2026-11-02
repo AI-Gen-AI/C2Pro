@@ -141,6 +141,37 @@ async def _vn1_risks(db: AsyncSession, w: Any, derived: Any) -> list[dict[str, A
     return _payload(next(r for r in rows if r.artifact_id == derived.derived_artifact_id))["extracted_risks"]
 
 
+EVENT = "hitl.candidate_derived"
+
+
+async def _events(db: AsyncSession, w: Any) -> list[Any]:
+    await db.commit()
+    return list(
+        (
+            await db.execute(
+                text(
+                    "SELECT event_id, tenant_id, project_id, actor, source_revision_id, payload FROM project_events "
+                    "WHERE project_id = :p AND event_type = :t ORDER BY occurred_at, event_id"
+                ),
+                {"p": w.project_id, "t": EVENT},
+            )
+        ).all()
+    )
+
+
+async def _scoring(db: AsyncSession, artifact_id: Any) -> Any:
+    await db.commit()
+    return (await db.execute(text("SELECT scoring FROM document_artifacts WHERE artifact_id = :a"), {"a": artifact_id})).scalar_one()
+
+
+async def _give_vn_a_score(db: AsyncSession, w: Any) -> dict[str, Any]:
+    """The source candidate carries an N8 score, as a real analysis would leave it."""
+    score = {"coherence_score": 82.0, "score_version": "coherence-v1"}
+    await db.execute(text("UPDATE document_artifacts SET scoring = cast(:s as jsonb) WHERE artifact_id = :a"), {"s": json.dumps(score), "a": w.artifact_id})
+    await db.commit()
+    return score
+
+
 @pytest.fixture
 def corrections_ratified(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(domain, "CORRECTIONS_RATIFIED", True)
@@ -197,7 +228,7 @@ async def test_the_provenance_and_the_new_binding_are_persisted_with_the_review(
     assert count == expected, "the ledger is untouched by deriving"
 
 
-async def test_deriving_creates_no_operation_event_or_analysis_and_a_pre_existing_trusted_artifact_is_untouched(
+async def test_deriving_creates_no_operation_or_analysis_only_its_own_event_and_a_pre_existing_trusted_artifact_is_untouched(
     db: AsyncSession, actors: Actors  # noqa: F811
 ) -> None:
     w, person = actors.w, await _decider(actors)
@@ -222,8 +253,10 @@ async def test_deriving_creates_no_operation_event_or_analysis_and_a_pre_existin
     trusted_after = [(r.artifact_id, r.artifact_hash, r.lifecycle_status, _payload(r)) for r in await _artifacts(db, w) if r.trust_state == "trusted"]
     assert trusted_after == trusted_before and len(trusted_after) == 1, "trusted content is never altered by a derivation"
     after = await _footprint(db, w)
-    for key in ("project_events", "analyses", "resume_operations"):
+    for key in ("analyses", "resume_operations"):
         assert after[key] == footprint[key], key
+    assert after["project_events"] == footprint["project_events"] + 1, "exactly ONE new event: the derivation's own evidence"
+    assert len(await _events(db, w)) == 1
     assert after["review"] == "PENDING_REVIEW_REQUIRED"
 
 
@@ -448,3 +481,125 @@ async def test_a_finished_review_cannot_be_derived(db: AsyncSession, actors: Act
     refusal = await _refused(w, person, expected)
     assert refusal.status_code in {404, 409}
     assert [r.trust_state for r in await _artifacts(db, w)].count("trusted") == 1
+
+
+# ═══ A3 — the evidence is an append-only project event written with the candidate ═════════════════════════
+async def test_the_derivation_is_recorded_as_an_append_only_project_event_in_the_same_transaction(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
+    w, person = actors.w, await _decider(actors)
+    expected = await _decide_all(w, person, [A.CONFIRMED, A.DISMISSED, A.CONFIRMED, A.CONFIRMED, A.CONFIRMED])
+    source_revision = w.revision_id
+    derived = await _derive(w, person, expected)
+
+    events = await _events(db, w)
+    assert len(events) == 1
+    event = events[0]
+    payload = event.payload if isinstance(event.payload, dict) else json.loads(event.payload)
+    assert (event.tenant_id, event.project_id, event.actor) == (w.tenant_id, w.project_id, str(person.id)), "the authenticated human"
+    assert event.source_revision_id == source_revision, "the identity of the source revision"
+    assert payload["policy"] == domain.DERIVATION_POLICY_VERSION and payload["reconciliation_policy"]
+    assert payload["review_row_id"] == str(w.review_row_id) and payload["reconciliation_digest"] == derived.reconciliation_digest
+    assert (payload["source_artifact_id"], payload["source_artifact_hash"], payload["source_ledger_revision"]) == (
+        str(derived.source_artifact_id), derived.source_artifact_hash, expected,
+    )
+    assert (payload["derived_artifact_id"], payload["derived_artifact_hash"]) == (str(derived.derived_artifact_id), derived.derived_artifact_hash)
+    assert [e["ordinal"] for e in payload["excluded"]] == [1] and payload["excluded"][0]["decision_event_id"]
+    assert derived.event_id == event.event_id
+    # append-only by the table itself (trigger), not by convention
+    for sql in ("UPDATE project_events SET payload = '{}'::jsonb WHERE event_id = :e", "DELETE FROM project_events WHERE event_id = :e"):
+        with pytest.raises(Exception, match="append-only"):
+            await db.execute(text(sql), {"e": event.event_id})
+        await db.rollback()
+
+
+async def test_the_replay_comes_from_the_event_ledger_not_from_the_mutable_review_metadata(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
+    w, person = actors.w, await _decider(actors)
+    expected = await _decide_all(w, person, [A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.DISMISSED])
+    first = await _derive(w, person, expected)
+    await db.execute(text("UPDATE review_items SET review_metadata = review_metadata - 'candidate_derivations' WHERE id = :r"), {"r": w.review_row_id})
+    await db.commit()
+    again = await _derive(w, person, expected)
+    assert again.replayed is True and again.derived_artifact_id == first.derived_artifact_id and again.event_id == first.event_id
+    assert len(await _events(db, w)) == 1 and len([r for r in await _artifacts(db, w) if r.trust_state == "proposed" and r.lifecycle_status == "active"]) == 1
+
+
+async def test_a_failure_after_the_candidate_but_before_the_event_leaves_neither(db: AsyncSession, actors: Actors, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+    from src.temporal.adapters.persistence.project_event_repository import (
+        SqlAlchemyProjectEventRepository,
+    )
+
+    w, person = actors.w, await _decider(actors)
+    expected = await _decide_all(w, person, [A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.DISMISSED])
+    before = await _artifacts(db, w)
+    real = SqlAlchemyProjectEventRepository.append
+
+    async def boom(self: Any, event: Any) -> Any:
+        raise RuntimeError("crash while appending the evidence")
+
+    monkeypatch.setattr(SqlAlchemyProjectEventRepository, "append", boom)
+    with pytest.raises(RuntimeError):
+        await _derive(w, person, expected)
+    monkeypatch.setattr(SqlAlchemyProjectEventRepository, "append", real)
+    assert [(r.artifact_id, r.trust_state, r.lifecycle_status) for r in await _artifacts(db, w)] == [(r.artifact_id, r.trust_state, r.lifecycle_status) for r in before]
+    assert await _events(db, w) == [] and (await _status(db, w))["metadata"]["candidate_binding"]["artifact_id"] == str(w.artifact_id)
+    derived = await _derive(w, person, expected)
+    assert derived.replayed is False and len(await _events(db, w)) == 1
+
+
+async def test_a_refused_derivation_writes_no_event(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
+    w, person = actors.w, await _decider(actors)
+    expected = await _decide_all(w, person, [A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.NEEDS_INFO])
+    await _refused(w, person, expected)
+    await _refused(w, person, expected - 1)
+    assert await _events(db, w) == []
+
+
+# ═══ A4 — a score inherited from Vn is never presented as the evaluation of Vn+1 ═════════════════════════════
+async def test_the_derived_candidate_carries_no_score_and_the_original_score_stays_as_history(db: AsyncSession, actors: Actors) -> None:  # noqa: F811
+    from src.analysis.application.trusted_materialization import MaterializationContent
+
+    w, person = actors.w, await _decider(actors)
+    original = await _give_vn_a_score(db, w)
+    expected = await _decide_all(w, person, [A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.DISMISSED])
+    derived = await _derive(w, person, expected)
+    assert derived.scoring_state == "PENDING_REEVALUATION"
+
+    vn = await _scoring(db, w.artifact_id)
+    assert (vn if isinstance(vn, dict) else json.loads(vn)) == original, "the original evaluation is kept, untouched, as history"
+    raw = await _scoring(db, derived.derived_artifact_id)
+    vn1 = raw if isinstance(raw, dict) else json.loads(raw)
+    assert vn1["coherence_score"] is None and vn1["score_version"] is None, "no Score is fabricated or carried"
+    assert vn1["evaluation"] == "PENDING_REEVALUATION" and vn1["derived_from_artifact_id"] == str(w.artifact_id)
+    event = (await _events(db, w))[0]
+    payload = event.payload if isinstance(event.payload, dict) else json.loads(event.payload)
+    assert payload["source_scoring"] == original and payload["derived_scoring"]["evaluation"] == "PENDING_REEVALUATION"
+    # what the TRUSTED materializer would write for Vn+1 is "no score", not the old 82
+    content = MaterializationContent.from_artifact({"document_id": str(w.document_id), "extracted_risks": []}, vn1)
+    assert content.coherence_score is None
+
+
+# ═══ A1 — proposing and approving are different capabilities ═══════════════════════════════════════════════
+async def test_approving_alone_does_not_allow_deriving_and_deriving_alone_does_not_allow_approving(
+    db: AsyncSession, actors: Actors, request_sessions: Any  # noqa: F811
+) -> None:
+    w, person = actors.w, await _decider(actors)
+    expected = await _decide_all(w, person, [A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.CONFIRMED, A.DISMISSED])
+    approver_only = await actors.user(label="approver-only")
+    await actors.grant(approver_only, READ, APPROVE)
+    assert _code(await _refused(w, approver_only, expected)) == "project_capability_required", "APPROVE_CANDIDATE does not imply REVIEW_FINDING"
+    proposer = await actors.user(label="proposer")
+    await actors.grant(proposer, READ, FIND)
+    derived = await _derive(w, proposer, expected)
+    _rebind(w, derived, await _vn1_risks(db, w, derived))
+    for ordinal in range(4):
+        await _decide(w, proposer, ordinal, expected + ordinal)
+    with pytest.raises(HTTPException) as caught:
+        await _final(w, request_sessions, "approve", proposer)
+    assert caught.value.status_code in {403, 404} and all(r.trust_state != "trusted" for r in await _artifacts(db, w)), "the proposer cannot promote"
+    await actors.grant(approver_only, FIND)  # now holds both: still an explicit, separate act
+    await _final(w, request_sessions, "approve", approver_only)
+    assert [r.artifact_id for r in await _artifacts(db, w) if r.trust_state == "trusted"] == [derived.derived_artifact_id]
+
+
+# ═══ A2 — the correction gate stays shut until the owner ratifies the semantics ═══════════════════════════════
+def test_the_correction_gate_is_shut_by_default() -> None:
+    assert domain.CORRECTIONS_RATIFIED is False

@@ -145,6 +145,9 @@ def derive_content(
     return DerivedContent(tuple(risks), tuple(retained), tuple(excluded), tuple(corrected))
 
 
+SCORING_PENDING = "PENDING_REEVALUATION"
+
+
 def provenance_entry(
     *,
     result: ReconciliationResult,
@@ -154,11 +157,18 @@ def provenance_entry(
     derived_artifact_version: int,
     derived_artifact_hash: str,
     derived_by: UUID,
+    source_scoring: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """The traceable record kept with the review: WHO derived WHAT from WHICH candidate, on WHICH reconciliation."""
+    """The traceable record: WHO derived WHAT from WHICH candidate, on WHICH reconciliation, under WHICH policy.
+
+    It is the payload of the append-only ``hitl.candidate_derived`` project event (the canonical evidence) and the
+    mirror kept on the review. ``source_scoring`` is the source candidate's N8 evaluation, kept here as history; the
+    derived candidate carries none (see ``derived_scoring``).
+    """
     identity = result.identity
     return {
         "policy": DERIVATION_POLICY_VERSION,
+        "review_row_id": str(identity.review_row_id),
         "source_artifact_id": str(identity.artifact_id),
         "source_artifact_version": identity.artifact_version,
         "source_artifact_hash": identity.artifact_hash,
@@ -183,8 +193,14 @@ def provenance_entry(
             }
             for c in content.corrected
         ],
-        # Vn+1 is a PROPOSED candidate: its own findings are undecided, nothing was approved or trusted by deriving it,
-        # and the N8 scoring is the source candidate's (carried, not recomputed).
+        # Vn+1 is a PROPOSED candidate: its own findings are undecided and nothing was approved or trusted by deriving it.
         "derived_state": "PROPOSED",
-        "scoring": "INHERITED_FROM_SOURCE",
+        # The effective risks changed, so the source's score does not describe Vn+1: it is kept as history, the derived
+        # candidate has NO score until an N8 evaluation of Vn+1 exists (never carried, never fabricated).
+        "source_scoring": (
+            {"coherence_score": source_scoring.get("coherence_score"), "score_version": source_scoring.get("score_version")}
+            if source_scoring is not None
+            else None
+        ),
+        "derived_scoring": {"evaluation": SCORING_PENDING, "coherence_score": None, "score_version": None},
     }

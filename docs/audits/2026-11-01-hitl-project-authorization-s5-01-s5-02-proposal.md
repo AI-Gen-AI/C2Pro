@@ -318,9 +318,10 @@ transaction) apply to Vn+1 unchanged. A decision still aimed at the superseded V
 * **A2 - which field a correction replaces.** The contract does not name it. `description` (the only free-text body of a risk, and
   what the screen's "Proposed replacement text" is shown against) is the implemented interpretation, but it is **gated**:
   `CORRECTIONS_RATIFIED = False` makes the service answer `409 correction_semantics_not_ratified`. Exclusions are unambiguous and not gated.
-* **A3 - provenance store.** The provenance lives in `review_metadata` (no migration, no new event type, no temporal-projection side
-  effect). That column is mutable JSON; an append-only table would be the hardening, and needs a migration decision.
-* **A4 - scoring.** Vn+1 inherits the source candidate's N8 scoring (the repository's default for a correction); it is not recomputed.
+* **A3 - provenance store.** (superseded by "A1-A4 closure" below) the first increment kept the provenance only in the mutable
+  `review_metadata`; it now lives in an append-only `hitl.candidate_derived` project event written with the candidate.
+* **A4 - scoring.** (superseded by "A1-A4 closure" below) the first increment inherited the source's N8 scoring; Vn+1 now carries
+  none and the source's is kept as history.
 * **No screen yet.** The route and the generated client exist; the review card has no "Derive candidate" action.
 
 **Tests.** `tests/unit/modules/hitl/test_derived_candidate.py` (pure) and `tests/integration/document_flow/test_s5_derived_candidate_pg.py`
@@ -329,7 +330,96 @@ incomplete decisions blocked; no promotion without a valid human approval; capab
 stale ledger/candidate; idempotent retry; concurrent requests; rollback and recovery; a pre-existing TRUSTED artifact untouched.
 Seven deliberate mutations of the implementation each turned a test RED.
 
-**Status.** Derived-candidate (Vn+1) producer: IMPLEMENTED for exclusions, GATED for corrections (A2), without UI. S5 as a whole remains
+**Status (first increment).** Derived-candidate (Vn+1) producer: IMPLEMENTED for exclusions, GATED for corrections (A2), without UI. S5 as a whole remains
 PARTIAL / NOT_ACCEPTED; P1 SQL administrative authority NOT_VERIFIED; typed critique UNEVALUATED; independent security review PENDING;
 S7 independent approval absent.
+
+
+## A1-A4 closure and the Vn+1 user flow (second increment, 2026-11-02)
+
+**About "the ratified D1-D8".** The text ratified on 2026-11-01 is not in the repository: the code and tests only *refer* to it
+("the ratified D1-D8 model (S5-01/S5-02)" in `final_decision_authorization.py`; "owner design D1-D8, C+B" in
+`finding_reconciliation.py`), and the proposal above says it "was not supplied to the implementer". What is contrasted below is
+therefore what IS recoverable and binding in the repo: the S5-01/S5-02 permission model (explicit grants, no implication between
+READ_REVIEW / REVIEW_FINDING / APPROVE_CANDIDATE, ADMIN without implicit approval) and the S5-03 table (DISMISSED -> EXCLUDED,
+CORRECTION_PROPOSED -> "a NEW candidate and its own signature, never applied"). No new interpretation replaces them; wherever the
+ratified text could say more, the point stays an owner decision.
+
+### Differential matrix
+
+| | Prior contract (in the repo) | Implementation before this increment | Minimal change | Acceptance test | Residual risk |
+|---|---|---|---|---|---|
+| **A1 Authority** | S5-01/02: three permissions that do not imply each other; approval and the first TRUSTED need an active `APPROVE_CANDIDATE` (S5-04/05) | Deriving needs `REVIEW_FINDING`; approving needs `APPROVE_CANDIDATE`; both already enforced | None in behaviour. Decision recorded: `REVIEW_FINDING` PROPOSES a derivation, `APPROVE_CANDIDATE` approves and promotes | `test_approving_alone_does_not_allow_deriving_and_deriving_alone_does_not_allow_approving` (APPROVE-only cannot derive; REVIEW_FINDING-only cannot approve/promote; holding both is still two explicit acts) | A single human holding both (tenant A) can propose and approve: the same declared single-person limit as S7 (`SELF_GRANTED_NOT_INDEPENDENT`); separation of duties for human-corrected content is an owner decision (O-3) |
+| **A2 Corrections** | S5-03: a correction "needs a NEW candidate and its own exact signature; it was NOT applied" | Gate shut: `CORRECTIONS_RATIFIED = False` -> `409 correction_semantics_not_ratified`; materializer replaces `description` behind the gate | None to the gate (stays shut). The semantics are specified below so the owner can ratify or amend them; exclusions stay operational | `test_a_correction_is_refused_until_the_owner_ratifies_which_field_it_replaces`; `test_the_correction_gate_is_shut_by_default` (a CI pin: flipping the constant fails the build until the tests are updated deliberately) | The specification below is a proposal, not ratified text; the Vn+1 payload cannot mark a risk as human-corrected without a contract change (O-1) |
+| **A3 Provenance** | Nothing yet (the first increment invented a mirror in `review_metadata`) | Provenance in mutable JSON only | Reuse the canonical event ledger: one append-only `hitl.candidate_derived` `project_events` row, written in the SAME session/transaction as the new candidate and the rebinding; replay is read from the event, the review metadata is only a mirror (`event_id` inside). No table, no migration | `test_the_derivation_is_recorded_as_an_append_only_project_event_in_the_same_transaction` (payload, actor, source revision, trigger refuses UPDATE/DELETE); `test_a_failure_after_the_candidate_but_before_the_event_leaves_neither`; `test_the_replay_comes_from_the_event_ledger_not_from_the_mutable_review_metadata`; `test_a_refused_derivation_writes_no_event` | The event is evidence, not a signature: it does not prove an authenticated human ADMIN issued the grants (P1 SQL administrative authority stays NOT_VERIFIED); `project_events` is tenant-RLS and append-only by trigger, not by a separate write-once role; the event carries digests, not the full diff (the diff is reconstructible from Vn, Vn+1 and the ledger) |
+| **A4 Scoring** | N8 output is stored on the artifact and is what the TRUSTED materializer writes as the analysis score (`MaterializationContent.from_artifact`) | Vn+1 inherited Vn's score: a stale Score would have been materialized as the evaluation of different content | Vn+1 is created with `CandidateScoring(None, None, evaluation=PENDING_REEVALUATION, derived_from_artifact_id=Vn)`; Vn's row is untouched (history) and the event records `source_scoring` / `derived_scoring`. Additive keys: legacy envelopes serialize exactly as before | `test_the_derived_candidate_carries_no_score_and_the_original_score_stays_as_history` (Vn 82 kept; Vn+1 null + PENDING; materializer yields no score; event holds both) | N8 cannot be re-run on Vn+1 today (below): until it can, a derived candidate approved and trusted yields NO coherence score for that analysis, honestly null; the S3 "null Score states its reason" path must be confirmed to render this reason (O-4) |
+
+### A2 - what CORRECTION_PROPOSED means (specification for ratification; nothing here activates the gate)
+
+1. **It is a statement about the analysis output, never an edit of the document.** The reviewer says "the extracted finding reads
+   wrongly; it should read X". The contractual document, its revision, blob SHA-256 and clauses are not touched, and replacing a
+   risk's narrative does not make the contract say anything else. If the reviewer believes the DOCUMENT is wrong, that is a new
+   document revision (the revision flow), not a correction.
+2. **What may be substituted:** only the narrative `description` of the risk (the system's wording of the finding). Nothing else.
+3. **What must stay intact:** `title`, `category`, `severity`, `likelihood`, `clause_ref` and `source` (classification and
+   evidence pointers belong to the extraction; a wrong classification or a wrong citation needs its own decision type, not a
+   rewording). The original wording is never lost: it stays in Vn (superseded, immutable payload and hash), its SHA-256 is in the
+   provenance, and the reviewer's reason and text stay in the ledger.
+4. **Confidence.** `confidence` is the model's self-assessment of the ORIGINAL wording; it does not describe human text. The proposed
+   rule is to clear it (`null`) on a corrected finding rather than leave a model confidence on human-written text (owner decision O-2).
+5. **Traceability of the human origin.** `RiskItem` is `extra="forbid"`: a `human_corrected` marker in the payload is a contract
+   change (new `x-contract-version`, ADR amendment) and is NOT introduced (O-1). Until then the human origin is carried by the
+   `hitl.candidate_derived` event (ordinal, decision event id, original and proposed digests) and by the compare view.
+6. **How the user sees it.** Per corrected finding, side by side: original wording | proposed wording (word-level difference), the
+   reviewer's reason and name, and the ORIGINAL clause evidence (the `clause_ref` / source link still points at the unmodified
+   document text) so a faithful correction can be judged against what the document actually says. A badge reads "Corrected by
+   {name} - not extracted by the model".
+7. **What validation Vn+1 requires.** Vn+1 starts undecided; each corrected finding must be explicitly CONFIRMED on its corrected
+   wording after the difference was shown, by a human with `REVIEW_FINDING`; the candidate is then approved by a human with an
+   active `APPROVE_CANDIDATE`, under S5-04 (a CURRENT reconciliation of Vn+1) and S5-05 (grant + digest inside the first-TRUSTED
+   transaction). Proposed hardening (NOT implemented, part of the ratification): a correction identical to the original, empty, or longer than the field's limit is refused at derivation.
+8. **Open owner decisions for ratification:** O-1 payload marker (contract change), O-2 clear `confidence`, O-3 separation of duties
+   (should the approver of human-corrected content be someone other than its author, with the tenant exception for single-human
+   tenants), O-5 whether the corrected text is subject to the PII anonymizer before it can reach any later model call.
+
+### A4 - when the score can be recomputed (condition, not implemented)
+
+N8 (`coherence_scorer`) runs inside the analysis graph over the graph state of that run. The artifact keeps the resulting
+`coherence_score` and `score_version`, not the state, so Vn+1 cannot be re-scored from what is persisted. A score for a derived
+candidate may be produced ONLY when all hold: (a) an N8 evaluation is run on the effective content of Vn+1 (not on Vn); (b) with
+the same `score_version` as the engine now in force (otherwise it is a new version, shown as such); (c) from inputs reconstructible
+from persisted data (the artifact payload and trusted project state), or from a graph state persisted for that purpose; (d) the
+result is recorded as a NEW evaluation bound to Vn+1's artifact id and hash. Until then the state is `PENDING_REEVALUATION`; no
+fallback to Vn's number, no estimate, no zero. **O-4 (owner/QA):** confirm that the Health/Score surfaces show an honest
+"not evaluated" reason for an analysis trusted from a derived candidate (the materializer writes a null score; the rendering was
+not exercised in this increment).
+
+### Vn+1 user flow (minimal; design only - no screen was changed)
+
+1. **Review the findings and the decisions** (existing findings panel): a summary strip counts confirmed / dismissed / correction /
+   needs-info / undecided from the findings read the screen already has.
+2. **See what will be excluded or corrected** ("Effect of your decisions", a read-only preview shown once no finding is undecided
+   and none is NEEDS_INFO): excluded findings struck through with the reviewer's reason; corrected findings as original -> proposed
+   with the clause evidence link; blockers listed by name when present. The preview should be a server answer (the reconciliation),
+   not a second client implementation: a read-only `GET .../derived-candidate/preview` is the proposed addition.
+3. **Request the derivation** ("Create revised candidate"): enabled only when the reconciliation has derivations and no blockers and
+   the caller holds `REVIEW_FINDING`; confirmation text: "This creates a new PROPOSED version. Nothing is approved. Your decisions on
+   V{n} do not carry over: you will review V{n+1} again. Its score is not evaluated yet." The call carries the candidate SHA-256 and
+   the ledger head the screen holds; `409` codes map to plain messages (`derivation_blocked`, `no_derivation_required`,
+   `stale_ledger_revision`, `stale_or_unbound_candidate`, `correction_semantics_not_ratified`, `derivation_not_possible`).
+4. **Compare V{n} and V{n+1}** (after `201`, and any time from the card): counts retained / excluded / corrected, each excluded and
+   corrected finding with its decision and author, both artifact hashes, the source revision, the derivation event id, and the score
+   line "Not evaluated yet - previous score {82} kept as history". A read-only `GET .../derivations` (from the events) feeds it.
+5. **Review and approve V{n+1} explicitly:** the same findings panel re-binds to V{n+1} (new pins), every finding undecided,
+   corrected ones badged; Approve stays a separate act, disabled with the reason when the caller lacks `APPROVE_CANDIDATE`
+   (the capabilities already ride on the findings read).
+
+API additions this flow needs (not built here): the preview and the derivations read. UI files to touch when it is built:
+`components/features/review/ReviewFindingsPanel.tsx` plus two small components (effect preview, compare dialog) and
+`app/(app)/projects/[id]/review/page.tsx` only if the card layout must change; confirm none is currently assigned to Codex first.
+
+**Status (second increment).** Derived-candidate producer: exclusions OPERATIONAL, corrections GATED (specification above awaiting
+ratification), provenance APPEND-ONLY EVENT, scoring PENDING-REEVALUATION, UX specified but not built. Still open: P1 SQL
+administrative authority NOT_VERIFIED; typed critique UNEVALUATED; independent security review PENDING; S7 independent approval;
+S5 PARTIAL / NOT_ACCEPTED.
 

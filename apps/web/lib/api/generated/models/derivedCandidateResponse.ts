@@ -55,6 +55,8 @@ export interface DerivedCandidateResponse {
   excluded: number;
   corrected: number;
   replayed: boolean;
+  event_id: string;
+  scoring_state?: "PENDING_REEVALUATION";
   derived_state?: "PROPOSED";
   final_approval?: "SEPARATE_ACT";
 }
