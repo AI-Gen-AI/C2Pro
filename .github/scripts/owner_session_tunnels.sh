@@ -12,7 +12,7 @@ WEB_PORT="${1:?web port}"
 API_PORT="${2:?api port}"
 BIN="${RUNNER_TEMP:?}/cloudflared"
 
-curl -fsSL --retry 3 -o "$BIN" "https://github.com/cloudflare/cloudflared/releases/download/${VERSION}/cloudflared-linux-amd64"
+curl --proto "=https" --tlsv1.2 -fsSL --retry 3 -o "$BIN" "https://github.com/cloudflare/cloudflared/releases/download/${VERSION}/cloudflared-linux-amd64"
 echo "${SHA256}  ${BIN}" | sha256sum -c -
 chmod +x "$BIN"
 

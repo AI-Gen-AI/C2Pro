@@ -21,7 +21,7 @@ NOT_CHECKED: Final = "NOT_CHECKED"  # no document text was available to check ag
 MIN_QUOTE_CHARS: Final = 12  # shorter strings match almost anywhere ("2.1") and prove nothing
 
 _WS = re.compile(r"\s+")
-_LEADING_TRAILING_MARKS = re.compile(r"^[\s\"'“”‘’«»]+|[\s\"'“”‘’«»]+$")
+_LEADING_TRAILING_MARKS = re.compile(r"(?:^[\s\"'“”‘’«»]+)|(?:[\s\"'“”‘’«»]+$)")
 
 
 def _squash(text: str) -> str:
