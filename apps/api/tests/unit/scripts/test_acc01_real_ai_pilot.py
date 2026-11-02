@@ -99,3 +99,12 @@ def test_the_script_imports_the_package_when_run_the_way_ci_runs_it() -> None:
         [sys.executable, "-I", "-c", code], cwd=api_root, capture_output=True, text=True, timeout=120, check=False
     )
     assert out.returncode == 0 and "IMPORT_OK" in out.stdout, out.stderr[-500:]
+
+
+def test_the_receipt_destination_is_fixed_and_the_script_takes_no_path_argument() -> None:
+    """SonarCloud pythonsecurity:S8707: a caller-chosen --out was an arbitrary-file write. The destination is now a constant."""
+    import inspect
+
+    assert pilot.RECEIPT_PATH.name == "acc01-s1-s2-real-ai-pilot.json" and pilot.RECEIPT_PATH.parent.name == "playwright-report"
+    assert not inspect.signature(pilot.main).parameters, "main() accepts no argument"
+    assert "argparse" not in inspect.getsource(pilot) and "--out" not in inspect.getsource(pilot.main)

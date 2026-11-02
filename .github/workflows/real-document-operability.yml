@@ -214,7 +214,7 @@ jobs:
 
       - name: Run exactly one C2Pro extraction without automatic retries
         working-directory: apps/api
-        run: python scripts/acc01_real_ai_pilot.py --out ../web/playwright-report/acc01-s1-s2-real-ai-pilot.json
+        run: python scripts/acc01_real_ai_pilot.py
 
       - name: Upload sanitized pilot evidence
         if: always()
@@ -223,4 +223,4 @@ jobs:
           name: acc01-s1-s2-real-ai-pilot
           path: apps/web/playwright-report/acc01-s1-s2-real-ai-pilot.json
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 3

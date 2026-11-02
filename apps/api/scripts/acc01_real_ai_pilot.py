@@ -15,7 +15,6 @@ which is an estimate and not a provider invoice.
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import hashlib
 import json
@@ -30,6 +29,9 @@ if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "web" / "src" / "tests" / "e2e" / "test-data" / "pj01"
+# The receipt goes to ONE fixed place. It used to be a --out argument, which SonarCloud (pythonsecurity:S8707, path
+# traversal) rightly flagged: a caller-chosen path is an arbitrary-file write for a script that runs with a paid credential.
+RECEIPT_PATH = API_ROOT.parent / "web" / "playwright-report" / "acc01-s1-s2-real-ai-pilot.json"
 INPUT_CHAR_LIMIT = 5_000  # the tool never sends more than this when RISK_EXTRACTION_MAX_CHARS=5000
 # Enough room for eight structured risks. 512 (the first draft) would truncate the JSON and waste the single run.
 OUTPUT_TOKEN_CEILING = 4_096
@@ -147,18 +149,14 @@ async def run(*, wrapper: Any, fixture_dir: Path = FIXTURE_DIR) -> dict[str, Any
     return receipt
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True, help="where the sanitized receipt JSON is written")
-    args = parser.parse_args(argv)
-
+def main() -> int:
     from src.core.ai.anthropic_wrapper import AnthropicWrapper
 
     # Transport retries and the response cache are off; the risk tool's retry policy is 0 (see its class definition).
     wrapper = AnthropicWrapper(enable_cache=False, enable_retry=False, max_tokens_limit=OUTPUT_TOKEN_CEILING)
     receipt = asyncio.run(run(wrapper=wrapper))
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    RECEIPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RECEIPT_PATH.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(receipt, indent=2, sort_keys=True))  # the receipt is also the run log: sanitized, public fixture only
     return 1 if "error" in receipt else 0
 
