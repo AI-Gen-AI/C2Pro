@@ -113,6 +113,38 @@ describe("API proxy coherence routing", () => {
     );
   });
 
+  it("does not forward stale compression headers when fetch returns a decoded API body", async () => {
+    // Node fetch automatically decompresses upstream content, but can keep the
+    // original gzip headers. Forwarding them breaks Chrome with
+    // ERR_CONTENT_DECODING_FAILED even though the upstream status is 200.
+    const payload = { documents: [{ id: "doc-1" }] };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "content-encoding": "gzip",
+          "content-length": "16",
+          "transfer-encoding": "chunked",
+          "cache-control": "no-store",
+        },
+      }),
+    );
+
+    const response = await GET(
+      new NextRequest("http://localhost:3000/api/projects/proj-1/documents"),
+      { params: Promise.resolve({ proxy: ["projects", "proj-1", "documents"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-encoding")).toBeNull();
+    expect(response.headers.get("content-length")).toBeNull();
+    expect(response.headers.get("transfer-encoding")).toBeNull();
+    expect(response.headers.get("content-type")).toBe("application/json");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual(payload);
+  });
+
   it("preserves backend 401 responses for the frontend auth handler", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ detail: "Unauthorized" }), {
