@@ -24,6 +24,14 @@ case "$branch" in
     ;;
 esac
 
+# The owner-approved integration branch is the current C2Pro pilot release.
+# A manual production deployment must not be skipped simply because Vercel
+# already built this same commit in Preview. Apply this override ONLY to the
+# explicitly authorized branch, not to other development branches.
+if [[ "$branch" == "integration/acc01-e2e-20261025" && "${VERCEL_ENV:-}" == "production" ]]; then
+  exit 1
+fi
+
 # Build only when the web app or root dependency/workspace inputs changed.
 # Prefer Vercel's last successful deployment SHA. When it is unavailable or
 # not present in the clone, fall back to the current commit's first parent.
