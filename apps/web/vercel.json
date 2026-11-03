@@ -4,6 +4,7 @@
     "deploymentEnabled": {
       "**": false,
       "main": true,
+      "integration/acc01-e2e-20261025": true,
       "hotfix/**": true,
       "release-candidate/**": true,
       "preview/**": true
