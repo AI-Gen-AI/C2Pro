@@ -41,11 +41,22 @@ def _source_consistency_issues(
         r"\s+days?\s+of\s+written\s+notice\b",
         source, re.IGNORECASE,
     )
+    defect_claims = " ".join(
+        f"{risk.get('title', '')} {risk.get('description', '')}"
+        for risk in risks
+        if re.search(
+            r"\b(?:defect\w*|rectif\w*|5\.2)\b",
+            f"{risk.get('title', '')} {risk.get('description', '')} {risk.get('clause_ref', '')}",
+            re.IGNORECASE,
+        )
+    )
+    if re.search(r"\b(?:defect\w*|rectif\w*|5\.2)\b", critic, re.IGNORECASE):
+        defect_claims += " " + critic
     missing_period = re.search(
         r"\b(?:no|without|lacks?|lacking)\s+"
         r"(?:(?:an?|the|agreed|defined|specified|clear|any)\s+){0,4}"
         r"(?:rectification\s+)?(?:time\s?frame|deadline|period)\b",
-        combined, re.IGNORECASE,
+        defect_claims, re.IGNORECASE,
     )
     if rectification_deadline and missing_period:
         issues.append(
