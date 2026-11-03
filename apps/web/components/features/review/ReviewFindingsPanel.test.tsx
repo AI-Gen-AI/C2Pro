@@ -232,3 +232,64 @@ describe("ReviewFindingsPanel", () => {
     expect(screen.queryByTestId(`review-findings-empty-${ROW}`)).toBeNull();
   });
 });
+
+
+describe("ACC-01 compact findings and source contradiction", () => {
+  it("shows a short executive view and keeps the full AI analysis and literal evidence behind a disclosure", async () => {
+    const full = "The contract exposes the client to additional costs through a fixed retention and an undefined certificate issuance date. ".repeat(7);
+    list.mockResolvedValue(view({ findings: [finding(0, {
+      risk: {
+        title: "Retention release without deadline",
+        category: "BUDGET",
+        severity: "HIGH",
+        description: full,
+        mitigation_suggestion: "Negotiate a release deadline and a partial release milestone.",
+        clause_ref: "2.3",
+        source_quote: "A retention of 5% shall be withheld from each payment.",
+        source_quote_status: "VERIFIED",
+      },
+    })] }));
+    renderPanel();
+    const executive = await screen.findByTestId("finding-brief-0");
+    expect(executive.textContent?.length).toBeLessThan(220);
+    expect(screen.getByTestId("finding-action-summary-0")).toHaveTextContent("Negotiate a release deadline");
+    expect(screen.getByTestId("finding-evidence-0")).not.toHaveAttribute("open");
+    await userEvent.click(screen.getByText("View evidence and full AI analysis"));
+    expect(screen.getByTestId("finding-evidence-0")).toHaveAttribute("open");
+    expect(screen.getByTestId("finding-description-0")).toHaveTextContent(full.trim());
+    expect(screen.getByTestId("finding-quote-0")).toHaveTextContent("A retention of 5%");
+  });
+
+  it("refuses a one-click confirmation when the verified 5.2 source provides a fourteen-day deadline", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0, {
+      risk: {
+        title: "Defect rectification",
+        category: "QUALITY", severity: "HIGH", clause_ref: "5.2",
+        description: "There is no agreed timeframe for the Contractor to rectify defects.",
+        source_quote: "Defective work identified during inspection shall be rectified at the Contractor's cost within fourteen (14) days of written notice.",
+        source_quote_status: "VERIFIED",
+      },
+    })] }));
+    renderPanel();
+    const warning = await screen.findByTestId("finding-source-conflict-0");
+    expect(warning).toHaveTextContent(/verified contract quotation/i);
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("does not invent a source contradiction when the purported quote is unverified", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0, {
+      risk: {
+        title: "Defect rectification",
+        description: "No agreed timeframe is defined.",
+        source_quote: "within fourteen (14) days of written notice",
+        source_quote_status: "NOT_FOUND_IN_DOCUMENT",
+      },
+    })] }));
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.queryByTestId("finding-source-conflict-0")).toBeNull();
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+  });
+});
