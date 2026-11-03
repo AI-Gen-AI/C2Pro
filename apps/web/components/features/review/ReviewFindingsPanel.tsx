@@ -57,6 +57,27 @@ function refusalFrom(error: unknown): string {
 
 const needsReason = (action: FindingDecisionAction) => action !== "CONFIRMED";
 
+/** A brief display is not new evidence: the complete model text remains in the disclosure. */
+function shortAnalysis(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 190) return normalized;
+  const firstSentence = normalized.match(/^.{30,190}?[.!?](?=\s|$)/)?.[0];
+  if (firstSentence) return firstSentence;
+  const lastSpace = normalized.slice(0, 190).lastIndexOf(" ");
+  return `${normalized.slice(0, Math.max(100, lastSpace)).trimEnd()}…`;
+}
+
+/** Explicit source-backed deadline vs an AI claim that no deadline exists. Advisory, never auto-decides. */
+function contradictsVerifiedDeadline(risk: Record<string, unknown>): boolean {
+  if (risk.source_quote_status !== "VERIFIED" || typeof risk.source_quote !== "string") return false;
+  const quote = risk.source_quote;
+  const claim = `${String(risk.title ?? "")} ${String(risk.description ?? "")}`;
+  const deadline = /\bwithin\s+(?:(?:[a-z]+)\s+)?\(?\d{1,3}\)?\s+(?:calendar\s+)?days?\s+of\s+(?:written\s+)?notice\b/i;
+  const missing = /\b(?:no|without|lacks?|lacking)\s+(?:(?:an?|the|agreed|defined|specified|clear)\s+){0,4}(?:rectification\s+)?(?:time\s?frame|deadline|period|cure\s+period)\b/i;
+  return deadline.test(quote) && missing.test(claim);
+}
+
 function newKey(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
@@ -178,6 +199,11 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
         {view.findings.map((finding) => {
           const draft = drafts[finding.ordinal];
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
+          const brief = shortAnalysis(finding.risk.description);
+          const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
+            .find((value) => typeof value === "string" && value.trim().length > 0);
+          const conflict = contradictsVerifiedDeadline(finding.risk);
+          const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
           const valid =
             draft !== undefined &&
             (!needsReason(draft.action) || draft.reason.trim().length > 0) &&
@@ -198,13 +224,35 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                   </Badge>
                 )}
               </div>
-              {finding.risk.description ? (
-                <p className="mt-1 text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
-                  <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
-                  {String(finding.risk.description)}
+              {brief ? (
+                <p className="mt-2 text-sm text-foreground" data-testid={`finding-brief-${finding.ordinal}`}>
+                  {brief}
                 </p>
               ) : null}
-              <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
+              {clause ? <p className="mt-1 text-xs text-muted-foreground">Contract clause {clause}</p> : null}
+              <p className="mt-2 text-sm" data-testid={`finding-action-summary-${finding.ordinal}`}>
+                <span className="font-medium">Suggested action: </span>
+                {typeof suggestion === "string"
+                  ? suggestion
+                  : "No specific mitigation supplied. Verify the contractual basis before deciding."}
+              </p>
+              {conflict ? (
+                <p role="alert" className="mt-2 rounded border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900"
+                  data-testid={`finding-source-conflict-${finding.ordinal}`}>
+                  Possible contradiction: the verified contract quotation explicitly specifies a notice deadline,
+                  while the AI description claims no deadline. Do not confirm this finding without correcting it.
+                </p>
+              ) : null}
+              <details className="mt-2 rounded border border-dashed p-2" data-testid={`finding-evidence-${finding.ordinal}`}>
+                <summary className="cursor-pointer text-sm font-medium">View evidence and full AI analysis</summary>
+                {finding.risk.description ? (
+                  <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
+                    <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
+                    {String(finding.risk.description)}
+                  </p>
+                ) : null}
+                <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
+              </details>
               {finding.current?.reason ? (
                 <p className="mt-1 text-xs">Reason: {finding.current.reason}</p>
               ) : null}
