@@ -17,7 +17,7 @@ case "$branch" in
     # Manual/CLI or otherwise non-Git deployment: there is no branch to
     # classify, so preserve the operator-requested build.
     ;;
-  main|hotfix/*|release-candidate/*|preview/*)
+  main|integration/acc01-e2e-20261025|hotfix/*|release-candidate/*|preview/*)
     ;;
   *)
     exit 0
