@@ -10,10 +10,16 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 2.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
-import re
+from src.analysis.domain.ai_extraction import (
+    AIExtractionPort,
+    CritiqueExtractionService,
+)
+from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
+
 
 # Deterministic checks are intentionally narrow. They identify demonstrable
 # contradictions in source-backed contractual timeframes/obligation ownership;
@@ -99,13 +105,6 @@ def _source_consistency_issues(
             "a Client payment delay cannot be attributed to the Contractor as payer."
         )
     return issues
-
-
-from src.analysis.domain.ai_extraction import (
-    AIExtractionPort,
-    CritiqueExtractionService,
-)
-from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 
 
 @dataclass(frozen=True)
