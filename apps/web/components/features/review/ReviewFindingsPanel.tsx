@@ -270,7 +270,8 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                     key={action}
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
-                    disabled={record.isPending || !mayReview}
+                    disabled={record.isPending || !mayReview || (action === "CONFIRMED" && conflict)}
+                    title={action === "CONFIRMED" && conflict ? "The AI finding conflicts with the verified source. Propose a correction instead." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);
