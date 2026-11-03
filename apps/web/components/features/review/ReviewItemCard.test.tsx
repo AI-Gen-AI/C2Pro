@@ -376,3 +376,34 @@ describe('ReviewItemCard - per-finding surface (S5)', () => {
     expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
   });
 });
+
+
+describe('ACC-01 review critique disclosure', () => {
+  it('does not overwhelm the queue with all seven multiline observations by default', async () => {
+    const notes = [
+      '2. CLAUSE 5.2 TRUNCATION — Preliminary observation, not validated.',
+      '3. DESCRIPTION ACCURACY — Check the computed milestone.',
+      '4. DESCRIPTION ACCURACY — Check retention.',
+      '5. COMPLETENESS — Consider missing clauses.',
+      '6. PLACEHOLDER TOKENS — Verify source.',
+      '7. CATEGORY ASSIGNMENT — Check the risk grouping.',
+      '8. CONFIDENCE FIELDS — No measured confidence.',
+    ].join('\n');
+    render(
+      <ReviewItemCard
+        item={{ ...graphGatedItem, item_data: { ...graphGatedItem.item_data, critique_notes: notes } }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    const details = screen.getByTestId('critique-disclosure-doc-456');
+    expect(details).not.toHaveAttribute('open');
+    expect(details.querySelector('summary')).toHaveTextContent('7 observations');
+    expect(details.querySelector('summary')).toHaveTextContent(/unverified/i);
+    await userEvent.click(details.querySelector('summary')!);
+    expect(details).toHaveAttribute('open');
+    expect(screen.getByText(/Check the computed milestone/i)).toBeInTheDocument();
+  });
+});
