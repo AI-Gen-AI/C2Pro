@@ -144,7 +144,8 @@ async def test_traced_llm_call_exception(mock_langsmith_client_enabled, mock_spa
     mock_span_client.end_span.assert_called_once()
     args, kwargs = mock_span_client.end_span.call_args
     assert kwargs["outputs"]["status"] == "error"
-    assert kwargs["outputs"]["error"] == "test error"
+    assert kwargs["outputs"]["error_type"] == "ValueError"
+    assert "error" not in kwargs["outputs"]
 
 @pytest.mark.asyncio
 async def test_attribute_allowlist(mock_span_client):
@@ -188,3 +189,49 @@ async def test_attribute_allowlist(mock_span_client):
         assert "tenant_id" in metadata_sent_to_span
         assert metadata_sent_to_span["tenant_id"] == MOCK_TENANT_ID
 
+
+
+@pytest.mark.asyncio
+async def test_traced_llm_call_never_exports_prompt_or_completion(
+    mock_langsmith_client_enabled, mock_span_client,
+):
+    """CORE P0: tracing metadata is useful without exporting contractual text."""
+
+    @traced_llm_call(task_type="risk_extraction")
+    async def sample_function(request: LLMRequest, langsmith_client: MagicMock, prompt: str):
+        return {
+            "output": "Private supplier and contract clauses from the model",
+            "usage": {"prompt_tokens": 12, "completion_tokens": 24},
+        }
+
+    await sample_function(
+        LLMRequest(model="test_model", messages=[]),
+        langsmith_client=mock_span_client,
+        prompt="Private contract source text from the owner",
+    )
+    inputs = mock_span_client.start_span.call_args.kwargs["inputs"]
+    outputs = mock_span_client.end_span.call_args.kwargs["outputs"]
+    assert "prompt" not in inputs
+    assert "output" not in outputs
+    assert outputs["tokens_total"] == 36
+    assert outputs["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_traced_llm_call_errors_do_not_export_exception_messages(
+    mock_langsmith_client_enabled, mock_span_client,
+):
+    """Contract text can surface in errors, so export only the error type."""
+
+    @traced_llm_call(task_type="risk_extraction")
+    async def sample_function(request: LLMRequest, langsmith_client: MagicMock):
+        raise ValueError("Private contract text should stay inside the service")
+
+    with pytest.raises(ValueError, match="Private contract text"):
+        await sample_function(
+            LLMRequest(model="test_model", messages=[]),
+            langsmith_client=mock_span_client,
+        )
+    outputs = mock_span_client.end_span.call_args.kwargs["outputs"]
+    assert outputs["error_type"] == "ValueError"
+    assert "error" not in outputs
