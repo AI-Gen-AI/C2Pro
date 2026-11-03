@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@clerk/nextjs';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { severityToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
+import { ReviewFindingsPanel } from '@/components/features/review/ReviewFindingsPanel';
+import { useReviewCapabilities } from '@/components/features/review/useReviewCapabilities';
 import { ReviewItemCard } from '@/components/features/review/ReviewItemCard';
 import {
   Dialog,
@@ -24,7 +27,14 @@ import {
   useRejectItemApiV1HitlQueueItemIdRejectPost,
 } from '@/lib/api/generated/hitl/hitl';
 import type { ReviewItemResponse } from '@/lib/api/generated/models';
+import { useDecideStructuredSourceTrustApiV1StructuredSourceTrustDecisionsPost } from '@/lib/api/generated/structured-source-trust/structured-source-trust';
+import { DecideStructuredSourceTrustBodyDecision } from '@/lib/api/generated/models/decideStructuredSourceTrustBodyDecision';
 import { ReviewStatus } from '@/lib/api/generated/models/reviewStatus';
+import { getGetProjectHealthApiV1ProjectsProjectIdHealthGetQueryKey } from '@/lib/api/generated/project-health/project-health';
+import {
+  getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey,
+  getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryKey,
+} from '@/lib/api/generated/coherence-dashboard/coherence-dashboard';
 
 const PAGE_LIMIT_STEP = 50;
 const MAX_PAGE_LIMIT = 200;
@@ -82,6 +92,23 @@ function errorMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
+function outcomeMayAlreadyBeRecorded(error: unknown): boolean {
+  // A 502 from HITL resume may occur AFTER the approval row was committed.
+  // Never invite a blind second decision on the same immutable review row.
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { status?: unknown } }).response;
+    if (response?.status === 502) return true;
+  }
+  return error instanceof Error && /\b502\b|review approved, but resuming/i.test(error.message);
+}
+
+
+/** S5-02: asks the server what the caller may do on THIS review's project, and stops offering what would be refused. */
+function ReviewItemWithCapabilities(props: ComponentProps<typeof ReviewItemCard>) {
+  const capabilities = useReviewCapabilities(props.item.row_id);
+  return <ReviewItemCard {...props} finalDecisionNotGranted={capabilities?.approve_candidate === false} />;
+}
+
 export default function ReviewPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -96,13 +123,41 @@ export default function ReviewPage() {
   const { data: project } = useProject(projectId);
   const projectName = project?.name?.trim();
 
+  const queryClient = useQueryClient();
+  // A review decision changes the document's lifecycle (it resumes or needs changes). The Documents
+  // list is cached for minutes and stops polling on a "review required" row, so without this it
+  // keeps showing the pre-decision state until a manual reload.
+  // HITL can change trusted document lifecycle AND Health/Coherence. Keep all
+  // three views synchronized after the server records a decision; no automatic
+  // Score or analysis-complete claim is made by these cache invalidations.
+  const refreshProjectAfterDecision = () => {
+    void queryClient.invalidateQueries({ queryKey: ['project-documents', projectId] });
+    void queryClient.invalidateQueries({
+      queryKey: getGetProjectHealthApiV1ProjectsProjectIdHealthGetQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: getGetCoherenceDashboardApiCoherenceDashboardProjectIdGetQueryKey(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: getGetCoherenceDashboardApiV1CoherenceDashboardProjectIdGetQueryKey(projectId),
+    });
+  };
+
   const approveMutation = useApproveItemApiV1HitlQueueItemIdApprovePost();
   const rejectMutation = useRejectItemApiV1HitlQueueItemIdRejectPost();
+  // ADR-032: a Budget/Schedule trust candidate is decided ONLY here, bound to the exact
+  // id/version/hash the reviewer sees. The legacy approve/reject routes answer 409 for it.
+  const structuredDecisionMutation =
+    useDecideStructuredSourceTrustApiV1StructuredSourceTrustDecisionsPost();
 
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
   const [rejectReason, setRejectReason] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [pageLimit, setPageLimit] = useState(PAGE_LIMIT_STEP);
+  // A Documents→Review deep link must actually find the item even if it
+  // is not among the default first 50. The backend caps this at 200.
+  const [pageLimit, setPageLimit] = useState(
+    targetItemId ? MAX_PAGE_LIMIT : PAGE_LIMIT_STEP,
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   // C2PRO #649: one human decision -> one request. The ref closes the gap
   // before React re-renders the disabled state (rapid clicks land in the
@@ -114,6 +169,12 @@ export default function ReviewPage() {
   // queue shows their new status, so a stale PENDING card cannot be
   // approved a second time.
   const [decidedKeys, setDecidedKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const [decisionReceipt, setDecisionReceipt] = useState<{
+    rowId: string;
+    action: 'approve' | 'reject';
+    /** A 5xx may occur after the server durably records the decision. */
+    uncertain: boolean;
+  } | null>(null);
 
   const queueParams = useMemo(
     () => ({
@@ -126,9 +187,27 @@ export default function ReviewPage() {
   );
 
   const { data: queueData, isLoading, error, refetch } =
-    useListReviewQueueApiV1HitlQueueGet(queueParams);
+    // A new revision of an already-reviewed document opens a NEW review row. The queue is cached for
+    // minutes, so opening the page must always ask the server instead of showing the previous
+    // (already decided) queue with nothing left to approve.
+    useListReviewQueueApiV1HitlQueueGet(queueParams, { query: { refetchOnMount: 'always' } });
 
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
+  useEffect(() => {
+    if (targetItemId) setPageLimit(MAX_PAGE_LIMIT);
+  }, [targetItemId]);
+  const targetIsMissing = Boolean(
+    targetItemId && pageLimit === MAX_PAGE_LIMIT &&
+    !items.some((item) => item.item_id === targetItemId),
+  );
+  const receiptRow = decisionReceipt
+    ? items.find((item) => item.row_id === decisionReceipt.rowId)
+    : undefined;
+  const confirmedDecision = Boolean(
+    receiptRow && decisionReceipt &&
+    receiptRow.current_status === (decisionReceipt.action === 'approve'
+      ? ReviewStatus.APPROVED : ReviewStatus.REJECTED),
+  );
   const canLoadMore = items.length === pageLimit && pageLimit < MAX_PAGE_LIMIT;
 
   useEffect(() => {
@@ -182,6 +261,33 @@ export default function ReviewPage() {
     setDecidedKeys((current) => new Set(current).add(decisionKey(item)));
   };
 
+  const decideStructuredSource = async (
+    item: ReviewItemResponse,
+    reviewRowId: string,
+    decision: DecideStructuredSourceTrustBodyDecision,
+    reason: string,
+  ) => {
+    const binding = item.candidate_binding as
+      | { artifact_id?: string; artifact_version?: number; artifact_hash?: string }
+      | null
+      | undefined;
+    if (!binding?.artifact_id || !binding.artifact_version || !binding.artifact_hash) {
+      throw new Error('The exact candidate is unavailable. Refresh the queue before deciding.');
+    }
+    await structuredDecisionMutation.mutateAsync({
+      data: {
+        review_row_id: reviewRowId,
+        artifact_id: binding.artifact_id,
+        artifact_version: binding.artifact_version,
+        artifact_hash: binding.artifact_hash,
+        decision,
+        // Deterministic per review row + decision: a retried request is an idempotent replay.
+        idempotency_key: `ui-${decision.toLowerCase()}-${reviewRowId}`,
+        reason,
+      },
+    });
+  };
+
   const handleApprove = async () => {
     if (modal.kind !== 'approve' || !reviewerName) return;
     if (!beginSubmit('approve')) return;
@@ -196,15 +302,32 @@ export default function ReviewPage() {
       // review row, never the reusable business item_id. A stale V1 modal
       // therefore reaches V1 (now CLOSED) and fails closed instead of
       // resolving onto an unseen V2 review for the same document.
-      await approveMutation.mutateAsync({
-        itemId: reviewRowId,
-        data: {},
-      });
+      if (modal.item.trust_kind === 'structured_source') {
+        await decideStructuredSource(
+          modal.item,
+          reviewRowId,
+          DecideStructuredSourceTrustBodyDecision.APPROVE,
+          'Human approval of the exact structured source (id, version and hash shown in the review).',
+        );
+      } else {
+        await approveMutation.mutateAsync({
+          itemId: reviewRowId,
+          data: {},
+        });
+      }
       markDecided(modal.item);
+      setDecisionReceipt({ rowId: reviewRowId, action: 'approve', uncertain: false });
       closeModal();
       void refetch();
+      refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to approve review item');
+      if (outcomeMayAlreadyBeRecorded(error) && modal.kind === 'approve' && modal.item.row_id) {
+        markDecided(modal.item);
+        setDecisionReceipt({ rowId: modal.item.row_id, action: 'approve', uncertain: true });
+        void refetch();
+        refreshProjectAfterDecision();
+      }
       setActionError(message);
       showToast(message);
     } finally {
@@ -222,17 +345,34 @@ export default function ReviewPage() {
           'Exact review identity is unavailable. Refresh the queue before deciding.',
         );
       }
-      await rejectMutation.mutateAsync({
-        itemId: reviewRowId,
-        data: {
-          reason: rejectReason.trim(),
-        },
-      });
+      if (modal.item.trust_kind === 'structured_source') {
+        await decideStructuredSource(
+          modal.item,
+          reviewRowId,
+          DecideStructuredSourceTrustBodyDecision.REJECT,
+          rejectReason.trim(),
+        );
+      } else {
+        await rejectMutation.mutateAsync({
+          itemId: reviewRowId,
+          data: {
+            reason: rejectReason.trim(),
+          },
+        });
+      }
       markDecided(modal.item);
+      setDecisionReceipt({ rowId: reviewRowId, action: 'reject', uncertain: false });
       closeModal();
       void refetch();
+      refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to reject review item');
+      if (outcomeMayAlreadyBeRecorded(error) && modal.kind === 'reject' && modal.item.row_id) {
+        markDecided(modal.item);
+        setDecisionReceipt({ rowId: modal.item.row_id, action: 'reject', uncertain: true });
+        void refetch();
+        refreshProjectAfterDecision();
+      }
       setActionError(message);
       showToast(message);
     } finally {
@@ -240,8 +380,10 @@ export default function ReviewPage() {
     }
   };
 
-  const approving = submitting === 'approve' || approveMutation.isPending;
-  const rejecting = submitting === 'reject' || rejectMutation.isPending;
+  const approving =
+    submitting === 'approve' || approveMutation.isPending || structuredDecisionMutation.isPending;
+  const rejecting =
+    submitting === 'reject' || rejectMutation.isPending || structuredDecisionMutation.isPending;
 
   const setFilter = (filter: string) => {
     setStatusFilter(filter);
@@ -280,6 +422,39 @@ export default function ReviewPage() {
           </p>
         )}
       </div>
+
+      {targetIsMissing ? (
+        <div data-testid="review-target-unavailable" role="status"
+             className="rounded-lg border bg-muted/40 p-4 text-sm">
+          This linked review item is not in the current project queue (up to 200 items).
+          It may have moved or no longer be available. No other review was selected.
+        </div>
+      ) : null}
+
+      {decisionReceipt ? (
+        <div data-testid="review-decision-receipt" role="status"
+             className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium">
+              {confirmedDecision
+                ? `Review ${decisionReceipt.action === 'approve' ? 'approved' : 'rejected'} — confirmed by refreshed queue`
+                : decisionReceipt.uncertain
+                  ? 'Review outcome needs verification'
+                  : 'Decision request accepted — checking saved review status'}
+            </p>
+            <p className="text-muted-foreground">
+              {confirmedDecision
+                ? 'The review decision is recorded. Document processing and Health may still be updating.'
+                : decisionReceipt.uncertain
+                  ? 'The workflow reported an error after the request. The decision may already be stored; check the refreshed queue before attempting another decision.'
+                  : 'Do not treat the document as analyzed until its updated lifecycle confirms completion.'}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            Refresh review status
+          </Button>
+        </div>
+      ) : null}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -326,7 +501,9 @@ export default function ReviewPage() {
         <div className="space-y-3" data-testid="review-queue">
           {items.map((item) => (
             <div
-              key={item.item_id}
+              // item_id is reusable across revisions; a new row must remount
+              // fresh controls rather than inherit the previous row's UI state.
+              key={decisionKey(item)}
               id={`review-item-${item.item_id}`}
               className={
                 targetItemId === item.item_id
@@ -334,11 +511,14 @@ export default function ReviewPage() {
                   : undefined
               }
             >
-            <ReviewItemCard
+            <ReviewItemWithCapabilities
               item={item}
               projectId={projectId}
               reviewerIdentityReady={reviewerIdentityReady}
               actionsLocked={decidedKeys.has(decisionKey(item))}
+              renderFindings={(reviewItem) =>
+                reviewItem.row_id ? <ReviewFindingsPanel reviewRowId={reviewItem.row_id} /> : null
+              }
               onApprove={(reviewItem) => {
                 setActionError(null);
                 setModal({ kind: 'approve', item: reviewItem });
@@ -408,7 +588,9 @@ export default function ReviewPage() {
             </Button>
             <Button
               onClick={handleApprove}
-              disabled={approving || !reviewerIdentityReady}
+              disabled={approving || !reviewerIdentityReady ||
+                Boolean(decisionReceipt?.uncertain && modal.kind === 'approve' &&
+                  decisionReceipt.rowId === modal.item.row_id)}
               aria-busy={approving}
               title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
               className="bg-green-600 hover:bg-green-700"
@@ -474,7 +656,9 @@ export default function ReviewPage() {
               disabled={
                 rejecting ||
                 rejectReason.trim().length === 0 ||
-                !reviewerIdentityReady
+                !reviewerIdentityReady ||
+                Boolean(decisionReceipt?.uncertain && modal.kind === 'reject' &&
+                  decisionReceipt.rowId === modal.item.row_id)
               }
               title={!reviewerIdentityReady ? 'Loading your identity…' : undefined}
             >

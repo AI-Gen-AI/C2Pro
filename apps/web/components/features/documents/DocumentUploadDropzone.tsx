@@ -22,6 +22,7 @@ const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "schedule", label: "Schedule" },
   { value: "drawing", label: "Drawing" },
   { value: "specification", label: "Specification" },
+  { value: "technical_spec", label: "Technical specification" },
   { value: "other", label: "Other" },
 ];
 

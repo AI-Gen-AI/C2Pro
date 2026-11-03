@@ -32,6 +32,7 @@ from src.reporting.application.current_state_projection import (
 )
 from src.reporting.application.ports import (
     CurrentStateInputs,
+    DocumentRevisionState,
     DocumentsInput,
     HitlInput,
     SourceFailed,
@@ -499,6 +500,39 @@ def test_documents_counts_by_processing_status_and_type() -> None:
     assert section.data.by_type == {"contract": 1, "budget": 1}
     assert [item.filename for item in section.data.items] == ["Budget.xlsx", "Contract.pdf"]
     assert section.source_as_of == GENERATED_AT - timedelta(days=1)
+
+
+def test_documents_report_the_trusted_and_the_pending_revision_of_each_document() -> None:
+    trusted_doc = _document(filename="Contract.pdf")
+    pending_doc = _document(filename="Budget.xlsx", document_type=DocumentType.BUDGET)
+    plain_doc = _document(filename="Schedule.xlsx", document_type=DocumentType.SCHEDULE)
+    trusted_ref = (uuid4(), 1, "a" * 64)
+    pending_ref = (uuid4(), 2, "b" * 64)
+    revisions = {
+        trusted_doc.id: DocumentRevisionState(trusted=trusted_ref, pending=pending_ref),
+        pending_doc.id: DocumentRevisionState(pending=pending_ref),
+    }
+    section = _report(
+        documents=SourceOk(DocumentsInput(documents=[trusted_doc, pending_doc, plain_doc], total=3, revisions=revisions))
+    ).sections.documents
+    assert section.data is not None
+    items = {item.filename: item for item in section.data.items}
+
+    contract = items["Contract.pdf"]
+    assert contract.trusted_revision is not None
+    assert (contract.trusted_revision.revision_id, contract.trusted_revision.rev_no, contract.trusted_revision.blob_hash) == trusted_ref
+    assert contract.pending_revision is not None
+    assert (contract.pending_revision.rev_no, contract.pending_revision.blob_hash) == pending_ref[1:]
+
+    # A revision still awaiting approval is never reported as trusted.
+    budget = items["Budget.xlsx"]
+    assert budget.trusted_revision is None
+    assert budget.pending_revision is not None
+
+    # No artifact for the document: nothing is claimed about any revision.
+    schedule = items["Schedule.xlsx"]
+    assert schedule.trusted_revision is None
+    assert schedule.pending_revision is None
 
 
 def test_executive_summary_counts_processed_and_failed_documents_as_the_documents_tab_does() -> None:

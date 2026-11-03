@@ -74,6 +74,16 @@ export function buildCurrentStateReport(): CurrentStateReport {
               version: 2,
               uploaded_at: "2026-09-10T10:00:00Z",
               parsed_at: "2026-09-10T10:05:00Z",
+              trusted_revision: {
+                revision_id: "5b0c1a8f-8e2a-4f7b-a8a9-5a6b7c8d9e11",
+                rev_no: 1,
+                blob_hash: "a".repeat(64),
+              },
+              pending_revision: {
+                revision_id: "5b0c1a8f-8e2a-4f7b-a8a9-5a6b7c8d9e12",
+                rev_no: 2,
+                blob_hash: "b".repeat(64),
+              },
             },
           ],
           truncated: true,

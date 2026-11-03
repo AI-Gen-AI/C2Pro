@@ -29,6 +29,7 @@ def record_revision_stated_total(
     blob_hash: str | None,
     total: float | int | None,
     currencies: Sequence[str] | None,
+    source_locator: str | None = None,
 ) -> None:
     """Record this revision's declaration in ``metadata`` (in place), keeping other revisions'.
 
@@ -41,12 +42,16 @@ def record_revision_stated_total(
         return
     existing = metadata.get(STATED_TOTAL_BY_REVISION_KEY)
     entries: dict[str, Any] = dict(existing) if isinstance(existing, Mapping) else {}
-    entries[str(revision_id)] = {
+    entry: dict[str, Any] = {
         "revision_id": str(revision_id),
         "blob_hash": blob_hash,
         "total": total,
         "currencies": list(currencies) if currencies and total is not None else [],
     }
+    if total is not None and source_locator:
+        # S4: where in THIS revision's bytes the total was declared (``Sheet!row``); absent when none was observed.
+        entry["source_locator"] = source_locator
+    entries[str(revision_id)] = entry
     metadata[STATED_TOTAL_BY_REVISION_KEY] = entries
 
 

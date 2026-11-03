@@ -352,3 +352,29 @@ class TestGetClauseTextMapUseCase:
         result = await use_case.execute(tenant_id=uuid4(), clause_ids=[])
 
         assert result == {}
+
+
+class TestListProjectDocumentsUseCaseProjectScope:
+    """ACC-01 S8: a project the caller cannot see is a 404, never an empty list."""
+
+    @pytest.mark.asyncio
+    async def test_unknown_or_foreign_project_is_404_and_documents_are_never_queried(self):
+        from fastapi import HTTPException
+
+        from src.documents.application.list_project_documents_use_case import (
+            ListProjectDocumentsUseCase,
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.list_for_project = AsyncMock(return_value=([], 0))
+        mock_project_repo = MagicMock()
+        mock_project_repo.get_by_id = AsyncMock(return_value=None)
+
+        use_case = ListProjectDocumentsUseCase(
+            document_repository=mock_repo, project_repository=mock_project_repo
+        )
+        with pytest.raises(HTTPException) as denied:
+            await use_case.execute(uuid4(), uuid4())
+
+        assert denied.value.status_code == 404
+        mock_repo.list_for_project.assert_not_awaited()

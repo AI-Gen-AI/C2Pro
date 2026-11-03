@@ -1,0 +1,16 @@
+{
+  "fixture_id": "triplet-integral-extra-v1",
+  "purpose": "Fixtures added by the integral S1-S8 runner on top of the triplet: revision B of the contract and a deliberately wrong draft specification that a reviewer REJECTS (S5).",
+  "contract_b": {
+    "file": "triplet-contract-b.docx",
+    "revision_of": "triplet-v1",
+    "sha256": "3727fd02444300cb663fcd3d54a63e862b9b791ff2fb9d0ed31f58475af0c00d",
+    "added_sentence": "Garantía. El contratista otorgará una garantía de buena ejecución de 24 meses desde la recepción.",
+    "note": "One added clause. Price and completion date are unchanged, so the cross-document findings on revision A stay valid."
+  },
+  "specification_rejected": {
+    "file": "triplet-specification-rejected.docx",
+    "sha256": "04bcfae8c6f80c1ec66f9466c7150790b0771664a7bc04d08502fc85b6270802",
+    "note": "A draft specification with an implausible strength requirement. It is uploaded as its own document and rejected with a reason; it must never become trusted."
+  }
+}

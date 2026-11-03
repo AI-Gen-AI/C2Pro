@@ -131,6 +131,15 @@ beforeEach(() => {
 
 // ── 1 — six-category view renders from the generated HealthVector type ─────────
 
+describe("Health revalidation", () => {
+  it("asks the server again every time the view opens (it is derived from decisions made elsewhere)", () => {
+    healthQueryMock.mockReset();
+    healthQueryMock.mockReturnValue({ data: undefined, isLoading: true, isError: false, error: null });
+    renderWithProviders(<SingleDocumentHealth projectId="project-1" />);
+    expect(healthQueryMock).toHaveBeenCalledWith("project-1", { query: { refetchOnMount: "always" } });
+  });
+});
+
 describe("1 — six-category view from the generated contract", () => {
   it("renders exactly the six canonical categories", () => {
     healthQueryMock.mockReturnValue(resolved(vector()));
@@ -304,12 +313,12 @@ describe("5 — evidence traceability", () => {
     });
     expect(link).toHaveAttribute(
       "href",
-      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&highlightId=${BUDGET_CLAUSE}`,
+      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&highlightId=${BUDGET_CLAUSE}&origin=health`,
     );
     const legal = screen.getByTestId(`health-category-${CoherenceCategory.LEGAL}`);
     expect(within(legal).getByRole("link", { name: /view supporting clause #1/i })).toHaveAttribute(
       "href",
-      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&highlightId=${LEGAL_CLAUSE}`,
+      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&highlightId=${LEGAL_CLAUSE}&origin=health`,
     );
   });
 
@@ -342,7 +351,7 @@ describe("5 — evidence traceability", () => {
     const links = within(budget).getByTestId("health-evidence-links");
     expect(within(links).getByRole("link", { name: /view document evidence/i })).toHaveAttribute(
       "href",
-      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}`,
+      `/projects/proj-1/evidence?documentId=${DOCUMENT_B}&origin=health`,
     );
     expect(within(links).queryByRole("link", { name: /supporting clause/i })).not.toBeInTheDocument();
   });

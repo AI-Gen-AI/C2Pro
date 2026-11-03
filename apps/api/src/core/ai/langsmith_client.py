@@ -27,7 +27,9 @@ class LangSmithConfig:
 
     @classmethod
     def from_env(cls, *, project_name: str) -> LangSmithConfig:
-        tracing_value = os.getenv("LANGSMITH_TRACING", "true").strip().lower()
+        # Explicit opt-in: do not transmit document or prompt traces just because an API key exists.
+        # Any enabled tracing must still pass payload/privacy controls upstream.
+        tracing_value = os.getenv("LANGSMITH_TRACING", "false").strip().lower()
         tracing_enabled = tracing_value in {"1", "true", "yes", "on"}
         return cls(
             api_key=os.getenv("LANGSMITH_API_KEY"),

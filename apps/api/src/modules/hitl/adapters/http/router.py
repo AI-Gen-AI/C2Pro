@@ -9,7 +9,11 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from src.analysis.domain.trust import review_decision_ready
+from src.analysis.domain.trust import (
+    BoundReviewRequiresTrustDecision,
+    ensure_legacy_decision_allowed,
+    review_decision_ready,
+)
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.observability.monitoring import record_hitl_decision
@@ -31,7 +35,22 @@ from src.modules.hitl.adapters.http.schemas import (
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
+from src.modules.hitl.application.approval_authority import (
+    PromotionNotAuthorized,
+    ReconciliationBlocksApproval,
+)
+from src.modules.hitl.application.final_decision_authorization import (
+    AuthorizedFinalDecider,
+    FinalDecisionNotAuthorized,
+    authorize_final_decider,
+)
 from src.modules.hitl.application.ports import HumanInTheLoopService
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectAuthorizationDenied,
+    ProjectAuthorizationUnavailable,
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
     ResumeWorkflowRequest as UseCaseResumeRequest,
 )
@@ -106,6 +125,85 @@ async def _record_hitl_correction_snapshot(
         )
 
 
+def _final_decider(current_user: Any, tenant_id: Any) -> AuthorizedFinalDecider:
+    """The server-authenticated human of THIS tenant, or 403 -- before any review state is read or changed."""
+    try:
+        return authorize_final_decider(current_user, tenant_id=tenant_id)
+    except FinalDecisionNotAuthorized as exc:
+        logger.warning("hitl_final_decision_denied", tenant_id=str(tenant_id))
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "final_decision_not_authorized", "message": str(exc)},
+        ) from exc
+
+
+def _project_refusal(exc: Exception) -> HTTPException:
+    """S5-02 denial mapping. 403 when the actor can already see the project's review (it lacks APPROVE_CANDIDATE);
+    404 when it cannot (no existence leak); 403 fail-closed when the authorizer cannot even be built."""
+    if isinstance(exc, ProjectAuthorizationDenied) and not exc.visible:
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND, detail={"code": "review_unavailable", "message": "no actionable review for tenant"}
+        )
+    if isinstance(exc, ProjectAuthorizationDenied):
+        return HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "project_capability_required", "message": f"{exc.capability.value} on this review's project is required"},
+        )
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        detail={"code": "project_authorization_unavailable", "message": str(exc)},
+    )
+
+
+async def _require_project_approval_for_legacy_row(
+    service: Any, existing: ReviewItem, decider: AuthorizedFinalDecider
+) -> None:
+    """The non-graph decision path (no thread) does not pass through ``ResumeWorkflowUseCase``: same authority here."""
+    raw = (existing.metadata or {}).get("project_id")
+    try:
+        project_id = UUID(str(raw)) if raw else None
+    except ValueError:
+        project_id = None
+    try:
+        await ProjectReviewAuthorizer.for_repository(service.review_queue_repo).require(
+            tenant_id=decider.tenant_id,
+            user_id=decider.user_id,
+            project_id=project_id,
+            capability=ProjectCapability.APPROVE_CANDIDATE,
+        )
+    except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+        raise _project_refusal(exc) from exc
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        raise _reconciliation_refusal(exc) from exc
+
+
+def _reconciliation_refusal(exc: ReconciliationBlocksApproval | PromotionNotAuthorized) -> HTTPException:
+    """S5-04 / S5-05. 409 when the candidate cannot be approved as it stands; 403 when the approver's authority is
+    gone at the moment of the promotion (the whole promotion transaction was rolled back)."""
+    if isinstance(exc, ReconciliationBlocksApproval):
+        return HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "reconciliation_blocks_approval",
+                "message": str(exc),
+                "blockers": list(exc.blockers),
+                "derivations": list(exc.derivations),
+                "inconsistencies": list(exc.inconsistencies),
+            },
+        )
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, detail={"code": "promotion_not_authorized", "message": str(exc)}
+    )
+
+
+def _exposed_binding(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    """The exact candidate a structured-source review gates (shown to the reviewer)."""
+    if metadata.get("trust_kind") != "structured_source":
+        return None
+    binding = metadata.get("candidate_binding")
+    return dict(binding) if isinstance(binding, dict) else None
+
+
 def _to_review_item_response(item: ReviewItem) -> ReviewItemResponse:
     row_id_raw = item.metadata.get("row_id")
     return ReviewItemResponse(
@@ -122,6 +220,10 @@ def _to_review_item_response(item: ReviewItem) -> ReviewItemResponse:
         row_id=UUID(str(row_id_raw)) if row_id_raw else None,
         resumable=bool(item.metadata.get("thread_id")),
         decision_ready=review_decision_ready(item.metadata),
+        trust_kind="structured_source"
+        if item.metadata.get("trust_kind") == "structured_source"
+        else None,
+        candidate_binding=_exposed_binding(item.metadata),
     )
 
 
@@ -224,6 +326,7 @@ async def _approve_and_resume_workflow(
     review_id: UUID | None = None,
     reviewer_name: str,
     resume_use_case: ResumeWorkflowUseCase,
+    decider: AuthorizedFinalDecider,
     row_id: str | None = None,
 ) -> ReviewItem:
     """Approve a graph-gated review (one carrying a real thread_id) by
@@ -252,6 +355,7 @@ async def _approve_and_resume_workflow(
                 decision=WorkflowDecision.APPROVE,
                 feedback="",
                 approved_by=reviewer_name,
+                decider=decider,
             ),
         )
     except ValueError as exc:
@@ -259,6 +363,15 @@ async def _approve_and_resume_workflow(
         if "not found" in error_msg:
             raise HTTPException(status.HTTP_404_NOT_FOUND, error_msg) from exc
         raise HTTPException(status.HTTP_400_BAD_REQUEST, error_msg) from exc
+    except FinalDecisionNotAuthorized as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "final_decision_not_authorized", "message": str(exc)},
+        ) from exc
+    except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+        raise _project_refusal(exc) from exc
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        raise _reconciliation_refusal(exc) from exc
     except Exception as exc:  # noqa: BLE001
         # C2PRO P0b true-resume hotfix: a genuine resume failure now RAISES
         # out of the use case instead of being swallowed into a
@@ -321,6 +434,9 @@ async def approve_item(
     # authenticated session, never to client-supplied values — otherwise any
     # authenticated user could forge a review as another user. ApproveRequest
     # carries no reviewer fields by design.
+    # SECURITY (HIGH, S5): only an active human of the tenant may take the final decision (VIEWER/API/inactive: 403),
+    # decided BEFORE any review state is read.
+    decider = _final_decider(current_user, _tenant_id)
     existing = await _resolve_decision_row(service, item_id, payload.row_id)
 
     if existing.metadata.get("thread_id"):
@@ -337,15 +453,24 @@ async def approve_item(
             review_id=payload.row_id or item_id,
             reviewer_name=current_user.full_name,
             resume_use_case=resume_use_case,
+            decider=decider,
             row_id=existing.metadata.get("row_id"),
         )
     else:
+        await _require_project_approval_for_legacy_row(service, existing, decider)
         try:
             item = await service.approve_item(
                 item_id=payload.row_id or item_id,
                 reviewer_id=current_user.id,
                 reviewer_name=current_user.full_name,
             )
+        except BoundReviewRequiresTrustDecision as exc:
+            logger.warning(
+                "hitl_legacy_decision_refused_bound_review",
+                item_id=str(item_id),
+                operation="approve",
+            )
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
 
@@ -376,6 +501,7 @@ async def reject_item(
     service: HumanInTheLoopService = Depends(get_hitl_service),
     resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ReviewItemResponse:
+    decider = _final_decider(current_user, _tenant_id)  # SECURITY (HIGH, S5): before any state is read
     existing = await _resolve_decision_row(service, item_id, payload.row_id)
 
     if existing.metadata.get("thread_id"):
@@ -389,8 +515,18 @@ async def reject_item(
                     decision=WorkflowDecision.REJECT,
                     feedback=payload.reason,
                     approved_by=current_user.full_name,
+                    decider=decider,
                 ),
             )
+        except FinalDecisionNotAuthorized as exc:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail={"code": "final_decision_not_authorized", "message": str(exc)},
+            ) from exc
+        except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+            raise _project_refusal(exc) from exc
+        except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+            raise _reconciliation_refusal(exc) from exc
         except ValueError as exc:
             error_msg = str(exc)
             if "not found" in error_msg:
@@ -412,11 +548,21 @@ async def reject_item(
         if item is None:  # pragma: no cover - execute() above already confirmed the row exists
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Review item {item_id} not found.")
     else:
+        await _require_project_approval_for_legacy_row(service, existing, decider)
         if existing.current_status not in AWAITING_DECISION_STATUSES:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"Item {item_id} cannot be rejected from status {existing.current_status.value}.",
             )
+        try:
+            ensure_legacy_decision_allowed(existing.metadata)
+        except BoundReviewRequiresTrustDecision as exc:
+            logger.warning(
+                "hitl_legacy_decision_refused_bound_review",
+                item_id=str(item_id),
+                operation="reject",
+            )
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
         item = existing
         item.current_status = ReviewStatus.REJECTED
         # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to
@@ -574,6 +720,7 @@ async def resume_workflow(
     review_id: UUID,
     payload: ResumeWorkflowRequest,
     tenant_id: CurrentTenantId,
+    current_user: Annotated[User, Depends(get_current_user)],
     use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
 ) -> ResumeWorkflowResponse:
     """
@@ -593,6 +740,9 @@ async def resume_workflow(
         HTTPException 404: Review item not found
         HTTPException 400: Review item not in pending status or missing checkpoint
     """
+    # SECURITY (HIGH, S5): /resume used to carry NO actor at all. It now requires the same authenticated human of the
+    # tenant as /approve and /reject, before any state is read, and records who decided.
+    decider = _final_decider(current_user, tenant_id)
     try:
         # Convert string decision to enum
         decision = WorkflowDecision(payload.decision)
@@ -602,7 +752,12 @@ async def resume_workflow(
             ResumeWorkflowRequest as UseCaseRequest,
         )
 
-        request = UseCaseRequest(decision=decision, feedback=payload.feedback)
+        request = UseCaseRequest(
+            decision=decision,
+            feedback=payload.feedback,
+            approved_by=decider.display_name,
+            decider=decider,
+        )
 
         # Execute use case
         result = await use_case.execute(review_id=review_id, request=request)
@@ -624,6 +779,15 @@ async def resume_workflow(
             message=result.message,
         )
 
+    except FinalDecisionNotAuthorized as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"code": "final_decision_not_authorized", "message": str(exc)},
+        ) from exc
+    except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
+        raise _project_refusal(exc) from exc
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        raise _reconciliation_refusal(exc) from exc
     except ValueError as exc:
         error_msg = str(exc)
         if "not found" in error_msg:

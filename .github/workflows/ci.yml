@@ -1493,8 +1493,8 @@ jobs:
           skipped = sum(int(s.get("skipped", 0)) for s in suites)
           failures = sum(int(s.get("failures", 0)) + int(s.get("errors", 0)) for s in suites)
           print(f"P0b real HITL: tests={tests}, skipped={skipped}, failures={failures}")
-          if tests != 11 or skipped or failures:
-              raise SystemExit("Real HITL gate must execute exactly 11 tests without skip/failure")
+          if tests != 12 or skipped or failures:
+              raise SystemExit("Real HITL gate must execute exactly 12 tests without skip/failure")
           PY
 
       - name: P0b takeover fork differential on real PostgreSQL (required)

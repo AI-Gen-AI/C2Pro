@@ -332,3 +332,91 @@ async def test_critique_absent_or_truncated_source_is_explicitly_unverified() ->
     )
     assert "PARTIAL EXCERPT" in ai.calls[1][1]
     assert "END_SENTINEL" not in ai.calls[1][1]
+
+
+# ACC-01: source-backed semantic contradictions are quality blockers, not a
+# "verified" risk, and never cause a human approval automatically.
+@pytest.mark.asyncio
+async def test_critique_flags_false_missing_rectification_period_against_source() -> None:
+    source = (
+        "5.2 Defective work identified during inspection shall be rectified "
+        "at the Contractor's cost within fourteen (14) days of written notice."
+    )
+    ai = _FakeAI(payload={"status": "OK", "notes": "2. CLAUSE 5.2 TRUNCATION — "
+        "The rectification deadline has apparently been removed."})
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{
+                "title": "Defect rectification with unclear period",
+                "clause_ref": "5.2",
+                "description": "No agreed timeframe for defect rectification is provided.",
+                "confidence": 0.95,
+            }],
+            extracted_wbs=[], doc_type="contract", retry_count=0,
+            source_text=source,
+        )
+    )
+    assert result.status == "RETRY"
+    assert result.human_approval_required is True
+    assert result.confidence is None
+    assert "source specifies a deadline" in result.critique_notes
+    assert "unsupported truncation" in result.critique_notes
+    assert "Original AI critique (unverified)" in result.critique_notes
+
+
+@pytest.mark.asyncio
+async def test_critique_flags_false_missing_cure_period_and_wrong_payment_actor() -> None:
+    source = (
+        "2.2 The Client shall pay monthly progress invoices within thirty (30) days of certification. "
+        "6.3 Either party may terminate for material breach not remedied within thirty (30) "
+        "days of written notice."
+    )
+    ai = _FakeAI(payload={"status": "OK", "notes": ""})
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[
+                {
+                    "title": "Termination with no cure period clarity",
+                    "description": "The contract sets no cure period for a material breach.",
+                    "clause_ref": "6.3", "confidence": 0.91,
+                },
+                {
+                    "title": "Payment risk",
+                    "description": "A payment delay by the Client may be a material breach by the Contractor.",
+                    "clause_ref": "2.2", "confidence": 0.89,
+                },
+            ],
+            extracted_wbs=[], doc_type="contract", retry_count=0,
+            source_text=source,
+        )
+    )
+    assert result.human_approval_required is True
+    assert result.confidence is None
+    assert "source states a cure period" in result.critique_notes
+    assert "Client owes progress payments" in result.critique_notes
+
+
+@pytest.mark.asyncio
+async def test_critique_does_not_invent_contradictions_without_source_or_in_other_clause() -> None:
+    source = (
+        "5.2 Defective work shall be rectified at the Contractor's cost "
+        "within fourteen (14) days of written notice. "
+        "6.2 Contractor shall hold all-risks insurance."
+    )
+    ai = _FakeAI(payload={"status": "OK", "notes": ""})
+    risks = [{
+        "title": "Insurance documentation",
+        "description": "There is no specified deadline for providing insurance evidence.",
+        "clause_ref": "6.2", "confidence": 0.92,
+    }]
+    use_case = CritiqueExtractionUseCase(ai=ai)
+    for text in (source, None):
+        result = await use_case.execute(
+            CritiqueExtractionCommand(
+                extracted_risks=risks, extracted_wbs=[], doc_type="contract",
+                retry_count=0, source_text=text,
+            )
+        )
+        assert result.status == "OK"
+        assert result.human_approval_required is False
+        assert result.critique_notes == ""

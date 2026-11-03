@@ -1,0 +1,53 @@
+name: ACC-01 S3 — Health and honest Score
+
+on:
+  pull_request:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - "apps/web/app/(app)/projects/[id]/analysis/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/analysis/page.test.tsx"
+      - "apps/api/src/coherence/router.py"
+      - "apps/api/tests/core/test_coherence_dashboard_derivation.py"
+      - "apps/api/tests/core/test_coherence_route_contract.py"
+      - ".github/workflows/acc01-s3-health-ux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s3-honest-health:
+    name: "S3 Health 6D — TypeScript, lint and Score honesty"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: S3 Analysis Health/Score frontend tests (no backend or secrets)
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            'app/(app)/projects/[id]/analysis/page.test.tsx' \
+            components/features/health/SingleDocumentHealth.test.tsx
+
+  s3-backend-syntax:
+    name: "S3 Dashboard pending-contract Python syntax (no DB or secrets)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compile affected Python files without importing production services
+        run: python3 -m py_compile apps/api/src/coherence/router.py apps/api/tests/core/test_coherence_dashboard_derivation.py apps/api/tests/core/test_coherence_route_contract.py

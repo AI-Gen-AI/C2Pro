@@ -13,7 +13,7 @@ import {
   Clock,
   XCircle,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { reviewSourceLinks } from './review-source-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,8 +28,15 @@ type ReviewItemCardProps = {
   reviewerIdentityReady: boolean;
   /** A decision for this row was already submitted; wait for the refreshed queue. */
   actionsLocked?: boolean;
+  /**
+   * S5-02: the server says this user lacks APPROVE_CANDIDATE on the review's project. Approve/Reject are then not
+   * offered (the server refuses them anyway; this is not the security boundary).
+   */
+  finalDecisionNotGranted?: boolean;
   onApprove: (item: ReviewItemResponse) => void;
   onReject: (item: ReviewItemResponse) => void;
+  /** S5: the per-finding decision surface of a pending analysis review (provided by the page). */
+  renderFindings?: (item: ReviewItemResponse) => ReactNode;
 };
 
 function statusLabel(status: string): string {
@@ -115,6 +122,11 @@ function hasData(data: ReviewItemResponse['item_data']): boolean {
 // whose approve/reject meanings always come from the backend.
 const DEFAULT_APPROVE_MEANING = 'Mark this item as approved.';
 const DEFAULT_REJECT_MEANING = 'Mark this item as rejected and record the reason given.';
+// ADR-032: a structured-source review gates trust in ONE immutable Budget/Schedule file only.
+const STRUCTURED_APPROVE_MEANING =
+  'Trust this exact Budget/Schedule file as an approved source. It does not approve costs, dates, a WBS baseline, Health or Coherence, and it creates no WBS link.';
+const STRUCTURED_REJECT_MEANING =
+  'Reject this source: it stays untrusted and cannot be linked to the WBS. The reason is recorded.';
 
 /** Why Approve/Reject are disabled, first reason wins; undefined when enabled. */
 function actionsBlockedReason(state: {
@@ -122,7 +134,11 @@ function actionsBlockedReason(state: {
   exactIdentityMissing: boolean;
   candidatePending: boolean;
   reviewerIdentityReady: boolean;
+  finalDecisionNotGranted: boolean;
 }): string | undefined {
+  if (state.finalDecisionNotGranted) {
+    return 'You do not have permission to approve or reject this project\'s review. Ask a project administrator for the approval capability.';
+  }
   if (state.actionsLocked) return 'Decision submitted. Refreshing the queue...';
   if (state.exactIdentityMissing) {
     return 'Exact review identity unavailable. Refresh the queue before deciding.';
@@ -135,7 +151,7 @@ function actionsBlockedReason(state: {
 // Presentation-only segmentation of numbered reviewer prose. It does NOT
 // convert model claims into verified evidence or per-finding decisions.
 function parseCritiqueObservations(notes: string): { number: number; title: string; body: string }[] | null {
-  const headers = Array.from(notes.matchAll(/^(\d{1,2})\.\s+([^\n:]{5,120}):[ \t]*/gm));
+  const headers = Array.from(notes.matchAll(/^\s{0,3}(\d{1,2})\.\s+([^\n:—–]{5,120}?)(?:\s+[—–-]\s+|:[ \t]*)/gm));
   if (headers.length < 2) return null;
 
   return headers.map((match, index) => {
@@ -154,8 +170,10 @@ export function ReviewItemCard({
   projectId,
   reviewerIdentityReady,
   actionsLocked = false,
+  finalDecisionNotGranted = false,
   onApprove,
   onReject,
+  renderFindings,
 }: ReviewItemCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
@@ -184,14 +202,25 @@ export function ReviewItemCard({
   const reason = getString(item.item_data, 'reason');
   const modelConclusion = getString(item.item_data, 'critique_notes');
   const critiqueObservations = modelConclusion ? parseCritiqueObservations(modelConclusion) : null;
+  const structuredSource = item.trust_kind === 'structured_source';
   const approveMeaning =
     getString(item.item_data, 'approve_meaning') ??
-    (item.resumable ? null : DEFAULT_APPROVE_MEANING);
+    (structuredSource
+      ? STRUCTURED_APPROVE_MEANING
+      : item.resumable
+        ? null
+        : DEFAULT_APPROVE_MEANING);
   const rejectMeaning =
     getString(item.item_data, 'reject_meaning') ??
-    (item.resumable ? null : DEFAULT_REJECT_MEANING);
+    (structuredSource
+      ? STRUCTURED_REJECT_MEANING
+      : item.resumable
+        ? null
+        : DEFAULT_REJECT_MEANING);
 
-  const title = documentFilename
+  const title = structuredSource
+    ? `Trust structured source (${item.item_type})`
+    : documentFilename
     ? `Approve analysis of ${documentFilename}`
     : (firstString(item.item_data, ['title', 'summary', 'message', 'description', 'category']) ??
       item.item_type);
@@ -219,12 +248,13 @@ export function ReviewItemCard({
 
   const exactIdentityMissing = !item.row_id;
   const actionsDisabled =
-    !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing;
+    !reviewerIdentityReady || actionsLocked || candidatePending || exactIdentityMissing || finalDecisionNotGranted;
   const actionsTitle = actionsBlockedReason({
     actionsLocked,
     exactIdentityMissing,
     candidatePending,
     reviewerIdentityReady,
+    finalDecisionNotGranted,
   });
 
   return (
@@ -257,7 +287,12 @@ export function ReviewItemCard({
           ) : null}
 
           {modelConclusion ? (
-            <div className="mt-2 rounded-md bg-muted/50 p-3 text-sm">
+            <details className="mt-2 rounded-md border bg-muted/30 p-3 text-sm" data-testid={`critique-disclosure-${item.item_id}`}>
+              <summary className="cursor-pointer font-medium">
+                AI critique (unverified) · {critiqueObservations ? `${critiqueObservations.length} observations` : "review notes"}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">View model comments</span>
+              </summary>
+              <div className="mt-2">
               {critiqueObservations ? (
                 <div className="space-y-2">
                   <p className="font-medium">
@@ -289,7 +324,8 @@ export function ReviewItemCard({
                   <span className="whitespace-pre-wrap">{modelConclusion}</span>
                 </>
               )}
-            </div>
+              </div>
+            </details>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -301,7 +337,7 @@ export function ReviewItemCard({
             {documentId ? (
               <Link
                 className="font-medium text-primary underline-offset-4 hover:underline"
-                href={`/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(documentId)}`}
+                href={`/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(documentId)}&returnReviewItemId=${encodeURIComponent(item.item_id)}`}
               >
                 View evidence
               </Link>
@@ -309,7 +345,7 @@ export function ReviewItemCard({
             {citedSourceLinks.map((source) => (
               <Link
                 key={source.key}
-                href={source.href}
+                href={`${source.href}&returnReviewItemId=${encodeURIComponent(item.item_id)}`}
                 className="font-medium text-primary underline-offset-4 hover:underline"
                 title="Pending server verification of document revision and source clause"
               >
@@ -317,6 +353,10 @@ export function ReviewItemCard({
               </Link>
             ))}
           </div>
+
+          {isPending && !structuredSource && item.row_id && !candidatePending && renderFindings
+            ? renderFindings(item)
+            : null}
 
           {isPending && (approveMeaning || rejectMeaning) ? (
             <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">

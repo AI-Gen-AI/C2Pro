@@ -4,6 +4,7 @@ import { CoherenceActions } from "./coherence-actions";
 
 const useProjectDocumentsMock = vi.fn();
 const evaluateCoherenceMock = vi.fn();
+let contractPendingApproval = false;
 
 vi.mock("@/hooks/useProjectDocuments", () => ({
   useProjectDocuments: (...args: unknown[]) => useProjectDocumentsMock(...args),
@@ -13,15 +14,48 @@ vi.mock("@/hooks/useProjectCoherenceActions", () => ({
   useProjectCoherenceActions: () => ({
     evaluateCoherence: evaluateCoherenceMock,
     rerunAnalysis: vi.fn(),
+    contractPendingApproval,
     isEvaluating: false,
     isRerunningAnalysis: false,
   }),
+  CONTRACT_PENDING_MESSAGE: "A contract is awaiting approval, so nothing was evaluated.",
 }));
 
 describe("CoherenceActions", () => {
   beforeEach(() => {
     useProjectDocumentsMock.mockReset();
     evaluateCoherenceMock.mockReset();
+    contractPendingApproval = false;
+  });
+
+  it("tells the user a contract awaits approval, without a score or an error", () => {
+    contractPendingApproval = true;
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [{ id: "contract", name: "Contract.docx", type: "contract", status: "parsed" }],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<CoherenceActions projectId="proj-real-1" />);
+
+    expect(screen.getByTestId("contract-pending-approval")).toHaveTextContent(
+      /contract is awaiting approval/i,
+    );
+    expect(screen.queryByText(/not found/i)).not.toBeInTheDocument();
+  });
+
+  it("shows no pending-approval notice by default", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<CoherenceActions projectId="proj-real-1" />);
+
+    expect(screen.queryByTestId("contract-pending-approval")).not.toBeInTheDocument();
   });
 
   it("disables evaluation until the required triplet is complete", () => {

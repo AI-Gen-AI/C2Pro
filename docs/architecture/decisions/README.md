@@ -45,6 +45,7 @@ This directory is the authoritative human catalogue of durable architecture deci
 - [ADR-029 WBS Governance — Implicit Root, Stable Identity, Governed Baselines](./ADR-029-wbs-governance-identity-baseline.md) *(partially supersedes ADR-025)*
 - [ADR-030 WBS Intelligence — Immutable Proposals, Dimension-Level Qualification, Domain Profiles](./ADR-030-wbs-intelligence-proposals-qualification-profiles.md) *(conforms to ADR-029; Amendment 1: PC-2b.2 intelligence store; Amendment 2: PC-2b.3 WBS import; Amendment 3: PC-2b.4 offline AI Reviewer)*
 - [ADR-031 Approved Schedule Baseline for Temporal Comparison](./ADR-031-approved-schedule-baseline-for-temporal-comparison.md) *(conforms to ADR-020/026/029; amends ADR-029 "Later: Schedule Temporal Intelligence"; implementation not started, depends on #1108/#1110)*
+- [ADR-032 Explicit Human Trust Approval of Structured Sources (Budget, Schedule)](./ADR-032-structured-source-trust-approval.md) *(Accepted with conditions 2026-11-01; conforms to ADR-026/027/025/029/031; reuses the #714 trust authority; implementation in progress on #1112)*
 
 ## Current critical architecture path
 

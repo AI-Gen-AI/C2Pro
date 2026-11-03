@@ -10,6 +10,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type AlertSeverity = "critical" | "high" | "medium" | "low";
 type AlertStatus = "pending" | "approved" | "rejected";
 
+/** S4: ONE original Budget row / Schedule activity a finding rests on (parser-observed, revision-bound). */
+export interface AlertStructuredSource {
+  family: "budget" | "schedule";
+  documentId: string;
+  revisionId: string;
+  sourceLocator: string;
+  blobSha256?: string;
+}
+
 export interface ReviewAlert {
   id: string;
   title: string;
@@ -20,6 +29,7 @@ export interface ReviewAlert {
   sourceDocumentId?: string;
   evidenceClaim?: string;
   evidenceQuote?: string;
+  structuredSources?: AlertStructuredSource[];
   assignee?: string;
   rejectionReason?: string;
   resolutionNotes?: string;
@@ -377,13 +387,44 @@ export function AlertReviewCenter({
                 )}
               </td>
               <td>
-                {alert.evidenceClaim || alert.evidenceQuote ? (
+                {alert.evidenceClaim || alert.evidenceQuote || alert.structuredSources?.length ? (
                   <div className="space-y-1">
                     {alert.evidenceClaim ? <div>{alert.evidenceClaim}</div> : null}
                     {alert.evidenceQuote ? (
                       <q className="text-sm text-muted-foreground">
                         {alert.evidenceQuote}
                       </q>
+                    ) : null}
+                    {alert.structuredSources?.length ? (
+                      <ul data-testid={"alert-structured-sources-" + alert.id} className="text-sm">
+                        {alert.structuredSources.map((source) => (
+                          <li key={source.family + source.revisionId + source.sourceLocator}>
+                            <Link
+                              href={
+                                "/projects/" +
+                                encodeURIComponent(projectId) +
+                                "/evidence?documentId=" +
+                                encodeURIComponent(source.documentId) +
+                                "&revisionId=" +
+                                encodeURIComponent(source.revisionId) +
+                                "&locator=" +
+                                encodeURIComponent(source.sourceLocator) +
+                                (source.blobSha256
+                                  ? "&expectedHash=" + encodeURIComponent(source.blobSha256)
+                                  : "")
+                              }
+                              aria-label={
+                                "View original " +
+                                (source.family === "budget" ? "budget row " : "schedule activity ") +
+                                source.sourceLocator
+                              }
+                            >
+                              {source.family === "budget" ? "Budget row " : "Schedule activity "}
+                              {source.sourceLocator}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                   </div>
                 ) : (

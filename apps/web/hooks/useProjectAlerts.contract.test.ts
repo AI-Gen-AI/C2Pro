@@ -46,6 +46,35 @@ describe("useProjectAlerts project mapping", () => {
     await waitFor(() => expect(getMock).toHaveBeenCalledWith("/alerts/projects/proj-5"));
   });
 
+  it("S4: maps parser-observed Budget/Schedule pointers and drops anything else", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: "a-s4",
+            project_id: "proj-5",
+            category: "TIME",
+            severity: "medium",
+            status: "open",
+            message: "Provisional schedule risk",
+            detection_evidence: {
+              structured_sources: [
+                { family: "schedule", document_id: "d", revision_id: "r", source_locator: "Plan!4" },
+                { family: "schedule", document_id: "d", revision_id: "r" },
+              ],
+            },
+          },
+        ],
+        total: 1,
+      },
+    });
+    const { result } = renderHook(() => useProjectAlerts("proj-5"));
+    await waitFor(() => expect(result.current.alerts).toHaveLength(1));
+    expect(result.current.alerts[0].structuredSources).toEqual([
+      { family: "schedule", documentId: "d", revisionId: "r", sourceLocator: "Plan!4" },
+    ]);
+  });
+
   it("maps unknown severities and statuses to safe defaults, without a clause id", () => {
     return runMapping(
       [

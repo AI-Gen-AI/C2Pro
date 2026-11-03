@@ -20,6 +20,7 @@ export interface CategoryAssessmentPayload {
 
 /** `GET /api/v1/projects/{id}/health`, as far as PJ-01 reads it. */
 export interface HealthVectorPayload {
+  computed_at?: string | null;
   single_document_coverage?: { document_id?: string | null; assessments?: CategoryAssessmentPayload[] | null } | null;
   single_document_evidence_granularity?: string | null;
 }
@@ -192,7 +193,14 @@ export function evaluateHealthSourceDocument(vector: HealthVectorPayload, docume
 
 /** Where a Health supporting-evidence link landed: exact document, exact clause, active. */
 export function evaluateEvidenceLanding(
-  observed: { url: string; activeEntityId: string | null; unavailableNotice: string | null },
+  observed: {
+    url: string;
+    activeEntityId: string | null;
+    unavailableNotice: string | null;
+    verifiedSourceDocumentId?: string | null;
+    verifiedSourceClauseId?: string | null;
+    verifiedSourceExcerpt?: string | null;
+  },
   expected: { documentId: string; clauseId: string },
 ): JourneyViolation[] {
   const violations: JourneyViolation[] = [];
@@ -203,8 +211,17 @@ export function evaluateEvidenceLanding(
   if (params.get("highlightId") !== expected.clauseId) {
     violations.push({ code: "EVIDENCE_WRONG_CLAUSE", detail: `linked ${params.get("highlightId")} instead of ${expected.clauseId}` });
   }
-  if (observed.activeEntityId !== expected.clauseId) {
-    violations.push({ code: "EVIDENCE_CLAUSE_NOT_ACTIVE", detail: `active evidence is ${observed.activeEntityId ?? "none"}` });
+  // A persisted source clause with its original text is a valid exact
+  // landing even without a semantic sidebar entity or PDF geometry. Never
+  // accept just the URL or a source metadata badge without quoted text.
+  const verifiedSource =
+    observed.verifiedSourceDocumentId === expected.documentId &&
+    observed.verifiedSourceClauseId === expected.clauseId &&
+    Boolean(observed.verifiedSourceExcerpt?.trim());
+  const requiresSourceProof = params.get("origin") === "health";
+  if ((requiresSourceProof && !verifiedSource) ||
+      (!requiresSourceProof && observed.activeEntityId !== expected.clauseId && !verifiedSource)) {
+    violations.push({ code: "EVIDENCE_CLAUSE_NOT_ACTIVE", detail: `active evidence is ${observed.activeEntityId ?? "none"}; exact source quote not verified` });
   }
   if (observed.unavailableNotice) {
     violations.push({ code: "EVIDENCE_LINK_UNAVAILABLE", detail: observed.unavailableNotice });

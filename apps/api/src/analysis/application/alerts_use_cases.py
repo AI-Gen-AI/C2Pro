@@ -90,7 +90,8 @@ class UpdateAlertStatusUseCase:
         alert.status = status
 
         if status in {AlertStatus.RESOLVED, AlertStatus.DISMISSED}:
-            alert.resolved_at = datetime.now(UTC)
+            # alerts.resolved_at is TIMESTAMP WITHOUT TIME ZONE: store naive UTC (see AlertGeneratorService).
+            alert.resolved_at = datetime.now(UTC).replace(tzinfo=None)
             if resolution_notes:
                 alert.resolution_notes = resolution_notes
 

@@ -47,14 +47,23 @@ export async function navigateTowardEvidence(
   await page.waitForURL(new RegExp(`/projects/${projectId}/evidence\\?`), { timeout: 30_000 });
 
   const activeCard = page.locator('[data-testid="evidence-entity-card"][data-active="true"]');
+  const verifiedSource = page.getByTestId("evidence-exact-source");
+  const sourceExcerpt = page.getByTestId("evidence-source-excerpt");
   const unavailable = page.getByTestId("evidence-link-unavailable");
-  await expect(activeCard.or(unavailable).first()).toBeVisible({ timeout: 30_000 });
+  // The original clause may have no semantic sidebar projection (e.g. a DOCX
+  // contract). Its verified source quote is an equally valid first-class S4
+  // result. Missing source text is NOT sufficient evidence.
+  await expect(activeCard.or(sourceExcerpt).or(unavailable).first()).toBeVisible({ timeout: 30_000 });
 
+  const hasSource = (await verifiedSource.count()) === 1;
   const violations = evaluateEvidenceLanding(
     {
       url: page.url(),
       activeEntityId: (await activeCard.count()) === 1 ? await activeCard.getAttribute("data-entity-id") : null,
       unavailableNotice: (await unavailable.count()) > 0 ? await unavailable.innerText() : null,
+      verifiedSourceDocumentId: hasSource ? await verifiedSource.getAttribute("data-source-document-id") : null,
+      verifiedSourceClauseId: hasSource ? await verifiedSource.getAttribute("data-source-clause-id") : null,
+      verifiedSourceExcerpt: (await sourceExcerpt.count()) === 1 ? await sourceExcerpt.innerText() : null,
     },
     { documentId, clauseId },
   );

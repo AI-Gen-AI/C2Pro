@@ -69,6 +69,7 @@ export default function ProjectChangesPage() {
     queryKey: ["project-timeline", projectId],
     queryFn: async () => (await apiClient.get<Timeline>(`/projects/${projectId}/timeline`)).data,
     enabled: Boolean(projectId),
+    refetchOnMount: "always",
     refetchInterval: (query) => query.state.data?.items.some((item) => item.state === "processing") ? 5000 : false,
   });
 

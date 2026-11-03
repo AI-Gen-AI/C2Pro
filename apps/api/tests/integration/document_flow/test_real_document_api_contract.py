@@ -188,8 +188,8 @@ async def test_processed_real_document_api_results_are_tenant_scoped(
         f"/api/v1/projects/{project_id}/alerts",
         headers=tenant_b_headers,
     )
-    assert isolated_alerts_response.status_code == 200
-    assert isolated_alerts_response.json() == {"items": [], "total": 0}
+    # Another tenant's project is not found (404), not an empty 200 (S1).
+    assert isolated_alerts_response.status_code == 404
 
     leaked_alerts = (
         await db.execute(select(AlertORM).where(AlertORM.project_id == project_id))

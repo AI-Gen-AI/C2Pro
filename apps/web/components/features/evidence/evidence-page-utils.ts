@@ -15,7 +15,7 @@ export type PendingEvidenceAction =
       kind: "entity-approve";
       entityId: string;
       label: string;
-      confidence: number;
+      confidence: number | null;
     }
   | {
       kind: "entity-reject";
@@ -98,7 +98,28 @@ export function downloadBlob(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export function normalizeConfidence(value: number): number {
+/** Only a literal source code is displayed; never derive WBS or verification. */
+export function technicalSourcePresentation(metadata?: Record<string, unknown>): {
+  technicalSourceSection: string | null;
+  technicalSourceUnverified: boolean;
+} {
+  const raw = metadata?.technical_requirement;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { technicalSourceSection: null, technicalSourceUnverified: false };
+  }
+  const source = raw as Record<string, unknown>;
+  const candidate = source.source_section;
+  const validSection =
+    typeof candidate === "string" &&
+    /^\d{1,3}(?:\.\d{1,3}){0,6}$/.test(candidate);
+  return {
+    technicalSourceSection: validSection ? (candidate as string) : null,
+    technicalSourceUnverified: validSection && source.verification_status === "unverified",
+  };
+}
+
+export function normalizeConfidence(value: number | null): number | null {
+  if (value === null) return null;
   if (value <= 1) {
     return Math.round(value * 100);
   }

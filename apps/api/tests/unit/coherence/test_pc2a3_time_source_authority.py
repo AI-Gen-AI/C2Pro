@@ -157,6 +157,9 @@ def _db() -> Mock:
     db.scalars = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
+    # A scoreless evaluation records its withheld reason (an append-only event): add + flush.
+    db.add = Mock()
+    db.flush = AsyncMock()
     return db
 
 

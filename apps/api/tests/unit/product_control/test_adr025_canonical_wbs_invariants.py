@@ -172,8 +172,13 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
     # PC-2b.3: the import router stores immutable WBS import sources -- never WBS rows -- and creates an
     # IMPORT_REVIEW DRAFT only through the governed commands, on an explicit human action.
     imports = "src.wbs.adapters.http.import_router"
+    # Technical S7 audit, explicit canonical approval and readback share one bounded router.
+    technical_reviews = "src.analysis.adapters.http.technical_wbs_review_router"
+    # S7 Budget/Schedule links use the approved canonical WBS, explicit human decisions,
+    # and durable project events; they cannot create or mutate a parallel hierarchy.
+    structured_links = "src.analysis.adapters.http.structured_wbs_link_router"
     allowed_handlers = {"src.projects.adapters.http.router", "src.procurement.adapters.http.router", governance,
-                        governed, profiles, intelligence, imports}
+                        governed, profiles, intelligence, imports, technical_reviews, structured_links}
     wbs_routes = {}
     for context in iter_route_contexts(create_application().routes):
         route = context.original_route
@@ -192,6 +197,77 @@ def test_every_mounted_wbs_route_persists_through_the_canonical_store() -> None:
                                        for path in intelligence_routes)
     import_routes = {path for (_, path), module in wbs_routes.items() if module == imports}
     assert import_routes and all(path.startswith("/api/v1/projects/{project_id}/wbs-imports") for path in import_routes)
+    # Review remains audit-only. Canonical approval is a separate explicit POST;
+    # its GET only reads persisted approvals and must never grant authority itself.
+    technical_routes = {(methods, path) for (methods, path), module in wbs_routes.items()
+                        if module == technical_reviews}
+    review_path = "/api/v1/projects/{project_id}/technical-wbs/reviews"
+    canonical_path = "/api/v1/projects/{project_id}/technical-wbs/canonical-links"
+    assert technical_routes == {
+        (("GET",), review_path),
+        (("POST",), review_path),
+        (("GET",), canonical_path),
+        (("POST",), canonical_path),
+    }
+    from src.analysis.adapters.http.technical_wbs_review_router import (
+        approve_canonical_technical_wbs_link,
+        list_canonical_technical_wbs_links,
+        list_technical_wbs_reviews,
+        record_technical_wbs_review,
+    )
+
+    assert wbs_routes[(("GET",), review_path)] == list_technical_wbs_reviews.__module__
+    assert wbs_routes[(("POST",), review_path)] == record_technical_wbs_review.__module__
+    assert wbs_routes[(("GET",), canonical_path)] == list_canonical_technical_wbs_links.__module__
+    assert wbs_routes[(("POST",), canonical_path)] == approve_canonical_technical_wbs_link.__module__
+
+    # The two structured-link routes are a bounded pair: GET reads durable
+    # decisions and POST requires an explicit Clerk-bound human approval.
+    structured_path = "/api/v1/projects/{project_id}/structured-wbs/canonical-links"
+    structured_routes = {
+        (methods, path) for (methods, path), module in wbs_routes.items()
+        if module == structured_links
+    }
+    assert structured_routes == {
+        (("GET",), structured_path),
+        (("POST",), structured_path),
+    }
+    from src.analysis.adapters.http.structured_wbs_link_router import (
+        approve_structured_wbs_link,
+        list_structured_wbs_links,
+    )
+
+    assert wbs_routes[(("GET",), structured_path)] == list_structured_wbs_links.__module__
+    assert wbs_routes[(("POST",), structured_path)] == approve_structured_wbs_link.__module__
+
+    # Keep this allowlist conditional on canonical authority and durable human
+    # consent. A new route that writes WBS nodes directly must fail this test.
+    import inspect
+
+    from src.analysis.application.canonical_structured_wbs_links import (
+        ApproveStructuredWBSLinkService,
+        ReadStructuredWBSLinksService,
+    )
+
+    approval_source = inspect.getsource(ApproveStructuredWBSLinkService.execute)
+    readback_source = inspect.getsource(ReadStructuredWBSLinksService.list)
+    assert "require_linkable_wbs_nodes(" in approval_source
+    assert "expected_wbs_baseline_id" in approval_source
+    assert "require_locked_trusted_artifact(" in approval_source
+    assert "authenticated human approver required" in approval_source
+    assert "approval != APPROVAL" in approval_source
+    assert "SqlAlchemyProjectEventRepository(self.session).append(event)" in approval_source
+    assert "WBSGovernanceRepository(self.session).authority(" in readback_source
+    assert "WBSBaselineNodeORM" in readback_source
+    for source in (approval_source, readback_source):
+        assert not any(
+            forbidden in source for forbidden in (
+                "procurement_wbs_items", "wbs_items", "INSERT INTO wbs_nodes",
+                "UPDATE wbs_nodes", "insert(WBSNodeORM", "update(WBSNodeORM",
+                "delete(WBSNodeORM",
+            )
+        )
+
 
 
 def test_wbs_import_never_writes_wbs_except_through_the_governed_draft_commands() -> None:

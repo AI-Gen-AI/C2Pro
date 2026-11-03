@@ -17,11 +17,13 @@ import pytest
 
 from src.core.observability import monitoring
 from src.modules.hitl.application.resume_workflow_use_case import (
-    ResumeWorkflowRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewItem, ReviewStatus
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
 
 
 def _make_review_item(

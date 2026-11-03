@@ -47,6 +47,6 @@ export interface DocumentEntityResponse {
   type: string;
   text: string;
   page?: number | null;
-  confidence: number;
+  confidence: number | null;
   metadata?: DocumentEntityResponseMetadata;
 }

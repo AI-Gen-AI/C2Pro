@@ -151,6 +151,46 @@ class ProjectContext(BaseModel):
     )
 
 
+class StructuredSourceRef(BaseModel):
+    """S4: a pointer to ONE original Budget row / Schedule activity a deterministic finding rests on.
+
+    Built only from what the parser observed in an immutable revision (document, revision, ``Sheet!row``, SHA-256),
+    never from model text. It is verified again, in the reader's tenant, before any cell is shown.
+    """
+
+    family: Literal["budget", "schedule"]
+    document_id: str
+    revision_id: str
+    source_locator: str
+    blob_sha256: str | None = None
+
+
+def structured_source_refs(raw: Any) -> list[StructuredSourceRef]:
+    """The well-formed structured references in ``raw`` (anything else is dropped, never repaired or invented)."""
+    refs: list[StructuredSourceRef] = []
+    if not isinstance(raw, list | tuple):
+        return refs
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        family = item.get("family")
+        if family not in ("budget", "schedule"):
+            continue
+        try:
+            ref = StructuredSourceRef(
+                family=family,
+                document_id=str(item.get("document_id") or ""),
+                revision_id=str(item.get("revision_id") or ""),
+                source_locator=str(item.get("source_locator") or ""),
+                blob_sha256=(item.get("blob_sha256") or item.get("blob_hash") or None),
+            )
+        except ValueError:
+            continue
+        if ref.document_id and ref.revision_id and ref.source_locator and ref not in refs:
+            refs.append(ref)
+    return refs
+
+
 class Evidence(BaseModel):
     """
     Represents the specific evidence supporting an alert.
@@ -163,6 +203,8 @@ class Evidence(BaseModel):
     quote: str = Field(
         ..., description="The direct quote from the clause text that serves as evidence."
     )
+    # S4: original Budget rows / Schedule activities the finding rests on (empty for clause-only evidence).
+    structured_sources: list[StructuredSourceRef] = Field(default_factory=list)
     # Additional fields can be added here in future iterations, e.g., confidence, page_number.
 
 

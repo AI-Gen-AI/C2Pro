@@ -182,7 +182,7 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
         metric("truncated", data.truncated),
         ...counts("by_lifecycle_status", data.by_lifecycle_status),
         ...counts("by_type", data.by_type),
-        ...data.items.map((document) =>
+        ...data.items.flatMap((document) => [
           item({
             record_id: document.id,
             record_label: document.filename,
@@ -191,7 +191,22 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
             record_status: document.lifecycle_status,
             record_source_ref: document.id,
           }),
-        ),
+          ...(["trusted_revision", "pending_revision"] as const).flatMap((field) => {
+            const revision = document[field];
+            return revision
+              ? [
+                  item({
+                    record_id: document.id,
+                    record_label: document.filename,
+                    field,
+                    value: `rev ${revision.rev_no} sha256:${revision.blob_hash}`,
+                    record_status: document.lifecycle_status,
+                    record_source_ref: revision.revision_id,
+                  }),
+                ]
+              : [];
+          }),
+        ]),
       ];
     }
     case "health": {

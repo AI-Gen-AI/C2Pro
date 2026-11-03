@@ -161,6 +161,14 @@ describe("buildCurrentStateCsv", () => {
     expect(budget?.source_as_of_state).toBe("null");
   });
 
+  it("exports the trusted and the pending revision of a document with their content hash", () => {
+    const rows = csvRows().filter((row) => row.section === "documents" && row.record_type === "item");
+    const trusted = rows.find((row) => row.field === "trusted_revision");
+    const pending = rows.find((row) => row.field === "pending_revision");
+    expect(trusted?.value).toBe(`rev 1 sha256:${"a".repeat(64)}`);
+    expect(pending?.value).toBe(`rev 2 sha256:${"b".repeat(64)}`);
+  });
+
   it("exports document rows with the lifecycle status and lifecycle counts", () => {
     const rows = csvRows();
     const document = rows.find((row) => row.section === "documents" && row.record_type === "item");

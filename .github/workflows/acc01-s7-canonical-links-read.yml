@@ -1,0 +1,64 @@
+name: ACC-01 S7 — Canonical link read-after-approval
+
+on:
+  pull_request:
+    branches:
+      - feat/acc01-s7-canonical-technical-wbs-20261029
+    paths:
+      - "apps/api/src/analysis/application/read_canonical_technical_wbs_links.py"
+      - "apps/api/src/analysis/adapters/http/technical_wbs_review_router.py"
+      - "apps/api/tests/integration/analysis/test_s7_canonical_links_read_pg.py"
+      - "apps/web/app/(app)/projects/[id]/wbs/page.tsx"
+      - "apps/web/app/(app)/projects/[id]/wbs/page.test.tsx"
+      - "apps/web/components/features/wbs/CanonicalTechnicalWBSLinksPanel.tsx"
+      - "apps/web/components/features/wbs/CanonicalTechnicalWBSLinksPanel.test.tsx"
+      - "apps/web/components/features/wbs/CanonicalTechnicalWBSApprovalPanel.tsx"
+      - "apps/web/components/features/wbs/CanonicalTechnicalWBSApprovalPanel.test.tsx"
+      - ".github/workflows/acc01-s7-canonical-links-read.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s7-api-syntax:
+    name: "S7 canonical read API — syntax only (real PostgreSQL via isolated Ops)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compile scoped Python files without importing services
+        run: |
+          python3 -m py_compile \
+            apps/api/src/analysis/application/read_canonical_technical_wbs_links.py \
+            apps/api/src/analysis/adapters/http/technical_wbs_review_router.py \
+            apps/api/tests/integration/analysis/test_s7_canonical_links_read_pg.py
+
+  s7-canonical-read-ux:
+    name: "S7 canonical links — types, lint and focused UI tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: S7 current-vs-stale and WBS after-relogin frontend tests
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            components/features/wbs/CanonicalTechnicalWBSLinksPanel.test.tsx \
+            components/features/wbs/CanonicalTechnicalWBSApprovalPanel.test.tsx \
+            components/features/wbs/TechnicalWBSReviewPanel.test.tsx \
+            'app/(app)/projects/[id]/wbs/page.test.tsx' \
+            hooks/useProjectDocuments.test.ts

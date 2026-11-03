@@ -12,6 +12,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.application.dtos import (
@@ -68,6 +69,7 @@ from src.alerts.domain.models import Alert
 from src.coherence.application.disposition_review import CoherenceReviewRescoreUnavailable
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
+from src.projects.adapters.persistence.models import ProjectORM
 
 router = APIRouter(prefix="/alerts", tags=["alerts"], dependencies=[Depends(security_scheme)])
 project_alerts_router = APIRouter(
@@ -75,6 +77,23 @@ project_alerts_router = APIRouter(
     tags=["alerts"],
     dependencies=[Depends(security_scheme)],
 )
+
+
+async def require_project_in_tenant(
+    project_id: UUID,
+    tenant_id: CurrentTenantId,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """404 for a project that is not the caller's tenant's, even when it holds no alerts.
+
+    An empty 200 for a foreign project cannot be told apart from an own project without alerts. An own project
+    without alerts keeps answering 200 with an empty list.
+    """
+    owned = await session.scalar(
+        select(ProjectORM.id).where(ProjectORM.id == project_id, ProjectORM.tenant_id == tenant_id)
+    )
+    if owned is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
 
 def get_alert_repository(
@@ -243,6 +262,7 @@ async def list_project_alerts(
     status_filter: str | None = None,
     category: str | None = None,
     severity: str | None = None,
+    _project: None = Depends(require_project_in_tenant),
 ) -> AlertListResponse:
     return await list_use_case.execute_for_project(
         project_id=project_id,
@@ -265,6 +285,7 @@ async def list_project_alerts_compatibility(
     status_filter: str | None = None,
     category: str | None = None,
     severity: str | None = None,
+    _project: None = Depends(require_project_in_tenant),
 ) -> AlertListResponse:
     return await list_project_alerts(
         project_id=project_id,

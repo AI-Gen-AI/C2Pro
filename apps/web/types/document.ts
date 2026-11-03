@@ -3,7 +3,7 @@
  * For handling multiple PDFs and their state
  */
 
-export type DocumentType = 'contract' | 'schedule' | 'budget' | 'specification' | 'drawing' | 'other';
+export type DocumentType = 'contract' | 'schedule' | 'budget' | 'specification' | 'technical_spec' | 'drawing' | 'other';
 
 /** Processing status for documents */
 export type DocumentProcessingStatus = 'queued' | 'processing' | 'parsed' | 'error';

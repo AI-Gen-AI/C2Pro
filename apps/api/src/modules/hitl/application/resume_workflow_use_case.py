@@ -52,6 +52,18 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
 from src.modules.hitl.adapters.persistence.resume_recovery import (
     acquire_for_reconciliation,
 )
+from src.modules.hitl.application.approval_authority import (
+    ApprovalAuthority,
+    require_reconciled_approval,
+)
+from src.modules.hitl.application.final_decision_authorization import (
+    AuthorizedFinalDecider,
+    FinalDecisionNotAuthorized,
+)
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.domain.entities import (
     AWAITING_DECISION_STATUSES,
     ReviewItem,
@@ -95,6 +107,10 @@ class ResumeWorkflowRequest:
     # pre-existing /resume/{review_id} route (which has no user identity
     # today) keeps working unchanged.
     approved_by: str | None = None
+    # The server-authenticated human who takes this FINAL decision (HIGH finding: VIEWER/API could approve to TRUSTED,
+    # and /resume carried no actor). ``execute`` refuses any request without it; the reconciler's ``recover()`` does
+    # not use ``execute`` -- it completes a decision a human already recorded, it never creates one.
+    decider: AuthorizedFinalDecider | None = None
 
 
 @dataclass(frozen=True)
@@ -124,6 +140,10 @@ class ResumeWorkflowUseCase:
     _ERR_NOT_FOUND = "Review item {review_id} not found"
     _ERR_ALREADY_CLAIMED = (
         "Review item {review_id} is already being resumed by another request"
+    )
+    _ERR_CONTRADICTORY_DECISION = (
+        "Review item {review_id} was already {stored} by a human; a {requested} decision cannot "
+        "replace it"
     )
     _ERR_OPERATOR_REQUIRED = (
         "Review item {review_id} needs operator intervention and will not be "
@@ -184,6 +204,7 @@ class ResumeWorkflowUseCase:
         claim_session_factory: Any = None,
         lease_seconds: int = DEFAULT_LEASE_SECONDS,
         fault: Any = None,
+        project_authorizer: ProjectReviewAuthorizer | None = None,
     ) -> None:
         """
         Initialize use case with dependencies.
@@ -204,6 +225,37 @@ class ResumeWorkflowUseCase:
         # named checkpoint; raising from it simulates hard process loss at
         # that exact durability boundary.
         self._fault = fault
+        # S5-02: the ONE per-project authority. Built lazily from the repository's own request-scoped session unless a
+        # caller injects one; with neither, a final decision FAILS CLOSED (ProjectAuthorizationUnavailable).
+        self._project_authorizer = project_authorizer
+
+    async def _require_project_approval(self, review_item: Any, decider: AuthorizedFinalDecider) -> None:
+        """APPROVE_CANDIDATE on the review row's OWN project (read from the row, never from the request)."""
+        authorizer = self._project_authorizer or ProjectReviewAuthorizer.for_repository(self.review_queue_repo)
+        raw = (review_item.metadata or {}).get("project_id")
+        try:
+            project_id = UUID(str(raw)) if raw else None
+        except ValueError:
+            project_id = None
+        await authorizer.require(
+            tenant_id=decider.tenant_id,
+            user_id=decider.user_id,
+            project_id=project_id,
+            capability=ProjectCapability.APPROVE_CANDIDATE,
+        )
+
+    async def _require_reconciled_approval(
+        self, review_item: Any, request: ResumeWorkflowRequest, row_id: UUID
+    ) -> ApprovalAuthority | None:
+        if request.decision is not WorkflowDecision.APPROVE or not isinstance(request.decider, AuthorizedFinalDecider):
+            return None
+        authorizer = self._project_authorizer or ProjectReviewAuthorizer.for_repository(self.review_queue_repo)
+        if not hasattr(authorizer, "session"):  # an injected authorizer without a database (mechanics-only suites)
+            return None
+        return await require_reconciled_approval(
+            authorizer, tenant_id=request.decider.tenant_id, user_id=request.decider.user_id,
+            review_row_id=row_id, review_metadata=getattr(review_item, "metadata", None),
+        )
 
     async def _heartbeat_loop(self, ownership: Ownership) -> None:
         """Renew the lease while the graph runs.
@@ -734,8 +786,11 @@ class ResumeWorkflowUseCase:
             ResumeWorkflowResponse with status and message
 
         Raises:
+            FinalDecisionNotAuthorized: no authenticated human decider (checked before ANY state is read)
             ValueError: If review item not found, not pending, or missing checkpoint
         """
+        if not isinstance(request.decider, AuthorizedFinalDecider):
+            raise FinalDecisionNotAuthorized("a final decision needs an authenticated human decider")
         start_time = time.perf_counter()
         decision = request.decision.value
         status = "unknown"
@@ -747,10 +802,25 @@ class ResumeWorkflowUseCase:
                 record_hitl_resume_error("not_found")
                 raise ValueError(self._ERR_NOT_FOUND.format(review_id=review_id))
 
+            # 1b. S5-02: per-project authority, BEFORE any status/replay/contradiction detail is disclosed.
+            await self._require_project_approval(review_item, request.decider)
+
             # 2. Validate review item is in pending status
             if review_item.current_status not in AWAITING_DECISION_STATUSES:
                 # Check if already processed (idempotency)
                 if review_item.current_status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}:
+                    stored_is_approval = review_item.current_status is ReviewStatus.APPROVED
+                    if stored_is_approval != (request.decision is WorkflowDecision.APPROVE):
+                        # Only the SAME decision is an idempotent replay. The opposite one
+                        # changes nothing and must not be answered as if it had been applied.
+                        record_hitl_resume_error("contradictory_decision")
+                        raise ValueError(
+                            self._ERR_CONTRADICTORY_DECISION.format(
+                                review_id=review_id,
+                                stored=review_item.current_status.value.lower(),
+                                requested=request.decision.value,
+                            )
+                        )
                     status = "already_processed"
                     record_hitl_resume_attempt(decision, status)
                     duration = time.perf_counter() - start_time
@@ -883,6 +953,10 @@ class ResumeWorkflowUseCase:
                 approve=request.decision == WorkflowDecision.APPROVE,
             )
 
+            # S5-04: under enforce, an approval of a candidate-bound analysis review needs a CURRENT, clean
+            # reconciliation of the finding decisions. Refused here -- BEFORE any resume operation exists.
+            authority = await self._require_reconciled_approval(review_item, request, row_id)
+
             ownership, phase, refusal = await acquire(
                 review_row_id=row_id,
                 tenant_id=tenant_id,
@@ -893,6 +967,7 @@ class ResumeWorkflowUseCase:
                 decision=request.decision.value,
                 feedback=request.feedback,
                 reviewer=request.approved_by,
+                authority=authority.to_json() if authority else None,
                 lease_seconds=self._lease_seconds,
                 session_factory=self._claim_session_factory,
             )
@@ -911,6 +986,20 @@ class ResumeWorkflowUseCase:
                     phase=phase.value if phase is not None else None,
                     reason=refusal,
                 )
+                if (phase is Phase.FINALIZED_APPROVED and request.decision is WorkflowDecision.REJECT) or (
+                    phase is Phase.FINALIZED_REJECTED and request.decision is WorkflowDecision.APPROVE
+                ):
+                    # A replay repeats the SAME decision. The opposite one is a contradiction: it
+                    # changes nothing, and it must not be answered as if it had been applied
+                    # ("rejected (already completed)" for a review that is approved).
+                    record_hitl_resume_error("contradictory_decision")
+                    raise ValueError(
+                        self._ERR_CONTRADICTORY_DECISION.format(
+                            review_id=review_id,
+                            stored="approved" if phase is Phase.FINALIZED_APPROVED else "rejected",
+                            requested=request.decision.value,
+                        )
+                    )
                 if phase in {Phase.FINALIZED_APPROVED, Phase.FINALIZED_REJECTED}:
                     # Everything durable already landed (e.g. the process
                     # died after finalization but before the HTTP response).

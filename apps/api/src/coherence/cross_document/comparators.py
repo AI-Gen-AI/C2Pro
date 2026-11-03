@@ -11,8 +11,10 @@ Refers to Suite ID: TS-UD-COH-XDOC-COMPARATORS-001.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 
 from src.coherence.cross_document.findings import (
     CrossDocFinding,
@@ -79,6 +81,14 @@ def _currency_not_assessed(
     )
 
 
+def _budget_sources_evidence(inputs: ProjectCrossDocInputs) -> dict[str, Any]:
+    """The original row the budget figure was read from, when the parser observed it -- never inferred."""
+    source = inputs.budget_total_source
+    if not source:
+        return {}
+    return {"sources": [dict(source)]}
+
+
 def compare_values(
     left_key: str,
     left_value: float | None,
@@ -88,6 +98,7 @@ def compare_values(
     rule_id: str,
     category: CoherenceCategory,
     tolerance: float = DEFAULT_TOLERANCE,
+    evidence: Mapping[str, Any] | None = None,
 ) -> CrossDocFinding | None:
     """Compare two values; emit a finding only if the relative discrepancy is material.
 
@@ -118,6 +129,7 @@ def compare_values(
             f"{left_key} ({left_value:,.0f}) {direction} {right_key} "
             f"({right_value:,.0f}) by {ratio:.1%}"
         ),
+        evidence=dict(evidence or {}),
     )
 
 
@@ -143,6 +155,7 @@ def contract_vs_budget_total(
         rule_id=RULE_CONTRACT_VS_BUDGET,
         category="BUDGET",
         tolerance=tolerance,
+        evidence=_budget_sources_evidence(inputs),
     )
 
 
@@ -215,6 +228,7 @@ def budget_exceeds_contract(
             f"budget_total ({budget:,.0f}) exceeds contract_total ({contract:,.0f}) "
             f"by {overrun:.1%} — negative margin"
         ),
+        evidence=_budget_sources_evidence(inputs),
     )
 
 
@@ -340,6 +354,15 @@ def schedule_overruns_deadline(
                     "source_locator": schedule.locator,
                     "basis": schedule.basis,
                 },
+                # S4: the exact original activity row the finish date was read from.
+                "sources": [
+                    {
+                        "family": "schedule",
+                        "document_id": schedule.document_id,
+                        "revision_id": schedule.revision_id,
+                        "source_locator": schedule.locator,
+                    }
+                ],
             },
         )
         if overrun is None or schedule.basis == BASIS_APPROVED_BASELINE:

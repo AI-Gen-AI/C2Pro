@@ -43,6 +43,9 @@ class RevisionStatus(BaseModel):
     current_revision_id: UUID | None = None
     # trusted | single_revision | unresolved (C3a resolver basis)
     current_basis: str = "unresolved"
+    # Immutable revision blob identity, not the mutable document file_hash.
+    blob_hash: str | None = None
+
     materialization: MaterializationStatus | None = None
     reason: str | None = None
 

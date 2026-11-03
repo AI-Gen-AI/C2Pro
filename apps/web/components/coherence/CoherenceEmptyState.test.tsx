@@ -32,6 +32,16 @@ describe("CoherenceEmptyState", () => {
     );
   });
 
+  it.each([
+    ["contract_pending_approval", /awaiting approval/i],
+    ["contract_rejected", /source was rejected/i],
+    ["not_evaluated", /not been evaluated yet/i],
+  ])("S3 — %s has its own copy, not the generic upload prompt", (reason, copy) => {
+    render(<CoherenceEmptyState projectId="proj-1" reason={reason} />);
+    expect(screen.getByRole("status")).toHaveTextContent(copy);
+    expect(screen.getByRole("status")).not.toHaveTextContent(/Upload the missing documents to compute/);
+  });
+
   it("never renders the text '0' as a fallback score", () => {
     const { container } = render(
       <CoherenceEmptyState projectId="proj-1" reason="pending_documents" />,

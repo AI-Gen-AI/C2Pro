@@ -44,12 +44,49 @@ REVIEW_BINDING_KEY = "candidate_binding"
 TRUST_CANDIDATE_REQUIRED_KEY = "trust_candidate_required"
 
 
+# ADR-032: payload key of a structured-source trust candidate (DocumentArtifact.structured_source).
+STRUCTURED_SOURCE_KEY = "structured_source"
+
+
+def is_structured_payload(payload: Mapping[str, Any] | None) -> bool:
+    """True for a structured-source (Budget/Schedule XLSX) trust candidate."""
+    return isinstance(payload, Mapping) and isinstance(payload.get(STRUCTURED_SOURCE_KEY), Mapping)
+
+
 def review_decision_ready(review_metadata: Mapping[str, Any] | None) -> bool:
     """False while a #714 review still waits for its exact candidate binding."""
     metadata = review_metadata or {}
     if not metadata.get(TRUST_CANDIDATE_REQUIRED_KEY):
         return True
     return isinstance(metadata.get(REVIEW_BINDING_KEY), Mapping)
+
+
+STRUCTURED_DECISION_ENDPOINT = "POST /api/v1/structured-source-trust/decisions"
+
+
+def ensure_legacy_decision_allowed(review_metadata: Mapping[str, Any] | None) -> None:
+    """ADR-032 Q4/C4: the legacy status-flip route never decides a candidate-bound review.
+
+    A review bound to a candidate (or marked ``trust_candidate_required``) that has no graph
+    ``thread_id`` cannot be resumed, so the legacy route would only flip its status and leave the
+    artifact PROPOSED ("approved but not trusted"). Unbound legacy reviews are unaffected.
+    """
+    metadata = review_metadata or {}
+    if metadata.get("thread_id"):
+        return
+    bound = isinstance(metadata.get(REVIEW_BINDING_KEY), Mapping)
+    if not bound and not metadata.get(TRUST_CANDIDATE_REQUIRED_KEY):
+        return
+    if metadata.get("trust_kind") == "structured_source":
+        raise BoundReviewRequiresTrustDecision(
+            "This review is bound to a structured-source trust candidate; decide it with "
+            f"{STRUCTURED_DECISION_ENDPOINT} so the decision and the trust change are recorded together."
+        )
+    raise BoundReviewRequiresTrustDecision(
+        "This review is bound to an analysis candidate but has no graph thread to resume, so a "
+        "status-only decision would leave the candidate untrusted. Re-run the analysis: the new "
+        "candidate supersedes this one and opens a resumable review."
+    )
 
 
 def artifact_digest(payload: Mapping[str, Any]) -> str:
@@ -94,19 +131,38 @@ class CandidateBinding:
             return None
 
 
+SCORING_PENDING_REEVALUATION = "PENDING_REEVALUATION"
+
+
 @dataclass(frozen=True)
 class CandidateScoring:
     """The canonical engine's (N8) output for one analysis run.
 
     Stored on the artifact envelope so a pending candidate can be projected
     with the SAME engine output and score_version -- never recomputed ad hoc.
+
+    A candidate DERIVED from another (S5 Vn+1) changes the effective risks, so the source's score does not describe it:
+    it carries ``coherence_score=None`` and ``evaluation=PENDING_REEVALUATION`` (``derived_from_artifact_id`` names the
+    source whose score is kept, untouched, as history). Both extra keys are written only when set, so every legacy
+    envelope serializes exactly as before.
     """
 
     coherence_score: float | None
     score_version: str | None
+    evaluation: str | None = None
+    derived_from_artifact_id: str | None = None
 
     def as_json(self) -> dict[str, Any]:
-        return {"coherence_score": self.coherence_score, "score_version": self.score_version}
+        out: dict[str, Any] = {"coherence_score": self.coherence_score, "score_version": self.score_version}
+        if self.evaluation is not None:
+            out["evaluation"] = self.evaluation
+        if self.derived_from_artifact_id is not None:
+            out["derived_from_artifact_id"] = self.derived_from_artifact_id
+        return out
+
+    @classmethod
+    def pending_reevaluation(cls, source_artifact_id: UUID) -> CandidateScoring:
+        return cls(None, None, SCORING_PENDING_REEVALUATION, str(source_artifact_id))
 
     @classmethod
     def from_state(cls, state: Mapping[str, Any]) -> CandidateScoring:
@@ -126,9 +182,13 @@ class CandidateScoring:
             return None
         score = raw.get("coherence_score")
         version = raw.get("score_version")
+        evaluation = raw.get("evaluation")
+        derived_from = raw.get("derived_from_artifact_id")
         return cls(
             coherence_score=float(score) if isinstance(score, int | float) else None,
             score_version=str(version) if version else None,
+            evaluation=str(evaluation) if evaluation else None,
+            derived_from_artifact_id=str(derived_from) if derived_from else None,
         )
 
 
@@ -160,7 +220,31 @@ class CandidateNotReadyError(ValueError):
     """
 
 
+class WrongTrustOperationError(ValueError):
+    """A trust operation was applied to the wrong kind of candidate (ADR-032).
+
+    ``commit_candidate`` (graph resume, materialization obligation) only promotes
+    analysis candidates; ``commit_structured_candidate`` only promotes structured-source
+    candidates. Neither may be used to bypass the other's obligations.
+    """
+
+
+class BoundReviewRequiresTrustDecision(ValueError):
+    """A review bound to a candidate has no graph thread to carry its decision (ADR-032).
+
+    The legacy decision route would only flip the review status and leave the candidate
+    PROPOSED ("approved but not trusted"). HTTP 409; the message names the endpoint that
+    records the decision together with the trust change.
+    """
+
+
 __all__ = [
+    "STRUCTURED_DECISION_ENDPOINT",
+    "ensure_legacy_decision_allowed",
+    "STRUCTURED_SOURCE_KEY",
+    "BoundReviewRequiresTrustDecision",
+    "WrongTrustOperationError",
+    "is_structured_payload",
     "REVIEW_BINDING_KEY",
     "TRUST_CANDIDATE_REQUIRED_KEY",
     "CandidateNotReadyError",

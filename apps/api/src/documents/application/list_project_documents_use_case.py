@@ -3,6 +3,8 @@ Use Case for listing documents for a specific project.
 """
 from uuid import UUID
 
+from fastapi import HTTPException, status
+
 from src.core.tenants.types import require_tenant_id
 from src.documents.domain.models import Document
 from src.documents.ports.document_repository import IDocumentRepository
@@ -24,10 +26,18 @@ class ListProjectDocumentsUseCase:
         """
         Lists documents for a specific project, with pagination and tenant isolation.
         Returns a tuple of (list of Document domain entities, total count).
+
+        A project that does not exist, or that belongs to another tenant, is answered with the same
+        neutral 404 -- never a 200 with an empty list, which would say "this project exists and is
+        empty" about a project the caller may not even know. An own project without documents is a
+        legitimate empty list.
         """
         project = await self.project_repository.get_by_id(project_id, tenant_id)
         if project is None:
-            return [], 0
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found or access denied.",
+            )
 
         documents, total_count = await self.document_repository.list_for_project(
             require_tenant_id(tenant_id), project_id, skip, limit

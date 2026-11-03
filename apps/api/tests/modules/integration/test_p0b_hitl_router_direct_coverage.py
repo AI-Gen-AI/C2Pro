@@ -50,13 +50,14 @@ from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflow
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.modules.hitl.domain.services import ConfidenceRouter
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.modules.integration.hitl_actor import human
 from tests.support.hitl_resume_fakes import ResumeGraphDouble
 
 pytestmark = pytest.mark.asyncio
 
 
-def _current_user(name: str = "Direct Test User") -> SimpleNamespace:
-    return SimpleNamespace(id=uuid4(), full_name=name)
+def _current_user(tenant_id: UUID, name: str = "Direct Test User") -> SimpleNamespace:
+    return human(tenant_id, name=name)
 
 
 def _service(db: AsyncSession, tenant_id: UUID) -> HumanInTheLoopService:
@@ -338,7 +339,7 @@ async def test_direct_approve_resumable_review_reaches_analyzed(db: AsyncSession
         item_id=review.item_id,
         payload=ApproveRequest(),
         _tenant_id=tenant.id,
-        current_user=_current_user(),
+        current_user=_current_user(tenant.id),
         service=_service(db, tenant.id),
         resume_use_case=_resume_use_case(db, tenant.id, resume_state, _FakeResumingGraphApp(resume_state)),
     )
@@ -381,7 +382,7 @@ async def test_direct_approve_non_resumable_review_succeeds_without_resume(db: A
         item_id=review.item_id,
         payload=ApproveRequest(),
         _tenant_id=tenant.id,
-        current_user=_current_user(),
+        current_user=_current_user(tenant.id),
         service=_service(db, tenant.id),
         resume_use_case=_ExplodingUseCase(),
     )
@@ -406,7 +407,7 @@ async def test_direct_approve_nonexistent_review_404(db: AsyncSession) -> None:
             item_id=uuid4(),
             payload=ApproveRequest(),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_UnusedUseCase(),
         )
@@ -442,7 +443,7 @@ async def test_direct_approve_non_resumable_already_approved_400(db: AsyncSessio
             item_id=review.item_id,
             payload=ApproveRequest(),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_UnusedUseCase(),
         )
@@ -474,7 +475,7 @@ async def test_direct_approve_resume_failure_returns_502_and_stays_pending(db: A
             item_id=review.item_id,
             payload=ApproveRequest(),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_resume_use_case(db, tenant.id, {}, _FailingGraphApp()),
         )
@@ -514,7 +515,7 @@ async def test_direct_approve_already_processed_is_idempotent(db: AsyncSession) 
         item_id=review.item_id,
         payload=ApproveRequest(),
         _tenant_id=tenant.id,
-        current_user=_current_user(),
+        current_user=_current_user(tenant.id),
         service=_service(db, tenant.id),
         resume_use_case=_resume_use_case(db, tenant.id, {}, _FakeResumingGraphApp({})),
     )
@@ -547,7 +548,7 @@ async def test_direct_reject_resumable_review_terminates_without_n17(db: AsyncSe
         item_id=review.item_id,
         payload=RejectRequest(reason="needs correction"),
         _tenant_id=tenant.id,
-        current_user=_current_user(),
+        current_user=_current_user(tenant.id),
         service=_service(db, tenant.id),
         resume_use_case=_resume_use_case(db, tenant.id, {"messages": [], "node_results": []}, _FakeResumingGraphApp({"messages": [], "node_results": []})),
     )
@@ -595,7 +596,7 @@ async def test_direct_reject_resumable_maps_use_case_not_found_to_404(db: AsyncS
             item_id=review.item_id,
             payload=RejectRequest(reason="race condition"),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_NotFoundUseCase(),
         )
@@ -629,7 +630,7 @@ async def test_direct_reject_non_resumable_review_succeeds_without_resume(db: As
         item_id=review.item_id,
         payload=RejectRequest(reason="bad extraction"),
         _tenant_id=tenant.id,
-        current_user=_current_user(),
+        current_user=_current_user(tenant.id),
         service=_service(db, tenant.id),
         resume_use_case=_ExplodingUseCase(),
     )
@@ -652,7 +653,7 @@ async def test_direct_reject_nonexistent_review_404(db: AsyncSession) -> None:
             item_id=uuid4(),
             payload=RejectRequest(reason="n/a"),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_UnusedUseCase(),
         )
@@ -688,7 +689,7 @@ async def test_direct_reject_non_resumable_already_rejected_400(db: AsyncSession
             item_id=review.item_id,
             payload=RejectRequest(reason="n/a"),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_UnusedUseCase(),
         )
@@ -724,7 +725,7 @@ async def test_direct_reject_resumable_already_processed_400(db: AsyncSession) -
             item_id=review.item_id,
             payload=RejectRequest(reason="n/a"),
             _tenant_id=tenant.id,
-            current_user=_current_user(),
+            current_user=_current_user(tenant.id),
             service=_service(db, tenant.id),
             resume_use_case=_resume_use_case(db, tenant.id, {}, _FakeResumingGraphApp({})),
         )

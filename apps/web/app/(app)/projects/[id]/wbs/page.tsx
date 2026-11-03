@@ -20,15 +20,18 @@
 
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { env } from "@/config/env";
+import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronDown, Expand, Loader2 } from "lucide-react";
 import { useWBSTree, type WBSTreeItem } from "@/hooks/useWBSTree";
 import { useProjectAlerts } from "@/hooks/useProjectAlerts";
+import { TechnicalWBSReviewPanel } from "@/components/features/wbs/TechnicalWBSReviewPanel";
+import { CanonicalTechnicalWBSLinksPanel } from "@/components/features/wbs/CanonicalTechnicalWBSLinksPanel";
+import { CanonicalStructuredWBSLinksPanel } from "@/components/features/wbs/CanonicalStructuredWBSLinksPanel";
+import { CanonicalWBSBaselinePanel } from "@/components/features/wbs/CanonicalWBSBaselinePanel";
+import { CanonicalLinksOverview } from "@/components/features/wbs/CanonicalLinksOverview";
 import type { ProjectWBSAuthority } from "@/lib/api/generated/models";
 
 const ALERT_SEVERITY_CLASSES: Record<string, string> = {
@@ -109,6 +112,26 @@ function WBSAlertsPanel({ projectId }: { projectId: string }) {
                   )
                 ) : null}
               </div>
+              {alert.structuredSources?.length ? (
+                <ul className="mt-1 space-y-0.5 text-xs" data-testid={`wbs-alert-${alert.id}-sources`}>
+                  {alert.structuredSources.map((source) => (
+                    <li key={`${source.family}${source.revisionId}${source.sourceLocator}`}>
+                      <Link
+                        className="font-mono underline"
+                        href={
+                          `/projects/${encodeURIComponent(projectId)}/evidence` +
+                          `?documentId=${encodeURIComponent(source.documentId)}` +
+                          `&revisionId=${encodeURIComponent(source.revisionId)}` +
+                          `&locator=${encodeURIComponent(source.sourceLocator)}` +
+                          (source.blobSha256 ? `&expectedHash=${encodeURIComponent(source.blobSha256)}` : "")
+                        }
+                      >
+                        {source.family === "budget" ? "Budget row" : "Schedule activity"} {source.sourceLocator}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ))
         )}
@@ -255,15 +278,8 @@ function WBSTreeRow({
 }
 
 export default function ProjectWBSPage() {
-  const router = useRouter();
   const params = useParams();
   const projectId = params.id as string;
-
-  useEffect(() => {
-    if (!env.FEATURE_PHASE2_MODULES) {
-      router.replace(`/projects/${projectId}`);
-    }
-  }, [router, projectId]);
 
   const {
     items,
@@ -277,8 +293,6 @@ export default function ProjectWBSPage() {
     toggleExpanded,
     expandAll,
   } = useWBSTree({ projectId });
-
-  if (!env.FEATURE_PHASE2_MODULES) return null;
 
   if (isLoading) {
     return (
@@ -330,7 +344,12 @@ export default function ProjectWBSPage() {
         </p>
       ) : null}
 
+      <CanonicalWBSBaselinePanel projectId={projectId} authority={authority} />
+      <CanonicalLinksOverview projectId={projectId} authority={authority} />
       <WBSAlertsPanel projectId={projectId} />
+      <TechnicalWBSReviewPanel projectId={projectId} authority={authority} />
+      <CanonicalTechnicalWBSLinksPanel projectId={projectId} />
+      <CanonicalStructuredWBSLinksPanel projectId={projectId} />
 
       <Card data-testid="wbs-tree">
         <CardHeader className="flex flex-row items-center justify-between">

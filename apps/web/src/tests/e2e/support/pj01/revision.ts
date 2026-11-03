@@ -6,6 +6,8 @@
  * document and that the project still lists exactly one document afterwards — a second
  * upload through "Upload Document" would be a different, unrelated document.
  */
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { expect, type Page, type Response } from "@playwright/test";
@@ -19,10 +21,12 @@ export interface RevisionUploadResult {
   documentsListed: number;
 }
 
+const sha256 = (file: string): string => createHash("sha256").update(readFileSync(file)).digest("hex");
+
 export async function uploadNewVersionThroughUi(
   page: Page,
   recorder: Pj01RunRecorder,
-  options: { projectId: string; documentId: string; filePath: string },
+  options: { projectId: string; documentId: string; filePath: string; expectedVersion?: number; onAccepted?: () => void },
 ): Promise<RevisionUploadResult> {
   const { projectId, documentId, filePath } = options;
 
@@ -52,10 +56,22 @@ export async function uploadNewVersionThroughUi(
   if (!response.ok()) {
     throw new Error(`PJ01_REVISION_UPLOAD_REJECTED: HTTP ${response.status()} for ${path.basename(filePath)}`);
   }
-  const body = (await response.json()) as { id?: string; version?: number };
+  const body = (await response.json()) as { id?: string; version?: number; file_hash?: string };
   if (body.id !== documentId) {
     recorder.violation("REVISION_CREATED_A_NEW_DOCUMENT", `new version response id ${body.id} != ${documentId}`);
   }
+  // The revision the application stored must be the file that was sent (hash of the committed fixture)
+  // and the next number in the document's own history.
+  if (options.expectedVersion !== undefined && body.version !== options.expectedVersion) {
+    recorder.violation("REVISION_VERSION", `the new version is numbered ${body.version}, expected ${options.expectedVersion}`);
+  }
+  if (body.file_hash !== sha256(filePath)) {
+    recorder.violation(
+      "REVISION_NOT_THE_UPLOADED_FILE",
+      `the stored revision hash ${body.file_hash} is not the sha256 of ${path.basename(filePath)}`,
+    );
+  }
+  options.onAccepted?.();
   await expect(dialog).toBeHidden({ timeout: 60_000 });
 
   const listed = await page.waitForResponse(

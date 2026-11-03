@@ -41,7 +41,7 @@ describe("TASK-QA-336 nightly full E2E lane", () => {
     const steps = [
       "bootstrap_test_infra.py --start-services --require-redis --recreate-db",
       "provision_clerk_e2e_fixture.py",
-      "seed_e2e_auth_tenancy",
+      "seed_wedge_e2e",
       "verify_e2e_tenant_link.py",
       "celery -A src.core.tasks.celery_app worker",
       "uvicorn src.main:app",

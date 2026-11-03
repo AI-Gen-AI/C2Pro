@@ -55,6 +55,7 @@ describe("evidence addressability", () => {
         id: "clause-7-1",
         clauseCode: "7.1",
         label: "Delay penalties",
+        excerpt: "The contractor shall pay delay penalties.",
         page: 4,
         startOffset: 120,
         endOffset: 164,
@@ -106,6 +107,46 @@ describe("evidence addressability", () => {
         sourceClauses: clauses,
       }),
     ).toMatchObject({ kind: "document-fallback" });
+  });
+
+  it("S4 — Health clause source wins over a same-ID semantic alias", () => {
+    const result = resolveEvidenceAddress({
+      evidenceId: "clause-a",
+      preferSourceClause: true,
+      semanticTargets: [
+        { id: "clause-a", type: "ALERT", label: "Unrelated alert alias" },
+      ],
+      sourceClauses: [
+        {
+          id: "clause-a",
+          clauseCode: "5.2",
+          label: "Contract penalties",
+          excerpt: "Delay penalties begin seven days after the milestone.",
+          page: 3,
+          startOffset: null,
+          endOffset: null,
+        },
+      ],
+    });
+    expect(result).toMatchObject({
+      kind: "raw-clause",
+      target: {
+        id: "clause-a",
+        clauseCode: "5.2",
+        excerpt: "Delay penalties begin seven days after the milestone.",
+      },
+    });
+  });
+
+  it("S4 — Health never resolves to an unrelated semantic target without the actual source clause", () => {
+    expect(resolveEvidenceAddress({
+      evidenceId: "clause-a",
+      preferSourceClause: true,
+      semanticTargets: [
+        { id: "clause-a", type: "CLAUSE", label: "Current semantic alias" },
+      ],
+      sourceClauses: [],
+    })).toEqual({ kind: "unresolved" });
   });
 
   it("returns an explicit unresolved state for an unknown evidence id", () => {

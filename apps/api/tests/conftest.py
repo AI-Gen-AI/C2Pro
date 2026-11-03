@@ -491,3 +491,37 @@ async def create_test_user_and_tenant(db):
         return user, tenant
 
     return _create
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_test_decider_has_no_project_authority_to_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The legacy P0b / trusted-state suites finalize with ``TEST_DECIDER`` -- a decider of a SYNTHETIC tenant id that has
+    no ``tenants`` row, no ``users`` row and no grants -- to exercise the mechanics of resume. Only that synthetic tenant
+    is exempted (the authority has nothing to look up for it); any real tenant still goes through the real
+    ``ProjectReviewAuthorizer``, whose behaviour is proven with denials in ``test_s5_project_review_authorization_pg.py``.
+    """
+    from src.modules.hitl.application.project_review_authorization import (
+        AuthorizationMode,
+        ProjectAuthorization,
+        ProjectReviewAuthorizer,
+    )
+    from tests.modules.integration.hitl_actor import TEST_DECIDER
+
+    original = ProjectReviewAuthorizer.require
+
+    async def require(self, *, tenant_id, user_id, project_id, capability, lock=False):  # type: ignore[no-untyped-def]
+        if tenant_id == TEST_DECIDER.tenant_id:
+            return ProjectAuthorization(tenant_id, project_id, user_id, capability, AuthorizationMode.OFF, None, enforced=False)
+        return await original(self, tenant_id=tenant_id, user_id=user_id, project_id=project_id, capability=capability, lock=lock)
+
+    monkeypatch.setattr(ProjectReviewAuthorizer, "require", require)
+
+    original_mode = ProjectReviewAuthorizer.mode
+
+    async def mode(self, tenant_id):  # type: ignore[no-untyped-def]
+        # the synthetic tenant has no `tenants` row: the legacy rule applies (S5-04 / S5-05 do not engage)
+        if tenant_id == TEST_DECIDER.tenant_id:
+            return AuthorizationMode.OFF
+        return await original_mode(self, tenant_id)
+
+    monkeypatch.setattr(ProjectReviewAuthorizer, "mode", mode)

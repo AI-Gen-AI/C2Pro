@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,10 @@ from src.core.auth.service import hash_password
 from src.documents.adapters.persistence.models import DocumentORM
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.application.project_review_authorization import (
+    SETTINGS_KEY,
+    transitional_off_setting,
+)
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 
@@ -31,6 +36,11 @@ from src.projects.adapters.persistence.models import ProjectORM
 TENANT_ID = UUID("00000000-0000-0000-0000-00000000a113")
 USER_ID = UUID("00000000-0000-0000-0000-00000000b113")
 PROJECT_ID = UUID("00000000-0000-0000-0000-00000000c303")
+
+# A SECOND tenant that owns a project the E2E user must never see (ACC-01 S8 cross-tenant denial).
+# It has no user and no Clerk organization the E2E identity belongs to.
+FOREIGN_TENANT_ID = UUID("00000000-0000-0000-0000-00000000a1f1")
+FOREIGN_PROJECT_ID = UUID("00000000-0000-0000-0000-00000000c3f1")
 
 DOC_CONTRACT_ID = UUID("00000000-0000-0000-0000-00000000d401")
 DOC_BUDGET_ID = UUID("00000000-0000-0000-0000-00000000d402")
@@ -56,6 +66,21 @@ def _utcnow_naive() -> datetime:
 # ── Upsert helpers ─────────────────────────────────────────────────
 
 
+def _with_transitional_project_authorization(settings: dict[str, Any] | None) -> dict[str, Any]:
+    """Synthetic nonproduction tenants keep the legacy HITL rule EXPLICITLY (S5-02), never by omission.
+
+    A tenant without the marker is ``enforce`` and the seeded journey creates its project only afterwards, so no
+    per-project grant can exist at seed time. This is the declared transitional relaxation (``off``): it is NOT a secure
+    state and S5 is not accepted while a tenant sits in it.
+    """
+    merged = dict(settings or {})
+    merged.setdefault(
+        SETTINGS_KEY,
+        transitional_off_setting("synthetic nonproduction E2E tenant: project grants cannot precede the project"),
+    )
+    return merged
+
+
 async def _upsert_tenant(db: AsyncSession) -> None:
     """Idempotent tenant upsert — mirrors seeded_auth_context logic."""
     existing = await db.get(Tenant, TENANT_ID)
@@ -63,6 +88,7 @@ async def _upsert_tenant(db: AsyncSession) -> None:
         existing.is_active = True
         existing.subscription_status = "active"
         existing.clerk_org_id = CLERK_E2E_ORG_ID
+        existing.settings = _with_transitional_project_authorization(existing.settings)
         return
     db.add(
         Tenant(
@@ -78,8 +104,45 @@ async def _upsert_tenant(db: AsyncSession) -> None:
             max_storage_gb=100,
             is_active=True,
             clerk_org_id=CLERK_E2E_ORG_ID,
+            settings=_with_transitional_project_authorization(None),
         )
     )
+
+
+async def _upsert_foreign_tenant_project(db: AsyncSession) -> None:
+    """Idempotent: another tenant's project, the isolation target of the S8 journey step."""
+    if await db.get(Tenant, FOREIGN_TENANT_ID) is None:
+        db.add(
+            Tenant(
+                id=FOREIGN_TENANT_ID,
+                name="Foreign Isolation Tenant",
+                slug="acc01-foreign-isolation-tenant",
+                subscription_plan=SubscriptionPlan.PROFESSIONAL,
+                subscription_status="active",
+                ai_budget_monthly=100.0,
+                ai_spend_current=0.0,
+                max_projects=100,
+                max_users=25,
+                max_storage_gb=100,
+                is_active=True,
+                clerk_org_id="org_acc01_foreign_isolation_tenant",
+                settings=_with_transitional_project_authorization(None),
+            )
+        )
+        await db.flush()
+    if await db.get(ProjectORM, FOREIGN_PROJECT_ID) is None:
+        db.add(
+            ProjectORM(
+                id=FOREIGN_PROJECT_ID,
+                tenant_id=FOREIGN_TENANT_ID,
+                name="Foreign Tenant Confidential Project",
+                code="FOREIGN-1",
+                project_type="construction",
+                status="active",
+                description="Owned by another tenant: must be invisible to the E2E user",
+                currency="EUR",
+            )
+        )
 
 
 async def _upsert_user(db: AsyncSession) -> None:
@@ -280,6 +343,8 @@ async def seed_wedge_e2e(db: AsyncSession) -> dict[str, UUID]:
     await db.flush()
     await _upsert_project(db)
     await db.flush()
+    await _upsert_foreign_tenant_project(db)
+    await db.flush()
     await _upsert_documents(db)
     await _upsert_coherence(db)
     await _upsert_alert(db)
@@ -290,6 +355,8 @@ async def seed_wedge_e2e(db: AsyncSession) -> dict[str, UUID]:
         "tenant_id": TENANT_ID,
         "user_id": USER_ID,
         "project_id": PROJECT_ID,
+        "foreign_tenant_id": FOREIGN_TENANT_ID,
+        "foreign_project_id": FOREIGN_PROJECT_ID,
         "doc_contract_id": DOC_CONTRACT_ID,
         "doc_budget_id": DOC_BUDGET_ID,
         "doc_schedule_id": DOC_SCHEDULE_ID,

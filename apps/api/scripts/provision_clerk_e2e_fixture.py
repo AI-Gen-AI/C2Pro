@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -331,6 +332,14 @@ def main() -> int:
     parser.add_argument("--name", default=os.getenv("E2E_CLERK_ORG_NAME", DEFAULT_ORG_NAME))
     parser.add_argument("--tenant-id", default=os.getenv("E2E_TENANT_ID", DEFAULT_TENANT_ID))
     parser.add_argument("--role", default="org:admin")
+    parser.add_argument(
+        "--export-prefix",
+        default="",
+        help=(
+            "Prefix for the CLERK_E2E_* exports (e.g. TENANT_B_ gives TENANT_B_CLERK_E2E_ORG_ID), so a second "
+            "identity in a different Organization does not overwrite the first one's exports."
+        ),
+    )
     jwks_contract = expected_jwks_path()
     parser.add_argument(
         "--jwks-out",
@@ -346,6 +355,9 @@ def main() -> int:
         help="File to append CLERK_E2E_* exports to (GitHub Actions env file).",
     )
     args = parser.parse_args()
+    if not re.fullmatch(r"[A-Z0-9_]*", args.export_prefix):
+        print("FAIL: --export-prefix may only contain A-Z, 0-9 and underscore.", file=sys.stderr)
+        return 2
 
     secret_key = os.getenv("CLERK_SECRET_KEY", "")
     if not secret_key:
@@ -451,10 +463,11 @@ def main() -> int:
             # exported for the database seed -- never echoed to the build log.
             if github_env:
                 with github_env.open("a", encoding="utf-8") as handle:
-                    handle.write(f"CLERK_E2E_ORG_ID={org_id}\n")
-                    handle.write(f"E2E_CLERK_ORGANIZATION_ID={org_id}\n")
-                    handle.write(f"CLERK_E2E_USER_ID={user_id}\n")
-                    handle.write(f"E2E_EXPECTED_TENANT_ID={args.tenant_id}\n")
+                    prefix = args.export_prefix
+                    handle.write(f"{prefix}CLERK_E2E_ORG_ID={org_id}\n")
+                    handle.write(f"{prefix}E2E_CLERK_ORGANIZATION_ID={org_id}\n")
+                    handle.write(f"{prefix}CLERK_E2E_USER_ID={user_id}\n")
+                    handle.write(f"{prefix}E2E_EXPECTED_TENANT_ID={args.tenant_id}\n")
                 print("exports_written = true")
 
     except FixtureError as exc:

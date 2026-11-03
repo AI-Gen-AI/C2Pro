@@ -152,12 +152,18 @@ async def test_documents_are_read_once_with_a_bounded_limit(monkeypatch: pytest.
             requested.append((tenant_id, project_id, skip, limit))
             return ["d1", "d2"], 1500
 
+    async def _no_revisions(session: object, tenant_id: UUID, project_id: UUID) -> dict:
+        assert (tenant_id, project_id) == (TENANT_ID, PROJECT_ID)
+        return {}
+
     monkeypatch.setattr(module, "SqlAlchemyDocumentRepository", _Documents)
+    monkeypatch.setattr(module, "_load_revision_states", _no_revisions)
     result = await _sources(_SessionLog()).load_documents(PROJECT_ID, TENANT_ID)
 
     assert requested == [(TENANT_ID, PROJECT_ID, 0, module.MAX_DOCUMENTS)]
     assert result.documents == ["d1", "d2"]
     assert result.total == 1500
+    assert result.revisions == {}
 
 
 async def test_stakeholders_keep_the_repository_total(monkeypatch: pytest.MonkeyPatch) -> None:

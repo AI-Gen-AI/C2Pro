@@ -7,7 +7,7 @@ feature); any other exception is treated as a read failure by the use case.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
 from uuid import UUID
 
@@ -50,11 +50,20 @@ class SourceFailed:
 
 
 @dataclass(frozen=True)
+class DocumentRevisionState:
+    """Which revision of one document is trusted and which one still awaits approval."""
+
+    trusted: tuple[UUID, int, str] | None = None  # (revision_id, rev_no, blob_hash)
+    pending: tuple[UUID, int, str] | None = None
+
+
+@dataclass(frozen=True)
 class DocumentsInput:
     """Documents that could be read, plus the repository's true total."""
 
     documents: list[Document]
     total: int
+    revisions: dict[UUID, DocumentRevisionState] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

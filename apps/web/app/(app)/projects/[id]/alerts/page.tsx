@@ -7,6 +7,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import { AlertReviewCenter, type ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
+import { structuredSourcesOf } from "@/lib/alerts/structured-sources";
 import {
   getListProjectAlertsApiV1AlertsProjectsProjectIdGetQueryKey,
   reviewAlertApiV1AlertsAlertIdReviewPost,
@@ -43,6 +44,13 @@ function mapAlertToReviewAlert(alert: {
     source_document_id?: string | null;
     claim?: string | null;
     quote?: string | null;
+    structured_sources?: Array<{
+      family: string;
+      document_id: string;
+      revision_id: string;
+      source_locator: string;
+      blob_sha256?: string | null;
+    }> | null;
   } | null;
 }): ReviewAlert {
   const persistedClauseId = alert.source_clause_id ?? undefined;
@@ -65,6 +73,9 @@ function mapAlertToReviewAlert(alert: {
       : {}),
     ...(alert.detection_evidence?.quote
       ? { evidenceQuote: alert.detection_evidence.quote }
+      : {}),
+    ...(structuredSourcesOf(alert.detection_evidence?.structured_sources).length
+      ? { structuredSources: structuredSourcesOf(alert.detection_evidence?.structured_sources) }
       : {}),
   };
 }

@@ -136,7 +136,6 @@ def _extract_usage_metrics(result: Any) -> dict[str, Any]:
     # Handle LLMResponse dataclass (primary production path)
     if hasattr(result, "input_tokens") and hasattr(result, "output_tokens"):
         return {
-            "output": getattr(result, "content", None),
             "tokens_input": int(getattr(result, "input_tokens", 0)),
             "tokens_output": int(getattr(result, "output_tokens", 0)),
             "tokens_total": int(getattr(result, "input_tokens", 0))
@@ -154,7 +153,6 @@ def _extract_usage_metrics(result: Any) -> dict[str, Any]:
         usage = {}
 
     return {
-        "output": result.get("output") or result.get("completion") or result.get("text"),
         "tokens_input": usage.get("prompt_tokens", 0),
         "tokens_output": usage.get("completion_tokens", 0),
         "tokens_total": usage.get("total_tokens", 0),
@@ -204,7 +202,6 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
             usage_logger = _extract_usage_logger(args, kwargs)
             request_id = _extract_request_id(kwargs, request=request_obj)
             tenant_id = _extract_tenant_id(kwargs, request=request_obj)
-            prompt = _extract_prompt(kwargs, request=request_obj)
             model_name = _extract_model_name(kwargs, request=request_obj)
             model_params = _extract_model_params(kwargs, request=request_obj)
             span = None
@@ -229,7 +226,6 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                     inputs={
                         "args_count": len(args),
                         "kwargs": list(kwargs.keys()),
-                        "prompt": prompt,
                         "model_name": model_name,
                         "model_params": model_params,
                     },
@@ -249,7 +245,7 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                             span,
                             outputs={
                                 "status": "error",
-                                "error": str(exc),
+                                "error_type": type(exc).__name__,
                                 "latency_ms": latency_ms,
                             },
                         )
@@ -306,7 +302,6 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
             span_client = _extract_span_client(args, kwargs)
             request_id = _extract_request_id(kwargs, request=request_obj)
             tenant_id = _extract_tenant_id(kwargs, request=request_obj)
-            prompt = _extract_prompt(kwargs, request=request_obj)
             model_name = _extract_model_name(kwargs, request=request_obj)
             model_params = _extract_model_params(kwargs, request=request_obj)
             span = None
@@ -330,7 +325,6 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                     inputs={
                         "args_count": len(args),
                         "kwargs": list(kwargs.keys()),
-                        "prompt": prompt,
                         "model_name": model_name,
                         "model_params": model_params,
                     },
@@ -349,7 +343,7 @@ def traced_llm_call(  # NOSONAR - legacy decorator intentionally wraps sync and 
                             span,
                             outputs={
                                 "status": "error",
-                                "error": str(exc),
+                                "error_type": type(exc).__name__,
                                 "latency_ms": latency_ms,
                             },
                         )

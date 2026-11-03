@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from src.analysis.domain.trust import ensure_legacy_decision_allowed
 from src.modules.hitl.domain.entities import (
     AWAITING_DECISION_STATUSES,
     ImpactLevel,
@@ -101,6 +102,10 @@ class HumanInTheLoopService:
             raise ValueError(
                 f"Item {item_id} cannot be approved from status {item.current_status.value}."
             )
+
+        # ADR-032: a candidate-bound review without a graph thread is decided only together
+        # with its trust change; a status-only approval would leave the candidate PROPOSED.
+        ensure_legacy_decision_allowed(item.metadata)
 
         item.current_status = ReviewStatus.APPROVED
         item.approved_by = reviewer_name

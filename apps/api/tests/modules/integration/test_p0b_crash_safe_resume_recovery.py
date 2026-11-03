@@ -56,13 +56,15 @@ from src.modules.hitl.adapters.persistence.repository import (
 )
 from src.modules.hitl.adapters.persistence.resume_ownership import Phase
 from src.modules.hitl.application.resume_workflow_use_case import (
-    ResumeWorkflowRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import ProjectEventORM
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
 
 pytestmark = pytest.mark.asyncio
 

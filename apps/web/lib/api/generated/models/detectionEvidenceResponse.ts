@@ -37,6 +37,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { StructuredSourceReference } from "./structuredSourceReference";
 
 /**
  * Detector-produced provenance; distinct from reviewer-attached evidence.
@@ -46,4 +47,5 @@ export interface DetectionEvidenceResponse {
   source_document_id?: string | null;
   claim?: string;
   quote?: string;
+  structured_sources?: StructuredSourceReference[];
 }

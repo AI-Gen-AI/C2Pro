@@ -22,6 +22,10 @@ from src.modules.hitl.application.finding_review_authorization import (
     FindingDecisionSubmission,
     authorize_finding_reviewer,
 )
+from src.modules.hitl.application.project_review_authorization import (
+    ProjectCapability,
+    ProjectReviewAuthorizer,
+)
 from src.modules.hitl.domain.finding_decision import (
     CandidateReviewIdentity,
     FindingDecisionDraft,
@@ -43,8 +47,9 @@ WHERE id = cast(:review_row_id as uuid)
 class RecordFindingDecisionUseCase:
     """Record one provisional RISK finding without inventing a trusted state."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, authorizer: ProjectReviewAuthorizer | None = None) -> None:
         self._session = session
+        self._authorizer = authorizer or ProjectReviewAuthorizer(session)
 
     async def execute(
         self,
@@ -62,6 +67,14 @@ class RecordFindingDecisionUseCase:
         ).mappings().first()
         if row is None or row.get("id") != review_row_id:
             raise FindingDecisionIdentityError("no actionable review for tenant")
+        # S5-02: REVIEW_FINDING on the review row's OWN project, before any pin detail is revealed. READ_REVIEW does not
+        # imply it and neither does APPROVE_CANDIDATE. Raises ProjectAuthorizationDenied.
+        await self._authorizer.require(
+            tenant_id=actor.tenant_id,
+            user_id=actor.reviewer_id,
+            project_id=row.get("project_id"),
+            capability=ProjectCapability.REVIEW_FINDING,
+        )
 
         metadata = row.get("review_metadata")
         bound = metadata.get("candidate_binding") if isinstance(metadata, Mapping) else None

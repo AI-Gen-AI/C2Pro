@@ -333,6 +333,27 @@ function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
               {humanize(document.document_type)} · {documentStatusLabel(document.lifecycle_status)}
               {document.version > 1 ? ` · v${document.version}` : ""}
             </span>
+            {document.trusted_revision ? (
+              <span
+                className="basis-full text-xs text-muted-foreground"
+                data-testid="document-trusted-revision"
+                data-rev-no={document.trusted_revision.rev_no}
+                data-blob-hash={document.trusted_revision.blob_hash}
+              >
+                Trusted revision {document.trusted_revision.rev_no} · SHA-256 {document.trusted_revision.blob_hash.slice(0, 12)}
+              </span>
+            ) : null}
+            {document.pending_revision ? (
+              <span
+                className="basis-full text-xs text-amber-700"
+                data-testid="document-pending-revision"
+                data-rev-no={document.pending_revision.rev_no}
+                data-blob-hash={document.pending_revision.blob_hash}
+              >
+                Revision {document.pending_revision.rev_no} awaits approval (nothing here is derived from it) · SHA-256{" "}
+                {document.pending_revision.blob_hash.slice(0, 12)}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>

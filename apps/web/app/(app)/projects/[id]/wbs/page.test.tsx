@@ -80,6 +80,33 @@ const { alertsState } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/components/features/wbs/TechnicalWBSReviewPanel", () => ({
+  TechnicalWBSReviewPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="technical-wbs-review-mock" data-project-id={projectId} />
+  ),
+}));
+vi.mock("@/components/features/wbs/CanonicalTechnicalWBSLinksPanel", () => ({
+  CanonicalTechnicalWBSLinksPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="technical-wbs-approved-mock" data-project-id={projectId} />
+  ),
+}));
+
+vi.mock("@/components/features/wbs/CanonicalStructuredWBSLinksPanel", () => ({
+  CanonicalStructuredWBSLinksPanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="structured-wbs-approved-mock" data-project-id={projectId} />
+  ),
+}));
+vi.mock("@/components/features/wbs/CanonicalWBSBaselinePanel", () => ({
+  CanonicalWBSBaselinePanel: ({ projectId }: { projectId: string }) => (
+    <div data-testid="baseline-panel-mock" data-project-id={projectId} />
+  ),
+}));
+vi.mock("@/components/features/wbs/CanonicalLinksOverview", () => ({
+  CanonicalLinksOverview: ({ projectId }: { projectId: string }) => (
+    <div data-testid="links-overview-mock" data-project-id={projectId} />
+  ),
+}));
+
 vi.mock("@/hooks/useProjectAlerts", () => ({
   useProjectAlerts: () => ({
     alerts: alertsState.alerts,
@@ -134,6 +161,29 @@ describe("ProjectWBSPage", () => {
     alertsState.error = null;
   });
 
+  it("S7: the page carries the baseline authority, the three-family overview and both link panels, with no Phase 2 flag", () => {
+    hookState.authority = authority({ approved: true, display_state: "APPROVED_BASELINE", state: "APPROVED_BASELINE", baseline_no: 1 });
+    renderWithProviders(<ProjectWBSPage />);
+    expect(screen.getByTestId("baseline-panel-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("links-overview-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("technical-wbs-approved-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("structured-wbs-approved-mock")).toBeInTheDocument();
+  });
+
+  it("#1149: the page hands the SAME route project id to every canonical panel it mounts", () => {
+    hookState.authority = authority({ approved: true, display_state: "APPROVED_BASELINE", state: "APPROVED_BASELINE", baseline_no: 1 });
+    renderWithProviders(<ProjectWBSPage />);
+    for (const id of [
+      "baseline-panel-mock",
+      "links-overview-mock",
+      "technical-wbs-review-mock",
+      "technical-wbs-approved-mock",
+      "structured-wbs-approved-mock",
+    ]) {
+      expect(screen.getByTestId(id), id).toHaveAttribute("data-project-id", "proj-real-wbs");
+    }
+  });
+
   it("renders the canonical WBS route", () => {
     hookState.items = [];
     hookState.totalItems = 0;
@@ -144,6 +194,8 @@ describe("ProjectWBSPage", () => {
       screen.getByRole("heading", { name: /work breakdown structure/i }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("wbs-tree")).toBeInTheDocument();
+    expect(screen.getByTestId("technical-wbs-review-mock")).toBeInTheDocument();
+    expect(screen.getByTestId("technical-wbs-approved-mock")).toBeInTheDocument();
     expect(screen.getByText(/no wbs items recorded for this project/i)).toBeInTheDocument();
   });
 

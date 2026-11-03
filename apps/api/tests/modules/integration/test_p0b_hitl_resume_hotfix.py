@@ -42,6 +42,9 @@ from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
 from tests.support.hitl_resume_fakes import ResumeGraphDouble
 from tests.support.processing_authority_fakes import install_permissive_authority
 
@@ -419,10 +422,9 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
         SqlAlchemyReviewQueueRepository,
     )
     from src.modules.hitl.application.resume_workflow_use_case import (
-        ResumeWorkflowRequest,
-        ResumeWorkflowUseCase,
-        WorkflowDecision,
-    )
+    ResumeWorkflowUseCase,
+    WorkflowDecision,
+)
     from src.temporal.adapters.persistence.models import ProjectEventORM
 
     document, fake_app, _repo = await _install_real_hitl_path_with_interrupting_graph(
@@ -451,6 +453,29 @@ async def test_full_hitl_lifecycle_resume_to_n17_to_analyzed_and_health_readable
     assert len(rows) == 1
     review_orm = rows[0]
     assert review_orm.thread_id and review_orm.checkpoint_id
+
+    # P0b regression: a durable HITL pause is not a completed analysis.
+    # The acceptance harness must explicitly resume this review before
+    # expecting either an analysis artifact or a graph.completed event.
+    from src.analysis.adapters.persistence.models import Analysis
+    from src.temporal.adapters.persistence.models import ProjectEventORM
+
+    async with get_session_with_tenant(document.tenant_id) as paused_session:
+        premature_analyses = (
+            await paused_session.execute(
+                select(Analysis).where(Analysis.project_id == document.project_id)
+            )
+        ).scalars().all()
+        premature_completions = (
+            await paused_session.execute(
+                select(ProjectEventORM).where(
+                    ProjectEventORM.project_id == document.project_id,
+                    ProjectEventORM.event_type == "graph.completed",
+                )
+            )
+        ).scalars().all()
+    assert premature_analyses == [], "HITL pause must not persist a completed analysis"
+    assert premature_completions == [], "HITL pause must not emit graph.completed"
 
     # 5. Approve through ResumeWorkflowUseCase -- the real use case, a real
     # tenant-scoped repository, and a graph_app that resumes into the real

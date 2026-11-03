@@ -113,6 +113,43 @@ describe("useProjectDocuments", () => {
     );
   });
 
+  it("shows a persisted Technical Specification as the fourth typed document, including BC3 format", async () => {
+    getProjectDocumentsMock.mockResolvedValueOnce([
+      {
+        id: "doc-technical",
+        filename: "Technical-Specification.docx",
+        document_type: "technical_spec",
+        status: "parsed",
+        uploaded_at: "2026-10-29T09:00:00Z",
+        file_size_bytes: 1024,
+      },
+      {
+        id: "doc-budget-bc3",
+        filename: "CostPlan.bc3",
+        document_type: "budget",
+        status: "parsed",
+        uploaded_at: "2026-10-29T09:00:00Z",
+        file_size_bytes: 768,
+      },
+    ]);
+
+    const { result } = renderHook(() => useProjectDocuments("proj-four-inputs"), {
+      wrapper: createTestWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "doc-technical", type: "technical_spec", extension: "docx",
+        }),
+        expect.objectContaining({
+          id: "doc-budget-bc3", type: "budget", extension: "bc3",
+        }),
+      ]),
+    );
+  });
+
   it("falls back unknown types and extensions to safe defaults", async () => {
     getProjectDocumentsMock.mockResolvedValueOnce([
       {

@@ -43,7 +43,7 @@ describe('ReviewItemCard', () => {
     expect(screen.getByText(/detected budget evidence/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View evidence' })).toHaveAttribute(
       'href',
-      '/projects/project-1/evidence?documentId=doc-123',
+      '/projects/project-1/evidence?documentId=doc-123&returnReviewItemId=item-1',
     );
     expect(screen.queryByText(/"document_id"/)).not.toBeInTheDocument();
   });
@@ -278,10 +278,10 @@ describe('PQ-HITL-06 review item source navigation', () => {
       />,
     );
     expect(screen.getByRole('link', { name: 'Inspect cited clause §5.2' })).toHaveAttribute(
-      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-52',
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-52&returnReviewItemId=item-1',
     );
     expect(screen.getByRole('link', { name: 'Inspect cited clause §1.3' })).toHaveAttribute(
-      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-13',
+      'href', '/projects/project-1/evidence?documentId=doc-123&revisionId=rev-a&highlightId=clause-13&returnReviewItemId=item-1',
     );
     expect(screen.getByRole('link', { name: 'View evidence' })).toBeInTheDocument();
   });
@@ -313,9 +313,9 @@ describe('PQ-HITL-06 review item source navigation', () => {
     const sourceLinks = screen.getAllByRole('link', { name: /^Inspect cited clause §/ });
     expect(sourceLinks).toHaveLength(3);
     expect(sourceLinks.map((link) => link.getAttribute('href'))).toEqual([
-      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-61',
-      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-63',
-      '/projects/project-1/evidence?documentId=doc-b&revisionId=rev-b&highlightId=b-64',
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-61&returnReviewItemId=item-1',
+      '/projects/project-1/evidence?documentId=doc-a&revisionId=rev-a&highlightId=a-63&returnReviewItemId=item-1',
+      '/projects/project-1/evidence?documentId=doc-b&revisionId=rev-b&highlightId=b-64&returnReviewItemId=item-1',
     ]);
     // A source link locates a clause; it never turns the prose into a
     // verified finding or executes an HITL decision on navigation.
@@ -324,4 +324,86 @@ describe('PQ-HITL-06 review item source navigation', () => {
     expect(onReject).not.toHaveBeenCalled();
   });
 
+});
+
+// ADR-032: a Budget/Schedule trust candidate is decided only as a source-trust decision.
+describe('ReviewItemCard structured-source trust review', () => {
+  const structured: ReviewItemResponse = {
+    item_id: 'doc-budget',
+    row_id: 'row-trust',
+    item_type: 'budget',
+    current_status: ReviewStatus.PENDING_REVIEW_REQUIRED,
+    confidence: 1,
+    impact_level: ImpactLevel.MEDIUM,
+    approved_by: null,
+    approved_at: null,
+    sla_due_date: '2026-12-31T00:00:00Z',
+    created_at: '2026-11-01T10:00:00Z',
+    item_data: { trust_kind: 'structured_source', reason: 'Structured source awaits an explicit human trust decision.' },
+    resumable: false,
+    decision_ready: true,
+    trust_kind: 'structured_source',
+    candidate_binding: { artifact_id: 'a-1', artifact_version: 1, artifact_hash: 'f'.repeat(64) },
+  };
+
+  it('says exactly what approving a structured source does and does not do', () => {
+    render(
+      <ReviewItemCard item={structured} projectId="project-1" reviewerIdentityReady onApprove={vi.fn()} onReject={vi.fn()} />,
+    );
+
+    expect(screen.getByText('Trust structured source (budget)')).toBeInTheDocument();
+    expect(screen.getByText(/does not approve costs, dates, a WBS baseline, Health or Coherence/i)).toBeInTheDocument();
+    expect(screen.getByText(/stays untrusted and cannot be linked to the WBS/i)).toBeInTheDocument();
+  });
+});
+
+describe('ReviewItemCard - per-finding surface (S5)', () => {
+  const pending: ReviewItemResponse = { ...item, row_id: 'row-9', resumable: true, decision_ready: true };
+
+  it('renders the findings surface only for a pending, candidate-bound analysis review', () => {
+    const renderFindings = vi.fn(() => <div data-testid="findings-slot" />);
+    const props = { projectId: 'project-1', reviewerIdentityReady: true, onApprove: vi.fn(), onReject: vi.fn(), renderFindings };
+    const { rerender } = render(<ReviewItemCard item={pending} {...props} />);
+    expect(screen.getByTestId('findings-slot')).toBeInTheDocument();
+
+    rerender(<ReviewItemCard item={{ ...pending, trust_kind: 'structured_source' }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+    rerender(<ReviewItemCard item={{ ...pending, row_id: null }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+    rerender(<ReviewItemCard item={{ ...pending, decision_ready: false }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+    rerender(<ReviewItemCard item={{ ...pending, current_status: ReviewStatus.APPROVED }} {...props} />);
+    expect(screen.queryByTestId('findings-slot')).not.toBeInTheDocument();
+  });
+});
+
+
+describe('ACC-01 review critique disclosure', () => {
+  it('does not overwhelm the queue with all seven multiline observations by default', async () => {
+    const notes = [
+      '2. CLAUSE 5.2 TRUNCATION — Preliminary observation, not validated.',
+      '3. DESCRIPTION ACCURACY — Check the computed milestone.',
+      '4. DESCRIPTION ACCURACY — Check retention.',
+      '5. COMPLETENESS — Consider missing clauses.',
+      '6. PLACEHOLDER TOKENS — Verify source.',
+      '7. CATEGORY ASSIGNMENT — Check the risk grouping.',
+      '8. CONFIDENCE FIELDS — No measured confidence.',
+    ].join('\n');
+    render(
+      <ReviewItemCard
+        item={{ ...graphGatedItem, item_data: { ...graphGatedItem.item_data, critique_notes: notes } }}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    const details = screen.getByTestId('critique-disclosure-doc-456');
+    expect(details).not.toHaveAttribute('open');
+    expect(details.querySelector('summary')).toHaveTextContent('7 observations');
+    expect(details.querySelector('summary')).toHaveTextContent(/unverified/i);
+    await userEvent.click(details.querySelector('summary')!);
+    expect(details).toHaveAttribute('open');
+    expect(screen.getByText(/Check the computed milestone/i)).toBeInTheDocument();
+  });
 });

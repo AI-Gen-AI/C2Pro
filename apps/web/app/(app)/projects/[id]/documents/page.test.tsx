@@ -8,6 +8,7 @@ const mutateAsyncMock = vi.fn();
 const useDeleteDocumentMock = vi.fn();
 const apiClientPostMock = vi.fn();
 const apiClientPatchMock = vi.fn();
+const apiClientGetMock = vi.fn();
 const showToastMock = vi.fn();
 const evaluateCoherenceMock = vi.fn();
 
@@ -44,6 +45,7 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: {
     post: (...args: unknown[]) => apiClientPostMock(...args),
     patch: (...args: unknown[]) => apiClientPatchMock(...args),
+    get: (...args: unknown[]) => apiClientGetMock(...args),
   },
 }));
 
@@ -91,6 +93,7 @@ describe("ProjectDocumentsPage", () => {
     useDeleteDocumentMock.mockReset();
     apiClientPostMock.mockReset();
     apiClientPatchMock.mockReset();
+    apiClientGetMock.mockReset();
     showToastMock.mockReset();
     evaluateCoherenceMock.mockReset();
     useProjectMock.mockReturnValue({
@@ -202,6 +205,72 @@ describe("ProjectDocumentsPage", () => {
     expect(
       screen.queryByText("No documents found for this project"),
     ).not.toBeInTheDocument();
+  });
+
+  it("labels a real technical_spec document distinctly instead of Other", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_technical_001",
+          name: "Technical-Specification.docx",
+          type: "technical_spec",
+          fileSize: 2048,
+          uploadedAt: new Date("2026-10-29T09:00:00Z"),
+          status: "parsed",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    expect(screen.getByTestId("document-row-doc_technical_001")).toHaveTextContent(
+      "Technical specification",
+    );
+    expect(screen.getByText("Showing 1 of 1 documents")).toBeInTheDocument();
+  });
+
+  it("offers the fourth Technical specification input without changing the coherence triplet", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    const fourthSlot = screen.getByTestId("technical-specification-slot");
+    expect(fourthSlot).toHaveTextContent("Fourth project source");
+    expect(fourthSlot).toHaveTextContent("coherence triplet");
+    fireEvent.click(within(fourthSlot).getByRole("button", { name: /upload technical specification/i }));
+    expect(screen.getByText("Default upload type: technical_spec")).toBeInTheDocument();
+  });
+
+  it("shows Technical specification as registered, not as completed analysis", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_technical_001",
+          name: "Technical-Specification.docx",
+          type: "technical_spec",
+          fileSize: 1024,
+          status: "processing",
+          lifecycleStatus: "processing",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<ProjectDocumentsPage />);
+    const fourthSlot = screen.getByTestId("technical-specification-slot");
+    expect(within(fourthSlot).getByTestId("technical-specification-present")).toHaveTextContent(
+      "In document register",
+    );
+    expect(within(fourthSlot).queryByRole("button", { name: /upload technical specification/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("document-row-doc_technical_001")).toHaveTextContent("Processing");
   });
 
   it("shows analysis progress while documents are still processing", () => {
@@ -838,6 +907,58 @@ describe("ProjectDocumentsPage", () => {
     expect(
       screen.getByRole("button", { name: /upload new version of contract\.pdf/i }),
     ).toBeInTheDocument();
+  });
+
+  it("offers 'Request trust' only on Budget/Schedule rows and posts for the CURRENT revision (ADR-032)", async () => {
+    const budget = { ...analyzedContract, id: "doc_budget_001", name: "Budget.xlsx", type: "budget" };
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [analyzedContract, budget],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    apiClientGetMock.mockResolvedValueOnce({
+      data: [
+        { revision_id: "rev-old", is_current: false },
+        { revision_id: "rev-current", is_current: true },
+      ],
+    });
+    apiClientPostMock.mockResolvedValueOnce({ status: 201, data: {} });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(
+      screen.queryByRole("button", { name: /request trust approval for contract\.pdf/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /request trust approval for budget\.xlsx/i }));
+    const dialog = await screen.findByRole("dialog", { name: /request trust approval for budget\.xlsx/i });
+    expect(within(dialog).getByText(/does not approve costs, dates, a wbs baseline/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTestId("document-request-trust-confirm"));
+
+    await waitFor(() => expect(apiClientPostMock).toHaveBeenCalledTimes(1));
+    const [url, body] = apiClientPostMock.mock.calls[0] as [string, Record<string, string>];
+    expect(apiClientGetMock).toHaveBeenCalledWith("/documents/doc_budget_001/revisions");
+    expect(url).toBe("/documents/doc_budget_001/revisions/rev-current/trust-candidate");
+    expect(body.idempotency_key).toBe("ui-trust-request-rev-current");
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/projects/proj_real_001/review"));
+  });
+
+  it("surfaces a refused trust request without navigating", async () => {
+    const schedule = { ...analyzedContract, id: "doc_sched_001", name: "Plan.xlsx", type: "schedule" };
+    useProjectDocumentsMock.mockReturnValue({ documents: [schedule], loading: false, error: null, refetch: vi.fn() });
+    apiClientGetMock.mockResolvedValueOnce({ data: [{ revision_id: "rev-1", is_current: true }] });
+    apiClientPostMock.mockRejectedValueOnce({
+      isAxiosError: true,
+      message: "409",
+      response: { status: 409, data: { detail: { code: "stale_revision", message: "only the current immutable revision" } } },
+    });
+
+    render(<ProjectDocumentsPage />);
+    fireEvent.click(screen.getByRole("button", { name: /request trust approval for plan\.xlsx/i }));
+    fireEvent.click(await screen.findByTestId("document-request-trust-confirm"));
+
+    await waitFor(() => expect(showToastMock).toHaveBeenCalled());
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("uploads a new version of the same document, keeps history and refetches", async () => {

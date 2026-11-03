@@ -12,6 +12,17 @@ from langsmith import Client as NativeLangSmithClient
 from src.core.ai.langsmith_client import LangSmithClient
 
 
+def test_langsmith_client_opt_in_required_even_with_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CORE P0: a configured secret alone cannot start exporting document traces."""
+    monkeypatch.setenv("LANGSMITH_API_KEY", "synthetic-key-never-sent")
+    monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+
+    client = LangSmithClient(project_name="c2pro-test")
+
+    assert client.enabled is False
+    assert client._client is None
+
+
 def test_langsmith_client_disabled_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """TS-AI-LANGSMITH-001: Client disables tracing when API key is absent."""
     monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)

@@ -1,0 +1,736 @@
+name: ACC-01 S2 Live AI UAT (isolated test)
+
+on:
+  push:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - '.github/workflows/acc01-s2-live-ai-uat.yml'
+  workflow_dispatch:
+    inputs:
+      integral_uat:
+        description: >-
+          Integral S1-S8 UAT (opt-in): ONE project from login to relogin, two Clerk Development tenants. When true
+          the original S2 job is NOT run; when false (default) this workflow behaves exactly as before.
+        type: boolean
+        default: false
+      integral_preflight_only:
+        description: "Integral UAT: only verify the two Clerk Development identities (read-only, no AI, no database)."
+        type: boolean
+        default: false
+      integral_discover_dev_b:
+        description: "SEPARATE read-only operation: inventory the Clerk Development users and report which existing synthetic account could be identity B (counts and pseudonyms only)."
+        type: boolean
+        default: false
+      integral_prepare_dev_a:
+        description: "SEPARATE operation (not a UAT): reconcile the Organization of the EXISTING Clerk Development user A. Requires integral_confirm_prepare_dev_a_sha."
+        type: boolean
+        default: false
+      integral_confirm_prepare_dev_a_sha:
+        description: "integral_prepare_dev_a only: the full candidate SHA, typed to authorise the Clerk Development write."
+        type: string
+        default: ""
+      integral_prepare_dev_b:
+        description: "SEPARATE operation (not a UAT): reconcile the Organization of the EXISTING Clerk Development user B. Requires integral_confirm_prepare_dev_b_sha."
+        type: boolean
+        default: false
+      integral_confirm_prepare_dev_b_sha:
+        description: "integral_prepare_dev_b only: the full candidate SHA, typed to authorise the Clerk Development write."
+        type: string
+        default: ""
+      integral_ai_mode:
+        description: "Integral UAT: deterministic-rehearsal (no paid AI, never UAT) or real-ai (paid provider calls)."
+        type: choice
+        options:
+          - deterministic-rehearsal
+          - real-ai
+        default: deterministic-rehearsal
+      integral_confirm_real_ai_sha:
+        description: "Integral UAT, real-ai only: the full candidate SHA, typed to confirm that paid provider calls are intended."
+        type: string
+        default: ""
+
+concurrency:
+  group: acc01-s2-live-ai-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  s2-live-ai:
+    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
+    # Scheduled, so it never blocks a PR. Its status is the suite's real result.
+    # Runs every "chromium" spec (the intentionally RED backlog is excluded in
+    # playwright.config.ts) against a real local backend started exactly as the
+    # P0b Acceptance Journey lane does: PostgreSQL + Redis, migrations, the Clerk
+    # E2E Organization fixture, seeded auth tenancy, a Celery worker and the API.
+    # S2 live AI attempt: dedicated test-only provider keys; both AI and embeddings mock disabled.
+    # Acceptance is valid only when the model, worker and independent SQL gates all pass.
+    name: S2 four-source browser + genuine AI + PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      STORAGE_PROVIDER: local
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      C2PRO_AI_MOCK: "0"
+      C2PRO_EMBEDDINGS_MOCK: "0"
+      ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.S2_E2E_OPENAI_API_KEY }}
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      # /ai-analytics (TASK-AI-029) redirects to /dashboard unless enabled.
+      NEXT_PUBLIC_FEATURE_INTERNAL_DASHBOARDS: "true"
+      BACKEND_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      CORS_ORIGINS: '["http://localhost:3100"]'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Enforce dedicated nonproduction AI test credentials
+        run: |
+          set -euo pipefail
+          test "${C2PRO_AI_MOCK}" = '0'
+          test "${C2PRO_EMBEDDINGS_MOCK}" = '0'
+          missing=0
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo '::error::S2 live AI BLOCKED: GitHub Actions secret S2_E2E_ANTHROPIC_API_KEY is missing.'
+            missing=1
+          fi
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo '::error::S2 live embeddings BLOCKED: GitHub Actions secret S2_E2E_OPENAI_API_KEY is missing.'
+            missing=1
+          fi
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo '::error::Clerk E2E test credentials are missing.'
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then exit 2; fi
+          echo 'Dedicated test-only AI credentials available; values are never printed.'
+
+      - name: Generate ephemeral test JWT secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+
+      # A suite that never ran is not a pass.
+      - name: Verify Clerk prerequisites
+        run: |
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo "::error::Nightly E2E NOT EXECUTED: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY are required."
+            exit 1
+          fi
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Bootstrap infrastructure (PostgreSQL + Redis)
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      # Fails closed unless the Clerk credentials are a development/test instance.
+      - name: Reconcile dedicated Clerk E2E Organization fixture
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+      - name: Seed deterministic E2E auth tenancy and FRT-192 wedge
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+
+          from src.core.database import close_db, get_raw_session, init_db
+          from tests.e2e_seed.seed_wedge import seed_wedge_e2e
+
+
+          async def main() -> None:
+              await init_db()
+              try:
+                  async with get_raw_session() as db:
+                      ids = await seed_wedge_e2e(db)
+                  print(
+                      f"seeded tenant={ids['tenant_id']} user={ids['user_id']} "
+                      f"project={ids['project_id']}"
+                  )
+              finally:
+                  await close_db()
+
+
+          asyncio.run(main())
+          PY
+
+      - name: Verify Clerk <-> local tenant linkage
+        working-directory: apps/api
+        run: python scripts/verify_e2e_tenant_link.py
+
+      - name: Require genuine noncached Anthropic provider response
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio, hashlib, json
+          from pathlib import Path
+          from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
+          from src.core.ai.model_router import AITaskType
+
+          async def check():
+              client = AnthropicWrapper(enable_cache=False, enable_retry=False, max_tokens_limit=24)
+              result = await client.generate(AIRequest(
+                  prompt="Synthetic CI fixture. Classify concrete as a building material in one phrase.",
+                  task_type=AITaskType.CLASSIFICATION,
+                  low_budget_mode=True, max_tokens=24, use_cache=False,
+                  bypass_anonymization=True,
+              ))
+              if result.cached or result.input_tokens <= 0 or result.output_tokens <= 0 or not result.content:
+                  raise SystemExit("S2_PROVIDER_REAL_INFERENCE_NOT_VERIFIED")
+              proof = {
+                  "provider": "Anthropic", "model": result.model_used,
+                  "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
+                  "output_sha256": hashlib.sha256(result.content.encode()).hexdigest(),
+                  "cached": result.cached, "provider_call": "real", "ai_mock": False,
+              }
+              file = Path("../web/playwright-report/s2-real-ai-provider.json")
+              file.parent.mkdir(parents=True, exist_ok=True)
+              file.write_text(json.dumps(proof, sort_keys=True, indent=2) + "\n")
+              print("PASS: genuine Anthropic response with nonzero tokens; content redacted")
+
+          asyncio.run(check())
+          PY
+
+      - name: Start Celery worker (document_parsing)
+        working-directory: apps/api
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker \
+            --loglevel=info --queues=document_parsing --concurrency=2 \
+            > "$RUNNER_TEMP/c2pro-nightly-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-nightly-worker.pid"
+          sleep 10
+          if ! kill -0 "$(cat "$RUNNER_TEMP/c2pro-nightly-worker.pid")"; then
+            cat "$RUNNER_TEMP/c2pro-nightly-worker.log"
+            echo "::error::Celery worker failed to start."
+            exit 1
+          fi
+
+      # The fixture step wrote the instance JWKS; serve it locally so the API can
+      # verify Clerk JWTs without a hard-coded Clerk host.
+      - name: Start backend API
+        working-directory: apps/api
+        # Every spec of this job signs in as the same E2E user of the same tenant. With ENVIRONMENT=test
+        # the API uses its in-memory limiter: a sliding 60 s window of RATE_LIMIT_PER_MINUTE (default 60)
+        # requests PER TENANT, answering 429 with "Retry-After: 60". Nightly 40228726004 / 40230538011:
+        # PJ-01 spends that budget, so the spec that follows it was refused (project creation, upload,
+        # isolation setup) and its outcome depended on spec order, not on the product. The limiter keeps
+        # its own tests (Backend Security Suite: test_clerk_auth_and_rate_limiter.py); the acceptance
+        # specs judge flows and authorization, not throttling, so their API gets a budget that one
+        # sequence of specs cannot exhaust.
+        env:
+          RATE_LIMIT_PER_MINUTE: "600"
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-nightly-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-nightly-jwks.pid"
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+            python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
+            > "$RUNNER_TEMP/c2pro-nightly-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-nightly-api.pid"
+          for _ in {1..45}; do
+            if curl --fail --silent http://localhost:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/c2pro-nightly-api.log"
+          exit 1
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      # TS-E2E-TRIPLET-001: the long three-document journey has its own step so its result is
+      # never mixed into the suite above. AI is mocked here (C2PRO_AI_MOCK=1) and the spec says so.
+      - name: Run S2 four-source journey (real backend and REAL AI)
+        id: triplet_s2_journey
+        if: success()
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/triplet-results.json
+        # One worker: both triplet specs sign in as the same E2E user and create a project through the
+        # wizard; run side by side (Nightly 40224064215) both stalled at project creation, so they run
+        # one after the other. This isolates them; it is not a finding about the cause.
+        run: ./node_modules/.bin/playwright test --project=triplet-journey --workers=1 --reporter=list,json
+
+      # S2: a separate process reads the actual SQL tables of THIS Playwright
+      # project, before cleanup destroys the job's migrated PostgreSQL database.
+      # API/listing and browser screenshots alone are not an independent DB check.
+      - name: Verify S2 four-source ledger directly in PostgreSQL
+        if: always() && steps.triplet_s2_journey.outcome == 'success'
+        working-directory: apps/api
+        run: |
+          python scripts/verify_s2_triplet_pg.py \
+            --playwright-json ../web/playwright-report/triplet-results.json \
+            --manifest ../web/src/tests/e2e/test-data/triplet/triplet.manifest.json \
+            --fixture-dir ../web/src/tests/e2e/test-data/triplet \
+            --output ../web/playwright-report/s2-postgres-ledger.json
+
+      - name: Verify the S2 Worker invoked a nonmocked model
+        if: success()
+        run: |
+          if ! grep -q 'anthropic_wrapper_request_success' "$RUNNER_TEMP/c2pro-nightly-worker.log"; then
+            echo '::error::No genuine Anthropic request succeeded inside S2 Celery worker.'
+            exit 1
+          fi
+          echo 'PASS: a genuine LLM call succeeded in the S2 Worker.'
+
+      - name: Summarize triplet journey result
+        if: always()
+        working-directory: apps/web
+        run: node scripts/playwright-summary.mjs playwright-report/triplet-results.json "S2 triplet browser (REAL AI, nonproduction)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized S2 live AI evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acc01-s2-real-ai-evidence
+          path: |
+            apps/web/playwright-report/s2-real-ai-provider.json
+            apps/web/playwright-report/triplet-results.json
+            apps/web/playwright-report/s2-postgres-ledger.json
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: |
+          for name in worker api jwks; do
+            if [ -f "$RUNNER_TEMP/c2pro-nightly-$name.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/c2pro-nightly-$name.pid")" || true
+            fi
+          done
+          docker compose -f docker-compose.test.yml down -v || true
+
+
+  # ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+  # Integral S1-S8 UAT (opt-in: workflow_dispatch with integral_uat=true). Nothing above this line changes.
+  # ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+  integral-clerk-preflight:
+    # Read-only: can the run start? Both Clerk DEVELOPMENT identities, in two Organizations/tenants.
+    # No database, no worker, no AI, no mutation. It never reads or prints an email, an id or a key.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only == 'true'
+    name: Integral UAT - Clerk Development identities A and B (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Preflight the two Clerk Development identities
+        id: preflight
+        run: |
+          set +e
+          python apps/api/scripts/preflight_integral_identities.py | tee "$RUNNER_TEMP/preflight.json"
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo '### Integral UAT - Clerk Development identities (read-only)'
+            echo
+            echo "Candidate SHA: \`${GITHUB_SHA}\`  exit code: \`${rc}\` (0 ready, 3 only B's Organization is missing, 1 not usable)"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/preflight.json" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+  integral-prepare-dev-a:
+    # Separate, authorised, Development-only. Never creates a user (A must exist); reconciles only A's own
+    # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_a == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_a_sha == github.sha
+    name: Integral UAT - prepare Clerk Development A (authorised write)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Reconcile the Organization of Clerk Development A
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+
+  integral-discover-dev-b:
+    # Read-only inventory of the Clerk Development users: which EXISTING synthetic account could be identity B.
+    # Every Clerk call is a GET; counts and pseudonyms only (no email, no id, no key). Never part of a UAT.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_discover_dev_b == 'true' && github.event.inputs.integral_uat != 'true'
+    name: Integral UAT - discover an existing Clerk Development B (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      INTEGRAL_SYNTHETIC_EMAIL_DOMAINS: ${{ vars.INTEGRAL_SYNTHETIC_EMAIL_DOMAINS }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Inventory Clerk Development (read-only)
+        run: |
+          set +e
+          python apps/api/scripts/discover_integral_dev_identities.py | tee "$RUNNER_TEMP/discovery.json"
+          rc=${PIPESTATUS[0]}
+          set -e
+          {
+            echo '### Integral UAT - Development B discovery (read-only)'
+            echo
+            echo "Candidate SHA: \`${GITHUB_SHA}\`  exit code: \`${rc}\`"
+            echo '```json'
+            cat "$RUNNER_TEMP/discovery.json" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+  integral-prepare-dev-b:
+    # Separate, authorised, Development-only. Never creates a user (B must exist); reconciles only B's own
+    # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_b == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_b_sha == github.sha
+    name: Integral UAT - prepare Clerk Development B (authorised write)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Reconcile the Organization of Clerk Development B
+        run: |
+          test -n "${INTEGRAL_CLERK_DEV_B_EMAIL:-}" || { echo '::error::INTEGRAL_CLERK_DEV_B_EMAIL is not configured.'; exit 2; }
+          python apps/api/scripts/provision_clerk_e2e_fixture.py \
+            --email "${INTEGRAL_CLERK_DEV_B_EMAIL}" \
+            --name "C2Pro E2E Tenant B" \
+            --tenant-id 00000000-0000-0000-0000-00000000a114 \
+            --export-prefix TENANT_B_
+
+  integral-s1-s8:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only != 'true'
+    name: Integral S1-S8 - one project, two Clerk tenants (${{ github.event.inputs.integral_ai_mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      STORAGE_PROVIDER: local
+      AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
+      # Deterministic rehearsal (default): no paid provider is reachable (the keys are not even in the environment).
+      C2PRO_AI_MOCK: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && '0' || '1' }}
+      C2PRO_EMBEDDINGS_MOCK: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && '0' || '1' }}
+      ANTHROPIC_API_KEY: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && secrets.S2_E2E_ANTHROPIC_API_KEY || '' }}
+      OPENAI_API_KEY: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && secrets.S2_E2E_OPENAI_API_KEY || '' }}
+      INTEGRAL_UAT: "1"
+      INTEGRAL_AI_MODE: ${{ github.event.inputs.integral_ai_mode }}
+      FRONTEND_RUNTIME_SHA: ${{ github.sha }}
+      BACKEND_RUNTIME_SHA: ${{ github.sha }}
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      NEXT_PUBLIC_FEATURE_INTERNAL_DASHBOARDS: "true"
+      BACKEND_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      CORS_ORIGINS: '["http://localhost:3100"]'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The run is judged on ONE SHA: the one that was dispatched, checked out, and (below) proven on the processes.
+      - name: Require HEAD equals the dispatched SHA
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}" || { echo "::error::checkout HEAD is not the dispatched SHA"; exit 2; }
+          echo "Candidate SHA: ${GITHUB_SHA}"
+
+      - name: Enforce the mode and its guards (fail closed before anything is started)
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ] || [ -z "${CLERK_SECRET_KEY:-}" ]; then
+            echo '::error::Clerk Development test credentials are missing.'; missing=1
+          fi
+          if [ -z "${INTEGRAL_CLERK_DEV_B_EMAIL:-}" ]; then
+            echo '::error::Development identity B is not configured (INTEGRAL_CLERK_DEV_B_EMAIL; the Production B of #1144 does not count): the cross-tenant stages cannot run.'; missing=1
+          fi
+          if [ "${INTEGRAL_AI_MODE}" = "real-ai" ]; then
+            test "${C2PRO_AI_MOCK}" = '0'
+            test "${C2PRO_EMBEDDINGS_MOCK}" = '0'
+            if [ "${{ github.event.inputs.integral_confirm_real_ai_sha }}" != "${GITHUB_SHA}" ]; then
+              echo '::error::real-ai needs integral_confirm_real_ai_sha equal to the full candidate SHA (paid provider calls must be intended).'; missing=1
+            fi
+            if [ -z "${ANTHROPIC_API_KEY:-}" ] || [ -z "${OPENAI_API_KEY:-}" ]; then
+              echo '::error::Dedicated test-only provider keys (S2_E2E_ANTHROPIC_API_KEY, S2_E2E_OPENAI_API_KEY) are missing.'; missing=1
+            fi
+          else
+            test "${C2PRO_AI_MOCK}" = '1'
+            test -z "${ANTHROPIC_API_KEY:-}" && test -z "${OPENAI_API_KEY:-}"
+            echo 'Deterministic rehearsal: NO paid provider is configured. This run can never be UAT evidence.'
+          fi
+          if [ "$missing" -ne 0 ]; then exit 2; fi
+
+      - name: Generate ephemeral test JWT secret
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      # Isolated, disposable PostgreSQL (migrated) and Redis: nothing shared with another job or environment.
+      - name: Bootstrap infrastructure (PostgreSQL + Redis)
+        run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+
+      # Identities A AND B (Clerk Development) are READ ONLY here: both must already exist, each in its own
+      # Organization with a valid tenant. If not, the run FAILS CLOSED. Preparing them is the separate, authorised
+      # jobs `integral-prepare-dev-a` / `integral-prepare-dev-b`. Only identifiers (GITHUB_ENV) and the public JWKS
+      # are taken; Clerk is not written.
+      - name: Check identities A and B (read-only), export their identifiers and the public JWKS
+        run: |
+          set +e
+          python apps/api/scripts/preflight_integral_identities.py --export-github-env > "$RUNNER_TEMP/preflight.json"
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/preflight.json" 2>/dev/null || true
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Clerk Development identities A/B are not usable (preflight exit $rc). Nothing was changed in Clerk; B must be prepared by the separate authorised operation."
+            exit "$rc"
+          fi
+
+      - name: Prepare the two tenants in the isolated database (no journey data)
+        working-directory: apps/api
+        run: python -m scripts.seed_integral_uat
+
+      - name: Verify Clerk <-> local tenant linkage (identity A)
+        working-directory: apps/api
+        run: python scripts/verify_e2e_tenant_link.py
+
+      - name: Require genuine noncached Anthropic provider response (real-ai only)
+        if: github.event.inputs.integral_ai_mode == 'real-ai'
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio, hashlib, json
+          from pathlib import Path
+          from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
+          from src.core.ai.model_router import AITaskType
+
+          async def check():
+              client = AnthropicWrapper(enable_cache=False, enable_retry=False, max_tokens_limit=24)
+              result = await client.generate(AIRequest(
+                  prompt="Synthetic CI fixture. Classify concrete as a building material in one phrase.",
+                  task_type=AITaskType.CLASSIFICATION,
+                  low_budget_mode=True, max_tokens=24, use_cache=False,
+                  bypass_anonymization=True,
+              ))
+              if result.cached or result.input_tokens <= 0 or result.output_tokens <= 0 or not result.content:
+                  raise SystemExit("INTEGRAL_PROVIDER_REAL_INFERENCE_NOT_VERIFIED")
+              proof = {
+                  "provider": "Anthropic", "model": result.model_used,
+                  "input_tokens": result.input_tokens, "output_tokens": result.output_tokens,
+                  "output_sha256": hashlib.sha256(result.content.encode()).hexdigest(),
+                  "cached": result.cached, "provider_call": "real", "ai_mock": False,
+              }
+              file = Path("../web/playwright-report/integral-provider-preflight.json")
+              file.parent.mkdir(parents=True, exist_ok=True)
+              file.write_text(json.dumps(proof, sort_keys=True, indent=2) + "\n")
+              print("PASS: genuine Anthropic response with nonzero tokens; content redacted")
+
+          asyncio.run(check())
+          PY
+
+      - name: Start Celery worker (document_parsing)
+        working-directory: apps/api
+        run: |
+          python -m celery -A src.core.tasks.celery_app worker \
+            --loglevel=info --queues=document_parsing --concurrency=2 \
+            > "$RUNNER_TEMP/c2pro-integral-worker.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-integral-worker.pid"
+          sleep 10
+          if ! kill -0 "$(cat "$RUNNER_TEMP/c2pro-integral-worker.pid")"; then
+            tail -n 60 "$RUNNER_TEMP/c2pro-integral-worker.log"
+            echo "::error::Celery worker failed to start."
+            exit 1
+          fi
+
+      - name: Start backend API
+        working-directory: apps/api
+        env:
+          # The acceptance run judges flows and authorization, not throttling (see the S2 job above).
+          RATE_LIMIT_PER_MINUTE: "600"
+        run: |
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/c2pro-integral-jwks.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-integral-jwks.pid"
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json \
+            python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 \
+            > "$RUNNER_TEMP/c2pro-integral-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/c2pro-integral-api.pid"
+          for _ in {1..45}; do
+            if curl --fail --silent http://localhost:8000/health/live > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          tail -n 60 "$RUNNER_TEMP/c2pro-integral-api.log"
+          exit 1
+
+      # The receipt is read from the RUNNING processes (their own working directory and its git HEAD).
+      - name: Runtime SHA receipt - backend API and Celery worker
+        run: |
+          mkdir -p apps/web/playwright-report
+          python apps/api/scripts/write_integral_runtime_receipt.py --role backend --process-pattern "uvicorn src.main:app" \
+            --expected-sha "${GITHUB_SHA}"
+          python apps/api/scripts/write_integral_runtime_receipt.py --role worker --process-pattern "celery -A src.core.tasks.celery_app" \
+            --expected-sha "${GITHUB_SHA}"
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-node-web
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run the integral S1-S8 scenario (one project, two Clerk tenants)
+        id: integral_run
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/integral-results.json
+        run: |
+          # The Next.js server is started by Playwright; its runtime SHA is read from the running process. The
+          # project integral-auth-preflight runs first (dependency): both Clerk identities must reach the local API
+          # with a real JWT, or the scenario does not start.
+          ( python ../api/scripts/write_integral_runtime_receipt.py --role frontend --process-pattern "next dev" \
+              --expected-sha "${GITHUB_SHA}" --wait-seconds 240 || true ) &
+          ./node_modules/.bin/playwright test --project=integral-s1-s8 --workers=1 --reporter=list,json
+
+      - name: Provider call receipt (counts only; no prompt or completion is stored)
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          log = Path(os.environ["RUNNER_TEMP"]) / "c2pro-integral-worker.log"
+          text = log.read_text(errors="replace") if log.exists() else ""
+          preflight = Path("apps/web/playwright-report/integral-provider-preflight.json")
+          receipt = {
+              "mode": os.environ["INTEGRAL_AI_MODE"],
+              "ai_mock": os.environ["C2PRO_AI_MOCK"] == "1",
+              "worker_provider_successes": text.count("anthropic_wrapper_request_success"),
+              "worker_provider_errors": text.count("anthropic_wrapper_request_error"),
+              "preflight": json.loads(preflight.read_text()) if preflight.exists() else None,
+          }
+          out = Path("apps/web/playwright-report/integral-provider-receipt.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+          print(json.dumps({k: v for k, v in receipt.items() if k != "preflight"}))
+          PY
+
+      # A separate process reads the actual SQL tables of THIS project (and tenant B's) before cleanup destroys the
+      # job's database, and emits the ONE manifest tied to the project id (stdout, redirected by the step).
+      - name: Independently verify the project in PostgreSQL and write the manifest
+        id: integral_verify
+        if: always() && hashFiles('apps/web/playwright-report/integral-browser-manifest.json') != ''
+        working-directory: apps/api
+        run: |
+          # The verifier writes no file: its stdout IS the manifest; diagnostics go to stderr.
+          rc=0
+          python scripts/verify_integral_s1_s8_pg.py > ../web/playwright-report/integral-manifest.json || rc=$?
+          if [ ! -s ../web/playwright-report/integral-manifest.json ]; then rm -f ../web/playwright-report/integral-manifest.json; fi
+          exit "$rc"
+
+      - name: Summarize the integral run
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("apps/web/playwright-report/integral-manifest.json")
+          out = [f"### Integral S1-S8 ({os.environ['INTEGRAL_AI_MODE']}) - candidate `{os.environ['GITHUB_SHA']}`", ""]
+          if not path.exists():
+              out.append("No manifest was written: the run stopped before the browser recorded a project.")
+          else:
+              m = json.loads(path.read_text())
+              out += [
+                  f"**Verdict: {m['verdict']}** - evidence class: {m['evidence_class']} - acceptance: {m['acceptance']}",
+                  f"Project A `{m['project_id_A']}` - project B `{m['project_id_B']}`",
+                  f"First failure: `{m['first_failure']}`", "",
+                  "| Stage | Browser | PostgreSQL | Verdict | Declared gaps |", "|---|---|---|---|---|",
+              ]
+              for stage, row in m["steps_S1_S8"].items():
+                  out.append(f"| {stage} | {row['browser']} | {row['postgres']} | {row['verdict']} | {len(row['declaredGaps'])} |")
+          Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text("\n".join(out) + "\n")
+          PY
+
+      - name: Upload sanitized integral evidence (JSON only, no screenshots, traces, prompts or completions)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acc01-integral-s1-s8-evidence-${{ github.event.inputs.integral_ai_mode }}
+          path: |
+            apps/web/playwright-report/integral-manifest.json
+            apps/web/playwright-report/integral-browser-manifest.json
+            apps/web/playwright-report/integral-auth-preflight.json
+            apps/web/playwright-report/integral-provider-receipt.json
+            apps/web/playwright-report/integral-runtime-backend.json
+            apps/web/playwright-report/integral-runtime-worker.json
+            apps/web/playwright-report/integral-runtime-frontend.json
+            apps/web/playwright-report/integral-results.json
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: |
+          for name in worker api jwks; do
+            if [ -f "$RUNNER_TEMP/c2pro-integral-$name.pid" ]; then
+              kill "$(cat "$RUNNER_TEMP/c2pro-integral-$name.pid")" || true
+            fi
+          done
+          docker compose -f docker-compose.test.yml down -v || true

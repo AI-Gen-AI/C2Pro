@@ -142,3 +142,37 @@ export async function assertWhatChangedThroughNavigation(
     page.off("response", onTimeline);
   }
 }
+
+/**
+ * After the human decision on revision B the timeline must still hold exactly the one change the
+ * upload produced: approving a revision is not a second business change.
+ */
+export async function assertNoDuplicateChangeEvent(
+  page: Page,
+  recorder: Pj01RunRecorder,
+  options: { projectId: string; documentId: string; changeEventId: string },
+): Promise<void> {
+  const { projectId, documentId, changeEventId } = options;
+  await clickProjectTab(page, recorder, projectId, "documents", "DOCUMENTS_TAB_NOT_NAVIGABLE");
+  await page.waitForURL(new RegExp(`/projects/${projectId}/documents`), { timeout: 30_000 });
+
+  const timeline = page.waitForResponse(
+    (response: Response) =>
+      response.request().method() === "GET" &&
+      response.ok() &&
+      new RegExp(`/projects/${projectId}/timeline/?$`).test(new URL(response.url()).pathname),
+    { timeout: 60_000 },
+  );
+  await clickProjectTab(page, recorder, projectId, "changes", "WHAT_CHANGED_TAB_NOT_NAVIGABLE");
+  await page.waitForURL(new RegExp(`/projects/${projectId}/changes`), { timeout: 30_000 });
+  const items = ((await (await timeline).json()) as { items: TimelineItem[] }).items;
+
+  const changes = items.filter((item) => item.event_type === "revision.changed" && item.document_id === documentId);
+  if (changes.length !== 1 || changes[0]?.event_id !== changeEventId) {
+    recorder.violation(
+      "WHAT_CHANGED_DUPLICATED_BY_APPROVAL",
+      `expected exactly the change ${changeEventId}; found ${changes.map((item) => item.event_id).join(", ") || "none"}`,
+    );
+  }
+  recorder.record("changeEventsAfterApproval", changes.map((item) => item.event_id));
+}

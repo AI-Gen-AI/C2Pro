@@ -1,0 +1,67 @@
+name: ACC-01 S7 — integration on full customer journey
+
+on:
+  pull_request:
+    branches:
+      - integration/acc01-e2e-20261025
+    paths:
+      - "apps/api/src/analysis/**"
+      - "apps/api/src/main.py"
+      - "apps/api/src/temporal/**"
+      - "apps/api/tests/**/test_s7_*"
+      - "apps/web/app/(app)/projects/[id]/wbs/**"
+      - "apps/web/components/features/wbs/**"
+      - "apps/web/lib/api/generated/models/**"
+      - "apps/web/lib/api/generated/technical-wbs-review/**"
+      - ".github/workflows/acc01-s7-stage-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  s7-stage-frontend:
+    name: "S7 integrated frontend — TS, lint and WBS/HITL revisions"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup frontend toolchain (frozen lockfile)
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Lint
+        working-directory: apps/web
+        run: pnpm lint
+      - name: S7 review, canonical links, WBS and document type regressions
+        working-directory: apps/web
+        run: |
+          node ./scripts/vitest-no-warn.mjs run --config vitest.config.mts \
+            components/features/wbs/CanonicalTechnicalWBSLinksPanel.test.tsx \
+            components/features/wbs/CanonicalTechnicalWBSApprovalPanel.test.tsx \
+            components/features/wbs/TechnicalWBSReviewPanel.test.tsx \
+            'app/(app)/projects/[id]/wbs/page.test.tsx' \
+            hooks/useProjectDocuments.test.ts
+
+  s7-stage-api-syntax:
+    name: "S7 integrated backend — Python compile"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Compile API, reader, event contracts and tests
+        run: |
+          python3 -m py_compile \
+            apps/api/src/main.py \
+            apps/api/src/analysis/adapters/http/technical_wbs_review_router.py \
+            apps/api/src/analysis/application/approve_canonical_technical_wbs_link.py \
+            apps/api/src/analysis/application/record_technical_wbs_review.py \
+            apps/api/src/analysis/application/read_canonical_technical_wbs_links.py \
+            apps/api/src/temporal/adapters/persistence/revision_status_reader.py \
+            apps/api/tests/integration/analysis/test_s7_canonical_links_read_pg.py

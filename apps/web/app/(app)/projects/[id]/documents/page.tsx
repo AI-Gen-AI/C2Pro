@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, FileText, Loader2, RefreshCw, Search, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, FileText, Loader2, RefreshCw, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { statusToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AnalysisProgressTracker } from '@/components/features/analysis/AnalysisProgressTracker';
-import { TripletChecklist, type TripletSlotType } from '@/components/features/documents/TripletChecklist';
+import { TripletChecklist } from '@/components/features/documents/TripletChecklist';
+import type { DocumentType as ApiDocumentType } from '@/lib/api/generated/models';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
 import { useProjectCoherenceActions } from '@/hooks/useProjectCoherenceActions';
 import { apiClient } from '@/lib/api/client';
@@ -108,6 +109,9 @@ function labelType(type: string): string {
   if (!type) {
     return 'Document';
   }
+  if (type === 'technical_spec') {
+    return 'Technical specification';
+  }
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -163,6 +167,7 @@ export default function ProjectDocumentsPage() {
   const projectId = params.id as string;
   const { data: project } = useProject(projectId);
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
+  const hasTechnicalSpecification = documents.some((doc) => doc.type === 'technical_spec');
   const { evaluateCoherence, isEvaluating } = useProjectCoherenceActions(projectId);
   const deleteDocument = useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete();
   const projectName = project?.name?.trim() || projectId;
@@ -175,10 +180,42 @@ export default function ProjectDocumentsPage() {
   const [documentToDelete, setDocumentToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
-  const [defaultUploadType, setDefaultUploadType] = useState<TripletSlotType | null>(null);
+  const [defaultUploadType, setDefaultUploadType] = useState<ApiDocumentType | null>(null);
   const [versionTarget, setVersionTarget] = useState<{ id: string; name: string } | null>(null);
   const [versionFile, setVersionFile] = useState<File | null>(null);
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
+  // ADR-032: asking for a human trust decision on the CURRENT revision of a Budget/Schedule.
+  const [trustTarget, setTrustTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isRequestingTrust, setIsRequestingTrust] = useState(false);
+
+  const handleRequestTrust = async () => {
+    if (!trustTarget) return;
+    setIsRequestingTrust(true);
+    try {
+      const revisions = await apiClient.get<Array<{ revision_id: string; is_current?: boolean }>>(
+        `/documents/${trustTarget.id}/revisions`,
+      );
+      const current = revisions.data.find((revision) => revision.is_current);
+      if (!current) {
+        throw new Error('The current revision of this document is unavailable.');
+      }
+      await apiClient.post(
+        `/documents/${trustTarget.id}/revisions/${current.revision_id}/trust-candidate`,
+        {
+          // Deterministic per revision: retrying the same request is an idempotent replay.
+          idempotency_key: `ui-trust-request-${current.revision_id}`,
+          reason: 'A user asked for a human trust decision on the current revision of this source.',
+        },
+      );
+      setTrustTarget(null);
+      showToast('Trust approval requested. A human decides it in the review queue.');
+      router.push(`/projects/${projectId}/review`);
+    } catch (error) {
+      showToast(mutationFailureMessage(error, 'Failed to request trust approval.'));
+    } finally {
+      setIsRequestingTrust(false);
+    }
+  };
 
   // A new version keeps the same logical document: the backend appends an immutable revision
   // and re-processes it. Uploading through "Upload Document" instead would create a second
@@ -218,7 +255,7 @@ export default function ProjectDocumentsPage() {
     refetch();
   };
 
-  const handleOpenUploadDialog = (type?: TripletSlotType) => {
+  const handleOpenUploadDialog = (type?: ApiDocumentType) => {
     setDefaultUploadType(type ?? null);
     setUploadDialogOpen(true);
   };
@@ -251,6 +288,7 @@ export default function ProjectDocumentsPage() {
           id: doc.id,
           name: doc.name,
           type: labelType(doc.type || 'PDF'),
+          structuredFamily: doc.type === 'budget' || doc.type === 'schedule' ? doc.type : null,
           status,
           statusDetail: doc.statusDetail,
           // The backend is authoritative on whether Retry is honest for this
@@ -349,6 +387,27 @@ export default function ProjectDocumentsPage() {
         evaluatePending={isEvaluating}
       />
 
+      {/* The fourth ACC-01 source is distinct from the Coherence triplet. */}
+      <section className="flex flex-col gap-3 rounded-2xl border bg-card/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-testid="technical-specification-slot">
+        <div className="flex items-start gap-3">
+          <FileText className="mt-1 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <h2 className="text-sm font-semibold">Technical specification</h2>
+            <p className="text-sm text-muted-foreground">
+              Fourth project source for technical requirements. Separate from the Contract–Budget–Schedule coherence triplet.
+            </p>
+          </div>
+        </div>
+        {hasTechnicalSpecification ? (
+          <Badge variant="outline" data-testid="technical-specification-present">In document register</Badge>
+        ) : (
+          <Button type="button" variant="outline" className="rounded-xl" onClick={() => handleOpenUploadDialog('technical_spec')}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload technical specification
+          </Button>
+        )}
+      </section>
+
       {/* Upload Dialog */}
       <Dialog
         open={uploadDialogOpen}
@@ -436,6 +495,37 @@ export default function ProjectDocumentsPage() {
             >
               {isUploadingVersion ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Upload new version
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={trustTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !isRequestingTrust) setTrustTarget(null);
+        }}
+      >
+        <DialogContent className="bg-card p-6 text-card-foreground sm:max-w-[480px] sm:rounded-2xl" data-testid="document-request-trust-dialog">
+          <DialogHeader className="rounded-2xl border bg-muted/70 px-4 py-4">
+            <DialogTitle>Request trust approval for {trustTarget?.name}</DialogTitle>
+            <DialogDescription>
+              This asks a human to decide whether the current version of this file is an approved source.
+              Nothing is trusted until a person approves it in the review queue, and approval does not
+              approve costs, dates, a WBS baseline, Health or Coherence.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button variant="outline" disabled={isRequestingTrust} onClick={() => setTrustTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isRequestingTrust}
+              data-testid="document-request-trust-confirm"
+              onClick={() => void handleRequestTrust()}
+            >
+              {isRequestingTrust ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Request trust approval
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -681,6 +771,19 @@ export default function ProjectDocumentsPage() {
                               )}
                             </Button>
                           )}
+                          {doc.structuredFamily ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label={`Request trust approval for ${doc.name}`}
+                              data-testid="document-request-trust"
+                              className="rounded-xl bg-background/95 shadow-sm"
+                              onClick={() => setTrustTarget({ id: doc.id, name: doc.name })}
+                            >
+                              <ShieldCheck className="mr-1 h-4 w-4" />
+                              Request trust
+                            </Button>
+                          ) : null}
                           <Button
                             variant="outline"
                             size="sm"

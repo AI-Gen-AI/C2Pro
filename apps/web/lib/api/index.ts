@@ -25,7 +25,7 @@ export interface ProcessedEntity {
   type: "stakeholder" | "wbs" | "bom" | "clause";
   text: string;
   page: number | null;
-  confidence: number;
+  confidence: number | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -176,7 +176,7 @@ export function createHighlightsFromEntities(
         entity.id,
         page,
         rects,
-        getHighlightColor(entity.confidence * 100),
+        entity.confidence === null ? "gray" : getHighlightColor(entity.confidence * 100),
         entity.text,
       ),
     ];

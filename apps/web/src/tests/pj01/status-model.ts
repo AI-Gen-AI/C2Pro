@@ -5,13 +5,14 @@
  */
 
 /** How a browser-visible document status label reads to a user. */
-export type UiDocumentState = "in_flight" | "success" | "error" | "unknown";
+export type UiDocumentState = "in_flight" | "success" | "error" | "needs_review" | "unknown";
 
 /** The backend stage of one document, recovered from the documents list API. */
 export type BackendDocumentStage =
   | "queued"
   | "processing"
   | "parsed_pending_analysis"
+  | "review_required"
   | "analyzed"
   | "error"
   | "unknown";
@@ -29,11 +30,15 @@ const SUCCESS_LABEL = /^analy[sz]ed$/i;
 // "Parsed" (honest lifecycle labels) is not finished: analysis has not completed yet.
 const IN_FLIGHT_LABEL = /^(uploaded|queued|processing|parsing|parsed|awaiting analysis|analysis pending)$/i;
 const ERROR_LABEL = /^(error|failed)$/i;
+// A durable attention state (#712): the analysis finished and waits for a human decision. It is
+// neither progress nor success, and the Documents page stops polling on it.
+const REVIEW_LABEL = /^review required$/i;
 
 /** Every document status label the Documents UI renders (polling and lifecycle variants). */
 const KNOWN_STATUS_LABELS = [
   "Awaiting Analysis",
   "Analysis pending",
+  "Review required",
   "Processing",
   "Analyzed",
   "Analysed",
@@ -60,6 +65,7 @@ export function classifyUiDocumentLabel(label: string): UiDocumentState {
   if (SUCCESS_LABEL.test(text)) return "success";
   if (IN_FLIGHT_LABEL.test(text)) return "in_flight";
   if (ERROR_LABEL.test(text)) return "error";
+  if (REVIEW_LABEL.test(text)) return "needs_review";
   return "unknown";
 }
 
@@ -70,6 +76,7 @@ const LIFECYCLE_STAGE: Record<string, BackendDocumentStage> = {
   parsing: "processing",
   parsed: "parsed_pending_analysis",
   analysis_pending: "parsed_pending_analysis",
+  review_required: "review_required",
   analyzed: "analyzed",
   error: "error",
 };
@@ -105,4 +112,15 @@ export function classifyBackendDocument(document: PolledDocument): BackendDocume
 
 export function isTerminalStage(stage: BackendDocumentStage): boolean {
   return stage === "analyzed" || stage === "error";
+}
+
+/**
+ * The stage a wait ends on. A document that needs a human decision (`review_required`) is not
+ * terminal for the pipeline, but it IS where an unattended wait must stop: nothing moves until a
+ * person decides.
+ */
+export type Settlement = "analyzed" | "review_required";
+
+export function isSettledStage(stage: BackendDocumentStage, settlement: Settlement): boolean {
+  return isTerminalStage(stage) || (settlement === "review_required" && stage === "review_required");
 }

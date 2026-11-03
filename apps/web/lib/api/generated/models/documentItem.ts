@@ -37,6 +37,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { DocumentRevisionRef } from "./documentRevisionRef";
 
 export interface DocumentItem {
   id: string;
@@ -51,4 +52,8 @@ export interface DocumentItem {
   version: number;
   uploaded_at?: string | null;
   parsed_at?: string | null;
+  /** The revision a human approved and the project's trusted analysis (Health, Coherence) rests on. Null until a revision has been approved. */
+  trusted_revision?: DocumentRevisionRef | null;
+  /** A newer revision that has been analysed but not approved yet. Nothing in this report is derived from it. */
+  pending_revision?: DocumentRevisionRef | null;
 }

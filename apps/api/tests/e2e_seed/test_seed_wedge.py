@@ -160,3 +160,32 @@ async def test_seed_wedge_is_idempotent(db: AsyncSession) -> None:
     # Verify no duplicate documents
     result = await db.execute(select(DocumentORM).where(DocumentORM.project_id == PROJECT_ID))
     assert len(result.all()) == 3
+
+
+@pytest.mark.requires_services
+@pytest.mark.asyncio
+async def test_seed_wedge_foreign_identities_are_exclusive_to_this_scenario(db: AsyncSession) -> None:
+    """The S8 foreign tenant/project must not reuse any identity another E2E seed owns.
+
+    seed_pq_hitl_03_1 guards its isolation fixture with ISOLATION_FIXTURE_TENANT_ID_COLLISION; the
+    wedge seed's foreign tenant used to share its UUIDs under a different slug and broke the
+    Frontend E2E Smoke job. Both seeds must now be applicable to one database, in either order.
+    """
+    from . import seed_pq_hitl_03_1 as pq
+    from .seed_wedge import FOREIGN_PROJECT_ID, FOREIGN_TENANT_ID
+
+    owned_by_pq = {
+        pq.OTHER_TENANT_ID, pq.OTHER_TENANT_PROJECT_ID, pq.OTHER_TENANT_DOCUMENT_ID,
+        pq.SAME_TENANT_PROJECT_ID, pq.SAME_TENANT_DOCUMENT_ID,
+    }
+    assert FOREIGN_TENANT_ID not in owned_by_pq
+    assert FOREIGN_PROJECT_ID not in owned_by_pq
+
+    await seed_wedge_e2e(db)
+    await pq.seed_pq_hitl_03_1(db)  # raises ISOLATION_FIXTURE_* on any identity collision
+    await seed_wedge_e2e(db)  # idempotent after the other seed ran
+
+    foreign = await db.get(Tenant, FOREIGN_TENANT_ID)
+    assert foreign is not None and foreign.slug == "acc01-foreign-isolation-tenant"
+    project = await db.get(ProjectORM, FOREIGN_PROJECT_ID)
+    assert project is not None and project.tenant_id == FOREIGN_TENANT_ID

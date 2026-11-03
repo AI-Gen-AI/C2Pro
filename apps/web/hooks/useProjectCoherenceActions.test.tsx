@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createTestWrapper } from "@/src/tests/test-utils";
 import { useProjectCoherenceActions } from "@/hooks/useProjectCoherenceActions";
@@ -66,6 +66,49 @@ describe("useProjectCoherenceActions", () => {
       queryKey: ["/api/v1/alerts/projects/proj-real-1"],
     });
     expect(showToastMock).toHaveBeenCalledWith("Evaluated 0 clauses, 2 findings.");
+  });
+
+  it("reports a contract awaiting approval as such, never as an evaluation of zero clauses", async () => {
+    evaluateMutateAsyncMock.mockResolvedValueOnce({
+      overall_score: null,
+      alerts: [],
+      score_reason: "contract_pending_approval",
+    });
+
+    const { result } = renderHook(
+      () => useProjectCoherenceActions("proj-pending"),
+      { wrapper: createTestWrapper() },
+    );
+    expect(result.current.contractPendingApproval).toBe(false);
+
+    await act(async () => {
+      await result.current.evaluateCoherence();
+    });
+
+    expect(result.current.contractPendingApproval).toBe(true);
+    expect(showToastMock).toHaveBeenCalledTimes(1);
+    expect(showToastMock.mock.calls[0][0]).toMatch(/contract is awaiting approval/i);
+    expect(showToastMock.mock.calls[0][0]).not.toMatch(/Evaluated 0 clauses/);
+  });
+
+  it("clears the pending state once an evaluation answers normally", async () => {
+    evaluateMutateAsyncMock
+      .mockResolvedValueOnce({ alerts: [], score_reason: "contract_pending_approval" })
+      .mockResolvedValueOnce({ alerts: [{ id: "a1" }] });
+
+    const { result } = renderHook(
+      () => useProjectCoherenceActions("proj-pending"),
+      { wrapper: createTestWrapper() },
+    );
+    await act(async () => {
+      await result.current.evaluateCoherence();
+    });
+    await act(async () => {
+      await result.current.evaluateCoherence();
+    });
+
+    expect(result.current.contractPendingApproval).toBe(false);
+    expect(showToastMock).toHaveBeenLastCalledWith("Evaluated 0 clauses, 1 findings.");
   });
 
   it("re-runs analysis with the backend request contract and refreshes project state", async () => {

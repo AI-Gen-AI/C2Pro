@@ -196,6 +196,7 @@ describe("ChangeDetailPage — current vs historical, trust and materialization 
         trust_state: "trusted",
         is_current: true,
         current_revision_id: "rev_2",
+        current_basis: "trusted",
         materialization: {
           state: "materialized",
           scope: "governance_authorized_effects_applied",
@@ -208,7 +209,7 @@ describe("ChangeDetailPage — current vs historical, trust and materialization 
     render(<ChangeDetailPage />);
 
     const status = within(await screen.findByTestId("revision-status"));
-    expect(status.getByText("Current revision")).toBeInTheDocument();
+    expect(status.getByText("Trusted current revision")).toBeInTheDocument();
     expect(status.getByText("Trusted")).toBeInTheDocument();
     expect(status.getByTestId("revision-materialization")).toHaveTextContent(
       "All effects currently authorized by governance were applied.",
@@ -218,6 +219,56 @@ describe("ChangeDetailPage — current vs historical, trust and materialization 
     );
     expect(status.getByTestId("revision-qualification-RISK_ALERT_RECONCILIATION_REQUIRED")).toBeInTheDocument();
     expect(screen.queryByTestId("change-detail-historical")).not.toBeInTheDocument();
+  });
+
+  it("S6 — never labels an unresolved is_current revision as canonical", async () => {
+    detail([modified], "ready", {
+      revision_status: {
+        status: "available",
+        trust_state: "trusted",
+        is_current: true,
+        current_basis: "unresolved",
+        current_revision_id: "rev_2",
+      },
+    });
+    render(<ChangeDetailPage />);
+    const status = within(await screen.findByTestId("revision-status"));
+    expect(status.getByTestId("revision-currency")).toHaveTextContent("Current authority unresolved");
+    expect(status.getByTestId("revision-authority-warning")).toHaveTextContent(
+      /not verified by an approved, trusted basis/i,
+    );
+    expect(status.queryByText("Trusted current revision")).not.toBeInTheDocument();
+  });
+
+  it("S6 — an isolated single revision is not proof of approval", async () => {
+    detail([modified], "ready", {
+      revision_status: {
+        status: "available",
+        trust_state: "trusted",
+        is_current: true,
+        current_basis: "single_revision",
+      },
+    });
+    render(<ChangeDetailPage />);
+    const status = within(await screen.findByTestId("revision-status"));
+    expect(status.getByTestId("revision-currency")).toHaveTextContent("Current authority unresolved");
+    expect(status.queryByText("Trusted current revision")).not.toBeInTheDocument();
+  });
+
+  it("S6 — a proposed B cannot present as canonical even with a stale positive current flag", async () => {
+    detail([modified], "ready", {
+      revision_status: {
+        status: "available",
+        trust_state: "proposed",
+        is_current: true,
+        current_basis: "trusted",
+        current_revision_id: "rev_1",
+      },
+    });
+    render(<ChangeDetailPage />);
+    const status = within(await screen.findByTestId("revision-status"));
+    expect(status.getByTestId("revision-currency")).toHaveTextContent("Current authority unresolved");
+    expect(status.getByText(/previously trusted revision stays current/i)).toBeInTheDocument();
   });
 
   it("never presents a proposed revision as current", async () => {

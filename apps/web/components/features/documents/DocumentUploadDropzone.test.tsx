@@ -119,14 +119,14 @@ describe("S2-09 - DocumentUploadDropzone", () => {
 
     const type = await screen.findByLabelText(/document type for technical-specification\.docx/i);
     await user.click(type);
-    await user.click(await screen.findByRole("option", { name: "Specification" }));
+    await user.click(await screen.findByRole("option", { name: "Technical specification" }));
     await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
 
     await waitFor(() => {
       expect(uploadDocumentMock).toHaveBeenCalledWith(
         "proj_docx",
         expect.objectContaining({ name: "technical-specification.docx" }),
-        "specification",
+        "technical_spec",
         { token: "fresh-token-123" },
       );
     });

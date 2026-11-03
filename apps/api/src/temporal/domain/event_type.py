@@ -40,6 +40,25 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         # PC-2b.4 (#923): model-call usage of one intelligence run, attributed to tenant, project and
         # run -- counts only, never prompts, evidence or output (offline runs are marked synthetic).
         "wbs.intelligence.run_usage",
+        # S7: audit observation and separately authenticated durable human approval.
+        "technical.wbs_link_reviewed",
+        "technical.wbs_link_approved",
+        # S7: separately human-approved row/activity associations; no TIME/BUDGET score authority.
+        "budget.wbs_link_approved",
+        "schedule.wbs_link_approved",
+        # ADR-032: structured (Budget/Schedule XLSX) source trust -- requested and decided by humans;
+        # evidence of the trust decision, never an analytic/graph/materialization fact.
+        "structured_source.trust_requested",
+        "structured_source.trust_decided",
+        # S3: an evaluation that withheld its Score keeps its reason durably (no CoherenceResult is invented).
+        "coherence.evaluation_withheld",
+        # S5-01: explicit per-project HITL review grants -- who granted/revoked which capability to whom and why.
+        # Written by the governed SQL functions in the same transaction as the grant (never by application code).
+        "hitl.project_grant_created",
+        "hitl.project_grant_revoked",
+        # S5 Vn+1: a derived candidate was produced from the finding decisions of a pending review. Append-only evidence
+        # of WHO derived WHAT from WHICH candidate on WHICH reconciliation; written with the candidate in one transaction.
+        "hitl.candidate_derived",
     }
 )
 RESERVED_EVENT_PREFIXES: tuple[str, ...] = ("procurement.", "stakeholder.")

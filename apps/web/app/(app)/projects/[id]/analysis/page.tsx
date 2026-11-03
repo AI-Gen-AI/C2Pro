@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { AlertTriangle, Gauge, RadioTower, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,18 +73,33 @@ function errorMessage(
  * reason_if_unavailable) is a governed P1 follow-up; until it exists this stays
  * neutral rather than asserting more than the contract proves.
  */
-type CoherenceSuppressionReason = "loading" | "unverified" | "coherence_unavailable";
+type CoherenceSuppressionReason =
+  | "loading"
+  | "unverified"
+  | "coherence_unavailable"
+  | "contract_pending_approval"
+  | "contract_rejected"
+  | "insufficient_evidence"
+  | "not_evaluated";
 
 function resolveCoherenceSuppressionReason({
   loading,
   errored,
   hasVector,
+  scoreReason,
 }: {
   loading: boolean;
   errored: boolean;
   hasVector: boolean;
+  scoreReason?: string | null;
 }): CoherenceSuppressionReason {
   if (loading) return "loading";
+  // Only an exact backend reason licenses naming an approval blocker.
+  if (scoreReason === "contract_pending_approval") return "contract_pending_approval";
+  // S3: the persisted dashboard now carries WHY a Score is withheld; each reason has its own copy and none is a 0.
+  if (scoreReason === "contract_rejected") return "contract_rejected";
+  if (scoreReason === "not_evaluated") return "not_evaluated";
+  if (typeof scoreReason === "string" && scoreReason.startsWith("insufficient")) return "insufficient_evidence";
   if (!errored && hasVector) return "coherence_unavailable";
   return "unverified";
 }
@@ -95,6 +111,14 @@ const COHERENCE_SUPPRESSION_COPY: Record<CoherenceSuppressionReason, string> = {
   coherence_unavailable:
     "Coherence is not available for this analysis yet. Availability depends on " +
     "having enough reconcilable evidence to evaluate consistency.",
+  contract_pending_approval:
+    "Contract awaiting approval. Coherence has not been evaluated and no Score is available until the contract is reviewed.",
+  contract_rejected:
+    "The contract source was rejected. Coherence has not been evaluated and no Score is available until a replacement is uploaded and approved.",
+  insufficient_evidence:
+    "Coherence was evaluated, but the evidence is not enough to support a Score. No Score is shown; it is not zero.",
+  not_evaluated:
+    "Coherence has not been evaluated for this project yet. No Score is available, and none is assumed.",
 };
 
 export default function AnalysisPage() {
@@ -114,12 +138,24 @@ export default function AnalysisPage() {
     data: healthVector,
     isLoading: healthLoading,
     isError: healthErrored,
-  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id);
-  const showCoherence = coherenceSubscoreIsIncorporated(healthVector);
+  } = useGetProjectHealthApiV1ProjectsProjectIdHealthGet(id, { query: { refetchOnMount: "always" } });
+  // A dashboard null must remain null, even if a previously loaded Health
+  // snapshot still carries a coherence evidence ref. Never convert null to 0.
+  const coherenceScore =
+    typeof dashboard?.coherence_score === "number" && Number.isFinite(dashboard.coherence_score)
+      ? dashboard.coherence_score
+      : null;
+  const contractPendingApproval =
+    dashboard?.score_reason === "contract_pending_approval" || dashboard?.score_reason === "contract_rejected";
+  const showCoherence =
+    coherenceScore !== null &&
+    !contractPendingApproval &&
+    coherenceSubscoreIsIncorporated(healthVector);
   const coherenceSuppressionReason = resolveCoherenceSuppressionReason({
     loading: healthLoading,
     errored: healthErrored,
     hasVector: healthVector != null,
+    scoreReason: dashboard?.score_reason,
   });
   const {
     data: alertsResponse,
@@ -148,7 +184,6 @@ export default function AnalysisPage() {
 
   const alerts = alertsResponse?.items ?? [];
   const openAlerts = alerts.filter((alert: AlertResponse) => alert.status === "open");
-  const coherenceScore = numberValue(dashboard.coherence_score);
   const documentCount = numberValue(dashboard.document_count);
   const subScores = objectValue(dashboard.sub_scores);
   const dashboardExtras = dashboard as DashboardExtras;
@@ -160,10 +195,16 @@ export default function AnalysisPage() {
     dashboardExtras.score_missing_dimensions,
   );
   const budgetScore =
-    typeof subScores["BUDGET"] === "number" ? subScores["BUDGET"] : null;
+    !contractPendingApproval && typeof subScores["BUDGET"] === "number"
+      ? subScores["BUDGET"]
+      : null;
   const budgetValue = budgetScore === null ? "—" : String(budgetScore);
   const budgetTitle =
-    budgetScore === null ? "Requires budget document" : undefined;
+    contractPendingApproval
+      ? "Awaiting contract approval before coherence is evaluated"
+      : budgetScore === null
+        ? "Requires budget document"
+        : undefined;
   const recentAlerts = openAlerts.slice(0, 3).map((alert: AlertResponse) => ({
     severity: alert.severity,
     title: alert.message.split(" — ")[0],
@@ -289,6 +330,24 @@ export default function AnalysisPage() {
                 className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
               >
                 {COHERENCE_SUPPRESSION_COPY[coherenceSuppressionReason]}
+                {coherenceSuppressionReason === "contract_rejected" ? (
+                  <Link
+                    className="ml-2 font-medium underline underline-offset-2"
+                    href={`/projects/${id}/documents`}
+                    data-testid="analysis-replace-contract-link"
+                  >
+                    Open project documents
+                  </Link>
+                ) : null}
+                {coherenceSuppressionReason === "contract_pending_approval" ? (
+                  <Link
+                    className="ml-2 font-medium underline underline-offset-2"
+                    href={`/projects/${id}/review`}
+                    data-testid="analysis-review-contract-link"
+                  >
+                    Open project review queue
+                  </Link>
+                ) : null}
               </p>
             )}
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">

@@ -42,6 +42,7 @@ from ..models import (
     FindingSignal,
     SeverityCount,
     impact_to_severity,
+    structured_source_refs,
 )
 from ..rules_engine.base import ApplicabilityState
 from ..rules_engine.category_utils import infer_category
@@ -1462,6 +1463,7 @@ def _provisional_deviation_alert(item: Any, clauses: list[Clause]) -> Alert:
             claim=claim,
             source_clause_id=clause_id,
             quote=clause_text[:300],
+            structured_sources=structured_source_refs(evidence.get("sources")),
         ),
     )
 
@@ -1489,6 +1491,11 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
             source_clause_id=signal.clause_id,
             claim=signal.evidence_summary,
             quote=signal.quote or "",
+            structured_sources=structured_source_refs(
+                (signal.raw_data.get("evidence") or {}).get("sources")
+                if isinstance(signal.raw_data.get("evidence"), dict)
+                else None
+            ),
         ),
     )
 

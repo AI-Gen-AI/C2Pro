@@ -14,7 +14,7 @@ type ChangeImpact = { change_index: number; assessment: { status: "CONFIRMED" | 
 type Projection = { status: "none" | "provisional" | "unavailable"; projected_score?: number | null; projected_delta?: number | null; qualification?: string | null; reason?: string | null };
 type Lineage = { event_id?: string; occurred_at?: string; event_type?: string; state?: string; derivation?: "original" | "recomputed" | "reinterpreted" | null; derived_from_event_id?: string | null; effective?: boolean | null; superseded_by_event_id?: string | null; matcher_status?: string | null; provenance?: { diff_engine_version?: string; recomputed_from_engine?: string } };
 type Materialization = { state: string; scope?: string | null; qualifications: string[]; deferred_effects?: Record<string, unknown> };
-type RevisionStatus = { status: "available" | "unavailable"; rev_no?: number | null; trust_state?: "proposed" | "trusted" | "rejected" | "superseded" | null; is_current: boolean; current_revision_id?: string | null; materialization?: Materialization | null };
+type RevisionStatus = { status: "available" | "unavailable"; rev_no?: number | null; trust_state?: "proposed" | "trusted" | "rejected" | "superseded" | null; is_current: boolean; current_revision_id?: string | null; current_basis?: "trusted" | "single_revision" | "unresolved" | null; materialization?: Materialization | null };
 type Detail = Lineage & { changes: Change[]; state: string; change_cause: string | null; confidence: number | null; evidence_refs: Array<{ locator?: string; source?: string }>; qualification_reason?: string | null; impacts?: ChangeImpact[]; projection?: Projection | null; history?: Lineage[]; revision_status?: RevisionStatus | null };
 
 export default function ChangeDetailPage() {
@@ -88,10 +88,16 @@ function RevisionStatusCard({ status }: { status: RevisionStatus | null | undefi
   }
   const materialization = status.materialization;
   const outcome = materialization ? MATERIALIZATION_LABEL[materialization.state] : undefined;
+  // A stale is_current flag (or a lone revision without approved provenance)
+  // is NOT authoritative. Require the same trusted-current basis as Evidence.
+  const trustedCurrent = status.trust_state === "trusted" &&
+    status.is_current === true && status.current_basis === "trusted";
+  const authorityUnresolved = status.is_current && !trustedCurrent;
   return <Card data-testid="revision-status"><CardContent className="space-y-2 pt-6 text-sm">
     <div className="flex flex-wrap items-center gap-2">
-      <Badge variant={status.is_current ? "success" : "outline"} data-testid="revision-currency">{status.is_current ? <><ShieldCheck className="mr-1 h-3 w-3" />Current revision</> : "Not the current revision"}</Badge>
+      <Badge variant={trustedCurrent ? "success" : "outline"} data-testid="revision-currency">{trustedCurrent ? <><ShieldCheck className="mr-1 h-3 w-3" />Trusted current revision</> : authorityUnresolved ? "Current authority unresolved" : "Not the current revision"}</Badge>
       <span className="text-muted-foreground" data-testid="revision-trust">{status.trust_state ? TRUST_LABEL[status.trust_state] : "No analysis result is bound to this revision."}</span>
+      {authorityUnresolved ? <p className="w-full text-muted-foreground" data-testid="revision-authority-warning">Current revision identity is not verified by an approved, trusted basis. No current authority is claimed.</p> : null}
     </div>
     {outcome ? <p data-testid="revision-materialization">{outcome}</p> : null}
     {materialization?.qualifications.map((code) => <p key={code} className="text-muted-foreground" data-testid={`revision-qualification-${code}`}>{QUALIFICATION_LABEL[code] ?? code}</p>)}

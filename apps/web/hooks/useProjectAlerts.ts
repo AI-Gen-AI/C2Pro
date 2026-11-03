@@ -31,6 +31,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiClient } from "@/lib/api/client";
 import type { ReviewAlert } from "@/components/features/alerts/AlertReviewCenter";
+import { structuredSourcesOf, type StructuredSourceWire } from "@/lib/alerts/structured-sources";
 
 interface UseProjectAlertsResult {
   alerts: ReviewAlert[];
@@ -42,6 +43,7 @@ interface UseProjectAlertsResult {
 interface DetectionEvidenceResponse {
   source_clause_id?: string | null;
   source_document_id?: string | null;
+  structured_sources?: StructuredSourceWire[] | null;
 }
 
 interface AlertResponse {
@@ -99,6 +101,9 @@ function transformAlert(alert: AlertResponse): ReviewAlert {
     ...(clauseId ? { clauseId } : {}),
     ...(persistedClauseId && sourceDocumentId
       ? { addressableClauseId: persistedClauseId, sourceDocumentId }
+      : {}),
+    ...(structuredSourcesOf(alert.detection_evidence?.structured_sources).length
+      ? { structuredSources: structuredSourcesOf(alert.detection_evidence?.structured_sources) }
       : {}),
   };
 }

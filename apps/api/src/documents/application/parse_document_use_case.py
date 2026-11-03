@@ -117,6 +117,12 @@ def _extract_budget_stated_total(parsed_payload: JsonDict) -> float | int | None
     return None
 
 
+def _extract_budget_stated_total_locator(parsed_payload: JsonDict) -> str | None:
+    """S4: the ``Sheet!row`` the parser observed the declared total at, or None."""
+    locator = getattr(parsed_payload.get("budget"), "stated_total_locator", None)
+    return locator if isinstance(locator, str) and locator else None
+
+
 def _extract_budget_currencies(parsed_payload: JsonDict) -> list[str]:
     """Denominations the budget source states, so its total keeps its currency."""
     currencies = getattr(parsed_payload.get("budget"), "currencies", None)
@@ -217,6 +223,7 @@ class ParseDocumentUseCase:
                         if stated_total is not None
                         else None
                     ),
+                    source_locator=_extract_budget_stated_total_locator(parsed_payload),
                 )
             await self.document_repository.update_metadata(
                 scoped_tenant_id, document_id, metadata

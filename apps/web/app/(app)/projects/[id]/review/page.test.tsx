@@ -16,6 +16,12 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams(),
 }));
 
+const { mockInvalidateQueries } = vi.hoisted(() => ({ mockInvalidateQueries: vi.fn() }));
+vi.mock('@tanstack/react-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+}));
+
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({
     isLoaded: true,
@@ -32,6 +38,20 @@ const mockApproveMutate = vi.fn();
 const mockRejectMutate = vi.fn();
 const mockShowToast = vi.fn();
 
+vi.mock('@/components/features/review/ReviewFindingsPanel', () => ({
+  ReviewFindingsPanel: ({ reviewRowId }: { reviewRowId: string }) => (
+    <div data-testid={`findings-panel-${reviewRowId}`} />
+  ),
+}));
+
+// S5-02: the advisory capabilities of the review's project (undefined = not loaded / unavailable: nothing is hidden).
+const { mockCapabilities } = vi.hoisted(() => ({
+  mockCapabilities: vi.fn<() => { approve_candidate: boolean } | undefined>(() => undefined),
+}));
+vi.mock('@/components/features/review/useReviewCapabilities', () => ({
+  useReviewCapabilities: () => mockCapabilities(),
+}));
+
 vi.mock('@/hooks/useProject', () => ({
   useProject: () => ({
     data: { name: 'Test Project' },
@@ -47,6 +67,14 @@ vi.mock('@/lib/api/generated/hitl/hitl', () => ({
   }),
   useRejectItemApiV1HitlQueueItemIdRejectPost: () => ({
     mutateAsync: mockRejectMutate,
+    isPending: false,
+  }),
+}));
+
+const mockStructuredDecide = vi.fn();
+vi.mock('@/lib/api/generated/structured-source-trust/structured-source-trust', () => ({
+  useDecideStructuredSourceTrustApiV1StructuredSourceTrustDecisionsPost: () => ({
+    mutateAsync: mockStructuredDecide,
     isPending: false,
   }),
 }));
@@ -115,6 +143,8 @@ function setupMock(overrides: Record<string, unknown> = {}) {
 describe('ReviewPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearchParams.mockReturnValue(new URLSearchParams());
+    mockCapabilities.mockReturnValue(undefined);
   });
 
   it('labels the queue as project-scoped because the API now supports project filtering', () => {
@@ -131,7 +161,17 @@ describe('ReviewPage', () => {
 
     expect(mockUseQueue).toHaveBeenCalledWith(
       expect.objectContaining({ project_id: 'test-project-id' }),
+      expect.anything(),
     );
+  });
+
+  it('always revalidates the queue on open, so a new revision review is never hidden by a cached queue', () => {
+    setupMock();
+    render(<ReviewPage />);
+
+    expect(mockUseQueue).toHaveBeenCalledWith(expect.anything(), {
+      query: { refetchOnMount: 'always' },
+    });
   });
 
   it('highlights and scrolls to the exact item linked from the Documents page (#712)', () => {
@@ -191,6 +231,32 @@ describe('ReviewPage', () => {
     expect(screen.getByTestId('reject-item-1')).toBeInTheDocument();
   });
 
+  it('S5-02: without APPROVE_CANDIDATE on the project, Approve and Reject are not offered and say why', () => {
+    mockCapabilities.mockReturnValue({ approve_candidate: false });
+    setupMock();
+    render(<ReviewPage />);
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(screen.getByTestId('reject-item-1')).toBeDisabled();
+    expect(screen.getByTestId('approve-item-1')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/do not have permission to approve or reject/i),
+    );
+  });
+
+  it('S5-02: an unavailable capabilities hint never hides the actions (the server decides)', () => {
+    mockCapabilities.mockReturnValue(undefined);
+    setupMock();
+    render(<ReviewPage />);
+    expect(screen.getByTestId('approve-item-1')).toBeEnabled();
+  });
+
+  it('S5-02: with APPROVE_CANDIDATE the actions stay available', () => {
+    mockCapabilities.mockReturnValue({ approve_candidate: true });
+    setupMock();
+    render(<ReviewPage />);
+    expect(screen.getByTestId('approve-item-1')).toBeEnabled();
+  });
+
   it('expands item detail on click', async () => {
     setupMock();
     render(<ReviewPage />);
@@ -216,6 +282,33 @@ describe('ReviewPage', () => {
         data: {},
       });
     });
+  });
+
+  it('refreshes the project documents after a decision so the row does not stay "Review required"', async () => {
+    setupMock();
+    mockApproveMutate.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => {
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['project-documents', 'test-project-id'],
+      });
+    });
+  });
+
+  it('does not refresh the documents when the decision failed', async () => {
+    setupMock();
+    mockApproveMutate.mockRejectedValue(new Error('boom'));
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });
 
   it('keeps approve dialog open and surfaces mutation errors', async () => {
@@ -339,8 +432,71 @@ describe('ReviewPage', () => {
     await waitFor(() => {
       expect(mockUseQueue).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 100 }),
+        expect.anything(),
       );
     });
+  });
+
+  const STRUCTURED_ITEM = {
+    ...MOCK_ITEMS[0],
+    item_id: 'doc-budget',
+    row_id: 'row-trust-1',
+    item_type: 'budget',
+    resumable: false,
+    trust_kind: 'structured_source',
+    candidate_binding: { artifact_id: 'art-1', artifact_version: 2, artifact_hash: 'a'.repeat(64) },
+  };
+
+  it('ADR-032: approving a structured-source review decides the exact bound candidate, never the legacy route', async () => {
+    setupMock({ data: { items: [STRUCTURED_ITEM], total: 1 } });
+    mockStructuredDecide.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-doc-budget'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => {
+      expect(mockStructuredDecide).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          review_row_id: 'row-trust-1',
+          artifact_id: 'art-1',
+          artifact_version: 2,
+          artifact_hash: 'a'.repeat(64),
+          decision: 'APPROVE',
+          idempotency_key: 'ui-approve-row-trust-1',
+        }),
+      });
+    });
+    expect(mockApproveMutate).not.toHaveBeenCalled();
+  });
+
+  it('ADR-032: rejecting a structured-source review sends the reason through the trust-decision endpoint', async () => {
+    setupMock({ data: { items: [STRUCTURED_ITEM], total: 1 } });
+    mockStructuredDecide.mockResolvedValue({});
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-doc-budget'));
+    await userEvent.type(screen.getByRole('textbox'), 'Wrong file');
+    await userEvent.click(screen.getByText('Confirm Reject'));
+
+    await waitFor(() => {
+      expect(mockStructuredDecide).toHaveBeenCalledWith({
+        data: expect.objectContaining({ decision: 'REJECT', reason: 'Wrong file', artifact_id: 'art-1' }),
+      });
+    });
+    expect(mockRejectMutate).not.toHaveBeenCalled();
+  });
+
+  it('ADR-032: a structured review without its exact binding fails closed and calls nothing', async () => {
+    setupMock({ data: { items: [{ ...STRUCTURED_ITEM, candidate_binding: null }], total: 1 } });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-doc-budget'));
+    await userEvent.click(screen.getByText('Confirm Approve'));
+
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    expect(mockStructuredDecide).not.toHaveBeenCalled();
+    expect(mockApproveMutate).not.toHaveBeenCalled();
   });
 
   it('targets the exact row_id rather than reusable item_id on approve', async () => {
@@ -563,6 +719,131 @@ describe('ReviewPage', () => {
       });
       expect(mockRejectMutate).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('S5 — a Documents deep link finds the 75th review without manually paginating', () => {
+    const items = Array.from({ length: 75 }, (_, index) => ({
+      ...MOCK_ITEMS[0],
+      item_id: `item-${index}`,
+      row_id: `review-row-${index}`,
+    }));
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=item-74'));
+    setupMock({ data: { items, total: items.length } });
+
+    render(<ReviewPage />);
+    expect(mockUseQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: 'test-project-id', limit: 200 }),
+      expect.anything(),
+    );
+    expect(document.getElementById('review-item-item-74')).toHaveClass('ring-2');
+    expect(screen.queryByTestId('review-target-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('S5 — missing linked review explains unavailability without silently selecting another row', () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=not-in-this-project'));
+    setupMock();
+
+    render(<ReviewPage />);
+    expect(screen.getByTestId('review-target-unavailable')).toHaveTextContent(
+      /no other review was selected/i,
+    );
+    expect(document.getElementById('review-item-item-1')).not.toHaveClass('ring-2');
+  });
+
+  it('S5 — a new review row with the same item_id remounts a fresh decision card', async () => {
+    const original = { ...MOCK_ITEMS[0], row_id: 'revision-a-row' };
+    setupMock({ data: { items: [original], total: 1 } });
+    const { rerender } = render(<ReviewPage />);
+    await userEvent.click(screen.getByTestId('expand-item-1'));
+    expect(screen.getByTestId('detail-item-1')).toBeInTheDocument();
+
+    // Backend creates a distinct row for a new revision of the same document.
+    // It MUST NOT inherit the old card's expanded/internal decision state.
+    const next = { ...MOCK_ITEMS[0], row_id: 'revision-b-row' };
+    setupMock({ data: { items: [next], total: 1 } });
+    rerender(<ReviewPage />);
+    expect(screen.queryByTestId('detail-item-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('approve-item-1')).toBeEnabled();
+
+    mockApproveMutate.mockResolvedValue({ current_status: 'APPROVED' });
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    await waitFor(() => expect(mockApproveMutate).toHaveBeenCalledWith({
+      itemId: 'revision-b-row',
+      data: {},
+    }));
+  });
+
+  it('S5 — approval is acknowledged but only a refreshed saved row confirms it', async () => {
+    setupMock();
+    mockApproveMutate.mockResolvedValue({ current_status: 'APPROVED' });
+    const { rerender } = render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+
+    const receipt = await screen.findByTestId('review-decision-receipt');
+    expect(receipt).toHaveTextContent(/decision request accepted/i);
+    expect(receipt).toHaveTextContent(/do not treat the document as analyzed/i);
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['/api/v1/projects/test-project-id/health'],
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['/api/coherence/dashboard/test-project-id'],
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['/api/v1/coherence/dashboard/test-project-id'],
+    });
+
+    setupMock({ data: { items: [
+      { ...MOCK_ITEMS[0], current_status: 'APPROVED' },
+    ], total: 1 } });
+    rerender(<ReviewPage />);
+    expect(receipt).toHaveTextContent(/review approved — confirmed by refreshed queue/i);
+    expect(receipt).toHaveTextContent(/document processing and health may still be updating/i);
+  });
+
+  it('S5 — a 502 after resume does not invite a blind duplicate decision', async () => {
+    setupMock();
+    const uncertain = Object.assign(new Error('Request failed with status code 502'), {
+      response: { status: 502, data: {
+        detail: 'Review approved, but resuming the analysis workflow failed',
+      } },
+    });
+    mockApproveMutate.mockRejectedValueOnce(uncertain);
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    await waitFor(() => expect(screen.getByTestId('review-decision-receipt')).toHaveTextContent(
+      /outcome needs verification/i,
+    ));
+    expect(screen.getByRole('alert')).toHaveTextContent(/resuming the analysis workflow failed/i);
+    expect(screen.getByRole('button', { name: /confirm approve/i })).toBeDisabled();
+    expect(mockApproveMutate).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(mockRefetch).toHaveBeenCalled();
+  });
+
+  it('S5 — rejection is confirmed only after the persisted queue reports REJECTED', async () => {
+    setupMock();
+    mockRejectMutate.mockResolvedValue({});
+    const { rerender } = render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('reject-item-1'));
+    await userEvent.type(screen.getByPlaceholderText(/explain why/i), 'Original contract clause contradicts the summary.');
+    await userEvent.click(screen.getByRole('button', { name: /confirm reject/i }));
+    const receipt = await screen.findByTestId('review-decision-receipt');
+    expect(receipt).toHaveTextContent(/decision request accepted/i);
+
+    setupMock({ data: { items: [
+      { ...MOCK_ITEMS[0], current_status: 'REJECTED' },
+    ], total: 1 } });
+    rerender(<ReviewPage />);
+    expect(receipt).toHaveTextContent(/review rejected — confirmed by refreshed queue/i);
+    expect(screen.queryByTestId('approve-item-1')).not.toBeInTheDocument();
   });
 
   it('renders one card per deduped queue item (no duplicate legacy rows shown)', () => {

@@ -145,7 +145,7 @@ async def test_real_unsupported_fixture_is_rejected_without_document_record(
             headers=headers,
         )
 
-    assert response.status_code == 400
+    assert response.status_code == 415
     assert response.json()["detail"] == "File type '.bin' is not allowed."
 
     document_count = (

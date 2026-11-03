@@ -73,11 +73,13 @@ from src.modules.hitl.application import (
     resume_workflow_use_case as resume_workflow_module,
 )
 from src.modules.hitl.application.resume_workflow_use_case import (
-    ResumeWorkflowRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
 from src.temporal.application import project_snapshot_trigger
+from tests.modules.integration.hitl_actor import (
+    decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
 
 pytestmark = pytest.mark.asyncio
 

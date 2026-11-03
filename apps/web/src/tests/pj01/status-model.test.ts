@@ -12,6 +12,7 @@ import {
   classifyBackendDocument,
   classifyUiDocumentLabel,
   extractStatusLabel,
+  isSettledStage,
   isTerminalStage,
 } from "./status-model";
 
@@ -83,5 +84,24 @@ describe("classifyBackendDocument", () => {
     expect(isTerminalStage("error")).toBe(true);
     expect(isTerminalStage("parsed_pending_analysis")).toBe(false);
     expect(isTerminalStage("processing")).toBe(false);
+  });
+});
+
+describe("human-review gate", () => {
+  it("reads the review_required lifecycle as its own stage, not as processing", () => {
+    expect(classifyBackendDocument({ id: "d", status: "processing", lifecycle_status: "review_required" })).toBe("review_required");
+  });
+
+  it("classifies the visible 'Review required' label as a needed decision", () => {
+    expect(extractStatusLabel("contract-a.pdf Review required Review")).toBe("Review required");
+    expect(classifyUiDocumentLabel("Review required")).toBe("needs_review");
+  });
+
+  it("settles on review_required only when the caller waits for the gate", () => {
+    expect(isSettledStage("review_required", "analyzed")).toBe(false);
+    expect(isSettledStage("review_required", "review_required")).toBe(true);
+    expect(isSettledStage("analyzed", "review_required")).toBe(true);
+    expect(isSettledStage("processing", "review_required")).toBe(false);
+    expect(isTerminalStage("review_required")).toBe(false);
   });
 });

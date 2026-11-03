@@ -16,6 +16,8 @@ from src.analysis.adapters.persistence.models import Analysis
 from src.analysis.domain.enums import AnalysisStatus, AnalysisType
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.router import get_coherence_dashboard
+from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.domain.models import DocumentStatus, DocumentType
 from src.projects.adapters.persistence.models import ProjectORM
 
 
@@ -58,6 +60,86 @@ async def test_dashboard_returns_unassessed_scores_when_no_persisted_coherence_s
         "LEGAL": None,
         "TIME": None,
     }
+
+
+@pytest.mark.asyncio
+async def test_s3_pending_contract_withholds_stale_score_and_keeps_existing_alerts(
+    db, test_tenant, monkeypatch
+) -> None:
+    """A pending first contract cannot inherit a number from an older dashboard generation.
+
+    The positive pending state is supplied by the authoritative current_revision SQL
+    helper; this test isolates the dashboard projection and its response contract.
+    """
+    project = ProjectORM(
+        id=uuid4(),
+        tenant_id=test_tenant.id,
+        name="S3 Contract Pending Review",
+        description=None,
+        code=f"S3-PENDING-{uuid4().hex[:8]}",
+        project_type="construction",
+        status="active",
+        estimated_budget=1000.0,
+        currency="EUR",
+        start_date=None,
+        end_date=None,
+        coherence_score=77,
+        last_analysis_at=None,
+        metadata_json={},
+    )
+    db.add(project)
+    await db.flush()
+    db.add(
+        DocumentORM(
+            id=uuid4(),
+            project_id=project.id,
+            tenant_id=test_tenant.id,
+            document_type=DocumentType.CONTRACT,
+            filename="contract-pending.docx",
+            upload_status=DocumentStatus.PARSING,
+        )
+    )
+    db.add(
+        CoherenceResultORM(
+            project_id=project.id,
+            tenant_id=test_tenant.id,
+            global_score=88,
+            category_scores={"BUDGET": 75, "SCOPE": 91},
+            category_details=[],
+            alerts=[
+                {
+                    "rule_id": "EARLIER-FINDING",
+                    "severity": "high",
+                    "category": "BUDGET",
+                    "message": "Prior alert remains visible",
+                }
+            ],
+            is_gaming_detected=False,
+            gaming_violations=[],
+            penalty_points=0,
+            calculated_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+    )
+    await db.commit()
+
+    async def _pending(_db, _project_id, _tenant_id):
+        assert _project_id == project.id
+        assert _tenant_id == test_tenant.id
+        return True
+
+    monkeypatch.setattr("src.coherence.router._contracts_awaiting_approval", _pending)
+    response = await get_coherence_dashboard(project.id, _request_for_tenant(test_tenant.id), db=db)
+
+    assert response.coherence_score is None
+    assert response.global_score is None
+    assert response.trusted_score is None
+    assert response.score_reason == "contract_pending_approval"
+    assert response.score_version is None
+    assert set(response.score_missing_dimensions or []) == {
+        "SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"
+    }
+    assert all(score is None for score in response.sub_scores.values())
+    assert response.alert_count == 1, "pending approval must not erase prior alert evidence"
 
 
 @pytest.mark.asyncio

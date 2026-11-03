@@ -324,9 +324,9 @@ class TestUnifiedAlertsAPI:
         # Query with current tenant credentials (must not see the other tenant's alert)
         response = await authenticated_client.get(f"/api/v1/projects/{other_project.id}/alerts")
 
-        # Tenant isolation is enforced by filtering on the authenticated tenant:
-        # the request succeeds (200) but the other tenant's alert must NOT leak.
-        assert response.status_code == 200
+        # A project of another tenant is not found (404), never an empty 200 that cannot be told
+        # apart from an own project without alerts; the other tenant's alert must NOT leak either.
+        assert response.status_code == 404
         returned_ids = {item["id"] for item in response.json().get("items", [])}
         assert str(other_alert.id) not in returned_ids
 

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 
@@ -40,8 +40,20 @@ class RejectRequest(BaseModel):
     """See ApproveRequest docstring: reviewer identity is server-derived,
     never client-supplied; ``row_id`` pins the exact review row."""
 
-    reason: str = Field("", max_length=2000)
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Why the reviewer rejects the item. Required: a rejection without a reason is not auditable.",
+    )
     row_id: UUID | None = None
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("A rejection requires a reason.")
+        return value
 
 
 class ReviewItemResponse(BaseModel):
@@ -70,6 +82,11 @@ class ReviewItemResponse(BaseModel):
     # analysis candidate to be persisted and bound. Clients must not offer a
     # decision then; the backend refuses one regardless (fail closed).
     decision_ready: bool = True
+    # ADR-032: "structured_source" when the review gates a Budget/Schedule trust candidate. Such a
+    # review is decided ONLY through POST /structured-source-trust/decisions (the legacy approve/
+    # reject routes answer 409); ``candidate_binding`` is the exact id/version/hash to decide.
+    trust_kind: Literal["structured_source"] | None = None
+    candidate_binding: dict[str, Any] | None = None
 
     class Config:
         from_attributes = True
@@ -105,6 +122,14 @@ class ResumeWorkflowRequest(BaseModel):
         description="Optional feedback or reason for the decision (required for rejections)",
         examples=["Approved - clause looks correct", "Rejected - clause needs revision"],
     )
+
+    @model_validator(mode="after")
+    def _rejection_requires_feedback(self) -> ResumeWorkflowRequest:
+        # The description has always said "required for rejections"; the schema now enforces it, so
+        # the resume route cannot be used to reject without the reason the queue route demands.
+        if self.decision == "reject" and not self.feedback.strip():
+            raise ValueError("A rejection requires feedback explaining the reason.")
+        return self
 
 
 class ResumeWorkflowResponse(BaseModel):

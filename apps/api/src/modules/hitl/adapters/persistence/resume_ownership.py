@@ -37,6 +37,7 @@ request commits).
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -196,7 +197,15 @@ _ACQUIRE_SQL = text(
            -- with empty feedback -- which would read as a NEW revision and
            -- finalize a reason the human never gave.
            operation_metadata = coalesce(operation_metadata, '{}'::jsonb)
-                                || jsonb_build_object('feedback', cast(:feedback as text)),
+                                || jsonb_build_object(
+                                    'feedback', cast(:feedback as text),
+                                    -- S5-05: the authority receipt is part of
+                                    -- the fenced acquisition.  A crash after
+                                    -- this CAS therefore leaves recovery the
+                                    -- exact authority of the original
+                                    -- decision, never a claim without proof.
+                                    'authority', cast(:authority as jsonb)
+                                ),
            -- Taking ownership must not erase durable progress. A takeover
            -- of an operation whose N17 already committed, or which already
            -- reached a verified terminal checkpoint, inherits that phase;
@@ -378,6 +387,7 @@ async def acquire(
     decision: str,
     feedback: str,
     reviewer: str | None,
+    authority: dict[str, Any] | None = None,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     session_factory: Any = None,
 ) -> tuple[Ownership | None, Phase, str | None]:
@@ -481,6 +491,7 @@ async def acquire(
                     "decision_hash": new_hash,
                     "reviewer": reviewer,
                     "feedback": feedback,
+                    "authority": json.dumps(authority),
                     "lease_seconds": lease_seconds,
                     "force_revision": decision_changed,
                     "adopt_lineage": decided.adopt_operation_lineage,
@@ -1359,6 +1370,14 @@ async def _apply_trust_decision(
     if not approved:
         await repo.reject_candidate(binding, tenant_id=tenant)
         return None
+    # S5-05: revalidate the approver's grant, membership and the reconciliation digest INSIDE this transaction, right
+    # before the statement that materializes the first TRUSTED state (no-op for an already TRUSTED candidate, for the
+    # legacy `off` / `audit` modes and for non-analysis candidates).
+    from src.modules.hitl.application.approval_authority import revalidate_at_promotion
+
+    await revalidate_at_promotion(
+        session, tenant_id=tenant_id, review_row_id=review_row_id, artifact_id=binding.artifact_id
+    )
     return await repo.commit_candidate(binding, tenant_id=tenant)
 
 

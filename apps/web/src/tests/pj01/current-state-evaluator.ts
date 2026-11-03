@@ -26,8 +26,30 @@ export interface HealthSectionLike extends SectionLike {
   data?: { computed_at: string; evidence_granularity: string; categories: HealthCategoryLike[] } | null;
 }
 
+export interface RevisionRefLike {
+  revision_id: string;
+  rev_no: number;
+  blob_hash: string;
+}
+
 export interface DocumentsSectionLike extends SectionLike {
-  data?: { total: number; by_type: Record<string, number>; by_lifecycle_status?: Record<string, number> } | null;
+  data?: {
+    total: number;
+    by_type: Record<string, number>;
+    by_lifecycle_status?: Record<string, number>;
+    items?: {
+      id: string;
+      filename?: string;
+      lifecycle_status?: string;
+      version?: number | null;
+      trusted_revision?: RevisionRefLike | null;
+      pending_revision?: RevisionRefLike | null;
+    }[];
+  } | null;
+}
+
+export interface ExecutiveSummarySectionLike extends SectionLike {
+  data?: { attention_items?: { kind: string; message?: string }[] } | null;
 }
 
 export interface CurrentStateReportLike {
@@ -36,6 +58,7 @@ export interface CurrentStateReportLike {
   sections: {
     documents?: DocumentsSectionLike;
     health?: HealthSectionLike;
+    executive_summary?: ExecutiveSummarySectionLike;
     [section: string]: SectionLike | undefined;
   };
 }

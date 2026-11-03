@@ -32,13 +32,15 @@ export interface ExtractedEntity {
   text: string;
   approvalResourceType?: string | null;
   originalText?: string;
-  confidence: number;
+  confidence: number | null;
   page: number | null;
   validated?: boolean;
   validationStatus?: "pending" | "approved" | "rejected";
   rejectionReason?: string;
   linkedWbs?: string[];
   linkedAlerts?: string[];
+  technicalSourceSection?: string | null;
+  technicalSourceUnverified?: boolean;
 }
 
 interface EntityValidationCardProps {
@@ -61,13 +63,15 @@ export function EntityValidationCard({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const getConfidenceColor = (confidence: number) => {
+  const getConfidenceColor = (confidence: number | null) => {
+    if (confidence === null) return "border-l-slate-400 bg-slate-50/50";
     if (confidence >= 80) return "border-l-green-500 bg-green-50/50";
     if (confidence >= 60) return "border-l-amber-500 bg-amber-50/50";
     return "border-l-red-500 bg-red-50/50";
   };
 
-  const getConfidenceBadge = (confidence: number) => {
+  const getConfidenceBadge = (confidence: number | null) => {
+    if (confidence === null) return { label: "Not measured", variant: "outline" as const };
     if (confidence >= 80) return { label: "High", variant: "default" as const };
     if (confidence >= 60)
       return { label: "Medium", variant: "secondary" as const };
@@ -152,8 +156,14 @@ export function EntityValidationCard({
 
           {/* Metadata */}
           <div className="flex items-center gap-2 flex-wrap">
+            {entity.technicalSourceSection && (
+              <Badge variant="outline">Source section {entity.technicalSourceSection}</Badge>
+            )}
+            {entity.technicalSourceUnverified && (
+              <Badge variant="outline">Technical requirement not verified</Badge>
+            )}
             <Badge variant={confidenceBadge.variant}>
-              {entity.confidence}% - {confidenceBadge.label}
+              {entity.confidence === null ? confidenceBadge.label : `${entity.confidence}% - ${confidenceBadge.label}`}
             </Badge>
             <Badge variant="outline" className="text-xs">
               {entity.page !== null ? `Page ${entity.page}` : "Exact location unavailable"}
@@ -229,7 +239,7 @@ export function EntityValidationCard({
                   {entity.text.substring(0, 150)}...
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Confidence: {entity.confidence}% | Page {entity.page}
+                  Confidence: {entity.confidence === null ? "Not measured" : `${entity.confidence}%`} | Page {entity.page ?? "unavailable"}
                 </p>
               </div>
               <p className="text-sm mt-3">
@@ -269,7 +279,7 @@ export function EntityValidationCard({
                   {entity.text.substring(0, 150)}...
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Confidence: {entity.confidence}% | Page {entity.page}
+                  Confidence: {entity.confidence === null ? "Not measured" : `${entity.confidence}%`} | Page {entity.page ?? "unavailable"}
                 </p>
               </div>
             </AlertDialogDescription>
