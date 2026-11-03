@@ -67,13 +67,20 @@ async function proxyRequest(
     const response = await fetch(url, init);
     const responseBody = await response.arrayBuffer();
 
+    // fetch() may already have decompressed the upstream body. Forwarding its
+    // original Content-Encoding/Length would make the browser decode it again.
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+    responseHeaders.delete("transfer-encoding");
+
     if (response.status === 204) {
       return new NextResponse(null, { status: 204 });
     }
 
     return new NextResponse(responseBody, {
       status: response.status,
-      headers: response.headers,
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("API Proxy Error:", error);
