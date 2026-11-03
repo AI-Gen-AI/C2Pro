@@ -151,7 +151,7 @@ function actionsBlockedReason(state: {
 // Presentation-only segmentation of numbered reviewer prose. It does NOT
 // convert model claims into verified evidence or per-finding decisions.
 function parseCritiqueObservations(notes: string): { number: number; title: string; body: string }[] | null {
-  const headers = Array.from(notes.matchAll(/^(\d{1,2})\.\s+([^\n:]{5,120}):[ \t]*/gm));
+  const headers = Array.from(notes.matchAll(/^\s{0,3}(\d{1,2})\.\s+([^\n:—–]{5,120}?)(?:\s+[—–-]\s+|:[ \t]*)/gm));
   if (headers.length < 2) return null;
 
   return headers.map((match, index) => {
@@ -287,7 +287,12 @@ export function ReviewItemCard({
           ) : null}
 
           {modelConclusion ? (
-            <div className="mt-2 rounded-md bg-muted/50 p-3 text-sm">
+            <details className="mt-2 rounded-md border bg-muted/30 p-3 text-sm" data-testid={`critique-disclosure-${item.item_id}`}>
+              <summary className="cursor-pointer font-medium">
+                AI critique (unverified) · {critiqueObservations ? `${critiqueObservations.length} observations` : "review notes"}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">View model comments</span>
+              </summary>
+              <div className="mt-2">
               {critiqueObservations ? (
                 <div className="space-y-2">
                   <p className="font-medium">
@@ -319,7 +324,8 @@ export function ReviewItemCard({
                   <span className="whitespace-pre-wrap">{modelConclusion}</span>
                 </>
               )}
-            </div>
+              </div>
+            </details>
           ) : null}
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
