@@ -1743,6 +1743,7 @@ async def _prefer_current_projectgraph_snapshot(
         update={
             "global_score": score,
             "coherence_score": score,
+            "trusted_score": score,
             "sub_scores": _normalized_sub_scores(facts.get("category_scores")),
             "score_reason": reason,
             "score_missing_dimensions": reasons if isinstance(reasons, list) else [],
