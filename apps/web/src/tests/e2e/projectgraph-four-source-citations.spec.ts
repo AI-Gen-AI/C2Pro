@@ -49,10 +49,16 @@ test("ProjectGraph four-source persisted alerts open real source citations after
     "Contract and technical specification must have explicit trusted approval",
   ).toHaveLength(2);
 
-  const addressable = (receipt.alert_read_model ?? []).filter(
+  const expectedManifest = JSON.parse(readFileSync(
+    path.join(process.cwd(), "src", "tests", "e2e", "test-data", "triplet", "triplet.manifest.json"),
+    "utf8",
+  )) as { expected_rules: string[]; expected_provisional: string[] };
+  const expected = new Set([...expectedManifest.expected_rules, ...expectedManifest.expected_provisional]);
+  const expectedAlerts = (receipt.alert_read_model ?? []).filter((alert) => expected.has(alert.rule_code));
+  const addressable = expectedAlerts.filter(
     (alert) => alert.source_clause_id && alert.source_document_id && alert.has_quote,
   );
-  const structured = (receipt.alert_read_model ?? []).filter(
+  const structured = expectedAlerts.filter(
     (alert) => alert.structured_ref_count > 0,
   );
   expect(
