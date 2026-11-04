@@ -182,6 +182,14 @@ jobs:
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
 
+      - name: ProjectGraph pilot dependency preflight (no provider calls)
+        if: github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true
+        working-directory: apps/api
+        env:
+          PYTHONPATH: "."
+        run: |
+          python -c 'import src; import scripts.projectgraph_epc_pilot_once; from src.core.tasks.project_graph_tasks import run_project_graph_once; print("PROJECTGRAPH_PILOT_IMPORTS_PASS")'
+
       - name: Require genuine noncached Anthropic provider response
         working-directory: apps/api
         run: |
@@ -304,6 +312,7 @@ jobs:
         if: success() && github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true
         working-directory: apps/api
         env:
+          PYTHONPATH: "."
           FEATURE_V3_PROJECT_GRAPH: "true"
           FEATURE_V3_COHERENCE_LLM: "true"
           AI_MAX_TOKENS_OUTPUT: "1536"
