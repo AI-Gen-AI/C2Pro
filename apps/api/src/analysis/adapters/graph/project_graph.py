@@ -316,6 +316,8 @@ async def evaluate_artifact_set(
     project_id: UUID | str,
     tenant_id: UUID | str,
     llm_on: bool,
+    source_clauses: list[Clause] | None = None,
+    schedule_planned_finish: dict[str, Any] | None = None,
 ) -> ArtifactSetEvaluation:
     """THE canonical ProjectGraph Coherence evaluation of an artifact set.
 
@@ -326,7 +328,15 @@ async def evaluate_artifact_set(
     """
     signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
     # Real cross-document evidence, not the previous empty clause list.
-    clauses = _verified_artifact_clauses(artifacts)
+    clauses = list(source_clauses or [])
+    # Keep additional N15/N4 verified source quotes that may not exist in the
+    # canonical clause store, but do not repeat the same document quote.
+    observed = {(str(c.data.get("document_id")), c.text.strip()) for c in clauses}
+    for clause in _verified_artifact_clauses(artifacts):
+        key = (str(clause.data.get("document_id")), clause.text.strip())
+        if key not in observed:
+            clauses.append(clause)
+            observed.add(key)
     engine_result = await evaluate_coherence_async(
         clauses,
         str(project_id),
@@ -334,6 +344,7 @@ async def evaluate_artifact_set(
             low_budget_mode=not llm_on,
             tenant_id=str(tenant_id),
             project_id=str(project_id),
+            schedule_planned_finish=schedule_planned_finish,
             missing_dimensions=[
                 category
                 for category in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
@@ -362,7 +373,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     artifacts = state.get("artifacts", [])
     project_id = state["project_id"]
     tenant_id = state["tenant_id"]
-    if not artifacts:
+    if not artifacts and not state.get("input_source_clauses"):
         return {
             "coherence_result": None,
             "coherence_evaluation": None,
@@ -376,7 +387,12 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     signal_count = 0
     try:
         evaluation = await evaluate_artifact_set(
-            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on
+            artifacts,
+            project_id=project_id,
+            tenant_id=tenant_id,
+            llm_on=llm_on,
+            source_clauses=state.get("input_source_clauses"),
+            schedule_planned_finish=state.get("schedule_planned_finish"),
         )
         summary = evaluation.summary
         signal_count = summary.signal_count
