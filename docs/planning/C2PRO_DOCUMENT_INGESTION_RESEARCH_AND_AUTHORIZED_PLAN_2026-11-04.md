@@ -1,0 +1,87 @@
+# C2Pro — Investigación avanzada de integridad documental y plan autorizado (04/11/2026)
+
+**Estado:** INVESTIGACIÓN COMPLETADA · PLAN APROBADO POR EL PROPIETARIO (04/11/2026) · IMPLEMENTACIÓN EN RAMA AISLADA
+
+**Procedencia:** investigación avanzada terminada el 04/11/2026, contrastada con el repositorio AI-Gen-AI/C2Pro, PR #1112, HEAD inicial `34f1f67d66f26c2e905570c39a0d693c605fca6e`; enriquecida con comprobaciones SQL agregadas de Supabase C2Pro y revisión posterior. Este fichero conserva el **resumen técnico fiel, las decisiones, condiciones y plan accionable**; el informe narrativo original completo permanece en la conversación de investigación. No atribuirle pruebas de ejecución que no existan.
+
+## 1. Conclusión ejecutiva
+
+La principal brecha de calidad está antes de N4/N12: **la fidelidad del trayecto archivo original → parser → unidad estructurada y localizable → representación del modelo → resultado con cita**. C2Pro tiene extractores por formato, `clauses`, `document_chunks`, pgvector, N4, N12 y N8, pero NO una cadena de cobertura verificablemente completa y homogénea para contratos, presupuestos, cronogramas y especificaciones técnicas. La disponibilidad de chunks vectoriales y CI en verde no demuestra exhaustividad.
+
+La decisión es avanzar **incrementalmente con evidencia**, sin sustituir los datos estructurados por RAG, ni añadir recuperación vectorial indiscriminadamente a N4/N12 antes de medirlos. Mantener una prueba sintética de 4 documentos y benchmark del fixture de 9 cláusulas como gate inicial. No usar datos confidenciales.
+
+Estado observado en **Supabase proyecto C2Pro** mediante consultas SQL de solo lectura (04/11/2026): 39 documentos (37 contratos, 1 presupuesto, 1 cronograma); 426 cláusulas; 95 chunks vectoriales documentales; 0 registros en `clause_embeddings`; extensión pgvector 0.8.0. 167 cláusulas tienen `revision_id`, 259 no. **No afirmar que esta base corresponde al runtime Railway sin comprobar su DATABASE_URL efectivo.**
+
+## 2. Cadena actual y pérdidas identificadas
+
+- **Contrato PDF/DOCX:** PyMuPDF captura texto/página/coordenadas en PDF, con OCR Tesseract condicionado; DOCX extrae párrafos y celdas pero pierde contexto de filas/columnas y página real. La persistencia de cláusulas puede descartar segmentos menores de 40 caracteres o truncar los mayores de 4.000. N4 aplica selección determinista por keywords e impone límite típico 40.000 caracteres; N12 limita su revisión a unos 16.000 caracteres. Ni N4 ni N12 trabajan automáticamente con el conjunto completo de `document_chunks`. Riesgo: hechos omitidos antes de inferencia.
+- **Presupuesto XLSX/BC3:** se lee primordialmente la hoja activa del XLSX y se obtienen partidas/cantidades/precios/totales; sólo el modo evidencia identifica con rigor filas y rechaza fórmulas no verificadas. `_extract_rag_text` no tiene rama `budget`, por lo que 0 chunks de presupuesto no implica error de parser; sí implica que no hay indexación RAG de partidas por esta ruta. BC3 en #1112 aún tiene fallback falso si no está el parser; la rama P0 de Codex `232ef483` lo elimina explícitamente.
+- **Cronograma XLSX:** se obtiene hoja activa, actividad, fechas, duración, WBS y precedentes; no equivale a reconstruir calendarios, FS/SS/FF/SF, retardos, flotaciones, ruta crítica o baseline. La ruta estructurada puede marcar `ANALYZED` sin análisis N1–N17, por diseño.
+- **Especificación técnica:** indexa requisitos en secciones numeradas que contienen una obligación; no prueba haber capturado tablas, figuras, apartados sin numeración o anexos. Una extracción parcial no debe promocionarse a conformidad técnica.
+- **Planos:** `drawing` existe como tipo, pero el upload general sólo acepta PDF/DOCX/XLSX/BC3; PDF puede dar texto/OCR, no geometría confiable, vistas, símbolos, tolerancias ni interferencias. DWG/DXF/IFC/MPP/XER aún requieren adaptadores especializados y evaluación de licencias.
+- **RAG:** `RagService._split_text` normaliza whitespace y corta a 1.000 caracteres, overlap 200, luego embedding `text-embedding-3-small` 1.536 dimensiones; no respeta límites de cláusulas/partidas/actividades ni aporta por chunk localizadores canónicos de origen. RAG es un índice derivado auxiliar, no el origen de verdad.
+- **N8:** `find_cross_document_pairs` existe, pero consulta `clause_embeddings`, actualmente vacío en la BD consultada. La función filtra proyecto y tipo documental, pero no revisiones vigentes ni explícitamente tenant. No poblar masivamente embeddings sin un modelo explícito de revisión y aislamiento.
+
+**La rama P0 de Codex `codex/core-p0-20261104` (`232ef483`) introduce `document_coverage_by_revision`, señala hojas Excel/fórmulas no evaluadas, declara cobertura PDF/DOCX sin verificar, registra omisiones de cláusulas y rechaza BC3 ficticio. Fue publicada, pero NO está integrada en #1112 ni en main.**
+
+## 3. Opciones comparables (NO descartar por defecto)
+
+| Vía | Herramientas/candidatos a evaluar | Ventaja | Riesgo/decisión |
+| --- | --- | --- | --- |
+| Determinista estructurada | PyMuPDF, pdfplumber, python-docx, openpyxl, BC3/FIEBDC, parsers XER/XML, ezdxf, IfcOpenShell | Citas y unidades exactas; coste bajo | Layout complejo, fórmulas/relaciones no evaluadas |
+| Layout-aware OSS | Docling, Unstructured, Marker, Apache Tika y herramientas de OCR | Tablas, columnas, bloques y lectura multimodal según capacidad probada | Calidad variable, licencia y recursos |
+| SaaS Document AI | Azure Document Intelligence, Google Document AI, AWS Textract, LlamaParse y equivalentes | OCR/tablas/layout robustos en escenarios elegibles | Residencia, precio por página, bloqueo de proveedor, privacidad |
+| Modelos vision-language | Interpretación de páginas, tablas, diagramas y anexos complejos con citas verificadas | Recupera señales no accesibles a texto plano | Alucinación, costes, necesidad de comprobación contra fuente |
+| SQL/relacional + reglas | PostgreSQL + objetos de dominio (cláusula, partida, actividad, requisito) | Exactitud monetaria, relación temporal, versionado | Contratos de esquema y migraciones |
+| RAG vectorial/híbrido | pgvector, BM25, reranking, parent-child, contextual retrieval, late chunking | Contexto cruzado y consultas ad hoc | Top-k **no demuestra cobertura exhaustiva** |
+| Grafos y conocimiento | ProjectGraph, GraphRAG, relaciones entre requisitos/riesgos/BOM/WBS | Detecta contradicciones entre familias | Construcción y calidad de relaciones, complejidad |
+| CAD/BIM | PDF vectorial+raster, ezdxf, IfcOpenShell, APIs comerciales CAD/BIM y VLM especializados | Amplía a planos/mediciones/modelos | Formatos propietarios, tolerancias y geometría requieren validación |
+
+**Criterio de selección:** evidencia de precisión/recall por familia, cita verificable, esfuerzo, coste, soberanía, seguridad, fiabilidad y portabilidad; no adoptar un único stack global. Los costes y licencias deben verificarse para versiones/volúmenes concretos antes de contratar.
+
+## 4. Arquitectura objetivo, incremental
+
+1. **Source ledger:** byte original inmutable, SHA-256, tenant/proyecto/documento/revisión y tipo.
+2. **Parser por modalidad:** extractor nativo + layout/OCR/visión opcional. Mantener signos, unidades, fechas, coordenadas, tablas/filas y advertencias. Nunca inventar contenidos ausentes.
+3. **Unidades canónicas:** contrato→cláusula/subcláusula; presupuesto→capítulo/partida/medición/moneda; cronograma→actividad/predecesores/calendario/hito; especificación→requisito y tabla; plano futuro→lámina/objeto/geometría.
+4. **Coverage manifest por revisión:** recuentos observados, esperados (sólo si fuente lo permite), descartados, truncados, no verificados; alcance y localizador; estado COMPLETE/PARTIAL/UNASSESSED/UNSUPPORTED/UNVERIFIED, sin confundir parseo con evaluación experta.
+5. **Índices derivados:** `document_chunks` para búsqueda contextual, embeddings por unidad canónica para relaciones N8, versión/modelo/dimensión y enlace a la fuente; sustitución segura de revisiones.
+6. **N4/N12:** evaluación por lotes de todas las unidades del alcance, con citas. La recuperación top-k aporta contexto opcional, no selecciona qué evidencias deben existir.
+7. **N8:** primero writer real de `clause_embeddings` y lector con filtros por tenant/proyecto/revisión vigente; después métricas de pares relevantes y falsos positivos.
+8. **UI/QA:** mostrar cobertura junto al resultado, enlaces a fuente exacta y `UNKNOWN/UNASSESSED` cuando falta evidencia. No usar un 200 OK, CI verde o llamada LLM para declarar utilidad del producto.
+
+## 5. Gates y plan autorizado
+
+| Gate | Intervención | Evidencia exigida |
+| --- | --- | --- |
+| A — Integridad (P0) | Adoptar P0 existente + manifest de observaciones por revisión; contrastar 4 documentos sintéticos | 100% de unidades del fixture contabilizadas o pérdida declarada; todas hojas/fórmulas inventariadas; cero BC3 ficticios |
+| B — N4 (Codex 2) | UNA evaluación LLM real con credencial protegida, fixture de 9 cláusulas | recall ≥8/9; precision ≥90%; 100% de citas materiales válidas; cero fuente inventada; modelo, tokens, costes y SHA registrados |
+| C — N12 (Codex 2) | Revisión crítica separada de N4 sobre fuente real | Detecta las omisiones EPC-04 y EPC-07 y rechaza interpretación falsa EPC-05, sin mocks |
+| D — N8 | Conectar writer y lector pgvector | 9/9 embeddings pertinentes del fixture, dimensiones/modelos correctos, aislamiento tenants, sin revisión obsoleta, pares citables |
+| E — Operación | Unir pruebas de fuente, UI y persistencia en rama de integración cuando esté lista | SHA de código/fixture, usuario/pasos, datos sintéticos, sin modificar main hasta aceptación |
+
+**Secuencia de implementación autorizada:** A → B/C (Codex en curso) → D → mejoras focalizadas de contexto/semántica según baseline → experimentos de CAD/BIM. El presupuesto inicial de la investigación es **26–42 horas efectivas aproximadas** para primera evidencia; no es promesa de duración ni coste contratado.
+
+**Coordinación:** Claude sigue como escritor único en PR #1112; Codex 2 conserva rama `audit/n4n12-pgvector-1112`; este trabajo se hace en rama separada `feat/ingestion-evidence-p0-20261104` basada en P0 Codex 1. No merge a main, no despliegue, no datos reales; integración coordinada sólo tras resultados.
+
+### Advertencias técnicas al reutilizar el SQL ilustrativo del informe original
+
+**NO ejecutar como está** el SQL de ejemplo del informe:
+- `clause_embeddings.clause_id` es VARCHAR y `clauses.id` UUID: el JOIN directo es incompatible y sus identificadores pueden no referirse al mismo concepto.
+- `document_chunks` guarda `revision_id` en JSONB `metadata`, no en columna SQL propia.
+- `clause_embeddings` no tiene columna `revision_id` en la estructura observada; debe añadirse mapping válido por identidad/metadatos o migración gobernada antes de filtrar revisiones.
+- No confundir última revisión cronológica con revisión **trusted-current**.
+- Las consultas deben segmentarse por tenant/proyecto antes de interpretar completitud; no copiar datos de documentos de usuario al informe.
+
+## 6. Fuentes primarias y trazabilidad
+
+- PR #1112 y criterios DONE: https://github.com/AI-Gen-AI/C2Pro/pull/1112
+- P0 publicado: https://github.com/AI-Gen-AI/C2Pro/commit/232ef48375eb6672b2df6ea76bcaa49b7c3d6fe6
+- N4/N12 runner Codex: https://github.com/AI-Gen-AI/C2Pro/commit/5f9392a783cb223a04a94c0b1b0af8208bda2675
+- Diseño chunking Microsoft: https://github.com/MicrosoftDocs/azure-ai-docs/blob/main/articles/search/vector-search-how-to-chunk-documents.md
+- Supabase pgvector: https://supabase.com/docs/guides/database/extensions/pgvector
+- Gestión embeddings: https://supabase.com/docs/guides/ai/automatic-embeddings
+- GitHub Actions secrets: https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets
+- Guía de evaluación: https://docs.langchain.com/langsmith/evaluation-types
+
+**Estado técnico al guardar:** investigación = documentada; implementación = autorizada; gate A en trabajo aislado; gate B/C pendientes de resultados de ejecución real; gate D aún no implementado. No afirmar que todos los proveedores alternativos hayan sido probados.
