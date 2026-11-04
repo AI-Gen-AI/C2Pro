@@ -149,9 +149,10 @@ async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
     assert "no prior snapshot" in (by_node["change_impact"].degradation_reason or "")
     assert by_node["write_snapshot"].status is NodeStatus.SKIPPED
     assert "repository unavailable" in (by_node["write_snapshot"].degradation_reason or "")
-    for node_name in {"alert_correlation", "hitl_routing"}:
-        assert by_node[node_name].status is NodeStatus.SKIPPED
-        assert "pending" in (by_node[node_name].degradation_reason or "")
+    assert by_node["alert_correlation"].status is NodeStatus.SKIPPED
+    assert "database session unavailable" in (by_node["alert_correlation"].degradation_reason or "")
+    assert by_node["hitl_routing"].status is NodeStatus.SKIPPED
+    assert "alert review route unavailable" in (by_node["hitl_routing"].degradation_reason or "")
 
 
 @pytest.mark.asyncio
