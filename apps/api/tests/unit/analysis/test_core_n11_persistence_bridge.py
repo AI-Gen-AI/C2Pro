@@ -2,6 +2,7 @@
 
 from src.analysis.application.trusted_materialization import MaterializationContent
 from src.analysis.adapters.graph.document_artifact_builder import build_document_artifact
+from src.analysis.adapters.graph.nodes import _risk_contract_payload
 from src.analysis.adapters.graph.workflow import build_workflow
 from src.analysis.adapters.graph.nodes_extended import decision_intelligence_node
 import asyncio
@@ -160,3 +161,41 @@ def test_real_n11_package_exists_before_n17_snapshot():
         "Align schedule milestone with contracted handover date"
     )
     assert snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
+
+def test_live_n4_mitigation_passes_to_n11_and_n17():
+    """Regression: strict RiskItem must not strip N4's real proposal."""
+    mitigation = "Reconcile commissioning milestones with contract and control delay penalties"
+    candidate = {
+        "title": "Delay in commissioning",
+        "description": "A contractual milestone is at risk",
+        "category": "SCHEDULE",
+        "impact": "HIGH",
+        "probability": "HIGH",
+        "mitigation_suggestion": mitigation,
+        "source_quote": None,
+        "clause_ref": "8.2",
+    }
+    risk = _risk_contract_payload(candidate, "Example synthetic EPC source")
+    assert risk["mitigation_suggestion"] == mitigation
+    state = {
+        "project_id": "test-project",
+        "document_id": "test-document",
+        "document_revision_id": "test-revision",
+        "extracted_risks": [risk],
+        "messages": [],
+        "node_results": [],
+    }
+    after_n11 = asyncio.run(decision_intelligence_node(state))
+    proposals = after_n11["decision_package"]["proposed_actions"]
+    assert len(proposals) == 1
+    assert proposals[0]["proposed_action"] == mitigation
+    assert proposals[0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
+
+    materialized = MaterializationContent.from_state(after_n11)
+    proposal = materialized.decision_snapshot["proposed_actions"][0]
+    assert proposal["proposed_action"] == mitigation
+    assert proposal["source_evidence"]["revision_id"] == "test-revision"
+    assert proposal["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
+
+    artifact = build_document_artifact({**after_n11, "doc_type": "contract"})
+    assert artifact.extracted_risks[0].mitigation_suggestion == mitigation
