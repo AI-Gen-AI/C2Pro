@@ -80,7 +80,7 @@ test("ProjectGraph four-source persisted alerts open real source citations after
 
     const first = addressable[0];
     if (first) {
-      const link = page.getByRole("link", { name: "View evidence for " + first.source_clause_id });
+      const link = page.getByRole("link", { name: "View evidence for " + first.source_clause_id }).first();
       await expect(link, "UI must expose the verified persisted contract clause link").toBeVisible({
         timeout: 30_000,
       });
