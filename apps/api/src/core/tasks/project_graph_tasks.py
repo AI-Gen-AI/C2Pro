@@ -97,7 +97,8 @@ async def _load_canonical_project_evidence(
         )
         for clause in clauses
     ]
-    return protected, schedule_finish
+    protected_schedule_finish = scrub(schedule_finish) if schedule_finish is not None else None
+    return protected, protected_schedule_finish
 
 
 async def enqueue_project_graph(
