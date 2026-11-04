@@ -17,6 +17,7 @@ from src.analysis.adapters.graph.project_graph import (
     is_project_graph_enabled,
 )
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
+from src.analysis.domain.node_result import NodeStatus
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
@@ -27,6 +28,8 @@ from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.core.tasks.project_graph_governance import ProjectGraphGovernance
 from src.core.tenants.types import TenantId, require_tenant_id
+from src.temporal.adapters.persistence.project_snapshot_repository import SqlAlchemyProjectSnapshotRepository
+from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,7 @@ async def run_project_graph_once(
     tenant_id: TenantId,
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
+    snapshot_repository: IProjectSnapshotRepository | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -68,11 +72,16 @@ async def run_project_graph_once(
         project_id=project_id,
         tenant_id=tenant_id,
     )
+    prior_snapshot = (
+        await snapshot_repository.latest(project_id, tenant_id)
+        if snapshot_repository is not None
+        else None
+    )
     graph_input: ProjectGraphState = {
         "project_id": project_id,
         "tenant_id": tenant_id,
         "trigger_event_id": trigger_event_id,
-        "previous_snapshot_id": None,
+        "previous_snapshot_id": prior_snapshot.snapshot_id if prior_snapshot else None,
         "changed_artifact_ids": [],
         "artifacts": artifacts,
         "coherence_result": None,
@@ -82,7 +91,22 @@ async def run_project_graph_once(
         "node_results": [],
         "artifact_repository": artifact_repository,
     }
+    if snapshot_repository is not None:
+        graph_input["snapshot_repository"] = snapshot_repository
     result = await build_project_graph().ainvoke(graph_input)
+    # A compiled graph is NOT a successful projection when material work failed.
+    # Keep the trusted obligation pending so the Celery retry can recover it.
+    material_nodes = {"cross_doc_coherence", "change_impact", "health", "write_snapshot"}
+    bad = [
+        item.node
+        for item in result.get("node_results", [])
+        if item.status is NodeStatus.FAILED
+        or (item.node in material_nodes and item.status is NodeStatus.DEGRADED)
+    ]
+    if bad:
+        raise RuntimeError(f"ProjectGraph material execution incomplete: {', '.join(bad)}")
+    if snapshot_repository is not None and artifacts and result.get("snapshot_id") is None:
+        raise RuntimeError("ProjectGraph snapshot missing; trusted projection not acknowledged")
     # #714: acknowledge the durable trusted -> ProjectGraph obligations of
     # exactly the artifacts this completed run loaded. The caller commits it
     # together with the run; a failed run rolls it back and stays pending.
@@ -97,8 +121,10 @@ async def run_project_graph_once(
         "projected_obligations": projected,
         "artifact_count": len(artifacts),
         "node_result_count": len(result.get("node_results", [])),
+        "snapshot_id": str(result["snapshot_id"]) if result.get("snapshot_id") else None,
         "coherence_result": _serializable(result.get("coherence_result")),
-        "node_results": result.get("node_results", []),
+        "health_result": _serializable(result.get("health_result")),
+        "node_results": [_serializable(node) for node in result.get("node_results", [])],
     }
 
 
@@ -137,6 +163,7 @@ async def _run_project_graph_async(
                     tenant_id=tenant_id,
                     trigger_event_id=trigger_event_id,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
+                    snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)
