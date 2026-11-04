@@ -61,6 +61,10 @@ def upgrade() -> None:
     op.execute("ALTER TABLE public.document_source_units FORCE ROW LEVEL SECURITY")
     for action, clause in _POLICIES.items():
         op.execute(
+            f"DROP POLICY IF EXISTS document_source_units_tenant_{action} "
+            "ON public.document_source_units"
+        )
+        op.execute(
             f"CREATE POLICY document_source_units_tenant_{action} "
             f"ON public.document_source_units {clause}"
         )
