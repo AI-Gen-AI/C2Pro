@@ -6,6 +6,8 @@ comes from the existing current-revision and RLS SQL seam.
 from __future__ import annotations
 
 import importlib.util
+import json
+from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
 
@@ -16,6 +18,11 @@ from alembic.operations import Operations
 from sqlalchemy import text
 
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
+from src.analysis.adapters.persistence.document_artifact_repository import SqlAlchemyDocumentArtifactRepository
+from src.reporting.adapters.sources.sqlalchemy_current_state_sources import SqlAlchemyCurrentStateSources
+from src.reporting.application.current_state_projection import project_source_discrepancies
+from src.reporting.application.ports import SourceOk
+from src.reporting.domain.current_state_report import SectionStatus
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.core.tasks.project_graph_tasks import persist_provisional_source_discrepancies
 from src.documents.application.structured_source_units import load_canonical_source_units
@@ -165,3 +172,47 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
     assert stored["scoring_policy"] == "not_scored"
     assert len(stored["findings"]) == 3
     assert all(len(item["sources"]) == 2 for item in stored["findings"])
+
+    # The report reader must never accept a contract/spec quote until its exact
+    # immutable revision is trusted. XLSX source rows remain source observations.
+    artifact_repository = SqlAlchemyDocumentArtifactRepository(db)
+    for artifact in artifacts:
+        await artifact_repository.save(
+            artifact, project_id=project_id, tenant_id=test_user.tenant_id,
+        )
+    await db.commit()
+
+    @asynccontextmanager
+    async def current_scope(requested_tenant):
+        assert requested_tenant == test_user.tenant_id
+        yield db
+
+    reader = SqlAlchemyCurrentStateSources(
+        current_user=test_user, session_scope=current_scope,
+    )
+    report_data = await reader.load_source_discrepancies(project_id, test_user.tenant_id)
+    section = project_source_discrepancies(SourceOk(report_data))
+    assert section.status is SectionStatus.AVAILABLE
+    assert section.source_ref == str(report_data["event_id"])
+    assert section.data is not None
+    assert len(section.data.items) == 3
+    assert all(len(item.sources) == 2 and item.scored is False for item in section.data.items)
+    assert all(
+        item.sources[1].source_locator and item.sources[1].blob_sha256
+        for item in section.data.items
+    )
+
+    # Stale evidence from another revision must NOT remain visible as current.
+    event_id = report_data["event_id"]
+    stored = (await db.execute(
+        text("SELECT payload FROM project_events WHERE event_id=CAST(:event_id AS uuid)"),
+        {"event_id": event_id},
+    )).scalar_one()
+    stored["findings"][0]["sources"][1]["revision_id"] = str(uuid4())
+    await db.execute(
+        text("UPDATE project_events SET payload=CAST(:payload AS jsonb) WHERE event_id=CAST(:event_id AS uuid)"),
+        {"payload": json.dumps(stored), "event_id": event_id},
+    )
+    await db.commit()
+    refreshed = await reader.load_source_discrepancies(project_id, test_user.tenant_id)
+    assert len(refreshed["items"]) == 2, "Stale XLSX revision must be excluded"
