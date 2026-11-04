@@ -51,6 +51,7 @@ from src.analysis.application.parse_budget_use_case import (
     ParseBudgetCommand,
     ParseBudgetUseCase,
 )
+from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.contracts import BudgetItem, Citation
 from src.analysis.domain.document_classification import DocumentCategoryClassifier
 from src.analysis.domain.documentation_health import build_documentation_health_signal
@@ -215,7 +216,7 @@ async def _is_feature_v3_coherence_llm_enabled(state: ProjectState) -> bool:
 async def document_ingestion_node(state: ProjectState) -> ProjectState:
     """N1 — Parse the document and classify its coherence category."""
     await asyncio.sleep(0)
-    text = state.get("anonymized_text") or state["document_text"]
+    text = llm_document_text(state)
     if not _has_extractable_text(text):
         state["document_parsed"] = False
         state["document_category"] = "insufficient_extractable_text"
@@ -276,6 +277,7 @@ async def pii_anonymizer_node(state: ProjectState) -> ProjectState:
     ]
 
     state["anonymized_text"] = anonymized
+    state["pii_anonymization_complete"] = True
     state["pii_redactions"] = redactions
     state["node_results"] = [
         *state.get("node_results", []),
