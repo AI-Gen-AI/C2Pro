@@ -271,6 +271,13 @@ async def test_parse_document_persists_revision_scoped_coverage_signal(
                 "status": "UNVERIFIED",
                 "origin": "pdf_file_parser",
                 "limitations": ["text_extraction_not_verified_against_source"],
+                "parser_observations": {
+                    "text_blocks": {
+                        "count": 0,
+                        "characters": 0,
+                        "parser_page_labels": [],
+                    }
+                },
             }
         }
     }
