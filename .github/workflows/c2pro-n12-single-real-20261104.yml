@@ -1,0 +1,98 @@
+name: C2Pro N12 single real provider call (synthetic EPC)
+
+on:
+  push:
+    branches:
+      - fix/n12-core-acceptance-20261104
+    paths:
+      - .github/workflows/c2pro-n12-single-real-20261104.yml
+  workflow_dispatch:
+    inputs:
+      confirm_sha:
+        description: "Full commit SHA of approved synthetic N12 candidate"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c2pro-n12-once-20261104
+  cancel-in-progress: false
+
+jobs:
+  n12-one-real-call:
+    if: (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[N12-REAL-AI-ONCE]')) || (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm_sha == github.sha)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
+      ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
+      AI_MAX_TOKENS_OUTPUT: "4096"
+      C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/web/playwright-report/n12-one-real-ai-governor.jsonl
+      C2PRO_AI_GOVERNOR_MAX_CALLS: "1"
+      C2PRO_AI_GOVERNOR_MAX_USD: "0.15"
+      PYTHONPATH: apps/api:apps/api/scripts/real_ai_governor
+    steps:
+      - name: Checkout isolated approved branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fail closed on wrong environment, fixture or missing credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${C2PRO_AI_MOCK}" = '0'
+          test "${C2PRO_EMBEDDINGS_MOCK}" = '1'
+          test -n "${ANTHROPIC_API_KEY:-}" || { echo "::error::Test-only Anthropic credential unavailable"; exit 2; }
+          test "$(sha256sum c2pro-n4n12-epc-synthetic-v1.json | awk '{print $1}')" = "6206d62492e786b2b97902cb59f19ba36f3bd996184470e5aecc3009cdf2c8eb"
+          mkdir -p apps/web/playwright-report
+          echo "N12 is isolated; exactly one provider request permitted; no N4, S2 or integral runs."
+
+      - name: Prepare Python backend
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Run N12 once with REAL Anthropic and governed cost
+        working-directory: apps/api
+        run: python scripts/n12_real_ai_verify.py
+
+      - name: Summarize sanitized N12 verdict
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path("apps/web/playwright-report/n12-real-ai-evaluation.json")
+          out = ["### C2Pro N12 — single real Anthropic call", ""]
+          if not p.exists():
+              out.append("BLOCKED BEFORE EVIDENCE; do not claim model quality.")
+          else:
+              j = json.loads(p.read_text(encoding="utf-8"))
+              n = j["n12"]
+              out += [
+                  f"Verdict: {j['verdict']}",
+                  f"Model(s): {j['provider'].get('models')}",
+                  f"Provider calls: {j['provider'].get('calls')}, completed: {j['provider'].get('completed_calls')}",
+                  f"Detected omissions: {n['omissions_detected']}/2",
+                  f"Detected false interpretations: {int(n['incorrect_interpretation_detected'])}/1",
+                  f"Verifiable source findings: {n['supported_findings']}",
+                  f"Parse error type: {n['parse_failure_type'] or 'none'}",
+              ]
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
+              f.write("\n".join(out) + "\n")
+          PY
+
+      - name: Preserve sanitized result without source or completion text
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: c2pro-n12-one-real-ai-synthetic-evidence
+          path: apps/web/playwright-report/n12-real-ai-evaluation.json
+          retention-days: 7
+          if-no-files-found: warn
