@@ -30,7 +30,8 @@ EmbeddingProvider = Callable[[list[str]], Awaitable[list[list[float]]]]
 # be explicitly trusted (a merely proposed requirement is not compliance).
 _CURRENT_CLAUSE_SOURCES = text(f"""
 SELECT c.id::text AS clause_id, c.full_text, c.revision_id::text AS revision_id,
-       c.source_page, c.text_start_offset, c.text_end_offset,
+       (c.extracted_entities ->> 'source_page') AS source_page,
+       c.text_start_offset, c.text_end_offset,
        d.id::text AS document_id, d.document_type::text AS document_type,
        ce.metadata AS existing_metadata
 FROM public.clauses AS c
