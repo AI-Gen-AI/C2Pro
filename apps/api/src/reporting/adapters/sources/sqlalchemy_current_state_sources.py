@@ -7,6 +7,7 @@ query from aborting the transaction another domain would use.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from typing import Any
@@ -48,7 +49,7 @@ from src.stakeholders.application.get_raci_matrix_use_case import GetRaciMatrixU
 from src.stakeholders.application.list_project_stakeholders_use_case import (
     ListProjectStakeholdersUseCase,
 )
-from src.temporal.adapters.persistence.models import DocumentRevisionORM
+from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
 from src.temporal.adapters.persistence.project_snapshot_repository import (
     SqlAlchemyProjectSnapshotRepository,
 )
@@ -248,6 +249,95 @@ class SqlAlchemyCurrentStateSources:
                     "No N11 proposals tied to current trusted revisions; older or unbound results remain historical."
                 )
             return actions
+
+    async def load_source_discrepancies(self, project_id: UUID, tenant_id: UUID) -> dict[str, Any]:
+        """Expose only the newest provisional event and current dual-source revisions.
+
+        A contract/spec quote must still belong to the trusted current artifact.
+        An XLSX row must still have the original canonical revision and hashes.
+        Nothing here converts a source observation into an approved baseline.
+        """
+        from src.documents.application.structured_source_units import load_canonical_source_units
+
+        scoped = require_tenant_id(tenant_id)
+        async with self._session_scope(scoped) as session:
+            event = (await session.execute(
+                select(ProjectEventORM).where(
+                    ProjectEventORM.project_id == project_id,
+                    ProjectEventORM.tenant_id == scoped,
+                    ProjectEventORM.event_type == "project_graph.source_discrepancies_observed",
+                ).order_by(ProjectEventORM.occurred_at.desc(), ProjectEventORM.event_id.desc()).limit(1)
+            )).scalar_one_or_none()
+            if event is None:
+                raise SourceUnavailableError("No ProjectGraph provisional comparison recorded for this project.")
+            payload = event.payload
+            if not isinstance(payload, dict) or payload.get("state") != "PROVISIONAL" or payload.get("scoring_policy") != "not_scored":
+                raise SourceUnavailableError("ProjectGraph comparison has no valid provisional trust boundary.")
+            trusted = await _load_revision_states(session, scoped, project_id)
+            rows = []
+            for family in ("budget", "schedule"):
+                rows.extend(await load_canonical_source_units(
+                    session=session, tenant_id=scoped, project_id=project_id, family=family
+                ))
+            canonical = {
+                (str(row.get("document_id")), str(row.get("revision_id")),
+                 str(row.get("source_locator")), str(row.get("blob_hash")),
+                 str(row.get("unit_sha256")))
+                for row in rows
+            }
+            current = []
+            for item in payload.get("findings") or []:
+                if not isinstance(item, dict) or (
+                    item.get("state") != "PROVISIONAL" or item.get("scored") is not False
+                    or item.get("requires_human_review") is not True
+                ):
+                    continue
+                sources = item.get("sources")
+                if not isinstance(sources, list) or len(sources) != 2:
+                    continue
+                quote = next((s for s in sources if isinstance(s, dict)
+                              and s.get("role") == "verified_document_quote"), None)
+                row = next((s for s in sources if isinstance(s, dict)
+                            and s.get("role") == "original_source_row"), None)
+                if quote is None or row is None:
+                    continue
+                try:
+                    qid, qrev = UUID(str(quote["document_id"])), UUID(str(quote["revision_id"]))
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    continue
+                trust = trusted.get(qid)
+                if trust is None or trust.trusted is None or trust.trusted[0] != qrev:
+                    continue
+                original_quote, quote_sha = quote.get("source_quote"), quote.get("source_quote_sha256")
+                if (not isinstance(original_quote, str) or not original_quote
+                        or not isinstance(quote_sha, str)
+                        or hashlib.sha256(original_quote.encode("utf-8")).hexdigest() != quote_sha):
+                    continue
+                key = (
+                    str(row.get("document_id")), str(row.get("revision_id")),
+                    str(row.get("source_locator")), str(row.get("blob_sha256")),
+                    str(row.get("unit_sha256")),
+                )
+                if key not in canonical:
+                    continue
+                current.append({
+                    "rule_id": item.get("rule_id"), "summary": item.get("summary"),
+                    "state": "PROVISIONAL", "scored": False,
+                    "requires_human_review": True,
+                    "compared_values": item.get("compared_values") or {},
+                    "sources": [quote, row],
+                })
+                if len(current) >= 25:
+                    break
+            if not current:
+                raise SourceUnavailableError(
+                    "No current trusted quote and canonical XLSX row pair remains; older findings are historical."
+                )
+            return {
+                "event_id": str(event.event_id),
+                "observed_at": event.occurred_at,
+                "items": current,
+            }
 
     async def load_alerts(self, project_id: UUID, tenant_id: UUID) -> list[Alert]:
         scoped = require_tenant_id(tenant_id)
