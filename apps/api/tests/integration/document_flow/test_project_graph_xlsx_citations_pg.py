@@ -68,15 +68,15 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
     await _ensure_real_source_unit_migration(db)
     project_id = await _project(db, test_user.tenant_id)
     contract_text = (
-        "La fecha de finalización de las obras será el 30 de junio de 2027. "
+        "8.2 La fecha de finalización de las obras será el 30 de junio de 2027. "
         "Es la fecha contractual de entrega definitiva de este proyecto EPC."
     )
     price_text = (
-        "El precio del contrato asciende a 1.000.000 euros y se pagará "
+        "4.1 El precio del contrato asciende a 1.000.000 euros y se pagará "
         "por hitos según las condiciones particulares del contrato."
     )
     technical_text = (
-        "Las pruebas de aceptación en fábrica deberán finalizar a más tardar "
+        "6.3 Las pruebas de aceptación en fábrica deberán finalizar a más tardar "
         "el 10 de junio de 2027 conforme a la especificación técnica."
     )
     contract_doc, contract_rev = await _upload_and_ingest(
