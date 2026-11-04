@@ -8,10 +8,6 @@ on:
       - '.github/workflows/acc01-s2-live-ai-uat.yml'
   workflow_dispatch:
     inputs:
-      pilot_secrets_relay:
-        description: "Owner-authorized one-shot: encrypt existing pilot AI keys for an independent Railway pilot; no plaintext logs."
-        type: boolean
-        default: false
       projectgraph_epc_pilot:
         description: "Owner-authorized: S2 four real files + real AI, then ONE Tier-2 ProjectGraph pass, exact evidence and snapshot. No production."
         type: boolean
@@ -66,73 +62,8 @@ permissions:
   contents: read
 
 jobs:
-  pilot-secret-relay:
-    if: github.event_name == 'workflow_dispatch' && inputs.pilot_secrets_relay == true
-    runs-on: ubuntu-latest
-    timeout-minutes: 6
-    env:
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.S2_E2E_OPENAI_API_KEY }}
-    steps:
-      - name: Encrypt authorized pilot credentials (no plaintext artifact)
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          cat > /tmp/c2pro-pilot-transfer.crt <<'CERT'
-          -----BEGIN CERTIFICATE-----
-          MIIETTCCArWgAwIBAgIUQq2lkSZYq7K4YfBRxG1HgzHgjdswDQYJKoZIhvcNAQEL
-          BQAwNjE0MDIGA1UEAwwrQzJQcm8gUHJvamVjdEdyYXBoIE9uZS1UaW1lIFNlY3Jl
-          dCBUcmFuc2ZlcjAeFw0yNjExMDQyMTM0MzRaFw0yNjExMDUyMTM0MzRaMDYxNDAy
-          BgNVBAMMK0MyUHJvIFByb2plY3RHcmFwaCBPbmUtVGltZSBTZWNyZXQgVHJhbnNm
-          ZXIwggGiMA0GCSqGSIb3DQEBAQUAA4IBjwAwggGKAoIBgQDNNGyjXABTt4nLgy1Y
-          llEfUuk8Dy+LUJXC5k6Q7UFhPOgVBTqAs9DudYo0lTg6prEl3RL/hq62pXfpG4IG
-          Huz9tgtIUn2wkMZydRw0T1KJa89aND0t0YHIZgJ/uGi0A2pFAADXgFfKlXSywpps
-          7dUA3M98L39oP8s6KtionWzIomhMxw5oNCDJedBg1I+HEi2lzncdf8LNO+oWoic2
-          l1WZ6OJDLdDPh5ve1HBRknxnd2318uRB6/eChobbbJUqHFvXN2KhgIa+B212Jbsc
-          DAfcOMVZN1G27m7mcHeyYAxBvW+YYIaYGe1CFM1X4YII9V0PLnD237Ynzg68zKCB
-          LK+76v/ivOl4UJIfsQK3gNXZ1UfOrNINEAvUV9kLlecgzGDj2vDpfc4gmyC7nkrI
-          vLZml0jZJlrp1xQNtO/9yGbiwyPGlsoCZRwh4RDCkRp+gQMDxV3j8abyhMffRqk/
-          uXqAmMnQxO0uGy1fodty44kvt/XAOaRPSTE+BBvhXKE7HqECAwEAAaNTMFEwHQYD
-          VR0OBBYEFBOQTUhGYYkKBZ/0RWI4jeAPWElgMB8GA1UdIwQYMBaAFBOQTUhGYYkK
-          BZ/0RWI4jeAPWElgMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggGB
-          AGt9kQkoEv7ioHJWIOrNga8if9w9wDMQfcu1mXZLesjGmg535NeVY2qTqm+ht3fX
-          q817gV0BlLi/Qtmcu7hVTB/zoxIWrpDg5baVFIDnPnkBVF9th6wiaLUAM3VrhNSv
-          9byRyk42AmFZB9jPh49YpkTsM3CUzP4WJFoOq9axNRiM6q7aeEAAZAqTptQdUaRO
-          8rb/twEXm9Q6nZ4842QV5/Uj7Jvyvt2p17BOCEcXsBYYaJjnKg+y+y1LIicQnRdf
-          IGDCZ0zyb6twteWrZM7w/NjAuvBosWhius1qCH30bFzlrPrfrAVwm1Fq3d7VrwKe
-          Fao/VLY4EpkKpOeg2UvCufGGEJik+uy1wUg9hQZw+YwH9nyOCpsfGX9ActwJ0+Qj
-          2qfgQNPaodkCMvAgGosiyD5I4SnTxuZvP+ORpd2zzzv6k9w9t6GYwHNctgXGiYL8
-          0Uqo5M0oTCw6S2GN10Xa86R/FOCycPnGoZFr8pAq4H79SzDcA3if0Qf36nn6+oW7
-          mw==
-          -----END CERTIFICATE-----
-          CERT
-          python3 - <<'PY'
-          import json, os
-          names = ("CLERK_SECRET_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
-          vals = {key: os.environ.get(key, "") for key in names}
-          if not vals["ANTHROPIC_API_KEY"] or not vals["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"]:
-              raise SystemExit("PILOT_KEYS_NOT_AVAILABLE")
-          with open("/tmp/c2pro-pilot-secrets.json", "w", encoding="utf8") as output:
-              json.dump(vals, output)
-          PY
-          openssl cms -encrypt -binary -aes256 -outform DER \
-            -in /tmp/c2pro-pilot-secrets.json \
-            -out /tmp/c2pro-pilot-secrets.cms \
-            /tmp/c2pro-pilot-transfer.crt
-          rm -f /tmp/c2pro-pilot-secrets.json
-      - name: Upload encrypted artifact only (expires after one day)
-        uses: actions/upload-artifact@v4
-        with:
-          name: c2pro-projectgraph-pilot-encrypted-credentials
-          path: /tmp/c2pro-pilot-secrets.cms
-          retention-days: 1
-          if-no-files-found: error
-
   s2-live-ai:
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true' && github.event.inputs.pilot_secrets_relay != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
+    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
     # Scheduled, so it never blocks a PR. Its status is the suite's real result.
     # Runs every "chromium" spec (the intentionally RED backlog is excluded in
     # playwright.config.ts) against a real local backend started exactly as the
