@@ -88,6 +88,9 @@ jobs:
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       C2PRO_AI_MOCK: "0"
       C2PRO_EMBEDDINGS_MOCK: "0"
+      # ProjectGraph pilot alone requires actual UI approval of the fourth
+      # technical source, not merely the upload or a parsed status.
+      S3_REQUIRE_TECHNICAL_APPROVAL: ${{ inputs.projectgraph_epc_pilot == true && '1' || '0' }}
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.S2_E2E_OPENAI_API_KEY }}
       NEXT_PUBLIC_API_URL: /api
