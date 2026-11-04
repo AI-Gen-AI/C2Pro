@@ -277,6 +277,17 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
+    # A workflow runner receives CLI paths as external input. Never use those
+    # values for I/O: pin both artifacts beneath this repository's web report
+    # directory, and reject any alternative (including ../../ traversal).
+    report_dir = Path(__file__).resolve().parents[2] / "web" / "playwright-report"
+    approved_ledger = report_dir / "s2-postgres-ledger.json"
+    approved_output = report_dir / "projectgraph-functional-pilot.json"
+    if args.ledger.resolve() != approved_ledger.resolve():
+        raise SystemExit("PILOT_UNAPPROVED_LEDGER_PATH")
+    if args.out.resolve() != approved_output.resolve():
+        raise SystemExit("PILOT_UNAPPROVED_REPORT_PATH")
+
     outcome = {
         "schema": "c2pro.projectgraph.real_four_sources.v1",
         "timestamp_utc": datetime.now(UTC).isoformat(),
@@ -286,15 +297,15 @@ def main() -> int:
     }
     try:
         _assert_disposable_runner()
-        asyncio.run(_run(json.loads(args.ledger.read_text()), outcome))
+        asyncio.run(_run(json.loads(approved_ledger.read_text()), outcome))
     except Exception as exc:
         # No raw SQL text, credentials, source contents or prompts in artifacts.
         outcome["first_blocker"] = str(exc) if str(exc).startswith(
             ("PILOT_", "FOUR_", "PROJECT_", "NO_CANONICAL_", "PROJECTGRAPH_", "UI_")
         ) else type(exc).__name__
         outcome["state"] = "NOT_ACCEPTED"
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(outcome, indent=2, sort_keys=True) + "\n")
+    approved_output.parent.mkdir(parents=True, exist_ok=True)
+    approved_output.write_text(json.dumps(outcome, indent=2, sort_keys=True) + "\n")
     print("PROJECTGRAPH_PILOT=" + json.dumps({
         "state": outcome["state"],
         "project_id": outcome.get("project_id"),
