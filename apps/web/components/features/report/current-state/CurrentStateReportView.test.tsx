@@ -323,6 +323,65 @@ describe("CurrentStateReportView", () => {
     expect(within(card).getByTestId("section-source")).toHaveTextContent("Source records carry no timestamp");
   });
 
+  it("shows each provisional discrepancy with separate quote-revision and XLSX-row links", () => {
+    const report = buildCurrentStateReport();
+    const documentId = "11111111-1111-4111-8111-111111111111";
+    const rowId = "22222222-2222-4222-8222-222222222222";
+    const revQuote = "33333333-3333-4333-8333-333333333333";
+    const revRow = "44444444-4444-4444-8444-444444444444";
+    const withEvidence = {
+      ...report,
+      sections: {
+        ...report.sections,
+        source_discrepancies: {
+          status: "available", status_reason: null, source_domain: "project_graph",
+          source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
+          evidence_tier: "weak_linked", evidence_note: "Provisional, not scored.",
+          data: { items: [{
+            rule_id: "DET-CRS-SCHDEAD",
+            summary: "Schedule ends after contractual date by 92 days",
+            state: "PROVISIONAL", scored: false, requires_human_review: true,
+            compared_values: { overrun_days: 92, planned_finish: "2027-09-30" },
+            sources: [
+              {
+                role: "verified_document_quote", document_id: documentId,
+                revision_id: revQuote, source_locator: "verified-quote:abcdef123",
+                source_quote: "The contractual completion date is 2027-06-30.",
+                source_quote_sha256: "a".repeat(64),
+              },
+              {
+                role: "original_source_row", family: "schedule", document_id: rowId,
+                revision_id: revRow, source_locator: "Schedule!4",
+                blob_sha256: "b".repeat(64), unit_sha256: "c".repeat(64),
+              },
+            ],
+          }] },
+        },
+      },
+    } as unknown as CurrentStateReport;
+    renderReport(withEvidence);
+    const card = section("source_discrepancies");
+    expect(within(card).getByTestId("section-status")).toHaveTextContent("Available");
+    expect(card).toHaveTextContent("Provisional");
+    expect(card).toHaveTextContent("not approved budget/schedule baselines");
+    expect(card).toHaveTextContent("92 days");
+    expect(within(card).getAllByTestId("source-discrepancy-item")).toHaveLength(1);
+    const links = within(card).getAllByTestId("source-discrepancy-evidence-link");
+    expect(links).toHaveLength(2);
+    expect(links[0].getAttribute("href")).toBe(
+      `/projects/${report.project.id}/evidence?documentId=${documentId}&revisionId=${revQuote}`,
+    );
+    expect(links[1].getAttribute("href")).toBe(
+      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule%214&expectedHash=${"b".repeat(64)}`,
+    );
+    expect(card).toHaveTextContent("Quote highlighting is not guaranteed");
+  });
+
+  it("does not invent discrepancy findings when an older backend omits the section", () => {
+    renderReport();
+    expect(screen.queryByTestId("section-source_discrepancies")).not.toBeInTheDocument();
+  });
+
   it("renders an empty section with its reason", () => {
     const report = buildCurrentStateReport();
     const emptyAlerts: CurrentStateReport = {
