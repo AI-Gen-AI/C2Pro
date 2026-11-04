@@ -92,6 +92,7 @@ async def stage_structured_source_units(
     document_id: UUID,
     revision_id: UUID | None,
     blob_hash: str | None,
+    source_format: str | None = None,
     parser_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reparse in strict evidence mode, then stage original source rows atomically.
@@ -104,7 +105,9 @@ async def stage_structured_source_units(
         raise ValueError("SOURCE_UNIT_FAMILY_INVALID")
     if revision_id is None or not blob_hash:
         return {"state": "UNASSESSED", "reason": "immutable_source_revision_missing", "units": 0}
-    if file_path.suffix.lower() != ".xlsx":
+    # R2 returns a temporary path; its suffix is usually preserved, but the
+    # original verified document format remains the authoritative type.
+    if (source_format or file_path.suffix).lower() != ".xlsx":
         return {"state": "UNASSESSED", "reason": "verified_source_format_unsupported", "units": 0}
 
     scope = {
