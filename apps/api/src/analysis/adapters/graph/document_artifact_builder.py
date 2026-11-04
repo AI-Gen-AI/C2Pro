@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
 
 def _list_value(state: Mapping[str, Any], key: str) -> list[Any]:
@@ -39,6 +40,11 @@ def build_document_artifact(final_state: Mapping[str, Any]) -> DocumentArtifact:
         {
             "document_id": str(final_state.get("document_id") or ""),
             "document_revision_id": final_state.get("document_revision_id"),
+            "decision_snapshot": decision_snapshot_for_persistence(
+                final_state.get("decision_package"),
+                document_id=str(final_state.get("document_id") or "") or None,
+                revision_id=str(final_state.get("document_revision_id") or "") or None,
+            ),
             "doc_type": str(final_state.get("doc_type") or "unknown"),
             "document_category": final_state.get("document_category"),
             "extracted_risks": _list_value(final_state, "extracted_risks"),

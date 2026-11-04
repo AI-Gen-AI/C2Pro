@@ -40,7 +40,7 @@ type Column = (typeof CSV_COLUMNS)[number];
 type CsvRow = Partial<Record<Column, string>>;
 type Cell = string | number | boolean | null | undefined;
 type ItemRow = Omit<CsvRow, "value" | "value_state"> & { value?: Cell };
-type Decisions = { status: string; status_reason?: string | null; source_domain: string; source_as_of?: string | null; evidence_tier: string; evidence_note?: string | null; data?: { items: Array<{ analysis_id: string; title: string; proposed_action: string; status: string; priority_proposal: string; source_revision_id: string; clause_ref?: string | null }> } | null };
+type Decisions = { status: string; status_reason?: string | null; source_domain: string; source_as_of?: string | null; evidence_tier: string; evidence_note?: string | null; data?: { items: Array<{ analysis_id: string; title: string; proposed_action: string; status: string; priority_proposal: string; source_document_id: string; source_revision_id: string; clause_ref?: string | null }> } | null };
 type Sections = CurrentStateReport["sections"] & { decision_proposals?: Decisions };
 type SectionKey = keyof Sections;
 
@@ -289,7 +289,7 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
         value: decision.proposed_action,
         record_status: decision.status,
         record_evidence_tier: "weak_linked",
-        record_source_ref: decision.source_revision_id,
+        record_source_ref: `${decision.source_document_id}@${decision.source_revision_id}`,
       }));
     }
     case "hitl": {

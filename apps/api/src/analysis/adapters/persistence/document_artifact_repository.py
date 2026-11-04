@@ -330,6 +330,9 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         if payload.get(STRUCTURED_SOURCE_KEY) is None:
             # ADR-032: the optional field must not change legacy payloads/digests.
             payload.pop(STRUCTURED_SOURCE_KEY, None)
+        if payload.get("decision_snapshot") is None:
+            # Do not change the digest of legacy artifacts without N11 proposals.
+            payload.pop("decision_snapshot", None)
         row = DocumentArtifactORM(
             artifact_id=uuid4(),
             document_id=document_id,

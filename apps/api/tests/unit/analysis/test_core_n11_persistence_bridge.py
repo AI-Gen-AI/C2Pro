@@ -1,6 +1,7 @@
 """Focused CORE pilot contract: N11 proposal persistence (no approvals invented)."""
 
 from src.analysis.application.trusted_materialization import MaterializationContent
+from src.analysis.adapters.graph.document_artifact_builder import build_document_artifact
 from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
 
@@ -65,3 +66,22 @@ def test_n17_fenced_artifact_without_proposal_cannot_invent_one():
         {},
     )
     assert not content.decision_snapshot
+
+
+def test_n11_artifact_roundtrip_keeps_pending_proposals_unapproved():
+    artifact = build_document_artifact({
+        "document_id": "doc-A",
+        "document_revision_id": "revision-2",
+        "doc_type": "contract",
+        "decision_package": {"proposed_actions": [_proposal()]},
+    })
+    assert artifact.decision_snapshot is not None
+    assert artifact.decision_snapshot["revision_id"] == "revision-2"
+    restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"), {})
+    assert restored.decision_snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
+    assert restored.decision_snapshot["proposed_actions"][0]["owner"] is None
+
+
+def test_legacy_artifact_has_no_spurious_decisions():
+    artifact = build_document_artifact({"document_id": "doc-A", "doc_type": "contract"})
+    assert artifact.decision_snapshot is None

@@ -195,6 +195,8 @@ class DocumentArtifact(BaseModel):
     pii_redaction_count: int = Field(default=0, ge=0)
     # ADR-032 (additive, optional): structured-source trust candidate identity.
     structured_source: StructuredSource | None = None
+    # Additive, optional N11 proposal snapshot: never a trusted decision or approval.
+    decision_snapshot: dict[str, Any] | None = None
 
 
 __all__ = [

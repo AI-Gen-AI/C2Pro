@@ -9,6 +9,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -110,7 +111,7 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
           if (!envelope) return null; // Older backend: do not invent decisions.
           return (
             <SectionCard key={key} sectionKey={key} section={envelope}>
-              <SectionBody sectionKey={key} sections={sections} />
+              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} />
             </SectionCard>
           );
         })}
@@ -275,7 +276,7 @@ function SectionCard({
   );
 }
 
-function SectionBody({ sectionKey, sections }: { sectionKey: ContentSectionKey; sections: Sections }) {
+function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentSectionKey; sections: Sections; projectId: string }) {
   switch (sectionKey) {
     case "documents":
       return <DocumentsBody data={sections.documents.data} />;
@@ -288,7 +289,7 @@ function SectionBody({ sectionKey, sections }: { sectionKey: ContentSectionKey; 
     case "alerts":
       return <AlertsBody data={sections.alerts.data} />;
     case "decision_proposals":
-      return <DecisionProposalsBody data={sections.decision_proposals?.data} />;
+      return <DecisionProposalsBody data={sections.decision_proposals?.data} projectId={projectId} />;
     case "hitl":
       return <HitlBody data={sections.hitl.data} />;
     case "budget":
@@ -305,7 +306,7 @@ function SectionBody({ sectionKey, sections }: { sectionKey: ContentSectionKey; 
 }
 
 
-function DecisionProposalsBody({ data }: { data: DecisionProposalsEnvelope["data"] }) {
+function DecisionProposalsBody({ data, projectId }: { data: DecisionProposalsEnvelope["data"]; projectId: string }) {
   if (!data) return null;
   return (
     <ul data-testid="current-state-decision-proposals" className="space-y-3">
@@ -321,8 +322,14 @@ function DecisionProposalsBody({ data }: { data: DecisionProposalsEnvelope["data
             {proposal.clause_ref ? ` · clause ${proposal.clause_ref}` : ""}
           </p>
           {proposal.source_quote ? <blockquote className="border-l-2 pl-2 text-xs">{proposal.source_quote}</blockquote> : null}
+          <Link
+            className="inline-block text-xs text-primary underline underline-offset-2"
+            href={`/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(proposal.source_document_id)}&revisionId=${encodeURIComponent(proposal.source_revision_id)}`}
+          >
+            Inspect source document revision
+          </Link>
           <p className="text-xs text-muted-foreground">
-            Source quote requires validation; no navigable original locator verified.
+            Opens the pinned source revision if available; clause/page localization and AI interpretation are not yet verified.
           </p>
         </li>
       ))}

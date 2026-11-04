@@ -140,6 +140,8 @@ class MaterializationContent:
     def from_artifact(
         cls, payload: Mapping[str, Any], scoring: Mapping[str, Any] | None
     ) -> MaterializationContent:
+        from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
+
         score = (scoring or {}).get("coherence_score")
         return cls(
             document_id=_str_or_none(payload.get("document_id")),
@@ -148,6 +150,11 @@ class MaterializationContent:
             coherence_score=round(score) if isinstance(score, int | float) else None,
             coherence_breakdown={},
             assessment={},
+            decision_snapshot=decision_snapshot_for_persistence(
+                payload.get("decision_snapshot"),
+                document_id=_str_or_none(payload.get("document_id")),
+                revision_id=_str_or_none(payload.get("document_revision_id")),
+            ) or {},
         )
 
 
