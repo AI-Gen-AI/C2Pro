@@ -1736,6 +1736,9 @@ async def _prefer_current_projectgraph_snapshot(
     reason = facts.get("score_reason")
     if score is None and not reason:
         reason = "insufficient_projectgraph_evidence"
+    score_version = facts.get("score_version")
+    if score_version not in ("coherence-v1", "coherence-v2"):
+        score_version = None
     return summary.model_copy(
         update={
             "global_score": score,
@@ -1743,7 +1746,7 @@ async def _prefer_current_projectgraph_snapshot(
             "sub_scores": _normalized_sub_scores(facts.get("category_scores")),
             "score_reason": reason,
             "score_missing_dimensions": reasons if isinstance(reasons, list) else [],
-            "score_version": "projectgraph",
+            "score_version": score_version,
             "last_updated": max(summary.last_updated, captured_at)
             if summary.last_updated is not None
             else captured_at,
