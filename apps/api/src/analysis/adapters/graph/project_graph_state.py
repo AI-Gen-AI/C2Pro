@@ -5,7 +5,7 @@ TS-UT-ADR017-PG-001
 
 from __future__ import annotations
 
-from typing import Annotated, NotRequired, Protocol, TypedDict
+from typing import Annotated, Any, NotRequired, Protocol, TypedDict
 from uuid import UUID
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
@@ -36,6 +36,9 @@ class ProjectGraphState(TypedDict):
     previous_snapshot_id: UUID | None
     changed_artifact_ids: list[UUID | str]
     artifacts: list[DocumentArtifact]
+    # Read-only references to canonical XLSX source rows, not approved baselines
+    # and not extra trusted DocumentArtifact records.
+    structured_source_refs: NotRequired[list[dict[str, Any]]]
     coherence_result: ProjectCoherenceResult | dict[str, object] | None
     impact_result: ChangeImpactReport | dict[str, object] | None
     health_result: dict[str, object] | None
