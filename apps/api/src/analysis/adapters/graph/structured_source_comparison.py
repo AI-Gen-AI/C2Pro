@@ -30,7 +30,7 @@ _ISO = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 _CURRENCY = re.compile(r"(EUR|USD|GBP|€|\$|£)\s*(\d[\d,.]*)", re.IGNORECASE)
 _COMPLETION = re.compile(
     r"(?:contractual\s+completion|completion\s+(?:date|deadline)|"
-    r"fecha\s+(?:límite\s+de\s+)?(?:finalización|terminación)|"
+    r"fecha\s+(?:(?:límite\s+)?de\s+)?(?:finalización|terminación)|"
     r"shall\s+(?:achieve|reach)\s+completion|complete\s+(?:the\s+works|commissioning))",
     re.IGNORECASE,
 )
