@@ -15,6 +15,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from src.analysis.domain.critique_findings import (
+    format_source_bound_notes,
+    source_bound_findings,
+)
+
 from src.analysis.domain.prompts import (
     BUDGET_EXTRACTION_PROMPT,
     CRITIQUE_SYSTEM_PROMPT,
@@ -114,10 +119,36 @@ class CritiqueExtractionService:
                 f"Document type: {doc_type}\n{evidence}\nExtraction results: {items}",
             )
             if isinstance(payload, dict):
-                status = str(payload.get("status", "")).upper()
+                status = str(payload.get("status", "")).strip().upper()
                 notes = str(payload.get("notes", "")).strip()
-                if status in {"OK", "RETRY"}:
-                    return CritiqueResult(status=status, notes=notes)
+                verified = source_bound_findings(
+                    payload.get("findings"), source_text=source
+                )
+                if verified:
+                    # Verified citations carry review authority, not the
+                    # model's untrusted status string. A model might return
+                    # NEEDS_REVIEW, FAIL, or even OK while identifying source
+                    # conflicts. Preserve the facts, require human review, and
+                    # NEVER silently replace a supported critique with fallback.
+                    return CritiqueResult(
+                        status="RETRY",
+                        notes=format_source_bound_notes(verified),
+                    )
+                if source and (status == "RETRY" or payload.get("findings")):
+                    return CritiqueResult(
+                        status="RETRY",
+                        notes="N12_UNASSESSED: no source-grounded findings available.",
+                    )
+                if status == "OK":
+                    return CritiqueResult(status="OK", notes=notes)
+                if status == "RETRY":
+                    return CritiqueResult(status="RETRY", notes=notes)
+                # Invalid status without verified source evidence is not a
+                # valid critique, regardless of natural-language confidence.
+                return CritiqueResult(
+                    status="RETRY",
+                    notes="N12_UNASSESSED: unrecognized reviewer status.",
+                )
         except Exception:
             pass
         return CritiqueResult(status="RETRY", notes="Automatic critique inconclusive.")
