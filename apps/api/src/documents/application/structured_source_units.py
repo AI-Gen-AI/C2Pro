@@ -108,7 +108,7 @@ async def stage_structured_source_units(
         return {"state": "UNASSESSED", "reason": "immutable_source_revision_missing", "units": 0}
     # R2 returns a temporary path; its suffix is usually preserved, but the
     # original verified document format remains the authoritative type.
-    if (source_format or file_path.suffix).lower() != ".xlsx":
+    if (source_format or file_path.suffix).lower().lstrip(".") != "xlsx":
         return {"state": "UNASSESSED", "reason": "verified_source_format_unsupported", "units": 0}
 
     scope = {
