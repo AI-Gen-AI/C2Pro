@@ -39,6 +39,10 @@ class ProjectGraphState(TypedDict):
     # Read-only references to canonical XLSX source rows, not approved baselines
     # and not extra trusted DocumentArtifact records.
     structured_source_refs: NotRequired[list[dict[str, Any]]]
+    # Canonical original XLSX rows (validated again against their unit SHA-256).
+    structured_source_units: NotRequired[list[dict[str, Any]]]
+    # Non-scoring, provisional discrepancies with two immutable evidence pointers.
+    structured_source_comparison: NotRequired[dict[str, Any]]
     coherence_result: ProjectCoherenceResult | dict[str, object] | None
     impact_result: ChangeImpactReport | dict[str, object] | None
     health_result: dict[str, object] | None
