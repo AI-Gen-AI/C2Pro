@@ -206,12 +206,7 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
     )
 
     # Stale evidence from another revision must NOT remain visible as current.
-    original_event = (await db.execute(
-        select(ProjectEventORM).where(
-            ProjectEventORM.event_id == uuid4()
-        )
-    )).scalar_one_or_none()  # keep the real source immutable (append-only)
-    assert original_event is None
+    # Event history is append-only: the new event supersedes without editing prior data.
     persisted_event = (await db.execute(
         select(ProjectEventORM).where(
             ProjectEventORM.event_id == UUID(report_data["event_id"])
