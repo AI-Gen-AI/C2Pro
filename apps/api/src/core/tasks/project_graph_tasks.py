@@ -87,6 +87,7 @@ async def run_project_graph_once(
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
     structured_source_refs: list[dict[str, Any]] | None = None,
+    structured_source_units: list[dict[str, Any]] | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -102,6 +103,7 @@ async def run_project_graph_once(
         "changed_artifact_ids": [],
         "artifacts": artifacts,
         "structured_source_refs": list(structured_source_refs or []),
+        "structured_source_units": list(structured_source_units or []),
         "coherence_result": None,
         "impact_result": None,
         "health_result": None,
@@ -124,6 +126,7 @@ async def run_project_graph_once(
         "projected_obligations": projected,
         "artifact_count": len(artifacts),
         "structured_source_revision_count": len(structured_source_refs or []),
+        "structured_source_comparison": result.get("structured_source_comparison"),
         "node_result_count": len(result.get("node_results", [])),
         "coherence_result": _serializable(result.get("coherence_result")),
         "node_results": result.get("node_results", []),
@@ -184,6 +187,7 @@ async def _run_project_graph_async(
                     trigger_event_id=trigger_event_id,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
                     structured_source_refs=source_refs,
+                    structured_source_units=rows,
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)
