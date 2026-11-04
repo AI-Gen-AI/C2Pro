@@ -49,6 +49,14 @@ on:
         description: "Integral UAT, real-ai only: the full candidate SHA, typed to confirm that paid provider calls are intended."
         type: string
         default: ""
+      n4_n12_live_ai:
+        description: "Run only the focused N4 extraction and N12 critique evaluation over the committed nine-clause synthetic EPC fixture. Never runs S2 or the integral journey."
+        type: boolean
+        default: false
+      n4_n12_confirm_sha:
+        description: "N4/N12 real-AI evaluation only: the full candidate SHA, typed to authorize its two governed provider calls."
+        type: string
+        default: ""
 
 concurrency:
   group: acc01-s2-live-ai-${{ github.ref }}
@@ -59,7 +67,7 @@ permissions:
 
 jobs:
   s2-live-ai:
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
+    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.n4_n12_live_ai != 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
     # Scheduled, so it never blocks a PR. Its status is the suite's real result.
     # Runs every "chromium" spec (the intentionally RED backlog is excluded in
     # playwright.config.ts) against a real local backend started exactly as the
@@ -323,6 +331,85 @@ jobs:
           done
           docker compose -f docker-compose.test.yml down -v || true
 
+
+  n4-n12-real-ai-evaluation:
+    # Isolated from both S2 and the integral lane: no browser, database, worker,
+    # embeddings provider, upload, persistence, or S2 fixture is started here.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.n4_n12_live_ai == 'true' && github.event.inputs.n4_n12_confirm_sha == github.sha && github.event.inputs.integral_uat != 'true'
+    name: Focused N4 to N12 real-AI synthetic EPC evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: c2pro-n4-n12-real-ai-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
+      ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
+      AI_MAX_TOKENS_OUTPUT: "4096"
+      C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/web/playwright-report/n4-n12-real-ai-governor.jsonl
+      C2PRO_AI_GOVERNOR_MAX_CALLS: "2"
+      C2PRO_AI_GOVERNOR_MAX_USD: "0.50"
+      PYTHONPATH: apps/api:apps/api/scripts/real_ai_governor
+    steps:
+      - name: Checkout dispatched candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require exact candidate, test-only credential, and fixture identity
+        run: |
+          set -euo pipefail
+          test "${C2PRO_AI_MOCK}" = "0"
+          test "${C2PRO_EMBEDDINGS_MOCK}" = "1"
+          test "${GITHUB_SHA}" = "${{ github.event.inputs.n4_n12_confirm_sha }}"
+          test -n "${ANTHROPIC_API_KEY:-}" || { echo '::error::N4/N12 evaluation blocked: S2_E2E_ANTHROPIC_API_KEY is unavailable.'; exit 2; }
+          test "$(sha256sum c2pro-n4n12-epc-synthetic-v1.json | awk '{print $1}')" = "6206d62492e786b2b97902cb59f19ba36f3bd996184470e5aecc3009cdf2c8eb"
+          echo 'Focused evaluation is isolated from S2 and integral UAT; credential value is never printed.'
+
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Verify runner scoring behavior without a provider call
+        run: python apps/api/tests/unit/scripts/test_n4_n12_real_ai_eval.py
+
+      - name: Run exactly N4 then N12 with the real governed provider
+        run: python apps/api/scripts/n4_n12_real_ai_eval.py
+
+      - name: Verify a measured result, not a connectivity-only receipt
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('apps/web/playwright-report/n4-n12-real-ai-evaluation.json')
+          result = json.loads(path.read_text(encoding='utf-8'))
+          if result['fixture_sha256'] != '6206d62492e786b2b97902cb59f19ba36f3bd996184470e5aecc3009cdf2c8eb':
+              raise SystemExit('N4_N12_FIXTURE_IDENTITY_MISMATCH')
+          if result['provider'].get('calls') != 2 or result['provider'].get('completed_calls') != 2:
+              raise SystemExit(f"N4_N12_PROVIDER_CALL_COUNT_INVALID: {result['provider']}")
+          if result['errors']:
+              raise SystemExit(f"N4_N12_NODE_ERRORS: {result['errors']}")
+          if result['n4']['expected_risks'] != 9 or result['n12']['omissions_expected'] != 2:
+              raise SystemExit('N4_N12_METRIC_CONTRACT_INVALID')
+          print(json.dumps({
+              'model': result['provider'].get('models'),
+              'n4': result['n4'],
+              'n12': result['n12'],
+          }, sort_keys=True))
+          PY
+
+      - name: Upload sanitized N4/N12 evaluation result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: n4-n12-real-ai-evaluation
+          path: apps/web/playwright-report/n4-n12-real-ai-evaluation.json
+          if-no-files-found: warn
+          retention-days: 7
 
   # ─────────────────────────────────────────────────────────────────────────────────────────────────────────
   # Integral S1-S8 UAT (opt-in: workflow_dispatch with integral_uat=true). Nothing above this line changes.
