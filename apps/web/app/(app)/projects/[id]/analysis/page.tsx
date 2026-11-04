@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AnalysisProgressTracker } from "@/components/features/analysis/AnalysisProgressTracker";
+import { ProjectSourceEvidenceCard } from "@/components/features/analysis/ProjectSourceEvidenceCard";
 import {
   SingleDocumentHealth,
   coherenceSubscoreIsIncorporated,
@@ -280,6 +281,8 @@ export default function AnalysisPage() {
       <AnalysisProgressTracker projectId={id} />
 
       <SingleDocumentHealth projectId={id} />
+
+      <ProjectSourceEvidenceCard projectId={id} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((stat) => {
