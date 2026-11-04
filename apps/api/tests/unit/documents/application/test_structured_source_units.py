@@ -3,7 +3,7 @@
 import json
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -11,6 +11,7 @@ import pytest
 from src.documents.adapters.parsers.excel_file_parser import BudgetRows, ExcelParsingError
 from src.documents.application.structured_source_units import (
     _prepare_units,
+    load_canonical_source_units,
     stage_structured_source_units,
 )
 
@@ -141,3 +142,52 @@ def test_duplicate_or_missing_locator_is_never_silently_deduplicated():
         ], family="schedule")
     with pytest.raises(ValueError, match="SOURCE_UNIT_LOCATOR_MISSING"):
         _prepare_units([{"task": "No source"}], family="schedule")
+
+
+
+@pytest.mark.asyncio
+async def test_r2_temporary_filename_does_not_hide_verified_xlsx_format(tmp_path):
+    scope = _scope(tmp_path / "revision_object_without_suffix")
+    scope["parser"].parse_schedule.return_value = [
+        {"task": "Handover", "source_locator": "Plan!12"}
+    ]
+    result = await stage_structured_source_units(
+        **scope, family="schedule", source_format=".xlsx"
+    )
+    assert result["units"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reader_queries_canonical_revision_not_pending_proposal():
+    session = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = [{
+        "family": "schedule",
+        "source_locator": "Plan!4",
+        "payload": {"task": "Milestone"},
+    }]
+    session.execute.return_value = result
+    records = await load_canonical_source_units(
+        session=session,
+        tenant_id=uuid4(),
+        project_id=uuid4(),
+        family="schedule",
+    )
+    assert len(records) == 1
+    assert records[0]["source_locator"] == "Plan!4"
+    query = str(session.execute.await_args.args[0])
+    assert "cur.canonical" in query
+    assert "cur.revision_id = u.revision_id" in query
+    assert "u.tenant_id = CAST(:tenant_id AS uuid)" in query
+    assert "u.project_id = CAST(:project_id AS uuid)" in query
+
+
+@pytest.mark.asyncio
+async def test_reader_rejects_other_document_families():
+    session = AsyncMock()
+    with pytest.raises(ValueError, match="SOURCE_UNIT_FAMILY_INVALID"):
+        await load_canonical_source_units(
+            session=session, tenant_id=uuid4(), project_id=uuid4(),
+            family="contract",
+        )
+    session.execute.assert_not_awaited()
