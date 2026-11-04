@@ -327,7 +327,6 @@ jobs:
 
       - name: ProjectGraph CORE - authenticated source citation and relogin UI
         if: always() && github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true && hashFiles('apps/web/playwright-report/projectgraph-functional-pilot.json') != ''
-        continue-on-error: true  # Preserve diagnostic files for the final gate.
         working-directory: apps/web
         run: ./node_modules/.bin/playwright test --project=projectgraph-acceptance --workers=1 --retries=0 --reporter=list
 
