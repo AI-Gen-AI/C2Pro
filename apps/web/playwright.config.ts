@@ -58,6 +58,7 @@ export default defineConfig({
         /(^|[\\/])p0c-what-changed\.spec\.ts$/,
         // Own project and Nightly step: a long journey that must not hide the rest of the suite.
         /(^|[\\/])triplet-user-journey\.spec\.ts$/,
+        /(^|[\\/])projectgraph-four-source-citations\.spec\.ts$/,
         /(^|[\\/])s7-clerk-relogin\.spec\.ts$/,
         // Opt-in integral S1-S8 UAT (own project, own workflow job).
         /(^|[\\/])integral-s1-s8\.spec\.ts$/,
@@ -376,6 +377,15 @@ export default defineConfig({
         ai: "mocked-in-nightly",
         description: "Three-document journey; not PQ-HITL-09 S1-S8",
       },
+    },
+    {
+      // Only the owner-authorised ProjectGraph live runner selects this suite.
+      // No stored Clerk session: sign in, navigate cited evidence and relogin.
+      name: "projectgraph-acceptance",
+      testMatch: /(^|[\\/])projectgraph-four-source-citations\.spec\.ts$/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: { suite: "PROJECTGRAPH-CORE", ai: "nonmocked-pilot-only" },
     },
     {
       name: "e2e-j2-weekly-review",
