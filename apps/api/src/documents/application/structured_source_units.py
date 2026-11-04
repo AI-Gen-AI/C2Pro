@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
+from src.temporal.adapters.persistence.current_revision_sql import current_revision_lateral
 
 
 _DELETE = text("""
@@ -161,4 +162,53 @@ async def stage_structured_source_units(
     }
 
 
-__all__ = ["stage_structured_source_units"]
+
+
+_READ_TRUSTED_SOURCE_UNITS = text(f"""
+    SELECT u.document_id, u.revision_id, u.source_locator, u.family,
+           u.blob_hash, u.unit_sha256, u.payload
+    FROM public.document_source_units AS u
+    JOIN public.documents AS d
+      ON d.id = u.document_id
+     AND d.project_id = u.project_id
+     AND d.tenant_id = u.tenant_id
+    CROSS JOIN LATERAL {current_revision_lateral("u.document_id", "u.tenant_id")} AS cur
+    WHERE u.tenant_id = CAST(:tenant_id AS uuid)
+      AND u.project_id = CAST(:project_id AS uuid)
+      AND u.family = :family
+      AND cur.canonical
+      AND cur.revision_id = u.revision_id
+    ORDER BY u.document_id, u.source_locator
+""")
+
+
+async def load_canonical_source_units(
+    *,
+    session: AsyncSession,
+    tenant_id: UUID,
+    project_id: UUID,
+    family: str,
+) -> list[dict[str, Any]]:
+    """Read only original rows of canonical document revisions, never pending ones.
+
+    This is a source-evidence reader; it does NOT approve an EPC baseline, prove
+    entire workbook coverage or create N8 risk/coherence signals.
+    """
+    if family not in {"budget", "schedule"}:
+        raise ValueError("SOURCE_UNIT_FAMILY_INVALID")
+
+    result = await session.execute(
+        _READ_TRUSTED_SOURCE_UNITS,
+        {
+            "tenant_id": str(tenant_id),
+            "project_id": str(project_id),
+            "family": family,
+        },
+    )
+    return [
+        dict(row)
+        for row in result.mappings().all()
+    ]
+
+
+__all__ = ["stage_structured_source_units", "load_canonical_source_units"]
