@@ -72,6 +72,7 @@ class ProjectState(TypedDict):
 
     # ── N2: PII Anonymizer ──
     anonymized_text: str
+    pii_anonymization_complete: bool
     pii_redactions: list[dict[str, Any]]
 
     # ── N6: Stakeholder Extractor ──
