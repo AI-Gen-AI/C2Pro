@@ -732,6 +732,7 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
           const data = response.ok ? await response.json() as {
             sections?: { decision_proposals?: {
               status?: string;
+              status_reason?: string | null;
               data?: { items?: Array<{
                 source_document_id: string; source_revision_id: string;
                 proposed_action: string; status: string;
@@ -741,11 +742,19 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
           return {
             status: response.status,
             section: data?.sections?.decision_proposals?.status ?? "MISSING",
+            statusReason: data?.sections?.decision_proposals?.status_reason ?? null,
             items: data?.sections?.decision_proposals?.data?.items ?? [],
           };
         }, projectId);
         expect(inspection.status, "Current State must respond after logout and relogin").toBe(200);
-        expect(inspection.section, "N11 proposals must be current, not NOT_MODELED or UNAVAILABLE").toBe("available");
+        test.info().annotations.push({
+          type: "core-n11-read-result",
+          description: JSON.stringify({ status: inspection.section, reason: inspection.statusReason }),
+        });
+        expect(
+          inspection.section,
+          `N11 current revision reader must be available; backend reason: ${inspection.statusReason ?? "none"}`,
+        ).toBe("available");
         expect(inspection.items.length, "N11 should offer at least one concrete EPC action").toBeGreaterThan(0);
         const sourceIds = new Set([
           contract.documentId, budget.documentId, schedule.documentId, technical.documentId,

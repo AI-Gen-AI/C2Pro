@@ -282,6 +282,63 @@ jobs:
         # one after the other. This isolates them; it is not a finding about the cause.
         run: ./node_modules/.bin/playwright test --project=triplet-journey --workers=1 --reporter=list,json
 
+      # On a real CORE failure preserve the FIRST missing bridge, even though
+      # the earlier browser test failed. Read-only, non-blocking diagnostics.
+      - name: CORE Pilot - capture SQL lineage after browser failure
+        if: ${{ always() && steps.triplet_s2_journey.outcome == 'failure' && github.ref_name == 'feat/c2pro-core-pilot-20261104' }}
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import asyncio
+          import json
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          src = Path("../web/playwright-report/triplet-results.json")
+          out = Path("../web/playwright-report/core-failure-diagnostics.json")
+          report = {"source": "read-only post-failure CI diagnostic", "project_id": None}
+          try:
+              test_report = json.loads(src.read_text())
+              def find(suites):
+                  for suite in suites:
+                      for spec in suite.get("specs", []):
+                          for test in spec.get("tests", []):
+                              for result in test.get("results", []):
+                                  for annotation in result.get("annotations", []):
+                                      if annotation.get("type") == "s2-source-ledger":
+                                          yield json.loads(annotation["description"]).get("projectId")
+                      yield from find(suite.get("suites", []))
+              pid = next((p for p in find(test_report.get("suites", [])) if p), None)
+              report["project_id"] = pid
+              if pid:
+                  async def check():
+                      db = os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://", 1)
+                      engine = create_async_engine(db)
+                      try:
+                          async with engine.connect() as con:
+                              await con.execute(text("SET TRANSACTION READ ONLY"))
+                              for key, sql in {
+                                  "documents": "SELECT count(*) FROM documents WHERE project_id=CAST(:p AS uuid)",
+                                  "artifacts_total": "SELECT count(*) FROM document_artifacts WHERE project_id=CAST(:p AS uuid)",
+                                  "artifacts_trusted_current": "SELECT count(*) FROM document_artifacts WHERE project_id=CAST(:p AS uuid) AND trust_state='trusted' AND lifecycle_status='active' AND document_revision_id IS NOT NULL",
+                                  "analyses_total": "SELECT count(*) FROM analyses WHERE project_id=CAST(:p AS uuid)",
+                                  "analyses_n11_snapshot": "SELECT count(*) FROM analyses WHERE project_id=CAST(:p AS uuid) AND (result_json::jsonb ? 'decision_snapshot')",
+                                  "graph_completed": "SELECT count(*) FROM project_events WHERE project_id=CAST(:p AS uuid) AND event_type='graph.completed'",
+                              }.items():
+                                  report[key] = int((await con.execute(text(sql), {"p": pid})).scalar_one())
+                      finally:
+                          await engine.dispose()
+                  asyncio.run(check())
+          except Exception as exc:
+              report["diagnostic_error_type"] = type(exc).__name__
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+          print("CORE_FAILURE_DIAGNOSTICS=" + json.dumps(report, sort_keys=True))
+          PY
+
       # S2: a separate process reads the actual SQL tables of THIS Playwright
       # project, before cleanup destroys the job's migrated PostgreSQL database.
       # API/listing and browser screenshots alone are not an independent DB check.
@@ -367,6 +424,7 @@ jobs:
             apps/web/playwright-report/s2-real-ai-provider.json
             apps/web/playwright-report/triplet-results.json
             apps/web/playwright-report/s2-postgres-ledger.json
+            apps/web/playwright-report/core-failure-diagnostics.json
           if-no-files-found: warn
           retention-days: 3
 
