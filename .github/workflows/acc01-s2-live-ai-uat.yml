@@ -329,6 +329,38 @@ jobs:
                                   "graph_completed": "SELECT count(*) FROM project_events WHERE project_id=CAST(:p AS uuid) AND event_type='graph.completed'",
                               }.items():
                                   report[key] = int((await con.execute(text(sql), {"p": pid})).scalar_one())
+                              # Distinguish N4 extraction, N4 mitigation, N11
+                              # materialization and structured XLSX source coverage.
+                              rows = (await con.execute(text(
+                                  "SELECT result_json FROM analyses WHERE project_id=CAST(:p AS uuid)"
+                              ), {"p": pid})).all()
+                              risks = [
+                                  risk
+                                  for row in rows
+                                  for risk in (
+                                      row[0].get("risks", []) if isinstance(row[0], dict) else []
+                                  )
+                                  if isinstance(risk, dict)
+                              ]
+                              report["n4_risks_persisted"] = len(risks)
+                              report["n4_mitigations_persisted"] = sum(
+                                  bool(str(risk.get("mitigation_suggestion") or "").strip())
+                                  for risk in risks
+                              )
+                              report["n11_actions_persisted"] = sum(
+                                  len(row[0].get("decision_snapshot", {}).get("proposed_actions", []))
+                                  for row in rows
+                                  if isinstance(row[0], dict)
+                                  and isinstance(row[0].get("decision_snapshot"), dict)
+                              )
+                              structured = (await con.execute(text(
+                                  "SELECT family, COUNT(DISTINCT document_id) "
+                                  "FROM document_source_units WHERE project_id=CAST(:p AS uuid) "
+                                  "GROUP BY family"
+                              ), {"p": pid})).all()
+                              report["structured_source_documents_by_family"] = {
+                                  str(family): int(count) for family, count in structured
+                              }
                       finally:
                           await engine.dispose()
                   asyncio.run(check())
