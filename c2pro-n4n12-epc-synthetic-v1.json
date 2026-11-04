@@ -1,0 +1,49 @@
+{
+  "fixture_id": "C2PRO-N4N12-EPC-SYNTHETIC-V1",
+  "purpose": "Real-AI quality evaluation only; no production data or persistence.",
+  "contract": {
+    "title": "Synthetic EPC Contract — North Pump Station",
+    "clauses": [
+      {"id": "EPC-01", "text": "Liquidated damages. If the Contractor fails to achieve Taking-Over by the Completion Date, it shall pay liquidated damages of 0.5% of the Contract Price for each week of delay, capped at 10% of the Contract Price. Delay caused solely by a subcontractor does not entitle the Contractor to an extension of time."},
+      {"id": "EPC-02", "text": "Contract Price. The Contract Price is fixed and includes all duties, taxes and customs charges known on the Base Date. The Contractor bears increases in material prices and exchange rates. A change in law imposing a new import duty after the Base Date is compensable only to the extent that it increases the affected cost by more than 3%."},
+      {"id": "EPC-03", "text": "Payment. The Employer shall pay an undisputed certified invoice within 45 days after receipt of a valid invoice. The Engineer shall certify or state reasons for rejection within 14 days. The Contractor may suspend performance only after giving 21 days' written notice for a payment overdue by more than 60 days."},
+      {"id": "EPC-04", "text": "Defects. The Defects Notification Period is 24 months from Taking-Over. The Contractor shall rectify a notified defect within 14 days of written notice. The Contractor is not liable for a defect caused exclusively by Employer-provided design or by operation contrary to the manuals."},
+      {"id": "EPC-05", "text": "Force Majeure. A Party affected by Force Majeure shall notify the other Party within 5 days and is entitled to time relief for the proven delay. Price escalation, currency fluctuation, lack of financing and ordinary market shortages are not Force Majeure."},
+      {"id": "EPC-06", "text": "Variations. No Variation is binding unless instructed in writing by the Employer's authorized representative and valued under this Contract. In an emergency threatening life or the Works, the Contractor may act immediately but must obtain written confirmation within 48 hours; otherwise the work is at the Contractor's risk."},
+      {"id": "EPC-07", "text": "Liability and indemnity. The Contractor shall indemnify the Employer against third-party bodily injury and property damage arising from the Works. Aggregate liability is capped at 100% of the Contract Price, except for fraud, wilful misconduct, intellectual-property infringement and liabilities that cannot lawfully be limited."},
+      {"id": "EPC-08", "text": "Site information. Geotechnical data supplied by the Employer is provided for information only. The Contractor confirms that it has inspected the Site and bears the risk of differing ground conditions that a competent contractor could have discovered from the data and inspection."},
+      {"id": "EPC-09", "text": "Termination for convenience. The Employer may terminate for convenience on 30 days' written notice. It shall pay for properly performed work, reasonable demobilization costs and committed non-cancellable purchase orders, but no loss of profit on unperformed work."}
+    ]
+  },
+  "n4_oracle": {
+    "expected_risks": [
+      {"clause_id": "EPC-01", "risk": "Delay LD exposure and no subcontractor-delay EOT", "category": "SCHEDULE", "citation_must_include": "0.5% of the Contract Price for each week of delay"},
+      {"clause_id": "EPC-02", "risk": "Fixed-price, FX/material escalation allocation; narrow change-in-law relief", "category": "BUDGET", "citation_must_include": "only to the extent that it increases the affected cost by more than 3%"},
+      {"clause_id": "EPC-03", "risk": "Long payment/suspension cash-flow exposure", "category": "BUDGET", "citation_must_include": "overdue by more than 60 days"},
+      {"clause_id": "EPC-04", "risk": "24-month defects obligation and 14-day cure", "category": "QUALITY", "citation_must_include": "rectify a notified defect within 14 days"},
+      {"clause_id": "EPC-05", "risk": "Narrow force-majeure relief and five-day notice", "category": "LEGAL", "citation_must_include": "lack of financing ... are not Force Majeure"},
+      {"clause_id": "EPC-06", "risk": "Unauthorized variation/emergency work can remain at contractor risk", "category": "SCOPE", "citation_must_include": "otherwise the work is at the Contractor's risk"},
+      {"clause_id": "EPC-07", "risk": "Indemnity and liability-cap carve-outs", "category": "LEGAL", "citation_must_include": "except for fraud, wilful misconduct, intellectual-property infringement"},
+      {"clause_id": "EPC-08", "risk": "Differing-ground-condition allocation", "category": "TECHNICAL", "citation_must_include": "bears the risk of differing ground conditions"},
+      {"clause_id": "EPC-09", "risk": "Convenience termination and unrecoverable lost profit", "category": "LEGAL", "citation_must_include": "no loss of profit on unperformed work"}
+    ],
+    "false_positive_rules": [
+      "Do not report a universal right to price escalation under EPC-02.",
+      "Do not report force-majeure relief for financial hardship, currency fluctuation or market shortage under EPC-05.",
+      "Do not report unlimited contractor liability under EPC-07.",
+      "Do not report recovery of lost profit after convenience termination under EPC-09."
+    ]
+  },
+  "n12_adversarial_input": {
+    "injected_omissions": ["EPC-04", "EPC-07"],
+    "injected_incorrect_interpretation": {
+      "clause_id": "EPC-05",
+      "claim": "Financial hardship and currency fluctuation qualify as Force Majeure and give the Contractor time relief."
+    },
+    "pass_condition": "N12 identifies both omitted risk areas and rejects the EPC-05 claim with an exact supporting source citation; it must not invent a contrary term."
+  },
+  "metrics": {
+    "n4": ["true_positive_extractions", "omissions", "false_positives", "citation_validity"],
+    "n12": ["omissions_detected_of_2", "incorrect_interpretation_detected_of_1", "critique_citation_validity"]
+  }
+}
