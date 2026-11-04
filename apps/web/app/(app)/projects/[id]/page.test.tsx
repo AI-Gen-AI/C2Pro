@@ -260,6 +260,32 @@ describe("ProjectOverviewPage", () => {
     expect(screen.getByText(/schedule missing/i)).toBeInTheDocument();
   });
 
+  it("does not misrepresent an unavailable ProjectGraph score as zero", () => {
+    getDashboardMock.mockReturnValue({
+      data: {
+        coherence_score: null,
+        score_reason: "insufficient_verified_dimensions",
+        sub_scores: {},
+        alert_count: 0,
+        document_count: 4,
+      },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({
+      data: { items: [] },
+      isLoading: false,
+      error: null,
+    });
+
+    renderWithProviders(<ProjectOverviewPage />);
+
+    // Both the summary card and project posture show unavailable (not 0).
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Coherence Score")).toHaveLength(2);
+  });
+
   it("links to the alerts route from the recent alerts panel", () => {
     getDashboardMock.mockReturnValue({
       data: {
