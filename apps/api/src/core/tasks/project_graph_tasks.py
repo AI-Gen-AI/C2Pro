@@ -11,12 +11,15 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.graph.project_graph import (
     build_project_graph,
     is_project_graph_enabled,
 )
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
+from src.analysis.domain.node_result import NodeStatus
+from src.coherence.models import Clause
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
@@ -27,6 +30,8 @@ from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.core.tasks.project_graph_governance import ProjectGraphGovernance
 from src.core.tenants.types import TenantId, require_tenant_id
+from src.temporal.adapters.persistence.project_snapshot_repository import SqlAlchemyProjectSnapshotRepository
+from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,66 @@ logger = logging.getLogger(__name__)
 async def _maybe_await(value: object) -> None:
     if inspect.isawaitable(value):
         await value
+
+
+async def _load_canonical_project_evidence(
+    session: AsyncSession,
+    project_id: UUID,
+    tenant_id: TenantId,
+) -> tuple[list[Clause], dict[str, Any] | None]:
+    """Reuse the application's tenant-scoped trusted-current source assembly.
+
+    Real persisted clauses carry UUID provenance; budget/schedule helpers attach
+    the existing revision/row authority and explicit missing-evidence markers.
+    No RAG chunks, pending proposals or model-generated quotes are substituted.
+    """
+    from src.coherence.router import (
+        _get_persisted_clause_candidates,
+        _with_budget_clause_candidates,
+        _with_schedule_clause_candidates,
+    )
+    from src.coherence.schedule_clause_builder import load_schedule_planned_finish
+    from src.core.privacy.anonymizer import anonymize_text_simple
+
+    clauses = await _get_persisted_clause_candidates(
+        session, project_id, tenant_id, max_chunks=60
+    )
+    clauses = await _with_budget_clause_candidates(
+        clauses, session, project_id, tenant_id
+    )
+    clauses = await _with_schedule_clause_candidates(
+        clauses, session, project_id, tenant_id, max_chunks=60
+    )
+    schedule_finish = await load_schedule_planned_finish(
+        session, project_id, tenant_id
+    )
+
+    identity_fields = {
+        "document_type", "document_id", "document_revision_id", "revision_id",
+        "source_clause_id", "source_document_id", "source_locator",
+        "blob_hash", "blob_sha256", "content_sha256", "family",
+        "currency", "budget_currencies", "contract_currencies",
+    }
+
+    def scrub(value: Any, key: str = "") -> Any:
+        if isinstance(value, str):
+            return value if key in identity_fields else anonymize_text_simple(value)
+        if isinstance(value, list):
+            return [scrub(item, key) for item in value]
+        if isinstance(value, dict):
+            return {name: scrub(item, name) for name, item in value.items()}
+        return value
+
+    protected = [
+        Clause(
+            id=clause.id,
+            text=anonymize_text_simple(clause.text),
+            data=scrub(clause.data),
+        )
+        for clause in clauses
+    ]
+    protected_schedule_finish = scrub(schedule_finish) if schedule_finish is not None else None
+    return protected, protected_schedule_finish
 
 
 async def enqueue_project_graph(
@@ -61,6 +126,8 @@ async def run_project_graph_once(
     tenant_id: TenantId,
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
+    snapshot_repository: IProjectSnapshotRepository | None = None,
+    db_session: AsyncSession | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -68,11 +135,22 @@ async def run_project_graph_once(
         project_id=project_id,
         tenant_id=tenant_id,
     )
+    prior_snapshot = (
+        await snapshot_repository.latest(project_id, tenant_id)
+        if snapshot_repository is not None
+        else None
+    )
+    source_clauses: list[Clause] = []
+    schedule_finish: dict[str, Any] | None = None
+    if db_session is not None:
+        source_clauses, schedule_finish = await _load_canonical_project_evidence(
+            db_session, project_id, tenant_id
+        )
     graph_input: ProjectGraphState = {
         "project_id": project_id,
         "tenant_id": tenant_id,
         "trigger_event_id": trigger_event_id,
-        "previous_snapshot_id": None,
+        "previous_snapshot_id": prior_snapshot.snapshot_id if prior_snapshot else None,
         "changed_artifact_ids": [],
         "artifacts": artifacts,
         "coherence_result": None,
@@ -81,8 +159,27 @@ async def run_project_graph_once(
         "snapshot_id": None,
         "node_results": [],
         "artifact_repository": artifact_repository,
+        "input_source_clauses": source_clauses,
+        "schedule_planned_finish": schedule_finish,
     }
+    if snapshot_repository is not None:
+        graph_input["snapshot_repository"] = snapshot_repository
+    if db_session is not None:
+        graph_input["db_session"] = db_session
     result = await build_project_graph().ainvoke(graph_input)
+    # A compiled graph is NOT a successful projection when material work failed.
+    # Keep the trusted obligation pending so the Celery retry can recover it.
+    material_nodes = {"cross_doc_coherence", "change_impact", "health", "write_snapshot"}
+    bad = [
+        item.node
+        for item in result.get("node_results", [])
+        if item.status is NodeStatus.FAILED
+        or (item.node in material_nodes and item.status is NodeStatus.DEGRADED)
+    ]
+    if bad:
+        raise RuntimeError(f"ProjectGraph material execution incomplete: {', '.join(bad)}")
+    if snapshot_repository is not None and artifacts and result.get("snapshot_id") is None:
+        raise RuntimeError("ProjectGraph snapshot missing; trusted projection not acknowledged")
     # #714: acknowledge the durable trusted -> ProjectGraph obligations of
     # exactly the artifacts this completed run loaded. The caller commits it
     # together with the run; a failed run rolls it back and stays pending.
@@ -97,8 +194,10 @@ async def run_project_graph_once(
         "projected_obligations": projected,
         "artifact_count": len(artifacts),
         "node_result_count": len(result.get("node_results", [])),
+        "snapshot_id": str(result["snapshot_id"]) if result.get("snapshot_id") else None,
         "coherence_result": _serializable(result.get("coherence_result")),
-        "node_results": result.get("node_results", []),
+        "health_result": _serializable(result.get("health_result")),
+        "node_results": [_serializable(node) for node in result.get("node_results", [])],
     }
 
 
@@ -137,6 +236,8 @@ async def _run_project_graph_async(
                     tenant_id=tenant_id,
                     trigger_event_id=trigger_event_id,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
+                    snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
+                    db_session=session,
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)

@@ -9,6 +9,16 @@ current_sha="${VERCEL_GIT_COMMIT_SHA:-}"
 #   exit 0 = ignore/cancel build
 #   exit 1 = continue build
 #
+# Scope this pilot exception to the NEW Vercel project only. The existing
+# v0-c2-pro project must continue to ignore this feature branch.
+if [[ "$branch" == "feat/projectgraph-functional-20261104" ]]; then
+  if [[ "${VERCEL_PROJECT_ID:-}" == "prj_z11Gj70PWALqxN0EKOIWPVmQNWW3" ]] || \
+     [[ "${VERCEL_URL:-}" == c2pro-projectgraph-pilot-*.vercel.app ]] || \
+     [[ "${VERCEL_PROJECT_PRODUCTION_URL:-}" == c2pro-projectgraph-pilot-*.vercel.app ]]; then
+    exit 1
+  fi
+  exit 0
+fi
 # Git deploymentEnabled in vercel.json is the primary branch gate. Keep the
 # same policy here as defense in depth in case the project setting/config is
 # evaluated differently during a Git-triggered deployment.

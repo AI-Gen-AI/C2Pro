@@ -8,6 +8,10 @@ on:
       - '.github/workflows/acc01-s2-live-ai-uat.yml'
   workflow_dispatch:
     inputs:
+      projectgraph_epc_pilot:
+        description: "Owner-authorized: S2 four real files + real AI, then ONE Tier-2 ProjectGraph pass, exact evidence and snapshot. No production."
+        type: boolean
+        default: false
       integral_uat:
         description: >-
           Integral S1-S8 UAT (opt-in): ONE project from login to relogin, two Clerk Development tenants. When true
@@ -84,6 +88,9 @@ jobs:
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       C2PRO_AI_MOCK: "0"
       C2PRO_EMBEDDINGS_MOCK: "0"
+      # ProjectGraph pilot alone requires actual UI approval of the fourth
+      # technical source, not merely the upload or a parsed status.
+      S3_REQUIRE_TECHNICAL_APPROVAL: ${{ inputs.projectgraph_epc_pilot == true && '1' || '0' }}
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.S2_E2E_OPENAI_API_KEY }}
       NEXT_PUBLIC_API_URL: /api
@@ -177,6 +184,14 @@ jobs:
       - name: Verify Clerk <-> local tenant linkage
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
+
+      - name: ProjectGraph pilot dependency preflight (no provider calls)
+        if: github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true
+        working-directory: apps/api
+        env:
+          PYTHONPATH: "."
+        run: |
+          python -c 'import src; import scripts.projectgraph_epc_pilot_once; from src.core.tasks.project_graph_tasks import run_project_graph_once; print("PROJECTGRAPH_PILOT_IMPORTS_PASS")'
 
       - name: Require genuine noncached Anthropic provider response
         working-directory: apps/api
@@ -296,6 +311,85 @@ jobs:
           fi
           echo 'PASS: a genuine LLM call succeeded in the S2 Worker.'
 
+      - name: ProjectGraph CORE - one real four-document Tier-2 evaluation
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true
+        continue-on-error: true  # The final evidence gate below owns the verdict.
+        working-directory: apps/api
+        env:
+          PYTHONPATH: "."
+          FEATURE_V3_PROJECT_GRAPH: "true"
+          FEATURE_V3_COHERENCE_LLM: "true"
+          AI_MAX_TOKENS_OUTPUT: "1536"
+        run: |
+          python scripts/projectgraph_epc_pilot_once.py \
+            --ledger ../web/playwright-report/s2-postgres-ledger.json \
+            --out ../web/playwright-report/projectgraph-functional-pilot.json
+
+      - name: ProjectGraph CORE - authenticated source citation and relogin UI
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true && hashFiles('apps/web/playwright-report/projectgraph-functional-pilot.json') != ''
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test --project=projectgraph-acceptance --workers=1 --retries=0 --reporter=list
+
+      - name: ProjectGraph CORE - evidence-based final verdict
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = Path("apps/web/playwright-report")
+          backend_path = evidence / "projectgraph-functional-pilot.json"
+          ui_path = evidence / "projectgraph-ui-citations.json"
+          oracle_path = Path("apps/web/src/tests/e2e/test-data/triplet/triplet.manifest.json")
+          reasons = []
+          backend = json.loads(backend_path.read_text()) if backend_path.exists() else {}
+          ui = json.loads(ui_path.read_text()) if ui_path.exists() else {}
+          oracle = json.loads(oracle_path.read_text())
+          authority = {s["family"]: s for s in backend.get("source_authority", [])}
+          codes = {a["rule_code"] for a in backend.get("alert_read_model", [])}
+          expected = set(oracle["expected_rules"]) | set(oracle["expected_provisional"])
+          cited = {
+              row["rule_code"]
+              for row in backend.get("alert_read_model", [])
+              if (
+                  (row.get("source_clause_id") and row.get("source_document_id") and row.get("has_quote"))
+                  or row.get("structured_ref_count", 0) > 0
+              )
+          }
+          if len(authority) != 4:
+              reasons.append("FOUR_DOCUMENT_AUTHORITIES_MISSING")
+          for family in ("contract", "technical_spec"):
+              if not authority.get(family, {}).get("trusted"):
+                  reasons.append(f"{family.upper()}_NOT_TRUSTED")
+          if backend.get("verified_text_document_count") != 2:
+              reasons.append("CONTRACT_AND_SPEC_CLAUSES_NOT_CURRENT")
+          if backend.get("graph_status") != "ok" or not backend.get("snapshot_durable"):
+              reasons.append("PROJECTGRAPH_NOT_DURABLY_COMPLETED")
+          if not backend.get("coherence", {}).get("llm_on"):
+              reasons.append("PROJECTGRAPH_NOT_REAL_LLM")
+          if not backend.get("alerts_with_verified_links") and not backend.get("alerts_with_structured_refs"):
+              reasons.append("NO_VERIFIABLE_ALERT_CITATIONS")
+          if not expected.issubset(codes):
+              reasons.append("EXPECTED_CONTRADICTIONS_NOT_PERSISTED")
+          if not expected.issubset(cited):
+              reasons.append("EXPECTED_CONTRADICTIONS_LACK_VERIFIED_CITATIONS")
+          if ui.get("state") != "PASS" or not ui.get("real_clerk_relogin"):
+              reasons.append("ALERT_UI_RELOGIN_AND_CITATIONS_NOT_VERIFIED")
+          verdict = {
+              "status": "PROJECTGRAPH_CORE_ACCEPTED" if not reasons else "NOT_ACCEPTED",
+              "project_id": backend.get("project_id"),
+              "snapshot_id": backend.get("snapshot_id"),
+              "first_blocker": reasons[0] if reasons else None,
+              "reasons": reasons,
+              "expected_rule_count": len(expected),
+              "verified_expected_rule_count": len(expected & codes),
+          }
+          (evidence / "projectgraph-final-verdict.json").write_text(json.dumps(verdict, indent=2) + "\n")
+          print("PROJECTGRAPH_FINAL_VERDICT=" + json.dumps(verdict, sort_keys=True))
+          if reasons:
+              raise SystemExit(1)
+          PY
+
       - name: Summarize triplet journey result
         if: always()
         working-directory: apps/web
@@ -310,6 +404,9 @@ jobs:
             apps/web/playwright-report/s2-real-ai-provider.json
             apps/web/playwright-report/triplet-results.json
             apps/web/playwright-report/s2-postgres-ledger.json
+            apps/web/playwright-report/projectgraph-functional-pilot.json
+            apps/web/playwright-report/projectgraph-ui-citations.json
+            apps/web/playwright-report/projectgraph-final-verdict.json
           if-no-files-found: warn
           retention-days: 3
 

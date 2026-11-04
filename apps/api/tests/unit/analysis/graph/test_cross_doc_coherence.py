@@ -289,8 +289,8 @@ async def test_run_project_graph_once_populates_cross_doc_coherence(
     assert result["status"] == "ok"
     assert result["artifact_count"] == 2
     assert result["coherence_result"]["artifact_count"] == 2
-    by_node = {node_result.node: node_result for node_result in result["node_results"]}
-    assert by_node["cross_doc_coherence"].status is NodeStatus.OK
+    by_node = {node_result["node"]: node_result for node_result in result["node_results"]}
+    assert by_node["cross_doc_coherence"]["status"] == NodeStatus.OK.value
 
 
 def test_cross_doc_coherence_does_not_call_raw_llm_or_bypass_anonymization() -> None:

@@ -43,6 +43,7 @@ from src.coherence.models import (
     CoherenceCategory as FindingCategory,
 )
 from src.coherence.models import (
+    Clause,
     EnrichedCoherenceResult,
     FindingSignal,
     SeverityLevel,
@@ -54,6 +55,7 @@ from src.health.application.governance_scorer import score_governance_dimension
 from src.health.application.health_engine import assemble_health_vector
 from src.health.application.risk_scorer import score_risk_dimension
 from src.project_state.domain.entities import ProjectRisk
+from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
 
 logger = structlog.get_logger(__name__)
 
@@ -235,19 +237,74 @@ def _coherence_summary(
     artifact_count: int,
     llm_on: bool,
 ) -> ProjectCoherenceResult:
+    # Tier-2 must reflect the completed Coherence evaluation, not only N4/N8
+    # seed findings. The first real four-source run emitted six Coherence alerts
+    # while the former summary incorrectly reported finding_count=0.
+    engine_signals = len(result.finding_signals)
+    engine_alerts = len(result.alerts)
+    category_scores: dict[str, float | None] = {}
+    for item in result.category_breakdown:
+        canonical = _coherence_category(str(item.category))
+        if canonical is not None:
+            category_scores[canonical] = item.score
     return ProjectCoherenceResult(
         overall_score=result.overall_score,
-        category_scores={
-            str(item.category).upper(): item.score
-            for item in result.category_breakdown
-        },
-        signal_count=signal_count,
-        finding_count=finding_count,
+        category_scores=category_scores,
+        signal_count=max(signal_count, engine_signals),
+        finding_count=max(finding_count, engine_alerts),
         artifact_count=artifact_count,
         llm_on=llm_on,
         insufficient_data_reasons=list(result.score_missing_dimensions or []),
         score_reason=result.score_reason,
     )
+
+
+def _verified_artifact_clauses(artifacts: list[DocumentArtifact]) -> list[Clause]:
+    """Supply the semantic engine with actual source-verified evidence.
+
+    ADR-017's previous empty list meant cross-document comparison and the LLM
+    had no clause text. Only verbatim validated N15 citations and N4 VERIFIED
+    source quotes qualify. An unverified generated summary cannot masquerade
+    as a document clause. Identity stays anchored to the immutable revision.
+    The existing privacy adapter strips PII before downstream model calls.
+    """
+    from src.core.privacy.anonymizer import anonymize_text_simple
+
+    clauses: list[Clause] = []
+    for artifact in artifacts:
+        revision = _artifact_key(artifact)
+        seen: set[str] = set()
+        evidence: list[tuple[str, str, str]] = [
+            ("citation", citation.item, citation.quote)
+            for citation in artifact.citations
+            if citation.found_in_source and citation.quote.strip()
+        ]
+        evidence.extend(
+            ("risk", risk.clause_ref or risk.title, risk.source_quote)
+            for risk in artifact.extracted_risks
+            if (risk.source_quote_status or "").upper() == "VERIFIED"
+            and risk.source_quote
+            and risk.source_quote.strip()
+        )
+        for index, (kind, anchor, quote) in enumerate(evidence):
+            if quote in seen:
+                continue
+            seen.add(quote)
+            clauses.append(
+                Clause(
+                    id=f"{revision}:{kind}:{index}",
+                    text=anonymize_text_simple(quote),
+                    data={
+                        "document_type": artifact.doc_type,
+                        "document_id": artifact.document_id,
+                        "document_revision_id": artifact.document_revision_id,
+                        "evidence_type": kind,
+                        "evidence_ref": anonymize_text_simple(anchor),
+                        "source_verified": True,
+                    },
+                )
+            )
+    return clauses
 
 
 @dataclass(frozen=True)
@@ -256,6 +313,8 @@ class ArtifactSetEvaluation:
 
     summary: ProjectCoherenceResult
     score_version: str | None
+    raw_result: EnrichedCoherenceResult | None = None
+    source_clauses: tuple[Clause, ...] = ()
 
 
 async def evaluate_artifact_set(
@@ -264,6 +323,8 @@ async def evaluate_artifact_set(
     project_id: UUID | str,
     tenant_id: UUID | str,
     llm_on: bool,
+    source_clauses: list[Clause] | None = None,
+    schedule_planned_finish: dict[str, Any] | None = None,
 ) -> ArtifactSetEvaluation:
     """THE canonical ProjectGraph Coherence evaluation of an artifact set.
 
@@ -273,13 +334,24 @@ async def evaluate_artifact_set(
     Read-only: it never persists anything.
     """
     signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
+    # Real cross-document evidence, not the previous empty clause list.
+    clauses = list(source_clauses or [])
+    # Keep additional N15/N4 verified source quotes that may not exist in the
+    # canonical clause store, but do not repeat the same document quote.
+    observed = {(str(c.data.get("document_id")), c.text.strip()) for c in clauses}
+    for clause in _verified_artifact_clauses(artifacts):
+        key = (str(clause.data.get("document_id")), clause.text.strip())
+        if key not in observed:
+            clauses.append(clause)
+            observed.add(key)
     engine_result = await evaluate_coherence_async(
-        [],
+        clauses,
         str(project_id),
         config=EvaluationConfig(
             low_budget_mode=not llm_on,
             tenant_id=str(tenant_id),
             project_id=str(project_id),
+            schedule_planned_finish=schedule_planned_finish,
             missing_dimensions=[
                 category
                 for category in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY")
@@ -298,6 +370,8 @@ async def evaluate_artifact_set(
             llm_on=llm_on,
         ),
         score_version=getattr(engine_result, "score_version", None),
+        raw_result=engine_result,
+        source_clauses=tuple(clauses),
     )
 
 
@@ -306,9 +380,11 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     artifacts = state.get("artifacts", [])
     project_id = state["project_id"]
     tenant_id = state["tenant_id"]
-    if not artifacts:
+    if not artifacts and not state.get("input_source_clauses"):
         return {
             "coherence_result": None,
+            "coherence_evaluation": None,
+            "coherence_source_clauses": [],
             "node_results": _skipped("cross_doc_coherence", "no artifacts"),
         }
 
@@ -318,17 +394,30 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     signal_count = 0
     try:
         evaluation = await evaluate_artifact_set(
-            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on
+            artifacts,
+            project_id=project_id,
+            tenant_id=tenant_id,
+            llm_on=llm_on,
+            source_clauses=state.get("input_source_clauses"),
+            schedule_planned_finish=state.get("schedule_planned_finish"),
         )
         summary = evaluation.summary
         signal_count = summary.signal_count
         overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
-        return {"coherence_result": summary, "node_results": status}
+        return {
+            "coherence_result": summary,
+            "coherence_evaluation": evaluation.raw_result,
+            "coherence_score_version": evaluation.score_version,
+            "coherence_source_clauses": list(evaluation.source_clauses),
+            "node_results": status,
+        }
     except Exception as exc:  # noqa: BLE001
         degraded = True
         return {
             "coherence_result": None,
+            "coherence_evaluation": None,
+            "coherence_source_clauses": [],
             "node_results": _degraded("cross_doc_coherence", str(exc)),
         }
     finally:
@@ -791,22 +880,157 @@ def snapshot_delta(state: ProjectGraphState) -> dict[str, object]:
     }
 
 
-def write_snapshot(_state: ProjectGraphState) -> dict[str, Any]:
-    return {
-        "snapshot_id": None,
-        "node_results": _skipped("write_snapshot", "pending ADR-015 snapshot write"),
+async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
+    """Persist the computed Tier-2 outcome using ADR-015's snapshot repository.
+
+    The run's caller owns the transaction. Unlike the general SnapshotWriter,
+    this retains ProjectGraph's *actual* Health and Coherence values instead
+    of recalculating an unrelated single-document assessment. It never makes
+    an absent score look assessed and never commits a pending candidate.
+    """
+    repository = state.get("snapshot_repository")
+    if repository is None:
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "snapshot repository unavailable"),
+        }
+
+    health_vector = state.get("health_result")
+    if not isinstance(health_vector, dict):
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "project health unavailable"),
+        }
+    raw_coherence = state.get("coherence_result")
+    coherence: ProjectCoherenceResult | None = (
+        ProjectCoherenceResult.model_validate(raw_coherence)
+        if isinstance(raw_coherence, dict)
+        else raw_coherence
+    )
+    if coherence is None:
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "project coherence unavailable"),
+        }
+
+    artifact_revisions = [str(_artifact_key(item)) for item in state.get("artifacts", [])]
+    counts = {
+        "project_graph": True,
+        "artifact_count": len(artifact_revisions),
+        "artifact_revision_ids": artifact_revisions,
+        "coherence_llm_on": coherence.llm_on,
+        "score_reason": coherence.score_reason,
+        "category_scores": dict(coherence.category_scores),
+        "score_version": state.get("coherence_score_version"),
+        "missing_dimensions": list(coherence.insufficient_data_reasons),
     }
+    try:
+        prior = await repository.latest(state["project_id"], state["tenant_id"])
+        if (
+            prior is not None
+            and prior.trigger is SnapshotTrigger.GRAPH_COMPLETED
+            and prior.counts == counts
+            and prior.health_vector == health_vector
+            and prior.coherence_subscore == coherence.overall_score
+        ):
+            return {
+                "snapshot_id": prior.snapshot_id,
+                "node_results": _ok("write_snapshot", {"snapshot_reused": True}),
+            }
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+        snapshot = ProjectSnapshot(
+            snapshot_id=uuid4(),
+            project_id=state["project_id"],
+            tenant_id=state["tenant_id"],
+            captured_at=now,
+            trigger=SnapshotTrigger.GRAPH_COMPLETED,
+            health_vector=health_vector,
+            coherence_subscore=coherence.overall_score,
+            counts=counts,
+            source_event_id=state.get("trigger_event_id"),
+            created_at=now,
+        )
+        persisted = await repository.append_snapshot(snapshot)
+        return {
+            "snapshot_id": persisted.snapshot_id,
+            "node_results": _ok("write_snapshot", {"snapshot_reused": False}),
+        }
+    except Exception as exc:  # noqa: BLE001 - no silent snapshot failure.
+        return {
+            "snapshot_id": None,
+            "node_results": _failed("write_snapshot", exc),
+        }
 
 
-def alert_correlation(_state: ProjectGraphState) -> dict[str, Any]:
+async def _reconcile_project_graph_alerts(state: ProjectGraphState) -> Any:
+    """Reuse the canonical coherence-alert reconciliation, without a second writer."""
+    from src.coherence.router import _mirror_coherence_alerts_to_alerts_table
+
+    evaluation = state["coherence_evaluation"]
+    assert evaluation is not None
+    return await _mirror_coherence_alerts_to_alerts_table(
+        db=state["db_session"],
+        project_id=state["project_id"],
+        tenant_id=state["tenant_id"],
+        alerts=evaluation.alerts,
+        clauses=state.get("coherence_source_clauses", []),
+        # A partially assessed project can never auto-resolve existing alerts.
+        # Human dispositions must survive successive ProjectGraph executions.
+        auto_resolve=False,
+        evaluation_complete=False,
+    )
+
+
+async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
+    """Reuse the existing evidence-aware Alerts persistence in the same transaction."""
+    if state.get("coherence_evaluation") is None:
+        return {
+            "node_results": _skipped("alert_correlation", "coherence evaluation unavailable"),
+        }
+    if state.get("db_session") is None:
+        return {
+            "node_results": _skipped("alert_correlation", "database session unavailable"),
+        }
+    try:
+        reconciliation = await _reconcile_project_graph_alerts(state)
+        records = reconciliation.records_by_finding_key
+        review_required = sum(
+            1
+            for record in records.values()
+            if (getattr(record, "alert_metadata", None) or {}).get("requires_human_review")
+        )
+        count = len(records)
+        return {
+            "correlated_alert_count": count,
+            "alert_review_required_count": review_required,
+            "node_results": _ok(
+                "alert_correlation",
+                {"alert_count": count, "review_required_count": review_required},
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "node_results": _failed("alert_correlation", exc),
+        }
+
+
+def hitl_routing(state: ProjectGraphState) -> dict[str, Any]:
+    """Expose the existing Alert review surface; never auto-approve or promote."""
+    count = state.get("alert_review_required_count")
+    if count is None:
+        return {
+            "node_results": _skipped("hitl_routing", "alert review route unavailable"),
+        }
     return {
-        "node_results": _skipped("alert_correlation", "pending ADR-019 alert correlation"),
-    }
-
-
-def hitl_routing(_state: ProjectGraphState) -> dict[str, Any]:
-    return {
-        "node_results": _skipped("hitl_routing", "pending ADR-020 HITL routing"),
+        "node_results": _ok(
+            "hitl_routing",
+            {
+                "route": "existing_alert_review",
+                "review_required_count": count,
+                "auto_approval": False,
+            },
+        ),
     }
 
 

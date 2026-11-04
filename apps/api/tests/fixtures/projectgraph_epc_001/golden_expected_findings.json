@@ -1,0 +1,98 @@
+{
+  "schema": "c2pro.projectgraph.epc_pilot.golden.v1",
+  "pilot_id": "EPC-SYN-ALBORAN-001",
+  "project_name": "ALBORAN 10 MWp PV EPC - synthetic pilot",
+  "generated_at": "2026-11-04",
+  "status": "SOURCE_FIXTURES_BUILT_NOT_UPLOADED_TO_C2PRO",
+  "documents": [
+    {
+      "doc_id": "EPC-SYN-CTR-001",
+      "file": "01_Contract_EPC_Solar_R01.pdf",
+      "type": "contract",
+      "revision": "R01",
+      "sha256": "3bc49ec2376b9eeabeeb7d6199ee0d275c90f8147dc03e06cc4fedabab51778b"
+    },
+    {
+      "doc_id": "EPC-SYN-SCH-001",
+      "file": "02_Schedule_EPC_Solar_R01.xlsx",
+      "type": "schedule",
+      "revision": "R01",
+      "sha256": "2ab4588abe34a6b29f487586dc8e2e6e52f7b5aeba1397d8efb25c7f749fb235"
+    },
+    {
+      "doc_id": "EPC-SYN-BUD-001",
+      "file": "03_Budget_EPC_Solar_R01.xlsx",
+      "type": "budget",
+      "revision": "R01",
+      "sha256": "732ca6b9bdbcf5e1eef7087771829b84c2ee6428088675982ca850053c0bf650"
+    },
+    {
+      "doc_id": "EPC-SYN-TEC-001",
+      "file": "04_Technical_Specification_R01.pdf",
+      "type": "technical_spec",
+      "revision": "R01",
+      "sha256": "db6892ef868cc8501a07e0de535d952b89e8b0daefdeba2b298afeae24fd09b6"
+    }
+  ],
+  "expected_findings": [
+    {
+      "id": "PG-EXPECTED-01",
+      "category": "TIME",
+      "source_refs": [
+        "CTR-4.1",
+        "Schedule!SCH-090"
+      ],
+      "description": "Contract handover 2027-06-30 vs Schedule 2027-07-25",
+      "known_delta_days": 25,
+      "conditional_penalty_eur": 205000,
+      "qualifier": "No automatic liability; check extension events and notices"
+    },
+    {
+      "id": "PG-EXPECTED-02",
+      "category": "BUDGET",
+      "source_refs": [
+        "CTR-2.1",
+        "CTR-3.1",
+        "Budget!BUD-TOTAL",
+        "Budget!BUD-CONTRACT",
+        "Budget!BUD-DELTA"
+      ],
+      "description": "Unapproved budget over contract: 8.65m vs 8.2m EUR",
+      "known_delta_eur": 450000
+    },
+    {
+      "id": "PG-EXPECTED-03",
+      "category": "SCOPE",
+      "source_refs": [
+        "CTR-5.1",
+        "TEC-3.2",
+        "TEC-4.2",
+        "Budget!BUD-X01",
+        "Budget!BUD-X02"
+      ],
+      "description": "SCADA SAT and grid witnessed tests mandatory but excluded from budget",
+      "indicative_unbudgeted_eur": 110000,
+      "qualifier": "Indicative estimate, not booked cost"
+    },
+    {
+      "id": "PG-EXPECTED-04",
+      "category": "TECHNICAL",
+      "source_refs": [
+        "CTR-4.1",
+        "TEC-4.3",
+        "Schedule!SCH-081",
+        "Schedule!SCH-082"
+      ],
+      "description": "Mandatory tests dated after contractual handover"
+    }
+  ],
+  "required_proof": [
+    "Use normal C2Pro authenticated file ingestion in an identified synthetic tenant",
+    "Record real project/document/revision IDs and verify source SHA-256",
+    "Resolve TRUSTED state only through supported review/approval; no SQL insertion shortcuts",
+    "Run IA real N4/N12 and ProjectGraph coherence; check source citations, omissions and false positives",
+    "Verify snapshot, alerts, Health, decisions and UI after full reload/relogin",
+    "If any step fails, report the first concrete blocking step; never claim a mocked run as UAT"
+  ],
+  "note": "Exact source binaries are provided in conversation zip C2Pro_ProjectGraph_EPC_Pilot_001.zip; repository stores acceptance oracle only, not the PDF/XLSX bytes."
+}

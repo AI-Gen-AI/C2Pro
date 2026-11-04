@@ -113,7 +113,12 @@ export default function ProjectOverviewPage() {
   const openAlerts = alerts.filter((alert: AlertResponse) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
   
-  const coherenceScore = numberValue(dashboard.coherence_score);
+  // An unavailable ProjectGraph/Coherence score is UNKNOWN, never zero.
+  const coherenceScore =
+    typeof dashboard.coherence_score === 'number' && Number.isFinite(dashboard.coherence_score)
+      ? dashboard.coherence_score
+      : null;
+  const coherenceLabel = coherenceScore === null ? '—' : String(coherenceScore);
   const documentCount = numberValue(dashboard.document_count);
   const subScores = objectValue((dashboard as DashboardScoreSource).sub_scores);
   const budgetScore =
@@ -133,7 +138,7 @@ export default function ProjectOverviewPage() {
   }));
 
   const statCards = [
-    { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
+    { label: 'Coherence Score', value: coherenceLabel, icon: Gauge, color: 'text-primary' },
     { label: 'Open Alerts', value: String(openAlertCount), icon: AlertTriangle, color: 'text-warning' },
     { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
     { label: 'Budget coherence', value: budgetValue, title: budgetTitle, icon: DollarSign, color: 'text-chart-budget' },
@@ -190,9 +195,11 @@ export default function ProjectOverviewPage() {
             )}
             <div className="flex justify-between">
               <span>Coherence Score</span>
-              <span className="font-mono font-medium text-foreground">{coherenceScore}</span>
+              <span className="font-mono font-medium text-foreground">{coherenceLabel}</span>
             </div>
-            <Progress value={coherenceScore} className="h-1.5" />
+            {coherenceScore === null ? null : (
+              <Progress value={coherenceScore} className="h-1.5" />
+            )}
           </CardContent>
         </Card>
 

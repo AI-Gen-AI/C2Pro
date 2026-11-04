@@ -331,6 +331,67 @@ async def test_run_gate_dispatches_calls_concurrently():
 
 
 @pytest.mark.asyncio
+async def test_real_session_backed_gate_never_runs_sql_budget_checks_concurrently(monkeypatch):
+    """Regression #1170: a single AsyncSession cannot be used by concurrent rules."""
+    import asyncio as _asyncio
+    from contextlib import asynccontextmanager
+    from src.coherence.graph.nodes import llm_semantic_evaluate_async
+    from src.coherence.adapters.ai import coherence_llm_gate as gate_module
+    from src.core import database as db_module
+
+    in_flight = 0
+    max_in_flight = 0
+
+    @asynccontextmanager
+    async def session_factory():
+        yield object()
+
+    class SessionBackedProbe:
+        def __init__(self, db):
+            assert db is not None
+
+        async def evaluate_rule(self, tenant_id, rule_id, clause):
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await _asyncio.sleep(0)
+            in_flight -= 1
+            return GateDecision(
+                state="evaluated", finding=None, reason=None,
+                reset_date=None, cache_key="k", cost_charged_usd=0.0,
+            )
+
+    monkeypatch.setattr(db_module, "_session_factory", session_factory)
+    monkeypatch.setattr(gate_module, "CoherenceLlmGate", SessionBackedProbe)
+    clauses = [
+        Clause(
+            id="contract-scope",
+            text="The contractor shall perform all detailed scope and deliverables.",
+            data={"document_type": "contract", "category": "SCOPE"},
+        ),
+        Clause(
+            id="contract-price",
+            text="Total contract payment amount and price is subject to adjustment.",
+            data={"document_type": "contract", "category": "BUDGET"},
+        ),
+        Clause(
+            id="schedule-terms",
+            text="Schedule completion date and delivery milestones are contractually binding.",
+            data={"document_type": "schedule", "category": "TIME"},
+        ),
+    ]
+    state = CoherenceGraphState(
+        project_id="p",
+        clauses=clauses,
+        config=EvaluationConfig(tenant_id="00000000-0000-0000-0000-000000000001"),
+    )
+    out = await llm_semantic_evaluate_async(state)
+    assert out["llm_calls_count"] >= 2
+    assert max_in_flight == 1
+    assert out["errors"] == []
+
+
+@pytest.mark.asyncio
 async def test_run_gate_applicability_logs_render_with_stdlib_logger(caplog):
     """TASK-COH-LLM-APPLIC-009-P3: applicability logs render as grep-friendly
     stdlib log messages when INFO/DEBUG logging is enabled."""

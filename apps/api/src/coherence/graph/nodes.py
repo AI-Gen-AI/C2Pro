@@ -509,7 +509,13 @@ async def llm_semantic_evaluate_async(
         if _session_factory is not None:
             async with _session_factory() as session:
                 gate = CoherenceLlmGate(db=session)
-                return await _run_gate(state, gate, _LLM_CATEGORIES, V1_LLM_RULE_IDS)
+                # All applicable rules share one AsyncSession for budget accounting.
+                # SQLAlchemy forbids concurrent operations on that session. Keep
+                # parallelism for injected, concurrency-safe gate ports only.
+                return await _run_gate(
+                    state, gate, _LLM_CATEGORIES, V1_LLM_RULE_IDS,
+                    max_concurrent=1,
+                )
         gate = CoherenceLlmGate(db=None)
 
     return await _run_gate(state, gate, _LLM_CATEGORIES, V1_LLM_RULE_IDS)
@@ -520,12 +526,14 @@ async def _run_gate(
     gate: CoherenceLlmGatePort,
     _LLM_CATEGORIES: tuple[str, ...],
     rule_ids: tuple[str, ...],
+    max_concurrent: int = 10,
 ) -> NodeOutput:
     """Dispatch each (clause, rule) to the gate with bounded concurrency.
 
     Phase 1 (sync): filter applicable (clause, rule, category) triples.
-    Phase 2 (async): run all triples concurrently, bounded by _GATE_CONCURRENCY.
-    asyncio single-threaded model makes accum mutations safe across concurrent tasks.
+    Phase 2 (async): dispatch bounded calls. A production gate whose quota
+    uses one shared SQLAlchemy AsyncSession MUST use max_concurrent=1.
+    Injected gate implementations may be concurrency-safe.
     """
     accum = _GateAccum(coverage=dict.fromkeys(_LLM_CATEGORIES, False))
     tenant_id = (state.config.tenant_id or "").strip() or \
@@ -547,8 +555,9 @@ async def _run_gate(
             else:
                 applicable.append((clause, rule_id, cat))
 
-    # Phase 2: concurrent LLM dispatch — bounded by _GATE_CONCURRENCY.
-    sem = asyncio.Semaphore(_GATE_CONCURRENCY)
+    # SQLAlchemy AsyncSession is not concurrent-use safe. Only the gate
+    # implementation that owns the session selects serialized dispatch.
+    sem = asyncio.Semaphore(max(1, min(max_concurrent, _GATE_CONCURRENCY)))
 
     async def _bounded(clause: Clause, rule_id: str, cat: str) -> None:
         async with sem:

@@ -114,3 +114,7 @@ scripts/*
 !scripts/run_worker.sh
 !scripts/run_scheduler.sh
 !scripts/wait_for_schema.py
+# Explicit owner-only bootstraps required for a NEW isolated PostgreSQL.
+!scripts/admin_ops_bootstrap.py
+!scripts/checkpoint_bootstrap.py
+!scripts/bootstrap_pilot_runtime.sh
