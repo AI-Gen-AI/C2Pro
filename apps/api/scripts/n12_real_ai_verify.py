@@ -22,7 +22,7 @@ RESULT_PATH = API_ROOT.parent / "web" / "playwright-report" / "n12-real-ai-evalu
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-from n4_n12_real_ai_eval import (  # noqa: E402
+from scripts.n4_n12_real_ai_eval import (  # noqa: E402
     _adversarial_risks,
     _governor_summary,
     _source_text,
