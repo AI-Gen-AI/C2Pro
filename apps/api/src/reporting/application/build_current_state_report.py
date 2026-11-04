@@ -65,6 +65,11 @@ class BuildCurrentStateReportUseCase:
                 if callable(getattr(sources, "load_decision_proposals", None))
                 else SourceUnavailable("No revision-bound N11 proposals reader is available.")
             ),
+            source_discrepancies=(
+                await self._read("source_discrepancies", sources.load_source_discrepancies, project_id, tenant_id)
+                if callable(getattr(sources, "load_source_discrepancies", None))
+                else SourceUnavailable("No ProjectGraph source discrepancy reader is available.")
+            ),
         )
         return assemble_current_state_report(project, inputs, generated_at=generated_at)
 
