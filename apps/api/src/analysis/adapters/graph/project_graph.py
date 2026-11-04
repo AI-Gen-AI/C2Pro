@@ -237,14 +237,21 @@ def _coherence_summary(
     artifact_count: int,
     llm_on: bool,
 ) -> ProjectCoherenceResult:
+    # Tier-2 must reflect the completed Coherence evaluation, not only N4/N8
+    # seed findings. The first real four-source run emitted six Coherence alerts
+    # while the former summary incorrectly reported finding_count=0.
+    engine_signals = len(result.finding_signals)
+    engine_alerts = len(result.alerts)
+    category_scores: dict[str, float | None] = {}
+    for item in result.category_breakdown:
+        canonical = _coherence_category(str(item.category))
+        if canonical is not None:
+            category_scores[canonical] = item.score
     return ProjectCoherenceResult(
         overall_score=result.overall_score,
-        category_scores={
-            str(item.category).upper(): item.score
-            for item in result.category_breakdown
-        },
-        signal_count=signal_count,
-        finding_count=finding_count,
+        category_scores=category_scores,
+        signal_count=max(signal_count, engine_signals),
+        finding_count=max(finding_count, engine_alerts),
         artifact_count=artifact_count,
         llm_on=llm_on,
         insufficient_data_reasons=list(result.score_missing_dimensions or []),
