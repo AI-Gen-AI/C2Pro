@@ -15,6 +15,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
@@ -120,7 +121,7 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
     def extract_input_from_state(self, state: ProjectState) -> WBSExtractionInput:
         """Extract input from LangGraph state."""
         # Apply document augmentation from state
-        doc_text = state["document_text"]
+        doc_text = llm_document_text(state)
 
         if state.get("critique_notes"):
             doc_text = f"{doc_text}\n\nCRITIQUE: {state['critique_notes']}"
