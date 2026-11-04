@@ -22,6 +22,7 @@ from langgraph.graph.state import CompiledStateGraph
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
+from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.domain.contracts import (
     BudgetItem,
     Citation,
@@ -319,9 +320,15 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     artifacts = state.get("artifacts", [])
     project_id = state["project_id"]
     tenant_id = state["tenant_id"]
+    # The source-only comparison is deliberately outside the scored Coherence
+    # engine. No XLSX observation is interpreted as an approved project baseline.
+    source_comparison = compare_original_source_rows(
+        artifacts, state.get("structured_source_units", [])
+    )
     if not artifacts:
         return {
             "coherence_result": None,
+            "structured_source_comparison": source_comparison,
             "node_results": _skipped("cross_doc_coherence", "no artifacts"),
         }
 
@@ -337,11 +344,16 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         signal_count = summary.signal_count
         overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
-        return {"coherence_result": summary, "node_results": status}
+        return {
+            "coherence_result": summary,
+            "structured_source_comparison": source_comparison,
+            "node_results": status,
+        }
     except Exception as exc:  # noqa: BLE001
         degraded = True
         return {
             "coherence_result": None,
+            "structured_source_comparison": source_comparison,
             "node_results": _degraded("cross_doc_coherence", str(exc)),
         }
     finally:
