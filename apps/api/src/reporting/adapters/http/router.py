@@ -12,6 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from src.analysis.application.project_source_evidence import read_project_source_evidence
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
@@ -82,4 +83,45 @@ async def get_current_state_report(
     return await BuildCurrentStateReportUseCase(sources).execute(identity, tenant_id)
 
 
-__all__ = ["get_current_state_report", "get_current_state_sources", "get_project_repository", "router"]
+
+
+@router.get(
+    "/{project_id}/reports/source-evidence",
+    summary="Get original budget and schedule observations for an owned project",
+    responses={
+        404: {"description": "Project not found or not in caller tenant"},
+        503: {"description": "Original source evidence is not available"},
+    },
+)
+async def get_project_source_evidence(
+    project_id: UUID,
+    response: Response,
+    current_user: Annotated[User, Depends(get_current_user)],
+    projects: Annotated[ProjectRepository, Depends(get_project_repository)],
+) -> dict[str, object]:
+    """Return canonical XLSX observations, never procurement-BOM authority.
+
+    No source SQL runs unless project ownership is proven. A missing migration
+    is UNAVAILABLE (503), not an invented zero budget or empty schedule.
+    """
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    project = await projects.get_by_id(project_id, tenant_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        evidence = await read_project_source_evidence(
+            tenant_id=tenant_id, project_id=project_id,
+        )
+    except Exception:
+        # Do not return SQL traces, table names, credentials or foreign-tenant IDs.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Original source observations are not available for this project",
+        ) from None
+
+    return evidence
+
+
+__all__ = ["get_current_state_report", "get_project_source_evidence", "get_current_state_sources", "get_project_repository", "router"]
