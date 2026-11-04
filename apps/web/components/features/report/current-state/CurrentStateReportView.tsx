@@ -54,7 +54,36 @@ type DecisionProposalsEnvelope = Pick<
 > & {
   data?: { items: DecisionProposal[] } | null;
 };
-type Sections = ReportSections & { decision_proposals?: DecisionProposalsEnvelope };
+type DiscrepancySource = {
+  role: "verified_document_quote" | "original_source_row";
+  document_id: string;
+  revision_id: string;
+  source_locator: string;
+  family?: "budget" | "schedule" | null;
+  source_quote?: string | null;
+  source_quote_sha256?: string | null;
+  blob_sha256?: string | null;
+  unit_sha256?: string | null;
+};
+type SourceDiscrepancy = {
+  rule_id: string;
+  summary: string;
+  state: "PROVISIONAL";
+  scored: false;
+  requires_human_review: true;
+  compared_values: Record<string, string | number>;
+  sources: [DiscrepancySource, DiscrepancySource];
+};
+type SourceDiscrepanciesEnvelope = Pick<
+  ReportSections["documents"],
+  "status" | "status_reason" | "source_domain" | "source_as_of" | "source_ref" | "evidence_tier" | "evidence_note"
+> & {
+  data?: { items: SourceDiscrepancy[] } | null;
+};
+type Sections = ReportSections & {
+  decision_proposals?: DecisionProposalsEnvelope;
+  source_discrepancies?: SourceDiscrepanciesEnvelope;
+};
 
 type SectionEnvelope = Pick<
   Sections["documents"],
@@ -67,6 +96,7 @@ const CONTENT_SECTION_ORDER = [
   "missing_evidence",
   "coherence",
   "alerts",
+  "source_discrepancies",
   "decision_proposals",
   "hitl",
   "budget",
@@ -288,6 +318,8 @@ function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentS
       return <CoherenceBody data={sections.coherence.data} />;
     case "alerts":
       return <AlertsBody data={sections.alerts.data} />;
+    case "source_discrepancies":
+      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} />;
     case "decision_proposals":
       return <DecisionProposalsBody data={sections.decision_proposals?.data} projectId={projectId} />;
     case "hitl":
@@ -305,6 +337,67 @@ function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentS
   }
 }
 
+
+function discrepancyEvidenceHref(projectId: string, source: DiscrepancySource): string {
+  const base = `/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(source.document_id)}&revisionId=${encodeURIComponent(source.revision_id)}`;
+  if (source.role !== "original_source_row" || !source.blob_sha256) return base;
+  return `${base}&locator=${encodeURIComponent(source.source_locator)}&expectedHash=${encodeURIComponent(source.blob_sha256)}`;
+}
+
+function SourceDiscrepanciesBody({
+  data, projectId,
+}: { data: SourceDiscrepanciesEnvelope["data"]; projectId: string }) {
+  if (!data) return null;
+  return (
+    <div data-testid="current-state-source-discrepancies" className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Observations only — not confirmed breaches, not approved budget/schedule baselines and not included in the Coherence Score.
+      </p>
+      {data.items.map((finding, index) => (
+        <article key={`${finding.rule_id}:${index}`} data-testid="source-discrepancy-item" className="space-y-2 rounded-md border p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">Provisional · human review required</Badge>
+            <span className="text-xs text-muted-foreground">{finding.rule_id}</span>
+          </div>
+          <p className="font-medium">{finding.summary}</p>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1 text-xs">
+            {Object.entries(finding.compared_values).map(([key, value]) => (
+              <div key={key} className="contents">
+                <dt className="text-muted-foreground">{humanize(key)}</dt>
+                <dd className="break-words">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="space-y-2 border-t pt-2">
+            {finding.sources.map((source) => (
+              <div key={`${source.document_id}:${source.revision_id}:${source.source_locator}`} className="space-y-1 text-xs">
+                <p className="text-muted-foreground">
+                  {source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
+                  {" · "}revision {source.revision_id}{" · "}{source.source_locator}
+                </p>
+                {source.source_quote ? (
+                  <blockquote className="border-l-2 pl-2 text-muted-foreground">{source.source_quote}</blockquote>
+                ) : null}
+                <Link
+                  data-testid="source-discrepancy-evidence-link"
+                  className="inline-block text-primary underline underline-offset-2"
+                  href={discrepancyEvidenceHref(projectId, source)}
+                >
+                  {source.role === "original_source_row"
+                    ? "Inspect original row and file hash"
+                    : "Inspect pinned source document revision"}
+                </Link>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Links open the pinned revision or re-verify the original XLSX row. Quote highlighting is not guaranteed.
+          </p>
+        </article>
+      ))}
+    </div>
+  );
+}
 
 function DecisionProposalsBody({ data, projectId }: { data: DecisionProposalsEnvelope["data"]; projectId: string }) {
   if (!data) return null;
