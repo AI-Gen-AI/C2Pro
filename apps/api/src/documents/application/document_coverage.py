@@ -29,6 +29,7 @@ def record_revision_document_coverage(
         "revision_id": str(revision_id) if revision_id is not None else None,
         "blob_hash": blob_hash,
         **coverage,
+        "parser_observations": summarize_parser_observations(parsed_payload),
     }
     if revision_id is None:
         # Legacy documents have no immutable revision identity. Preserve the
@@ -55,3 +56,77 @@ def append_document_coverage_omissions(
         return
     existing = list(coverage.get("known_omissions") or [])
     coverage["known_omissions"] = [*existing, *omissions]
+
+
+
+def summarize_parser_observations(parsed_payload: dict[str, Any]) -> dict[str, Any]:
+    """Count *observed* parser units, never claim completeness against the source.
+
+    This manifest contains aggregate counts only; no contract prose, cells,
+    filenames or identifiers are copied into document metadata. Sheet/formula
+    coverage and source caveats continue to come from each parser's own
+    document_coverage payload. A zero count is meaningful, not a success flag.
+    """
+    observations: dict[str, Any] = {}
+
+    if isinstance(parsed_payload.get("text_blocks"), list):
+        blocks = [
+            block for block in parsed_payload["text_blocks"]
+            if isinstance(block, dict)
+            and isinstance(block.get("text"), str)
+            and block["text"].strip()
+        ]
+        observations["text_blocks"] = {
+            "count": len(blocks),
+            "characters": sum(len(block["text"]) for block in blocks),
+            # DOCX parsers can emit a placeholder page=1; these are parser
+            # labels, NOT proof of actual printed source-page coverage.
+            "parser_page_labels": sorted({
+                block["page"] for block in blocks
+                if isinstance(block.get("page"), int) and block["page"] > 0
+            }),
+        }
+
+    schedule = parsed_payload.get("schedule")
+    if isinstance(schedule, list):
+        rows = [row for row in schedule if isinstance(row, dict)]
+        observations["schedule"] = {
+            "parsed_rows": len(rows),
+            "rows_with_source_locator": sum(
+                bool(row.get("source_locator")) for row in rows
+            ),
+            "rows_with_task": sum(bool(row.get("task")) for row in rows),
+            "rows_with_predecessors": sum(
+                bool(row.get("predecessors")) for row in rows
+            ),
+        }
+
+    budget = parsed_payload.get("budget")
+    if isinstance(budget, list):
+        rows = [row for row in budget if isinstance(row, dict)]
+        declared = getattr(budget, "declared_total_rows", [])
+        observations["budget"] = {
+            "parsed_line_items": len(rows),
+            "items_with_source_locator": sum(
+                bool(row.get("source_locator")) for row in rows
+            ),
+            "declared_total_rows": (
+                len(declared) if isinstance(declared, list) else 0
+            ),
+            "has_declared_total": getattr(budget, "stated_total", None) is not None,
+        }
+    elif isinstance(budget, dict):
+        chapters = budget.get("chapters")
+        observations["budget"] = {
+            "parsed_chapters": len(chapters) if isinstance(chapters, list) else 0,
+            "chapter_line_item_counts_known": False,
+            "has_declared_total": budget.get("stated_total") is not None,
+        }
+
+    clauses = parsed_payload.get("clauses")
+    if isinstance(clauses, list):
+        observations["clauses"] = {
+            "parsed_entries": sum(isinstance(item, dict) for item in clauses)
+        }
+
+    return observations
