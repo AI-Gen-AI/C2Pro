@@ -389,3 +389,76 @@ async def test_project_graph_loads_trusted_artifacts_not_merely_active_candidate
     assert result["artifact_count"] == 1
     assert repo.trusted_calls == 1
     assert repo.active_calls == 0
+
+
+def test_structured_xlsx_revisions_are_distinct_source_only_observations():
+    """Canonical source refs must not be counted as trusted analysis artifacts."""
+    from src.core.tasks.project_graph_tasks import summarize_canonical_source_revisions
+
+    doc_budget, doc_schedule = uuid4(), uuid4()
+    rev_budget, rev_schedule = uuid4(), uuid4()
+    budget = {
+        "family": "budget",
+        "document_id": doc_budget,
+        "revision_id": rev_budget,
+        "blob_hash": "a" * 64,
+    }
+    schedule = {
+        "family": "schedule",
+        "document_id": doc_schedule,
+        "revision_id": rev_schedule,
+        "blob_hash": "b" * 64,
+    }
+    refs = summarize_canonical_source_revisions([
+        budget, budget, schedule,
+        {**budget, "revision_id": None},  # unbound is not usable evidence
+    ])
+    assert len(refs) == 2
+    assert {ref["family"]: ref["observed_rows"] for ref in refs} == {
+        "budget": 2, "schedule": 1,
+    }
+    assert all(ref["role"] == "source_observation_only_not_approved_baseline" for ref in refs)
+    assert all(ref["revision_id"] and ref["blob_sha256"] for ref in refs)
+
+
+@pytest.mark.asyncio
+async def test_project_graph_observes_xlsx_revisions_without_promoting_them(monkeypatch):
+    from src.core.tasks import project_graph_tasks
+    from src.analysis.adapters.graph.project_graph import load_current_artifacts, align_entities
+
+    trusted_contract = _artifact()
+    refs = [
+        {
+            "family": "budget", "document_id": str(uuid4()),
+            "revision_id": str(uuid4()), "blob_sha256": "a" * 64,
+            "observed_rows": 3, "role": "source_observation_only_not_approved_baseline",
+        },
+        {
+            "family": "schedule", "document_id": str(uuid4()),
+            "revision_id": str(uuid4()), "blob_sha256": "b" * 64,
+            "observed_rows": 4, "role": "source_observation_only_not_approved_baseline",
+        },
+    ]
+    class CaptureGraph:
+        async def ainvoke(self, state):
+            self.state = state
+            return state
+
+    graph = CaptureGraph()
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: graph)
+    result = await project_graph_tasks.run_project_graph_once(
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        artifact_repository=_FakeRepo([trusted_contract]),
+        structured_source_refs=refs,
+    )
+    assert result["artifact_count"] == 1
+    assert result["structured_source_revision_count"] == 2
+    assert len(graph.state["artifacts"]) == 1
+    assert graph.state["structured_source_refs"] == refs
+    loaded = load_current_artifacts(graph.state)["node_results"][0].data
+    aligned = align_entities(graph.state)["node_results"][0].data
+    assert loaded["artifact_count"] == 1
+    assert loaded["structured_source_revision_count"] == 2
+    assert loaded["structured_source_role"] == "source_evidence_only_not_projected"
+    assert set(aligned["structured_source_revision_groups"]) == {"budget", "schedule"}
