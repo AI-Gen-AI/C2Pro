@@ -21,6 +21,7 @@ from src.analysis.adapters.ai.agents.risk_extractor import (
     RiskImpact,
     RiskProbability,
 )
+from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 from src.analysis.domain.risk_categories import RiskCategory, normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
@@ -261,7 +262,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         (critique_notes, human_feedback) are appended after filtering so
         they are never stripped — they are always relevant signal.
         """
-        doc_text = state["document_text"]
+        doc_text = llm_document_text(state)
         original_chars = len(doc_text)
 
         filtered = self._filter_relevant_text(doc_text)
