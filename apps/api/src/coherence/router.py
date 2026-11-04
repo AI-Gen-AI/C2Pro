@@ -49,6 +49,8 @@ from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.models import ProjectSnapshotORM
+from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.adapters.persistence.current_revision_sql import (
     chunk_in_current_scope,
     clause_in_current_scope,
@@ -1694,6 +1696,61 @@ async def evaluate_with_diagnostics(
 # ======================================================================
 
 
+async def _prefer_current_projectgraph_snapshot(
+    summary: DashboardSummary,
+    *,
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    latest_source_at: datetime | None,
+) -> DashboardSummary:
+    """Expose ProjectGraph's newest trusted snapshot, never a stale or unrelated one.
+
+    A ProjectGraph snapshot must be newer than the last document/analysis input.
+    If its Coherence score is NULL, a prior numeric score must not be silently
+    reused: the current evaluation is unassessed. Contract approval remains a
+    separate, stronger guard in get_coherence_dashboard.
+    """
+    latest = await db.scalar(
+        select(ProjectSnapshotORM)
+        .where(
+            ProjectSnapshotORM.project_id == project_id,
+            ProjectSnapshotORM.tenant_id == tenant_id,
+            ProjectSnapshotORM.trigger == SnapshotTrigger.GRAPH_COMPLETED.value,
+            ProjectSnapshotORM.counts["project_graph"].astext == "true",
+        )
+        .order_by(ProjectSnapshotORM.captured_at.desc())
+        .limit(1)
+    )
+    if latest is None:
+        return summary
+    captured_at = _normalize_utc_datetime(latest.captured_at)
+    if captured_at is None or (
+        latest_source_at is not None and captured_at < latest_source_at
+    ):
+        return summary
+
+    facts = latest.counts or {}
+    score = latest.coherence_subscore
+    reasons = facts.get("missing_dimensions", [])
+    reason = facts.get("score_reason")
+    if score is None and not reason:
+        reason = "insufficient_projectgraph_evidence"
+    return summary.model_copy(
+        update={
+            "global_score": score,
+            "coherence_score": score,
+            "sub_scores": _normalized_sub_scores(facts.get("category_scores")),
+            "score_reason": reason,
+            "score_missing_dimensions": reasons if isinstance(reasons, list) else [],
+            "score_version": "projectgraph",
+            "last_updated": max(summary.last_updated, captured_at)
+            if summary.last_updated is not None
+            else captured_at,
+        }
+    )
+
+
 @dashboard_router.get(
     "/{project_id}",
     response_model=DashboardSummary,
@@ -1924,6 +1981,19 @@ async def get_coherence_dashboard(
         ),
         last_updated=last_updated,
         categories_v2=None,
+    )
+
+    # The ProjectGraph Tier-2 snapshot is the canonical readout only if the
+    # computed revision set is at least as fresh as the project's source records.
+    # A later upload or analysis retains its own authority until Tier-2 completes.
+    freshness = [analysis_at, result_at, _normalize_utc_datetime(latest_doc_at)]
+    latest_source_at = max((x for x in freshness if x is not None), default=None)
+    summary = await _prefer_current_projectgraph_snapshot(
+        summary,
+        db=db,
+        project_id=project_id,
+        tenant_id=tenant_id,
+        latest_source_at=latest_source_at,
     )
 
     # S3: the early /coherence/evaluate guard returns contract_pending_approval
