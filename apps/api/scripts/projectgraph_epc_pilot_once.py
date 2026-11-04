@@ -106,6 +106,39 @@ async def _run(ledger: dict, outcome: dict) -> None:
             outcome["tenant_id"] = str(tenant_id)
             outcome["source_hashes_verified"] = True  # prior S2 SQL gate
 
+            # Bind each of the four uploaded bytes to the canonical trusted-
+            # current revision reader; a parsed file is not approved evidence.
+            from src.temporal.adapters.persistence.current_revision_sql import (
+                current_revision_lateral,
+            )
+            source_rows = (
+                await db.execute(
+                    text(
+                        "SELECT d.id, d.document_type::text AS family, "
+                        "cur.revision_id, cur.canonical, cur.trusted "
+                        "FROM documents d "
+                        f"CROSS JOIN LATERAL {current_revision_lateral('d.id', 'd.tenant_id')} AS cur "
+                        "WHERE d.project_id=:p AND d.tenant_id=:t"
+                    ),
+                    {"p": project_id, "t": tenant_id},
+                )
+            ).all()
+            outcome["source_authority"] = [
+                {
+                    "family": row.family,
+                    "document_id": str(row.id),
+                    "revision_id": str(row.revision_id) if row.revision_id else None,
+                    "canonical": bool(row.canonical),
+                    "trusted": bool(row.trusted),
+                }
+                for row in source_rows
+            ]
+            if len(source_rows) != 4 or any(row.revision_id is None for row in source_rows):
+                raise RuntimeError("FOUR_CURRENT_REVISIONS_NOT_RESOLVED")
+            for family in ("contract", "technical_spec"):
+                if not any(row.family == family and row.trusted for row in source_rows):
+                    raise RuntimeError(f"PROJECTGRAPH_{family.upper()}_AWAITING_TRUSTED_APPROVAL")
+
             flags = {
                 "project_graph": await is_project_graph_enabled(tenant_id),
                 "coherence_llm": await is_coherence_llm_enabled(tenant_id),
@@ -127,6 +160,14 @@ async def _run(ledger: dict, outcome: dict) -> None:
             outcome["canonical_document_ids"] = sorted(
                 {str(c.data.get("document_id")) for c in clauses if c.data.get("document_id")}
             )
+            text_ids = {
+                str(row.id) for row in source_rows
+                if row.family in ("contract", "technical_spec")
+            }
+            present_text = set(outcome["canonical_document_ids"]) & text_ids
+            outcome["verified_text_document_count"] = len(present_text)
+            if present_text != text_ids:
+                raise RuntimeError("PROJECTGRAPH_TEXT_DOCUMENT_CLAUSES_UNAVAILABLE")
             outcome["schedule_observation_available"] = bool(
                 schedule and not schedule.get("reason")
             )
@@ -167,6 +208,42 @@ async def _run(ledger: dict, outcome: dict) -> None:
                 if isinstance(n, dict)
             ]
             persisted = await snapshot_repo.latest(project_id, tenant_id)
+            # The same repository and DTO mapper used by the authenticated
+            # Alerts UI must read the persisted ProjectGraph reconciliation.
+            from src.alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
+            from src.alerts.application.mappers.alert_mapper import AlertMapper
+            alert_rows = await SqlAlchemyAlertRepository(db).list_for_project(
+                project_id=project_id, tenant_id=tenant_id
+            )
+            public_rows = AlertMapper.to_response_list(alert_rows, tenant_id)
+            outcome["alert_read_model"] = [
+                {
+                    "rule_code": row.rule_code,
+                    "source_clause_id": str(row.source_clause_id) if row.source_clause_id else None,
+                    "source_document_id": (
+                        row.detection_evidence.source_document_id
+                        if row.detection_evidence else None
+                    ),
+                    "has_quote": bool(
+                        row.detection_evidence and row.detection_evidence.quote
+                    ),
+                    "structured_ref_count": (
+                        len(row.detection_evidence.structured_sources)
+                        if row.detection_evidence else 0
+                    ),
+                    "review_status": row.status,
+                }
+                for row in public_rows
+            ]
+            outcome["alerts_persisted"] = len(public_rows)
+            outcome["alerts_with_verified_links"] = sum(
+                bool(row["source_clause_id"] and row["source_document_id"])
+                for row in outcome["alert_read_model"]
+            )
+            outcome["alerts_with_structured_refs"] = sum(
+                row["structured_ref_count"] > 0
+                for row in outcome["alert_read_model"]
+            )
             outcome["snapshot_durable"] = bool(
                 persisted and str(persisted.snapshot_id) == result.get("snapshot_id")
             )
@@ -174,6 +251,10 @@ async def _run(ledger: dict, outcome: dict) -> None:
 
             if not outcome["snapshot_durable"]:
                 raise RuntimeError("PROJECTGRAPH_SNAPSHOT_NOT_PERSISTED")
+            if not outcome["alerts_persisted"]:
+                raise RuntimeError("PROJECTGRAPH_NO_PERSISTED_ALERTS")
+            if not (outcome["alerts_with_verified_links"] or outcome["alerts_with_structured_refs"]):
+                raise RuntimeError("PROJECTGRAPH_NO_VERIFIABLE_ALERT_CITATIONS")
             if not coherence.get("llm_on"):
                 raise RuntimeError("PROJECTGRAPH_REAL_LLM_NOT_ENABLED")
             # Contract vs budget and late schedule must produce at least
