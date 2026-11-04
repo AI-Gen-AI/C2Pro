@@ -87,6 +87,8 @@ class ProjectState(TypedDict):
     coherence_reason: str | None
     coherence_missing_dimensions: list[str]
     coherence_breakdown: CoherenceBreakdown
+    # Canonical XLSX observations, NOT approved budget/schedule baseline.
+    project_source_evidence: dict[str, Any]
 
     # ── N8b: Single-document assessment (ADR-024 / P0b L4-3) ──
     # Versioned artifact produced ONCE at N8 (where canonical Clause[] + FindingSignal[]
