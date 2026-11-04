@@ -8,7 +8,7 @@ feature); any other exception is treated as a read failure by the use case.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -99,6 +99,9 @@ class CurrentStateInputs:
     wbs: SourceOk[WbsInput] | SourceUnavailable | SourceFailed
     stakeholders: SourceOk[StakeholdersInput] | SourceUnavailable | SourceFailed
     raci: SourceOk[RaciMatrixViewResponse] | SourceUnavailable | SourceFailed
+    decision_proposals: SourceOk[list[dict[str, Any]]] | SourceUnavailable | SourceFailed = field(
+        default_factory=lambda: SourceUnavailable("No revision-bound N11 proposals have been assessed.")
+    )
 
 
 class CurrentStateSources(Protocol):
@@ -119,6 +122,8 @@ class CurrentStateSources(Protocol):
     async def load_stakeholders(self, project_id: UUID, tenant_id: UUID) -> StakeholdersInput: ...
 
     async def load_raci(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse: ...
+
+    async def load_decision_proposals(self, project_id: UUID, tenant_id: UUID) -> list[dict[str, Any]]: ...
 
 
 __all__ = [

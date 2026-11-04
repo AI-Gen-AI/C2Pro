@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
 from src.alerts.domain.models import Alert
-from src.analysis.adapters.persistence.models import DocumentArtifactORM
+from src.analysis.adapters.persistence.models import Analysis, DocumentArtifactORM
+from src.analysis.domain.enums import AnalysisStatus
 from src.config import get_settings
 from src.core.auth.models import User
 from src.core.database import get_session_with_tenant
@@ -164,6 +165,89 @@ class SqlAlchemyCurrentStateSources:
             raise SourceUnavailableError(COHERENCE_DISABLED_REASON)
         async with self._session_scope(tenant_id) as session:
             return await _read_coherence_dashboard(project_id, self._current_user, session)
+
+    async def load_decision_proposals(self, project_id: UUID, tenant_id: UUID) -> list[dict[str, Any]]:
+        """Only N11 proposals tied to the current trusted document revision.
+
+        Historic or revision-unbound results are NOT silently promoted to current.
+        A source quote remains unverified; no document URL is invented.
+        """
+        scoped = require_tenant_id(tenant_id)
+        async with self._session_scope(scoped) as session:
+            revisions = await _load_revision_states(session, scoped, project_id)
+            if not revisions:
+                raise SourceUnavailableError("No trusted document revisions to anchor N11 decisions.")
+            analyses = (
+                await session.execute(
+                    select(Analysis)
+                    .where(
+                        Analysis.project_id == project_id,
+                        Analysis.tenant_id == scoped,
+                        Analysis.status == AnalysisStatus.COMPLETED,
+                    )
+                    .order_by(Analysis.completed_at.desc(), Analysis.id.desc())
+                    .limit(100)
+                )
+            ).scalars().all()
+            actions: list[dict[str, Any]] = []
+            seen_documents: set[UUID] = set()
+            for analysis in analyses:
+                data = analysis.result_json or {}
+                snapshot = data.get("decision_snapshot") if isinstance(data, dict) else None
+                if not isinstance(snapshot, dict):
+                    continue
+                try:
+                    document_id = UUID(str(snapshot["document_id"]))
+                    revision_id = UUID(str(snapshot["revision_id"]))
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    continue
+                trusted = revisions.get(document_id)
+                if trusted is None or trusted.trusted is None or trusted.trusted[0] != revision_id:
+                    continue
+                # Never re-surface an older assessment of the same current revision.
+                if document_id in seen_documents:
+                    continue
+                seen_documents.add(document_id)
+                for action in snapshot.get("proposed_actions") or []:
+                    if not isinstance(action, dict) or action.get("status") != "PROPOSED_REQUIRES_HUMAN_REVIEW":
+                        continue
+                    origin = action.get("source_evidence") or {}
+                    if not isinstance(origin, dict):
+                        continue
+                    try:
+                        source_id = UUID(str(origin["document_id"]))
+                        source_rev_id = UUID(str(origin["revision_id"]))
+                    except (KeyError, TypeError, ValueError, AttributeError):
+                        continue
+                    source_trusted = revisions.get(source_id)
+                    if (
+                        source_trusted is None
+                        or source_trusted.trusted is None
+                        or source_trusted.trusted[0] != source_rev_id
+                    ):
+                        continue
+                    actions.append({
+                        "analysis_id": str(analysis.id),
+                        "document_id": str(document_id),
+                        "revision_id": str(revision_id),
+                        "source_document_id": str(source_id),
+                        "source_revision_id": str(source_rev_id),
+                        "title": str(action.get("title") or "Untitled proposal"),
+                        "proposed_action": str(action.get("proposed_action") or ""),
+                        "priority_proposal": str(action.get("priority_proposal") or "UNASSESSED"),
+                        "risk_impact": action.get("risk_impact"),
+                        "clause_ref": origin.get("clause_ref"),
+                        "source_quote": origin.get("source_quote"),
+                        "source_verification": "REQUIRES_SOURCE_VALIDATION",
+                        "status": "PROPOSED_REQUIRES_HUMAN_REVIEW",
+                    })
+                    if len(actions) >= 5:
+                        return actions
+            if not actions:
+                raise SourceUnavailableError(
+                    "No N11 proposals tied to current trusted revisions; older or unbound results remain historical."
+                )
+            return actions
 
     async def load_alerts(self, project_id: UUID, tenant_id: UUID) -> list[Alert]:
         scoped = require_tenant_id(tenant_id)

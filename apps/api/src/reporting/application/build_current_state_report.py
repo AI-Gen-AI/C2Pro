@@ -60,6 +60,11 @@ class BuildCurrentStateReportUseCase:
             wbs=await self._read("wbs", sources.load_wbs, project_id, tenant_id),
             stakeholders=await self._read("stakeholders", sources.load_stakeholders, project_id, tenant_id),
             raci=await self._read("raci", sources.load_raci, project_id, tenant_id),
+            decision_proposals=(
+                await self._read("decision_proposals", sources.load_decision_proposals, project_id, tenant_id)
+                if callable(getattr(sources, "load_decision_proposals", None))
+                else SourceUnavailable("No revision-bound N11 proposals reader is available.")
+            ),
         )
         return assemble_current_state_report(project, inputs, generated_at=generated_at)
 

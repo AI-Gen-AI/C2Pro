@@ -47,6 +47,9 @@ from src.reporting.domain.current_state_report import (
     CurrentStateReport,
     CurrentStateSections,
     DocumentItem,
+    DecisionProposalsData,
+    DecisionProposalsSection,
+    DecisionProposalItem,
     DocumentRevisionRef,
     DocumentsData,
     DocumentsSection,
@@ -783,6 +786,30 @@ def project_raci(result: Any) -> RaciSection:
     )
 
 
+
+def project_decision_proposals(result: Any) -> DecisionProposalsSection:
+    domain = "analysis"
+    if not isinstance(result, SourceOk):
+        return _not_ok(DecisionProposalsSection, domain, result)
+    if not result.value:
+        return _without_data(
+            DecisionProposalsSection, domain, SectionStatus.EMPTY,
+            "No current revision-bound N11 decision proposals were found.",
+        )
+    return DecisionProposalsSection(
+        status=SectionStatus.AVAILABLE,
+        source_domain=domain,
+        evidence_tier=ReportEvidenceTier.WEAK_LINKED,
+        evidence_note=(
+            "Source document and trusted revision verified. AI interpretation and "
+            "source quote still require human validation; no approval implied."
+        ),
+        data=DecisionProposalsData(items=[
+            DecisionProposalItem.model_validate(item) for item in result.value[:5]
+        ]),
+    )
+
+
 def not_modeled_section(key: str) -> NotModeledSection:
     return NotModeledSection(
         status=SectionStatus.NOT_MODELED,
@@ -1104,6 +1131,7 @@ def assemble_current_state_report(
     risks = not_modeled_section("risks")
     obligations = not_modeled_section("obligations")
     schedule = not_modeled_section("schedule")
+    decision_proposals = project_decision_proposals(inputs.decision_proposals)
 
     content_sections: dict[str, ReportSectionBase] = {
         "documents": documents,
@@ -1119,6 +1147,7 @@ def assemble_current_state_report(
         "risks": risks,
         "obligations": obligations,
         "schedule": schedule,
+        "decision_proposals": decision_proposals,
     }
 
     sections = CurrentStateSections(
@@ -1144,6 +1173,7 @@ def assemble_current_state_report(
         risks=risks,
         obligations=obligations,
         schedule=schedule,
+        decision_proposals=decision_proposals,
         evidence_quality=project_evidence_quality(content_sections),
     )
     return CurrentStateReport(

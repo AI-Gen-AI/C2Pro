@@ -31,7 +31,32 @@ import {
   tierLabel,
 } from "./current-state-format";
 
-type Sections = CurrentStateReport["sections"];
+type DecisionProposal = {
+  analysis_id: string;
+  document_id: string;
+  revision_id: string;
+  source_document_id: string;
+  source_revision_id: string;
+  title: string;
+  proposed_action: string;
+  priority_proposal: string;
+  risk_impact?: string | null;
+  clause_ref?: string | null;
+  source_quote?: string | null;
+  source_verification: "REQUIRES_SOURCE_VALIDATION";
+  status: "PROPOSED_REQUIRES_HUMAN_REVIEW";
+};
+type DecisionProposalsEnvelope = {
+  status: string;
+  status_reason?: string | null;
+  source_domain: string;
+  source_as_of?: string | null;
+  source_ref?: string | null;
+  evidence_tier: string;
+  evidence_note?: string | null;
+  data?: { items: DecisionProposal[] } | null;
+};
+type Sections = CurrentStateReport["sections"] & { decision_proposals?: DecisionProposalsEnvelope };
 
 type SectionEnvelope = Pick<
   Sections["documents"],
@@ -44,6 +69,7 @@ const CONTENT_SECTION_ORDER = [
   "missing_evidence",
   "coherence",
   "alerts",
+  "decision_proposals",
   "hitl",
   "budget",
   "wbs",
@@ -83,7 +109,8 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
 
       <div className="grid gap-4 lg:grid-cols-2">
         {CONTENT_SECTION_ORDER.map((key) => {
-          const envelope: SectionEnvelope = sections[key];
+          const envelope: SectionEnvelope | undefined = sections[key];
+          if (!envelope) return null; // Older backend: do not invent decisions.
           return (
             <SectionCard key={key} sectionKey={key} section={envelope}>
               <SectionBody sectionKey={key} sections={sections} />
@@ -263,6 +290,8 @@ function SectionBody({ sectionKey, sections }: { sectionKey: ContentSectionKey; 
       return <CoherenceBody data={sections.coherence.data} />;
     case "alerts":
       return <AlertsBody data={sections.alerts.data} />;
+    case "decision_proposals":
+      return <DecisionProposalsBody data={sections.decision_proposals?.data} />;
     case "hitl":
       return <HitlBody data={sections.hitl.data} />;
     case "budget":
@@ -276,6 +305,32 @@ function SectionBody({ sectionKey, sections }: { sectionKey: ContentSectionKey; 
     default:
       return null;
   }
+}
+
+
+function DecisionProposalsBody({ data }: { data: DecisionProposalsEnvelope["data"] }) {
+  if (!data) return null;
+  return (
+    <ul data-testid="current-state-decision-proposals" className="space-y-3">
+      {data.items.map((proposal) => (
+        <li key={`${proposal.analysis_id}:${proposal.title}`} className="space-y-1 rounded-md border p-2">
+          <p className="font-semibold">{proposal.title} · {proposal.priority_proposal}</p>
+          <p>{proposal.proposed_action}</p>
+          <p className="text-xs text-muted-foreground">
+            Proposed, human review required · Impact: {proposal.risk_impact ?? "unassessed"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Source document {proposal.source_document_id} · revision {proposal.source_revision_id}
+            {proposal.clause_ref ? ` · clause ${proposal.clause_ref}` : ""}
+          </p>
+          {proposal.source_quote ? <blockquote className="border-l-2 pl-2 text-xs">{proposal.source_quote}</blockquote> : null}
+          <p className="text-xs text-muted-foreground">
+            Source quote requires validation; no navigable original locator verified.
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function Counts({

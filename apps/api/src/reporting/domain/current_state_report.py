@@ -499,6 +499,49 @@ class RaciSection(ReportSectionBase):
     data: RaciData | None = None
 
 
+
+# ---------------------------------------------------------------------------
+# N11 — Proposed decisions (not an approved risk register or project baseline)
+# ---------------------------------------------------------------------------
+
+
+class DecisionProposalItem(BaseModel):
+    model_config = _CONTRACT
+
+    analysis_id: UUID
+    document_id: UUID
+    revision_id: UUID
+    source_document_id: UUID
+    source_revision_id: UUID
+    title: str
+    proposed_action: str
+    priority_proposal: str
+    risk_impact: str | None = None
+    clause_ref: str | None = None
+    source_quote: str | None = None
+    source_verification: Literal["REQUIRES_SOURCE_VALIDATION"] = "REQUIRES_SOURCE_VALIDATION"
+    status: Literal["PROPOSED_REQUIRES_HUMAN_REVIEW"] = "PROPOSED_REQUIRES_HUMAN_REVIEW"
+
+
+class DecisionProposalsData(BaseModel):
+    model_config = _CONTRACT
+
+    items: list[DecisionProposalItem]
+
+
+class DecisionProposalsSection(ReportSectionBase):
+    data: DecisionProposalsData | None = None
+
+
+def _unavailable_decisions() -> DecisionProposalsSection:
+    return DecisionProposalsSection(
+        status=SectionStatus.UNAVAILABLE,
+        status_reason="N11 decisions have not been read from trusted, current source revisions.",
+        source_domain="analysis",
+        evidence_tier=ReportEvidenceTier.UNAVAILABLE,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Not-modeled domains
 # ---------------------------------------------------------------------------
@@ -592,6 +635,7 @@ class CurrentStateSections(BaseModel):
     risks: NotModeledSection
     obligations: NotModeledSection
     schedule: NotModeledSection
+    decision_proposals: DecisionProposalsSection = Field(default_factory=_unavailable_decisions)
     evidence_quality: EvidenceQualitySection
 
 

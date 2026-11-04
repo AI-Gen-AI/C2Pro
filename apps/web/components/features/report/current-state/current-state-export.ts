@@ -40,7 +40,8 @@ type Column = (typeof CSV_COLUMNS)[number];
 type CsvRow = Partial<Record<Column, string>>;
 type Cell = string | number | boolean | null | undefined;
 type ItemRow = Omit<CsvRow, "value" | "value_state"> & { value?: Cell };
-type Sections = CurrentStateReport["sections"];
+type Decisions = { status: string; status_reason?: string | null; source_domain: string; source_as_of?: string | null; evidence_tier: string; evidence_note?: string | null; data?: { items: Array<{ analysis_id: string; title: string; proposed_action: string; status: string; priority_proposal: string; source_revision_id: string; clause_ref?: string | null }> } | null };
+type Sections = CurrentStateReport["sections"] & { decision_proposals?: Decisions };
 type SectionKey = keyof Sections;
 
 const SECTION_ORDER: SectionKey[] = [
@@ -50,6 +51,7 @@ const SECTION_ORDER: SectionKey[] = [
   "missing_evidence",
   "coherence",
   "alerts",
+  "decision_proposals",
   "hitl",
   "budget",
   "wbs",
@@ -122,6 +124,7 @@ export function downloadTextFile(filename: string, content: string, mimeType: st
 
 function sectionRows(key: SectionKey, sections: Sections): CsvRow[] {
   const section = sections[key];
+  if (!section) return []; // Old backend did not project N11 decisions.
   const sectionRow: CsvRow = {
     section: key,
     section_status: section.status,
@@ -275,6 +278,19 @@ function detailRows(key: SectionKey, sections: Sections): CsvRow[] {
           }),
         ),
       ];
+    }
+    case "decision_proposals": {
+      const data = sections.decision_proposals?.data;
+      if (!data) return [];
+      return data.items.map((decision) => item({
+        record_id: decision.analysis_id,
+        record_label: decision.title,
+        field: "proposed_action",
+        value: decision.proposed_action,
+        record_status: decision.status,
+        record_evidence_tier: "weak_linked",
+        record_source_ref: decision.source_revision_id,
+      }));
     }
     case "hitl": {
       const data = sections.hitl.data;
