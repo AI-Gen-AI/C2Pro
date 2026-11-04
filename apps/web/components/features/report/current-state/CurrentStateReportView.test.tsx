@@ -372,7 +372,7 @@ describe("CurrentStateReportView", () => {
       `/projects/${report.project.id}/evidence?documentId=${documentId}&revisionId=${revQuote}`,
     );
     expect(links[1].getAttribute("href")).toBe(
-      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule%214&expectedHash=${"b".repeat(64)}`,
+      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule!4&expectedHash=${"b".repeat(64)}`,
     );
     expect(card).toHaveTextContent("Quote highlighting is not guaranteed");
   });
