@@ -7,7 +7,7 @@ Refers to TASK-IMPL-010.4.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -37,6 +37,8 @@ class ReportInput:
     decision_package: dict[str, Any]
     human_approval_required: bool
     human_feedback: str
+    # Original, revision-bound source observations. Not an approved baseline.
+    project_source_evidence: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,48 @@ class DecisionPackageInput:
     citations: list[dict[str, Any]]
     citation_validation_passed: bool
     human_feedback: str
+    project_source_evidence: dict[str, Any] = field(default_factory=dict)
+
+
+def _proposed_risk_actions(risks: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
+    """Show model-supported suggestions, not invented owners or approved tasks."""
+    actions: list[dict[str, Any]] = []
+    for risk in risks:
+        if not isinstance(risk, dict):
+            continue
+        mitigation = risk.get("mitigation_suggestion")
+        title = risk.get("title")
+        if not isinstance(title, str) or not title.strip():
+            continue
+        if not isinstance(mitigation, str) or not mitigation.strip():
+            continue
+        impact = str(risk.get("impact") or "").upper()
+        priority = (
+            "P1" if impact == "CRITICAL"
+            else "P2" if impact == "HIGH"
+            else "P3" if impact in {"LOW", "MEDIUM"}
+            else "UNASSESSED"
+        )
+        evidence = {
+            "document_id": risk.get("document_id"),
+            "clause_ref": risk.get("clause_ref"),
+            "source_quote": risk.get("source_quote"),
+            "verification": "REQUIRES_SOURCE_VALIDATION",
+        }
+        actions.append({
+            "title": title.strip(),
+            "proposed_action": mitigation.strip(),
+            "priority_proposal": priority,
+            "priority_basis": "model_extracted_risk_impact" if priority != "UNASSESSED" else "unassessed",
+            "risk_impact": impact if impact else None,
+            "owner": None,
+            "due_date": None,
+            "status": "PROPOSED_REQUIRES_HUMAN_REVIEW",
+            "source_evidence": evidence,
+        })
+        if len(actions) >= limit:
+            break
+    return actions
 
 
 class ReportAssemblyService:
@@ -87,6 +131,7 @@ class ReportAssemblyService:
                 "edges": inp.knowledge_graph_edges,
             },
             "decision_package": inp.decision_package,
+            "project_source_evidence": inp.project_source_evidence,
             "human_approval_required": inp.human_approval_required,
             "human_feedback": inp.human_feedback,
         }
@@ -103,7 +148,10 @@ class DecisionPackageAssemblyService:
             "stakeholders": inp.extracted_stakeholders,
             "wbs_items": inp.extracted_wbs,
             "bom_items": inp.bom_items,
+            # Never construct a URL without an authorized document locator.
             "evidence_links": [],
+            "project_source_evidence": inp.project_source_evidence,
+            "proposed_actions": _proposed_risk_actions(inp.extracted_risks),
             "citations": [c.get("quote", "") for c in inp.citations],
             "citation_validation_passed": inp.citation_validation_passed,
             "approved_by": "human_reviewer" if inp.human_feedback else None,
