@@ -13,6 +13,7 @@ from typing import Any
 
 import openpyxl
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.documents.domain.models import DocumentType
@@ -57,7 +58,7 @@ async def test_the_budget_total_and_the_schedule_finish_both_reach_one_evaluatio
         db, worker, test_user, project_id, filename="budget.xlsx",
         content=_budget_xlsx(1_500_000), document_type=DocumentType.BUDGET,
     )
-    schedule_doc, _ = await _upload_and_ingest(
+    schedule_doc, schedule_rev = await _upload_and_ingest(
         db, worker, test_user, project_id, filename="schedule.xlsx",
         content=_xlsx(LATE_SCHEDULE), document_type=DocumentType.SCHEDULE,
     )
@@ -66,6 +67,53 @@ async def test_the_budget_total_and_the_schedule_finish_both_reach_one_evaluatio
     declared = (await _metadata(db, budget_doc.id))["stated_total_by_revision"]
     assert declared[str(budget_rev.revision_id)]["total"] == 1_500_000
     assert (await _metadata(db, schedule_doc.id))["schedule_planned_finish"]["date"] == "2027-09-30"
+
+    # P0: these are original XLSX observations, NOT procurement BOM or WBS
+    # and NOT a trusted schedule/budget baseline. Both belong to the same
+    # immutable revision the worker was asked to process.
+    budget_source = (await db.execute(
+        text("""
+            SELECT source_locator, payload, revision_id
+            FROM document_source_units
+            WHERE tenant_id = CAST(:tenant AS uuid)
+              AND project_id = CAST(:project AS uuid)
+              AND document_id = CAST(:document AS uuid)
+              AND revision_id = CAST(:revision AS uuid)
+              AND family = 'budget'
+        """),
+        {
+            "tenant": str(test_user.tenant_id),
+            "project": str(project_id),
+            "document": str(budget_doc.id),
+            "revision": str(budget_rev.revision_id),
+        },
+    )).mappings().all()
+    assert budget_source
+    assert any(row["payload"]["kind"] == "line_item" for row in budget_source)
+    assert all(row["source_locator"] for row in budget_source)
+    assert all(row["revision_id"] == budget_rev.revision_id for row in budget_source)
+
+    schedule_source = (await db.execute(
+        text("""
+            SELECT source_locator, payload, revision_id
+            FROM document_source_units
+            WHERE tenant_id = CAST(:tenant AS uuid)
+              AND project_id = CAST(:project AS uuid)
+              AND document_id = CAST(:document AS uuid)
+              AND revision_id = CAST(:revision AS uuid)
+              AND family = 'schedule'
+        """),
+        {
+            "tenant": str(test_user.tenant_id),
+            "project": str(project_id),
+            "document": str(schedule_doc.id),
+            "revision": str(schedule_rev.revision_id),
+        },
+    )).mappings().all()
+    assert schedule_source
+    assert all(row["payload"]["kind"] == "activity" for row in schedule_source)
+    assert all(row["revision_id"] == schedule_rev.revision_id for row in schedule_source)
+    assert all(row["source_locator"] for row in schedule_source)
 
     result = await _evaluate(db, test_user, project_id)
 
