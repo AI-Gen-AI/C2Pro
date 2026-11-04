@@ -30,12 +30,25 @@ _ISO = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 _CURRENCY = re.compile(r"(EUR|USD|GBP|€|\$|£)\s*(\d[\d,.]*)", re.IGNORECASE)
 _COMPLETION = re.compile(
     r"(?:contractual\s+completion|completion\s+(?:date|deadline)|"
+    r"fecha\s+(?:límite\s+de\s+)?(?:finalización|terminación)|"
     r"shall\s+(?:achieve|reach)\s+completion|complete\s+(?:the\s+works|commissioning))",
     re.IGNORECASE,
 )
-_PRICE = re.compile(r"(?:contract\s+(?:price|sum|value)|total\s+contract\s+value)", re.IGNORECASE)
-_SPEC_MILESTONES = ("factory acceptance", "site acceptance", "commissioning", "performance test")
-_CODES = {"€": "EUR", "$": "USD", "£": "GBP"}
+_PRICE = re.compile(r"(?:contract\s+(?:price|sum|value)|total\s+contract\s+value|"
+    r"precio\s+del\s+contrato|importe\s+del\s+contrato|valor\s+del\s+contrato)", re.IGNORECASE)
+_SPEC_MILESTONES = ("factory acceptance", "site acceptance", "commissioning", "performance test",
+                    "pruebas de aceptación en fábrica", "puesta en marcha", "pruebas de rendimiento")
+_CODES = {"€": "EUR", "$": "USD", "£": "GBP", "EURO": "EUR", "EUROS": "EUR" }
+_DATE_ES = re.compile(
+    r"\b(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+    r"septiembre|setiembre|octubre|noviembre|diciembre)\s+de\s+(20\d{2})\b",
+    re.IGNORECASE,
+)
+_MONTH_ES = {month: n for n, month in enumerate(
+    ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+     "septiembre", "octubre", "noviembre", "diciembre"), 1)}
+_MONTH_ES["setiembre"] = 9
+_CURRENCY_AFTER = re.compile(r"(\d[\d,.]*)\s*(euros?|EUR|USD|GBP|€|\$|£)\b", re.IGNORECASE)
 
 
 def _source_row(row: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -70,7 +83,7 @@ def _quoted_risks(artifacts: list[DocumentArtifact], *, technical: bool = False)
     result = []
     for artifact in artifacts:
         doc_type = artifact.doc_type.lower()
-        if technical and doc_type not in {"technical", "technical_specification", "specification"}:
+        if technical and doc_type not in {"technical", "technical_spec", "technical_specification", "specification"}:
             continue
         if not technical and doc_type != "contract":
             continue
@@ -92,6 +105,11 @@ def _quoted_risks(artifacts: list[DocumentArtifact], *, technical: bool = False)
 
 def _date_from_quote(quote: str) -> str | None:
     dates = set(_ISO.findall(quote))
+    for day, month, year in _DATE_ES.findall(quote):
+        try:
+            dates.add(date(int(year), _MONTH_ES[month.lower()], int(day)).isoformat())
+        except ValueError:
+            return None
     if len(dates) != 1:
         return None
     value = next(iter(dates))
@@ -114,15 +132,22 @@ def _row_date(value: object) -> str | None:
 
 
 def _amount(text: str) -> tuple[float, str] | None:
-    matches = _CURRENCY.findall(text)
+    matches = [(curr, val) for curr, val in _CURRENCY.findall(text)]
+    matches += [(curr, val) for val, curr in _CURRENCY_AFTER.findall(text)]
     if len(matches) != 1:
         return None
     currency, amount = matches[0]
     amount = amount.strip(".,")
-    if not re.fullmatch(r"\d+(?:,\d{3})*(?:\.\d{1,2})?", amount):
-        return None  # Locale ambiguity: never guess a number or denomination.
+    if re.fullmatch(r"\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?", amount):
+        decimal = amount.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?", amount):
+        decimal = amount.replace(",", "")
+    elif re.fullmatch(r"\d+(?:[,.]\d{1,2})?", amount):
+        decimal = amount.replace(",", ".")
+    else:
+        return None  # Ambiguous number/decimal convention: do not compare.
     try:
-        return float(Decimal(amount.replace(",", ""))), _CODES.get(currency, currency.upper())
+        return float(Decimal(decimal)), _CODES.get(currency.upper(), currency.upper())
     except InvalidOperation:
         return None
 
@@ -226,7 +251,8 @@ def compare_original_source_rows(
     for spec in specs:
         quote = spec["source_quote"].lower()
         deadline = _date_from_quote(spec["source_quote"])
-        if deadline is None or not ("no later than" in quote or " by " in quote):
+        if deadline is None or not any(mark in quote for mark in
+            ("no later than", " by ", "a más tardar", "antes del", "no después del")):
             continue
         names = [name for name in _SPEC_MILESTONES if name in quote]
         if len(names) != 1:
