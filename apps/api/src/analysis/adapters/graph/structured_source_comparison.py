@@ -98,7 +98,7 @@ def _quoted_risks(artifacts: list[DocumentArtifact], *, technical: bool = False)
             # The model's clause label is NOT an authority: retain it only if
             # the number is visible verbatim in the original verified quote.
             labelled = bool(clause and re.search(
-                r"(?<![\\d.])" + re.escape(clause) + r"(?![\\d.])", quote
+                r"(?<![0-9.])" + re.escape(clause) + r"(?![0-9.])", quote
             ))
             result.append({
                 "document_id": artifact.document_id,
