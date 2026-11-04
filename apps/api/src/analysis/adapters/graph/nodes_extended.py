@@ -441,7 +441,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
                 extracted_wbs=state.get("extracted_wbs", []),
                 bom_items=state.get("bom_items", []),
                 confidence_score=state.get("confidence_score", 0.0),
-                document_text=state.get("document_text", ""),
+                document_text=llm_document_text(state),
             )
         )
 
