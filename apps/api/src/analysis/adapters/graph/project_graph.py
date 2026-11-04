@@ -912,6 +912,7 @@ async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
         "artifact_revision_ids": artifact_revisions,
         "coherence_llm_on": coherence.llm_on,
         "score_reason": coherence.score_reason,
+        "category_scores": dict(coherence.category_scores),
         "missing_dimensions": list(coherence.insufficient_data_reasons),
     }
     try:
