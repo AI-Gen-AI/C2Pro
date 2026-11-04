@@ -5,7 +5,7 @@ TS-UT-ADR017-PG-001
 
 from __future__ import annotations
 
-from typing import Annotated, NotRequired, Protocol, TypedDict
+from typing import Annotated, Any, NotRequired, Protocol, TypedDict
 from uuid import UUID
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
@@ -47,6 +47,8 @@ class ProjectGraphState(TypedDict):
     artifact_repository: NotRequired[ProjectGraphArtifactRepository]
     snapshot_repository: NotRequired[IProjectSnapshotRepository]
     db_session: NotRequired[AsyncSession]
+    input_source_clauses: NotRequired[list[Clause]]
+    schedule_planned_finish: NotRequired[dict[str, Any] | None]
     coherence_evaluation: NotRequired[EnrichedCoherenceResult | None]
     coherence_source_clauses: NotRequired[list[Clause]]
     correlated_alert_count: NotRequired[int]
