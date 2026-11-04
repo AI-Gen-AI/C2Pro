@@ -51,6 +51,7 @@ class ProjectGraphState(TypedDict):
     input_source_clauses: NotRequired[list[Clause]]
     schedule_planned_finish: NotRequired[dict[str, Any] | None]
     coherence_evaluation: NotRequired[EnrichedCoherenceResult | None]
+    coherence_score_version: NotRequired[str | None]
     coherence_source_clauses: NotRequired[list[Clause]]
     correlated_alert_count: NotRequired[int]
     alert_review_required_count: NotRequired[int]
