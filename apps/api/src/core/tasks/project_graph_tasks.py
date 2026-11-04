@@ -7,11 +7,14 @@ from __future__ import annotations
 
 import inspect
 import logging
+import hashlib
+import json
+from datetime import UTC, datetime
 from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from src.analysis.adapters.graph.project_graph import (
     build_project_graph,
@@ -78,6 +81,68 @@ def summarize_canonical_source_revisions(rows: list[dict[str, Any]]) -> list[dic
         }
         for (family, doc, revision, digest), count in sorted(groups.items())
     ]
+
+
+async def persist_provisional_source_discrepancies(
+    session: Any, *, project_id: UUID, tenant_id: TenantId,
+    comparison: dict[str, Any] | None,
+) -> bool:
+    """Append only changed source-cited observations; NEVER canonical alerts/scores.
+
+    Uses project + tenant scoped latest-event lookup, and the ProjectGraph
+    transaction owns the commit. Exact repeat runs produce no duplicate event.
+    """
+    findings = (comparison or {}).get("findings")
+    if not isinstance(findings, list) or not findings:
+        return False
+    if any(
+        item.get("state") != "PROVISIONAL" or item.get("scored") is not False
+        or len(item.get("sources") or []) != 2
+        for item in findings
+    ):
+        raise ValueError("SOURCE_DISCREPANCY_MUST_BE_PROVISIONAL_AND_BI_SOURCED")
+    from src.temporal.adapters.persistence.models import ProjectEventORM
+
+    event_type = "project_graph.source_discrepancies_observed"
+    encoded = json.dumps(findings, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    fingerprint = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    last = (
+        await session.execute(
+            select(ProjectEventORM.payload).where(
+                ProjectEventORM.project_id == project_id,
+                ProjectEventORM.tenant_id == tenant_id,
+                ProjectEventORM.event_type == event_type,
+            ).order_by(ProjectEventORM.occurred_at.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    if isinstance(last, dict) and last.get("fingerprint") == fingerprint:
+        return False
+
+    references = [
+        {
+            "document_id": source["document_id"],
+            "revision_id": source["revision_id"],
+            "source_locator": source["source_locator"],
+            "role": source["role"],
+            **({"unit_sha256": source["unit_sha256"]} if source.get("unit_sha256") else {}),
+            **({"blob_sha256": source["blob_sha256"]} if source.get("blob_sha256") else {}),
+            **({"source_quote_sha256": source["source_quote_sha256"]} if source.get("source_quote_sha256") else {}),
+        }
+        for finding in findings for source in finding["sources"]
+    ]
+    now = datetime.now(UTC).replace(tzinfo=None)
+    session.add(ProjectEventORM(
+        project_id=project_id, tenant_id=tenant_id, event_type=event_type,
+        payload={
+            "state": "PROVISIONAL", "scoring_policy": "not_scored",
+            "requires_human_review": True, "fingerprint": fingerprint,
+            "findings": findings,
+        },
+        evidence_refs=references, actor="project_graph_source_comparator",
+        occurred_at=now, created_at=now,
+    ))
+    await session.flush()
+    return True
 
 
 async def run_project_graph_once(
@@ -188,6 +253,12 @@ async def _run_project_graph_async(
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
                     structured_source_refs=source_refs,
                     structured_source_units=rows,
+                )
+                # Persist only PROVISIONAL, dual-source citations in the same
+                # transaction as Tier-2. No promotion to canonical alerts.
+                await persist_provisional_source_discrepancies(
+                    session, project_id=project_id, tenant_id=tenant_id,
+                    comparison=result.get("structured_source_comparison"),
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)
