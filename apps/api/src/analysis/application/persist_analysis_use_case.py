@@ -41,6 +41,8 @@ class PersistAnalysisCommand:
     # ``None`` => not evaluated for this analysis; the key is then simply absent from
     # result_json, which readers must treat as UNAVAILABLE (never "evaluated, empty").
     single_document_assessment: dict[str, Any] | None = None
+    # N11 proposals are additive and never a human approval or trusted baseline.
+    decision_snapshot: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ class PersistAnalysisUseCase:
                 "risks": command.extracted_risks,
                 # The WBS proposal, exactly as extracted (recoverable for governance).
                 "wbs": command.extracted_wbs,
+                **({"decision_snapshot": command.decision_snapshot} if command.decision_snapshot else {}),
                 # Additive: existing keys are preserved; the assessment key is written
                 # only when the assessment actually ran.
                 **(command.single_document_assessment or {}),

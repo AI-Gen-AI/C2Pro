@@ -8,7 +8,7 @@ Refers to TASK-IMPL-010.4.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Mapping
 
 
 @dataclass(frozen=True)
@@ -96,6 +96,64 @@ def _proposed_risk_actions(risks: list[dict[str, Any]], *, limit: int = 5) -> li
         if len(actions) >= limit:
             break
     return actions
+
+
+
+def decision_snapshot_for_persistence(
+    package: Mapping[str, Any] | None,
+    *,
+    document_id: str | None,
+    revision_id: str | None,
+) -> dict[str, Any] | None:
+    """Preserve only N11's *proposals* with their source identity.
+
+    This is not a decision approval, validated citation, or trusted baseline.
+    A missing revision remains missing (never silently attributed to latest).
+    """
+    if not isinstance(package, Mapping):
+        return None
+    raw_actions = package.get("proposed_actions")
+    if not isinstance(raw_actions, list):
+        return None
+    actions: list[dict[str, Any]] = []
+    for action in raw_actions:
+        if not isinstance(action, dict) or not action.get("proposed_action"):
+            continue
+        if action.get("status") != "PROPOSED_REQUIRES_HUMAN_REVIEW":
+            continue
+        source = action.get("source_evidence")
+        source = source if isinstance(source, dict) else {}
+        source_document = source.get("document_id") or document_id
+        source_revision = source.get("revision_id") or (
+            revision_id if source_document == document_id else None
+        )
+        actions.append({
+            "title": action.get("title"),
+            "proposed_action": action["proposed_action"],
+            "priority_proposal": action.get("priority_proposal") or "UNASSESSED",
+            "priority_basis": action.get("priority_basis") or "unassessed",
+            "risk_impact": action.get("risk_impact"),
+            "owner": None,  # N11 does not establish decision authority.
+            "due_date": None,
+            "status": "PROPOSED_REQUIRES_HUMAN_REVIEW",
+            "source_evidence": {
+                "document_id": source_document,
+                "revision_id": source_revision,
+                "clause_ref": source.get("clause_ref"),
+                "source_quote": source.get("source_quote"),
+                "verification": "REQUIRES_SOURCE_VALIDATION",
+            },
+        })
+        if len(actions) == 5:
+            break
+    if not actions:
+        return None
+    return {
+        "status": "PROPOSED_REQUIRES_HUMAN_REVIEW",
+        "document_id": document_id,
+        "revision_id": revision_id,
+        "proposed_actions": actions,
+    }
 
 
 class ReportAssemblyService:

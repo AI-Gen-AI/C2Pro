@@ -116,9 +116,12 @@ class MaterializationContent:
     coherence_score: int | float | None = None
     coherence_breakdown: Mapping[str, Any] = field(default_factory=dict)
     assessment: Mapping[str, Any] = field(default_factory=dict)
+    decision_snapshot: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_state(cls, state: Mapping[str, Any]) -> MaterializationContent:
+        from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
+
         return cls(
             document_id=_str_or_none(state.get("document_id")),
             risks=list(state.get("extracted_risks") or []),
@@ -126,6 +129,11 @@ class MaterializationContent:
             coherence_score=state.get("coherence_score"),
             coherence_breakdown=state.get("coherence_breakdown") or {},
             assessment=state.get("single_document_assessment") or {},
+            decision_snapshot=decision_snapshot_for_persistence(
+                state.get("decision_package"),
+                document_id=_str_or_none(state.get("document_id")),
+                revision_id=_str_or_none(state.get("document_revision_id")),
+            ) or {},
         )
 
     @classmethod
@@ -477,7 +485,12 @@ async def write_canonical_effects(
             coherence_breakdown=dict(content.coherence_breakdown),
             alerts_count=len(content.risks),
             completed_at=_utcnow(),
-            result_json={"risks": content.risks, "wbs": content.wbs, **dict(content.assessment)},
+            result_json={
+                "risks": content.risks,
+                "wbs": content.wbs,
+                **dict(content.assessment),
+                **({"decision_snapshot": dict(content.decision_snapshot)} if content.decision_snapshot else {}),
+            },
             resume_operation_id=resume.operation_id if resume else None,
             resume_attempt_id=resume.attempt_id if resume else None,
             fencing_token=resume.fencing_token if resume else None,

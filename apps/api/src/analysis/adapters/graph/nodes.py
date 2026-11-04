@@ -931,6 +931,7 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         PersistAnalysisCommand,
         PersistAnalysisUseCase,
     )
+    from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
     tenant_id = UUID(state["tenant_id"])
     try:
@@ -950,6 +951,11 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
                     coherence_score=state.get("coherence_score", 0),
                     coherence_breakdown=state.get("coherence_breakdown", {}),
                     single_document_assessment=state.get("single_document_assessment"),
+                    decision_snapshot=decision_snapshot_for_persistence(
+                        state.get("decision_package"),
+                        document_id=state.get("document_id"),
+                        revision_id=state.get("document_revision_id"),
+                    ),
                 )
             )
     # N17 persists best-effort and reports persistence failures as NodeResult.
