@@ -543,6 +543,66 @@ def _unavailable_decisions() -> DecisionProposalsSection:
 
 
 # ---------------------------------------------------------------------------
+# ProjectGraph — provisional cross-document source discrepancies
+# ---------------------------------------------------------------------------
+
+
+class SourceDiscrepancyEvidence(BaseModel):
+    """One pinned source of a two-sided, unapproved cross-document comparison."""
+
+    model_config = _CONTRACT
+
+    role: Literal["verified_document_quote", "original_source_row"]
+    document_id: UUID
+    revision_id: UUID
+    source_locator: str = Field(min_length=1)
+    family: Literal["budget", "schedule"] | None = None
+    source_quote: str | None = None
+    source_quote_sha256: str | None = None
+    blob_sha256: str | None = None
+    unit_sha256: str | None = None
+
+
+class SourceDiscrepancyItem(BaseModel):
+    model_config = _CONTRACT
+
+    rule_id: str
+    summary: str
+    state: Literal["PROVISIONAL"]
+    scored: Literal[False]
+    requires_human_review: Literal[True]
+    compared_values: dict[str, str | float | int]
+    sources: tuple[SourceDiscrepancyEvidence, SourceDiscrepancyEvidence]
+
+    @model_validator(mode="after")
+    def _enforce_two_distinct_sources(self) -> SourceDiscrepancyItem:
+        if {source.role for source in self.sources} != {
+            "verified_document_quote", "original_source_row"
+        }:
+            raise ValueError("one verified quote and one original XLSX row are mandatory")
+        return self
+
+
+class SourceDiscrepanciesData(BaseModel):
+    model_config = _CONTRACT
+
+    items: list[SourceDiscrepancyItem]
+
+
+class SourceDiscrepanciesSection(ReportSectionBase):
+    data: SourceDiscrepanciesData | None = None
+
+
+def _unavailable_discrepancies() -> SourceDiscrepanciesSection:
+    return SourceDiscrepanciesSection(
+        status=SectionStatus.UNAVAILABLE,
+        status_reason="ProjectGraph has not produced a current, dual-source provisional comparison.",
+        source_domain="project_graph",
+        evidence_tier=ReportEvidenceTier.UNAVAILABLE,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Not-modeled domains
 # ---------------------------------------------------------------------------
 
@@ -636,6 +696,7 @@ class CurrentStateSections(BaseModel):
     obligations: NotModeledSection
     schedule: NotModeledSection
     decision_proposals: DecisionProposalsSection = Field(default_factory=_unavailable_decisions)
+    source_discrepancies: SourceDiscrepanciesSection = Field(default_factory=_unavailable_discrepancies)
     evidence_quality: EvidenceQualitySection
 
 
@@ -697,6 +758,10 @@ __all__ = [
     "ReportEvidenceTier",
     "ReportSectionBase",
     "SectionStatus",
+    "SourceDiscrepanciesData",
+    "SourceDiscrepanciesSection",
+    "SourceDiscrepancyEvidence",
+    "SourceDiscrepancyItem",
     "StakeholderItem",
     "StakeholdersData",
     "StakeholdersSection",
