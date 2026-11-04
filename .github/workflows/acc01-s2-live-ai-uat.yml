@@ -8,6 +8,10 @@ on:
       - '.github/workflows/acc01-s2-live-ai-uat.yml'
   workflow_dispatch:
     inputs:
+      projectgraph_epc_pilot:
+        description: "Owner-authorized: S2 four real files + real AI, then ONE Tier-2 ProjectGraph pass, exact evidence and snapshot. No production."
+        type: boolean
+        default: false
       integral_uat:
         description: >-
           Integral S1-S8 UAT (opt-in): ONE project from login to relogin, two Clerk Development tenants. When true
@@ -296,6 +300,18 @@ jobs:
           fi
           echo 'PASS: a genuine LLM call succeeded in the S2 Worker.'
 
+      - name: ProjectGraph CORE - one real four-document Tier-2 evaluation
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.projectgraph_epc_pilot == true
+        working-directory: apps/api
+        env:
+          FEATURE_V3_PROJECT_GRAPH: "true"
+          FEATURE_V3_COHERENCE_LLM: "true"
+          AI_MAX_TOKENS_OUTPUT: "1536"
+        run: |
+          python scripts/projectgraph_epc_pilot_once.py \
+            --ledger ../web/playwright-report/s2-postgres-ledger.json \
+            --out ../web/playwright-report/projectgraph-functional-pilot.json
+
       - name: Summarize triplet journey result
         if: always()
         working-directory: apps/web
@@ -310,6 +326,7 @@ jobs:
             apps/web/playwright-report/s2-real-ai-provider.json
             apps/web/playwright-report/triplet-results.json
             apps/web/playwright-report/s2-postgres-ledger.json
+            apps/web/playwright-report/projectgraph-functional-pilot.json
           if-no-files-found: warn
           retention-days: 3
 
