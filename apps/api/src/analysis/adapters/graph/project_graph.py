@@ -401,6 +401,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         return {
             "coherence_result": summary,
             "coherence_evaluation": evaluation.raw_result,
+            "coherence_score_version": evaluation.score_version,
             "coherence_source_clauses": list(evaluation.source_clauses),
             "node_results": status,
         }
@@ -913,6 +914,7 @@ async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
         "coherence_llm_on": coherence.llm_on,
         "score_reason": coherence.score_reason,
         "category_scores": dict(coherence.category_scores),
+        "score_version": state.get("coherence_score_version"),
         "missing_dimensions": list(coherence.insufficient_data_reasons),
     }
     try:
