@@ -853,6 +853,7 @@ async def decision_intelligence_node(state: ProjectState) -> ProjectState:
             citations=state.get("citations", []),
             citation_validation_passed=state.get("citation_validation_passed", False),
             human_feedback=state.get("human_feedback", ""),
+            project_source_evidence=state.get("project_source_evidence") or {},
         )
     )
 
@@ -959,6 +960,7 @@ async def final_assembler_node(state: ProjectState) -> ProjectState:
             decision_package=state.get("decision_package", {}),
             human_approval_required=state.get("human_approval_required", False),
             human_feedback=state.get("human_feedback", ""),
+            project_source_evidence=state.get("project_source_evidence") or {},
         )
     )
 
