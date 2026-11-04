@@ -15,6 +15,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from src.analysis.domain.critique_findings import (
+    format_source_bound_notes,
+    source_bound_findings,
+)
+
 from src.analysis.domain.prompts import (
     BUDGET_EXTRACTION_PROMPT,
     CRITIQUE_SYSTEM_PROMPT,
@@ -117,6 +122,29 @@ class CritiqueExtractionService:
                 status = str(payload.get("status", "")).upper()
                 notes = str(payload.get("notes", "")).strip()
                 if status in {"OK", "RETRY"}:
+                    if source and status == "RETRY":
+                        verified = source_bound_findings(
+                            payload.get("findings"), source_text=source
+                        )
+                        if not verified:
+                            # Do not call a text-only RETRY a supported quality
+                            # finding: the model may have invented citations or
+                            # omitted structured evidence entirely.
+                            return CritiqueResult(
+                                status="RETRY",
+                                notes="N12_UNASSESSED: no source-grounded findings available.",
+                            )
+                        return CritiqueResult(
+                            status="RETRY",
+                            notes=format_source_bound_notes(verified),
+                        )
+                    if source and status == "OK" and payload.get("findings"):
+                        # The reviewer cannot say "OK" while also reporting a
+                        # defect. Fail closed; never grant a success verdict.
+                        return CritiqueResult(
+                            status="RETRY",
+                            notes="N12_UNASSESSED: contradictory reviewer status.",
+                        )
                     return CritiqueResult(status=status, notes=notes)
         except Exception:
             pass
