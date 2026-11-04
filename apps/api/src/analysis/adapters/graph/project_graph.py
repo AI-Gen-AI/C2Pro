@@ -55,6 +55,7 @@ from src.health.application.governance_scorer import score_governance_dimension
 from src.health.application.health_engine import assemble_health_vector
 from src.health.application.risk_scorer import score_risk_dimension
 from src.project_state.domain.entities import ProjectRisk
+from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
 
 logger = structlog.get_logger(__name__)
 
@@ -842,11 +843,85 @@ def snapshot_delta(state: ProjectGraphState) -> dict[str, object]:
     }
 
 
-def write_snapshot(_state: ProjectGraphState) -> dict[str, Any]:
-    return {
-        "snapshot_id": None,
-        "node_results": _skipped("write_snapshot", "pending ADR-015 snapshot write"),
+async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
+    """Persist the computed Tier-2 outcome using ADR-015's snapshot repository.
+
+    The run's caller owns the transaction. Unlike the general SnapshotWriter,
+    this retains ProjectGraph's *actual* Health and Coherence values instead
+    of recalculating an unrelated single-document assessment. It never makes
+    an absent score look assessed and never commits a pending candidate.
+    """
+    repository = state.get("snapshot_repository")
+    if repository is None:
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "snapshot repository unavailable"),
+        }
+
+    health_vector = state.get("health_result")
+    if not isinstance(health_vector, dict):
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "project health unavailable"),
+        }
+    raw_coherence = state.get("coherence_result")
+    coherence: ProjectCoherenceResult | None = (
+        ProjectCoherenceResult.model_validate(raw_coherence)
+        if isinstance(raw_coherence, dict)
+        else raw_coherence
+    )
+    if coherence is None:
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "project coherence unavailable"),
+        }
+
+    artifact_revisions = [str(_artifact_key(item)) for item in state.get("artifacts", [])]
+    counts = {
+        "project_graph": True,
+        "artifact_count": len(artifact_revisions),
+        "artifact_revision_ids": artifact_revisions,
+        "coherence_llm_on": coherence.llm_on,
+        "score_reason": coherence.score_reason,
+        "missing_dimensions": list(coherence.insufficient_data_reasons),
     }
+    try:
+        prior = await repository.latest(state["project_id"], state["tenant_id"])
+        if (
+            prior is not None
+            and prior.trigger is SnapshotTrigger.GRAPH_COMPLETED
+            and prior.counts == counts
+            and prior.health_vector == health_vector
+            and prior.coherence_subscore == coherence.overall_score
+        ):
+            return {
+                "snapshot_id": prior.snapshot_id,
+                "node_results": _ok("write_snapshot", {"snapshot_reused": True}),
+            }
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+        snapshot = ProjectSnapshot(
+            snapshot_id=uuid4(),
+            project_id=state["project_id"],
+            tenant_id=state["tenant_id"],
+            captured_at=now,
+            trigger=SnapshotTrigger.GRAPH_COMPLETED,
+            health_vector=health_vector,
+            coherence_subscore=coherence.overall_score,
+            counts=counts,
+            source_event_id=state.get("trigger_event_id"),
+            created_at=now,
+        )
+        persisted = await repository.append_snapshot(snapshot)
+        return {
+            "snapshot_id": persisted.snapshot_id,
+            "node_results": _ok("write_snapshot", {"snapshot_reused": False}),
+        }
+    except Exception as exc:  # noqa: BLE001 - no silent snapshot failure.
+        return {
+            "snapshot_id": None,
+            "node_results": _failed("write_snapshot", exc),
+        }
 
 
 def alert_correlation(_state: ProjectGraphState) -> dict[str, Any]:
