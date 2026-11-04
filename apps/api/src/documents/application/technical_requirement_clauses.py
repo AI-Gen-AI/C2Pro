@@ -35,6 +35,45 @@ _OBLIGATION = re.compile(
 _MAX_SOURCE_CHARS = 4000
 
 
+def technical_requirement_coverage_omissions(
+    parsed_text: str, *, revision_id: UUID | None
+) -> list[dict[str, int | str]]:
+    """Identify source sections the selective technical extractor does not retain."""
+    if revision_id is None:
+        return [{"kind": "technical_clauses_unpinned_revision"}]
+
+    boundaries = list(_SECTION_BOUNDARY.finditer(parsed_text))
+    omissions: list[dict[str, int | str]] = []
+    for index, match in enumerate(boundaries):
+        section_code = match.group("code")
+        end = boundaries[index + 1].start() if index + 1 < len(boundaries) else len(parsed_text)
+        stripped = parsed_text[match.start():end].strip()
+        if _ELIGIBLE_SECTION_CODE.fullmatch(section_code) is None:
+            omissions.append(
+                {"kind": "technical_section_unsupported_heading", "section_code": section_code}
+            )
+        elif len(stripped) < 30:
+            omissions.append(
+                {"kind": "technical_section_discarded_short", "section_code": section_code}
+            )
+        elif _OBLIGATION.search(stripped) is None:
+            omissions.append(
+                {
+                    "kind": "technical_section_without_deterministic_obligation",
+                    "section_code": section_code,
+                }
+            )
+        elif len(stripped) > _MAX_SOURCE_CHARS:
+            omissions.append(
+                {
+                    "kind": "technical_section_truncated",
+                    "section_code": section_code,
+                    "omitted_chars": len(stripped) - _MAX_SOURCE_CHARS,
+                }
+            )
+    return omissions
+
+
 def extract_technical_requirement_clauses(
     *,
     document_id: UUID,

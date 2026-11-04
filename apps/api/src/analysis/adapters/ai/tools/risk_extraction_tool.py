@@ -231,7 +231,6 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             "risk_extraction_parse_diagnostics",
             extra={
                 "raw_output_chars": len(ai_response.content or ""),
-                "raw_output_sample": (ai_response.content or "")[:600],
                 "payload_type": type(payload).__name__,
                 "payload_keys": list(payload.keys())[:20]
                 if isinstance(payload, dict)

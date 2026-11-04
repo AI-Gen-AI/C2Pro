@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.budget_stated_total import record_revision_stated_total
+from src.documents.application.document_coverage import record_revision_document_coverage
 from src.documents.application.document_source import fetch_source_file, resolve_source_revision
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
@@ -205,6 +206,12 @@ class ParseDocumentUseCase:
             # This enables the analysis endpoint to find and use the document text.
             parsed_text = _extract_parsed_text(parsed_payload)
             metadata = dict(document.document_metadata or {})
+            record_revision_document_coverage(
+                metadata,
+                parsed_payload=parsed_payload,
+                revision_id=revision.revision_id if revision is not None else None,
+                blob_hash=revision.blob_hash if revision is not None else None,
+            )
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
                 if revision is not None:

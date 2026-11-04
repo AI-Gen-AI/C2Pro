@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from src.documents.application.technical_requirement_clauses import (
     extract_technical_requirement_clauses,
+    technical_requirement_coverage_omissions,
 )
 from src.documents.domain.models import ClauseType
 
@@ -194,3 +195,21 @@ def test_supported_heading_with_closing_parenthesis_can_be_extracted() -> None:
     [clause] = _extract(source, revision_id=revision)
     assert clause.clause_code == "4.1.2"
     assert source[clause.text_start_offset:clause.text_end_offset] == clause.full_text
+
+
+def test_technical_coverage_records_known_skips_and_truncation() -> None:
+    """Selective deterministic clause extraction must not hide omitted source sections."""
+    parsed_text = (
+        "Section 1\nInformative background only.\n\n"
+        "Section 2\nThe supplier must comply. " + "x" * 4_100
+    )
+
+    omissions = technical_requirement_coverage_omissions(parsed_text, revision_id=uuid4())
+
+    assert omissions[0] == {
+        "kind": "technical_section_without_deterministic_obligation",
+        "section_code": "1",
+    }
+    assert omissions[1]["kind"] == "technical_section_truncated"
+    assert omissions[1]["section_code"] == "2"
+    assert omissions[1]["omitted_chars"] > 0

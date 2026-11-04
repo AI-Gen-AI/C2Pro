@@ -105,7 +105,7 @@ class TestCompositeParserAdvanced:
             os.unlink(tmp_path)
 
     def test_parser_unsupported_format(self):
-        """Test parser raises error for unsupported format."""
+        """Unsupported formats make the coverage limitation explicit."""
         from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
         from src.documents.domain.models import Document, DocumentType
 
@@ -132,9 +132,36 @@ class TestCompositeParserAdvanced:
             with pytest.raises(ValueError) as exc_info:
                 import asyncio
                 asyncio.run(parser.parse_document_file(doc, Path(tmp_path)))
-            assert "no parser available" in str(exc_info.value).lower()
+            assert "document coverage: unsupported" in str(exc_info.value).lower()
         finally:
             os.unlink(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_excel_unprocessed_sheet_and_formula_are_partial_coverage(self, tmp_path):
+        """A parsed sheet must not hide another sheet or an unevaluated formula."""
+        from openpyxl import Workbook
+
+        from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+
+        workbook = Workbook()
+        schedule = workbook.active
+        schedule.title = "Schedule"
+        schedule.append(["Task", "Start Date", "End Date", "Duration"])
+        schedule.append(["Excavation", "2026-01-01", "2026-01-05", "=DAYS(C2,B2)"])
+        workbook.create_sheet("Notes").append(["This sheet is not parsed"])
+        path = tmp_path / "schedule.xlsx"
+        workbook.save(path)
+        workbook.close()
+
+        coverage = await ExcelFileParser().inspect_coverage(path)
+
+        assert coverage == {
+            "status": "PARTIAL",
+            "origin": "excel_file_parser",
+            "processed_worksheets": ["Schedule"],
+            "unprocessed_worksheets": ["Notes"],
+            "unverified_formula_cells": ["Schedule!D2"],
+        }
 
 
 # ===========================================

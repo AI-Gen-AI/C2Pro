@@ -38,7 +38,8 @@ langsmith>=0.9.3,<1.0.0  # LangSmith observability; compatible with langchain-co
 pymupdf==1.28.0  # PDF
 openpyxl==3.1.5   # Excel
 python-docx==1.2.0  # Word
-# pyfiebdc==0.8.1    # BC3/FIEBDC - Not available on PyPI, commented out
+# BC3/FIEBDC has no supported package source here. Uploads fail explicitly
+# when the parser is unavailable; never replace this with synthetic data.
 pytesseract==0.3.13  # OCR for scanned PDFs
 Pillow>=12.3.0  # Image processing for OCR
 

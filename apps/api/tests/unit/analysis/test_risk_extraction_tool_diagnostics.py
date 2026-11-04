@@ -38,7 +38,7 @@ def _tool() -> RiskExtractionTool:
 
 
 @pytest.mark.asyncio
-async def test_risk_tool_logs_raw_output_length_and_parsed_count(monkeypatch) -> None:
+async def test_risk_tool_logs_structured_diagnostics_without_contract_sample(monkeypatch) -> None:
     """Test Suite ID: TS-HOTFIX-ANALYSIS-HONEST-RISK-001."""
     events: list[tuple[str, dict[str, object]]] = []
 
@@ -73,7 +73,6 @@ async def test_risk_tool_logs_raw_output_length_and_parsed_count(monkeypatch) ->
                 # structlog-style kwargs raise TypeError on a logging.Logger.
                 "extra": {
                     "raw_output_chars": len(response.content),
-                    "raw_output_sample": response.content,
                     "payload_type": "dict",
                     "payload_keys": ["risks"],
                     "candidate_item_count": 0,

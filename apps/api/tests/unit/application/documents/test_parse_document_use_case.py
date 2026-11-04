@@ -238,6 +238,45 @@ async def test_parse_document_without_a_pinned_revision_records_no_unstamped_tot
 
 
 @pytest.mark.asyncio
+async def test_parse_document_persists_revision_scoped_coverage_signal(
+    use_case,
+    mock_repository,
+    mock_parser,
+    sample_document,
+):
+    """A parsed state stores its coverage independently and pins it to the revision."""
+    revision = _Revision()
+    use_case.revision_repository = MagicMock()
+    mock_repository.get_by_id = AsyncMock(return_value=sample_document)
+    mock_repository.update_status = AsyncMock()
+    mock_repository.commit = AsyncMock()
+    mock_parser.parse_document_file = AsyncMock(return_value={
+        "file_format": ".pdf",
+        "text_blocks": [],
+        "document_coverage": {
+            "status": "UNVERIFIED",
+            "origin": "pdf_file_parser",
+            "limitations": ["text_extraction_not_verified_against_source"],
+        },
+    })
+
+    with _pinned_revision(revision):
+        await use_case.execute(sample_document.tenant_id, sample_document.id, uuid4())
+
+    assert mock_repository.update_metadata.await_args.args[2] == {
+        "document_coverage_by_revision": {
+            str(revision.revision_id): {
+                "revision_id": str(revision.revision_id),
+                "blob_hash": revision.blob_hash,
+                "status": "UNVERIFIED",
+                "origin": "pdf_file_parser",
+                "limitations": ["text_extraction_not_verified_against_source"],
+            }
+        }
+    }
+
+
+@pytest.mark.asyncio
 async def test_parse_document_persists_budget_currencies_with_stated_total(
     use_case,
     mock_repository,

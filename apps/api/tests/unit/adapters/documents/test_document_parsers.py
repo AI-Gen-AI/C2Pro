@@ -344,8 +344,9 @@ class TestBC3Parser:
 
     @pytest.mark.asyncio
     async def test_bc3_parser_parse_sample(self, tmp_path):
-        """Test BC3 parser with sample data."""
-        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+        """BC3 without its real parser must fail rather than invent a budget."""
+        from src.documents.adapters.parsers import bc3_file_parser
+        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser, BC3ParsingError
 
         parser = BC3FileParser()
 
@@ -360,8 +361,13 @@ A2;Second Item;200.00
         bc3_path = tmp_path / "sample.bc3"
         bc3_path.write_text(sample_bc3)
 
-        result = await parser.parse(bc3_path)
-        assert result is not None
+        original_parser = bc3_file_parser.pyfiebdc
+        bc3_file_parser.pyfiebdc = None
+        try:
+            with pytest.raises(BC3ParsingError, match="parser is unavailable"):
+                await parser.parse(bc3_path)
+        finally:
+            bc3_file_parser.pyfiebdc = original_parser
 
     @pytest.mark.asyncio
     async def test_bc3_parser_rejects_missing_file(self):
@@ -388,18 +394,23 @@ A2;Second Item;200.00
     @pytest.mark.asyncio
     async def test_bc3_parser_wraps_invalid_file_errors(self, tmp_path):
         """Test BC3 parser wraps library invalid-file exceptions."""
-        from src.documents.adapters.parsers.bc3_file_parser import (
-            BC3FileParser,
-            BC3ParsingError,
-            InvalidFileException,
-        )
+        from src.documents.adapters.parsers import bc3_file_parser
+        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser, BC3ParsingError
 
         bc3_path = tmp_path / "invalid.bc3"
         bc3_path.write_text("*")
 
         parser = BC3FileParser()
-        with patch("src.documents.adapters.parsers.bc3_file_parser.pyfiebdc.Fiebdc") as mock_fiebdc:
-            mock_fiebdc.return_value.parse.side_effect = InvalidFileException("bad bc3")
+        class LibraryInvalidFile(Exception):
+            pass
+
+        library = MagicMock()
+        library.Fiebdc.return_value.parse.side_effect = LibraryInvalidFile("bad bc3")
+        with (
+            patch.object(bc3_file_parser, "PYFIEBDC_AVAILABLE", True),
+            patch.object(bc3_file_parser, "pyfiebdc", library),
+            patch.object(bc3_file_parser, "InvalidFileException", LibraryInvalidFile),
+        ):
             with pytest.raises(BC3ParsingError, match="Invalid BC3 file format"):
                 await parser.parse(bc3_path)
 

@@ -54,6 +54,10 @@ from src.documents.adapters.rag.sqlalchemy_rag_ingestion_service import (
 )
 from src.documents.adapters.storage.factory import build_storage_service
 from src.documents.application.budget_stated_total import record_revision_stated_total
+from src.documents.application.document_coverage import (
+    append_document_coverage_omissions,
+    record_revision_document_coverage,
+)
 from src.documents.application.document_source import (
     REVISION_HASH_MISMATCH,
     RevisionSourceError,
@@ -71,6 +75,7 @@ from src.documents.application.schedule_planned_finish import (
 from src.documents.application.schedule_planned_finish import extract_schedule_planned_finish
 from src.documents.application.technical_requirement_clauses import (
     extract_technical_requirement_clauses,
+    technical_requirement_coverage_omissions,
 )
 from src.documents.application.trigger_document_analysis_use_case import (
     TriggerDocumentAnalysisUseCase,
@@ -762,6 +767,30 @@ def _split_contract_clause_spans(
 def _split_contract_into_clauses(parsed_text: str) -> list[str]:
     """Compatibility text-only view over the exact clause-span splitter."""
     return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
+
+
+def _contract_clause_coverage_omissions(parsed_text: str) -> list[dict[str, int | str]]:
+    """Expose known clause omissions without storing contractual source text."""
+    omissions: list[dict[str, int | str]] = []
+    for segment, start_offset, end_offset in _split_contract_clause_spans(parsed_text):
+        if len(segment) < 40:
+            omissions.append(
+                {
+                    "kind": "contract_clause_discarded_short",
+                    "start_offset": start_offset,
+                    "end_offset": end_offset,
+                }
+            )
+        elif len(segment) > 4000:
+            omissions.append(
+                {
+                    "kind": "contract_clause_truncated",
+                    "start_offset": start_offset,
+                    "end_offset": end_offset,
+                    "omitted_chars": len(segment) - 4000,
+                }
+            )
+    return omissions
 
 
 def _explicit_source_clause_heading_code(segment: str) -> str | None:
@@ -1807,6 +1836,12 @@ async def _ingest_owned(
     # never belong in document metadata. Recorded so an operator (or a
     # retry) can tell "nothing to embed" from "provider misconfigured".
     metadata["rag_ingestion_outcome"] = rag_result.outcome.value
+    record_revision_document_coverage(
+        metadata,
+        parsed_payload=parsed_payload,
+        revision_id=source_revision.revision_id if source_revision else None,
+        blob_hash=source_revision.blob_hash if source_revision else None,
+    )
     if document.document_type == DocumentType.BUDGET:
         # The declared budget total (and its denominations) is what coherence
         # reconciles against the contract total (DET-CRS-CONBUD / NEGMARGIN). It is
@@ -1850,6 +1885,18 @@ async def _ingest_owned(
             DocumentType.TECHNICAL_SPEC,
             DocumentType.SPECIFICATION,
         }:
+            omissions = (
+                technical_requirement_coverage_omissions(
+                    parsed_text, revision_id=source_revision.revision_id if source_revision else None
+                )
+                if document.document_type in {DocumentType.TECHNICAL_SPEC, DocumentType.SPECIFICATION}
+                else _contract_clause_coverage_omissions(parsed_text)
+            )
+            append_document_coverage_omissions(
+                metadata,
+                revision_id=source_revision.revision_id if source_revision else None,
+                omissions=omissions,
+            )
             # Technical requirements use the same C3a revision pin, immutable
             # clause IDs and #711 processing fence as contract clauses. They
             # are SOURCE observations only, never verified assessments.

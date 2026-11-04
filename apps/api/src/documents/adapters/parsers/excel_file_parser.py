@@ -79,6 +79,44 @@ class ExcelFileParser:
     Encapsulates the logic specific to the Excel format and `openpyxl` library.
     """
 
+    async def inspect_coverage(self, file_path: Path) -> dict[str, Any]:
+        """Describe known workbook content this parser did not verify or evaluate."""
+        # This is a bounded metadata scan; keep it in the caller's event-loop
+        # context because read-only openpyxl iteration is not thread-safe on
+        # every supported runtime.
+        return self._inspect_coverage_sync(file_path)
+
+    @staticmethod
+    def _inspect_coverage_sync(file_path: Path) -> dict[str, Any]:
+        workbook: Any | None = None
+        try:
+            workbook = openpyxl.load_workbook(file_path, data_only=False, read_only=True)
+            processed_sheet = workbook.active.title
+            unprocessed_worksheets = [
+                sheet.title for sheet in workbook.worksheets if sheet.title != processed_sheet
+            ]
+            unverified_formula_cells = [
+                f"{sheet.title}!{cell.coordinate}"
+                for sheet in workbook.worksheets
+                for row in sheet.iter_rows()
+                for cell in row
+                if cell.data_type == "f"
+            ]
+            return {
+                "status": "PARTIAL" if unprocessed_worksheets or unverified_formula_cells else "COMPLETE",
+                "origin": "excel_file_parser",
+                "processed_worksheets": [processed_sheet],
+                "unprocessed_worksheets": unprocessed_worksheets,
+                "unverified_formula_cells": unverified_formula_cells,
+            }
+        except (InvalidFileException, FileNotFoundError) as exc:
+            raise ExcelParsingError(f"Failed to inspect Excel coverage: {exc}") from exc
+        except Exception as exc:
+            raise ExcelParsingError(f"Failed to inspect Excel coverage: {exc}") from exc
+        finally:
+            if workbook is not None and hasattr(workbook, "close"):
+                workbook.close()
+
     async def parse_schedule(
         self, file_path: Path, *, include_evidence: bool = False,
         source_bytes: bytes | None = None

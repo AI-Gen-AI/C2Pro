@@ -51,6 +51,11 @@ on:
           - hard
           - expert
         default: all
+      enable_langsmith_tracing:
+        description: "Explicitly enable synthetic-evaluation LangSmith tracing"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: evaluation-regression-${{ github.ref }}
@@ -62,6 +67,8 @@ permissions:
 env:
   PYTHON_VERSION: "3.11"
   LANGSMITH_PROJECT: "C2Pro-Eval"
+  LANGSMITH_TRACING: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_langsmith_tracing && 'true' || 'false' }}
+  LANGCHAIN_TRACING_V2: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_langsmith_tracing && 'true' || 'false' }}
 
 jobs:
   coherence-eval:
@@ -95,7 +102,6 @@ jobs:
         working-directory: apps/api
         env:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-          LANGCHAIN_TRACING_V2: "true"
           LANGSMITH_PROJECT: ${{ env.LANGSMITH_PROJECT }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -148,7 +154,6 @@ jobs:
         working-directory: apps/api
         env:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-          LANGCHAIN_TRACING_V2: "true"
           LANGSMITH_PROJECT: ${{ env.LANGSMITH_PROJECT }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -201,7 +206,6 @@ jobs:
         working-directory: apps/api
         env:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-          LANGCHAIN_TRACING_V2: "true"
           LANGSMITH_PROJECT: ${{ env.LANGSMITH_PROJECT }}
         run: |
           if [ "${{ inputs.smoke_test_only }}" == "true" ]; then

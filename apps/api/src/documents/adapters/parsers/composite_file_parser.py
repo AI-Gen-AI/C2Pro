@@ -52,7 +52,15 @@ class CompositeFileParser(IFileParserService):
         if file_format == ".pdf":
             try:
                 text_blocks = await self.pdf_parser.extract_text_and_offsets(file_path)
-                return {"file_format": file_format, "text_blocks": text_blocks}
+                return {
+                    "file_format": file_format,
+                    "text_blocks": text_blocks,
+                    "document_coverage": {
+                        "status": "UNVERIFIED",
+                        "origin": "pdf_file_parser",
+                        "limitations": ["text_extraction_not_verified_against_source"],
+                    },
+                }
             except PDFParsingError as e:
                 raise ValueError(f"PDF parsing failed: {e}")
 
@@ -61,7 +69,15 @@ class CompositeFileParser(IFileParserService):
                 raise ValueError("budget/schedule require .xlsx/.bc3")
             try:
                 text_blocks = await self.docx_parser.extract_text_and_offsets(file_path)
-                return {"file_format": file_format, "text_blocks": text_blocks}
+                return {
+                    "file_format": file_format,
+                    "text_blocks": text_blocks,
+                    "document_coverage": {
+                        "status": "UNVERIFIED",
+                        "origin": "docx_file_parser",
+                        "limitations": ["text_extraction_not_verified_against_source"],
+                    },
+                }
             except DocxParsingError as e:
                 raise ValueError(f"DOCX parsing failed: {e}")
 
@@ -69,13 +85,21 @@ class CompositeFileParser(IFileParserService):
             if document.document_type == DocumentType.SCHEDULE:
                 try:
                     schedule = await self.excel_parser.parse_schedule(file_path)
-                    return {"file_format": file_format, "schedule": schedule}
+                    return {
+                        "file_format": file_format,
+                        "schedule": schedule,
+                        "document_coverage": await self.excel_parser.inspect_coverage(file_path),
+                    }
                 except ExcelParsingError as e:
                     raise ValueError(f"Excel schedule parsing failed: {e}")
             if document.document_type == DocumentType.BUDGET:
                 try:
                     budget = await self.excel_parser.parse_budget(file_path)
-                    return {"file_format": file_format, "budget": budget}
+                    return {
+                        "file_format": file_format,
+                        "budget": budget,
+                        "document_coverage": await self.excel_parser.inspect_coverage(file_path),
+                    }
                 except ExcelParsingError as e:
                     raise ValueError(f"Excel budget parsing failed: {e}")
             raise ValueError(
@@ -85,8 +109,20 @@ class CompositeFileParser(IFileParserService):
         if file_format == ".bc3":
             try:
                 bc3_budget = await self.bc3_parser.parse(file_path)
-                return {"file_format": file_format, "budget": bc3_budget}
+                return {
+                    "file_format": file_format,
+                    "budget": bc3_budget,
+                    "document_coverage": {
+                        "status": "UNVERIFIED",
+                        "origin": "bc3_file_parser",
+                        "limitations": ["third_party_parser_coverage_not_verified"],
+                    },
+                }
             except BC3ParsingError as e:
                 raise ValueError(f"BC3 parsing failed: {e}")
 
-        raise ValueError(f"No parser available for file format: {file_format} and document type: {document.document_type.value}")
+        raise ValueError(
+            "No parser available for file format: "
+            f"{file_format} and document type: {document.document_type.value}; "
+            "document coverage: UNSUPPORTED"
+        )
