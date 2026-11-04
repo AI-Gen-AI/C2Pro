@@ -10,6 +10,8 @@ from uuid import UUID
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
 from src.analysis.domain.contracts import DocumentArtifact
+from src.coherence.models import Clause, EnrichedCoherenceResult
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.domain.node_result import NodeResult, merge_node_results
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
 from src.core.tenants.types import TenantId
@@ -44,6 +46,11 @@ class ProjectGraphState(TypedDict):
     node_results: Annotated[list[NodeResult[object]], merge_node_results]
     artifact_repository: NotRequired[ProjectGraphArtifactRepository]
     snapshot_repository: NotRequired[IProjectSnapshotRepository]
+    db_session: NotRequired[AsyncSession]
+    coherence_evaluation: NotRequired[EnrichedCoherenceResult | None]
+    coherence_source_clauses: NotRequired[list[Clause]]
+    correlated_alert_count: NotRequired[int]
+    alert_review_required_count: NotRequired[int]
 
 
 __all__ = ["ProjectGraphState"]
