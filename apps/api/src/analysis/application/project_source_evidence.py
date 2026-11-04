@@ -21,7 +21,10 @@ def summarize_source_units(
     if max_preview_per_family < 1:
         raise ValueError("INVALID_SOURCE_PREVIEW_LIMIT")
     summary: dict[str, Any] = {
-        "state": "SOURCE_OBSERVED_NOT_APPROVED",
+        "state": (
+            "SOURCE_OBSERVED_NOT_APPROVED"
+            if budget_rows or schedule_rows else "NO_CANONICAL_SOURCE_ROWS"
+        ),
         "baseline_approved": False,
         "budget": {},
         "schedule": {},
