@@ -131,3 +131,15 @@ Estado observado en **Supabase proyecto C2Pro** mediante consultas SQL de solo l
 - Futuros incrementos: múltiples hojas y fórmulas calculadas con prueba de recálculo; BC3 source locators; modelos de actividad/calendarios/hitos P6/MS Project; después de ello writer embeddings por cláusula con identidad y revisión fiable, y finalmente N8/comparadores. No fragmentar números, importes y fechas como único vector.
 
 **Estado:** `SOURCE_UNIT_PERSISTENCE_IMPLEMENTED_IN_BRANCH`; `NO_MIGRATION_APPLIED`; `NOT_DEPLOYED`; `N8_NOT_WIRED`. No afirmar cobertura exhaustiva de hojas ni calidad del conjunto sin evidencia.
+
+
+## 9. Gate A — Resultado de prueba real PostgreSQL aislada (04/11/2026)
+
+**Implementación con evidencia real de ejecución, NO desplegada.**
+
+1. Primer lote sobre `6a6859d2a6b84441d90a6b6445dbeb9a867b3809`: job `fa424c52055e4c4aad1ba509`, **22 PASS, 1 FAIL**. El fallo fue `UndefinedTableError: public.document_source_units does not exist` en el ensayo integral, porque el bootstrap de pytest usa `Base.metadata.create_all`, no Alembic. No fue fallo del parser ni del proveedor IA.
+2. Corrección focalizada: nuevo `DocumentSourceUnitORM` en `apps/api/src/documents/adapters/persistence/models.py`, commit `fdf49c1220a8752fe1b7419770e3eb4121ac3ba1`, con FK compuesta, unicidad y schema JSONB equivalentes a la migración. Esto registra la tabla en el metadata del bootstrap de ensayo y del backend.
+3. Reejecución **solo del test previamente bloqueado** en PostgreSQL privado: job `5775bb7791c640f78ba2e883`, commit exacto `fdf49c1220a8752fe1b7419770e3eb4121ac3ba1`, `tests/integration/document_flow/test_budget_and_time_rules_coexist.py`: **1 PASS, 0 FAIL**, exit 0, 21.22s, log SHA256 `e04b8ca2865deaf626c49bd9b2d01e374a6a07cfdcf3d58774d53267ba78bbc6`. Prueba sobre dos archivos XLSX y contrato, verifica registros originales `document_source_units` por `tenant/project/document/revision`, presupuesto y actividades, además de reglas de coherencia previamente existentes.
+4. No se han repetido las 22 pruebas ya correctas tras añadir el ORM; por eso la evidencia son dos ejecuciones con SHAs explícitos, **no** una afirmación de suite integral verde en HEAD. La ruta Alembic/Supabase, sus políticas RLS y los permisos efectivos del usuario de Railway aún requieren una verificación independiente **antes de despliegue**; los tests usan schema ORM de ensayo, no equivalen a aplicar migraciones en el backend.
+5. El estado es **GATE_A_PERSISTENCE_VERIFIED_IN_ISOLATED_TEST**, sin `main`, #1112 ni despliegue; no aporta vectorización ni N8 todavía. La siguiente fase es demostrar identidad segura de `clause_embeddings` y conectar el escritor/lector de revisiones vigentes sobre esta fuente, conservando partidas/fechas en SQL.
+
