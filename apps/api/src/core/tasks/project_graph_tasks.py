@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
@@ -55,12 +56,37 @@ async def enqueue_project_graph(
     )
 
 
+def summarize_canonical_source_revisions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Summarize only revision-bound XLSX observations, never promote to baselines."""
+    groups: dict[tuple[str, str, str, str], int] = defaultdict(int)
+    for row in rows:
+        family = str(row.get("family") or "")
+        document_id = str(row.get("document_id") or "")
+        revision_id = str(row.get("revision_id") or "")
+        blob_hash = str(row.get("blob_hash") or "")
+        if family not in {"budget", "schedule"} or not document_id or not revision_id or not blob_hash:
+            continue
+        groups[(family, document_id, revision_id, blob_hash)] += 1
+    return [
+        {
+            "family": family,
+            "document_id": doc,
+            "revision_id": revision,
+            "blob_sha256": digest,
+            "observed_rows": count,
+            "role": "source_observation_only_not_approved_baseline",
+        }
+        for (family, doc, revision, digest), count in sorted(groups.items())
+    ]
+
+
 async def run_project_graph_once(
     *,
     project_id: UUID,
     tenant_id: TenantId,
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
+    structured_source_refs: list[dict[str, Any]] | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -75,6 +101,7 @@ async def run_project_graph_once(
         "previous_snapshot_id": None,
         "changed_artifact_ids": [],
         "artifacts": artifacts,
+        "structured_source_refs": list(structured_source_refs or []),
         "coherence_result": None,
         "impact_result": None,
         "health_result": None,
@@ -96,6 +123,7 @@ async def run_project_graph_once(
         "status": "ok",
         "projected_obligations": projected,
         "artifact_count": len(artifacts),
+        "structured_source_revision_count": len(structured_source_refs or []),
         "node_result_count": len(result.get("node_results", [])),
         "coherence_result": _serializable(result.get("coherence_result")),
         "node_results": result.get("node_results", []),
@@ -132,11 +160,30 @@ async def _run_project_graph_async(
         async with get_raw_session() as session:
             try:
                 await session.execute(text(f"SET LOCAL app.current_tenant = '{tenant_id}'"))
+                from src.documents.application.structured_source_units import (
+                    load_canonical_source_units,
+                )
+
+                # Read canonical immutable source revisions through their own
+                # tenant-scoped provenance seam. Never create DocumentArtifact
+                # or ProjectGraph materialization obligations from these rows.
+                rows: list[dict[str, Any]] = []
+                for family in ("budget", "schedule"):
+                    rows.extend(
+                        await load_canonical_source_units(
+                            session=session,
+                            tenant_id=tenant_id,
+                            project_id=project_id,
+                            family=family,
+                        )
+                    )
+                source_refs = summarize_canonical_source_revisions(rows)
                 result = await run_project_graph_once(
                     project_id=project_id,
                     tenant_id=tenant_id,
                     trigger_event_id=trigger_event_id,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
+                    structured_source_refs=source_refs,
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)
