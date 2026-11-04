@@ -306,6 +306,8 @@ class ArtifactSetEvaluation:
 
     summary: ProjectCoherenceResult
     score_version: str | None
+    raw_result: EnrichedCoherenceResult | None = None
+    source_clauses: tuple[Clause, ...] = ()
 
 
 async def evaluate_artifact_set(
@@ -350,6 +352,8 @@ async def evaluate_artifact_set(
             llm_on=llm_on,
         ),
         score_version=getattr(engine_result, "score_version", None),
+        raw_result=engine_result,
+        source_clauses=tuple(clauses),
     )
 
 
@@ -361,6 +365,8 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     if not artifacts:
         return {
             "coherence_result": None,
+            "coherence_evaluation": None,
+            "coherence_source_clauses": [],
             "node_results": _skipped("cross_doc_coherence", "no artifacts"),
         }
 
@@ -376,11 +382,18 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         signal_count = summary.signal_count
         overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
-        return {"coherence_result": summary, "node_results": status}
+        return {
+            "coherence_result": summary,
+            "coherence_evaluation": evaluation.raw_result,
+            "coherence_source_clauses": list(evaluation.source_clauses),
+            "node_results": status,
+        }
     except Exception as exc:  # noqa: BLE001
         degraded = True
         return {
             "coherence_result": None,
+            "coherence_evaluation": None,
+            "coherence_source_clauses": [],
             "node_results": _degraded("cross_doc_coherence", str(exc)),
         }
     finally:
@@ -924,15 +937,74 @@ async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
         }
 
 
-def alert_correlation(_state: ProjectGraphState) -> dict[str, Any]:
-    return {
-        "node_results": _skipped("alert_correlation", "pending ADR-019 alert correlation"),
-    }
+async def _reconcile_project_graph_alerts(state: ProjectGraphState) -> Any:
+    """Reuse the canonical coherence-alert reconciliation, without a second writer."""
+    from src.coherence.router import _mirror_coherence_alerts_to_alerts_table
+
+    evaluation = state["coherence_evaluation"]
+    assert evaluation is not None
+    return await _mirror_coherence_alerts_to_alerts_table(
+        db=state["db_session"],
+        project_id=state["project_id"],
+        tenant_id=state["tenant_id"],
+        alerts=evaluation.alerts,
+        clauses=state.get("coherence_source_clauses", []),
+        # A partially assessed project can never auto-resolve existing alerts.
+        # Human dispositions must survive successive ProjectGraph executions.
+        auto_resolve=False,
+        evaluation_complete=False,
+    )
 
 
-def hitl_routing(_state: ProjectGraphState) -> dict[str, Any]:
+async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
+    """Reuse the existing evidence-aware Alerts persistence in the same transaction."""
+    if state.get("coherence_evaluation") is None:
+        return {
+            "node_results": _skipped("alert_correlation", "coherence evaluation unavailable"),
+        }
+    if state.get("db_session") is None:
+        return {
+            "node_results": _skipped("alert_correlation", "database session unavailable"),
+        }
+    try:
+        reconciliation = await _reconcile_project_graph_alerts(state)
+        records = reconciliation.records_by_finding_key
+        review_required = sum(
+            1
+            for record in records.values()
+            if (getattr(record, "alert_metadata", None) or {}).get("requires_human_review")
+        )
+        count = len(records)
+        return {
+            "correlated_alert_count": count,
+            "alert_review_required_count": review_required,
+            "node_results": _ok(
+                "alert_correlation",
+                {"alert_count": count, "review_required_count": review_required},
+            ),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "node_results": _failed("alert_correlation", exc),
+        }
+
+
+def hitl_routing(state: ProjectGraphState) -> dict[str, Any]:
+    """Expose the existing Alert review surface; never auto-approve or promote."""
+    count = state.get("alert_review_required_count")
+    if count is None:
+        return {
+            "node_results": _skipped("hitl_routing", "alert review route unavailable"),
+        }
     return {
-        "node_results": _skipped("hitl_routing", "pending ADR-020 HITL routing"),
+        "node_results": _ok(
+            "hitl_routing",
+            {
+                "route": "existing_alert_review",
+                "review_required_count": count,
+                "auto_approval": False,
+            },
+        ),
     }
 
 
