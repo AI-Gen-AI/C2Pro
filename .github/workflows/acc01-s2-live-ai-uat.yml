@@ -349,6 +349,14 @@ jobs:
           authority = {s["family"]: s for s in backend.get("source_authority", [])}
           codes = {a["rule_code"] for a in backend.get("alert_read_model", [])}
           expected = set(oracle["expected_rules"]) | set(oracle["expected_provisional"])
+          cited = {
+              row["rule_code"]
+              for row in backend.get("alert_read_model", [])
+              if (
+                  (row.get("source_clause_id") and row.get("source_document_id") and row.get("has_quote"))
+                  or row.get("structured_ref_count", 0) > 0
+              )
+          }
           if len(authority) != 4:
               reasons.append("FOUR_DOCUMENT_AUTHORITIES_MISSING")
           for family in ("contract", "technical_spec"):
@@ -364,13 +372,15 @@ jobs:
               reasons.append("NO_VERIFIABLE_ALERT_CITATIONS")
           if not expected.issubset(codes):
               reasons.append("EXPECTED_CONTRADICTIONS_NOT_PERSISTED")
+          if not expected.issubset(cited):
+              reasons.append("EXPECTED_CONTRADICTIONS_LACK_VERIFIED_CITATIONS")
           if ui.get("state") != "PASS" or not ui.get("real_clerk_relogin"):
               reasons.append("ALERT_UI_RELOGIN_AND_CITATIONS_NOT_VERIFIED")
           verdict = {
               "status": "PROJECTGRAPH_CORE_ACCEPTED" if not reasons else "NOT_ACCEPTED",
               "project_id": backend.get("project_id"),
               "snapshot_id": backend.get("snapshot_id"),
-              "first_blocker": backend.get("first_blocker") or reasons[0] if reasons else None,
+              "first_blocker": reasons[0] if reasons else None,
               "reasons": reasons,
               "expected_rule_count": len(expected),
               "verified_expected_rule_count": len(expected & codes),
