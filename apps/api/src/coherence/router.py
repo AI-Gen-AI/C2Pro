@@ -1988,13 +1988,19 @@ async def get_coherence_dashboard(
     # A later upload or analysis retains its own authority until Tier-2 completes.
     freshness = [analysis_at, result_at, _normalize_utc_datetime(latest_doc_at)]
     latest_source_at = max((x for x in freshness if x is not None), default=None)
-    summary = await _prefer_current_projectgraph_snapshot(
-        summary,
-        db=db,
-        project_id=project_id,
-        tenant_id=tenant_id,
-        latest_source_at=latest_source_at,
+    project_graph_enabled = (
+        await flags_service.is_enabled(tenant_id, "feature_v3_project_graph")
+        if isinstance(flags_service, TenantFlagsService)
+        else False
     )
+    if project_graph_enabled:
+        summary = await _prefer_current_projectgraph_snapshot(
+            summary,
+            db=db,
+            project_id=project_id,
+            tenant_id=tenant_id,
+            latest_source_at=latest_source_at,
+        )
 
     # S3: the early /coherence/evaluate guard returns contract_pending_approval
     # without persisting a scored CoherenceResult. The dashboard is a separate
