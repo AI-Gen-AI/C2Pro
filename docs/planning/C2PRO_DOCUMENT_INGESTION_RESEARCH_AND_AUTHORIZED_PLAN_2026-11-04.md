@@ -116,3 +116,18 @@ Estado observado en **Supabase proyecto C2Pro** mediante consultas SQL de solo l
 
 **pgvector funciona a nivel de tipo/índice/almacenamiento; la conexión de negocio aún NO.** Para presupuesto y cronograma, la autoridad primaria debe ser relacional/estructurada; los vectores son un índice auxiliar de búsqueda. Postergar optimizaciones IVFFlat/HNSW y nuevos modelos hasta que existan unidades originales trazables y consulta exacta de revisión.
 
+
+
+## 8. Gate A — Primera persistencia de fuentes XLSX (04/11/2026)
+
+**Implementación publicada en la misma rama aislada; aún no integrada en #1112 ni en main.** Tras el paso P0 de observaciones de cobertura:
+
+- Nueva tabla `public.document_source_units`, migración Alembic `20261104_0001` (tras `20261101_0001`) y espejo Supabase `20261104000100_document_source_units.sql`. Clave única `tenant/document/revision/family/source_locator`, FK compuesta al registro inmutable de revisión, `blob_hash`, `unit_sha256`, JSONB de fila original y RLS forzada por `app.current_tenant`. No backfill ni exposición intencional a anon/authenticated.
+- `structured_source_units.py`: reparseo XLSX con `include_evidence=True` y conservación de filas originales de presupuesto (`line_item`/total declarado) y cronograma (`activity`), manteniendo `Decimal` y fechas como cadenas sin pasar por float. Formula no verificada → `UNASSESSED`, sin falsificar dato. Hoja secundaria sin analizar → `parser_coverage=PARTIAL` conservado; sólo se escriben observaciones de hoja activa.
+- `ingestion_tasks._ingest_owned`: inserciones dentro de la misma transacción que `ProcessingAuthority.finish_ingestion`, jamás escritura secundaria independiente. Resumen sin texto `source_units_by_revision` en metadata; bytes fuente validados previamente mediante SHA.
+- Lector `load_canonical_source_units`: consulta por `tenant_id/project_id/family` y `current_revision_lateral`; excluye propuesta sin autoridad, no promueve la fuente original a baseline contractual ni WBS/BOM. Este lector **NO** se ha conectado todavía a N8; es deliberadamente un gate anterior a los nodos.
+- Pruebas añadidas: nueve tests unitarios de fuentes + ampliación del test PostgreSQL integral existente `test_budget_and_time_rules_coexist.py` para exigir filas por revisión de presupuesto y cronograma. Los tests de cobertura P0 previos permanecen.
+- Condiciones para ejecutar/integrar: probar una sola tanda focalizada de unit/integration en worktree aislado y PostgreSQL de ensayo; comprobar migración/RLS/permiso efectivo del worker; distinguir `SOURCE_OBSERVED` de `SOURCE_APPROVED`; mantener #1112 en manos de Claude; no desplegar sin aceptar la fuente y el veredicto de pruebas.
+- Futuros incrementos: múltiples hojas y fórmulas calculadas con prueba de recálculo; BC3 source locators; modelos de actividad/calendarios/hitos P6/MS Project; después de ello writer embeddings por cláusula con identidad y revisión fiable, y finalmente N8/comparadores. No fragmentar números, importes y fechas como único vector.
+
+**Estado:** `SOURCE_UNIT_PERSISTENCE_IMPLEMENTED_IN_BRANCH`; `NO_MIGRATION_APPLIED`; `NOT_DEPLOYED`; `N8_NOT_WIRED`. No afirmar cobertura exhaustiva de hojas ni calidad del conjunto sin evidencia.
