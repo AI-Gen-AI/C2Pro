@@ -7,7 +7,7 @@ TASK-IMPL-006: Added DocumentChunkORM model for Gate 4 traceability.
 """
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -23,6 +23,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy import (
@@ -379,3 +380,60 @@ class DocumentProcessingOperationORM(Base):
 # Register that table wherever the clause model is mapped, so mapper configuration
 # never depends on some other module having imported the temporal models first.
 from src.temporal.adapters.persistence import models as _temporal_models  # noqa: E402, F401
+
+
+class DocumentSourceUnitORM(Base):
+    """Immutable source XLSX row in one document revision (not BOM or WBS).
+
+    The migration owns tenant RLS; registration here keeps SQLAlchemy metadata
+    bootstrap and test PostgreSQL aligned with the deployed schema.
+    """
+
+    __tablename__ = "document_source_units"
+
+    id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid4,
+        server_default=func.gen_random_uuid(),
+    )
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    project_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    revision_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    blob_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    family: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_locator: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    unit_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint("family IN ('budget', 'schedule')"),
+        CheckConstraint("length(source_locator) > 0"),
+        CheckConstraint("jsonb_typeof(payload) = 'object'"),
+        UniqueConstraint(
+            "tenant_id", "document_id", "revision_id", "family", "source_locator",
+            name="uq_document_source_units_revision_locator",
+        ),
+        ForeignKeyConstraint(
+            ["revision_id", "document_id", "project_id", "tenant_id"],
+            [
+                "document_revisions.revision_id",
+                "document_revisions.document_id",
+                "document_revisions.project_id",
+                "document_revisions.tenant_id",
+            ],
+            ondelete="CASCADE",
+            name="fk_document_source_units_revision",
+        ),
+        Index(
+            "ix_document_source_units_project",
+            "tenant_id", "project_id", "family", "revision_id",
+        ),
+        Index(
+            "ix_document_source_units_document",
+            "tenant_id", "document_id", "revision_id",
+        ),
+        {"info": {"rls_policy": "tenant_isolation"}},
+    )
