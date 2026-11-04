@@ -62,6 +62,27 @@ def _valid_quote(risk: dict[str, Any], source: str) -> bool:
     )
 
 
+def _source_marker_matches(marker: str, quote: str) -> bool:
+    """Match literal oracle anchors; '...' is an ordered omission, not source text.
+
+    The synthetic EPC-05 oracle abbreviates its expected quotation with '...'.
+    Reject reordered or missing anchors rather than matching the punctuation
+    literally or accepting a paraphrase as a grounded source quotation.
+    """
+    normalized_marker = _normalized(marker).replace("…", "...")
+    normalized_quote = _normalized(quote)
+    parts = [part.strip() for part in normalized_marker.split("...")]
+    if any(not part for part in parts):
+        return False
+    offset = 0
+    for part in parts:
+        index = normalized_quote.find(part, offset)
+        if index < 0:
+            return False
+        offset = index + len(part)
+    return bool(parts)
+
+
 def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, Any]:
     """Score emitted N4 risks against independently authored fixture evidence."""
     source = _source_text(fixture)
@@ -80,7 +101,7 @@ def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, 
                 if index not in consumed
                 and valid[index]
                 and _normalized(risk.get("category")) == expected_category
-                and marker in _normalized(risk.get("source_quote"))
+                and _source_marker_matches(marker, str(risk.get("source_quote") or ""))
             ),
             None,
         )
