@@ -13,6 +13,7 @@ from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.node_result import NodeResult, merge_node_results
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
 from src.core.tenants.types import TenantId
+from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
 
 
 class ProjectGraphArtifactRepository(Protocol):
@@ -42,6 +43,7 @@ class ProjectGraphState(TypedDict):
     snapshot_id: UUID | None
     node_results: Annotated[list[NodeResult[object]], merge_node_results]
     artifact_repository: NotRequired[ProjectGraphArtifactRepository]
+    snapshot_repository: NotRequired[IProjectSnapshotRepository]
 
 
 __all__ = ["ProjectGraphState"]
