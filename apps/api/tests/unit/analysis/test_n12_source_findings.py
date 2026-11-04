@@ -127,7 +127,46 @@ async def test_service_rejects_ok_with_reported_errors():
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
     assert result.status == "RETRY"
-    assert result.notes.startswith("N12_UNASSESSED:")
+    assert "EPC-04 [omission]" in result.notes
+    assert "14 days" in result.notes
+
+
+@pytest.mark.asyncio
+async def test_model_status_variant_cannot_erase_three_source_verified_findings():
+    ai = AsyncMock()
+    ai.run_extraction.return_value = {
+        "status": "NEEDS_REVIEW",
+        "notes": "Review three issues",
+        "findings": [
+            _finding(
+                "EPC-04", "omission",
+                "The Contractor shall rectify a notified defect within 14 days of written notice.",
+                "The defects rectification obligation was omitted.",
+            ),
+            _finding(
+                "EPC-07", "omission",
+                "Aggregate liability is capped at 100% of the Contract Price",
+                "The liability cap is missing from extraction.",
+            ),
+            _finding(
+                "EPC-05", "contradiction",
+                "lack of financing and ordinary market shortages are not Force Majeure.",
+                "Financing does not qualify as Force Majeure.",
+            ),
+        ],
+    }
+    result = await CritiqueExtractionService().extract(
+        ai=ai, items=[], doc_type="contract", source_text=SOURCE,
+    )
+    assert result.status == "RETRY"
+    assert "N12_UNASSESSED" not in result.notes
+    assert all(clause in result.notes for clause in ("EPC-04", "EPC-05", "EPC-07"))
+    from scripts.n4_n12_real_ai_eval import score_n12
+
+    metrics = score_n12(result.notes, SOURCE)
+    assert metrics["omissions_detected"] == 2
+    assert metrics["incorrect_interpretation_detected"] is True
+    assert metrics["critique_citation_validity"] is True
 
 
 def test_real_ai_parser_accepts_wrapped_json_without_hiding_source():
