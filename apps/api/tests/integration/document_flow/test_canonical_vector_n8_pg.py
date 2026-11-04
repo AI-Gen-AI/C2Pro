@@ -35,6 +35,14 @@ async def test_real_pg_source_clause_vectors_feed_n8_without_untrusted_revisions
         "src.documents.application.upload_document_use_case.enqueue_project_snapshot",
         lambda **_kwargs: None,
     )
+    monkeypatch.setattr(
+        "src.documents.application.reupload_document_use_case._enqueue_document_processing",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "src.documents.application.reupload_document_use_case.enqueue_project_snapshot",
+        lambda **_kwargs: None,
+    )
     world = await _World(db, tmp_path).setup()
 
     contract = await world.upload("contract.pdf")
