@@ -222,7 +222,9 @@ def main() -> int:
         "snapshot_id": outcome.get("snapshot_id"),
         "first_blocker": outcome["first_blocker"],
     }, sort_keys=True))
-    return 0 if outcome["state"].startswith("PARTIAL") else 1
+    # A valid backend snapshot is PARTIAL, not the user's end-to-end UI UAT.
+    # Do not let GitHub's green check suggest ProjectGraph was fully accepted.
+    return 0 if outcome["state"] == "ACCEPTED_END_TO_END" else 1
 
 
 if __name__ == "__main__":
