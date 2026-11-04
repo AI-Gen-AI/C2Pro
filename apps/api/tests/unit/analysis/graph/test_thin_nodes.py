@@ -196,7 +196,9 @@ class TestCritiqueNodeThinDelegation:
             _make_state(extracted_risks=[{"confidence": 0.9}], retry_count=0)
         )
         assert result["retry_count"] == 1
-        assert result["critique_notes"] == "redo"
+        # A model saying "redo" without a cited clause is not an assessed
+        # defect; keep the retry but do not certify unsupported findings.
+        assert result["critique_notes"].startswith("N12_UNASSESSED:")
 
     @pytest.mark.asyncio
     async def test_use_case_exception_emits_failed_node_result_and_persists_error(
