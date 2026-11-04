@@ -211,3 +211,35 @@ async def test_projectgraph_rejects_fake_scored_or_unbound_source_event():
             await persist_provisional_source_discrepancies(
                 NoWrite(), project_id=uuid4(), tenant_id=uuid4(), comparison=wrong
             )
+
+
+def test_spanish_contract_budget_and_schedule_citations_are_supported():
+    contract_deadline = _artifact("contract", (
+        "La fecha de finalización de las obras será el 30 de junio de 2027. "
+        "Es la fecha contractual de entrega sin prórroga autorizada."
+    ))
+    contract_price = _artifact("contract", (
+        "El precio del contrato asciende a 1.000.000 euros, y se abonará "
+        "según los hitos establecidos en las condiciones particulares."
+    ))
+    technical = _artifact("technical_spec", (
+        "Las pruebas de aceptación en fábrica deberán finalizar a más tardar "
+        "el 10 de junio de 2027 conforme a la especificación técnica."
+    ))
+    rows = [
+        _unit("schedule", {
+            "task": "Pruebas de aceptación en fábrica", "end_date": "2027-07-01",
+        }, loc="Cronograma!3"),
+        _unit("schedule", {
+            "task": "Entrega final", "end_date": "2027-07-30",
+        }, loc="Cronograma!4"),
+        _unit("budget", {
+            "item": "Total presupuesto", "total": "1300000.00", "currency": "EUR"
+        }, loc="Presupuesto!10"),
+    ]
+    result = compare_original_source_rows([contract_deadline, contract_price, technical], rows)
+    assert {item["rule_id"] for item in result["findings"]} == {
+        "DET-CRS-SCHDEAD", "DET-CRS-NEGMARGIN", "SPEC-MILESTONE-VS-SCHEDULE"
+    }
+    assert all(item["state"] == "PROVISIONAL" for item in result["findings"])
+    assert all(item["sources"][1]["source_locator"] for item in result["findings"])
