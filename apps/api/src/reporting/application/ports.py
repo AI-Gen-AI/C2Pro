@@ -102,6 +102,11 @@ class CurrentStateInputs:
     decision_proposals: SourceOk[list[dict[str, Any]]] | SourceUnavailable | SourceFailed = field(
         default_factory=lambda: SourceUnavailable("No revision-bound N11 proposals have been assessed.")
     )
+    source_discrepancies: SourceOk[dict[str, Any]] | SourceUnavailable | SourceFailed = field(
+        default_factory=lambda: SourceUnavailable(
+            "No revision-bound ProjectGraph source discrepancies have been assessed."
+        )
+    )
 
 
 class CurrentStateSources(Protocol):
@@ -124,6 +129,8 @@ class CurrentStateSources(Protocol):
     async def load_raci(self, project_id: UUID, tenant_id: UUID) -> RaciMatrixViewResponse: ...
 
     async def load_decision_proposals(self, project_id: UUID, tenant_id: UUID) -> list[dict[str, Any]]: ...
+
+    async def load_source_discrepancies(self, project_id: UUID, tenant_id: UUID) -> dict[str, Any]: ...
 
 
 __all__ = [
