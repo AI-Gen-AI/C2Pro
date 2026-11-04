@@ -102,9 +102,17 @@ def _artifact_key(artifact: DocumentArtifact) -> str:
 
 def load_current_artifacts(state: ProjectGraphState) -> dict[str, object]:
     artifacts = state.get("artifacts", [])
+    source_refs = state.get("structured_source_refs", [])
+    # Source-only XLSX observations are not approved baselines or extra trusted
+    # document-analysis artifacts, and are not yet included in scoring.
+    details: dict[str, object] = {"artifact_count": len(artifacts)}
+    if source_refs:
+        details["structured_source_revision_count"] = len(source_refs)
+        details["structured_source_role"] = "source_evidence_only_not_projected"
     return {
         "artifacts": artifacts,
-        "node_results": _ok("load_current_artifacts", {"artifact_count": len(artifacts)}),
+        "structured_source_refs": source_refs,
+        "node_results": _ok("load_current_artifacts", details),
     }
 
 
@@ -112,12 +120,17 @@ def align_entities(state: ProjectGraphState) -> dict[str, object]:
     anchors_by_doc_type: dict[str, list[str]] = {}
     for artifact in state.get("artifacts", []):
         anchors_by_doc_type.setdefault(artifact.doc_type, []).append(_artifact_key(artifact))
-    return {
-        "node_results": _ok(
-            "align_entities",
-            {"doc_type_groups": anchors_by_doc_type},
-        )
-    }
+    details: dict[str, object] = {"doc_type_groups": anchors_by_doc_type}
+    source_groups: dict[str, list[str]] = {}
+    for source in state.get("structured_source_refs", []):
+        family = str(source.get("family") or "")
+        document_id = str(source.get("document_id") or "")
+        revision_id = str(source.get("revision_id") or "")
+        if family in {"budget", "schedule"} and document_id and revision_id:
+            source_groups.setdefault(family, []).append(f"{document_id}@{revision_id}")
+    if source_groups:
+        details["structured_source_revision_groups"] = source_groups
+    return {"node_results": _ok("align_entities", details)}
 
 
 def _coherence_category(value: str | None) -> FindingCategory | None:
