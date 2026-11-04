@@ -371,7 +371,7 @@ function Note({ testId, children }: { testId?: string; children: ReactNode }) {
 // Section bodies
 // ---------------------------------------------------------------------------
 
-type SectionData<K extends keyof Sections> = Sections[K]["data"];
+type SectionData<K extends keyof ReportSections> = ReportSections[K]["data"];
 
 function DocumentsBody({ data }: { data: SectionData<"documents"> }) {
   if (!data) return null;
