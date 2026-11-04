@@ -5,6 +5,7 @@
       "**": false,
       "main": true,
       "integration/acc01-e2e-20261025": true,
+    "feat/projectgraph-functional-20261104": true,
       "hotfix/**": true,
       "release-candidate/**": true,
       "preview/**": true
