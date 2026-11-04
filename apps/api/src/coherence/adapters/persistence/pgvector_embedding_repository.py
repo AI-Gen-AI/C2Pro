@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.json_types import JsonDict
 from src.core.tenants.types import TenantId
+from src.documents.adapters.rag.rag_service import EMBEDDING_MODEL
+from src.temporal.adapters.persistence.current_revision_sql import current_revision_lateral
 
 from ...ports.embedding_repository import (
     EmbeddingMatch,
@@ -401,8 +403,9 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
         """
         Find similar clauses across different document types with tenant verification.
 
-        Uses the find_cross_document_pairs() PostgreSQL function to efficiently
-        find semantically related clauses from different documents.
+        Only compares vectorized clauses bound to current/canonical document
+        revisions, with tenant/project isolation. Historical/unbound clause
+        embeddings are not eligible for this N8 read.
 
         Args:
             project_id: Project to analyze
@@ -422,19 +425,74 @@ class PgvectorEmbeddingRepository(IEmbeddingRepository):
 
         start_time = time.time()
 
-        # Call the find_cross_document_pairs function
+        # Candidate pairs must point to *current source clauses*, never
+        # arbitrary historical vectors or proposed revisions. The legacy
+        # PostgreSQL function has no revision filter and is unsuitable for N8.
+        current_a = current_revision_lateral("d1.id", "d1.tenant_id")
+        current_b = current_revision_lateral("d2.id", "d2.tenant_id")
         stmt = sql_text(
-            """SELECT * FROM find_cross_document_pairs(
-                :project_id::uuid,
-                :similarity_threshold,
-                :max_pairs
-            )"""
+            f"""
+            SELECT e1.clause_id, e2.clause_id,
+                   e1.document_type, e2.document_type,
+                   e1.category, e2.category,
+                   (1 - (e1.embedding <=> e2.embedding))::float AS similarity_score
+            FROM public.clause_embeddings AS e1
+            JOIN public.clauses AS c1
+              ON c1.id::text = e1.clause_id
+             AND c1.tenant_id = e1.tenant_id
+             AND c1.project_id = e1.project_id
+             AND c1.document_id = e1.document_id
+            JOIN public.documents AS d1
+              ON d1.id = c1.document_id
+             AND d1.tenant_id = c1.tenant_id
+             AND d1.project_id = c1.project_id
+            CROSS JOIN LATERAL {current_a} AS cur1
+            JOIN public.clause_embeddings AS e2
+              ON e2.project_id = e1.project_id
+             AND e2.tenant_id = e1.tenant_id
+             AND e2.clause_id > e1.clause_id
+            JOIN public.clauses AS c2
+              ON c2.id::text = e2.clause_id
+             AND c2.tenant_id = e2.tenant_id
+             AND c2.project_id = e2.project_id
+             AND c2.document_id = e2.document_id
+            JOIN public.documents AS d2
+              ON d2.id = c2.document_id
+             AND d2.tenant_id = c2.tenant_id
+             AND d2.project_id = c2.project_id
+            CROSS JOIN LATERAL {current_b} AS cur2
+            WHERE e1.project_id = CAST(:project_id AS uuid)
+              AND e1.tenant_id = CAST(:tenant_id AS uuid)
+              AND d1.id <> d2.id
+              AND d1.document_type::text <> d2.document_type::text
+              AND c1.revision_id IS NOT NULL
+              AND c2.revision_id IS NOT NULL
+              AND c1.revision_id = cur1.revision_id
+              AND c2.revision_id = cur2.revision_id
+              AND ((d1.document_type::text='contract' AND cur1.canonical)
+                   OR (d1.document_type::text IN ('technical_spec','specification')
+                       AND cur1.trusted))
+              AND ((d2.document_type::text='contract' AND cur2.canonical)
+                   OR (d2.document_type::text IN ('technical_spec','specification')
+                       AND cur2.trusted))
+              AND e1.metadata->>'revision_id' = c1.revision_id::text
+              AND e2.metadata->>'revision_id' = c2.revision_id::text
+              AND e1.metadata->>'embedding_model' = :embedding_model
+              AND e2.metadata->>'embedding_model' = :embedding_model
+              AND e1.metadata->>'text_sha256' IS NOT NULL
+              AND e2.metadata->>'text_sha256' IS NOT NULL
+              AND (1 - (e1.embedding <=> e2.embedding)) >= :similarity_threshold
+            ORDER BY similarity_score DESC
+            LIMIT :max_pairs
+            """
         )
 
         result = await self.session.execute(
             stmt,
             {
                 "project_id": str(project_id),
+                "tenant_id": str(self.tenant_id) if self.tenant_id else None,
+                "embedding_model": EMBEDDING_MODEL,
                 "similarity_threshold": similarity_threshold,
                 "max_pairs": max_pairs,
             },
