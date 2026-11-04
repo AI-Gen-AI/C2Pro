@@ -6,17 +6,18 @@ comes from the existing current-revision and RLS SQL seam.
 from __future__ import annotations
 
 import importlib.util
-import json
+import copy
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import openpyxl
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.adapters.persistence.document_artifact_repository import SqlAlchemyDocumentArtifactRepository
@@ -24,6 +25,7 @@ from src.reporting.adapters.sources.sqlalchemy_current_state_sources import SqlA
 from src.reporting.application.current_state_projection import project_source_discrepancies
 from src.reporting.application.ports import SourceOk
 from src.reporting.domain.current_state_report import SectionStatus
+from src.temporal.adapters.persistence.models import ProjectEventORM
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.core.tasks.project_graph_tasks import persist_provisional_source_discrepancies
 from src.documents.application.structured_source_units import load_canonical_source_units
@@ -204,16 +206,28 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
     )
 
     # Stale evidence from another revision must NOT remain visible as current.
-    event_id = report_data["event_id"]
-    stored = (await db.execute(
-        text("SELECT payload FROM project_events WHERE event_id=CAST(:event_id AS uuid)"),
-        {"event_id": event_id},
+    original_event = (await db.execute(
+        select(ProjectEventORM).where(
+            ProjectEventORM.event_id == uuid4()
+        )
+    )).scalar_one_or_none()  # keep the real source immutable (append-only)
+    assert original_event is None
+    persisted_event = (await db.execute(
+        select(ProjectEventORM).where(
+            ProjectEventORM.event_id == UUID(report_data["event_id"])
+        )
     )).scalar_one()
-    stored["findings"][0]["sources"][1]["revision_id"] = str(uuid4())
-    await db.execute(
-        text("UPDATE project_events SET payload=CAST(:payload AS jsonb) WHERE event_id=CAST(:event_id AS uuid)"),
-        {"payload": json.dumps(stored), "event_id": event_id},
-    )
+    stale_payload = copy.deepcopy(persisted_event.payload)
+    stale_payload["findings"][0]["sources"][1]["revision_id"] = str(uuid4())
+    db.add(ProjectEventORM(
+        project_id=project_id, tenant_id=test_user.tenant_id,
+        event_type="project_graph.source_discrepancies_observed",
+        payload=stale_payload,
+        evidence_refs=[],
+        actor="synthetic_stale_event_test",
+        occurred_at=persisted_event.occurred_at + timedelta(seconds=1),
+        created_at=persisted_event.created_at + timedelta(seconds=1),
+    ))
     await db.commit()
     refreshed = await reader.load_source_discrepancies(project_id, test_user.tenant_id)
     assert len(refreshed["items"]) == 2, "Stale XLSX revision must be excluded"
