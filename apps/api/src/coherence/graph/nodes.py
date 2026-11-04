@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -299,10 +300,31 @@ async def _load_context_embeddings(
 
             if project_uuid and _session_factory is not None:
                 async with _session_factory() as session:
+                    clause_ids = [c.id for c in state.clauses]
+                    # Explicitly opt-in only. Source-bound embeddings are an
+                    # auxiliary search index, never a requirement to score
+                    # deterministic EPC evidence. Default: ZERO provider calls.
+                    if os.getenv("C2PRO_CLAUSE_VECTOR_INDEX_ON_DEMAND") == "1":
+                        if tenant_uuid is None:
+                            raise PermissionError("Clause indexing requires tenant context")
+                        from src.coherence.application.canonical_clause_vectors import (
+                            index_current_clause_vectors,
+                        )
+
+                        async with session.begin():
+                            index_result = await index_current_clause_vectors(
+                                db=session,
+                                tenant_id=tenant_uuid,
+                                project_id=project_uuid,
+                                clause_ids=clause_ids,
+                            )
+                        logger.info(
+                            "prepare_context: canonical source vector index result %s",
+                            index_result,
+                        )
                     repo = PgvectorEmbeddingRepository(
                         session=session, tenant_id=tenant_uuid
                     )
-                    clause_ids = [c.id for c in state.clauses]
                     embeddings_by_clause = await repo.load_embeddings_batch(
                         clause_ids=clause_ids,
                         project_id=project_uuid,
