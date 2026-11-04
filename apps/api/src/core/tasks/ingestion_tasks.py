@@ -1859,6 +1859,7 @@ async def _ingest_owned(
             document_id=document_id,
             revision_id=source_revision.revision_id if source_revision else None,
             blob_hash=source_revision.blob_hash if source_revision else None,
+            source_format=document.file_format,
             parser_coverage=parsed_payload.get("document_coverage"),
         )
         if source_revision is not None:
