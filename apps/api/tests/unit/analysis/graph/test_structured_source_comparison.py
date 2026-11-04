@@ -142,3 +142,72 @@ async def test_projectgraph_node_exposes_provisional_findings_without_scoring(mo
     assert len(result["structured_source_comparison"]["findings"]) == 3
     assert result["structured_source_comparison"]["scoring_policy"] == "provisional_only_not_scored"
     assert result["coherence_result"].overall_score is None
+
+
+@pytest.mark.asyncio
+async def test_projectgraph_persists_two_source_provisional_event_once():
+    from src.core.tasks.project_graph_tasks import persist_provisional_source_discrepancies
+
+    artifacts, rows = _sources()
+    result = compare_original_source_rows(artifacts, rows)
+    project_id, tenant_id = uuid4(), uuid4()
+
+    class Result:
+        def __init__(self, previous):
+            self.previous = previous
+        def scalar_one_or_none(self):
+            return self.previous
+
+    class Session:
+        def __init__(self):
+            self.added = []
+            self.flushed = 0
+        async def execute(self, statement):
+            previous = self.added[-1].payload if self.added else None
+            return Result(previous)
+        def add(self, event):
+            self.added.append(event)
+        async def flush(self):
+            self.flushed += 1
+
+    db = Session()
+    created = await persist_provisional_source_discrepancies(
+        db, project_id=project_id, tenant_id=tenant_id, comparison=result
+    )
+    duplicate = await persist_provisional_source_discrepancies(
+        db, project_id=project_id, tenant_id=tenant_id, comparison=result
+    )
+    assert created is True and duplicate is False
+    assert len(db.added) == 1 and db.flushed == 1
+    event = db.added[0]
+    assert event.project_id == project_id and event.tenant_id == tenant_id
+    assert event.event_type == "project_graph.source_discrepancies_observed"
+    assert event.payload["state"] == "PROVISIONAL"
+    assert event.payload["scoring_policy"] == "not_scored"
+    assert event.payload["requires_human_review"] is True
+    assert len(event.payload["findings"]) == 3
+    assert len(event.evidence_refs) == 6
+    assert all(x["document_id"] and x["revision_id"] and x["source_locator"] for x in event.evidence_refs)
+    assert not await persist_provisional_source_discrepancies(
+        db, project_id=project_id, tenant_id=tenant_id,
+        comparison={"findings": []},
+    )
+
+
+@pytest.mark.asyncio
+async def test_projectgraph_rejects_fake_scored_or_unbound_source_event():
+    from src.core.tasks.project_graph_tasks import persist_provisional_source_discrepancies
+
+    class NoWrite:
+        async def execute(self, _):
+            raise AssertionError("Invalid evidence must never touch PostgreSQL")
+
+    for wrong in (
+        {"findings": [{"state": "CONFIRMED", "scored": False, "sources": [{}, {}]}]},
+        {"findings": [{"state": "PROVISIONAL", "scored": True, "sources": [{}, {}]}]},
+        {"findings": [{"state": "PROVISIONAL", "scored": False, "sources": [{}]}]},
+    ):
+        with pytest.raises(ValueError, match="MUST_BE_PROVISIONAL"):
+            await persist_provisional_source_discrepancies(
+                NoWrite(), project_id=uuid4(), tenant_id=uuid4(), comparison=wrong
+            )
