@@ -93,12 +93,19 @@ def _quoted_risks(artifacts: list[DocumentArtifact], *, technical: bool = False)
             quote = risk.source_quote
             if risk.source_quote_status != "VERIFIED" or not quote:
                 continue
+            quote_hash = hashlib.sha256(quote.encode()).hexdigest()
+            clause = risk.clause_ref or ""
+            # The model's clause label is NOT an authority: retain it only if
+            # the number is visible verbatim in the original verified quote.
+            labelled = bool(clause and re.search(
+                r"(?<![\\d.])" + re.escape(clause) + r"(?![\\d.])", quote
+            ))
             result.append({
                 "document_id": artifact.document_id,
                 "revision_id": artifact.document_revision_id,
-                "source_locator": risk.clause_ref or "verified-quote:" + hashlib.sha256(quote.encode()).hexdigest()[:16],
+                "source_locator": clause if labelled else "verified-quote:" + quote_hash[:16],
                 "source_quote": quote,
-                "source_quote_sha256": hashlib.sha256(quote.encode()).hexdigest(),
+                "source_quote_sha256": quote_hash,
             })
     return result
 
