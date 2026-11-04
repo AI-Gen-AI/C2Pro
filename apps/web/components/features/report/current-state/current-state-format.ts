@@ -23,6 +23,7 @@ export const SECTION_LABELS: Record<string, string> = {
   missing_evidence: "Missing evidence",
   coherence: "Coherence",
   alerts: "Alerts",
+  source_discrepancies: "Source discrepancies · provisional",
   hitl: "Awaiting decision",
   budget: "Budget",
   wbs: "WBS",
