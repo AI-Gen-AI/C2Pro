@@ -62,6 +62,21 @@ def _valid_quote(risk: dict[str, Any], source: str) -> bool:
     )
 
 
+def _source_marker_matches(marker: str, quote: str) -> bool:
+    """A fixture's editorial ellipsis denotes ordered omission, not source text."""
+    parts = [part.strip() for part in _normalized(marker).replace("…", "...").split("...")]
+    if not parts or any(not part for part in parts):
+        return False
+    quote_norm = _normalized(quote)
+    offset = 0
+    for part in parts:
+        at = quote_norm.find(part, offset)
+        if at < 0:
+            return False
+        offset = at + len(part)
+    return True
+
+
 def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, Any]:
     """Score emitted N4 risks against independently authored fixture evidence."""
     source = _source_text(fixture)
@@ -80,7 +95,7 @@ def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, 
                 if index not in consumed
                 and valid[index]
                 and _normalized(risk.get("category")) == expected_category
-                and marker in _normalized(risk.get("source_quote"))
+                and _source_marker_matches(marker, str(risk.get("source_quote") or ""))
             ),
             None,
         )
@@ -250,7 +265,19 @@ async def run() -> dict[str, Any]:
     ]
     n4_metrics = score_n4(fixture, extracted_risks)
 
+    # Production uses robust JSON extraction/repair, unlike the previous
+    # one-off runner's json.loads(). Follow that exact parsing path while
+    # preserving the governor's no-cache/no-retry wrapper.
+    from src.analysis.adapters.ai.anthropic_client import AIService
+
+    parser = AIService(wrapper=wrapper)
+
     class _RealNoRetryPort:
+        def __init__(self) -> None:
+            self.parse_failure_type: str | None = None
+            self.response_sha256: str | None = None
+            self.payload: Any = None
+
         async def run_extraction(self, system_prompt: str, user_content: str) -> Any:
             response = await wrapper.generate(
                 AIRequest(
@@ -261,9 +288,20 @@ async def run() -> dict[str, Any]:
                     use_cache=False,
                 )
             )
-            return json.loads(response.content)
+            self.response_sha256 = hashlib.sha256(
+                response.content.encode("utf-8")
+            ).hexdigest()
+            try:
+                self.payload = parser._parse_json_response(response.content)
+            except Exception as exc:
+                # The domain adapter catches errors and emits a fallback;
+                # preserve the failure *type*, never source/model response.
+                self.parse_failure_type = type(exc).__name__
+                raise
+            return self.payload
 
-    n12_result = await CritiqueExtractionUseCase(ai=_RealNoRetryPort()).execute(
+    n12_port = _RealNoRetryPort()
+    n12_result = await CritiqueExtractionUseCase(ai=n12_port).execute(
         CritiqueExtractionCommand(
             extracted_risks=_adversarial_risks(fixture),
             extracted_wbs=[],
@@ -274,6 +312,11 @@ async def run() -> dict[str, Any]:
     )
     n12_notes = n12_result.critique_notes
     n12_metrics = score_n12(n12_notes, source)
+    source_grounded = not (
+        n12_port.parse_failure_type
+        or n12_notes.startswith("Automatic critique inconclusive.")
+        or n12_notes.startswith("N12_UNASSESSED:")
+    )
 
     return {
         "fixture_id": fixture["fixture_id"],
@@ -284,6 +327,9 @@ async def run() -> dict[str, Any]:
         "n12": {
             **n12_metrics,
             "status": n12_result.status,
+            "quality_state": "ASSESSED" if source_grounded else "NOT_ASSESSED",
+            "parse_failure_type": n12_port.parse_failure_type,
+            "response_sha256": n12_port.response_sha256,
             "notes_sha256": hashlib.sha256(n12_notes.encode("utf-8")).hexdigest(),
         },
         "provider": _governor_summary(),
