@@ -8,12 +8,13 @@ from __future__ import annotations
 from typing import Annotated, Any, NotRequired, Protocol, TypedDict
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
 from src.analysis.domain.contracts import DocumentArtifact
-from src.coherence.models import Clause, EnrichedCoherenceResult
-from sqlalchemy.ext.asyncio import AsyncSession
 from src.analysis.domain.node_result import NodeResult, merge_node_results
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
+from src.coherence.models import Clause, EnrichedCoherenceResult
 from src.core.tenants.types import TenantId
 from src.temporal.ports.project_snapshot_repository import IProjectSnapshotRepository
 
