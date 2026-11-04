@@ -85,3 +85,34 @@ Estado observado en **Supabase proyecto C2Pro** mediante consultas SQL de solo l
 - Guía de evaluación: https://docs.langchain.com/langsmith/evaluation-types
 
 **Estado técnico al guardar:** investigación = documentada; implementación = autorizada; gate A en trabajo aislado; gate B/C pendientes de resultados de ejecución real; gate D aún no implementado. No afirmar que todos los proveedores alternativos hayan sido probados.
+
+
+## 7. Verificación empírica de vectores y decisión de orden (04/11/2026)
+
+**Alcance:** consultas SQL de solo lectura al proyecto Supabase `tcxedmnvebazcsaridge`; revisión de código de PR #1112 HEAD `34f1f67d`; inspección de servicios Railway sin acceder a secretos. **No se ha acreditado que la conexión `DATABASE_URL` efectiva de Railway apunte a esta misma BD:** el conector Railway muestra variables por nombre, con valores redacted.
+
+### Datos contrastados
+
+- `document_chunks`: 95 filas y 19 documentos, todos de tipo contrato. Los 95 embeddings son `vector(1536)`, sin NULL, sin norma cero. Normas min 0.999642, media 1.000089, max 1.000426. Índice `ivfflat vector_cosine_ops`.
+- `clause_embeddings`: 0 filas, columna `vector(1536)`, índice `hnsw vector_cosine_ops`. La función SQL `find_cross_document_pairs` sólo lee esta tabla y, ahora mismo, NO puede obtener pares vectoriales en esta BD. **No afirmar que N8 entero carece de funcionalidad**, pues su subgrafo también incluye reglas, cross-doc determinista y señales.
+- De los 95 chunks, **8 llevan `metadata.revision_id`**, 87 no; **0 llevan modelo de embedding ni localizador fuente**. Ningún chunk apunta a un documento ausente ni a otro proyecto/tenant según comparación de IDs.
+- Distinción de embeddings reales/mock: C2Pro admite `settings.embeddings_mock` y genera con SHA-256 vectores deterministas de norma 1. Se compararon dos ratios de componentes contra ese algoritmo para 87 filas en las que las razones eran válidas: **0 coincidencias**. Los 8 restantes no son verificables con este test; esto excluye esa firma para los 87, **no demuestra el proveedor/modelo ni la calidad semántica**.
+- Las 39 filas de `documents` observadas: 37 contratos (426 cláusulas), 1 presupuesto (0 chunks/0 cláusulas), 1 cronograma (0 chunks/0 cláusulas). Los dos documentos estructurados no tienen `document_metadata.stated_total_by_revision` ni `document_metadata.schedule_planned_finish` respectivamente en esta BD; no afirmar que hayan sido procesados de forma vigente.
+- `procurement_budget_items` tiene **0** filas; `procurement_wbs_items` tiene **23**. La tabla de compras/BOM NO es la autoridad original del presupuesto y la WBS no reemplaza al cronograma.
+- Railway project `c2pro-api`, entorno `production`: servicios `C2Pro` y `C2Pro-Worker` usan rama `integration/acc01-e2e-20261025` y tienen `DATABASE_URL`, `SUPABASE_URL` como nombres de variables, pero **sus valores están ocultos**. Por tanto no afirmar que esta Supabase sea la base del backend runtime sin evidencia de configuración.
+- Código `PgvectorEmbeddingRepository.store_embeddings_batch`: `ON CONFLICT (clause_id, project_id) DO NOTHING`; esquema `clause_embeddings` no tiene columna `revision_id` propia. Riesgo de dejar vector obsoleto si cambia la revisión fuente. La consulta SQL de pares filtra proyecto y tipos distintos, **no revisión vigente dentro de SQL**; el wrapper comprueba proyecto/tenant si recibe contexto válido. Corregir el contrato de identidad y actualización antes de poblar producción.
+
+### Orden aprobado para ejecución incremental (sin conflar datos estructurados con vectores)
+
+**A — Garantizar y conservar observaciones estructuradas (PRIMERO).** Presupuesto XLSX/BC3: cada partida original, código/capítulo/cantidad/unidad/precio/total/moneda, fórmula y estado de verificación, `Sheet!row` o localizador original, blob SHA256 y revisión. Cronograma XLSX: cada actividad, identificador fuente/WBS observado, hitos, fechas, tipo de dependencia/lag cuando exista, calendario y baseline si probados, origen de fila y revisión. Si no se puede verificar, `PARTIAL/UNASSESSED`, no completar inventando. Persistir en fuente específica por revisión, no convertir a BOM o WBS canónica. Ya existen parsers y `ScheduleActivityEvidence` aprovechables; la fuente persistida completa aún NO existe. Inicialmente se puede conservar el resumen `stated_total_by_revision` y `schedule_planned_finish` sin pretender que sean el dataset completo.
+
+**B — Conectar pgvector a unidades canónicas ya persistidas.** Contrato y especificación → cláusulas/requisitos verificados en fuente → embeddings de **descripciones textuales** con modelo, versión, SHA de texto, `tenant_id/project_id/document_id/revision_id/source_locator` y `unit_id` estable. Para presupuesto/cronograma vectorizar descripciones **solo opcionalmente**, jamás fechas/importes/unidades como verdad. No reutilizar los 95 chunks RAG como cláusulas canónicas ni confundir `document_chunks` con `clause_embeddings`. Adaptar identidad/UPSERT y limpieza de revisiones en `clause_embeddings`, y consulta tenant/trusted-current; no ejecutar migraciones directas en Supabase sin verificación de entorno e integración.
+
+**C — Conectar nodos DESPUÉS de A/B.** N8 recibe evidencias estructuradas, reglas de comparación contrato↔presupuesto y contrato↔cronograma, más pares candidatos de pgvector trazables. N4 y N12 **NO requieren pgvector** para evaluación inicial de contratos: N12 tiene un fallo independiente de respuesta/JSON (`Automatic critique inconclusive.`); corregir parser/diagnóstico sin confundirlo con recuperación vectorial. El grafo define rutas `schedule→N5` y `budget→N9` si se invoca, pero el worker normal excluye ambos del grafo libre N1–N17; **no dar por hecha su ejecución por figurar en el diagrama**. Una futura conexión no debe atribuir a N5/WBS autoridad sobre actividades ni a N9/BOM autoridad sobre partidas.
+
+**Puerta funcional única:** proyecto EPC sintético con cuatro documentos, reporte por unidad fuente/fiabilidad/revisión, modelo embedding conocido y coste declarado, N4/N12 sin fallback silencioso, N8 con pares reales citables, comparadores numéricos/de fechas y UI. Mantener CI/simulator separados de evaluación real. SIN despliegue, sin tocar #1112 de Claude, sin solicitudes de claves privadas y sin repetir LLM salvo un ensayo autorizado posterior.
+
+### Decisión técnica
+
+**pgvector funciona a nivel de tipo/índice/almacenamiento; la conexión de negocio aún NO.** Para presupuesto y cronograma, la autoridad primaria debe ser relacional/estructurada; los vectores son un índice auxiliar de búsqueda. Postergar optimizaciones IVFFlat/HNSW y nuevos modelos hasta que existan unidades originales trazables y consulta exacta de revisión.
+
