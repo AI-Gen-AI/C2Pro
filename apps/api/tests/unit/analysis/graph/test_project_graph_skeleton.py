@@ -147,11 +147,9 @@ async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
     assert result["snapshot_id"] is None
     assert by_node["change_impact"].status is NodeStatus.SKIPPED
     assert "no prior snapshot" in (by_node["change_impact"].degradation_reason or "")
-    for node_name in {
-        "write_snapshot",
-        "alert_correlation",
-        "hitl_routing",
-    }:
+    assert by_node["write_snapshot"].status is NodeStatus.SKIPPED
+    assert "repository unavailable" in (by_node["write_snapshot"].degradation_reason or "")
+    for node_name in {"alert_correlation", "hitl_routing"}:
         assert by_node[node_name].status is NodeStatus.SKIPPED
         assert "pending" in (by_node[node_name].degradation_reason or "")
 
