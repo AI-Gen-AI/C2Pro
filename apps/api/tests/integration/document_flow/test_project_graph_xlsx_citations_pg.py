@@ -75,14 +75,23 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
         "El precio del contrato asciende a 1.000.000 euros y se pagará "
         "por hitos según las condiciones particulares del contrato."
     )
+    technical_text = (
+        "Las pruebas de aceptación en fábrica deberán finalizar a más tardar "
+        "el 10 de junio de 2027 conforme a la especificación técnica."
+    )
     contract_doc, contract_rev = await _upload_and_ingest(
         db, worker, test_user, project_id, filename="contract.docx",
         content=_docx([contract_text, price_text]), document_type=DocumentType.CONTRACT,
+    )
+    technical_doc, technical_rev = await _upload_and_ingest(
+        db, worker, test_user, project_id, filename="specification.docx",
+        content=_docx([technical_text]), document_type=DocumentType.TECHNICAL_SPEC,
     )
     schedule_doc, schedule_rev = await _upload_and_ingest(
         db, worker, test_user, project_id, filename="schedule.xlsx",
         content=_xlsx([
             ["Foundations", "2027-01-04", "2027-03-31"],
+            ["Pruebas de aceptación en fábrica", "2027-05-01", "2027-07-01"],
             ["Handover", "2027-08-02", "2027-09-30"],
         ]), document_type=DocumentType.SCHEDULE,
     )
@@ -122,12 +131,24 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
                     source_quote=price_text, source_quote_status="VERIFIED", clause_ref="4.1",
                 ),
             ],
-        )
+        ),
+        DocumentArtifact(
+            document_id=str(technical_doc.id),
+            document_revision_id=str(technical_rev.revision_id),
+            doc_type="technical_spec",
+            extracted_risks=[RiskItem(
+                title="Factory acceptance deadline",
+                description="Original technical specification milestone",
+                source_quote=technical_text,
+                source_quote_status="VERIFIED",
+                clause_ref="6.3",
+            )],
+        ),
     ]
     result = compare_original_source_rows(artifacts, rows)
-    assert result["source_rows_verified"] >= 3
+    assert result["source_rows_verified"] >= 4
     assert {x["rule_id"] for x in result["findings"]} == {
-        "DET-CRS-SCHDEAD", "DET-CRS-NEGMARGIN",
+        "DET-CRS-SCHDEAD", "DET-CRS-NEGMARGIN", "SPEC-MILESTONE-VS-SCHEDULE",
     }, result
     assert await persist_provisional_source_discrepancies(
         db, project_id=project_id, tenant_id=test_user.tenant_id, comparison=result
@@ -142,5 +163,5 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
     )).scalar_one()
     assert stored["state"] == "PROVISIONAL"
     assert stored["scoring_policy"] == "not_scored"
-    assert len(stored["findings"]) == 2
+    assert len(stored["findings"]) == 3
     assert all(len(item["sources"]) == 2 for item in stored["findings"])
