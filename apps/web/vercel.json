@@ -7,7 +7,8 @@
       "integration/acc01-e2e-20261025": true,
       "hotfix/**": true,
       "release-candidate/**": true,
-      "preview/**": true
+      "preview/**": true,
+      "feat/c2pro-core-pilot-20261104": true
     }
   },
   "ignoreCommand": "bash scripts/vercel-ignore-build.sh"

@@ -17,7 +17,7 @@ case "$branch" in
     # Manual/CLI or otherwise non-Git deployment: there is no branch to
     # classify, so preserve the operator-requested build.
     ;;
-  main|integration/acc01-e2e-20261025|hotfix/*|release-candidate/*|preview/*)
+  main|integration/acc01-e2e-20261025|feat/c2pro-core-pilot-20261104|hotfix/*|release-candidate/*|preview/*)
     ;;
   *)
     exit 0
@@ -28,6 +28,13 @@ esac
 # A manual production deployment must not be skipped simply because Vercel
 # already built this same commit in Preview. Apply this override ONLY to the
 # explicitly authorized branch, not to other development branches.
+# The owner explicitly authorized a one-off CORE pilot on the real platform.
+# Always build this exact branch; the compare heuristic would otherwise
+# ignore a manual release after the prior commit was already deployed.
+if [[ "$branch" == "feat/c2pro-core-pilot-20261104" ]]; then
+  exit 1
+fi
+
 if [[ "$branch" == "integration/acc01-e2e-20261025" && "${VERCEL_ENV:-}" == "production" ]]; then
   exit 1
 fi
