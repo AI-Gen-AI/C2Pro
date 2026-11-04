@@ -85,3 +85,40 @@ def test_n11_artifact_roundtrip_keeps_pending_proposals_unapproved():
 def test_legacy_artifact_has_no_spurious_decisions():
     artifact = build_document_artifact({"document_id": "doc-A", "doc_type": "contract"})
     assert artifact.decision_snapshot is None
+
+
+def test_live_n4_candidate_with_mitigation_becomes_projectgraph_artifact():
+    """The actual N4 adapter output has fields forbidden by frozen RiskItem."""
+    n4_candidate = {
+        "title": "Late commissioning milestone",
+        "description": "Completion is after the contractual deadline",
+        "summary": "Risk of liquidated damages",
+        "category": "SCHEDULE",
+        "probability": "HIGH",
+        "impact": "HIGH",
+        "mitigation_suggestion": "Reconcile project plan with contract before approval",
+        "risk_score": 9,
+        "immediate_alert": True,
+        "source_quote": "Completion date is June",
+        "source_text_snippet": "Completion date is June",
+        "clause_ref": "8.2",
+    }
+    artifact = build_document_artifact({
+        "document_id": "doc-A",
+        "document_revision_id": "revision-2",
+        "doc_type": "contract",
+        "extracted_risks": [n4_candidate],
+        "decision_package": {"proposed_actions": [_proposal()]},
+    })
+    assert len(artifact.extracted_risks) == 1
+    risk = artifact.extracted_risks[0]
+    assert risk.title == n4_candidate["title"]
+    assert risk.impact.value == "HIGH"
+    # An unverified model quote never becomes trusted document evidence.
+    assert risk.source_quote is None
+    assert risk.source_quote_status == "REQUIRES_SOURCE_VALIDATION"
+    # Mitigation is not silently lost: it remains a proposed N11 decision.
+    assert artifact.decision_snapshot is not None
+    assert artifact.decision_snapshot["proposed_actions"][0]["proposed_action"]
+    restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"), {})
+    assert restored.decision_snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
