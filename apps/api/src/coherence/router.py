@@ -49,8 +49,6 @@ from src.core.middleware.feature_flags import require_feature
 from src.core.security import security_scheme
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
-from src.temporal.adapters.persistence.models import ProjectSnapshotORM
-from src.temporal.domain.project_snapshot import SnapshotTrigger
 from src.temporal.adapters.persistence.current_revision_sql import (
     chunk_in_current_scope,
     clause_in_current_scope,
@@ -59,6 +57,8 @@ from src.temporal.adapters.persistence.current_revision_sql import (
     current_revision_lateral,
     parsed_text_in_current_scope,
 )
+from src.temporal.adapters.persistence.models import ProjectSnapshotORM
+from src.temporal.domain.project_snapshot import SnapshotTrigger
 
 # Import v0.3 graph evaluation
 from .budget_clause_builder import build_budget_clauses
