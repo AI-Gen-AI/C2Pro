@@ -73,6 +73,7 @@ from src.documents.application.schedule_planned_finish import (
     METADATA_KEY as SCHEDULE_PLANNED_FINISH_KEY,
 )
 from src.documents.application.schedule_planned_finish import extract_schedule_planned_finish
+from src.documents.application.structured_source_units import stage_structured_source_units
 from src.documents.application.technical_requirement_clauses import (
     extract_technical_requirement_clauses,
     technical_requirement_coverage_omissions,
@@ -1842,6 +1843,30 @@ async def _ingest_owned(
         revision_id=source_revision.revision_id if source_revision else None,
         blob_hash=source_revision.blob_hash if source_revision else None,
     )
+    if document.document_type in {DocumentType.BUDGET, DocumentType.SCHEDULE}:
+        # P0: preserve native XLSX source rows per immutable revision, BEFORE
+        # connecting to N8. Neither WBS nor procurement BOM can stand in for
+        # original schedule activities or budget line items. Strict evidence
+        # parsing rejects unevaluated formulas, but ordinary ingestion remains
+        # permitted with an explicit UNASSESSED source-unit status.
+        unit_summary = await stage_structured_source_units(
+            session=session,
+            parser=file_parser.excel_parser,
+            file_path=file_path,
+            family=document.document_type.value,
+            tenant_id=tenant_id,
+            project_id=document.project_id,
+            document_id=document_id,
+            revision_id=source_revision.revision_id if source_revision else None,
+            blob_hash=source_revision.blob_hash if source_revision else None,
+            parser_coverage=parsed_payload.get("document_coverage"),
+        )
+        if source_revision is not None:
+            summaries = dict(metadata.get("source_units_by_revision") or {})
+            summaries[str(source_revision.revision_id)] = unit_summary
+            metadata["source_units_by_revision"] = summaries
+        else:
+            metadata["source_units_unassessed"] = unit_summary
     if document.document_type == DocumentType.BUDGET:
         # The declared budget total (and its denominations) is what coherence
         # reconciles against the contract total (DET-CRS-CONBUD / NEGMARGIN). It is
