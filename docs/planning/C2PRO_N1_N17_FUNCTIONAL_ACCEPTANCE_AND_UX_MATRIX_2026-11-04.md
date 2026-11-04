@@ -99,3 +99,34 @@ Solo considerar un nuevo nodo cuando un camino de negocio verificable requiera u
 4. Publicar en un entorno real pero aislado con los cuatro documentos sintéticos, comprobar UX y persistencia al volver a abrir el proyecto.
 
 **No se han desplegado cambios**, activado IA adicional ni tocado `#1112`, `main`, Railway o Supabase al elaborar esta matriz. Claude sigue siendo escritor exclusivo de #1112; la propuesta de correcciones queda limitada a la rama CORE Pilot hasta que se coordine la integración.
+
+
+## Incremento implementado — Cadena P0 fuentes → N8 → N11 → N16 → UI (04/11/2026)
+
+Este incremento representa trabajo **real de código** posterior a la matriz inicial. No modifica los criterios de aceptación; deja constancia de lo que se implementó sin afirmar un despliegue.
+
+### 1. Protección de texto para IA (N2/N3/N4/N5/N8/N12)
+- Nuevo selector `src/analysis/domain/ai_source_text.py::llm_document_text` y marcador `pii_anonymization_complete` que marca la proyección realizada por N2. En el grafo canónico, N2 precede a todos los consumidores LLM. N3 clasifica sobre texto protegido, las herramientas N4/N5 toman la proyección y N8/N12 usan la misma selección. N6/N9/N15 también pasan por helper.
+- El texto fuente original no desaparece: sigue en estado para procedencia y validación local, pero la rama de IA no debe usarlo cuando existe proyección N2.
+- **Limitación relevante:** invocaciones directas legacy sin haber ejecutado N2 aún pueden usar `document_text`, y texto agregado de `critique_notes`/`human_feedback` no tiene garantía universal de reanonimización. No anunciar cobertura PII total hasta prueba del proyecto piloto.
+- Evidencia focalizada inicial job `245702e141eb4cdfaf82eb8d` sobre SHA `1b7eb9a1a4833449502cc84f00134c23fb79a20c`: **53 PASS, 37 deselected**; incluye correo sintético oculto antes de N3/N4/N5.
+
+### 2. Evidencia original y sugerencias, sin inventar autoridad
+- Nuevo `src/analysis/application/project_source_evidence.py` lee `document_source_units` de revisiones canónicas de presupuesto/cronograma por tenant/proyecto, manteniendo `source_locator`, IDs, hash y valores originales. El estado distingue `SOURCE_OBSERVED_NOT_APPROVED` de `NO_CANONICAL_SOURCE_ROWS`. Campos explícitos: `baseline_approved=false`, `coverage=NOT_ASSESSED`, resultados preview limitados con `truncated`.
+- N8 incorpora `project_source_evidence` a `ProjectState` y lo transmite a N11/N16, sin convertir las filas originales en WBS, BOM ni reglas de puntuación ficticias. Si la tabla no está disponible o falla SQL: `UNASSESSED`, no cero.
+- `DecisionPackageAssemblyService` (N11) construye como máximo 5 propuestas desde `mitigation_suggestion` realmente extraídas; prioridad sugerida derivada del impacto declarado, con `owner=null`, `due_date=null`, estado `PROPOSED_REQUIRES_HUMAN_REVIEW` y procedencia `REQUIRES_SOURCE_VALIDATION`. No se inventan URLs ni firmas. N16 recibe estas propuestas y un resumen estructurado de fuentes.
+- La primera tanda amplia encontró **50 PASS, 1 FAIL** por un test legacy N12 que esperaba conservar `notes='redo'` sin cita; ese comportamiento contradice el nuevo contrato de N12. Se actualizó esa única expectativa para exigir `N12_UNASSESSED`. Job posterior `c2f9fecdeaf14b2fb7c90bf7`, SHA `955b97f3d80daaa4dca2859f1cac508bcdcfc048`: **73 PASS, 0 FAIL**.
+
+### 3. Primera interfaz visible de evidencia original
+- Nuevo endpoint `GET /api/v1/projects/{project_id}/reports/source-evidence` en `reporting/adapters/http/router.py`; autoriza primero proyecto y tenant con el repositorio existente, sólo luego lee filas de revisión actual. Respuesta `Cache-Control: no-store`; acceso ajeno y proyecto inexistente ambos 404; error de tabla/DB 503 explícito (sin filtrar error interno).
+- Nuevo componente web `ProjectSourceEvidenceCard.tsx`, insertado en `projects/[id]/analysis/page.tsx`, que usa `fetchApiJson` con autenticación del proyecto. Muestra localizador, revisión, campos de presupuesto/cronograma y estado de cobertura; ausencia de filas **no** se representa como presupuesto 0 ni schedule vacío.
+- Job focalizado `b639afed527241919e3c54bc`, SHA `6feec4034becbad0a09bc22bc177491a3320abce`: **19 PASS, 0 FAIL**, incluyendo 200 de proyecto propio, 404 entre tenants, 503 de fuente no disponible y tests previos de reporte. Log SHA256 `b164ef12ea52cc53b5f08338dbb9c441da41f1e128b45b0ae887e5842c8f04ab`.
+- **Pendiente:** no hay CI de frontend para esta rama (`workflow_runs=0`), por tanto no se ha comprobado typecheck/bundle/visualización navegador del nuevo componente. No se ha desplegado frontend/backend ni aplicado migración; el único entorno Railway confirmado es `production` y el DSN está redacted.
+
+### Qué NO queda resuelto
+- El nuevo registro de fuentes llega como **evidencia observada** a N8/N11/N16 y como datos al endpoint UI. **Todavía no se ha implementado** un comparador de contradicciones EPC (contrato↔presupuesto, contrato↔cronograma, contrato↔especificación) basado en esas partidas/actividades; no confundir transporte de evidencia con razonamiento.
+- N11 devuelve propuestas en el informe del grafo, pero la UI Current State Report usa otras proyecciones. No se ha comprobado que el usuario vea esas propuestas en la página de informe.
+- La identidad real Railway→Supabase, permisos runtime, migración efectiva, persistencia y cuatro documentos con IA real siguen pendientes.
+- N10 frescura frente a N17 sigue por verificar con el proyecto piloto; N13/N14 y otros nodos no reciben automáticamente aceptación por estas pruebas.
+
+**Estado del incremento:** `CODE_IMPLEMENTED_IN_ISOLATED_BRANCH`, `API_PYTEST_PASS`, `FRONTEND_BUILD_NOT_RUN`, `NOT_DEPLOYED`, `CORE_USER_ACCEPTANCE_NOT_ACCEPTED`. No nuevas PR/WORK/nodos/agentes ni alteraciones de `#1112`.
