@@ -43,6 +43,7 @@ from src.coherence.models import (
     CoherenceCategory as FindingCategory,
 )
 from src.coherence.models import (
+    Clause,
     EnrichedCoherenceResult,
     FindingSignal,
     SeverityLevel,
@@ -250,6 +251,54 @@ def _coherence_summary(
     )
 
 
+def _verified_artifact_clauses(artifacts: list[DocumentArtifact]) -> list[Clause]:
+    """Supply the semantic engine with actual source-verified evidence.
+
+    ADR-017's previous empty list meant cross-document comparison and the LLM
+    had no clause text. Only verbatim validated N15 citations and N4 VERIFIED
+    source quotes qualify. An unverified generated summary cannot masquerade
+    as a document clause. Identity stays anchored to the immutable revision.
+    The existing privacy adapter strips PII before downstream model calls.
+    """
+    from src.core.privacy.anonymizer import anonymize_text_simple
+
+    clauses: list[Clause] = []
+    for artifact in artifacts:
+        revision = _artifact_key(artifact)
+        seen: set[str] = set()
+        evidence: list[tuple[str, str, str]] = [
+            ("citation", citation.item, citation.quote)
+            for citation in artifact.citations
+            if citation.found_in_source and citation.quote.strip()
+        ]
+        evidence.extend(
+            ("risk", risk.clause_ref or risk.title, risk.source_quote)
+            for risk in artifact.extracted_risks
+            if (risk.source_quote_status or "").upper() == "VERIFIED"
+            and risk.source_quote
+            and risk.source_quote.strip()
+        )
+        for index, (kind, anchor, quote) in enumerate(evidence):
+            if quote in seen:
+                continue
+            seen.add(quote)
+            clauses.append(
+                Clause(
+                    id=f"{revision}:{kind}:{index}",
+                    text=anonymize_text_simple(quote),
+                    data={
+                        "document_type": artifact.doc_type,
+                        "document_id": artifact.document_id,
+                        "document_revision_id": artifact.document_revision_id,
+                        "evidence_type": kind,
+                        "evidence_ref": anonymize_text_simple(anchor),
+                        "source_verified": True,
+                    },
+                )
+            )
+    return clauses
+
+
 @dataclass(frozen=True)
 class ArtifactSetEvaluation:
     """Canonical project-level Coherence evaluation of one artifact set."""
@@ -273,8 +322,10 @@ async def evaluate_artifact_set(
     Read-only: it never persists anything.
     """
     signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
+    # Real cross-document evidence, not the previous empty clause list.
+    clauses = _verified_artifact_clauses(artifacts)
     engine_result = await evaluate_coherence_async(
-        [],
+        clauses,
         str(project_id),
         config=EvaluationConfig(
             low_budget_mode=not llm_on,
