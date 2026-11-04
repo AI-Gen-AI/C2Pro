@@ -200,9 +200,9 @@ def build_workflow() -> ProjectWorkflow:
                               │                         │                         │
                               └────────────► N10 (knowledge_graph) ◄──────────────┘
                                                         │   (fan-in barrier)
-                                                  N17 (save_to_db)
-                                                        │
                                               N11 (decision_intelligence)
+                                                        │
+                                                  N17 (save_to_db)
                                                         │
                                                   N16 (final_assembler)
                                                         │
@@ -355,10 +355,12 @@ def build_workflow() -> ProjectWorkflow:
         "knowledge_graph",
     )
 
-    # ── Persistence & assembly: N10 → N17 → N11 → N16 → END ─────────────
-    workflow.add_edge("knowledge_graph", "save_to_db")
-    workflow.add_edge("save_to_db", "decision_intelligence")
-    workflow.add_edge("decision_intelligence", "final_assembler")
+    # ── Decisions before persistence: N10 → N11 → N17 → N16 → END ───────
+    # N11 must exist before N17 snapshots it to analyses.result_json.
+    # The N17 HITL gate remains unchanged; proposals never imply approval.
+    workflow.add_edge("knowledge_graph", "decision_intelligence")
+    workflow.add_edge("decision_intelligence", "save_to_db")
+    workflow.add_edge("save_to_db", "final_assembler")
     workflow.add_edge("final_assembler", END)
 
     return workflow

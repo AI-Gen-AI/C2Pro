@@ -2,6 +2,9 @@
 
 from src.analysis.application.trusted_materialization import MaterializationContent
 from src.analysis.adapters.graph.document_artifact_builder import build_document_artifact
+from src.analysis.adapters.graph.workflow import build_workflow
+from src.analysis.adapters.graph.nodes_extended import decision_intelligence_node
+import asyncio
 from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
 
@@ -122,3 +125,38 @@ def test_live_n4_candidate_with_mitigation_becomes_projectgraph_artifact():
     assert artifact.decision_snapshot["proposed_actions"][0]["proposed_action"]
     restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"), {})
     assert restored.decision_snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
+
+
+def test_n11_precedes_n17_in_executable_graph():
+    """N17-first topology silently wrote analyses before decisions existed."""
+    edges = set(build_workflow().edges)
+    assert ("knowledge_graph", "decision_intelligence") in edges
+    assert ("decision_intelligence", "save_to_db") in edges
+    assert ("save_to_db", "final_assembler") in edges
+    assert ("save_to_db", "decision_intelligence") not in edges
+
+
+def test_real_n11_package_exists_before_n17_snapshot():
+    """N4's live mitigation survives N11->N17, still pending human review."""
+    state = {
+        "project_id": "p1",
+        "document_id": "doc-A",
+        "document_revision_id": "revision-2",
+        "extracted_risks": [{
+            "title": "Late EPC completion",
+            "impact": "HIGH",
+            "mitigation_suggestion": "Align schedule milestone with contracted handover date",
+            "clause_ref": "8.2",
+        }],
+        "messages": [],
+        "node_results": [],
+    }
+    after_n11 = asyncio.run(decision_intelligence_node(state))
+    snapshot = MaterializationContent.from_state(after_n11).decision_snapshot
+    assert len(snapshot["proposed_actions"]) == 1
+    assert snapshot["proposed_actions"][0]["source_evidence"]["document_id"] == "doc-A"
+    assert snapshot["proposed_actions"][0]["source_evidence"]["revision_id"] == "revision-2"
+    assert snapshot["proposed_actions"][0]["proposed_action"] == (
+        "Align schedule milestone with contracted handover date"
+    )
+    assert snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
