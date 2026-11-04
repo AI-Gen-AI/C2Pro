@@ -1039,6 +1039,7 @@ def test_evidence_quality_lists_every_section() -> None:
         "risks",
         "obligations",
         "schedule",
+        "decision_proposals",
     ]
     budget_row = next(row for row in section.data.rows if row.section_key == "budget")
     assert budget_row.evidence_tier is ReportEvidenceTier.UNLINKED

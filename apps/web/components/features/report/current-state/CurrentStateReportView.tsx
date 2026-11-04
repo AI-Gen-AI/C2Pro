@@ -46,17 +46,14 @@ type DecisionProposal = {
   source_verification: "REQUIRES_SOURCE_VALIDATION";
   status: "PROPOSED_REQUIRES_HUMAN_REVIEW";
 };
-type DecisionProposalsEnvelope = {
-  status: string;
-  status_reason?: string | null;
-  source_domain: string;
-  source_as_of?: string | null;
-  source_ref?: string | null;
-  evidence_tier: string;
-  evidence_note?: string | null;
+type ReportSections = CurrentStateReport["sections"];
+type DecisionProposalsEnvelope = Pick<
+  ReportSections["documents"],
+  "status" | "status_reason" | "source_domain" | "source_as_of" | "source_ref" | "evidence_tier" | "evidence_note"
+> & {
   data?: { items: DecisionProposal[] } | null;
 };
-type Sections = CurrentStateReport["sections"] & { decision_proposals?: DecisionProposalsEnvelope };
+type Sections = ReportSections & { decision_proposals?: DecisionProposalsEnvelope };
 
 type SectionEnvelope = Pick<
   Sections["documents"],
@@ -85,7 +82,7 @@ type ContentSectionKey = (typeof CONTENT_SECTION_ORDER)[number];
 const HEADING_CLASS = "text-base font-semibold leading-none tracking-tight";
 
 export function CurrentStateReportView({ report }: { report: CurrentStateReport }) {
-  const { sections } = report;
+  const sections = report.sections as Sections;
 
   return (
     <div className="space-y-6">
