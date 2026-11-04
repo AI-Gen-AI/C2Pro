@@ -76,6 +76,9 @@ from src.reporting.domain.current_state_report import (
     ReportEvidenceTier,
     ReportSectionBase,
     SectionStatus,
+    SourceDiscrepanciesData,
+    SourceDiscrepanciesSection,
+    SourceDiscrepancyItem,
     StakeholderItem,
     StakeholdersData,
     StakeholdersSection,
@@ -810,6 +813,34 @@ def project_decision_proposals(result: Any) -> DecisionProposalsSection:
     )
 
 
+def project_source_discrepancies(result: Any) -> SourceDiscrepanciesSection:
+    """A distinct advisory section; never merge these into scored coherence or alerts."""
+    domain = "project_graph"
+    if not isinstance(result, SourceOk):
+        return _not_ok(SourceDiscrepanciesSection, domain, result)
+    payload = result.value
+    raw_items = payload.get("items") if isinstance(payload, dict) else None
+    if not raw_items:
+        return _without_data(
+            SourceDiscrepanciesSection, domain, SectionStatus.EMPTY,
+            "No current, two-source provisional discrepancies were recorded.",
+        )
+    items = [SourceDiscrepancyItem.model_validate(item) for item in raw_items[:25]]
+    return SourceDiscrepanciesSection(
+        status=SectionStatus.AVAILABLE,
+        source_domain=domain,
+        source_ref=str(payload["event_id"]),
+        source_as_of=_as_utc(payload["observed_at"]),
+        evidence_tier=ReportEvidenceTier.WEAK_LINKED,
+        evidence_note=(
+            "Both source revisions and original XLSX row hashes are current. "
+            "Comparisons remain provisional: the row is not an approved budget/schedule baseline, "
+            "the contract quote does not imply a verified clause highlight, and nothing is scored."
+        ),
+        data=SourceDiscrepanciesData(items=items),
+    )
+
+
 def not_modeled_section(key: str) -> NotModeledSection:
     return NotModeledSection(
         status=SectionStatus.NOT_MODELED,
@@ -1132,6 +1163,7 @@ def assemble_current_state_report(
     obligations = not_modeled_section("obligations")
     schedule = not_modeled_section("schedule")
     decision_proposals = project_decision_proposals(inputs.decision_proposals)
+    source_discrepancies = project_source_discrepancies(inputs.source_discrepancies)
 
     content_sections: dict[str, ReportSectionBase] = {
         "documents": documents,
@@ -1148,6 +1180,7 @@ def assemble_current_state_report(
         "obligations": obligations,
         "schedule": schedule,
         "decision_proposals": decision_proposals,
+        "source_discrepancies": source_discrepancies,
     }
 
     sections = CurrentStateSections(
@@ -1174,6 +1207,7 @@ def assemble_current_state_report(
         obligations=obligations,
         schedule=schedule,
         decision_proposals=decision_proposals,
+        source_discrepancies=source_discrepancies,
         evidence_quality=project_evidence_quality(content_sections),
     )
     return CurrentStateReport(
@@ -1204,5 +1238,6 @@ __all__ = [
     "project_missing_evidence",
     "project_raci",
     "project_stakeholders",
+    "project_source_discrepancies",
     "project_wbs",
 ]
