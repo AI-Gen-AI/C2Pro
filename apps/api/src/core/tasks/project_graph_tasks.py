@@ -19,6 +19,7 @@ from src.analysis.adapters.graph.project_graph import (
 )
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.domain.node_result import NodeStatus
+from src.coherence.models import Clause
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
@@ -38,6 +39,65 @@ logger = logging.getLogger(__name__)
 async def _maybe_await(value: object) -> None:
     if inspect.isawaitable(value):
         await value
+
+
+async def _load_canonical_project_evidence(
+    session: AsyncSession,
+    project_id: UUID,
+    tenant_id: TenantId,
+) -> tuple[list[Clause], dict[str, Any] | None]:
+    """Reuse the application's tenant-scoped trusted-current source assembly.
+
+    Real persisted clauses carry UUID provenance; budget/schedule helpers attach
+    the existing revision/row authority and explicit missing-evidence markers.
+    No RAG chunks, pending proposals or model-generated quotes are substituted.
+    """
+    from src.coherence.router import (
+        _get_persisted_clause_candidates,
+        _with_budget_clause_candidates,
+        _with_schedule_clause_candidates,
+    )
+    from src.coherence.schedule_clause_builder import load_schedule_planned_finish
+    from src.core.privacy.anonymizer import anonymize_text_simple
+
+    clauses = await _get_persisted_clause_candidates(
+        session, project_id, tenant_id, max_chunks=60
+    )
+    clauses = await _with_budget_clause_candidates(
+        clauses, session, project_id, tenant_id
+    )
+    clauses = await _with_schedule_clause_candidates(
+        clauses, session, project_id, tenant_id, max_chunks=60
+    )
+    schedule_finish = await load_schedule_planned_finish(
+        session, project_id, tenant_id
+    )
+
+    identity_fields = {
+        "document_type", "document_id", "document_revision_id", "revision_id",
+        "source_clause_id", "source_document_id", "source_locator",
+        "blob_hash", "blob_sha256", "content_sha256", "family",
+        "currency", "budget_currencies", "contract_currencies",
+    }
+
+    def scrub(value: Any, key: str = "") -> Any:
+        if isinstance(value, str):
+            return value if key in identity_fields else anonymize_text_simple(value)
+        if isinstance(value, list):
+            return [scrub(item, key) for item in value]
+        if isinstance(value, dict):
+            return {name: scrub(item, name) for name, item in value.items()}
+        return value
+
+    protected = [
+        Clause(
+            id=clause.id,
+            text=anonymize_text_simple(clause.text),
+            data=scrub(clause.data),
+        )
+        for clause in clauses
+    ]
+    return protected, schedule_finish
 
 
 async def enqueue_project_graph(
@@ -79,6 +139,12 @@ async def run_project_graph_once(
         if snapshot_repository is not None
         else None
     )
+    source_clauses: list[Clause] = []
+    schedule_finish: dict[str, Any] | None = None
+    if db_session is not None:
+        source_clauses, schedule_finish = await _load_canonical_project_evidence(
+            db_session, project_id, tenant_id
+        )
     graph_input: ProjectGraphState = {
         "project_id": project_id,
         "tenant_id": tenant_id,
@@ -92,6 +158,8 @@ async def run_project_graph_once(
         "snapshot_id": None,
         "node_results": [],
         "artifact_repository": artifact_repository,
+        "input_source_clauses": source_clauses,
+        "schedule_planned_finish": schedule_finish,
     }
     if snapshot_repository is not None:
         graph_input["snapshot_repository"] = snapshot_repository
