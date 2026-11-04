@@ -720,6 +720,65 @@ test.describe("TS-E2E-TRIPLET-001: contract → HITL → budget + schedule → c
       ).toHaveText(/approved/i, { timeout: 30_000 });
     });
 
+    // CORE proof is opt-in ONLY for the owner-authorized CI run; a successfully
+    // uploaded triplet with no current decisions is NOT a complete CORE.
+    if (process.env.C2PRO_REQUIRE_CORE_PILOT === "1") {
+      await test.step("CORE Pilot: N11 decision visible through the real Current State backend and UI", async () => {
+        const inspection = await page.evaluate(async (projectId) => {
+          const token = await window.Clerk?.session?.getToken();
+          const response = await fetch(`/api/v1/projects/${projectId}/reports/current-state`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          const data = response.ok ? await response.json() as {
+            sections?: { decision_proposals?: {
+              status?: string;
+              data?: { items?: Array<{
+                source_document_id: string; source_revision_id: string;
+                proposed_action: string; status: string;
+              }> };
+            } };
+          } : null;
+          return {
+            status: response.status,
+            section: data?.sections?.decision_proposals?.status ?? "MISSING",
+            items: data?.sections?.decision_proposals?.data?.items ?? [],
+          };
+        }, projectId);
+        expect(inspection.status, "Current State must respond after logout and relogin").toBe(200);
+        expect(inspection.section, "N11 proposals must be current, not NOT_MODELED or UNAVAILABLE").toBe("available");
+        expect(inspection.items.length, "N11 should offer at least one concrete EPC action").toBeGreaterThan(0);
+        const sourceIds = new Set([
+          contract.documentId, budget.documentId, schedule.documentId, technical.documentId,
+        ]);
+        for (const item of inspection.items) {
+          expect(item.status, "the model cannot approve its own recommendations")
+            .toBe("PROPOSED_REQUIRES_HUMAN_REVIEW");
+          expect(sourceIds.has(item.source_document_id), "the action must cite one of the four originals")
+            .toBe(true);
+          expect(item.source_revision_id, "the action must identify the actual immutable revision")
+            .toMatch(/^[0-9a-f-]{36}$/);
+          expect(item.proposed_action.trim().length, "action must contain usable content").toBeGreaterThan(15);
+        }
+        await page.goto(`/projects/${projectId}/report`);
+        await expect(page.getByTestId("current-state-decision-proposals"))
+          .toBeVisible({ timeout: 60_000 });
+        const sourceLink = page.getByRole("link", { name: /inspect source document revision/i }).first();
+        await expect(sourceLink, "N16/report must render a revision-bound evidence link").toBeVisible();
+        const href = await sourceLink.getAttribute("href");
+        expect(href).toContain(`/projects/${projectId}/evidence?documentId=`);
+        expect(href).toContain("revisionId=");
+        test.info().annotations.push({
+          type: "core-pilot",
+          description: JSON.stringify({
+            projectId, decisionCount: inspection.items.length,
+            linkedDocumentCount: new Set(inspection.items.map((x) => x.source_document_id)).size,
+            sourceNavigation: "revision_bound",
+            status: "PENDING_PROJECT_GRAPH_SQL_GATE",
+          }),
+        });
+      });
+    }
+
     await test.step("S8: another tenant's project is denied, with no data and no 2xx", async () => {
       const statuses: { url: string; status: number }[] = [];
       page.on("response", (response) => {

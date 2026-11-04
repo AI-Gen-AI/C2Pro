@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - integration/acc01-e2e-20261025
+      # One explicitly owner-approved CORE pilot. The existing commit marker
+      # [S2-LIVE-AI-ONCE] gates the paid job; ordinary pushes do not run it.
+      - feat/c2pro-core-pilot-20261104
     paths:
       - '.github/workflows/acc01-s2-live-ai-uat.yml'
   workflow_dispatch:
@@ -84,6 +87,11 @@ jobs:
       AUTH_BOOTSTRAP_ALLOW_FALLBACK_EMERGENCY: "true"
       C2PRO_AI_MOCK: "0"
       C2PRO_EMBEDDINGS_MOCK: "0"
+      # One-off CORE evidence gate on the pilot branch, not for old S2 dispatches.
+      C2PRO_REQUIRE_CORE_PILOT: ${{ github.ref_name == 'feat/c2pro-core-pilot-20261104' && '1' || '0' }}
+      S3_REQUIRE_TECHNICAL_APPROVAL: ${{ github.ref_name == 'feat/c2pro-core-pilot-20261104' && '1' || '0' }}
+      FEATURE_V3_PROJECT_GRAPH: ${{ github.ref_name == 'feat/c2pro-core-pilot-20261104' && 'true' || 'false' }}
+      PROJECT_GRAPH_DEBOUNCE_TTL_SECONDS: "1"
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.S2_E2E_OPENAI_API_KEY }}
       NEXT_PUBLIC_API_URL: /api
@@ -286,6 +294,55 @@ jobs:
             --manifest ../web/src/tests/e2e/test-data/triplet/triplet.manifest.json \
             --fixture-dir ../web/src/tests/e2e/test-data/triplet \
             --output ../web/playwright-report/s2-postgres-ledger.json
+
+      # CORE Pilot hard stop: an S2-green run is NOT a ProjectGraph success.
+      # The fixture project is created in this same job; use its captured UUID.
+      - name: CORE Pilot - assert real ProjectGraph and four trusted source revisions
+        if: ${{ success() && github.ref_name == 'feat/c2pro-core-pilot-20261104' }}
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          project_id="$(python -c 'import json; print(json.load(open("../web/playwright-report/s2-postgres-ledger.json"))["project_id"])')"
+          echo "CORE_PILOT_CHECK project_id=$project_id"
+          python scripts/verify_p0b_journey.py --project-id "$project_id"
+          python - "$project_id" <<'PY'
+          import asyncio, os, sys
+          from uuid import UUID
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          async def main():
+              pid = UUID(sys.argv[1])
+              url = os.environ["TEST_DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://", 1)
+              engine = create_async_engine(url)
+              try:
+                  async with engine.connect() as connection:
+                      await connection.execute(text("SET TRANSACTION READ ONLY"))
+                      count = (await connection.execute(text(
+                          "SELECT count(DISTINCT document_id) FROM document_artifacts "
+                          "WHERE project_id = :p AND trust_state = 'trusted' AND lifecycle_status = 'active' "
+                          "AND document_revision_id IS NOT NULL"
+                      ), {"p": pid})).scalar_one()
+                      print(f"CORE_PILOT_TRUSTED_ARTIFACTS={count} expected=4")
+                      if count != 4:
+                          raise SystemExit(f"CORE_NOT_ACCEPTED: trusted revision-bound artifacts={count}, expected exactly 4")
+                      rows = (await connection.execute(text(
+                          "SELECT id, result_json FROM analyses "
+                          "WHERE project_id = :p AND result_json ? 'decision_snapshot'"
+                      ), {"p": pid})).all()
+                      bound = [
+                          row for row in rows if isinstance(row.result_json, dict)
+                          and isinstance(row.result_json.get("decision_snapshot"), dict)
+                          and bool(row.result_json["decision_snapshot"].get("proposed_actions"))
+                      ]
+                      print(f"CORE_PILOT_N11_DURABLE_PROPOSALS={len(bound)}")
+                      if not bound:
+                          raise SystemExit("CORE_NOT_ACCEPTED: no persisted N11 decision proposals for this project")
+              finally:
+                  await engine.dispose()
+
+          asyncio.run(main())
+          PY
 
       - name: Verify the S2 Worker invoked a nonmocked model
         if: success()
