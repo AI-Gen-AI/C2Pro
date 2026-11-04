@@ -410,6 +410,29 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
     Refers to Suite ID: TS-UA-ANA-UC-001.
     """
     project_id = state.get("project_id")
+    # Source rows are queried independently from score evaluation. An absent
+    # migration, missing tenant or unreadable source is NOT zero budget/schedule.
+    source_evidence: dict[str, Any] = {
+        "state": "UNASSESSED",
+        "reason": "source_identity_not_available",
+        "baseline_approved": False,
+    }
+    tenant_id = state.get("tenant_id")
+    if project_id and tenant_id:
+        try:
+            from src.analysis.application.project_source_evidence import (
+                read_project_source_evidence,
+            )
+            source_evidence = await read_project_source_evidence(
+                tenant_id=UUID(str(tenant_id)), project_id=UUID(str(project_id)),
+            )
+        except Exception:
+            logger.warning("node_coherence_project_source_read_unavailable", exc_info=True)
+            source_evidence = {
+                "state": "UNASSESSED",
+                "reason": "project_source_read_unavailable",
+                "baseline_approved": False,
+            }
 
     if not project_id:
         node_result: NodeResult[object] = NodeResult(
@@ -423,6 +446,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             "coherence_breakdown": {},
             "coherence_reason": "missing_project_id",
             "coherence_missing_dimensions": ["schedule", "budget"],
+            "project_source_evidence": source_evidence,
             "node_results": [node_result],
             "messages": [AIMessage(content="N8 coherence_scorer: skipped (missing project_id)")],
         }
@@ -552,6 +576,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         "single_document_assessment": single_document_assessment,
         "coherence_reason": reason,
         "coherence_missing_dimensions": result_missing_dimensions,
+        "project_source_evidence": source_evidence,
         "node_results": [node_result],
         "messages": [
             AIMessage(
