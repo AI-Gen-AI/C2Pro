@@ -45,6 +45,7 @@ from src.analysis.application.critique_extraction_use_case import (
     CritiqueExtractionCommand,
     CritiqueExtractionUseCase,
 )
+from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.ai_extraction import (
     CritiqueExtractionService,
     DeterministicRiskRulesService,
@@ -258,7 +259,8 @@ async def router_node(state: ProjectState) -> ProjectState:
             _ok_node_result("router", {"doc_type": state["doc_type"]}),
         ]
         return state
-    if not _has_extractable_text(state.get("document_text")):
+    source_text = llm_document_text(state)
+    if not _has_extractable_text(source_text):
         state["doc_type"] = "insufficient_extractable_text"
         state["node_results"] = [
             *state.get("node_results", []),
@@ -272,7 +274,7 @@ async def router_node(state: ProjectState) -> ProjectState:
         return state
     use_case = ClassifyDocumentUseCase(ai=get_ai_service(state.get("tenant_id")))
     doc_type = await use_case.execute(
-        ClassifyDocumentCommand(text=state["document_text"])
+        ClassifyDocumentCommand(text=source_text)
     )
     state["doc_type"] = doc_type
     state["node_results"] = [
@@ -299,10 +301,11 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
     from src.core.ai.tools import get_tool
 
     try:
-        original_chars = len(state.get("document_text", "") or "")
+        safe_text = llm_document_text(state)
+        original_chars = len(safe_text)
         updated_state = await get_tool("risk_extraction", version="1.0")(state)
         risks = [
-            _risk_contract_payload(item, state.get("document_text"))
+            _risk_contract_payload(item, safe_text)
             for item in (updated_state.get("extracted_risks") or [])
         ]
         updated_state["extracted_risks"] = risks
@@ -358,7 +361,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         wbs_items = [
             _wbs_contract_payload(item)
-            for item in _wbs_rules.extract(state.get("document_text", ""))
+            for item in _wbs_rules.extract(llm_document_text(state))
         ]
         state["extracted_wbs"] = wbs_items
         state["node_results"] = [
