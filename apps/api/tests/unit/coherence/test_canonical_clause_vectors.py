@@ -162,7 +162,7 @@ def test_pgvector_pairs_require_revision_and_same_tenant():
     # Static contract: N8 must not call the old revision-unaware SQL function.
     from pathlib import Path
 
-    root = Path(__file__).resolve().parents[4]
+    root = Path(__file__).resolve().parents[3]
     source = (
         root
         / "src"
