@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.graph.project_graph import (
     build_project_graph,
@@ -65,6 +66,7 @@ async def run_project_graph_once(
     artifact_repository: IDocumentArtifactRepository,
     trigger_event_id: UUID | None = None,
     snapshot_repository: IProjectSnapshotRepository | None = None,
+    db_session: AsyncSession | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -93,6 +95,8 @@ async def run_project_graph_once(
     }
     if snapshot_repository is not None:
         graph_input["snapshot_repository"] = snapshot_repository
+    if db_session is not None:
+        graph_input["db_session"] = db_session
     result = await build_project_graph().ainvoke(graph_input)
     # A compiled graph is NOT a successful projection when material work failed.
     # Keep the trusted obligation pending so the Celery retry can recover it.
@@ -164,6 +168,7 @@ async def _run_project_graph_async(
                     trigger_event_id=trigger_event_id,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
                     snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
+                    db_session=session,
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)
