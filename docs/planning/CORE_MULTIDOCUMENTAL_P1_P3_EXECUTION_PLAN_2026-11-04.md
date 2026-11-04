@@ -1,6 +1,6 @@
 # C2Pro — CORE multidocumental | Plan de ejecución P1–P3
 
-**Versión:** 2.0 (diseño técnico ampliado; §9–§18) · **Fecha:** 2026-11-04 · **Estado:** PLAN APROBADO PARA DOCUMENTACIÓN / IMPLEMENTACIÓN P1–P3 AÚN NO AUTORIZADA COMO DESPLIEGUE
+**Versión:** 2.1 (diseño técnico ampliado; §9–§19) · **Fecha:** 2026-11-04 · **Estado:** PLAN APROBADO PARA DOCUMENTACIÓN / IMPLEMENTACIÓN P1–P3 AÚN NO AUTORIZADA COMO DESPLIEGUE
 **Repositorio:** AI-Gen-AI/C2Pro · **Candidato de integración:** [PR #1112](https://github.com/AI-Gen-AI/C2Pro/pull/1112) · **Base inspeccionada:** `34f1f67d66f26c2e905570c39a0d693c605fca6e`.
 **Propósito:** una hoja de ruta ejecutable y actualizable, sin crear WORK redundantes ni rehacer auditorías. Este plan no acredita funcionalidad ni sustituye la UAT real.
 
@@ -537,3 +537,87 @@ No afirmar éxito de vector por `CREATE TABLE` o prueba con embeddings determini
 
 **Forma de reportar avances:** `ID paquete | HEAD SHA | diff archivo/función | dato real de prueba | coverage delta | recall delta | coste/latencia | limitación | siguiente gate`. Actualizar **este mismo documento v2**, no crear otro documento rival. Respetar el checkpoint de #1112. Revalidar rutas y versiones después de integrar P0; algunas afirmaciones de esta parte describen el HEAD base anterior a P0.
 
+
+
+## 19. Ejecución real de LLM por nodo, especialización y autoridad de prompts (v2.1)
+
+**Hallazgo nuevo y central:** 17 nodos LangGraph NO equivalen a 17 agentes expertos, ni todas las ramas llaman al LLM. El modelo solo interpreta el material que recibe: un prompt especializado no corrige una selección de cláusulas incompleta. Esta sección describe el HEAD base `34f1f67d`, no una UAT.
+
+### 19.1 Matriz exacta del grafo principal N1–N17
+
+| Nodo | ¿Llama LLM? | Entrada de esa llamada / salida | Instrucciones actuales; límite y fallo |
+|---|---|---|---|
+| N1 Ingestión | No en ese nodo | Texto fuente → categoría preliminar determinista | No es análisis experto. |
+| N2 Anonimizador | No directamente | Texto fuente → redacción PII + mapa | No equivale a proteger secretos comerciales; conservar offsets de fuente original. |
+| N3 Router | **Condicional** | Si el `doc_type` recibido no es válido, clasifica con `ROUTER_SYSTEM_PROMPT` | El prompt permite solo contract/technical_spec/budget/schedule; si tipo está definido, **no** consulta modelo. |
+| N4 Risk Extractor | **Sí, salvo mock/error** | `state["document_text"]` → filtro keywords → prompt inline EPC → JSON `risks` | Especialista *declarado* en contratos EPC, 6 categorías; preferencia 3–8 hallazgos, máximo 20; corte de input 40.000 caracteres por defecto. **No** consume `document_chunks` vectoriales. `prompt_template_name=None`. |
+| N5 WBS Extractor | **Sí, salvo mock/error** | `state["document_text"]` → prompt inline planificador WBS → JSON de paquetes y actividades | Máximo 50 WBS items. Se usa incluso para technical_spec/schedule en el router; no es un extractor de *todas* las obligaciones técnicas. `prompt_template_name=None`. |
+| N6 Stakeholders | **Sí, si tenant válido** | `state["anonymized_text"]` o raw → `ExtractStakeholdersUseCase` → nombres/roles | Contrato de extracción en `stakeholders/application/extract_stakeholders.py`. |
+| N7 RACI | **Sí, si existen stakeholders y WBS** | `GenerateRaciUseCase` / `RACI_GENERATION_PROMPT` → responsables | Prompt exige 1 Accountable por actividad; propuesta, no aprobación humana. |
+| N8 Coherence | **Mixto y condicional** | Subgrafo: determinista → `llm_semantic_evaluate` → `rag_similarity_check` → comparaciones/scoring | 6 reglas LLM cualitativas (Scope, Payment, Schedule, Technical Spec, Responsibility, Quality), `CoherenceLlmGate` controla cache, rollout, presupuesto y llamada. Flag y `low_budget_mode` pueden **saltarse** el LLM; fallar explícitamente. Similitud entre cláusulas via `PgvectorEmbeddingRepository` es otra ruta, **no** implica que N4 use RAG. |
+| N9 Budget Parser textual | **Sí** | `ParseBudgetUseCase` → `BUDGET_EXTRACTION_PROMPT` → BOM | No reemplaza al XLSX parser con cantidades/total declarados y hash; prompt legacy contiene defaults que no son verdad económica. |
+| N10 Knowledge Graph | No directamente | Aglutina resultados → grafo | No inventar autoridad a partir de aristas. |
+| N11 Decision package | No | Datos y resultados → paquete | Ensambla lo anterior. |
+| N12 Critique | **Sí, salvo mock/error** | `CritiqueExtractionUseCase` → `CRITIQUE_SYSTEM_PROMPT` con items + prefijo fuente (≤16k chars) → `OK/RETRY` y notas | Revisor de calidad, **no** revisor documental exhaustivo. Si fuente parcial, prompt prohíbe asegurar ausencia. Confianza por ítem no se inventa; puede requerir HITL. |
+| N13/N14 Human review | No | `interrupt`/resume sobre candidato exacto | Decisión humana, no otro agente autónomo. |
+| N15 Citation | No | Comprueba citas contra fuente suministrada | Verificación literal no basta para demostrar correcta interpretación. |
+| N16 Report | No | Ensamblaje de estado | Sin otro LLM en este nodo. |
+| N17 Persistence | No | Guarda resultado autorizado | No debe promover propuesta solo por ejecución. |
+
+**Topología verificada:** N1 → N2 → N3 → **una** rama N4/N5/N9 → N12 → (retry/HITL o continuación) → fan-out de N6→N7, N8 y N15 → N10 → N17 → N11 → N16. No confundir este grafo con el subgrafo de coherencia de N8 ni con el WBS Reviewer específico.
+
+### 19.2 Qué instrucciones y modelo ve realmente cada ejecución
+
+**Fuentes de prompts del HEAD:**
+- Clasificación N3, RACI N7, presupuesto textual N9 y crítica N12: `apps/api/src/analysis/domain/prompts.py`.
+- Riesgos N4: `apps/api/src/analysis/adapters/ai/tools/risk_extraction_tool.py::_build_default_prompt`, rol *senior project risk analyst for infrastructure contracts* y un JSON con `source_quote`, `clause_ref`, riesgos y mitigación.
+- WBS N5: `apps/api/src/analysis/adapters/ai/tools/wbs_extraction_tool.py::_build_default_prompt`, rol *planificador experto WBS* y JSON jerárquico; prompts **inline**.
+- Stakeholders N6: `apps/api/src/stakeholders/application/extract_stakeholders.py`; reconstruir prompt a partir de código usado, no inferir solo por nombre.
+- N8: `coherence/rules_engine/registry.py` y configuración de reglas YAML/`LlmRuleEvaluator` + `coherence/adapters/ai/coherence_llm_gate.py` (versión `p3-v3`); no confundir con N12.
+- Tool manager central disponible: `core/ai/prompts/__init__.py`; los tools N4/N5 tienen `prompt_template_name=None`, por lo que **su prompt operativo no se obtiene automáticamente** de ese manager.
+- Los `AIService.run_extraction` en N3/N7/N9/N12 envían la tarea genérica `AITaskType.COMPLEX_EXTRACTION` al `AnthropicWrapper`, **no** una identidad de experto ni tier individual necesariamente. Tools N4/N5 también declaran `COMPLEX_EXTRACTION`.
+- Routing/modelos en `core/ai/model_routing.yaml` y `core/ai/model_router.py`: tiers Flash/Standard/Powerful. El YAML base muestra Haiku 4.5, Sonnet 4.6, Opus 4.7. `config.py` conserva valores por defecto distintos; **solo un trace/log de la ejecución exacta** confirma el modelo efectivo, tokens, fallback, sampling y prompt efectivo. No dar por ejecutado Opus por estar configurado en `powerful`.
+- `CoherenceLlmGate` tiene 6 reglas, gate de cache, rollout (%), presupuesto, ejecución y tracking; `feature_v3_coherence_llm` puede bloquear la ruta, y semántica documental no cubierta sigue `NOT_ASSESSED`.
+
+**Riesgo de privacidad a comprobar:** N2 redacta PII en `anonymized_text`, pero N4/N5 obtienen `document_text` original del estado, y `AnthropicWrapper.generate` hace su propia anonimización de prompt antes del proveedor salvo bypass. No afirmar fuga efectiva sin probar tráfico, pero **verificar la ruta completa, checkpoint de LangGraph, tracing nativo y modelo**. P0 Codex informa retirada de `raw_output_sample`, aún no confirmado remotamente.
+
+### 19.3 N12 / revisión LLM vs revisión experta de negocio vs LangSmith
+
+Son **tres funciones distintas**:
+
+1. **N12 (revisor LLM de extracción):** lee los candidatos y un excerpt de fuente, entrega `OK/RETRY` con notas. Hoy no puede auditar 300 páginas que no ha recibido. Su criterio es correctitud/traceabilidad, limitado por input. Puede conducir a reintento o HITL.
+2. **N8 (reglas cualitativas):** evalúa cláusulas con configuraciones de claridad/riesgo y puede producir FindingSignals; también se limita a las cláusulas que llegan al subgrafo y a políticas de rollout/coste. **No** es una auditoría independiente de la extracción N4.
+3. **LangSmith (tracing/evaluación/prompt hub):** observa y compara ejecuciones, datasets, modelos y versiones; no ejecuta una revisión independiente por arte de magia ni valida precisión sin etiquetas/oráculo. **Puede gestionar versiones de prompts**, pero en C2Pro el Hub experimental `core/ai/experimental/langsmith_hub.py` dice expresamente *non-authoritative* y `prompt_registry.py` implementa sincronización opcional. La autoridad actual de runtime es repositorio/PromptManager local y prompts inline. Mantener esto hasta decisión separada, como se acordó.
+
+### 19.4 Especialistas deseados SIN nuevo sistema de agentes
+
+**No crear todavía Supervisor nuevo, Multi-Agent teams, Agent Registry ni Agent Factory.** Separar agentes de desarrollo (AUD-DEV) de ejecución experta de producto (AUD-PRODUCT); la exploración de agentes especializados se dejó para fase ulterior. C2Pro puede elevar especialización **dentro del grafo existente** con roles, contratos, conocimiento y pruebas verificables.
+
+**Fichas de rol/prompt (propuesta para P2, no implementadas):**
+- `EPC_CONTRACT_RISK_ANALYST`: contratista/cliente, obligaciones, exclusiones, LD/caps/garantías, avisos, pagos, prelación; extraer obligaciones y riesgos *unit by unit* con citas. `N4`.
+- `PLANNER_SCHEDULE_REVIEWER`: analizar actividades/plazos/dependencias observadas, distinguir baseline y campos no probados; prohibido asignar CPM/holgura sin cálculo. `P1-B + N8 rules`.
+- `COST_ENGINEER_BUDGET_REVIEWER`: partidas, capítulos, impuestos, costes indirectos, divisa y conciliaciones; aritmética deterministic, LLM solo interpretación de partidas ambiguas. `P1-A + N8`.
+- `TECHNICAL_REQUIREMENTS_REVIEWER`: detectar obligaciones, parámetros y pruebas FAT/SAT, requisitos vinculables; distinguir requerimiento del cumplimiento probado. `P1-C + N8`.
+- `CROSS_DOCUMENT_QA_REVIEWER`: verificar hallazgo/relación contra **ambas** fuentes exactas y ledger completo; proponer corrección o `NOT_ASSESSED`; humano decide. `N12 adaptado`.
+
+**Cada ficha debe contener**: `role_id`, expertise, tarea, alcance document/revision, input schema/allowed tools (SQL exacto, retriever scoped, reglas), prompt template/version/hash, model config, presupuesto de contexto, salida JSON/Pydantic, criterios de abstención, autoridad y versión de rúbrica/evaluador. No basta con escribir «actúa como experto»: suministrar casos EPC gold de aceptación y contraejemplos.
+
+### 19.5 Qué significa gestionar los prompts con LangSmith
+
+**Decisión de gobernanza:** mantener **prompts versionados en Git/PromptManager como autoridad**. Añadir manifiesto de rutas runtime que pueda mostrarse en LangSmith para **evaluación sintética**, no descargar silenciosamente prompts «latest» de internet en producción. Prompt Hub se mantiene espejo/experimento opt-in hasta otra decisión explícita.
+
+Cada call LLM registra de forma segura:
+`run_id, node_id, role_id, prompt_name, prompt_commit/hash, model_requested, model_returned, model_config_hash, context_unit_ids, revision_id, coverage_status, ruleset_version, response_schema_version, outcome, tokens_in/out, latency_ms, cost, retry_count, llm_gate_status, reviewer_verdict`.
+**Nunca guardar contenido confidencial en traces**.
+
+**Control de cambios de prompt en P2:** inventario real de prompts efectivos → baseline sobre conjunto sintético anotado → cambiar **una sola variable** (prompt, ventana, recuperación o modelo) → comparar recall, precision, citas, coste y abstención → aprobar nueva versión en código → integrar con Claude. LangSmith puede facilitar `datasets`, `experiments`, evaluadores automáticos + revisión humana, y comparación de versiones; no basta un simple dashboard de trazas.
+
+### 19.6 Problemas corregibles sin convertir el producto en multiagente
+
+1. **La causa de omisiones suele ser la selección de entrada.** En P1 inventariar exhaustivamente las cláusulas/filas antes de activar IA; el prompt de N4 solo verá lotes completos cuando P2 lo conecte.
+2. **La calidad del especialista depende de ejemplos y restricciones verificables.** Añadir ejemplos positivos y negativos de obligaciones EPC reales sintéticas y criterios de abstención; evitar un «3–8 riesgos» global para contratos completos.
+3. **Revisión de contenido vs exhaustividad separadas.** N12 debe verificar significados/citas de cada hallazgo; ledger determinista prueba qué unidades examinó el sistema. N8 aplica reglas al corpus admitido. Ninguna ruta concluye `100% complete` desde un top-k.
+4. **Especialización progresiva:** P2-01 N4 contratos + rubrica; P2-02 N12 + fuentes; P2-03/04 revisiones de presupuesto, schedule y technical sobre evidencia P1; P2-05 LangSmith + experimento de prompts. **No** añadir nuevas identidades de agentes autónomos.
+5. **Prueba de valor:** un proyecto sintético con 4 documentos, riesgos al inicio/medio/final, cambios en revisión, fallos deliberados de costos/plazos/FAT; medir \(TP/FP/FN\), tiempo, coste y confianza de fuente, comparando antes/después. Si el modelo no detecta un fallo porque el extracto no lo contiene, el error se atribuye a retrieval/cobertura, no a la «capacidad del especialista».
+
+**Estado de sección 19:** arquitectura/contratos **DEFINIDOS**, catalogación inicial a partir de código **VERIFICADA**, identidad/config exacta de cada modelo en runtime **NO VERIFICADA**, adopción de fichas y nuevos prompts **PENDIENTE P2**. No cambia P0/P1, autoridad HITL ni decisiones aplazadas de Agent Teams.
