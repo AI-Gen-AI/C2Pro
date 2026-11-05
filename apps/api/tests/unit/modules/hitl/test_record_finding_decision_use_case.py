@@ -42,7 +42,12 @@ class _Session:
         self.calls = []
 
     async def execute(self, statement, params):
-        self.calls.append((str(statement), params))
+        sql = str(statement)
+        self.calls.append((sql, params))
+        if "AS safe_hitl_writer_role" in sql:
+            # Simulate a non-BYPASSRLS, properly scoped application principal.
+            # Privileged denial is covered by a separate negative regression.
+            return _Result({"safe_hitl_writer_role": True})
         return _Result(next(self.rows))
 
 
@@ -142,7 +147,7 @@ async def test_provisional_event_uses_authenticated_user_and_real_review_identit
     assert receipt.event_id == event_id
     assert receipt.ledger_revision == 1
     assert receipt.replayed is False
-    assert len(session.calls) == 6
+    assert len(session.calls) == 7
     sql, values = session.calls[-1]
     assert "INSERT INTO public.hitl_finding_decisions" in sql
     assert values["reviewer_id"] == str(user.id)
