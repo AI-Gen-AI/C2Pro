@@ -230,38 +230,56 @@ def validate_work_envelope(current: dict[str, Any], queue: dict[str, Any]) -> No
 
 
 def validate_product_envelopes() -> None:
-    """Validate optional Product WORK receipts without activating execution authority.
+    """Validate optional Product WORK separately from DEV hot state.
 
-    A DEV-queue entry never stands in for a Product task. Product assignments
-    must be explicit and grounded in the existing Product MASTER and delivery SDD.
+    PC-3 and PC-7a have explicitly bounded Project Controls identities. A
+    staged/assigned record never edits current.active_work or authorizes merge.
     """
     import jsonschema
     from importlib.util import module_from_spec, spec_from_file_location
+
+    try:
+        from scripts.development.product_work_identity import (
+            PC_TASKS, ProductWorkError, validate_pc_work,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name != "scripts":
+            raise
+        # This validator is also executed directly as a script by CI.
+        from product_work_identity import PC_TASKS, ProductWorkError, validate_pc_work
 
     spec = spec_from_file_location("c2pro_task_trace", ROOT / "scripts" / "development" / "validate_task_trace.py")
     assert spec is not None and spec.loader is not None
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
-    load_registry = module.load_registry
-
-    registry = load_registry(ROOT)
+    registry = module.load_registry(ROOT)
     schema = load_yaml(SCHEMAS / "product-work-envelope.schema.yaml")
     for path in sorted((ROOT / ".c2pro" / "product-work").glob("*.yaml")):
+        if path.is_symlink():
+            raise ValueError(f"{path.name}: Product WORK symlink rejected")
         work = load_yaml(path)
         try:
             jsonschema.Draft202012Validator(schema).validate(work)
         except jsonschema.ValidationError as exc:
             raise ValueError(f"{path.name}: Product WORK schema invalid: {exc.message}") from exc
         task = work["task_id"]
+        if path.name != f"{task}.yaml" or work["work_id"] != task:
+            raise ValueError(f"{path.name}: noncanonical Product WORK path/identity")
+        if task in PC_TASKS:
+            try:
+                # Re-read protected record with duplicate-key rejection.
+                validate_pc_work(ROOT, task)
+            except ProductWorkError as exc:
+                raise ValueError(f"{path.name}: {exc}") from exc
+            continue
         if task not in registry or not task.startswith("PQ-HITL-"):
             raise ValueError(f"{path.name}: unknown Product Task")
-        if work["work_id"] != task or work["parent_issue"] != registry[task]["issue"]:
+        if work["parent_issue"] != registry[task]["issue"]:
             raise ValueError(f"{path.name}: wrong Product Task/issue")
         if not set(work["acceptance_ids"]).issubset(registry[task]["acceptance_ids"]):
             raise ValueError(f"{path.name}: acceptance not in canonical delivery specification")
         if work["status"] == "assigned" and (not work["assigned_to"] or not work["workspace_receipt"]):
             raise ValueError(f"{path.name}: assigned Product WORK lacks worker/workspace evidence")
-
 
 def validate_role_profiles() -> dict[str, dict[str, Any]]:
     expected_files = {f"{role}.yaml" for role in CANONICAL_ROLES}
