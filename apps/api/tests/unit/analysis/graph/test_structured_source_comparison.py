@@ -243,3 +243,40 @@ def test_spanish_contract_budget_and_schedule_citations_are_supported():
     }
     assert all(item["state"] == "PROVISIONAL" for item in result["findings"])
     assert all(item["sources"][1]["source_locator"] for item in result["findings"])
+
+
+@pytest.mark.asyncio
+async def test_real_original_budget_total_budget_label_staged_as_declared_total(tmp_path):
+    """The synthetic production workbook labels its total 'TOTAL BUDGET'.
+
+    This is not an approved baseline. It is an original row with a revision-
+    bound locator that must be available to the provisional comparator.
+    """
+    from openpyxl import Workbook
+    from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
+    from src.documents.application.structured_source_units import _prepare_units
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Budget"
+    sheet.append(["Item", "Quantity", "Unit", "Unit Price", "Total", "Currency"])
+    sheet.append(["Transformer", 1, "unit", 600000, 600000, "EUR"])
+    sheet.append(["Erection and commissioning", 1, "lot", 500000, 500000, "EUR"])
+    sheet.append(["Contingency", 1, "lot", 200000, 200000, "EUR"])
+    sheet.append(["TOTAL BUDGET", None, None, None, 1300000, "EUR"])
+    file_path = tmp_path / "source.xlsx"
+    workbook.save(file_path)
+    rows = await ExcelFileParser().parse_budget(file_path, include_evidence=True)
+    assert len(rows) == 3
+    assert rows.stated_total == 1300000
+    assert len(rows.declared_total_rows) == 1
+    declared = rows.declared_total_rows[0]
+    assert declared["source_locator"] == "Budget!5"
+    assert declared["currency"] == "EUR"
+    assert str(declared["total"]) == "1300000.0"
+    prepared = _prepare_units(rows, family="budget", extra_rows=rows.declared_total_rows)
+    assert len(prepared) == 4
+    total_payload = next(__import__("json").loads(unit["payload"]) for unit in prepared
+                         if unit["source_locator"] == "Budget!5")
+    assert total_payload["kind"] == "declared_total"
+    assert total_payload["item"] == "TOTAL BUDGET"
