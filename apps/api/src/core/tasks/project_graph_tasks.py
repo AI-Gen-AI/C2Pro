@@ -153,6 +153,7 @@ async def run_project_graph_once(
     trigger_event_id: UUID | None = None,
     structured_source_refs: list[dict[str, Any]] | None = None,
     structured_source_units: list[dict[str, Any]] | None = None,
+    structured_document_quotes: list[dict[str, Any]] | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -169,6 +170,7 @@ async def run_project_graph_once(
         "artifacts": artifacts,
         "structured_source_refs": list(structured_source_refs or []),
         "structured_source_units": list(structured_source_units or []),
+        "structured_document_quotes": list(structured_document_quotes or []),
         "coherence_result": None,
         "impact_result": None,
         "health_result": None,
@@ -246,6 +248,12 @@ async def _run_project_graph_async(
                         )
                     )
                 source_refs = summarize_canonical_source_revisions(rows)
+                from src.analysis.adapters.graph.source_clause_evidence import (
+                    load_revision_bound_source_quotes,
+                )
+                quotes = await load_revision_bound_source_quotes(
+                    session=session, tenant_id=tenant_id, project_id=project_id,
+                )
                 result = await run_project_graph_once(
                     project_id=project_id,
                     tenant_id=tenant_id,
@@ -253,6 +261,7 @@ async def _run_project_graph_async(
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
                     structured_source_refs=source_refs,
                     structured_source_units=rows,
+                    structured_document_quotes=quotes,
                 )
                 # Persist only PROVISIONAL, dual-source citations in the same
                 # transaction as Tier-2. No promotion to canonical alerts.
