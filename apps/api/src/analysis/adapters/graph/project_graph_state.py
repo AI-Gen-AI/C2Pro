@@ -41,6 +41,8 @@ class ProjectGraphState(TypedDict):
     structured_source_refs: NotRequired[list[dict[str, Any]]]
     # Canonical original XLSX rows (validated again against their unit SHA-256).
     structured_source_units: NotRequired[list[dict[str, Any]]]
+    # Read-only, literal clause facts from revision-stamped DOCX source chunks.
+    structured_document_quotes: NotRequired[list[dict[str, Any]]]
     # Non-scoring, provisional discrepancies with two immutable evidence pointers.
     structured_source_comparison: NotRequired[dict[str, Any]]
     coherence_result: ProjectCoherenceResult | dict[str, object] | None
