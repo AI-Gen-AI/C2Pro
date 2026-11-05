@@ -110,6 +110,39 @@ def _quoted_risks(artifacts: list[DocumentArtifact], *, technical: bool = False)
     return result
 
 
+def _literal_observations(
+    artifacts: list[DocumentArtifact], source_quotes: list[dict[str, Any]],
+    *, technical: bool,
+) -> list[dict[str, Any]]:
+    """Only quotes belonging to a TRUSTED artifact loaded for this graph run."""
+    trusted = {
+        (str(a.document_id), str(a.document_revision_id), a.doc_type.lower())
+        for a in artifacts if a.document_revision_id
+    }
+    result = []
+    for src in source_quotes:
+        kind = str(src.get("doc_type") or "").lower()
+        if technical != (kind in {"technical", "technical_spec", "technical_specification", "specification"}):
+            continue
+        if (str(src.get("document_id")), str(src.get("revision_id")), kind) not in trusted:
+            continue
+        quote = src.get("source_quote")
+        digest = src.get("source_quote_sha256")
+        locator = src.get("source_locator")
+        if not isinstance(quote, str) or not isinstance(digest, str) or not isinstance(locator, str):
+            continue
+        if not locator.startswith("chunk:") or hashlib.sha256(quote.encode("utf-8")).hexdigest() != digest:
+            continue
+        result.append({
+            "document_id": str(src["document_id"]),
+            "revision_id": str(src["revision_id"]),
+            "source_locator": locator,
+            "source_quote": quote,
+            "source_quote_sha256": digest,
+        })
+    return result
+
+
 def _date_from_quote(quote: str) -> str | None:
     dates = set(_ISO.findall(quote))
     for day, month, year in _DATE_ES.findall(quote):
@@ -184,6 +217,7 @@ def _finding(rule: str, summary: str, contract: dict[str, Any], row: dict[str, A
 def compare_original_source_rows(
     artifacts: list[DocumentArtifact],
     units: list[dict[str, Any]],
+    source_quotes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return explicit provisional deviations, never canonical Coherence Score signals."""
     rows = [good for unit in units if (good := _source_row(unit)) is not None]
@@ -191,7 +225,10 @@ def compare_original_source_rows(
     budget = [row for row in rows if row["family"] == "budget" and row["payload"].get("kind") == "declared_total"]
     findings: list[dict[str, Any]] = []
     reasons: list[str] = []
-    contract_quotes = _quoted_risks(artifacts)
+    contract_quotes = (
+        _quoted_risks(artifacts)
+        + _literal_observations(artifacts, source_quotes or [], technical=False)
+    )
 
     deadlines = [
         (src, parsed) for src in contract_quotes
@@ -254,7 +291,10 @@ def compare_original_source_rows(
 
     # Specification-specific milestone conflicts: require a verified quote,
     # identical named activity in a source row and an unambiguous explicit date.
-    specs = _quoted_risks(artifacts, technical=True)
+    specs = (
+        _quoted_risks(artifacts, technical=True)
+        + _literal_observations(artifacts, source_quotes or [], technical=True)
+    )
     for spec in specs:
         quote = spec["source_quote"].lower()
         deadline = _date_from_quote(spec["source_quote"])
