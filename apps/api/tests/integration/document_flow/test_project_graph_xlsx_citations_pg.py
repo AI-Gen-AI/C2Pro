@@ -20,6 +20,7 @@ from alembic.operations import Operations
 from sqlalchemy import select, text
 
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
+from src.analysis.adapters.graph.source_clause_evidence import load_revision_bound_source_quotes
 from src.analysis.adapters.persistence.document_artifact_repository import SqlAlchemyDocumentArtifactRepository
 from src.reporting.adapters.sources.sqlalchemy_current_state_sources import SqlAlchemyCurrentStateSources
 from src.reporting.application.current_state_projection import project_source_discrepancies
@@ -126,6 +127,32 @@ async def test_real_pg_xlsx_rows_compare_to_verified_contract_and_save_provision
     assert {str(row["revision_id"]) for row in rows} == {
         str(schedule_rev.revision_id), str(budget_rev.revision_id)
     }
+
+    # Contract/spec FACTS must be recoverable from the original, revision-
+    # stamped chunks even when the AI classified neither price nor FAT as risk.
+    literal_quotes = await load_revision_bound_source_quotes(
+        session=db, tenant_id=test_user.tenant_id, project_id=project_id,
+    )
+    assert {str(q["document_id"]) for q in literal_quotes} == {
+        str(contract_doc.id), str(technical_doc.id)
+    }
+    assert len(literal_quotes) >= 3, literal_quotes
+    factual_artifacts = [
+        DocumentArtifact(
+            document_id=str(contract_doc.id),
+            document_revision_id=str(contract_rev.revision_id),
+            doc_type="contract", extracted_risks=[],
+        ),
+        DocumentArtifact(
+            document_id=str(technical_doc.id),
+            document_revision_id=str(technical_rev.revision_id),
+            doc_type="technical_spec", extracted_risks=[],
+        ),
+    ]
+    source_only = compare_original_source_rows(factual_artifacts, rows, literal_quotes)
+    assert {x["rule_id"] for x in source_only["findings"]} == {
+        "DET-CRS-SCHDEAD", "DET-CRS-NEGMARGIN", "SPEC-MILESTONE-VS-SCHEDULE",
+    }, source_only
     artifacts = [
         DocumentArtifact(
             document_id=str(contract_doc.id),
