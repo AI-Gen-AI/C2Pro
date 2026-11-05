@@ -20,6 +20,7 @@ from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
 from src.core.ai.tools import BaseTool, ToolResult, register_tool
+from src.projects.domain.wbs_hierarchy import WBSHierarchy
 
 if TYPE_CHECKING:
     from src.analysis.adapters.graph.schema import ProjectState
@@ -38,6 +39,15 @@ class WBSItemOutput(BaseModel):
     code: str = Field(..., description="WBS code (e.g., 1.2.3)")
     name: str = Field(..., description="Item name")
     description: str | None = Field(None, description="Item description")
+    level: int | None = Field(
+        default=None,
+        ge=0,
+        description="Source-supplied WBS depth; derived from a valid numeric code only when absent",
+    )
+    parent_code: str | None = Field(
+        default=None,
+        description="Direct numeric parent emitted in this result; not semantic source validation",
+    )
     item_type: str = Field(
         ..., description="Item type: deliverable, work_package, or activity"
     )
@@ -116,7 +126,7 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
         if len(wbs_items) > input_data.max_items:
             wbs_items = wbs_items[: input_data.max_items]
 
-        return wbs_items
+        return self._resolve_hierarchy(wbs_items)
 
     def extract_input_from_state(self, state: ProjectState) -> WBSExtractionInput:
         """Extract input from LangGraph state."""
@@ -141,7 +151,8 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
     ) -> ProjectState:
         """Inject output into LangGraph state."""
         # Convert WBSItemOutput to dicts for state storage
-        state["extracted_wbs"] = [item.model_dump(mode="json") for item in result.data]
+        resolved_items = self._resolve_hierarchy(result.data)
+        state["extracted_wbs"] = [item.model_dump(mode="json") for item in resolved_items]
 
         # Tool-level quality metadata is not individual WBS confidence.
         # A synthetic 0.9 default would falsely certify every unassessed item.
@@ -163,6 +174,8 @@ Para cada elemento WBS identifica:
 - code: Código jerárquico (ej: 1.2.3)
 - name: Nombre del elemento
 - description: Descripción detallada
+- level: Nivel WBS de la fuente si se declara; si no, null
+- parent_code: Código del padre directo solo si dicho padre también aparece en la salida
 - item_type: Tipo de elemento (deliverable | work_package | activity)
   * deliverable: Entregable final del proyecto
   * work_package: Paquete de trabajo que agrupa actividades
@@ -180,6 +193,8 @@ IMPORTANTE: Devuelve SOLO un JSON con el formato:
     "code": "1.1",
     "name": "Diseño estructural",
     "description": "Diseño completo de la estructura del edificio",
+    "level": 1,
+    "parent_code": "1",
     "item_type": "work_package",
     "confidence": 0.95,
     "budget_allocated": 50000.0,
@@ -193,6 +208,13 @@ IMPORTANTE: Devuelve SOLO un JSON con el formato:
 
 Reglas:
 - Los códigos deben ser jerárquicos (1, 1.1, 1.1.1, etc.)
+- No inventes nodos padre ni agrupaciones. Si falta el padre directo en el texto/salida, usa parent_code: null.
+- parent_code no valida una relación semántica: el sistema solo conservará el padre directo
+  derivable del código numérico y presente en la salida. No presentes una agrupación inferida como fuente.
+- No inventes detalles técnicos no respaldados por el documento (incluidos as-built o certificados).
+  Conserva una fecha FAT explícita exactamente como aparece; no la sustituyas por una fecha inferida.
+- Los detalles técnicos no corroborados son provisionales y requieren revisión humana. Un JSON
+  generado no constituye validación semántica ni aprobación de esos detalles.
 - deliverables son los productos finales
 - work_packages agrupan múltiples actividades
 - activities son tareas específicas
@@ -231,6 +253,26 @@ Reglas:
             # Otherwise treat the dict itself as a single item
             return [payload]
         return []
+
+    @classmethod
+    def _resolve_hierarchy(cls, items: list[WBSItemOutput]) -> list[WBSItemOutput]:
+        """Derive only direct numeric parents that are present in this result."""
+        valid_codes = {item.code for item in items if WBSHierarchy.validate_code(item.code)}
+        resolved: list[WBSItemOutput] = []
+        for item in items:
+            code_is_valid = item.code in valid_codes
+            candidate = WBSHierarchy.parent_code(item.code) if code_is_valid else None
+
+            # A supplied parent cannot override the canonical direct-prefix
+            # relationship. This rejects cross-links (for example 1.2.1 -> 1.1)
+            # and never synthesizes a missing parent node.
+            parent_code = candidate if candidate in valid_codes else None
+
+            level = item.level if item.level is not None else (
+                item.code.count(".") if code_is_valid else None
+            )
+            resolved.append(item.model_copy(update={"parent_code": parent_code, "level": level}))
+        return resolved
 
     def _extract_json_from_text(self, text: str) -> Any:
         """Extract JSON from text that may contain markdown or other formatting."""
