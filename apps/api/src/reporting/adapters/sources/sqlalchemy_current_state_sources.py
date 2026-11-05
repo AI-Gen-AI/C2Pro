@@ -258,6 +258,9 @@ class SqlAlchemyCurrentStateSources:
         Nothing here converts a source observation into an approved baseline.
         """
         from src.documents.application.structured_source_units import load_canonical_source_units
+        from src.analysis.adapters.graph.source_clause_evidence import (
+            load_revision_bound_source_quotes,
+        )
 
         scoped = require_tenant_id(tenant_id)
         async with self._session_scope(scoped) as session:
@@ -284,6 +287,14 @@ class SqlAlchemyCurrentStateSources:
                  str(row.get("source_locator")), str(row.get("blob_hash")),
                  str(row.get("unit_sha256")))
                 for row in rows
+            }
+            exact_quotes = await load_revision_bound_source_quotes(
+                session=session, tenant_id=scoped, project_id=project_id,
+            )
+            literal_authority = {
+                (str(q["document_id"]), str(q["revision_id"]),
+                 q["source_locator"], q["source_quote"], q["source_quote_sha256"])
+                for q in exact_quotes
             }
             current = []
             for item in payload.get("findings") or []:
@@ -313,6 +324,15 @@ class SqlAlchemyCurrentStateSources:
                         or not isinstance(quote_sha, str)
                         or hashlib.sha256(original_quote.encode("utf-8")).hexdigest() != quote_sha):
                     continue
+                # Source-chunk quotes must still exist verbatim in their
+                # revision-stamped parsed text; a self-hash is not authority.
+                if str(quote.get("source_locator") or "").startswith("chunk:"):
+                    quote_key = (
+                        str(quote["document_id"]), str(quote["revision_id"]),
+                        str(quote["source_locator"]), original_quote, quote_sha,
+                    )
+                    if quote_key not in literal_authority:
+                        continue
                 key = (
                     str(row.get("document_id")), str(row.get("revision_id")),
                     str(row.get("source_locator")), str(row.get("blob_sha256")),
