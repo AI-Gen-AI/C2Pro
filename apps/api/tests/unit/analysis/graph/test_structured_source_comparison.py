@@ -280,3 +280,81 @@ async def test_real_original_budget_total_budget_label_staged_as_declared_total(
                          if unit["source_locator"] == "Budget!5")
     assert total_payload["kind"] == "declared_total"
     assert total_payload["item"] == "TOTAL BUDGET"
+
+
+
+def test_source_chunk_obligations_work_without_n4_risk_classification():
+    """A quoted price / FAT obligation is not necessarily a risk item."""
+    from src.analysis.adapters.graph.source_clause_evidence import extract_literal_source_quotes
+
+    contract = DocumentArtifact(
+        document_id=str(uuid4()), document_revision_id=str(uuid4()),
+        doc_type="contract", extracted_risks=[],
+    )
+    technical = DocumentArtifact(
+        document_id=str(uuid4()), document_revision_id=str(uuid4()),
+        doc_type="technical_spec", extracted_risks=[],
+    )
+    contract_chunk = (
+        "4.1 Contract Price 4.1 The total contract price is EUR 1,000,000.00, "
+        "excluding agreed variations. 8.2 Contractual Completion "
+        "8.2 The contractual completion deadline is 2027-06-30. "
+    )
+    technical_chunk = (
+        "6.3 Factory Acceptance Test 6.3 Factory acceptance testing shall be "
+        "completed no later than 2027-06-10 before dispatch."
+    )
+    sources = extract_literal_source_quotes(
+        document_id=contract.document_id, revision_id=contract.document_revision_id,
+        chunk_id=str(uuid4()), doc_type="contract", content=contract_chunk,
+    ) + extract_literal_source_quotes(
+        document_id=technical.document_id, revision_id=technical.document_revision_id,
+        chunk_id=str(uuid4()), doc_type="technical_spec", content=technical_chunk,
+    )
+    assert len(sources) == 3
+    assert all(
+        source["source_quote"] in (contract_chunk + technical_chunk)
+        and source["source_locator"].startswith("chunk:")
+        for source in sources
+    )
+    rows = [
+        _unit("schedule", {"task": "Factory acceptance test", "end_date": "2027-07-01"}, loc="Plan!3"),
+        _unit("schedule", {"task": "Final handover", "end_date": "2027-09-30"}, loc="Plan!4"),
+        _unit("budget", {"total": "1300000.00", "currency": "EUR"}, loc="Budget!5"),
+    ]
+    result = compare_original_source_rows([contract, technical], rows, sources)
+    assert {item["rule_id"] for item in result["findings"]} == {
+        "DET-CRS-SCHDEAD", "DET-CRS-NEGMARGIN", "SPEC-MILESTONE-VS-SCHEDULE",
+    }, result
+    assert all(item["state"] == "PROVISIONAL" and not item["scored"] for item in result["findings"])
+
+    # Without a loaded trusted contract/spec artifact no provisional promotion.
+    assert compare_original_source_rows([], rows, sources)["findings"] == []
+
+    # A forged quote hash or a quote belonging to another revision is discarded.
+    tampered = [{**source, "source_quote_sha256": "0" * 64} for source in sources]
+    assert compare_original_source_rows([contract, technical], rows, tampered)["findings"] == []
+    outdated = [{**source, "revision_id": str(uuid4())} for source in sources]
+    assert compare_original_source_rows([contract, technical], rows, outdated)["findings"] == []
+
+
+def test_spanish_original_chunks_yield_fact_quotes_without_llm():
+    from src.analysis.adapters.graph.source_clause_evidence import extract_literal_source_quotes
+
+    cases = [
+        ("contract", (
+            "4.1 El precio del contrato asciende a 1.000.000 euros y se pagará por hitos. "
+            "8.2 La fecha de finalización de las obras será el 30 de junio de 2027."
+        ), 2),
+        ("technical_spec", (
+            "6.3 Las pruebas de aceptación en fábrica deberán finalizar a más tardar "
+            "el 10 de junio de 2027 conforme a la especificación."
+        ), 1),
+    ]
+    for doc_type, content, expected in cases:
+        result = extract_literal_source_quotes(
+            document_id=str(uuid4()), revision_id=str(uuid4()),
+            chunk_id=str(uuid4()), doc_type=doc_type, content=content,
+        )
+        assert len(result) == expected, result
+        assert all(source["source_quote"] in content for source in result)
