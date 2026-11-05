@@ -10,7 +10,12 @@ from typing import Any
 import yaml
 
 from core.merge_gate_policy import evaluate_merge_gates
-from core.result_parser import extract_result_block, parse_result_yaml, validate_result
+from core.result_parser import (
+    extract_result_block,
+    parse_result_yaml,
+    validate_result,
+    validate_review_result,
+)
 
 
 class ReconciliationError(Exception):
@@ -26,12 +31,418 @@ def default_now_fn() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+def _load_review_routing(control_dir: Path) -> dict[str, Any]:
+    routing_path = control_dir / "routing.yaml"
+    if not routing_path.exists():
+        raise ValidationError("Missing .c2pro/control/routing.yaml for review authorization.")
+    try:
+        with open(routing_path, encoding="utf-8") as handle:
+            routing = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ReconciliationError(f"Failed to load routing.yaml: {exc}") from exc
+    if not isinstance(routing, dict):
+        raise ValidationError("routing.yaml must be a mapping.")
+    return routing
+
+
+def _load_work_review_requirements(
+    control_dir: Path,
+    work_item: dict[str, Any],
+) -> tuple[str, bool]:
+    """Resolve risk policy from the canonical work envelope and review-policy."""
+    work_id = work_item.get("work_id")
+    work_ref = work_item.get("work_ref")
+    if not isinstance(work_ref, str) or not work_ref.strip():
+        raise ValidationError(
+            f"Work '{work_id}' requires a canonical work_ref for review authorization."
+        )
+
+    c2pro_root = control_dir.parent.resolve()
+    repo_root = c2pro_root.parent
+    work_root = (c2pro_root / "work").resolve()
+    work_path = (repo_root / work_ref).resolve()
+    try:
+        work_path.relative_to(work_root)
+    except ValueError as exc:
+        raise ValidationError(
+            f"Work '{work_id}' work_ref escapes canonical .c2pro/work authority."
+        ) from exc
+    if not work_path.is_file():
+        raise ValidationError(
+            f"Work '{work_id}' canonical work envelope is missing: {work_ref!r}."
+        )
+
+    try:
+        with open(work_path, encoding="utf-8") as handle:
+            envelope = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ReconciliationError(
+            f"Failed to load canonical work envelope for '{work_id}': {exc}"
+        ) from exc
+    if not isinstance(envelope, dict) or envelope.get("work_id") != work_id:
+        raise ValidationError(
+            f"Work '{work_id}' canonical work envelope identity is invalid."
+        )
+
+    queue_role = work_item.get("role")
+    envelope_role = envelope.get("role")
+    if (
+        not isinstance(queue_role, str)
+        or not queue_role.strip()
+        or not isinstance(envelope_role, str)
+        or envelope_role != queue_role
+    ):
+        raise ValidationError(
+            f"Work '{work_id}' role drifts between queue and work envelope."
+        )
+
+    queue_review_policy = work_item.get("review_policy")
+    if envelope.get("review_policy") != queue_review_policy:
+        raise ValidationError(
+            f"Work '{work_id}' review_policy drifts between queue and work envelope."
+        )
+    risk_class = envelope.get("risk_class")
+    if not isinstance(risk_class, str) or not risk_class:
+        raise ValidationError(
+            f"Work '{work_id}' canonical work envelope has no valid risk_class."
+        )
+
+    policy_path = control_dir / "review-policy.yaml"
+    if not policy_path.is_file():
+        raise ValidationError("Missing .c2pro/control/review-policy.yaml.")
+    try:
+        with open(policy_path, encoding="utf-8") as handle:
+            policy = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ReconciliationError(f"Failed to load review-policy.yaml: {exc}") from exc
+    if not isinstance(policy, dict):
+        raise ValidationError("review-policy.yaml must be a mapping.")
+
+    risk_config = policy.get("risk_classes", {}).get(risk_class)
+    if not isinstance(risk_config, dict):
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} is absent from review-policy.yaml."
+        )
+    principal_requirement = risk_config.get("independent_principal_review")
+    challenger_requirement = risk_config.get("challenger")
+    synthesis_required = risk_config.get("orchestrator_synthesis")
+    if principal_requirement not in {"optional", "required"}:
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} has invalid principal review policy."
+        )
+    if challenger_requirement not in {False, "optional", "required"}:
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} has invalid challenger policy."
+        )
+    if type(synthesis_required) is not bool:
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} has invalid orchestrator_synthesis policy."
+        )
+    if principal_requirement == "required" and queue_review_policy == "optional":
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} requires independent principal review."
+        )
+    if (
+        challenger_requirement == "required"
+        and queue_review_policy != "principal_and_challenger"
+    ):
+        raise ValidationError(
+            f"Work '{work_id}' risk_class {risk_class!r} requires principal_and_challenger review."
+        )
+    return risk_class, synthesis_required
+
+
+def _validate_orchestrator_synthesis(
+    synthesis: dict[str, Any] | None,
+    *,
+    required: bool,
+    risk_class: str | None,
+    work_id: str,
+    expected_pr: object,
+    expected_head_sha: object,
+    routing: dict[str, Any],
+    implementation_worker_id: object,
+    principal_workers: set[str],
+    challenger_workers: set[str],
+) -> None:
+    """Fail closed when canonical risk policy requires bounded synthesis."""
+    if not required:
+        return
+    if not isinstance(synthesis, dict):
+        raise ValidationError(
+            f"Work '{work_id}' risk_class={risk_class} requires orchestrator synthesis evidence."
+        )
+
+    required_fields = {
+        "schema",
+        "work_id",
+        "risk_class",
+        "reviewed_pr",
+        "reviewed_head_sha",
+        "orchestrator_worker_id",
+        "principal_worker_ids",
+        "challenger_worker_ids",
+        "unresolved_material_disagreement",
+        "decision",
+    }
+    keys = set(synthesis)
+    if keys != required_fields:
+        missing = sorted(required_fields - keys)
+        extra = sorted(keys - required_fields)
+        raise ValidationError(
+            f"Orchestrator synthesis shape mismatch; missing={missing}, extra={extra}."
+        )
+    if synthesis.get("schema") != "c2pro-orchestrator-synthesis-v1":
+        raise ValidationError("Invalid orchestrator synthesis schema.")
+    if synthesis.get("work_id") != work_id:
+        raise ValidationError("Orchestrator synthesis work_id mismatch.")
+    if synthesis.get("risk_class") != risk_class:
+        raise ValidationError("Orchestrator synthesis risk_class mismatch.")
+    if synthesis.get("reviewed_pr") != expected_pr:
+        raise ValidationError("Orchestrator synthesis reviewed_pr mismatch.")
+    if synthesis.get("reviewed_head_sha") != expected_head_sha:
+        raise ValidationError("Orchestrator synthesis reviewed_head_sha mismatch.")
+
+    orchestrator_id = synthesis.get("orchestrator_worker_id")
+    workers = routing.get("workers", {})
+    worker = workers.get(orchestrator_id) if isinstance(workers, dict) else None
+    if (
+        not isinstance(orchestrator_id, str)
+        or not isinstance(worker, dict)
+        or worker.get("principal_gate_eligible") is not True
+        or "orchestrator" not in worker.get("eligible_roles", [])
+    ):
+        raise ValidationError(
+            "Orchestrator synthesis worker must be a trusted principal eligible for orchestrator."
+        )
+    if orchestrator_id == implementation_worker_id:
+        raise ValidationError(
+            "Orchestrator synthesis worker must differ from implementation worker."
+        )
+
+    principal_ids = synthesis.get("principal_worker_ids")
+    challenger_ids = synthesis.get("challenger_worker_ids")
+    if (
+        not isinstance(principal_ids, list)
+        or any(not isinstance(item, str) for item in principal_ids)
+        or set(principal_ids) != principal_workers
+    ):
+        raise ValidationError(
+            "Orchestrator synthesis principal_worker_ids must exactly match accepted principal reviews."
+        )
+    if (
+        not isinstance(challenger_ids, list)
+        or any(not isinstance(item, str) for item in challenger_ids)
+        or set(challenger_ids) != challenger_workers
+    ):
+        raise ValidationError(
+            "Orchestrator synthesis challenger_worker_ids must exactly match accepted challenger reviews."
+        )
+    if synthesis.get("unresolved_material_disagreement") is not False:
+        raise ValidationError(
+            "Unresolved material disagreement requires owner escalation, not reconciliation."
+        )
+    if synthesis.get("decision") != "approve":
+        raise ValidationError(
+            "Orchestrator synthesis decision must be 'approve' for reconciliation."
+        )
+
+
+def _validate_reconciliation_reviews(
+    review_results: list[dict[str, Any]] | None,
+    *,
+    review_policy: str,
+    work_id: str,
+    expected_pr: object,
+    expected_head_sha: object,
+    implementation_worker_id: object,
+    routing: dict[str, Any],
+    implementation_role: object,
+    risk_class: str | None = None,
+    orchestrator_synthesis_required: bool = False,
+    orchestrator_synthesis: dict[str, Any] | None = None,
+) -> None:
+    """Enforce trusted reviewer eligibility, independence, and queue review policy."""
+    if review_policy not in {"optional", "independent_principal", "principal_and_challenger"}:
+        raise ValidationError(f"Unsupported review_policy for '{work_id}': {review_policy!r}")
+
+    if review_results is None:
+        if review_policy == "optional":
+            return
+        raise ValidationError(
+            f"Work '{work_id}' review_policy={review_policy} requires structured review evidence."
+        )
+    if not isinstance(review_results, list) or not review_results:
+        raise ValidationError("Structured review evidence must be a non-empty list when supplied.")
+    if not isinstance(expected_pr, int) or isinstance(expected_pr, bool) or expected_pr < 1:
+        raise ValidationError(
+            "Missing or invalid live pr_number for structured review reconciliation."
+        )
+    if not isinstance(expected_head_sha, str):
+        raise ValidationError(
+            "Missing live pr_head_sha for structured review reconciliation."
+        )
+
+    workers = routing.get("workers")
+    principal_gate = routing.get("principal_gate")
+    if not isinstance(workers, dict) or not isinstance(principal_gate, dict):
+        raise ValidationError("routing.yaml review authority mappings are missing or malformed.")
+
+    principal_eligible = principal_gate.get("eligible_workers")
+    if not isinstance(principal_eligible, list) or any(
+        not isinstance(worker, str) for worker in principal_eligible
+    ):
+        raise ValidationError("routing.yaml principal_gate.eligible_workers is malformed.")
+    principal_eligible_set = set(principal_eligible)
+
+    if (
+        not isinstance(implementation_worker_id, str)
+        or not implementation_worker_id.strip()
+        or implementation_worker_id not in workers
+    ):
+        raise ValidationError(
+            "Missing, unknown, or invalid trusted implementation_worker_id for review reconciliation."
+        )
+    implementation_worker = workers.get(implementation_worker_id)
+    if not isinstance(implementation_worker, dict):
+        raise ValidationError(
+            "Trusted implementation_worker_id must resolve to a routing worker mapping."
+        )
+    implementation_roles = implementation_worker.get("eligible_roles")
+    if (
+        not isinstance(implementation_role, str)
+        or not implementation_role.strip()
+        or not isinstance(implementation_roles, list)
+        or implementation_role not in implementation_roles
+    ):
+        raise ValidationError(
+            f"Implementation worker '{implementation_worker_id}' is not eligible "
+            f"for work role '{implementation_role}'."
+        )
+
+    principal_reviews: list[dict[str, Any]] = []
+    challenger_reviews: list[dict[str, Any]] = []
+    for review in review_results:
+        try:
+            validate_review_result(
+                review,
+                expected_pr=expected_pr,
+                expected_head_sha=expected_head_sha,
+            )
+        except (ValueError, TypeError) as exc:
+            raise ValidationError(
+                f"Structured review identity validation failed: {exc}"
+            ) from exc
+
+        if review.get("work_id") != work_id:
+            raise ValidationError(
+                f"Structured review work_id mismatch: {review.get('work_id')!r} != {work_id!r}."
+            )
+        if review.get("verdict") == "BLOCK":
+            raise ValidationError(
+                f"Structured review BLOCK prevents reconciliation for '{work_id}'."
+            )
+        if review.get("blocking"):
+            raise ValidationError(
+                f"Structured review has blocking findings for '{work_id}'."
+            )
+        if review.get("scope_deviation") is not False:
+            raise ValidationError(
+                f"Structured review reports scope deviation for '{work_id}'."
+            )
+        if review.get("recommended_action") != "approve":
+            raise ValidationError(
+                f"Structured review recommended_action must be 'approve' for '{work_id}'."
+            )
+        if review.get("verdict") not in {"PASS", "PASS_WITH_FINDINGS"}:
+            raise ValidationError(
+                f"Structured review verdict does not permit reconciliation for '{work_id}'."
+            )
+
+        worker_id = review["worker_id"]
+        role = review["role"]
+        worker = workers.get(worker_id)
+        if not isinstance(worker, dict):
+            raise ValidationError(
+                f"Structured review worker '{worker_id}' is not a trusted routing worker."
+            )
+        eligible_roles = worker.get("eligible_roles")
+        if not isinstance(eligible_roles, list) or role not in eligible_roles:
+            raise ValidationError(
+                f"Structured review worker '{worker_id}' is not eligible for role '{role}'."
+            )
+
+        if role == "independent_reviewer":
+            if (
+                worker_id not in principal_eligible_set
+                or worker.get("principal_gate_eligible") is not True
+            ):
+                raise ValidationError(
+                    f"Structured principal reviewer '{worker_id}' is not principal-gate eligible."
+                )
+            if worker_id == implementation_worker_id:
+                raise ValidationError(
+                    f"Structured principal reviewer '{worker_id}' must differ from implementation worker."
+                )
+            principal_reviews.append(review)
+        elif role in {"specialist", "security"}:
+            if worker_id == implementation_worker_id:
+                raise ValidationError(
+                    f"Structured challenger '{worker_id}' must differ from implementation worker."
+                )
+            challenger_reviews.append(review)
+
+    if (
+        review_policy in {"independent_principal", "principal_and_challenger"}
+        and not principal_reviews
+    ):
+        raise ValidationError(
+            f"Work '{work_id}' requires an approved independent principal review."
+        )
+
+    if review_policy == "principal_and_challenger":
+        if not challenger_reviews:
+            raise ValidationError(
+                f"Work '{work_id}' requires an approved challenger specialist review."
+            )
+        principal_workers = {review["worker_id"] for review in principal_reviews}
+        challenger_workers = {review["worker_id"] for review in challenger_reviews}
+        overlap = principal_workers & challenger_workers
+        if overlap:
+            raise ValidationError(
+                f"Work '{work_id}' challenger workers must be distinct from principal reviewers; "
+                f"overlap={sorted(overlap)}."
+            )
+        if risk_class == "security" and not any(
+            review["role"] == "security" for review in challenger_reviews
+        ):
+            raise ValidationError(
+                f"Work '{work_id}' risk_class='security' requires an approved security-role challenger."
+            )
+
+    _validate_orchestrator_synthesis(
+        orchestrator_synthesis,
+        required=orchestrator_synthesis_required,
+        risk_class=risk_class,
+        work_id=work_id,
+        expected_pr=expected_pr,
+        expected_head_sha=expected_head_sha,
+        routing=routing,
+        implementation_worker_id=implementation_worker_id,
+        principal_workers={review["worker_id"] for review in principal_reviews},
+        challenger_workers={review["worker_id"] for review in challenger_reviews},
+    )
+
+
+
 def reconcile_result(
     result_text: str,
     remote_evidence: dict[str, Any],
     ci_evidence: dict[str, Any],
     control_dir: Path | None = None,
-    now_fn: Callable[[], str] | None = None
+    now_fn: Callable[[], str] | None = None,
+    review_results: list[dict[str, Any]] | None = None,
+    orchestrator_synthesis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Reconciles accepted worker result evidence into canonical .c2pro control state.
 
@@ -42,6 +453,8 @@ def reconcile_result(
               - 'branch': actual remote branch name
               - 'remote_head_sha': actual SHA of remote branch (worker HEAD)
               - 'pr_head_sha': actual SHA of Pull Request on GitHub (must match remote_head_sha)
+              - 'pr_number': live Pull Request number when structured review evidence is supplied
+              - 'implementation_worker_id': trusted execution worker identity used for reviewer independence
               - 'pr_base_sha': immutable baseline base SHA of the PR
               - 'pr_base_branch': base branch of the PR (must be 'main')
               - 'pr_state': state of PR ('open', 'closed_unmerged', 'merged')
@@ -54,6 +467,8 @@ def reconcile_result(
               - 'ci_status': 'success' / 'passed' or failure
         control_dir: Optional custom Path to .c2pro/control/
         now_fn: Optional clock provider function returning string ISO-8601 timestamp
+        review_results: Structured independent review evidence bound to the live PR/head.
+        orchestrator_synthesis: Required bounded synthesis evidence when canonical risk policy says so.
 
     Returns:
         Dict representing the reconciliation outcome.
@@ -243,6 +658,51 @@ def reconcile_result(
     work_item = next((item for item in items if item.get("work_id") == work_id), None)
     if not work_item:
         raise ValidationError(f"Unknown work_id: '{work_id}' is not registered in the active work queue.")
+
+    # Review authorization is evaluated only after immutable Git/CI/merge evidence and
+    # the canonical queue item are known, but before any canonical-state mutation.
+    raw_review_policy = work_item.get("review_policy")
+    work_ref = work_item.get("work_ref")
+    # Legacy queue entries without an explicit review policy/work envelope predate
+    # review gating and remain optional. Canonical envelopes remain authoritative:
+    # once work_ref exists, risk/review policy is derived fail-closed from it.
+    if raw_review_policy is None and work_ref is None:
+        review_policy = "optional"
+    else:
+        review_policy = raw_review_policy
+
+    risk_class: str | None = None
+    orchestrator_synthesis_required = False
+    if work_ref is not None:
+        risk_class, orchestrator_synthesis_required = _load_work_review_requirements(
+            control_dir,
+            work_item,
+        )
+        # The canonical envelope loader verifies queue/envelope policy parity.
+        review_policy = work_item.get("review_policy")
+    elif review_policy not in {"optional", "independent_principal", "principal_and_challenger"}:
+        raise ValidationError(
+            f"Unsupported review_policy for '{work_id}': {review_policy!r}"
+        )
+
+    review_routing = (
+        _load_review_routing(control_dir)
+        if review_results is not None or review_policy != "optional"
+        else {}
+    )
+    _validate_reconciliation_reviews(
+        review_results,
+        review_policy=review_policy,
+        work_id=work_id,
+        expected_pr=remote_evidence.get("pr_number"),
+        expected_head_sha=remote_evidence.get("pr_head_sha"),
+        implementation_worker_id=remote_evidence.get("implementation_worker_id"),
+        routing=review_routing,
+        implementation_role=work_item.get("role"),
+        risk_class=risk_class,
+        orchestrator_synthesis_required=orchestrator_synthesis_required,
+        orchestrator_synthesis=orchestrator_synthesis,
+    )
 
     # Process and classify findings based on Quality Delta Rule
     findings = result.get("findings", [])
