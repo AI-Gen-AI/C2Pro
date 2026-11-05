@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, FileText, Loader2, RefreshCw, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Eye, FileText, ListRestart, Loader2, RefreshCw, Search, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { statusToToken } from '@/lib/ui/severity-tokens';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,11 @@ import { showToast } from '@/lib/ui/toast';
 import { formatFileSize, type DocumentLifecycleStatus } from '@/types/document';
 import { DocumentUploadDropzone } from '@/components/features/documents/DocumentUploadDropzone';
 import { useProject } from '@/hooks/useProject';
+import { useUserRole } from '@/lib/clerk-tenant';
+import {
+  reextractBudgetSourceRows,
+  type BudgetReextractionResult,
+} from '@/lib/documents/reextractBudgetSource';
 
 const LIFECYCLE_LABELS: Record<DocumentLifecycleStatus, string> = {
   uploaded: 'Uploaded',
@@ -188,6 +193,26 @@ export default function ProjectDocumentsPage() {
   const [trustTarget, setTrustTarget] = useState<{ id: string; name: string } | null>(null);
   const [isRequestingTrust, setIsRequestingTrust] = useState(false);
 
+  // Re-derive the original XLSX rows of an already analysed budget (same document/revision/hash).
+  const { hasPermission } = useUserRole();
+  const canReextractSource = hasPermission('manage:documents');
+  const [reextractTarget, setReextractTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isReextracting, setIsReextracting] = useState(false);
+  const [reextractResult, setReextractResult] = useState<BudgetReextractionResult | null>(null);
+
+  const handleReextractSource = async () => {
+    if (!reextractTarget) return;
+    setIsReextracting(true);
+    setReextractResult(null);
+    try {
+      setReextractResult(await reextractBudgetSourceRows(projectId, reextractTarget.id));
+    } catch (error) {
+      showToast(mutationFailureMessage(error, 'Failed to re-extract the budget source rows.'));
+    } finally {
+      setIsReextracting(false);
+    }
+  };
+
   const handleRequestTrust = async () => {
     if (!trustTarget) return;
     setIsRequestingTrust(true);
@@ -289,6 +314,7 @@ export default function ProjectDocumentsPage() {
           name: doc.name,
           type: labelType(doc.type || 'PDF'),
           structuredFamily: doc.type === 'budget' || doc.type === 'schedule' ? doc.type : null,
+          canReextract: doc.type === 'budget' && /\.xlsx$/i.test(doc.name),
           status,
           statusDetail: doc.statusDetail,
           // The backend is authoritative on whether Retry is honest for this
@@ -527,6 +553,60 @@ export default function ProjectDocumentsPage() {
               {isRequestingTrust ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Request trust approval
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={reextractTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !isReextracting) {
+            setReextractTarget(null);
+            setReextractResult(null);
+          }
+        }}
+      >
+        <DialogContent className="bg-card p-6 text-card-foreground sm:max-w-[520px] sm:rounded-2xl" data-testid="document-reextract-dialog">
+          <DialogHeader className="rounded-2xl border bg-muted/70 px-4 py-4">
+            <DialogTitle>Re-extract source rows of {reextractTarget?.name}</DialogTitle>
+            <DialogDescription>
+              Re-reads the original file of the current version, verifies its SHA-256 and refreshes only
+              the extracted source rows. It creates no document or revision, does not rerun the analysis
+              and does not change any review decision.
+            </DialogDescription>
+          </DialogHeader>
+          {reextractResult ? (
+            <dl className="space-y-1 rounded-2xl border bg-background/80 px-4 py-3 text-sm" data-testid="document-reextract-result">
+              <div className="flex justify-between"><dt>Rows before</dt><dd>{reextractResult.units_before}</dd></div>
+              <div className="flex justify-between"><dt>Rows after (units_after)</dt><dd>{reextractResult.units_after}</dd></div>
+              <div className="flex justify-between"><dt>Changed</dt><dd>{reextractResult.changed ? 'yes' : 'no'}</dd></div>
+              <div className="flex justify-between gap-4"><dt>Added (added_locators)</dt><dd>{reextractResult.added_locators.join(', ') || 'none'}</dd></div>
+              <div className="flex justify-between gap-4"><dt>Removed</dt><dd>{reextractResult.removed_locators.join(', ') || 'none'}</dd></div>
+              <div className="flex justify-between gap-4"><dt>Revision</dt><dd className="break-all">{reextractResult.revision_id}</dd></div>
+              <div className="flex justify-between gap-4"><dt>SHA-256</dt><dd className="break-all">{reextractResult.blob_hash}</dd></div>
+            </dl>
+          ) : null}
+          <DialogFooter className="gap-2 rounded-2xl border bg-background/80 px-4 py-4">
+            <Button
+              variant="outline"
+              disabled={isReextracting}
+              onClick={() => {
+                setReextractTarget(null);
+                setReextractResult(null);
+              }}
+            >
+              {reextractResult ? 'Close' : 'Cancel'}
+            </Button>
+            {reextractResult ? null : (
+              <Button
+                disabled={isReextracting}
+                data-testid="document-reextract-confirm"
+                onClick={() => void handleReextractSource()}
+              >
+                {isReextracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Re-extract source rows
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -782,6 +862,22 @@ export default function ProjectDocumentsPage() {
                             >
                               <ShieldCheck className="mr-1 h-4 w-4" />
                               Request trust
+                            </Button>
+                          ) : null}
+                          {doc.canReextract && canReextractSource ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              aria-label={`Re-extract source rows of ${doc.name}`}
+                              data-testid="document-reextract-source"
+                              className="rounded-xl bg-background/95 shadow-sm"
+                              onClick={() => {
+                                setReextractResult(null);
+                                setReextractTarget({ id: doc.id, name: doc.name });
+                              }}
+                            >
+                              <ListRestart className="mr-1 h-4 w-4" />
+                              Re-extract rows
                             </Button>
                           ) : null}
                           <Button

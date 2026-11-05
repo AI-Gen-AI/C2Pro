@@ -49,6 +49,11 @@ vi.mock("@/lib/api/client", () => ({
   },
 }));
 
+const hasPermissionMock = vi.fn();
+vi.mock("@/lib/clerk-tenant", () => ({
+  useUserRole: () => ({ hasPermission: (...args: unknown[]) => hasPermissionMock(...args) }),
+}));
+
 vi.mock("@/lib/ui/toast", () => ({
   showToast: (...args: unknown[]) => showToastMock(...args),
 }));
@@ -86,6 +91,8 @@ import ProjectDocumentsPage from "./page";
 
 describe("ProjectDocumentsPage", () => {
   beforeEach(() => {
+    hasPermissionMock.mockReset();
+    hasPermissionMock.mockReturnValue(true);
     pushMock.mockReset();
     useProjectDocumentsMock.mockReset();
     useProjectMock.mockReset();
@@ -941,6 +948,58 @@ describe("ProjectDocumentsPage", () => {
     expect(url).toBe("/documents/doc_budget_001/revisions/rev-current/trust-candidate");
     expect(body.idempotency_key).toBe("ui-trust-request-rev-current");
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/projects/proj_real_001/review"));
+  });
+
+  it("offers 'Re-extract rows' only on authorized XLSX budgets and shows units_after / added_locators", async () => {
+    const budget = { ...analyzedContract, id: "doc_budget_001", name: "03_Presupuesto_EPC.xlsx", type: "budget" };
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [analyzedContract, budget],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    apiClientGetMock.mockResolvedValueOnce({
+      data: [{ revision_id: "rev-current", is_current: true, blob_hash: "hash-current" }],
+    });
+    apiClientPostMock.mockResolvedValueOnce({
+      data: {
+        document_id: "doc_budget_001",
+        revision_id: "rev-current",
+        blob_hash: "hash-current",
+        units_before: 3,
+        units_after: 4,
+        changed: true,
+        added_locators: ["Budget!5"],
+        removed_locators: [],
+      },
+    });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(
+      screen.queryByRole("button", { name: /re-extract source rows of contract\.pdf/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /re-extract source rows of 03_presupuesto_epc\.xlsx/i }));
+    const dialog = await screen.findByTestId("document-reextract-dialog");
+    fireEvent.click(within(dialog).getByTestId("document-reextract-confirm"));
+
+    const result = await within(dialog).findByTestId("document-reextract-result");
+    expect(result).toHaveTextContent("Budget!5");
+    expect(result).toHaveTextContent("4");
+    const [url, body, config] = apiClientPostMock.mock.calls[0] as [string, null, { params: Record<string, string> }];
+    expect(url).toBe("/projects/proj_real_001/documents/doc_budget_001/reextract-source-units");
+    expect(body).toBeNull();
+    expect(config.params).toEqual({ expected_revision_id: "rev-current", expected_blob_hash: "hash-current" });
+  });
+
+  it("hides 'Re-extract rows' from users without document-management permission", () => {
+    hasPermissionMock.mockReturnValue(false);
+    const budget = { ...analyzedContract, id: "doc_budget_001", name: "03_Presupuesto_EPC.xlsx", type: "budget" };
+    useProjectDocumentsMock.mockReturnValue({ documents: [budget], loading: false, error: null, refetch: vi.fn() });
+
+    render(<ProjectDocumentsPage />);
+
+    expect(screen.queryByTestId("document-reextract-source")).not.toBeInTheDocument();
   });
 
   it("surfaces a refused trust request without navigating", async () => {
