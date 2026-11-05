@@ -323,7 +323,8 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     # The source-only comparison is deliberately outside the scored Coherence
     # engine. No XLSX observation is interpreted as an approved project baseline.
     source_comparison = compare_original_source_rows(
-        artifacts, state.get("structured_source_units", [])
+        artifacts, state.get("structured_source_units", []),
+        state.get("structured_document_quotes", []),
     )
     if not artifacts:
         return {
