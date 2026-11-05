@@ -95,6 +95,41 @@ def _table_scope(has_tenant_id: bool, has_project_id: bool) -> str:
     raise AttestationFailure("UNSCOPED_TABLE")
 
 
+def _coverage_error(
+    scoped: list[tuple[str, str]],
+    catalog: dict[str, tuple[bool, bool]],
+) -> str | None:
+    """Classify only schema/privilege coverage, never inspect or report DB rows.
+
+    pg_catalog describes physical columns even when information_schema hides
+    a table from a verifier without SELECT grants. A category failure never
+    relaxes the mandatory required-table and project-scope guarantees.
+    """
+    if len(scoped) > MAX_TABLES:
+        return "TOO_MANY_SCOPED_TABLES"
+
+    required = REQUIRED_TABLES | REQUIRED_PROJECT_TABLES
+    if not required.issubset(catalog):
+        return "REQUIRED_TABLE_NOT_DEPLOYED"
+
+    # Catalog scope is independent of SELECT grants. Diagnose absent
+    # project/scope columns before a privilege-filtered missing-table result.
+    if any(not catalog[name][1] for name in REQUIRED_PROJECT_TABLES):
+        return "REQUIRED_PROJECT_COLUMN_MISSING"
+
+    if any(not any(catalog[name]) for name in required):
+        return "REQUIRED_SCOPE_COLUMN_MISSING"
+
+    visible = dict(scoped)
+    if not required.issubset(visible):
+        return "REQUIRED_TABLE_NOT_VISIBLE_TO_VERIFIER"
+
+    if any(visible[name] != "project_id" for name in REQUIRED_PROJECT_TABLES):
+        return "REQUIRED_PROJECT_SCOPE_MISMATCH"
+
+    return None
+
+
 def _selectable_columns(
     access: list[tuple[str, bool]], scope_column: str
 ) -> tuple[list[str], int]:
@@ -211,17 +246,34 @@ async def _snapshot(tenant: UUID, key: bytes) -> dict[str, object]:
                     )
                     for row in discovery
                 ]
-                names = {table for table, _ in scoped}
-                project_names = {
-                    table for table, scope_column in scoped
-                    if scope_column == "project_id"
+                # Independent schema metadata only: pg_catalog is not
+                # privilege-filtered the same way as information_schema.
+                # Keep every production row unread and never print identifiers.
+                catalog_result = await conn.execute(
+                    text(
+                        "SELECT cls.relname AS table_name, "
+                        "bool_or(attr.attname = 'tenant_id') AS has_tenant_id, "
+                        "bool_or(attr.attname = 'project_id') AS has_project_id "
+                        "FROM pg_catalog.pg_class AS cls "
+                        "JOIN pg_catalog.pg_namespace AS ns ON ns.oid = cls.relnamespace "
+                        "JOIN pg_catalog.pg_attribute AS attr "
+                        "ON attr.attrelid = cls.oid "
+                        "AND attr.attnum > 0 AND NOT attr.attisdropped "
+                        "WHERE ns.nspname = 'public' "
+                        "AND cls.relkind IN ('r', 'p') "
+                        "GROUP BY cls.relname ORDER BY cls.relname"
+                    )
+                )
+                catalog_scope = {
+                    row.table_name: (
+                        bool(row.has_tenant_id),
+                        bool(row.has_project_id),
+                    )
+                    for row in catalog_result
                 }
-                if (
-                    len(scoped) > MAX_TABLES
-                    or not REQUIRED_TABLES.issubset(names)
-                    or not REQUIRED_PROJECT_TABLES.issubset(project_names)
-                ):
-                    raise AttestationFailure("TENANT_TABLE_COVERAGE_UNVERIFIED")
+                coverage_error = _coverage_error(scoped, catalog_scope)
+                if coverage_error is not None:
+                    raise AttestationFailure(coverage_error)
 
                 output: dict[str, dict[str, object]] = {}
                 for table, scope_column in scoped:

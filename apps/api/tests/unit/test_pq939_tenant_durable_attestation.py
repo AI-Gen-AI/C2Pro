@@ -135,3 +135,74 @@ def test_all_schema_defined_project_only_rls_tables_are_mandatory() -> None:
         "procurement_plan_snapshots",
         "stakeholder_alerts",
     } == attest.REQUIRED_PROJECT_TABLES
+
+
+def _complete_synthetic_coverage() -> tuple[
+    list[tuple[str, str]], dict[str, tuple[bool, bool]]
+]:
+    """Offline fixture of allowlisted table names; no production connection."""
+    required = attest.REQUIRED_TABLES | attest.REQUIRED_PROJECT_TABLES
+    catalog = {
+        name: (name not in attest.REQUIRED_PROJECT_TABLES, True)
+        for name in required
+    }
+    scoped = [
+        (name, "project_id" if name in attest.REQUIRED_PROJECT_TABLES else "tenant_id")
+        for name in sorted(required)
+    ]
+    return scoped, catalog
+
+
+def test_schema_coverage_complete_is_not_failed() -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    assert attest._coverage_error(scoped, catalog) is None
+
+
+@pytest.mark.parametrize("missing", ["projects", "procurement_bom_items"])
+def test_missing_deployed_mandatory_table_fails_closed(missing: str) -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    catalog.pop(missing)
+    assert attest._coverage_error(scoped, catalog) == "REQUIRED_TABLE_NOT_DEPLOYED"
+
+
+@pytest.mark.parametrize("unreadable", ["clauses", "procurement_budget_items"])
+def test_required_table_hidden_from_verifier_fails_closed(unreadable: str) -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    scoped = [(name, scope) for name, scope in scoped if name != unreadable]
+    assert attest._coverage_error(scoped, catalog) == (
+        "REQUIRED_TABLE_NOT_VISIBLE_TO_VERIFIER"
+    )
+
+
+def test_required_project_column_missing_fails_closed() -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    catalog["extractions"] = (True, False)
+    # Real information_schema can still show a table with only tenant_id.
+    # The protected catalog must identify the absent project_id first.
+    scoped = [(name, scope) for name, scope in scoped if name != "extractions"]
+    assert attest._coverage_error(scoped, catalog) == "REQUIRED_PROJECT_COLUMN_MISSING"
+
+
+def test_required_scope_columns_missing_fails_before_visibility_check() -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    catalog["clauses"] = (False, False)
+    scoped = [(name, scope) for name, scope in scoped if name != "clauses"]
+    assert attest._coverage_error(scoped, catalog) == "REQUIRED_SCOPE_COLUMN_MISSING"
+
+
+def test_required_project_scope_mismatch_fails_closed() -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    scoped = [
+        (name, "tenant_id" if name == "extractions" else scope)
+        for name, scope in scoped
+    ]
+    assert attest._coverage_error(scoped, catalog) == "REQUIRED_PROJECT_SCOPE_MISMATCH"
+
+
+def test_too_many_scoped_tables_fails_even_if_required_coverage_present() -> None:
+    scoped, catalog = _complete_synthetic_coverage()
+    scoped += [
+        (f"nonmandatory_extra_{index}", "tenant_id")
+        for index in range(attest.MAX_TABLES + 1)
+    ]
+    assert attest._coverage_error(scoped, catalog) == "TOO_MANY_SCOPED_TABLES"
