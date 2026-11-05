@@ -56,6 +56,7 @@ jobs:
               r"project_id=(?P<project_id>[0-9a-fA-F-]{36}) "
               r"document_id=(?P<document_id>[0-9a-fA-F-]{36}) "
               r"source_revision_id=(?P<source_revision_id>[0-9a-fA-F-]{36}) "
+              r"(?:recovery_revision_id=(?P<recovery_revision_id>[0-9a-fA-F-]{36}) )?"
               r"staged_clear=(?P<staged_clear>true)$"
           )
           match = pattern.fullmatch(body)
@@ -63,7 +64,9 @@ jobs:
               raise SystemExit("Refusing owner command: exact bounded format required.")
 
           values = match.groupdict()
-          for key in ("backend_deployment", "project_id", "document_id", "source_revision_id"):
+          for key in ("backend_deployment", "project_id", "document_id", "source_revision_id", "recovery_revision_id"):
+              if not values.get(key):
+                  continue
               try:
                   uuid.UUID(values[key])
               except ValueError as exc:
@@ -71,7 +74,7 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               for key, value in values.items():
-                  print(f"{key}={value}", file=output)
+                  print(f"{key}={value or ''}", file=output)
 
       - name: Fail closed on owner intent and bounded inputs
         env:
@@ -84,6 +87,7 @@ jobs:
           PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +101,10 @@ jobs:
           for id in "$PROJECT_ID" "$DOCUMENT_ID" "$SOURCE_REVISION_ID"; do
             [[ "$id" =~ ^[0-9a-fA-F-]{36}$ ]]
           done
+          if [ -n "${RECOVERY_REVISION_ID:-}" ]; then
+            [[ "$RECOVERY_REVISION_ID" =~ ^[0-9a-fA-F-]{36}$ ]]
+            test "$RECOVERY_REVISION_ID" != "$SOURCE_REVISION_ID"
+          fi
 
       - name: Fail closed on protected qualification prerequisites
         env:
@@ -287,13 +295,19 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
+          recovery_args=()
+          if [ -n "${PROD_P0C_RECOVERY_REVISION_ID:-}" ]; then
+            recovery_args+=(--recovery-revision-id "$PROD_P0C_RECOVERY_REVISION_ID")
+          fi
           python apps/api/scripts/verify_p0c_prod_journey.py \
             --project-id "$PROD_P0C_PROJECT_ID" \
             --document-id "$PROD_P0C_DOCUMENT_ID" \
-            --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID"
+            --source-revision-id "$PROD_P0C_SOURCE_REVISION_ID" \
+            "${recovery_args[@]}"
 
       - name: Execute real P0c production browser journey
         env:
@@ -310,6 +324,7 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
           PROD_P0C_NO_CHANGE_PDF: ${{ github.workspace }}/apps/web/playwright/.prod-p0c/contract-c-semantic-no-change.pdf
         working-directory: apps/web
         shell: bash
@@ -354,6 +369,7 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -397,6 +413,7 @@ jobs:
           PROD_P0C_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
           PROD_P0C_DOCUMENT_ID: ${{ steps.parse.outputs.document_id }}
           PROD_P0C_SOURCE_REVISION_ID: ${{ steps.parse.outputs.source_revision_id }}
+          PROD_P0C_RECOVERY_REVISION_ID: ${{ steps.parse.outputs.recovery_revision_id }}
         shell: bash
         run: |
           {
@@ -408,6 +425,10 @@ jobs:
             echo "- accepted project: `$PROD_P0C_PROJECT_ID`"
             echo "- accepted document: `$PROD_P0C_DOCUMENT_ID`"
             echo "- source revision A: `$PROD_P0C_SOURCE_REVISION_ID`"
+            if [ -n "${PROD_P0C_RECOVERY_REVISION_ID:-}" ]; then
+              echo "- recovery revision B: `$PROD_P0C_RECOVERY_REVISION_ID`"
+              echo "- recovery mode: **canonical UI retry**"
+            fi
             echo "- lifecycle authority: **false**"
             echo
             echo "Credentials and tokens are never included in this summary."
