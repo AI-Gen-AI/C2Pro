@@ -998,6 +998,7 @@ class ExcelFileParser:
         label = item.strip().lower()
         declared_total_labels = (
             "total presupuesto",
+            "total budget",
             "total general",
             "total licitacion",
             "total licitación",
