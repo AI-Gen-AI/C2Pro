@@ -74,5 +74,5 @@ worker_selection:
   eligible_principals: [claude_code, codex]
   eligible_subordinates: []
   selected: codex
-workspace_receipt: workspace:/srv/c2pro/workspaces/codex@945c97a8ca3b319e8ae8e20a404e3f6091e06431#docs/dev15-wave311-tracing-inventory-repro-20261014
+workspace_receipt: workspace:/srv/c2pro/workspaces/codex@4ef80346d71afb8eb236741862259599a986d76b#docs/dev15-wave311-tracing-inventory-repro-20261014
 timeout_resource_policy: bounded_inventory_reproduction_and_synthetic_tests_only_no_remote_export_or_prod_mutation

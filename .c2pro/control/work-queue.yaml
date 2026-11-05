@@ -58,12 +58,12 @@ items:
     review_policy: independent_principal
 
   # DEV-15 follow-on Core AI Reliability/Observability/Assurance — OPEN issue #958.
-  # Prepared assignment only: Codex is selected for a fresh reproduction of the unmerged #963
-  # inventory in its persistent clean workspace. current.yaml remains reconciled_idle and
-  # active_work stays empty until the principal is actually available for execution.
-  # Historical #849 remains CLOSED; no product/runtime or W311 remediation authority here.
+  # Activation delta for the fresh reproduction of unmerged #963.
+  # Merge ONLY after Codex availability is re-proven on the exact persistent workspace.
+  # Workspace receipt is pinned to protected-main HEAD 4ef80346... and current becomes active
+  # only with this delta. Historical #849 stays CLOSED; no W311 remediation authority here.
   - work_id: C2PRO-DEV-15
-    status: ready
+    status: in_progress
     role: implementation_lead
     work_ref: .c2pro/work/C2PRO-DEV-15.yaml
     priority: P1
