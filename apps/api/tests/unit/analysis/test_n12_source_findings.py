@@ -12,7 +12,6 @@ from src.analysis.domain.critique_findings import (
     source_bound_findings,
 )
 
-
 SOURCE = (
     "EPC-04: Defects. The Contractor shall rectify a notified defect "
     "within 14 days of written notice.\n\n"
@@ -99,7 +98,8 @@ async def test_service_exposes_quoted_findings_to_existing_notes_consumer():
 
 
 @pytest.mark.asyncio
-async def test_service_marks_retry_without_source_findings_unassessed():
+async def test_service_keeps_unsupported_retry_unassessed_without_retry_status():
+    """A model verdict alone cannot create a retry-worthy critique."""
     ai = AsyncMock()
     ai.run_extraction.return_value = {
         "status": "RETRY",
@@ -109,7 +109,7 @@ async def test_service_marks_retry_without_source_findings_unassessed():
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
+    assert result.status == "UNASSESSED"
     assert result.notes.startswith("N12_UNASSESSED:")
 
 

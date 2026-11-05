@@ -185,20 +185,64 @@ class TestCritiqueNodeThinDelegation:
         assert node_result.status is NodeStatus.OK
 
     @pytest.mark.asyncio
-    async def test_retry_path_increments(self, monkeypatch) -> None:
+    async def test_unsupported_retry_requires_hitl_without_reextraction(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
+        from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
-        ai = _FakeAI(payload={"status": "RETRY", "notes": "redo"})
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
+        ai = _FakeAI(payload={
+            "status": "RETRY",
+            "notes": "redo",
+            "findings": [],
+        })
         monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
 
         result = await nodes.critique_node(
-            _make_state(extracted_risks=[{"confidence": 0.9}], retry_count=0)
+            _make_state(
+                document_text="EPC-04: The Contractor shall rectify a notified defect within 14 days.",
+                extracted_risks=[{"confidence": 0.9}],
+                retry_count=0,
+            )
         )
-        assert result["retry_count"] == 1
-        # A model saying "redo" without a cited clause is not an assessed
-        # defect; keep the retry but do not certify unsupported findings.
+        assert result["confidence_score"] is None
+        assert result["retry_count"] == 0
+        assert result["human_approval_required"] is True
         assert result["critique_notes"].startswith("N12_UNASSESSED:")
+        assert _next_after_critique_v2(result) == "human_interrupt"
+
+    @pytest.mark.asyncio
+    async def test_grounded_retry_preserves_the_existing_reextraction_path(self, monkeypatch) -> None:
+        from src.analysis.adapters.graph import nodes
+        from src.analysis.adapters.graph.workflow import _next_after_critique_v2
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        monkeypatch.delenv("C2PRO_SKIP_HITL", raising=False)
+        quote = "The Contractor shall rectify a notified defect within 14 days."
+        ai = _FakeAI(payload={
+            "status": "RETRY",
+            "notes": "Missing defects obligation.",
+            "findings": [{
+                "clause_ref": "EPC-04",
+                "issue_type": "omission",
+                "source_quote": quote,
+                "explanation": "The defects obligation was omitted.",
+            }],
+        })
+        monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
+
+        result = await nodes.critique_node(
+            _make_state(
+                document_text=f"EPC-04: {quote}",
+                doc_type="contract",
+                extracted_risks=[{"confidence": 0.9}],
+                retry_count=0,
+            )
+        )
+        assert result["confidence_score"] == pytest.approx(0.9)
+        assert result["retry_count"] == 1
+        assert result["human_approval_required"] is False
+        assert _next_after_critique_v2(result) == "risk_extractor"
 
     @pytest.mark.asyncio
     async def test_use_case_exception_emits_failed_node_result_and_persists_error(

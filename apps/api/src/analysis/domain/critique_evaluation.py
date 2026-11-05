@@ -68,7 +68,7 @@ class CritiqueEvaluationService:
         """Evaluate critique result and determine HITL requirement.
 
         Args:
-            critique_status: "OK" or "RETRY"
+            critique_status: "OK", "RETRY", or "UNASSESSED"
             critique_notes: Reviewer notes
             confidence: Confidence score (0.0-1.0)
             retry_count: Current retry count
@@ -80,7 +80,11 @@ class CritiqueEvaluationService:
         if normalized_status == "RETRY":
             new_retry_count = retry_count + 1
             cleared_notes = critique_notes
-        # OK clears notes
+        elif normalized_status == "UNASSESSED":
+            # Preserve the explicit lack of evidence for audit/UI consumers,
+            # but do not treat it as a verified defect or consume a retry.
+            cleared_notes = critique_notes
+        # OK clears notes.
 
         human_approval_required = False if skip_hitl else (
             confidence is None or confidence < self.confidence_threshold

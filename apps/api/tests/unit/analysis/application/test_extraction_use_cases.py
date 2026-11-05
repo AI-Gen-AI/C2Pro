@@ -154,6 +154,29 @@ class TestCritiqueExtractionUseCase:
         assert res.human_approval_required is True
 
     @pytest.mark.asyncio
+    async def test_unsupported_critique_stays_unassessed_without_consuming_retry(self) -> None:
+        """An unsupported model RETRY must not become a grounded N12 critique."""
+        ai = _FakeAI(payload={
+            "status": "RETRY",
+            "notes": "The extraction misses a critical obligation.",
+            "findings": [],
+        })
+        result = await CritiqueExtractionUseCase(ai=ai).execute(
+            CritiqueExtractionCommand(
+                extracted_risks=[{"confidence": 0.95}],
+                extracted_wbs=[],
+                doc_type="contract",
+                retry_count=0,
+                source_text="EPC-04: The Contractor shall rectify a notified defect within 14 days.",
+            )
+        )
+        assert result.status == "UNASSESSED"
+        assert result.confidence is None
+        assert result.retry_count == 0
+        assert result.human_approval_required is True
+        assert result.critique_notes.startswith("N12_UNASSESSED:")
+
+    @pytest.mark.asyncio
     async def test_low_confidence_triggers_hitl(self) -> None:
         ai = _FakeAI(payload={"status": "OK", "notes": ""})
         uc = CritiqueExtractionUseCase(ai=ai)

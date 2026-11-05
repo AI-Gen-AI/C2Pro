@@ -19,7 +19,6 @@ from src.analysis.domain.critique_findings import (
     format_source_bound_notes,
     source_bound_findings,
 )
-
 from src.analysis.domain.prompts import (
     BUDGET_EXTRACTION_PROMPT,
     CRITIQUE_SYSTEM_PROMPT,
@@ -76,7 +75,7 @@ _CRITIQUE_MAX_SOURCE_CHARS = 16000
 
 @dataclass(frozen=True)
 class CritiqueResult:
-    status: str  # "OK" | "RETRY"
+    status: str  # "OK" | "RETRY" | "UNASSESSED"
     notes: str
 
 
@@ -136,7 +135,7 @@ class CritiqueExtractionService:
                     )
                 if source and (status == "RETRY" or payload.get("findings")):
                     return CritiqueResult(
-                        status="RETRY",
+                        status="UNASSESSED",
                         notes="N12_UNASSESSED: no source-grounded findings available.",
                     )
                 if status == "OK":
