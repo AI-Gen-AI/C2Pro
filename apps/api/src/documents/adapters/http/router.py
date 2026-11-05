@@ -79,6 +79,10 @@ from src.documents.application.list_project_documents_use_case import (
     ListProjectDocumentsUseCase,
 )
 from src.documents.application.parse_document_use_case import ParseDocumentUseCase
+from src.documents.application.reextract_budget_source_units import (
+    BudgetReextractionError,
+    reextract_budget_source_units,
+)
 from src.documents.application.reupload_document_use_case import (
     ReuploadDocumentUseCase,  # TASK-BCK-023
 )
@@ -1228,6 +1232,43 @@ async def reprocess_document_endpoint(
         else "Document reprocessing has been queued."
     )
     return DocumentQueuedResponse(**response_data)
+
+
+@router.post(
+    "/projects/{project_id}/documents/{document_id}/reextract-source-units",
+    summary="Re-derive the original XLSX budget rows of the current, already analysed revision",
+)
+async def reextract_budget_source_units_endpoint(
+    project_id: UUID,
+    document_id: UUID,
+    expected_revision_id: UUID,
+    expected_blob_hash: str,
+    user_id: CurrentUserId,  # noqa: ARG001
+    tenant_id: CurrentTenantId,
+    db: AsyncSession = Depends(get_session),
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+    rev_repo: SqlAlchemyDocumentRevisionRepository = Depends(get_document_revision_repository),
+    storage: IStorageService = Depends(get_storage_service),
+    file_parser: CompositeFileParser = Depends(get_file_parser_service),
+) -> JsonDict:
+    """Recompute only ``document_source_units`` and the revision-keyed summaries of the current
+    revision from its SHA-256-verified original bytes. Same document, revision and hash; no
+    reprocess, no N4/N12, no LLM, no change to analysis/HITL state. Idempotent and CAS-guarded."""
+    try:
+        return await reextract_budget_source_units(
+            session=db,
+            document_repository=repo,
+            revision_repository=rev_repo,
+            storage=storage,
+            file_parser=file_parser,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=document_id,
+            expected_revision_id=expected_revision_id,
+            expected_blob_hash=expected_blob_hash,
+        )
+    except BudgetReextractionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.code) from exc
 
 
 @router.post(
