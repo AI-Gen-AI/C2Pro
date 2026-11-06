@@ -15,10 +15,15 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost,
   listReviewFindingsApiV1HitlReviewsReviewRowIdFindingsGet,
   recordFindingDecisionApiV1HitlReviewsReviewRowIdFindingsDecisionsPost,
 } from "@/lib/api/generated/hitl-findings/hitl-findings";
-import type { ReviewFindingResponse, ReviewFindingsResponse } from "@/lib/api/generated/models";
+import type {
+  DerivedCandidateResponse,
+  ReviewFindingResponse,
+  ReviewFindingsResponse,
+} from "@/lib/api/generated/models";
 import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDecisionAction";
 import { reviewFindingsKey } from "./useReviewCapabilities";
 
@@ -46,6 +51,16 @@ const REFUSAL: Record<string, string> = {
   project_capability_required: "You do not have permission to record decisions on this project's review.",
   review_unavailable: "This review is no longer open. Nothing was recorded.",
 };
+
+/** Server-authored refusal of a derivation (409 with a code, a message and the blocking findings): shown as said. */
+function derivationRefusalFrom(error: unknown): string {
+  if (isAxiosError(error)) {
+    const detail = (error.response?.data as { detail?: { code?: string; message?: string } } | undefined)?.detail;
+    if (detail?.code && REFUSAL[detail.code]) return REFUSAL[detail.code];
+    if (detail?.message) return `${detail.message} Nothing was derived.`;
+  }
+  return "The corrected candidate could not be derived. Nothing was changed.";
+}
 
 function refusalFrom(error: unknown): string {
   if (isAxiosError(error)) {
@@ -134,6 +149,29 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
   const mayReview = query.data?.capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [confirmingDerive, setConfirmingDerive] = useState(false);
+  const [derived, setDerived] = useState<DerivedCandidateResponse | null>(null);
+  const [deriveRefusal, setDeriveRefusal] = useState<string | null>(null);
+
+  // Vn+1 is derived from the candidate and ledger head the SERVER reports now, never from values held by the screen.
+  const derive = useMutation({
+    mutationFn: (view: ReviewFindingsResponse) =>
+      deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost(reviewRowId, {
+        source_artifact_hash: view.artifact_hash,
+        expected_ledger_revision: view.ledger_revision,
+      }),
+    onSuccess: (result) => {
+      setDeriveRefusal(null);
+      setConfirmingDerive(false);
+      setDerived(result);
+      void queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      setDeriveRefusal(derivationRefusalFrom(error));
+      setConfirmingDerive(false);
+      void queryClient.invalidateQueries({ queryKey });
+    },
+  });
 
   const record = useMutation({
     mutationFn: ({ view, finding, draft }: { view: ReviewFindingsResponse; finding: ReviewFindingResponse; draft: Draft }) =>
@@ -166,6 +204,10 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
   if (query.isLoading) return null;
   if (query.isError || !query.data) return null; // not a candidate-bound analysis review: nothing to decide here
   const view = query.data;
+  // A DISMISSED / CORRECTION_PROPOSED decision cannot be approved "as is": it calls for the derived candidate Vn+1.
+  const needsDerivation = view.findings.some(
+    (finding) => finding.current?.action === "DISMISSED" || finding.current?.action === "CORRECTION_PROPOSED",
+  );
 
   return (
     <section
@@ -342,6 +384,66 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
           );
         })}
       </ul>
+      {derived ? (
+        <div className="mt-3 rounded border border-emerald-500 p-2" role="status" data-testid={`derived-result-${reviewRowId}`}>
+          <p className="font-medium">
+            {derived.replayed ? "Corrected candidate already derived" : "Corrected candidate derived"}: version{" "}
+            {derived.derived_artifact_version} (PROPOSED)
+          </p>
+          <p className="mt-1 text-xs" data-testid={`derived-counts-${reviewRowId}`}>
+            Kept {derived.retained}, excluded {derived.excluded}, corrected {derived.corrected}. Derived from version{" "}
+            {derived.source_artifact_version} at decision revision {derived.source_ledger_revision}.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Nothing was approved or trusted and no score was computed. The new version starts with every finding
+            undecided: review it again, then approve or reject it as a separate decision.
+          </p>
+        </div>
+      ) : null}
+      {deriveRefusal ? (
+        <p role="alert" className="mt-2 text-destructive" data-testid={`derive-refused-${reviewRowId}`}>
+          {deriveRefusal}
+        </p>
+      ) : null}
+      {needsDerivation && !derived && mayReview ? (
+        <div className="mt-3 rounded border border-dashed p-2" data-testid={`derive-panel-${reviewRowId}`}>
+          <p className="text-xs text-muted-foreground">
+            You dismissed or corrected at least one finding. The analysis cannot be approved as it stands: derive a new
+            proposed version that leaves out dismissed findings and applies your corrections.
+          </p>
+          {confirmingDerive ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs">
+                This creates a new version as PROPOSED. It approves nothing and your current decisions are not carried
+                over.
+              </span>
+              <Button
+                size="sm"
+                disabled={derive.isPending}
+                data-testid={`derive-confirm-${reviewRowId}`}
+                onClick={() => derive.mutate(view)}
+              >
+                Confirm: create corrected candidate
+              </Button>
+              <Button size="sm" variant="outline" disabled={derive.isPending} onClick={() => setConfirmingDerive(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              className="mt-2"
+              data-testid={`derive-start-${reviewRowId}`}
+              onClick={() => {
+                setDeriveRefusal(null);
+                setConfirmingDerive(true);
+              }}
+            >
+              Create corrected candidate from my decisions
+            </Button>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

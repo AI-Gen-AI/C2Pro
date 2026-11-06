@@ -7,15 +7,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReviewFindingsPanel } from "./ReviewFindingsPanel";
 import { reviewFindingsKey } from "./useReviewCapabilities";
 
-const { list, record, auth } = vi.hoisted(() => ({
+const { list, record, derive, auth } = vi.hoisted(() => ({
   list: vi.fn(),
   record: vi.fn(),
+  derive: vi.fn(),
   auth: { orgId: "o", userId: "u", isLoaded: true },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 vi.mock("@/lib/api/generated/hitl-findings/hitl-findings", () => ({
   listReviewFindingsApiV1HitlReviewsReviewRowIdFindingsGet: (...args: unknown[]) => list(...args),
   recordFindingDecisionApiV1HitlReviewsReviewRowIdFindingsDecisionsPost: (...args: unknown[]) => record(...args),
+  deriveCandidateApiV1HitlReviewsReviewRowIdDerivedCandidatePost: (...args: unknown[]) => derive(...args),
 }));
 
 const ROW = "row-1";
@@ -119,6 +121,72 @@ describe("ReviewFindingsPanel", () => {
       expect(screen.queryByTestId("finding-quote-0")).toBeNull();
       expect(screen.getByTestId("finding-quote-missing-0")).toHaveTextContent("No quote available for this finding.");
       expect(screen.getByTestId("finding-clause-0")).toHaveTextContent("none given by the analysis");
+    });
+  });
+
+  describe("derived candidate Vn+1 after a DISMISSED / CORRECTION_PROPOSED decision", () => {
+    const decision = (action: string) => ({
+      event_id: "e", ledger_revision: 3, action, reason: "no verified quote", proposed_text: null,
+      reviewer_id: "u", recorded_at: null,
+    });
+    const dismissed = () =>
+      view({
+        ledger_revision: 3,
+        findings: [
+          finding(0, { current: decision("CONFIRMED") }),
+          finding(1, { current: decision("DISMISSED") }),
+        ],
+      });
+
+    it("offers nothing while no finding is dismissed or corrected", async () => {
+      list.mockResolvedValue(view({ findings: [finding(0, { current: decision("CONFIRMED") })] }));
+      renderPanel();
+      await screen.findByTestId("finding-0");
+      expect(screen.queryByTestId(`derive-start-${ROW}`)).toBeNull();
+    });
+
+    it("is hidden from a reader without REVIEW_FINDING", async () => {
+      list.mockResolvedValue({
+        ...dismissed(),
+        capabilities: { mode: "enforce", read_review: true, review_finding: false, approve_candidate: false },
+      });
+      renderPanel();
+      await screen.findByTestId("finding-0");
+      expect(screen.queryByTestId(`derive-start-${ROW}`)).toBeNull();
+    });
+
+    it("asks for explicit confirmation, then sends the SERVER's candidate hash and ledger head and shows Vn+1 as PROPOSED", async () => {
+      list.mockResolvedValue(dismissed());
+      derive.mockResolvedValue({
+        review_row_id: ROW, source_artifact_id: "art-1", source_artifact_version: 2, source_artifact_hash: "a".repeat(64),
+        derived_artifact_id: "art-2", derived_artifact_version: 3, derived_artifact_hash: "b".repeat(64),
+        reconciliation_digest: "d", source_ledger_revision: 3, retained: 1, excluded: 1, corrected: 0, replayed: false,
+        event_id: "ev", scoring_state: "PENDING_REEVALUATION", derived_state: "PROPOSED",
+      });
+      renderPanel();
+      await userEvent.click(await screen.findByTestId(`derive-start-${ROW}`));
+      expect(derive).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByTestId(`derive-confirm-${ROW}`));
+      await waitFor(() => expect(derive).toHaveBeenCalledTimes(1));
+      expect(derive).toHaveBeenCalledWith(ROW, { source_artifact_hash: "a".repeat(64), expected_ledger_revision: 3 });
+      expect(await screen.findByTestId(`derived-result-${ROW}`)).toHaveTextContent("version 3 (PROPOSED)");
+      expect(screen.getByTestId(`derived-counts-${ROW}`)).toHaveTextContent("Kept 1, excluded 1, corrected 0");
+      expect(screen.getByTestId(`derived-result-${ROW}`)).toHaveTextContent(/nothing was approved or trusted/i);
+    });
+
+    it("fails closed and shows the server's own reason when it refuses the derivation", async () => {
+      list.mockResolvedValue(dismissed());
+      derive.mockRejectedValue(
+        new AxiosError("Conflict", "ERR_BAD_REQUEST", undefined, undefined, {
+          status: 409,
+          data: { detail: { code: "undecided_findings", message: "Two findings still have no decision.", blockers: [] } },
+        } as never),
+      );
+      renderPanel();
+      await userEvent.click(await screen.findByTestId(`derive-start-${ROW}`));
+      await userEvent.click(screen.getByTestId(`derive-confirm-${ROW}`));
+      expect(await screen.findByTestId(`derive-refused-${ROW}`)).toHaveTextContent(/Two findings still have no decision\. Nothing was derived/);
+      expect(screen.queryByTestId(`derived-result-${ROW}`)).toBeNull();
     });
   });
 
