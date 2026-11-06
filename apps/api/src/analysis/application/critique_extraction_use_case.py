@@ -118,7 +118,7 @@ class CritiqueExtractionCommand:
 
 @dataclass(frozen=True)
 class CritiqueExtractionResult:
-    status: str               # "OK" | "RETRY"
+    status: str               # "OK" | "RETRY" | "UNASSESSED"
     notes_raw: str            # the critique note as returned by the LLM
     confidence: float | None
     retry_count: int
@@ -146,6 +146,10 @@ class CritiqueExtractionUseCase:
             ai=self.ai,
             source_text=cmd.source_text,
         )
+        # N4's extraction confidence is not an assessment of N12.  Once the
+        # critic cannot substantiate its verdict, keep that uncertainty rather
+        # than letting a high N4 score waive the existing HITL gate.
+        assessed_confidence = None if critique.status == "UNASSESSED" else confidence
 
         source_issues = (
             _source_consistency_issues(
@@ -183,14 +187,14 @@ class CritiqueExtractionUseCase:
         evaluation = self.evaluation_service.evaluate_critique(
             critique_status=critique.status,
             critique_notes=critique.notes,
-            confidence=confidence,
+            confidence=assessed_confidence,
             retry_count=cmd.retry_count,
         )
 
         return CritiqueExtractionResult(
             status=critique.status,
             notes_raw=critique.notes,
-            confidence=confidence,
+            confidence=assessed_confidence,
             retry_count=evaluation.retry_count,
             human_approval_required=evaluation.human_approval_required,
             critique_notes=evaluation.critique_notes,
