@@ -161,12 +161,18 @@ def document_lifecycle_status(
 # Lifecycle states the existing reprocess endpoint (POST .../reprocess) can
 # genuinely recover: it unconditionally resets upload_status to UPLOADED and
 # re-enqueues parsing + analysis, which is a real fix for a system/parsing
-# fault (ERROR) or an exhausted automatic analysis attempt (FAILED_RETRYABLE).
-# It is NOT offered for REVIEW_REQUIRED (a decision is pending, not a retry)
-# or NEEDS_CHANGES (a human already decided; re-upload/correction is the
-# honest next step, not blindly re-running the same pipeline).
+# fault (ERROR), an exhausted automatic analysis attempt (FAILED_RETRYABLE) or a
+# human rejection (NEEDS_CHANGES): the reviewer decided the previous result was
+# unfit, and re-uploading byte-identical content is a no-op (same SHA-256), so an
+# explicit re-analysis is the only way to obtain a new PROPOSED candidate for the
+# SAME revision. It never approves anything: the new result starts a new review.
+# It is NOT offered for REVIEW_REQUIRED (a decision is pending, not a retry).
 _RETRYABLE_LIFECYCLE_STATUSES = frozenset(
-    {DocumentLifecycleStatus.ERROR, DocumentLifecycleStatus.FAILED_RETRYABLE}
+    {
+        DocumentLifecycleStatus.ERROR,
+        DocumentLifecycleStatus.FAILED_RETRYABLE,
+        DocumentLifecycleStatus.NEEDS_CHANGES,
+    }
 )
 
 

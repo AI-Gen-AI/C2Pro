@@ -143,7 +143,6 @@ async def test_failed_retryable_analysis_is_allowed_to_reprocess(
             "review_required",
         ),
         (DocumentStatus.ANALYZED, {}, {}, "analyzed"),
-        (DocumentStatus.NEEDS_CHANGES, {}, {}, "needs_changes"),
     ],
 )
 async def test_reprocess_rejects_every_non_retryable_lifecycle_without_mutation(

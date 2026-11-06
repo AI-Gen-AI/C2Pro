@@ -205,7 +205,7 @@ def test_exhausted_retry_is_distinguishable_from_active_analysis(app, project_id
     assert item["retryable"] is True
 
 
-def test_needs_changes_is_retryable_false_and_stops_looking_like_processing(
+def test_needs_changes_is_retryable_and_stops_looking_like_processing(
     app, project_id
 ) -> None:
     document = _document(project_id, DocumentStatus.NEEDS_CHANGES)
@@ -218,7 +218,8 @@ def test_needs_changes_is_retryable_false_and_stops_looking_like_processing(
     item = response.json()["items"][0]
     assert item["lifecycle_status"] == "needs_changes"
     assert item["status"] != "processing"
-    assert item["retryable"] is False
+    # A human rejection is answered by an explicit re-analysis (re-uploading identical bytes is a no-op).
+    assert item["retryable"] is True
 
 
 
