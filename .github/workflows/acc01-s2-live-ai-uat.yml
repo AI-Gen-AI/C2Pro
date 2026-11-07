@@ -716,7 +716,7 @@ jobs:
 
           from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
           from src.config import settings
-          from src.core.database import get_raw_session
+          from src.core.database import get_raw_session, init_db
           from src.core.feature_flags import TenantFlagsService
 
           async def check():
@@ -725,6 +725,9 @@ jobs:
               if not settings.feature_v3_project_graph:
                   raise SystemExit("CORE_UAT_GUARD_PROJECT_GRAPH_DISABLED")
               tenant_id = UUID(os.environ["E2E_EXPECTED_TENANT_ID"])
+              # This is a new Python process, separate from the tenant-seed step.
+              # The pool must be initialized in this process before opening a session.
+              await init_db()
               async with get_raw_session() as session:
                   enabled = await TenantFlagsService(
                       tenant_repository=SqlAlchemyTenantRepository(session),
