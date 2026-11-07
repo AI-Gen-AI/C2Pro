@@ -199,6 +199,49 @@ def test_malformed_currency_suffix_is_not_promoted_to_a_contract_price(untrusted
     assert "DET-CRS-NEGMARGIN" not in {item["rule_id"] for item in result["findings"]}
 
 
+def test_literal_contract_chunk_with_euro_suffix_compares_to_original_budget_row_without_n4_risk():
+    """Price is a source obligation, not necessarily an N4-classified risk.
+
+    The real chunk extractor must feed the same source-bound comparator;
+    success cannot depend on an LLM inventing a RiskItem for a contract sum.
+    """
+    from src.analysis.adapters.graph.source_clause_evidence import extract_literal_source_quotes
+
+    text = (
+        "4.1 El precio del contrato asciende a 1.000.000 € y se pagará por hitos. "
+        "8.2 La fecha de finalización de las obras será el 30 de junio de 2027."
+    )
+    artifact = DocumentArtifact(
+        document_id=str(uuid4()), document_revision_id=str(uuid4()),
+        doc_type="contract", extracted_risks=[],
+    )
+    observed = extract_literal_source_quotes(
+        document_id=artifact.document_id, revision_id=artifact.document_revision_id,
+        chunk_id=str(uuid4()), doc_type="contract", content=text,
+    )
+    assert len(observed) == 2
+    budget = _unit("budget", {"item": "TOTAL", "total": "1350000.00", "currency": "EUR"},
+                   loc="Presupuesto!9")
+    result = compare_original_source_rows([artifact], [budget], observed)
+    financial = [x for x in result["findings"] if x["rule_id"] == "DET-CRS-NEGMARGIN"]
+    assert len(financial) == 1, result
+    [finding] = financial
+    source, row = finding["sources"]
+    assert source["source_quote"] == "El precio del contrato asciende a 1.000.000 €"
+    assert source["source_locator"].startswith("chunk:")
+    assert source["source_quote_sha256"] == hashlib.sha256(source["source_quote"].encode()).hexdigest()
+    assert source["revision_id"] == artifact.document_revision_id
+    assert row["source_locator"] == "Presupuesto!9"
+    assert row["unit_sha256"] == budget["unit_sha256"]
+    assert finding["scored"] is False and finding["requires_human_review"] is True
+
+    # Unknown source revision or corrupted quote provenance is never rehabilitated.
+    stale = [{**item, "revision_id": str(uuid4())} for item in observed]
+    assert compare_original_source_rows([artifact], [budget], stale)["findings"] == []
+    forged = [{**item, "source_quote_sha256": "0" * 64} for item in observed]
+    assert compare_original_source_rows([artifact], [budget], forged)["findings"] == []
+
+
 def test_euro_suffix_does_not_erase_currency_ambiguity_or_quote_trust():
     budget = _unit(
         "budget", {"item": "TOTAL", "total": "1350000.00", "currency": "EUR"},
