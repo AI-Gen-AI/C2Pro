@@ -90,6 +90,9 @@ async def test_real_pg_trusted_document_projection_idempotent_and_tenant_scoped(
         )
     )).scalar_one()
     assert updated.id == doc_node.id
+    # UPSERT is executed as SQL Core; ORM identity-map values require refresh.
+    # The assertion must inspect PostgreSQL state, not the previous Python cache.
+    await db.refresh(updated)
     assert updated.properties["document_revision_id"] == str(revision_two)
     assert len((await db.execute(
         select(KnowledgeGraphEdgeORM).where(KnowledgeGraphEdgeORM.project_id == project_id)
