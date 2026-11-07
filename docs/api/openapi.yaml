@@ -8289,6 +8289,16 @@ components:
           - type: string
           - type: 'null'
           title: Source Document Id
+        source_revision_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Revision Id
+        source_locator:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Locator
         claim:
           type: string
           title: Claim

@@ -16,11 +16,38 @@ class AlertMapper:
     """Maps Alert domain entities to AlertResponse DTOs."""
 
     @staticmethod
-    def _detection_evidence(metadata: dict[str, object]) -> dict[str, object] | None:
+    def _detection_evidence(
+        metadata: dict[str, object], source_clause_id: UUID | None
+    ) -> dict[str, object] | None:
         """Return detector provenance without conflating reviewer evidence lists."""
         evidence = metadata.get("detection_evidence")
         if isinstance(evidence, dict):
             return evidence
+
+        provenance = metadata.get("source_provenance")
+        if not isinstance(provenance, dict) or provenance.get("verification_status") != "VERIFIED":
+            provenance = None
+        references = provenance.get("source_references") if provenance is not None else None
+        if isinstance(references, list) and len(references) == 1 and source_clause_id is not None:
+            reference = references[0]
+            if isinstance(reference, dict):
+                try:
+                    document_id = str(UUID(str(reference.get("document_id"))))
+                    revision_id = str(UUID(str(reference.get("revision_id"))))
+                    clause_id = UUID(str(reference.get("clause_id")))
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    locator = reference.get("clause_code")
+                    if clause_id == source_clause_id and isinstance(locator, str) and locator.strip():
+                        # This is a revision-bound navigation locator, never a
+                        # quoted source statement.
+                        return {
+                            "source_clause_id": str(clause_id),
+                            "source_document_id": document_id,
+                            "source_revision_id": revision_id,
+                            "source_locator": locator,
+                        }
 
         # Compatibility with historical detector payloads. Reviewer evidence is
         # stored as a list, so only dict-shaped legacy values can be detector
@@ -63,7 +90,9 @@ class AlertMapper:
                 else str(alert.status),
                 "affected_entities": Alert.normalize_affected_entities(alert.affected_entities),
                 "source_clause_id": alert.source_clause_id,
-                "detection_evidence": AlertMapper._detection_evidence(metadata),
+                "detection_evidence": AlertMapper._detection_evidence(
+                    metadata, alert.source_clause_id
+                ),
                 "reviewed_by": alert.reviewed_by,
                 "reviewed_at": alert.reviewed_at,
                 "root_cause": metadata.get("root_cause"),

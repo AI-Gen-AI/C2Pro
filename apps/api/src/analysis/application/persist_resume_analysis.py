@@ -43,7 +43,7 @@ truthfulness, and it must never be able to roll back durable business state.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -196,7 +196,14 @@ async def persist_resume_analysis_atomically(
             created = outcome.status is materializer.MaterializationStatus.CREATED
         else:
             # Pre-#714 review: nothing was proposed or bound, so there is no
-            # artifact identity -- same core effects, no obligation.
+            # artifact identity -- same core effects, no obligation. It also
+            # has no canonical revision authority, so any in-memory locator
+            # must remain explicitly NOT_VERIFIED rather than being attached
+            # to a possibly different current revision.
+            content = replace(
+                content,
+                risks=materializer.unverified_resume_risk_sources(content.risks),
+            )
             analysis_id, _ = await materializer.write_canonical_effects(
                 session,
                 tenant_id=tenant_id,

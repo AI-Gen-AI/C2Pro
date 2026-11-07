@@ -119,6 +119,8 @@ class DetectionEvidenceResponse(BaseModel):
 
     source_clause_id: str | None = None
     source_document_id: str | None = None
+    source_revision_id: str | None = None
+    source_locator: str | None = None
     claim: str = ""
     quote: str = ""
     structured_sources: list[StructuredSourceReference] = Field(default_factory=list)
