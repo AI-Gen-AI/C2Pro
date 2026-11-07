@@ -842,12 +842,16 @@ jobs:
           from pathlib import Path
           log = Path(os.environ["RUNNER_TEMP"]) / "c2pro-integral-worker.log"
           text = log.read_text(errors="replace") if log.exists() else ""
+          import sys
+          sys.path.insert(0, str(Path("apps/api").resolve()))
+          from scripts.uat_s3_worker_diagnostics import summarize_s3_worker_diagnostics
           preflight = Path("apps/web/playwright-report/integral-provider-preflight.json")
           receipt = {
               "mode": os.environ["INTEGRAL_AI_MODE"],
               "ai_mock": os.environ["C2PRO_AI_MOCK"] == "1",
               "worker_provider_successes": text.count("anthropic_wrapper_request_success"),
               "worker_provider_errors": text.count("anthropic_wrapper_request_error"),
+              "s3_worker_diagnostics": summarize_s3_worker_diagnostics(text),
               "preflight": json.loads(preflight.read_text()) if preflight.exists() else None,
           }
           out = Path("apps/web/playwright-report/integral-provider-receipt.json")
