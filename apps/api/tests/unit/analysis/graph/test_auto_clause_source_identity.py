@@ -1,0 +1,84 @@
+"""Regression: original EPC clause number must survive parser AUTO-* identity."""
+
+from types import SimpleNamespace
+from uuid import uuid4
+
+from src.analysis.adapters.graph.review_source_references import grounded_review_source_references
+
+
+def _persisted_clause(*, tenant, project, document, revision, auto_code, original_text):
+    return SimpleNamespace(
+        id=uuid4(),
+        tenant_id=tenant,
+        project_id=project,
+        document_id=document,
+        revision_id=revision,
+        clause_code=auto_code,
+        full_text=original_text,
+    )
+
+
+def test_epc_8_2_original_prefix_uniquely_resolves_auto_007_clause_id():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007",
+        original_text=(
+            "8.2 The contractual completion deadline is 2027-06-30. "
+            "Contractor shall achieve completion of all works by 2027-06-30."
+        ),
+    )
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    )
+    # Original source prefix and exact tenant/revision suffice to locate ClauseORM
+    # UUID. They do NOT independently validate an AI-generated risk narrative.
+    assert refs == [{
+        "document_id": str(document),
+        "revision_id": str(revision),
+        "clause_id": str(clause.id),
+        "clause_code": "8.2",
+    }]
+
+
+def test_number_prefix_8_21_does_not_match_8_2():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text="8.21 Similar but different clause",
+    )
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    )
+    assert refs == []
+
+
+def test_two_auto_clauses_with_same_original_number_remain_ambiguous():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clauses = [
+        _persisted_clause(
+            tenant=tenant, project=project, document=document, revision=revision,
+            auto_code=code, original_text="8.2 Repeated conflicting clause",
+        )
+        for code in ["AUTO-007", "AUTO-008"]
+    ]
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=clauses,
+    )
+    assert refs == []
+
+
+def test_auto_clause_from_other_revision_or_tenant_never_binds():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=uuid4(), project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text="8.2 Original wording",
+    )
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    )
+    assert refs == []
