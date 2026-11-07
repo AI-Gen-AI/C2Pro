@@ -259,12 +259,14 @@ export function ReviewItemCard({
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
-      <div className="flex items-start gap-4 p-4">
+      {/* Phones: icon + content on top, the actions in their own wrapped row below; sm+: side by side. */}
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
         <StatusIcon status={item.current_status} />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 break-words">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{title}</span>
+            <span className="min-w-0 break-words font-medium">{title}</span>
             <Badge className={statusColor(item.current_status)}>
               {statusLabel(item.current_status)}
             </Badge>
@@ -310,7 +312,7 @@ export function ReviewItemCard({
                       <summary className="cursor-pointer font-medium">
                         {observation.number}. {observation.title}
                       </summary>
-                      <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
+                      <p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">
                         {observation.body}
                       </p>
                     </details>
@@ -321,7 +323,7 @@ export function ReviewItemCard({
                   <span className="font-medium text-muted-foreground">
                     Unverified model critique:{' '}
                   </span>
-                  <span className="whitespace-pre-wrap">{modelConclusion}</span>
+                  <span className="whitespace-pre-wrap break-words">{modelConclusion}</span>
                 </>
               )}
               </div>
@@ -373,8 +375,9 @@ export function ReviewItemCard({
             </div>
           ) : null}
         </div>
+        </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap" data-testid={`review-actions-${item.item_id}`}>
           {isPending ? (
             <>
               <Button
@@ -407,6 +410,16 @@ export function ReviewItemCard({
                   Preparing candidate…
                 </span>
               ) : null}
+              {/* A tooltip (title) never shows on a phone: say out loud why the decision buttons are disabled. */}
+              {actionsDisabled && actionsTitle ? (
+                <p
+                  className="w-full text-xs text-amber-700 sm:w-auto sm:max-w-[16rem]"
+                  role="status"
+                  data-testid={`actions-blocked-${item.item_id}`}
+                >
+                  Decision buttons are disabled: {actionsTitle}
+                </p>
+              ) : null}
             </>
           ) : null}
           <Button
@@ -429,12 +442,12 @@ export function ReviewItemCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <span className="font-medium text-muted-foreground">Item ID:</span>{' '}
-              <code className="text-xs">{item.item_id}</code>
+              <code className="break-all text-xs">{item.item_id}</code>
             </div>
             {item.row_id ? (
               <div>
                 <span className="font-medium text-muted-foreground">Review row ID:</span>{' '}
-                <code className="text-xs">{item.row_id}</code>
+                <code className="break-all text-xs">{item.row_id}</code>
               </div>
             ) : null}
             <div>

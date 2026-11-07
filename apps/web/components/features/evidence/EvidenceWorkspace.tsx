@@ -10,6 +10,9 @@ import type { Alert as ProjectAlert } from "@/types/project";
 import { EvidenceInspectorPanel } from "./EvidenceInspectorPanel";
 import { EvidenceViewerPanel } from "./EvidenceViewerPanel";
 import type { EvidencePanelTab } from "./evidence-page-utils";
+import { useState } from "react";
+import { useIsNarrowViewport } from "@/hooks/useIsNarrowViewport";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface EvidenceWorkspaceProps {
   splitView: boolean;
@@ -57,8 +60,8 @@ interface EvidenceWorkspaceProps {
   reviewerIdentityReady: boolean;
   onHighlightClick: (id: string) => void;
   onActivePanelTabChange: (tab: EvidencePanelTab) => void;
-  onApproveEntity: (entityId: string) => void;
-  onRejectEntity: (entityId: string, reason: string) => void;
+  onApproveEntity: (entityId: string, note?: string) => void | Promise<void>;
+  onRejectEntity: (entityId: string, reason: string) => void | Promise<void>;
   onEntityClick: (entity: ExtractedEntity) => void;
   onSearchQueryChange: (value: string) => void;
   onSelectPanelItem: (id: string) => void;
@@ -101,61 +104,100 @@ export function EvidenceWorkspace({
   onReviewAlert,
   onResolveAlert,
 }: EvidenceWorkspaceProps) {
+  const narrow = useIsNarrowViewport();
+  const [mobileTab, setMobileTab] = useState<"source" | "entities">("source");
+
+  const viewer = (
+    <EvidenceViewerPanel
+      selectedDocument={selectedDocument}
+      selectedDocumentId={selectedDocumentId}
+      selectedRevisionId={selectedRevisionId}
+      highlights={highlights}
+      activeHighlightId={activeHighlightId}
+      onHighlightClick={onHighlightClick}
+    />
+  );
+
+  const inspector = readOnlyRevision ? (
+    <div
+      className="m-4 rounded-lg border border-border/70 bg-muted/30 p-5 text-sm"
+      data-testid="historical-evidence-read-only"
+    >
+      Historical source inspection is read-only. Current-revision alerts,
+      entity overlays and approval actions are hidden to avoid mixing evidence
+      from different document versions.
+    </div>
+  ) : (
+    <EvidenceInspectorPanel
+      activePanelTab={activePanelTab}
+      onActivePanelTabChange={onActivePanelTabChange}
+      entities={entities}
+      entitiesLoading={entitiesLoading}
+      entitiesError={entitiesError}
+      alertsState={alertsState}
+      alertsLoading={alertsLoading}
+      alertsError={alertsError}
+      activeEntityId={activeEntityId}
+      activeHighlightId={activeHighlightId}
+      highlightSearchQuery={highlightSearchQuery}
+      filteredHighlightResults={filteredHighlightResults}
+      relationshipViewMode={relationshipViewMode}
+      relationshipGraph={relationshipGraph}
+      relationshipExplanation={relationshipExplanation}
+      evidenceTimeline={evidenceTimeline}
+      reviewerIdentityReady={reviewerIdentityReady}
+      onApproveEntity={onApproveEntity}
+      onRejectEntity={onRejectEntity}
+      onEntityClick={onEntityClick}
+      onSearchQueryChange={onSearchQueryChange}
+      onSelectPanelItem={onSelectPanelItem}
+      onRelationshipViewModeChange={onRelationshipViewModeChange}
+      onReviewAlert={onReviewAlert}
+      onResolveAlert={onResolveAlert}
+    />
+  );
+
+  if (narrow) {
+    // Phones: one full-width column at a time. A horizontal split would squeeze the source and the entities
+    // into unreadable slivers.
+    return (
+      <Tabs
+        value={mobileTab}
+        onValueChange={(value) => setMobileTab(value as "source" | "entities")}
+        className="w-full min-w-0"
+        data-testid="evidence-mobile-workspace"
+      >
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="source" data-testid="evidence-tab-source">
+            Source
+          </TabsTrigger>
+          <TabsTrigger value="entities" data-testid="evidence-tab-entities">
+            Entities
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="source" className="min-w-0 overflow-x-hidden">
+          {viewer}
+        </TabsContent>
+        <TabsContent value="entities" className="min-w-0 overflow-x-hidden">
+          {inspector}
+        </TabsContent>
+      </Tabs>
+    );
+  }
+
   return (
     <ResizablePanelGroup
       direction="horizontal"
       className="min-h-[calc(100vh-12rem)]"
     >
       <ResizablePanel defaultSize={splitView ? 50 : 70} minSize={30}>
-        <EvidenceViewerPanel
-          selectedDocument={selectedDocument}
-          selectedDocumentId={selectedDocumentId}
-          selectedRevisionId={selectedRevisionId}
-          highlights={highlights}
-          activeHighlightId={activeHighlightId}
-          onHighlightClick={onHighlightClick}
-        />
+        {viewer}
       </ResizablePanel>
 
       <ResizableHandle withHandle />
 
       <ResizablePanel defaultSize={splitView ? 50 : 30} minSize={20}>
-        {readOnlyRevision ? (
-          <div className="m-6 rounded-lg border border-border/70 bg-muted/30 p-5 text-sm"
-               data-testid="historical-evidence-read-only">
-            Historical source inspection is read-only. Current-revision alerts,
-            entity overlays and approval actions are hidden to avoid mixing evidence
-            from different document versions.
-          </div>
-        ) : (
-        <EvidenceInspectorPanel
-          activePanelTab={activePanelTab}
-          onActivePanelTabChange={onActivePanelTabChange}
-          entities={entities}
-          entitiesLoading={entitiesLoading}
-          entitiesError={entitiesError}
-          alertsState={alertsState}
-          alertsLoading={alertsLoading}
-          alertsError={alertsError}
-          activeEntityId={activeEntityId}
-          activeHighlightId={activeHighlightId}
-          highlightSearchQuery={highlightSearchQuery}
-          filteredHighlightResults={filteredHighlightResults}
-          relationshipViewMode={relationshipViewMode}
-          relationshipGraph={relationshipGraph}
-          relationshipExplanation={relationshipExplanation}
-          evidenceTimeline={evidenceTimeline}
-          reviewerIdentityReady={reviewerIdentityReady}
-          onApproveEntity={onApproveEntity}
-          onRejectEntity={onRejectEntity}
-          onEntityClick={onEntityClick}
-          onSearchQueryChange={onSearchQueryChange}
-          onSelectPanelItem={onSelectPanelItem}
-          onRelationshipViewModeChange={onRelationshipViewModeChange}
-          onReviewAlert={onReviewAlert}
-          onResolveAlert={onResolveAlert}
-        />
-        )}
+        {inspector}
       </ResizablePanel>
     </ResizablePanelGroup>
   );

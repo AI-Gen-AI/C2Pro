@@ -45,8 +45,9 @@ export interface ExtractedEntity {
 
 interface EntityValidationCardProps {
   entity: ExtractedEntity;
-  onApprove: (entityId: string) => void;
-  onReject: (entityId: string, reason: string) => void;
+  /** Must resolve only once the SERVER has persisted the decision; reject to keep the dialog open with the error. */
+  onApprove: (entityId: string, note?: string) => void | Promise<void>;
+  onReject: (entityId: string, reason: string) => void | Promise<void>;
   onEntityClick?: (entity: ExtractedEntity) => void;
   isActive?: boolean;
 }
@@ -62,6 +63,14 @@ export function EntityValidationCard({
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [approvalNote, setApprovalNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+
+  // Only entity types the backend can persist a decision for are actionable. Everything else is inspection only:
+  // no Approve/Reject, so no confirmation can appear to succeed when nothing is saved.
+  const decisionSupported = Boolean(entity.approvalResourceType);
+  const noteRequired = entity.confidence === null || entity.confidence < 90;
 
   const getConfidenceColor = (confidence: number | null) => {
     if (confidence === null) return "border-l-slate-400 bg-slate-50/50";
@@ -79,6 +88,13 @@ export function EntityValidationCard({
   };
 
   const getStatusBadge = () => {
+    if (!decisionSupported) {
+      return (
+        <Badge variant="outline" data-testid="entity-inspection-only">
+          Inspection only
+        </Badge>
+      );
+    }
     if (entity.validationStatus === "approved") {
       return (
         <Badge variant="default" className="bg-green-600">
@@ -105,19 +121,40 @@ export function EntityValidationCard({
 
   const confidenceBadge = getConfidenceBadge(entity.confidence);
 
-  const handleApproveConfirm = () => {
-    onApprove(entity.id);
-    setApproveDialogOpen(false);
+  const decisionFailure = (error: unknown) =>
+    error instanceof Error && error.message ? error.message : "The decision could not be saved. Nothing was changed.";
+
+  const handleApproveConfirm = async () => {
+    setSubmitting(true);
+    setDecisionError(null);
+    try {
+      await onApprove(entity.id, approvalNote.trim() || undefined);
+      setApproveDialogOpen(false);
+      setApprovalNote("");
+    } catch (error) {
+      setDecisionError(decisionFailure(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleRejectConfirm = () => {
-    onReject(entity.id, rejectionReason);
-    setRejectDialogOpen(false);
-    setRejectionReason("");
+  const handleRejectConfirm = async () => {
+    setSubmitting(true);
+    setDecisionError(null);
+    try {
+      await onReject(entity.id, rejectionReason);
+      setRejectDialogOpen(false);
+      setRejectionReason("");
+    } catch (error) {
+      setDecisionError(decisionFailure(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const isPending =
     entity.validationStatus === "pending" || !entity.validationStatus;
+  const showActions = isPending && decisionSupported;
 
   return (
     <>
@@ -136,17 +173,17 @@ export function EntityValidationCard({
       >
         <CardContent className="p-4 space-y-3">
           {/* Header with type and status */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium text-sm">{entity.type}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="break-words text-sm font-medium">{entity.type}</span>
             </div>
             {getStatusBadge()}
           </div>
 
           {/* Extracted text */}
           <div className="space-y-1">
-            <p className="text-sm line-clamp-3">{entity.text}</p>
+            <p className="break-words text-sm line-clamp-3">{entity.text}</p>
             {entity.originalText && entity.originalText !== entity.text && (
               <p className="text-xs text-muted-foreground italic">
                 Original: {entity.originalText.substring(0, 100)}...
@@ -189,15 +226,23 @@ export function EntityValidationCard({
             </div>
           )}
 
-          {/* Action buttons - Only show for pending entities */}
-          {isPending && (
-            <div className="flex items-center gap-2 pt-2 border-t">
+          {!decisionSupported && (
+            <p className="border-t pt-2 text-xs text-muted-foreground" data-testid="entity-inspection-note">
+              Source inspection only. This item type has no individual approval: nothing is saved from here. The
+              document as a whole is approved or rejected in Review.
+            </p>
+          )}
+
+          {/* Action buttons - only for pending entities whose decision the backend can persist */}
+          {showActions && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
               <Button
                 size="sm"
                 variant="outline"
-                className="flex-1 text-green-600 hover:bg-green-50 hover:text-green-700"
+                className="min-w-[7rem] flex-1 text-green-600 hover:bg-green-50 hover:text-green-700"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setDecisionError(null);
                   setApproveDialogOpen(true);
                 }}
               >
@@ -207,9 +252,10 @@ export function EntityValidationCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="flex-1 text-red-600 hover:bg-red-50 hover:text-red-700"
+                className="min-w-[7rem] flex-1 text-red-600 hover:bg-red-50 hover:text-red-700"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setDecisionError(null);
                   setRejectDialogOpen(true);
                 }}
               >
@@ -222,8 +268,13 @@ export function EntityValidationCard({
       </Card>
 
       {/* Gate 6 Human-in-the-loop: Approve Confirmation Dialog */}
-      <AlertDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <AlertDialogContent>
+      <AlertDialog
+        open={approveDialogOpen}
+        onOpenChange={(open) => {
+          if (!submitting) setApproveDialogOpen(open);
+        }}
+      >
+        <AlertDialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-600" />
@@ -243,27 +294,61 @@ export function EntityValidationCard({
                 </p>
               </div>
               <p className="text-sm mt-3">
-                This will mark the extraction as <strong>validated</strong> and
-                include it in the analysis results.
+                This asks the server to record your decision. It is shown as approved only after the server
+                confirms it.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          {noteRequired ? (
+            <div className="px-6 pb-2">
+              <Label htmlFor={`approval-note-${entity.id}`} className="text-sm font-medium">
+                Validation note <span className="text-red-500">*</span>
+              </Label>
+              <p className="mt-1 text-xs text-amber-700">
+                Confidence {entity.confidence === null ? "is not measured" : "is below 90%"}: explain why this
+                extraction is still acceptable.
+              </p>
+              <Textarea
+                id={`approval-note-${entity.id}`}
+                data-testid="entity-approval-note"
+                value={approvalNote}
+                onChange={(e) => setApprovalNote(e.target.value)}
+                className="mt-2"
+                rows={3}
+              />
+            </div>
+          ) : null}
+          {decisionError ? (
+            <p role="alert" className="px-6 text-sm text-destructive" data-testid="entity-decision-error">
+              {decisionError}
+            </p>
+          ) : null}
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleApproveConfirm}
+              disabled={submitting || (noteRequired && !approvalNote.trim())}
+              data-testid="entity-approve-confirm"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleApproveConfirm();
+              }}
               className="bg-green-600 hover:bg-green-700"
             >
               <CheckCircle className="mr-2 h-4 w-4" />
-              Confirm Approval
+              {submitting ? "Saving…" : "Confirm Approval"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Gate 6 Human-in-the-loop: Reject Confirmation Dialog with Reason */}
-      <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <AlertDialogContent>
+      <AlertDialog
+        open={rejectDialogOpen}
+        onOpenChange={(open) => {
+          if (!submitting) setRejectDialogOpen(open);
+        }}
+      >
+        <AlertDialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <XCircle className="h-5 w-5 text-red-600" />
@@ -301,17 +386,26 @@ export function EntityValidationCard({
               improve future extractions.
             </p>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRejectionReason("")}>
+          {decisionError ? (
+            <p role="alert" className="px-6 text-sm text-destructive" data-testid="entity-decision-error">
+              {decisionError}
+            </p>
+          ) : null}
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={submitting} onClick={() => setRejectionReason("")}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleRejectConfirm}
-              disabled={!rejectionReason.trim()}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleRejectConfirm();
+              }}
+              disabled={submitting || !rejectionReason.trim()}
+              data-testid="entity-reject-confirm"
               className="bg-red-600 hover:bg-red-700 disabled:opacity-50"
             >
               <XCircle className="mr-2 h-4 w-4" />
-              Confirm Rejection
+              {submitting ? "Saving…" : "Confirm Rejection"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

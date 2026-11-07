@@ -109,6 +109,17 @@ function ReviewItemWithCapabilities(props: ComponentProps<typeof ReviewItemCard>
   return <ReviewItemCard {...props} finalDecisionNotGranted={capabilities?.approve_candidate === false} />;
 }
 
+/** Document + version a review row is about, for receipts (never invented: falls back to the item type). */
+function receiptSubject(item: ReviewItemResponse): { documentLabel: string; version: number | null } {
+  const data = (item.item_data ?? {}) as Record<string, unknown>;
+  const filename = typeof data.document_filename === 'string' ? data.document_filename : null;
+  const binding = item.candidate_binding as { artifact_version?: number } | null | undefined;
+  return {
+    documentLabel: filename ?? String(item.item_type),
+    version: typeof binding?.artifact_version === 'number' ? binding.artifact_version : null,
+  };
+}
+
 export default function ReviewPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -174,7 +185,12 @@ export default function ReviewPage() {
     action: 'approve' | 'reject';
     /** A 5xx may occur after the server durably records the decision. */
     uncertain: boolean;
+    /** What the reviewer decided on, captured at click time (the row may later fall outside the filter). */
+    documentLabel: string;
+    version: number | null;
   } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   const queueParams = useMemo(
     () => ({
@@ -192,7 +208,27 @@ export default function ReviewPage() {
     // (already decided) queue with nothing left to approve.
     useListReviewQueueApiV1HitlQueueGet(queueParams, { query: { refetchOnMount: 'always' } });
 
+  // Counters describe the whole project queue, never the list filter: a separate unfiltered read.
+  const statsParams = useMemo(
+    () => ({ skip: 0, limit: MAX_PAGE_LIMIT, project_id: projectId }),
+    [projectId],
+  );
+  const { data: statsData, refetch: refetchStats } =
+    useListReviewQueueApiV1HitlQueueGet(statsParams, { query: { refetchOnMount: 'always' } });
+  const statsItems = useMemo(() => statsData?.items ?? [], [statsData]);
+  const statsTruncated = (statsData?.total ?? 0) > statsItems.length;
+
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
+
+  const refreshQueue = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetch(), refetchStats()]);
+      setLastChecked(new Date());
+    } finally {
+      setRefreshing(false);
+    }
+  };
   useEffect(() => {
     if (targetItemId) setPageLimit(MAX_PAGE_LIMIT);
   }, [targetItemId]);
@@ -201,7 +237,7 @@ export default function ReviewPage() {
     !items.some((item) => item.item_id === targetItemId),
   );
   const receiptRow = decisionReceipt
-    ? items.find((item) => item.row_id === decisionReceipt.rowId)
+    ? statsItems.find((item) => item.row_id === decisionReceipt.rowId)
     : undefined;
   const confirmedDecision = Boolean(
     receiptRow && decisionReceipt &&
@@ -218,18 +254,18 @@ export default function ReviewPage() {
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [targetItemId, items]);
 
-  const pendingCount = items.filter(
+  const pendingCount = statsItems.filter(
     (i) =>
       i.current_status === ReviewStatus.PENDING_REVIEW_REQUIRED ||
       i.current_status === ReviewStatus.PENDING_REVIEW_CONDITIONAL,
   ).length;
-  const approvedCount = items.filter(
+  const approvedCount = statsItems.filter(
     (i) => i.current_status === ReviewStatus.APPROVED,
   ).length;
-  const rejectedCount = items.filter(
+  const rejectedCount = statsItems.filter(
     (i) => i.current_status === ReviewStatus.REJECTED,
   ).length;
-  const escalatedCount = items.filter(
+  const escalatedCount = statsItems.filter(
     (i) => i.current_status === ReviewStatus.ESCALATED,
   ).length;
 
@@ -316,16 +352,16 @@ export default function ReviewPage() {
         });
       }
       markDecided(modal.item);
-      setDecisionReceipt({ rowId: reviewRowId, action: 'approve', uncertain: false });
+      setDecisionReceipt({ rowId: reviewRowId, action: 'approve', uncertain: false, ...receiptSubject(modal.item) });
       closeModal();
-      void refetch();
+      void refreshQueue();
       refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to approve review item');
       if (outcomeMayAlreadyBeRecorded(error) && modal.kind === 'approve' && modal.item.row_id) {
         markDecided(modal.item);
-        setDecisionReceipt({ rowId: modal.item.row_id, action: 'approve', uncertain: true });
-        void refetch();
+        setDecisionReceipt({ rowId: modal.item.row_id, action: 'approve', uncertain: true, ...receiptSubject(modal.item) });
+        void refreshQueue();
         refreshProjectAfterDecision();
       }
       setActionError(message);
@@ -361,16 +397,16 @@ export default function ReviewPage() {
         });
       }
       markDecided(modal.item);
-      setDecisionReceipt({ rowId: reviewRowId, action: 'reject', uncertain: false });
+      setDecisionReceipt({ rowId: reviewRowId, action: 'reject', uncertain: false, ...receiptSubject(modal.item) });
       closeModal();
-      void refetch();
+      void refreshQueue();
       refreshProjectAfterDecision();
     } catch (error) {
       const message = errorMessage(error, 'Failed to reject review item');
       if (outcomeMayAlreadyBeRecorded(error) && modal.kind === 'reject' && modal.item.row_id) {
         markDecided(modal.item);
-        setDecisionReceipt({ rowId: modal.item.row_id, action: 'reject', uncertain: true });
-        void refetch();
+        setDecisionReceipt({ rowId: modal.item.row_id, action: 'reject', uncertain: true, ...receiptSubject(modal.item) });
+        void refreshQueue();
         refreshProjectAfterDecision();
       }
       setActionError(message);
@@ -431,53 +467,81 @@ export default function ReviewPage() {
         </div>
       ) : null}
 
-      {decisionReceipt ? (
-        <div data-testid="review-decision-receipt" role="status"
-             className="flex flex-col gap-2 rounded-lg border bg-card p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-medium">
-              {confirmedDecision
-                ? `Review ${decisionReceipt.action === 'approve' ? 'approved' : 'rejected'} — confirmed by refreshed queue`
-                : decisionReceipt.uncertain
-                  ? 'Review outcome needs verification'
-                  : 'Decision request accepted — checking saved review status'}
-            </p>
-            <p className="text-muted-foreground">
-              {confirmedDecision
-                ? 'The review decision is recorded. Document processing and Health may still be updating.'
-                : decisionReceipt.uncertain
-                  ? 'The workflow reported an error after the request. The decision may already be stored; check the refreshed queue before attempting another decision.'
-                  : 'Do not treat the document as analyzed until its updated lifecycle confirms completion.'}
-            </p>
+      {decisionReceipt ? (() => {
+        const verb = decisionReceipt.action === 'approve' ? 'approval' : 'rejection';
+        const doneWord = decisionReceipt.action === 'approve' ? 'Approved' : 'Rejected';
+        const subject = `${decisionReceipt.documentLabel}${decisionReceipt.version !== null ? ` · version ${decisionReceipt.version}` : ''}`;
+        const serverStatus = receiptRow ? statusLabel(receiptRow.current_status) : null;
+        return (
+          <div data-testid="review-decision-receipt" role="status"
+               className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 break-words">
+              <p className="font-medium" data-testid="review-receipt-title">
+                {confirmedDecision
+                  ? `${doneWord} and saved: ${subject}`
+                  : decisionReceipt.uncertain
+                    ? `Outcome of your ${verb} needs verification: ${subject}`
+                    : `Your ${verb} was sent, NOT yet confirmed as saved: ${subject}`}
+              </p>
+              <p className="text-muted-foreground">
+                {confirmedDecision
+                  ? 'The server now shows this review as decided. Document processing and Health may still be updating.'
+                  : decisionReceipt.uncertain
+                    ? 'The workflow reported an error after the request. The decision may already be stored; refresh the status before deciding again.'
+                    : 'Press "Refresh review status" to read the saved state. Do not treat the document as analyzed until it shows as decided.'}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground" data-testid="review-receipt-server-status">
+                {lastChecked
+                  ? serverStatus
+                    ? `Server status at ${lastChecked.toLocaleTimeString()}: ${serverStatus}.`
+                    : `Checked at ${lastChecked.toLocaleTimeString()}: this review row was not found in the project queue.`
+                  : serverStatus
+                    ? `Server status: ${serverStatus}.`
+                    : 'Not checked yet.'}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start sm:self-center"
+              disabled={refreshing}
+              onClick={() => void refreshQueue()}
+              data-testid="review-refresh-status"
+            >
+              {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Refresh review status
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void refetch()}>
-            Refresh review status
-          </Button>
-        </div>
-      ) : null}
+        );
+      })() : null}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border bg-card p-4" data-testid="stat-pending">
+      {/* Stats Cards: whole project queue, independent of the list filter below */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4" data-testid="review-stats">
+        <div className="rounded-lg border bg-card p-3 sm:p-4" data-testid="stat-pending">
           <div className="text-sm text-muted-foreground">Pending</div>
           <div className="mt-1 text-2xl font-bold text-yellow-600">{pendingCount}</div>
         </div>
-        <div className="rounded-lg border bg-card p-4" data-testid="stat-approved">
+        <div className="rounded-lg border bg-card p-3 sm:p-4" data-testid="stat-approved">
           <div className="text-sm text-muted-foreground">Approved</div>
           <div className="mt-1 text-2xl font-bold text-green-600">{approvedCount}</div>
         </div>
-        <div className="rounded-lg border bg-card p-4" data-testid="stat-rejected">
+        <div className="rounded-lg border bg-card p-3 sm:p-4" data-testid="stat-rejected">
           <div className="text-sm text-muted-foreground">Rejected</div>
           <div className="mt-1 text-2xl font-bold text-red-600">{rejectedCount}</div>
         </div>
-        <div className="rounded-lg border bg-card p-4" data-testid="stat-escalated">
+        <div className="rounded-lg border bg-card p-3 sm:p-4" data-testid="stat-escalated">
           <div className="text-sm text-muted-foreground">Escalated</div>
           <div className="mt-1 text-2xl font-bold text-orange-600">{escalatedCount}</div>
         </div>
       </div>
+      {statsTruncated ? (
+        <p className="text-xs text-muted-foreground" data-testid="stats-truncated">
+          Counts cover the {statsItems.length} most recent of {statsData?.total} review items.
+        </p>
+      ) : null}
 
-      {/* Filter */}
-      <div className="flex gap-2">
+      {/* Filter: wraps on phones */}
+      <div className="flex flex-wrap gap-2" data-testid="review-filters">
         {['all', ReviewStatus.PENDING_REVIEW_REQUIRED, ReviewStatus.APPROVED, ReviewStatus.REJECTED, ReviewStatus.ESCALATED].map(
           (filter) => (
             <Button

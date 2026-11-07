@@ -419,6 +419,7 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
               </span>
               <Button
                 size="sm"
+                className="h-auto max-w-full whitespace-normal py-2 text-left"
                 disabled={derive.isPending}
                 data-testid={`derive-confirm-${reviewRowId}`}
                 onClick={() => derive.mutate(view)}
@@ -432,7 +433,7 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
           ) : (
             <Button
               size="sm"
-              className="mt-2"
+              className="mt-2 h-auto max-w-full whitespace-normal py-2 text-left"
               data-testid={`derive-start-${reviewRowId}`}
               onClick={() => {
                 setDeriveRefusal(null);

@@ -783,8 +783,9 @@ describe('ReviewPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
 
     const receipt = await screen.findByTestId('review-decision-receipt');
-    expect(receipt).toHaveTextContent(/decision request accepted/i);
+    expect(receipt).toHaveTextContent(/approval was sent, not yet confirmed as saved/i);
     expect(receipt).toHaveTextContent(/do not treat the document as analyzed/i);
+    expect(screen.getByTestId('review-receipt-title')).toHaveTextContent(/alert/);
     expect(screen.getByTestId('approve-item-1')).toBeDisabled();
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ['/api/v1/projects/test-project-id/health'],
@@ -800,7 +801,8 @@ describe('ReviewPage', () => {
       { ...MOCK_ITEMS[0], current_status: 'APPROVED' },
     ], total: 1 } });
     rerender(<ReviewPage />);
-    expect(receipt).toHaveTextContent(/review approved — confirmed by refreshed queue/i);
+    expect(receipt).toHaveTextContent(/approved and saved/i);
+    expect(screen.getByTestId('review-receipt-server-status')).toHaveTextContent(/server status.*: approved/i);
     expect(receipt).toHaveTextContent(/document processing and health may still be updating/i);
   });
 
@@ -817,7 +819,7 @@ describe('ReviewPage', () => {
     await userEvent.click(screen.getByTestId('approve-item-1'));
     await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
     await waitFor(() => expect(screen.getByTestId('review-decision-receipt')).toHaveTextContent(
-      /outcome needs verification/i,
+      /needs verification/i,
     ));
     expect(screen.getByRole('alert')).toHaveTextContent(/resuming the analysis workflow failed/i);
     expect(screen.getByRole('button', { name: /confirm approve/i })).toBeDisabled();
@@ -836,14 +838,64 @@ describe('ReviewPage', () => {
     await userEvent.type(screen.getByPlaceholderText(/explain why/i), 'Original contract clause contradicts the summary.');
     await userEvent.click(screen.getByRole('button', { name: /confirm reject/i }));
     const receipt = await screen.findByTestId('review-decision-receipt');
-    expect(receipt).toHaveTextContent(/decision request accepted/i);
+    expect(receipt).toHaveTextContent(/rejection was sent, not yet confirmed as saved/i);
 
     setupMock({ data: { items: [
       { ...MOCK_ITEMS[0], current_status: 'REJECTED' },
     ], total: 1 } });
     rerender(<ReviewPage />);
-    expect(receipt).toHaveTextContent(/review rejected — confirmed by refreshed queue/i);
+    expect(receipt).toHaveTextContent(/rejected and saved/i);
     expect(screen.queryByTestId('approve-item-1')).not.toBeInTheDocument();
+  });
+
+  it('P0 — counters describe the whole project queue, not the selected status filter', async () => {
+    mockUseQueue.mockImplementation(((params: { status?: string }) => ({
+      data: params.status === 'APPROVED'
+        ? { items: [MOCK_ITEMS[1]], total: 1 }
+        : { items: MOCK_ITEMS, total: 3 },
+      isLoading: false,
+      error: null,
+      refetch: mockRefetch,
+    })) as unknown as typeof useListReviewQueueApiV1HitlQueueGet);
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^approved$/i }));
+
+    // The list is filtered to the single approved row, the counters still read the whole queue.
+    expect(screen.getAllByTestId(/^review-item-/)).toHaveLength(1);
+    expect(screen.getByTestId('stat-pending')).toHaveTextContent('1');
+    expect(screen.getByTestId('stat-approved')).toHaveTextContent('1');
+    expect(mockUseQueue).toHaveBeenCalledWith(
+      expect.not.objectContaining({ status: expect.anything() }),
+      expect.anything(),
+    );
+  });
+
+  it('P0 — "Refresh review status" shows progress and a comprehensible server answer', async () => {
+    setupMock();
+    mockApproveMutate.mockResolvedValue({ current_status: 'APPROVED' });
+    render(<ReviewPage />);
+
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
+    await screen.findByTestId('review-decision-receipt');
+
+    await userEvent.click(screen.getByTestId('review-refresh-status'));
+    await waitFor(() =>
+      expect(screen.getByTestId('review-receipt-server-status')).toHaveTextContent(
+        /server status at .*: pending/i,
+      ),
+    );
+    expect(screen.getByTestId('review-decision-receipt')).not.toHaveTextContent(/approved and saved/i);
+  });
+
+  it('P0 — says out loud (not only in a tooltip) why the decision buttons are disabled', () => {
+    setupMock();
+    mockCapabilities.mockReturnValue({ approve_candidate: false });
+    render(<ReviewPage />);
+
+    expect(screen.getByTestId('actions-blocked-item-1')).toHaveTextContent(/do not have permission/i);
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
   });
 
   it('renders one card per deduped queue item (no duplicate legacy rows shown)', () => {

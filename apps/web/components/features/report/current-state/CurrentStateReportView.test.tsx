@@ -29,7 +29,7 @@ describe("CurrentStateReportView", () => {
     expect(items[2]).toHaveTextContent("4 review item(s) await a human decision.");
   });
 
-  it("says plainly when nothing needs attention", () => {
+  it("says plainly when nothing needs attention, only when nothing was left unevaluated", () => {
     const report = buildCurrentStateReport();
     const summary = report.sections.executive_summary;
     renderReport({
@@ -38,13 +38,41 @@ describe("CurrentStateReportView", () => {
         ...report.sections,
         executive_summary: {
           ...summary,
-          data: summary.data ? { ...summary.data, attention_items: [] } : summary.data,
+          data: summary.data
+            ? {
+                ...summary.data,
+                attention_items: [],
+                not_modeled_section_keys: [],
+                unavailable_section_keys: [],
+                error_section_keys: [],
+                awaiting_analysis_document_count: 0,
+              }
+            : summary.data,
         },
       },
     });
     expect(screen.getByTestId("executive-summary")).toHaveTextContent(
       "Nothing requires attention in the data that is available.",
     );
+  });
+
+  it("never calls an empty attention list clean while parts of the project were not evaluated", () => {
+    const report = buildCurrentStateReport();
+    const summary = report.sections.executive_summary;
+    renderReport({
+      ...report,
+      sections: {
+        ...report.sections,
+        executive_summary: {
+          ...summary,
+          data: summary.data
+            ? { ...summary.data, attention_items: [], not_modeled_section_keys: ["coherence"] }
+            : summary.data,
+        },
+      },
+    });
+    expect(screen.getByTestId("attention-not-evaluated")).toHaveTextContent(/NOT a clean result/);
+    expect(screen.getByTestId("executive-summary")).not.toHaveTextContent("Nothing requires attention");
   });
 
   it("states which domains the report does not cover", () => {

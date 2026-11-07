@@ -484,81 +484,69 @@ export default function EvidencePage() {
       : null;
   const exactSourceClause = requestedSourceClause ?? requestedDocumentFallback;
 
-  const handleApproveEntity = useCallback(
-    async (entityId: string, note?: string) => {
+  // One authoritative decision flow (the card's single confirmation). It resolves only after the server answered
+  // and shows the status the SERVER reports; every failure throws so the dialog stays open with the reason.
+  const persistEntityDecision = useCallback(
+    async (
+      entityId: string,
+      status: "APPROVED" | "REJECTED",
+      comment: string | null,
+    ) => {
       const entity = entities.find((item) => item.id === entityId);
       if (!entity) {
-        return;
+        throw new Error("This item is no longer in the list. Nothing was changed.");
       }
-
       if (!entity.approvalResourceType) {
-        setActionError(
-          `No backend approval endpoint is available for ${entity.type.toLowerCase()} entities yet.`,
+        // Defensive: unsupported types render no actions, so this must never look like a success.
+        throw new Error(
+          `${entity.type} items have no individual approval. Nothing was saved.`,
         );
-        return;
       }
 
       setActionError(null);
-      await reviewResource.mutateAsync({
-        resourceType: entity.approvalResourceType,
-        resourceId: entityId,
-        data: {
-          status: "APPROVED",
-          correction_data: undefined,
-          feedback_comment: note?.trim() || null,
-        },
-      });
-
-      setEntities((prev) =>
-        prev.map((item) =>
-          item.id === entityId
-            ? { ...item, validationStatus: "approved", validated: true }
-            : item,
-        ),
-      );
-    },
-    [entities],
-  );
-
-  const handleRejectEntity = useCallback(
-    async (entityId: string, reason: string) => {
-      const entity = entities.find((item) => item.id === entityId);
-      if (!entity) {
-        return;
+      let confirmed: { status?: string } | undefined;
+      try {
+        confirmed = (await reviewResource.mutateAsync({
+          resourceType: entity.approvalResourceType,
+          resourceId: entityId,
+          data: { status, correction_data: undefined, feedback_comment: comment },
+        })) as { status?: string } | undefined;
+      } catch {
+        throw new Error("The server did not save the decision. Nothing was changed; try again.");
       }
 
-      if (!entity.approvalResourceType) {
-        setActionError(
-          `No backend approval endpoint is available for ${entity.type.toLowerCase()} entities yet.`,
+      // Trust the persisted record the server returned, not the click.
+      const serverStatus = String(confirmed?.status ?? "").toUpperCase();
+      if (serverStatus !== status) {
+        throw new Error(
+          `The server answered ${serverStatus || "no status"} instead of ${status}. The decision is not recorded.`,
         );
-        return;
       }
-
-      setActionError(null);
-      await reviewResource.mutateAsync({
-        resourceType: entity.approvalResourceType,
-        resourceId: entityId,
-        data: {
-          status: "REJECTED",
-          correction_data: undefined,
-          feedback_comment: reason,
-        },
-      });
-
       setEntities((prev) =>
         prev.map((item) =>
           item.id === entityId
             ? {
                 ...item,
-                validationStatus: "rejected",
-                validated: false,
-                rejectionReason: reason,
+                validationStatus: status === "APPROVED" ? "approved" : "rejected",
+                validated: status === "APPROVED",
+                rejectionReason: status === "REJECTED" ? (comment ?? undefined) : undefined,
               }
             : item,
         ),
       );
     },
-    [entities],
+    [entities, reviewResource],
+  );
+
+  const handleApproveEntity = useCallback(
+    (entityId: string, note?: string) =>
+      persistEntityDecision(entityId, "APPROVED", note?.trim() || null),
+    [persistEntityDecision],
+  );
+
+  const handleRejectEntity = useCallback(
+    (entityId: string, reason: string) => persistEntityDecision(entityId, "REJECTED", reason),
+    [persistEntityDecision],
   );
 
   const handleEntityClick = useCallback(
@@ -639,40 +627,6 @@ export default function EvidencePage() {
     [handleResolveAlert],
   );
 
-  const requestApproveEntity = useCallback(
-    async (entityId: string) => {
-      const entity = entities.find((item) => item.id === entityId);
-      if (!entity) {
-        return;
-      }
-
-      setPendingAction({
-        kind: "entity-approve",
-        entityId,
-        label: entity.text,
-        confidence: entity.confidence,
-      });
-    },
-    [entities],
-  );
-
-  const requestRejectEntity = useCallback(
-    async (entityId: string, reason: string) => {
-      const entity = entities.find((item) => item.id === entityId);
-      if (!entity) {
-        return;
-      }
-
-      setPendingAction({
-        kind: "entity-reject",
-        entityId,
-        label: entity.text,
-        reason,
-      });
-    },
-    [entities],
-  );
-
   const requestReviewAlert = useCallback(
     (alertId: string, decision: "approve" | "reject") => {
       const alert = alertsState.find((item) => item.id === alertId);
@@ -691,26 +645,15 @@ export default function EvidencePage() {
   );
 
   const confirmPendingAction = useCallback(async () => {
-    if (!pendingAction) {
+    if (!pendingAction || pendingAction.kind !== "alert-review") {
       return;
     }
 
-    if (pendingAction.kind === "entity-approve") {
-      await handleApproveEntity(pendingAction.entityId, validationNote);
-    } else if (pendingAction.kind === "entity-reject") {
-      await handleRejectEntity(pendingAction.entityId, pendingAction.reason);
-    } else {
-      await handleReviewAlert(pendingAction.alertId, pendingAction.decision);
-    }
+    await handleReviewAlert(pendingAction.alertId, pendingAction.decision);
 
     setPendingAction(null);
     setValidationNote("");
-  }, [
-    handleApproveEntity,
-    handleRejectEntity,
-    handleReviewAlert,
-    pendingAction,
-  ]);
+  }, [handleReviewAlert, pendingAction]);
 
   const handleConfirmPendingActionClick = useCallback(() => {
     confirmPendingAction().catch(() => {
@@ -777,7 +720,7 @@ export default function EvidencePage() {
         entity.id,
         entity.text,
         String(entity.page ?? ""),
-        entity.validationStatus ?? "pending",
+        entity.approvalResourceType ? (entity.validationStatus ?? "pending") : "inspection_only",
       ]),
       ...alertsState.map((alert) => [
         "alert",
@@ -1019,8 +962,8 @@ export default function EvidencePage() {
         reviewerIdentityReady={reviewerIdentityReady}
         onHighlightClick={handleHighlightClick}
         onActivePanelTabChange={setActivePanelTab}
-        onApproveEntity={requestApproveEntity}
-        onRejectEntity={requestRejectEntity}
+        onApproveEntity={handleApproveEntity}
+        onRejectEntity={handleRejectEntity}
         onEntityClick={handleEntityClick}
         onSearchQueryChange={setHighlightSearchQuery}
         onSelectPanelItem={syncPanelSelection}

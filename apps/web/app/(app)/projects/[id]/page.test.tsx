@@ -86,6 +86,37 @@ describe("ProjectOverviewPage", () => {
     expect(screen.getByText(/boom/i)).toBeInTheDocument();
   });
 
+  it("P0 — a null coherence score is NOT EVALUATED (never 0) and an empty alert list is not 'no open alerts'", () => {
+    getDashboardMock.mockReturnValue({
+      data: { coherence_score: null, sub_scores: {}, alert_count: 0, document_count: 4 },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null });
+
+    renderWithProviders(<ProjectOverviewPage />);
+
+    expect(screen.getByTestId("overview-coherence-score")).toHaveTextContent("Not evaluated");
+    expect(screen.getAllByText("Not evaluated").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTestId("overview-alerts-not-evaluated")).toHaveTextContent(/not been evaluated/i);
+    expect(screen.queryByText("No open alerts")).not.toBeInTheDocument();
+  });
+
+  it("P0 — an evaluated project with zero alerts still says 'No open alerts', and a true score of 0 stays 0", () => {
+    getDashboardMock.mockReturnValue({
+      data: { coherence_score: 0, sub_scores: {}, alert_count: 0, document_count: 4 },
+      isLoading: false,
+      error: null,
+    });
+    listProjectAlertsMock.mockReturnValue({ data: { items: [] }, isLoading: false, error: null });
+
+    renderWithProviders(<ProjectOverviewPage />);
+
+    expect(screen.getByTestId("overview-coherence-score")).toHaveTextContent("0");
+    expect(screen.getByTestId("overview-coherence-score")).not.toHaveTextContent("Not evaluated");
+    expect(screen.getByText("No open alerts")).toBeInTheDocument();
+  });
+
   it("keeps the project overview usable when only the alerts request fails", () => {
     getDashboardMock.mockReturnValue({
       data: {

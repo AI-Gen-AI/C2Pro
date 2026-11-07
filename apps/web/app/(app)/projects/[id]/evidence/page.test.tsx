@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@/src/tests/test-utils";
 
@@ -146,26 +147,38 @@ vi.mock("@/components/evidence", () => ({
     entities: Array<{ id: string; text: string }>;
     onEntityClick?: (entity: { id: string; text: string }) => void;
     activeEntityId?: string | null;
-    onApprove: (entityId: string) => void;
-    onReject: (entityId: string, reason: string) => void;
-  }) => (
-    <div>
-      <div data-testid="active-entity-id">{activeEntityId ?? "none"}</div>
-      {entities.map((entity) => (
-        <div key={entity.id}>
-          <button type="button" onClick={() => onEntityClick?.(entity)}>
-            Entity {entity.id}
-          </button>
-          <button type="button" onClick={() => onApprove(entity.id)}>
-            Approve Entity {entity.id}
-          </button>
-          <button type="button" onClick={() => onReject(entity.id, "bad data")}>
-            Reject Entity {entity.id}
-          </button>
-        </div>
-      ))}
-    </div>
-  ),
+    onApprove: (entityId: string, note?: string) => void | Promise<void>;
+    onReject: (entityId: string, reason: string) => void | Promise<void>;
+  }) => {
+    const [decisionFailure, setDecisionFailure] = useState("");
+    const attempt = async (run: () => void | Promise<void>) => {
+      try {
+        await run();
+        setDecisionFailure("");
+      } catch (error) {
+        setDecisionFailure((error as Error).message);
+      }
+    };
+    return (
+      <div>
+        <div data-testid="active-entity-id">{activeEntityId ?? "none"}</div>
+        <div data-testid="mock-decision-failure">{decisionFailure}</div>
+        {entities.map((entity) => (
+          <div key={entity.id}>
+            <button type="button" onClick={() => onEntityClick?.(entity)}>
+              Entity {entity.id}
+            </button>
+            <button type="button" onClick={() => void attempt(() => onApprove(entity.id, "note"))}>
+              Approve Entity {entity.id}
+            </button>
+            <button type="button" onClick={() => void attempt(() => onReject(entity.id, "bad data"))}>
+              Reject Entity {entity.id}
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 vi.mock("@/components/ui/tabs", () => ({
@@ -772,16 +785,15 @@ describe("EvidencePage highlight mapping", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("wires entity approval to the backend approval endpoint", async () => {
+  it("wires entity approval to the backend approval endpoint with ONE confirmation (the entity's own dialog)", async () => {
     render(<EvidencePage />);
 
     fireEvent.click(
       screen.getByRole("button", { name: /approve entity clause-1/i }),
     );
 
-    expect(screen.getByText("Confirm evidence action")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /confirm action/i }));
-
+    // No second page-level confirmation exists for entities any more.
+    expect(screen.queryByText("Confirm evidence action")).not.toBeInTheDocument();
     await waitFor(() => {
       expect(reviewApprovalMutateAsyncMock).toHaveBeenCalledWith({
         resourceType: "stakeholders",
@@ -789,10 +801,11 @@ describe("EvidencePage highlight mapping", () => {
         data: {
           status: "APPROVED",
           correction_data: undefined,
-          feedback_comment: null,
+          feedback_comment: "note",
         },
       });
     });
+    expect(screen.getByTestId("mock-decision-failure")).toBeEmptyDOMElement();
   });
 
   it("shows the fetched project name instead of the raw route id in the evidence subtitle", () => {
@@ -802,66 +815,25 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.queryByText("Project: proj-1")).not.toBeInTheDocument();
   });
 
-  it("requires a validation note before approving entities below 90 percent confidence", async () => {
-    useDocumentEntitiesMock.mockReturnValue({
-      entities: [
-        {
-          id: "clause-2",
-          type: "stakeholder",
-          text: "Unverified scope note",
-          confidence: 88,
-          page: 4,
-        },
-      ],
-      highlights: [
-        {
-          id: "highlight-clause-2",
-          entityId: "clause-2",
-          page: 4,
-          color: "yellow",
-          label: "Unverified scope note",
-          rects: [],
-        },
-      ],
-      loading: false,
-      error: null,
-      refetch: vi.fn(),
-    });
-
+  it("never shows a decision as saved when the server did not persist it", async () => {
+    reviewApprovalMutateAsyncMock.mockResolvedValue({ status: "PENDING" });
     render(<EvidencePage />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /approve entity clause-2/i }),
+    fireEvent.click(screen.getByRole("button", { name: /approve entity clause-1/i }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("mock-decision-failure")).toHaveTextContent(
+        /answered PENDING instead of APPROVED/i,
+      ),
     );
 
-    expect(screen.getByText("Confirm evidence action")).toBeInTheDocument();
-    expect(
-      screen.getByText(/confidence below 90% requires a validation note/i),
-    ).toBeInTheDocument();
-
-    const confirmButton = screen.getByRole("button", {
-      name: /confirm action/i,
-    });
-    expect(confirmButton).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText(/validation note/i), {
-      target: { value: "Reviewed against source context and accepted." },
-    });
-
-    expect(confirmButton).not.toBeDisabled();
-    fireEvent.click(confirmButton);
-
-    await waitFor(() => {
-      expect(reviewApprovalMutateAsyncMock).toHaveBeenCalledWith({
-        resourceType: "stakeholders",
-        resourceId: "clause-2",
-        data: {
-          status: "APPROVED",
-          correction_data: undefined,
-          feedback_comment: "Reviewed against source context and accepted.",
-        },
-      });
-    });
+    reviewApprovalMutateAsyncMock.mockRejectedValue(new Error("boom"));
+    fireEvent.click(screen.getByRole("button", { name: /reject entity clause-1/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("mock-decision-failure")).toHaveTextContent(
+        /did not save the decision/i,
+      ),
+    );
   });
 
   it("requires confirmation before approving or rejecting alerts", async () => {
@@ -1189,7 +1161,7 @@ describe("EvidencePage highlight mapping", () => {
       "shadow-sm",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /approve entity clause-1/i }));
+    fireEvent.click(screen.getByRole("button", { name: /approve alert/i }));
 
     expect(
       screen.getByText("Confirm evidence action").closest("[role='dialog']"),

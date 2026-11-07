@@ -207,7 +207,14 @@ function ExecutiveSummary({ sections }: { sections: Sections }) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Nothing requires attention in the data that is available.</p>
+          notCovered.length > 0 || (awaitingCount !== null && awaitingCount !== undefined && awaitingCount > 0) ? (
+            <p className="text-sm text-muted-foreground" data-testid="attention-not-evaluated">
+              No attention items were raised, but this is NOT a clean result: parts of the project were not
+              evaluated or documents are still awaiting analysis (see below).
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing requires attention in the data that is available.</p>
+          )
         )}
 
         <dl className="grid gap-3 text-sm sm:grid-cols-2">

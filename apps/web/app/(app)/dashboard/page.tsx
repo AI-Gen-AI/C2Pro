@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { NOT_EVALUATED_LABEL, scoreOrNull } from "@/lib/evaluation-state";
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -326,8 +327,9 @@ export default function AppDashboardPage() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => {
           const summary = summaries[project.id];
-          const score = summary?.coherence_score ?? 0;
+          const score = scoreOrNull(summary?.coherence_score);
           const alerts = summary?.alert_count ?? 0;
+          const alertsNotEvaluated = score === null && alerts === 0;
           const docs = summary?.document_count ?? 0;
 
           return (
@@ -345,7 +347,9 @@ export default function AppDashboardPage() {
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="space-y-1 rounded-md bg-muted/50 p-2">
                     <BarChart3 className="mx-auto h-4 w-4 text-primary" />
-                    <div className="text-xl font-bold">{score}</div>
+                    <div className={score === null ? "text-xs font-semibold text-muted-foreground" : "text-xl font-bold"}>
+                      {score === null ? NOT_EVALUATED_LABEL : score}
+                    </div>
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Score
                     </div>
@@ -354,7 +358,9 @@ export default function AppDashboardPage() {
                     <AlertTriangle
                       className={`mx-auto h-4 w-4 ${alerts > 0 ? "text-warning" : "text-muted-foreground"}`}
                     />
-                    <div className="text-xl font-bold">{alerts}</div>
+                    <div className={alertsNotEvaluated ? "text-xs font-semibold text-muted-foreground" : "text-xl font-bold"}>
+                      {alertsNotEvaluated ? NOT_EVALUATED_LABEL : alerts}
+                    </div>
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Alerts
                     </div>

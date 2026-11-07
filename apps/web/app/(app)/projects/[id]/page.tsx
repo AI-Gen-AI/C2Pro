@@ -18,6 +18,11 @@ import { useProject } from '@/hooks/useProject';
 import { useProjectDocuments } from '@/hooks/useProjectDocuments';
 import { TripletChecklist } from '@/components/features/documents/TripletChecklist';
 import type { AlertResponse } from '@/lib/api/generated/models';
+import {
+  ALERTS_NOT_EVALUATED_MESSAGE,
+  NOT_EVALUATED_LABEL,
+  scoreOrNull,
+} from '@/lib/evaluation-state';
 
 type DashboardScoreSource = {
   sub_scores?: unknown;
@@ -113,7 +118,9 @@ export default function ProjectOverviewPage() {
   const openAlerts = alerts.filter((alert: AlertResponse) => alert.status === 'open');
   const alertsUnavailable = Boolean(alertsError);
   
-  const coherenceScore = numberValue(dashboard.coherence_score);
+  // null/missing = no coherence evaluation produced a score: never rendered as 0.
+  const coherenceScore = scoreOrNull(dashboard.coherence_score);
+  const coherenceEvaluated = coherenceScore !== null;
   const documentCount = numberValue(dashboard.document_count);
   const subScores = objectValue((dashboard as DashboardScoreSource).sub_scores);
   const budgetScore =
@@ -132,9 +139,22 @@ export default function ProjectOverviewPage() {
     title: alert.message.split(' — ')[0],
   }));
 
+  // Alerts are produced by evaluation: without one, "0 open alerts" is absence of evaluation, not absence of risk.
+  const alertsNotEvaluated = !coherenceEvaluated && openAlertCount === 0;
+
   const statCards = [
-    { label: 'Coherence Score', value: String(coherenceScore), icon: Gauge, color: 'text-primary' },
-    { label: 'Open Alerts', value: String(openAlertCount), icon: AlertTriangle, color: 'text-warning' },
+    {
+      label: 'Coherence Score',
+      value: coherenceEvaluated ? String(coherenceScore) : NOT_EVALUATED_LABEL,
+      icon: Gauge,
+      color: 'text-primary',
+    },
+    {
+      label: 'Open Alerts',
+      value: alertsNotEvaluated ? NOT_EVALUATED_LABEL : String(openAlertCount),
+      icon: AlertTriangle,
+      color: 'text-warning',
+    },
     { label: 'Documents', value: String(documentCount), icon: FileText, color: 'text-chart-quality' },
     { label: 'Budget coherence', value: budgetValue, title: budgetTitle, icon: DollarSign, color: 'text-chart-budget' },
   ];
@@ -152,7 +172,10 @@ export default function ProjectOverviewPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-                  <p className="font-mono text-2xl font-bold" title={stat.title}>
+                  <p
+                    className={`font-mono font-bold ${stat.value === NOT_EVALUATED_LABEL ? 'text-base text-muted-foreground' : 'text-2xl'}`}
+                    title={stat.title}
+                  >
                     {stat.value}
                   </p>
                 </div>
@@ -190,9 +213,11 @@ export default function ProjectOverviewPage() {
             )}
             <div className="flex justify-between">
               <span>Coherence Score</span>
-              <span className="font-mono font-medium text-foreground">{coherenceScore}</span>
+              <span className="font-mono font-medium text-foreground" data-testid="overview-coherence-score">
+                {coherenceEvaluated ? coherenceScore : NOT_EVALUATED_LABEL}
+              </span>
             </div>
-            <Progress value={coherenceScore} className="h-1.5" />
+            {coherenceEvaluated ? <Progress value={coherenceScore} className="h-1.5" /> : null}
           </CardContent>
         </Card>
 
@@ -234,7 +259,13 @@ export default function ProjectOverviewPage() {
               </div>
             ))}
             {!alertsUnavailable && recentAlerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No open alerts</p>
+              alertsNotEvaluated ? (
+                <p className="text-sm text-muted-foreground" data-testid="overview-alerts-not-evaluated">
+                  {ALERTS_NOT_EVALUATED_MESSAGE}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No open alerts</p>
+              )
             ) : null}
           </CardContent>
         </Card>

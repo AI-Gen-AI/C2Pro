@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  ALERTS_NOT_EVALUATED_MESSAGE,
+  NOT_EVALUATED_LABEL,
+  scoreOrNull,
+} from "@/lib/evaluation-state";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -911,7 +916,9 @@ export default function ProjectsPage() {
                         Coherence score
                       </div>
                       <div className="mt-3 text-4xl font-semibold tracking-tight">
-                        {Math.round(quickViewSummary?.coherence_score ?? 0)}
+                        {scoreOrNull(quickViewSummary?.coherence_score) === null
+                          ? NOT_EVALUATED_LABEL
+                          : Math.round(scoreOrNull(quickViewSummary?.coherence_score) as number)}
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">
                         Current project health based on the latest backend analysis.
@@ -967,7 +974,9 @@ export default function ProjectsPage() {
                       </div>
                     ) : (
                       <div className="mt-4 rounded-xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground shadow-sm">
-                        No open alerts in the current quick-view summary.
+                        {scoreOrNull(quickViewSummary?.coherence_score) === null
+                          ? ALERTS_NOT_EVALUATED_MESSAGE
+                          : 'No open alerts in the current quick-view summary.'}
                       </div>
                     )}
                   </section>

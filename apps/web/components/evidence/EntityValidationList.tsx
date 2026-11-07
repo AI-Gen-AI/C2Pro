@@ -26,8 +26,8 @@ import {
 
 interface EntityValidationListProps {
   entities: ExtractedEntity[];
-  onApprove: (entityId: string) => void;
-  onReject: (entityId: string, reason: string) => void;
+  onApprove: (entityId: string, note?: string) => void | Promise<void>;
+  onReject: (entityId: string, reason: string) => void | Promise<void>;
   onEntityClick?: (entity: ExtractedEntity) => void;
   activeEntityId?: string | null;
   isLoading?: boolean;
@@ -50,12 +50,15 @@ export function EntityValidationList({
   // Get unique entity types for filter
   const entityTypes = Array.from(new Set(entities.map((e) => e.type)));
 
-  // Calculate stats
+  // Only items whose decision the backend can persist take part in the review counters. Everything else is
+  // inspection only: it is never "pending", so it can neither be approved nor inflate the pending count.
+  const decidable = entities.filter((e) => Boolean(e.approvalResourceType));
   const stats = {
     total: entities.length,
-    pending: entities.filter((e) => !e.validationStatus || e.validationStatus === 'pending').length,
-    approved: entities.filter((e) => e.validationStatus === 'approved').length,
-    rejected: entities.filter((e) => e.validationStatus === 'rejected').length,
+    inspectionOnly: entities.length - decidable.length,
+    pending: decidable.filter((e) => !e.validationStatus || e.validationStatus === 'pending').length,
+    approved: decidable.filter((e) => e.validationStatus === 'approved').length,
+    rejected: decidable.filter((e) => e.validationStatus === 'rejected').length,
   };
 
   // Filter entities
@@ -72,6 +75,7 @@ export function EntityValidationList({
 
     // Status filter
     if (statusFilter !== 'all') {
+      if (!entity.approvalResourceType) return false;
       const entityStatus = entity.validationStatus || 'pending';
       if (entityStatus !== statusFilter) return false;
     }
@@ -125,14 +129,19 @@ export function EntityValidationList({
           <XCircle className="h-3 w-3" />
           {stats.rejected} Rejected
         </Badge>
-        <span className="text-xs text-muted-foreground ml-auto">
+        {stats.inspectionOnly > 0 ? (
+          <Badge variant="outline" className="gap-1" data-testid="stat-inspection-only">
+            {stats.inspectionOnly} Inspection only
+          </Badge>
+        ) : null}
+        <span className="text-xs text-muted-foreground sm:ml-auto">
           {stats.total} total entities
         </span>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[8rem] flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search entities..."
@@ -142,7 +151,7 @@ export function EntityValidationList({
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as FilterStatus)}>
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-full min-w-0 flex-1 sm:w-[130px] sm:flex-none">
             <Filter className="mr-2 h-4 w-4" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -154,7 +163,7 @@ export function EntityValidationList({
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full min-w-0 flex-1 sm:w-[150px] sm:flex-none">
             <SelectValue placeholder="Type" />
           </SelectTrigger>
           <SelectContent>
@@ -176,7 +185,7 @@ export function EntityValidationList({
       )}
 
       {/* Entity List */}
-      <ScrollArea className="h-[calc(100vh-24rem)]">
+      <ScrollArea className="md:h-[calc(100vh-24rem)]">
         <div className="space-y-3 pr-4">
           {filteredEntities.length === 0 ? (
             <Alert>
@@ -212,7 +221,7 @@ export function EntityValidationList({
               className="text-green-600"
               onClick={() => {
                 // Navigate to first pending entity
-                const firstPending = entities.find(
+                const firstPending = decidable.find(
                   (e) => !e.validationStatus || e.validationStatus === 'pending'
                 );
                 if (firstPending) onEntityClick?.(firstPending);

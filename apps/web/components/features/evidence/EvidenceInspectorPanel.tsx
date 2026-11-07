@@ -59,8 +59,8 @@ interface EvidenceInspectorPanelProps {
   relationshipExplanation: RelationshipExplanation | null;
   evidenceTimeline: EvidenceTimelineEvent[];
   reviewerIdentityReady: boolean;
-  onApproveEntity: (entityId: string) => void;
-  onRejectEntity: (entityId: string, reason: string) => void;
+  onApproveEntity: (entityId: string, note?: string) => void | Promise<void>;
+  onRejectEntity: (entityId: string, reason: string) => void | Promise<void>;
   onEntityClick: (entity: ExtractedEntity) => void;
   onSearchQueryChange: (value: string) => void;
   onSelectPanelItem: (id: string) => void;
