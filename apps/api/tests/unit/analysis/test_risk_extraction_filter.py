@@ -400,3 +400,42 @@ def test_n4_still_excludes_pure_price_tables_even_with_schedule_labels(
     assert risk in result.document_text
     assert table_es not in result.document_text
     assert table_en not in result.document_text
+
+
+@pytest.mark.parametrize(
+    ("clause", "anchor"),
+    [
+        (
+            "7.4 El Contratista deberá aportar garantía de buena ejecución "
+            "de los equipos durante veinticuatro meses.",
+            "garantía de buena ejecución",
+        ),
+        (
+            "6.2 La especificación técnica fijará los valores mínimos "
+            "para el dimensionamiento de las cimentaciones.",
+            "especificación técnica",
+        ),
+    ],
+)
+def test_n4_spanish_accented_obligations_are_not_lost_before_ai(
+    tool: RiskExtractionTool, clause: str, anchor: str,
+) -> None:
+    other = "5.1 El contratista acepta responsabilidad por retraso de entrega."
+    result = tool.extract_input_from_state({
+        "document_text": clause + "\n\n" + other,
+    })  # type: ignore[arg-type]
+    assert anchor in result.document_text
+    assert clause in result.document_text
+    assert other in result.document_text
+
+
+def test_n4_spanish_accented_measurement_and_payment_table_stays_excluded(
+    tool: RiskExtractionTool,
+) -> None:
+    table = "Medición y pago: tabla de calidad y cronograma de mediciones."
+    risk = "8.2 El contratista asumirá responsabilidad por retraso en la entrega final."
+    result = tool.extract_input_from_state({
+        "document_text": table + "\n\n" + risk,
+    })  # type: ignore[arg-type]
+    assert risk in result.document_text
+    assert table not in result.document_text
