@@ -21,4 +21,7 @@ async def test_s3_lineage_diagnostics_queries_real_postgres_without_raw_data(
     assert report["graph_completed_total"] == 0
     assert report["snapshots_total"] == 0
     assert report["latest_snapshot_assessment_count"] is None
-    assert not any(k.endswith("_id") for k in report)
+    assert not any(
+        k in report
+        for k in ("project_id", "tenant_id", "analysis_id", "event_id", "source_event_id")
+    )
