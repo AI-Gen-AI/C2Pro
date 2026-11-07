@@ -49,6 +49,7 @@ def test_contract_risk_alert_retains_grounded_document_revision_and_clause_locat
     [alert] = AlertGenerator(project_id=project).generate_risk_alerts([risk])
 
     assert alert.source_clause_id == clause
+    assert alert.affected_entities == {"documents": [str(document)]}
     assert alert.alert_metadata["source_provenance"] == {
         "verification_status": "VERIFIED",
         "source_references": [{
@@ -69,6 +70,7 @@ def test_unlinked_contract_risk_is_explicitly_not_verified_not_invented() -> Non
     [alert] = AlertGenerator(project_id=project).generate_risk_alerts([risk])
 
     assert alert.source_clause_id is None
+    assert alert.affected_entities == {}
     assert alert.alert_metadata["source_provenance"] == {
         "verification_status": "NOT_VERIFIED",
         "source_references": [],
@@ -101,4 +103,61 @@ def test_foreign_tenant_clause_never_becomes_an_alert_source() -> None:
 
     assert refs == []
     assert alert.source_clause_id is None
+    assert alert.affected_entities == {}
     assert alert.alert_metadata["source_provenance"]["verification_status"] == "NOT_VERIFIED"
+
+
+def test_malformed_risk_source_reference_never_invents_affected_document() -> None:
+    project = uuid4()
+    [alert] = AlertGenerator(project_id=project).generate_risk_alerts([
+        {
+            "title": "Malformed source",
+            "clause_ref": "6.1",
+            "source_locator_status": "VERIFIED",
+            "source_references": [{
+                "document_id": "not-a-document-id",
+                "revision_id": str(uuid4()),
+                "clause_id": str(uuid4()),
+                "clause_code": "6.1",
+            }],
+        }
+    ])
+
+    assert alert.source_clause_id is None
+    assert alert.affected_entities == {}
+    assert alert.alert_metadata["source_provenance"] == {
+        "verification_status": "NOT_VERIFIED",
+        "source_references": [],
+    }
+
+
+def test_ambiguous_risk_source_references_never_invent_affected_documents() -> None:
+    project, first_document, second_document = (uuid4() for _ in range(3))
+    [alert] = AlertGenerator(project_id=project).generate_risk_alerts([
+        {
+            "title": "Ambiguous source",
+            "clause_ref": "6.1",
+            "source_locator_status": "VERIFIED",
+            "source_references": [
+                {
+                    "document_id": str(first_document),
+                    "revision_id": str(uuid4()),
+                    "clause_id": str(uuid4()),
+                    "clause_code": "6.1",
+                },
+                {
+                    "document_id": str(second_document),
+                    "revision_id": str(uuid4()),
+                    "clause_id": str(uuid4()),
+                    "clause_code": "6.1",
+                },
+            ],
+        }
+    ])
+
+    assert alert.source_clause_id is None
+    assert alert.affected_entities == {}
+    assert alert.alert_metadata["source_provenance"] == {
+        "verification_status": "NOT_VERIFIED",
+        "source_references": [],
+    }

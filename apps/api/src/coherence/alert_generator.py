@@ -235,6 +235,11 @@ class AlertGenerator:
             impact_level = item.get("impact_level")
             confidence = item.get("confidence")
             source_clause_id, source_provenance = self._risk_source_provenance(item)
+            affected_entities = {}
+            if source_provenance["verification_status"] == "VERIFIED":
+                affected_entities = {
+                    "documents": [source_provenance["source_references"][0]["document_id"]]
+                }
 
             alerts.append(
                 AlertCreate(
@@ -255,6 +260,7 @@ class AlertGenerator:
                     rule_id=None,
                     source_clause_id=source_clause_id,
                     related_clause_ids=None,
+                    affected_entities=affected_entities,
                 )
             )
 
