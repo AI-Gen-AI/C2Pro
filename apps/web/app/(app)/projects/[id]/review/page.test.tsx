@@ -767,6 +767,34 @@ describe('ReviewPage', () => {
     expect(screen.queryByTestId('review-target-searching')).not.toBeInTheDocument();
   });
 
+  it('S5 — refreshes an older linked review when its row changes but the total stays fixed', async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=item-245'));
+    setupMock({ data: { items: MOCK_ITEMS, total: 250 } });
+    mockLoadScopedReviewPage
+      .mockResolvedValueOnce({
+        items: [{ ...MOCK_ITEMS[0], item_id: 'item-245', row_id: 'row-old', current_status: 'APPROVED' }],
+        total: 250,
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...MOCK_ITEMS[0], item_id: 'item-245', row_id: 'row-new', current_status: 'PENDING_REVIEW_REQUIRED' }],
+        total: 250,
+      });
+    Element.prototype.scrollIntoView = vi.fn();
+
+    render(<ReviewPage />);
+    await waitFor(() => expect(mockLoadScopedReviewPage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('review-item-item-245')).toHaveTextContent(/Approved/i));
+    await userEvent.click(screen.getByTestId('review-refresh-linked-item'));
+
+    await waitFor(() => expect(mockLoadScopedReviewPage).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId('review-item-item-245')).toHaveTextContent(/Pending Review/i));
+    expect(mockLoadScopedReviewPage).toHaveBeenNthCalledWith(2,
+      { project_id: 'test-project-id', skip: 200, limit: 200 },
+      expect.any(AbortSignal),
+    );
+    expect(screen.queryByTestId('review-target-unavailable')).not.toBeInTheDocument();
+  });
+
   it('S5 — never displays an item from a different project when it is absent in scoped pages', async () => {
     mockSearchParams.mockReturnValue(new URLSearchParams('itemId=foreign-project-item'));
     setupMock({ data: { items: MOCK_ITEMS, total: 250 } });

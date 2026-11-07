@@ -173,6 +173,9 @@ export default function ReviewPage() {
   const [pageLimit, setPageLimit] = useState(
     targetItemId ? MAX_PAGE_LIMIT : PAGE_LIMIT_STEP,
   );
+  // Force a fresh project-scoped lookup after explicit refresh even if the
+  // first-page data and overall count are unchanged.
+  const [linkedRefreshSeq, setLinkedRefreshSeq] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   // C2PRO #649: one human decision -> one request. The ref closes the gap
   // before React re-renders the disabled state (rapid clicks land in the
@@ -273,7 +276,7 @@ export default function ReviewPage() {
       }
     })();
     return () => controller.abort();
-  }, [shouldFindOlderReview, targetItemId, projectId, queueData?.total]);
+  }, [shouldFindOlderReview, targetItemId, projectId, queueData?.total, queueData?.items, linkedRefreshSeq]);
 
   const locatedReview = shouldFindOlderReview && linkedReview?.item_id === targetItemId
     ? linkedReview
@@ -289,6 +292,7 @@ export default function ReviewPage() {
     setRefreshing(true);
     try {
       await Promise.all([refetch(), refetchStats()]);
+      setLinkedRefreshSeq((current) => current + 1);
       setLastChecked(new Date());
     } finally {
       setRefreshing(false);
@@ -529,6 +533,18 @@ export default function ReviewPage() {
         <p role="status" data-testid="review-target-searching" className="text-sm text-muted-foreground">
           Finding the linked review in older pages of this project…
         </p>
+      ) : null}
+      {shouldFindOlderReview && locatedReview ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="review-refresh-linked-item"
+          disabled={refreshing}
+          onClick={() => void refreshQueue()}
+        >
+          {refreshing ? 'Checking linked review…' : 'Refresh linked review'}
+        </Button>
       ) : null}
       {shouldFindOlderReview && linkedSearchStatus === 'error' ? (
         <p role="alert" data-testid="review-target-search-error" className="text-sm text-destructive">
