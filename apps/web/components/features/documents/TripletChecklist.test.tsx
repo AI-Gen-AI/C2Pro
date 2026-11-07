@@ -54,6 +54,18 @@ describe("TripletChecklist", () => {
     expect(result.complete).toBe(false);
   });
 
+  it("does not promote parsed input requiring human approval to ready", () => {
+    const result = deriveTripletChecklist([doc("contract", "parsed", "review_required")]);
+    expect(result.slots[0].state).toBe("awaiting_approval");
+    expect(result.complete).toBe(false);
+  });
+
+  it("does not promote a parsed input with pending analysis to ready", () => {
+    const result = deriveTripletChecklist([doc("contract", "parsed", "analysis_pending")]);
+    expect(result.slots[0].state).toBe("processing");
+    expect(result.complete).toBe(false);
+  });
+
   it("a ready document wins over another revision of the same type that awaits approval", () => {
     const result = deriveTripletChecklist([
       doc("contract", "processing", "review_required"),
