@@ -66,13 +66,22 @@ describe("TripletChecklist", () => {
     expect(result.complete).toBe(false);
   });
 
-  it("a ready document wins over another revision of the same type that awaits approval", () => {
+  it("never hides a pending contract decision behind another analyzed contract", () => {
     const result = deriveTripletChecklist([
       doc("contract", "processing", "review_required"),
       { ...doc("contract", "parsed", "analyzed"), id: "contract-older" },
     ]);
+    expect(result.slots[0]).toEqual(expect.objectContaining({ type: "contract", state: "awaiting_approval" }));
+    expect(result.complete).toBe(false);
+  });
 
-    expect(result.slots[0]).toEqual(expect.objectContaining({ type: "contract", state: "ready" }));
+  it("does not mark a category ready while another document has analysis pending", () => {
+    const result = deriveTripletChecklist([
+      doc("contract", "parsed", "analysis_pending"),
+      { ...doc("contract", "parsed", "analyzed"), id: "contract-older" },
+    ]);
+    expect(result.slots[0]).toEqual(expect.objectContaining({ type: "contract", state: "processing" }));
+    expect(result.complete).toBe(false);
   });
 
   it("says in plain words that the contract awaits approval and that nothing is evaluated", () => {
