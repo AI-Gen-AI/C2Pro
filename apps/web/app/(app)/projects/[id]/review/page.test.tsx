@@ -265,6 +265,47 @@ describe('ReviewPage', () => {
     expect(screen.getByTestId('detail-item-1')).toBeInTheDocument();
   });
 
+  it('does not present unassessed extraction confidence as a measured percentage in approve dialog', async () => {
+    setupMock({ data: {
+      items: [{
+        ...MOCK_ITEMS[0], confidence: 0.85,
+        item_data: { confidence_assessed: false, document_filename: '01_Contrato_EPC.docx' },
+      }],
+      total: 1,
+    } });
+    render(<ReviewPage />);
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(screen.getByText('Extraction confidence:')).toBeInTheDocument();
+    expect(screen.getByText('Not evaluated')).toBeInTheDocument();
+    expect(screen.queryByText('85.0%')).not.toBeInTheDocument();
+  });
+
+  it('shows legacy sentinel zero as not evaluated, but preserves an assessed zero', async () => {
+    setupMock({ data: {
+      items: [{
+        ...MOCK_ITEMS[0], confidence: 0,
+        item_data: { confidence_assessed: true },
+      }],
+      total: 1,
+    } });
+    const { unmount } = render(<ReviewPage />);
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(screen.getByText('0.0%')).toBeInTheDocument();
+    unmount();
+
+    setupMock({ data: {
+      items: [{
+        ...MOCK_ITEMS[0], confidence: 0,
+        item_data: { message: 'Unassessed legacy extraction' },
+      }],
+      total: 1,
+    } });
+    render(<ReviewPage />);
+    await userEvent.click(screen.getByTestId('approve-item-1'));
+    expect(screen.getByText('Not evaluated')).toBeInTheDocument();
+    expect(screen.queryByText('0.0%')).not.toBeInTheDocument();
+  });
+
   it('opens approve dialog and calls API', async () => {
     setupMock();
     mockApproveMutate.mockResolvedValue({});
