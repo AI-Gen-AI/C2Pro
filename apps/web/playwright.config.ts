@@ -126,6 +126,14 @@ export default defineConfig({
       },
     },
     {
+      // Opt-in authenticated UX browser smoke: real Clerk Development A/B on disposable test DB.
+      name: "ux-clerk-browser-gate",
+      testMatch: ["**/ux-clerk-browser-gate.spec.ts"],
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["global-setup"],
+      metadata: { suite: "UX-E2E-01", type: "e2e", priority: "p0" },
+    },
+    {
       // Integral ACC-01 S1-S8 UAT: ONE project from the first login to the relogin, two Clerk tenants. Opt-in
       // only (INTEGRAL_UAT=1, set by the integral job of acc01-s2-live-ai-uat.yml); never part of another suite.
       name: "integral-s1-s8",
