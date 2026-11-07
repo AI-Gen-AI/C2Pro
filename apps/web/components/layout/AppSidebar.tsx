@@ -42,11 +42,19 @@ export function AppSidebar() {
   const { organization } = useOrganization();
   const { isCollapsed, toggle, setCollapsed } = useSidebarStore();
 
-  // Handle initial mobile state - collapse by default on small screens
+  // Close the overlay when the viewport ENTERS mobile size, including on rotation
+  // or desktop-window resize. Do not close on every mobile resize: a user may
+  // deliberately have opened the menu, and soft keyboards can resize the viewport.
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setCollapsed(true);
-    }
+    let wasMobile = window.innerWidth < 768;
+    if (wasMobile) setCollapsed(true);
+    const onResize = () => {
+      const isMobile = window.innerWidth < 768;
+      if (isMobile && !wasMobile) setCollapsed(true);
+      wasMobile = isMobile;
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [setCollapsed]);
 
   // Check if we're in demo mode based on the current path
@@ -94,8 +102,9 @@ export function AppSidebar() {
     >
       {/* Overlay for mobile when sidebar is open */}
       {!isCollapsed && (
-        <div 
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm md:hidden" 
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm md:hidden"
           onClick={() => setCollapsed(true)}
         />
       )}

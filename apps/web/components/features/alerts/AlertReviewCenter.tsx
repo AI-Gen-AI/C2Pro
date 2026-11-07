@@ -70,6 +70,17 @@ function findAlert(items: ReviewAlert[], alertId: string): ReviewAlert | undefin
   return items.find((item) => item.id === alertId);
 }
 
+// Alerts always return to this project's list, never a user-provided URL.
+function alertAnchor(alertId: string): string | null {
+  return /^[A-Za-z0-9_-]{1,128}$/.test(alertId) ? "alert-" + alertId : null;
+}
+
+function returnAlertSuffix(alertId: string): string {
+  return alertAnchor(alertId)
+    ? "&origin=alerts&returnAlertId=" + encodeURIComponent(alertId)
+    : "";
+}
+
 export function AlertReviewCenter({
   projectId,
   alerts,
@@ -93,6 +104,7 @@ export function AlertReviewCenter({
   const [isSaving, setIsSaving] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const restoredAlertRef = useRef<string | null>(null);
   const persistedMode = Boolean(onApprove && onReject && onResolve);
 
   useEffect(() => {
@@ -111,6 +123,20 @@ export function AlertReviewCenter({
         .sort((left, right) => SEVERITY_RANK[right.severity] - SEVERITY_RANK[left.severity]),
     [items, statusFilter],
   );
+
+  // The alerts list may render after the URL fragment has been loaded. Restore
+  // focus only when the alert is actually present in this project's response.
+  useEffect(() => {
+    const fragment = window.location.hash.slice(1);
+    if (!fragment.startsWith("alert-") || restoredAlertRef.current === fragment) return;
+    const matching = visibleItems.some((alert) => alertAnchor(alert.id) === fragment);
+    if (!matching) return;
+    const row = document.getElementById(fragment);
+    if (!row) return;
+    restoredAlertRef.current = fragment;
+    row.focus({ preventScroll: true });
+    row.scrollIntoView?.({ block: "center" });
+  }, [visibleItems]);
 
   const closeModal = () => {
     setModal({ kind: "none" });
@@ -359,7 +385,12 @@ export function AlertReviewCenter({
         </thead>
         <tbody>
           {visibleItems.map((alert) => (
-            <tr key={alert.id}>
+            <tr
+              key={alert.id}
+              id={alertAnchor(alert.id) ?? undefined}
+              tabIndex={-1}
+              className="scroll-mt-24 focus-visible:outline-2 focus-visible:outline-primary"
+            >
               <td>{alert.title}</td>
               <td>{alert.severity}</td>
               <td>{alert.status}</td>
@@ -373,7 +404,8 @@ export function AlertReviewCenter({
                         "/evidence?documentId=" +
                         encodeURIComponent(alert.sourceDocumentId) +
                         "&highlightId=" +
-                        encodeURIComponent(alert.addressableClauseId)
+                        encodeURIComponent(alert.addressableClauseId) +
+                        returnAlertSuffix(alert.id)
                       }
                       aria-label={"View evidence for " + alert.addressableClauseId}
                     >
@@ -411,7 +443,8 @@ export function AlertReviewCenter({
                                 encodeURIComponent(source.sourceLocator) +
                                 (source.blobSha256
                                   ? "&expectedHash=" + encodeURIComponent(source.blobSha256)
-                                  : "")
+                                  : "") +
+                                returnAlertSuffix(alert.id)
                               }
                               aria-label={
                                 "View original " +

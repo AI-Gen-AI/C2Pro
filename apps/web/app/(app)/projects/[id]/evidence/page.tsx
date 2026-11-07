@@ -106,6 +106,23 @@ export default function EvidencePage() {
   // Return path is constructed locally from the authenticated project scope,
   // never from a user-supplied full URL (no open redirects or cross-project jump).
   const returnReviewItemId = searchParams.get("returnReviewItemId");
+  const requestedReturnAlertId = searchParams.get("returnAlertId");
+  // No open redirect and no invented cross-project destination: alert identity
+  // is a constrained local anchor in the currently authenticated project.
+  const returnAlertId =
+    searchParams.get("origin") === "alerts" &&
+    requestedReturnAlertId &&
+    /^[A-Za-z0-9_-]{1,128}$/.test(requestedReturnAlertId)
+      ? requestedReturnAlertId
+      : null;
+  // Only report-generated anchors are accepted. The link is built against
+  // the authenticated route project ID, never a user-provided URL or project.
+  const requestedReturnDiscrepancy = searchParams.get("returnDiscrepancy");
+  const returnDiscrepancy =
+    requestedReturnDiscrepancy &&
+    /^source-discrepancy-[0-9a-f]{12}-[0-9]{1,5}$/.test(requestedReturnDiscrepancy)
+      ? requestedReturnDiscrepancy
+      : null;
   // Health links cite the persisted source clause, not a semantic/alert alias.
   const requestedFromHealth = searchParams.get("origin") === "health";
   const revisionReadOnly = Boolean(requestedRevisionId);
@@ -923,6 +940,26 @@ export default function EvidencePage() {
           className="inline-flex rounded-md border px-3 py-2 text-sm font-medium text-primary hover:underline"
         >
           Back to this review
+        </Link>
+      ) : null}
+
+      {returnDiscrepancy && !returnReviewItemId ? (
+        <Link
+          data-testid="evidence-return-to-discrepancy"
+          href={`/projects/${encodeURIComponent(id)}/report?mode=current-state#${returnDiscrepancy}`}
+          className="inline-flex rounded-md border px-3 py-2 text-sm font-medium text-primary hover:underline"
+        >
+          Back to this Current State finding
+        </Link>
+      ) : null}
+
+      {returnAlertId && !returnReviewItemId && !returnDiscrepancy ? (
+        <Link
+          data-testid="evidence-return-to-alert"
+          href={"/projects/" + encodeURIComponent(id) + "/alerts#alert-" + returnAlertId}
+          className="inline-flex rounded-md border px-3 py-2 text-sm font-medium text-primary hover:underline"
+        >
+          Back to this alert
         </Link>
       ) : null}
 

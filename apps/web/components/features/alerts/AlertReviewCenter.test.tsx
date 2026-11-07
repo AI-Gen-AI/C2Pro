@@ -62,13 +62,80 @@ describe("S3-04 RED - AlertReviewCenter", () => {
     const budget = screen.getByRole("link", { name: "View original budget row Presupuesto!3" });
     expect(budget).toHaveAttribute(
       "href",
-      "/projects/proj%201/evidence?documentId=doc-b&revisionId=rev-b&locator=Presupuesto!3&expectedHash=" + "a".repeat(64),
+      "/projects/proj%201/evidence?documentId=doc-b&revisionId=rev-b&locator=Presupuesto!3&expectedHash=" + "a".repeat(64) + "&origin=alerts&returnAlertId=a-s4",
     );
     expect(screen.getByRole("link", { name: "View original schedule activity Plan!4" })).toHaveAttribute(
       "href",
-      "/projects/proj%201/evidence?documentId=doc-s&revisionId=rev-s&locator=Plan!4",
+      "/projects/proj%201/evidence?documentId=doc-s&revisionId=rev-s&locator=Plan!4&origin=alerts&returnAlertId=a-s4",
     );
     expect(list).toHaveTextContent("Budget row Presupuesto!3");
+  });
+
+  it("restores focus after an alert evidence link returns to the exact alert", () => {
+    const previousUrl = window.location.href;
+    const oldScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true, value: scrollIntoView,
+    });
+    try {
+      window.history.replaceState(null, "", "#alert-a-s4");
+      render(
+        <AlertReviewCenter
+          projectId="proj 1"
+          alerts={[{ id: "a-s4", title: "Budget discrepancy", severity: "high", status: "pending" }]}
+        />,
+      );
+      const row = document.getElementById("alert-a-s4");
+      expect(row).toHaveAttribute("tabindex", "-1");
+      expect(row).toBe(document.activeElement);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+      fireInAct(() => fireEvent.change(screen.getByLabelText("Status filter"), {
+        target: { value: "pending" },
+      }));
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(row);
+    } finally {
+      window.history.replaceState(null, "", previousUrl);
+      if (oldScroll) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", oldScroll);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
+  });
+
+  it("does not navigate or focus another alert when a return anchor is absent or invalid", () => {
+    const previousUrl = window.location.href;
+    const oldScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true, value: scrollIntoView,
+    });
+    try {
+      window.history.replaceState(null, "", "#alert-missing");
+      render(
+        <AlertReviewCenter
+          projectId="proj 1"
+          alerts={[{
+            id: "bad/id", title: "Not an addressable alert", severity: "low", status: "pending",
+            structuredSources: [{ family: "budget", documentId: "doc", revisionId: "rev", sourceLocator: "Plan!4" }],
+          }]}
+        />,
+      );
+      expect(document.getElementById("alert-bad/id")).toBeNull();
+      expect(screen.getByRole("link", { name: /view original budget row/i })).not.toHaveAttribute(
+        "href", expect.stringContaining("returnAlertId"),
+      );
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      window.history.replaceState(null, "", previousUrl);
+      if (oldScroll) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", oldScroll);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
   });
 
   it("[S4] an alert without any structured pointer shows none and invents none", () => {
@@ -514,7 +581,7 @@ describe("Line B evidence provenance", () => {
     });
     expect(link).toHaveAttribute(
       "href",
-      "/projects/proj-42/evidence?documentId=22222222-2222-4222-8222-222222222222&highlightId=11111111-1111-4111-8111-111111111111",
+      "/projects/proj-42/evidence?documentId=22222222-2222-4222-8222-222222222222&highlightId=11111111-1111-4111-8111-111111111111&origin=alerts&returnAlertId=a-evidence",
     );
   });
 

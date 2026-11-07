@@ -23,6 +23,7 @@ import { useProject } from '@/hooks/useProject';
 import { showToast } from '@/lib/ui/toast';
 import {
   useListReviewQueueApiV1HitlQueueGet,
+  listReviewQueueApiV1HitlQueueGet,
   useApproveItemApiV1HitlQueueItemIdApprovePost,
   useRejectItemApiV1HitlQueueItemIdRejectPost,
 } from '@/lib/api/generated/hitl/hitl';
@@ -38,6 +39,9 @@ import {
 
 const PAGE_LIMIT_STEP = 50;
 const MAX_PAGE_LIMIT = 200;
+// Never scan an unbounded queue on page entry. Each page remains backend
+// project-scoped, and we explicitly disclose when this search limit is reached.
+const MAX_LINKED_REVIEW_SCAN_ITEMS = 2_000;
 
 type ModalState =
   | { kind: 'none' }
@@ -169,6 +173,9 @@ export default function ReviewPage() {
   const [pageLimit, setPageLimit] = useState(
     targetItemId ? MAX_PAGE_LIMIT : PAGE_LIMIT_STEP,
   );
+  // Force a fresh project-scoped lookup after explicit refresh even if the
+  // first-page data and overall count are unchanged.
+  const [linkedRefreshSeq, setLinkedRefreshSeq] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   // C2PRO #649: one human decision -> one request. The ref closes the gap
   // before React re-renders the disabled state (rapid clicks land in the
@@ -219,11 +226,73 @@ export default function ReviewPage() {
   const statsTruncated = (statsData?.total ?? 0) > statsItems.length;
 
   const items = useMemo(() => queueData?.items ?? [], [queueData]);
+  const targetInPage = Boolean(targetItemId && items.some((item) => item.item_id === targetItemId));
+  const shouldFindOlderReview = Boolean(
+    targetItemId &&
+    pageLimit === MAX_PAGE_LIMIT &&
+    statusFilter === 'all' &&
+    !isLoading && !error &&
+    !targetInPage &&
+    (queueData?.total ?? 0) > items.length,
+  );
+  const [linkedReview, setLinkedReview] = useState<ReviewItemResponse | null>(null);
+  const [linkedSearchStatus, setLinkedSearchStatus] = useState<
+    'idle' | 'searching' | 'found' | 'not-found' | 'limit' | 'error'
+  >('idle');
+
+  useEffect(() => {
+    if (!shouldFindOlderReview || !targetItemId) {
+      setLinkedReview(null);
+      setLinkedSearchStatus('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    setLinkedReview(null);
+    setLinkedSearchStatus('searching');
+    void (async () => {
+      try {
+        // The unfiltered project queue is authoritative for membership. A
+        // single-item GET lacks project_id in its response, so it is NOT used
+        // to make cross-project deep links appear valid.
+        const total = queueData?.total ?? 0;
+        for (let skip = MAX_PAGE_LIMIT; skip < Math.min(total, MAX_LINKED_REVIEW_SCAN_ITEMS); skip += MAX_PAGE_LIMIT) {
+          const page = await listReviewQueueApiV1HitlQueueGet(
+            { project_id: projectId, skip, limit: MAX_PAGE_LIMIT },
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          const target = page.items.find((item) => item.item_id === targetItemId);
+          if (target) {
+            setLinkedReview(target);
+            setLinkedSearchStatus('found');
+            return;
+          }
+          if (page.items.length === 0) break;
+        }
+        setLinkedSearchStatus(total > MAX_LINKED_REVIEW_SCAN_ITEMS ? 'limit' : 'not-found');
+      } catch {
+        if (!controller.signal.aborted) setLinkedSearchStatus('error');
+      }
+    })();
+    return () => controller.abort();
+  }, [shouldFindOlderReview, targetItemId, projectId, queueData?.total, queueData?.items, linkedRefreshSeq]);
+
+  const locatedReview = shouldFindOlderReview && linkedReview?.item_id === targetItemId
+    ? linkedReview
+    : null;
+  const displayedItems = useMemo(
+    () => locatedReview && !items.some((item) => item.item_id === locatedReview.item_id)
+      ? [...items, locatedReview]
+      : items,
+    [items, locatedReview],
+  );
 
   const refreshQueue = async () => {
     setRefreshing(true);
     try {
       await Promise.all([refetch(), refetchStats()]);
+      setLinkedRefreshSeq((current) => current + 1);
       setLastChecked(new Date());
     } finally {
       setRefreshing(false);
@@ -234,7 +303,8 @@ export default function ReviewPage() {
   }, [targetItemId]);
   const targetIsMissing = Boolean(
     targetItemId && pageLimit === MAX_PAGE_LIMIT &&
-    !items.some((item) => item.item_id === targetItemId),
+    !isLoading && !error && !targetInPage && !locatedReview &&
+    (!shouldFindOlderReview || linkedSearchStatus === 'not-found'),
   );
   const receiptRow = decisionReceipt
     ? statsItems.find((item) => item.row_id === decisionReceipt.rowId)
@@ -248,11 +318,11 @@ export default function ReviewPage() {
 
   useEffect(() => {
     if (!targetItemId) return;
-    if (!items.some((item) => item.item_id === targetItemId)) return;
-    document
-      .getElementById(`review-item-${targetItemId}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [targetItemId, items]);
+    if (!displayedItems.some((item) => item.item_id === targetItemId)) return;
+    const target = document.getElementById('review-item-' + targetItemId);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [targetItemId, displayedItems]);
 
   const pendingCount = statsItems.filter(
     (i) =>
@@ -459,10 +529,38 @@ export default function ReviewPage() {
         )}
       </div>
 
+      {shouldFindOlderReview && linkedSearchStatus === 'searching' ? (
+        <p role="status" data-testid="review-target-searching" className="text-sm text-muted-foreground">
+          Finding the linked review in older pages of this project…
+        </p>
+      ) : null}
+      {shouldFindOlderReview && locatedReview ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="review-refresh-linked-item"
+          disabled={refreshing}
+          onClick={() => void refreshQueue()}
+        >
+          {refreshing ? 'Checking linked review…' : 'Refresh linked review'}
+        </Button>
+      ) : null}
+      {shouldFindOlderReview && linkedSearchStatus === 'error' ? (
+        <p role="alert" data-testid="review-target-search-error" className="text-sm text-destructive">
+          The linked review could not be checked. No other review was selected; reload to retry.
+        </p>
+      ) : null}
+      {shouldFindOlderReview && linkedSearchStatus === 'limit' ? (
+        <p role="status" data-testid="review-target-search-limited" className="text-sm text-muted-foreground">
+          The linked review was not found in the first 2,000 project items.
+          No other review was selected. Narrow the queue or ask an administrator to locate the item.
+        </p>
+      ) : null}
       {targetIsMissing ? (
         <div data-testid="review-target-unavailable" role="status"
              className="rounded-lg border bg-muted/40 p-4 text-sm">
-          This linked review item is not in the current project queue (up to 200 items).
+          This linked review item was not found in the checked project queue.
           It may have moved or no longer be available. No other review was selected.
         </div>
       ) : null}
@@ -557,18 +655,19 @@ export default function ReviewPage() {
       </div>
 
       {/* Queue List */}
-      {items.length === 0 ? (
+      {displayedItems.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground" data-testid="review-empty">
           No review items found
         </div>
       ) : (
         <div className="space-y-3" data-testid="review-queue">
-          {items.map((item) => (
+          {displayedItems.map((item) => (
             <div
               // item_id is reusable across revisions; a new row must remount
               // fresh controls rather than inherit the previous row's UI state.
               key={decisionKey(item)}
               id={`review-item-${item.item_id}`}
+              tabIndex={-1}
               className={
                 targetItemId === item.item_id
                   ? 'rounded-lg ring-2 ring-primary ring-offset-2'

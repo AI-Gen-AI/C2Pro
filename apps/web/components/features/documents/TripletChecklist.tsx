@@ -40,25 +40,42 @@ function isReadyStatus(status: unknown): boolean {
   return ["analyzed", "parsed"].includes(String(status ?? "").toLowerCase());
 }
 
+/** Backend lifecycle takes precedence over old polling status. */
+function isReadyDocument(document: Pick<DocumentInfo, "status" | "lifecycleStatus">): boolean {
+  return document.lifecycleStatus
+    ? document.lifecycleStatus === "analyzed"
+    : isReadyStatus(document.status);
+}
+
 export function deriveTripletChecklist(
   documents: Pick<DocumentInfo, "type" | "status" | "lifecycleStatus">[],
 ): TripletChecklistState {
   const slots = REQUIRED_SLOTS.map(({ type, label }) => {
     const matchingDocuments = documents.filter((document) => document.type === type);
-    const hasReadyDocument = matchingDocuments.some((document) =>
-      isReadyStatus(document.status),
+    const hasReadyDocument = matchingDocuments.some(isReadyDocument);
+    // The list has no authoritative active-revision order. A pending source
+    // must not be hidden by another previously analyzed file of the same type.
+    const hasPendingReview = matchingDocuments.some((document) =>
+      isAwaitingApprovalStatus(document.lifecycleStatus),
+    );
+    const hasIncompleteLifecycle = matchingDocuments.some((document) =>
+      document.lifecycleStatus !== undefined &&
+      document.lifecycleStatus !== "analyzed" &&
+      document.lifecycleStatus !== "review_required",
     );
 
     return {
       type,
       label,
-      state: hasReadyDocument
-        ? "ready"
-        : matchingDocuments.some((document) => isAwaitingApprovalStatus(document.lifecycleStatus))
-          ? "awaiting_approval"
-          : matchingDocuments.length > 0
-            ? "processing"
-            : "missing",
+      state: hasPendingReview
+        ? "awaiting_approval"
+        : hasIncompleteLifecycle
+          ? "processing"
+          : hasReadyDocument
+            ? "ready"
+            : matchingDocuments.length > 0
+              ? "processing"
+              : "missing",
     } satisfies TripletSlot;
   });
 
