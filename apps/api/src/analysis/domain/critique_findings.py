@@ -56,8 +56,8 @@ def source_bound_findings(
             continue
 
         # The reference and quote must be co-located in an identifiable clause.
-        # Support EPC-04: and numbered clauses such as "5.2 <text>" or
-        # "Section 5.2 <text>", including same-line headings after a full stop.
+        # Support line-initial EPC-04: and numbered clauses such as "5.2 <text>"
+        # or "Section 5.2: <text>". Same-line mentions are not headings.
         # A reference merely *mentioned* elsewhere is not clause provenance.
         # Recognise only line-initial headings. Narrative same-line
         # cross-references such as "... Section 6.3 applies separately" are
@@ -74,12 +74,29 @@ def source_bound_findings(
                 source_text,
             )
         )
+        # An uncertain qualified line still interrupts the *previous* known
+        # clause, but is not itself sufficient to certify the new clause.
+        # Otherwise a valid 5.2 heading can absorb an ambiguous Section 6.3.
+        ambiguous_boundaries = [
+            m.start()
+            for m in re.finditer(
+                r"(?im)^[ \t]*(?:Clause|Section|Cláusula|Artículo|Articulo|§)"
+                r"[ \t]*(?:EPC-\d+|\d+(?:\.\d+){1,3})\b",
+                source_text,
+            )
+        ]
+        boundaries = sorted(
+            {label.start() for label in labels} | set(ambiguous_boundaries)
+        )
         matched = False
-        for pos, label in enumerate(labels):
+        for label in labels:
             ref = label.group("qualified_ref") or label.group("bare_ref")
             if ref.casefold() != clause_ref.strip().casefold():
                 continue
-            end = labels[pos + 1].start() if pos + 1 < len(labels) else len(source_text)
+            end = min(
+                (point for point in boundaries if point > label.start()),
+                default=len(source_text),
+            )
             if quote in _normal(source_text[label.start() : end]):
                 matched = True
                 break

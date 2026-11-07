@@ -242,3 +242,29 @@ def test_codex_line_initial_cross_reference_without_heading_delimiter_is_unverif
         "Incorrect attribution from narrative cross-reference.",
     )
     assert source_bound_findings([misleading], source_text=source) == []
+
+
+def test_codex_ambiguous_new_section_breaks_previous_clause_span():
+    """An unpunctuated qualified section is a boundary, not verified authority."""
+    source = (
+        "5.2 Payment terms.\n"
+        "Section 6.3 Delay damages\n"
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    quote = "Contractor shall pay delay damages of 1% per week."
+    wrong_previous = _finding("5.2", "omission", quote, "Wrong previous section.")
+    unsupported_new = _finding("6.3", "omission", quote, "Unpunctuated heading not proven.")
+    assert source_bound_findings([wrong_previous, unsupported_new], source_text=source) == []
+
+
+def test_explicit_new_section_is_scoped_to_its_own_quote():
+    source = (
+        "5.2 Payment terms.\n"
+        "Section 6.3: Delay damages\n"
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    quote = "Contractor shall pay delay damages of 1% per week."
+    wrong_previous = _finding("5.2", "omission", quote, "Wrong previous section.")
+    grounded_new = _finding("6.3", "omission", quote, "Clause 6.3 has this requirement.")
+    findings = source_bound_findings([wrong_previous, grounded_new], source_text=source)
+    assert [item["clause_ref"] for item in findings] == ["6.3"]
