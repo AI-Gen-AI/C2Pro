@@ -33,6 +33,7 @@ from src.analysis.adapters.graph.review_lineage import (
     claim_review_lineage_for_current_attempt,
 )
 from src.analysis.adapters.graph.review_source_references import (
+    bind_risk_alert_source_references,
     grounded_review_source_references,
     review_risk_clause_codes,
 )
@@ -940,13 +941,21 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
             # owner (same transaction as the writes). #830: the extracted WBS is
             # kept as a proposal in the analysis; canonical WBS is never written.
             await fence_current(session)
+            risks = await _bind_risk_alert_sources(
+                session=session,
+                tenant_id=tenant_id,
+                project_id=UUID(state["project_id"]),
+                document_id=state.get("document_id"),
+                revision_id=state.get("document_revision_id"),
+                risks=state.get("extracted_risks", []),
+            )
             result = await PersistAnalysisUseCase(
                 analysis_repo=SqlAlchemyAnalysisRepository(session),
             ).execute(
                 PersistAnalysisCommand(
                     project_id=UUID(state["project_id"]),
                     tenant_id=tenant_id,
-                    extracted_risks=state.get("extracted_risks", []),
+                    extracted_risks=risks,
                     extracted_wbs=state.get("extracted_wbs", []),
                     coherence_score=state.get("coherence_score", 0),
                     coherence_breakdown=state.get("coherence_breakdown", {}),
@@ -992,3 +1001,42 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     ]
     state["messages"].append(AIMessage(content=f"Persisted analysis {result.analysis_id}."))
     return state
+
+
+async def _bind_risk_alert_sources(
+    *,
+    session: Any,
+    tenant_id: UUID,
+    project_id: UUID,
+    document_id: object,
+    revision_id: object,
+    risks: object,
+) -> list[dict[str, Any]]:
+    """Carry only exact, tenant-scoped source clauses into RISK alert payloads."""
+    raw_risks = risks if isinstance(risks, list) else []
+    try:
+        document = UUID(str(document_id))
+        revision = UUID(str(revision_id))
+    except (TypeError, ValueError):
+        return bind_risk_alert_source_references(raw_risks, [])
+
+    try:
+        persisted = await SqlAlchemyDocumentRepository(session).list_clauses_bound_to_revision(
+            tenant_id, document, revision
+        )
+        refs = grounded_review_source_references(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=document,
+            revision_id=revision,
+            clause_codes=review_risk_clause_codes(raw_risks),
+            persisted_clauses=persisted,
+        )
+    except Exception as exc:  # noqa: BLE001 - a source lookup cannot fabricate or block the risk alert.
+        logger.warning(
+            "risk_alert_source_reference_unavailable",
+            reason=type(exc).__name__,
+            document_id=str(document),
+        )
+        refs = []
+    return bind_risk_alert_source_references(raw_risks, refs)

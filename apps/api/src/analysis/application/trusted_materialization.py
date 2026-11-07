@@ -55,7 +55,7 @@ Derived-state policy (C3b-1):
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -366,7 +366,7 @@ async def materialize_in_transaction(
     PROJECT locks (:func:`lock_document`, :func:`lock_project`). Nothing here
     commits; an exception rolls every effect back with the caller.
     """
-    from src.analysis.adapters.persistence.models import Analysis
+    from src.analysis.adapters.persistence.models import Analysis, DocumentArtifactORM
 
     reason = await verify_current_authority(session, ref)
     if reason is not None:
@@ -394,6 +394,24 @@ async def materialize_in_transaction(
         # canonical effect already happened. Write nothing new.
         await _mark_materialized(session, ref, existing, None)
         return MaterializationOutcome(MaterializationStatus.ALREADY_MATERIALIZED, existing)
+
+    artifact = await session.scalar(
+        select(DocumentArtifactORM).where(
+            DocumentArtifactORM.artifact_id == ref.artifact_id,
+            DocumentArtifactORM.tenant_id == ref.tenant_id,
+            DocumentArtifactORM.project_id == ref.project_id,
+            DocumentArtifactORM.document_id == ref.document_id,
+        )
+    )
+    risks = await _bind_risk_alert_sources(
+        session=session,
+        tenant_id=ref.tenant_id,
+        project_id=ref.project_id,
+        document_id=ref.document_id,
+        revision_id=getattr(artifact, "document_revision_id", None),
+        risks=content.risks,
+    )
+    content = replace(content, risks=risks)
 
     analysis_id, qualifications = await write_canonical_effects(
         session,
@@ -454,6 +472,49 @@ async def materialize_in_transaction(
         qualifications=list(qualifications),
     )
     return MaterializationOutcome(MaterializationStatus.CREATED, analysis_id, qualifications)
+
+
+async def _bind_risk_alert_sources(
+    *,
+    session: Any,
+    tenant_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    revision_id: UUID | None,
+    risks: list[Any],
+) -> list[dict[str, Any]]:
+    """Materialization-side equivalent of N17's fail-closed source projection."""
+    from src.analysis.adapters.graph.review_source_references import (
+        bind_risk_alert_source_references,
+        grounded_review_source_references,
+        review_risk_clause_codes,
+    )
+    from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+        SqlAlchemyDocumentRepository,
+    )
+
+    if revision_id is None:
+        return bind_risk_alert_source_references(risks, [])
+    try:
+        persisted = await SqlAlchemyDocumentRepository(session).list_clauses_bound_to_revision(
+            tenant_id, document_id, revision_id
+        )
+        refs = grounded_review_source_references(
+            tenant_id=tenant_id,
+            project_id=project_id,
+            document_id=document_id,
+            revision_id=revision_id,
+            clause_codes=review_risk_clause_codes(risks),
+            persisted_clauses=persisted,
+        )
+    except Exception as exc:  # noqa: BLE001 - preserve alerts with explicit unverified provenance.
+        logger.warning(
+            "trusted_materialization_risk_source_reference_unavailable",
+            artifact_document_id=str(document_id),
+            reason=type(exc).__name__,
+        )
+        refs = []
+    return bind_risk_alert_source_references(risks, refs)
 
 
 async def write_canonical_effects(

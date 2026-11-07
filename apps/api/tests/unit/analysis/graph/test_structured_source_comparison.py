@@ -84,6 +84,26 @@ def test_three_provisional_discrepancies_have_both_exact_sources():
     assert schedule["compared_values"]["overrun_days"] == 11
 
 
+def test_two_source_discrepancy_conserves_each_revision_hash_and_row_locator() -> None:
+    artifacts, rows = _sources()
+    finding = next(
+        item
+        for item in compare_original_source_rows(artifacts, rows)["findings"]
+        if item["rule_id"] == "DET-CRS-NEGMARGIN"
+    )
+    quote, row = finding["sources"]
+
+    assert set(quote) >= {
+        "document_id", "revision_id", "source_locator", "source_quote_sha256",
+    }
+    assert set(row) >= {
+        "document_id", "revision_id", "source_locator", "blob_sha256", "unit_sha256",
+    }
+    assert quote["revision_id"] != row["revision_id"]
+    assert row["source_locator"] == "Budget!9"
+    assert len(quote["source_quote_sha256"]) == len(row["blob_sha256"]) == len(row["unit_sha256"]) == 64
+
+
 def test_tampered_original_row_cannot_be_used_as_evidence():
     artifacts, rows = _sources()
     for row in rows:
