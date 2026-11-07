@@ -19,9 +19,7 @@ from src.core.tasks import materialization_tasks as tasks
 async def test_pending_worker_does_not_promote_provisional_scoring_into_n8_state(
     monkeypatch,
 ) -> None:
-    tenant_id, project_id, document_id, artifact_id, analysis_id = (
-        uuid4() for _ in range(5)
-    )
+    tenant_id, project_id, document_id, artifact_id, analysis_id = (uuid4() for _ in range(5))
     obligation = SimpleNamespace(
         artifact_id=artifact_id,
         document_id=document_id,
@@ -40,12 +38,14 @@ async def test_pending_worker_does_not_promote_provisional_scoring_into_n8_state
     scoring_from_proposal = {"coherence_score": 60}
     rows = [
         SimpleNamespace(first=lambda: obligation),
-        SimpleNamespace(first=lambda: SimpleNamespace(
-            materialization_state=tasks.materializer.MaterializationState.PENDING
-        )),
-        SimpleNamespace(first=lambda: SimpleNamespace(
-            payload=approved_payload, scoring=scoring_from_proposal
-        )),
+        SimpleNamespace(
+            first=lambda: SimpleNamespace(
+                materialization_state=tasks.materializer.MaterializationState.PENDING
+            )
+        ),
+        SimpleNamespace(
+            first=lambda: SimpleNamespace(payload=approved_payload, scoring=scoring_from_proposal)
+        ),
     ]
     session = SimpleNamespace(execute=AsyncMock(side_effect=rows))
     monkeypatch.setattr(tasks.materializer, "lock_document", AsyncMock(return_value=True))
@@ -75,9 +75,7 @@ async def test_pending_worker_does_not_promote_provisional_scoring_into_n8_state
     persist = AsyncMock(return_value=effect)
     monkeypatch.setattr(tasks.materializer, "materialize_in_transaction", persist)
 
-    result = await tasks._materialize(
-        session, artifact_id=artifact_id, tenant_id=tenant_id
-    )
+    result = await tasks._materialize(session, artifact_id=artifact_id, tenant_id=tenant_id)
 
     assert result["status"] == tasks.materializer.MaterializationStatus.CREATED.value
     assert observed == {"payload": approved_payload, "resumed_state": None}
