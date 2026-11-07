@@ -59,7 +59,8 @@ class CompositeFileParser(IFileParserService):
                 inventory = inspect_pdf_source_inventory(file_path, text_blocks)
                 return {
                     "file_format": file_format,
-                    "text_blocks": text_blocks,
+                    # Drop the transient OCR sidecar before JSON persistence.
+                    "text_blocks": list(text_blocks),
                     "document_coverage": {
                         "status": "UNVERIFIED",
                         "origin": "pdf_file_parser",

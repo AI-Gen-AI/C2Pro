@@ -95,3 +95,94 @@ async def test_composite_docx_reports_unextracted_header_and_remains_unverified(
     assert payload["document_coverage"]["status"] == "UNVERIFIED"
     assert "header_or_footer_part_not_extracted" in payload["document_coverage"]["limitations"]
     assert payload["document_coverage"]["source_inventory"]["assurance"] == "OBSERVED_ONLY"
+
+
+@pytest.mark.asyncio
+async def test_pdf_ocr_unavailable_is_distinguished_from_failed(tmp_path, monkeypatch):
+    from src.documents.adapters.parsers import pdf_file_parser
+    path = tmp_path / "blank-scanned.pdf"
+    with fitz.open() as doc:
+        doc.new_page()
+        doc.save(path)
+    monkeypatch.setattr(pdf_file_parser, "OCR_AVAILABLE", False)
+    payload = await CompositeFileParser.create().parse_document_file(
+        SimpleNamespace(file_format=".pdf", document_type=DocumentType.CONTRACT), path
+    )
+    inventory = payload["document_coverage"]["source_inventory"]
+    assert inventory["pages_ocr_unavailable"] == [1]
+    assert inventory["pages_ocr_failed"] == []
+    assert inventory["pages_ocr_empty_result"] == []
+    assert "ocr_unavailable_for_candidate_pages" in inventory["limitations"]
+    assert payload["document_coverage"]["status"] == "UNVERIFIED"
+
+
+@pytest.mark.asyncio
+async def test_pdf_ocr_processing_exception_does_not_leak_exception_text(tmp_path, monkeypatch):
+    from src.documents.adapters.parsers import pdf_file_parser
+    path = tmp_path / "blank-scanned.pdf"
+    with fitz.open() as doc:
+        doc.new_page()
+        doc.save(path)
+
+    def broken_open(_):
+        raise RuntimeError("CONFIDENTIAL EXCEPTION PAYLOAD")
+
+    monkeypatch.setattr(pdf_file_parser, "OCR_AVAILABLE", True)
+    monkeypatch.setattr(pdf_file_parser.Image, "open", broken_open)
+    payload = await CompositeFileParser.create().parse_document_file(
+        SimpleNamespace(file_format=".pdf", document_type=DocumentType.CONTRACT), path
+    )
+    inventory = payload["document_coverage"]["source_inventory"]
+    assert inventory["pages_ocr_failed"] == [1]
+    assert inventory["pages_ocr_unavailable"] == []
+    assert "ocr_processing_failed" in inventory["limitations"]
+    assert "CONFIDENTIAL" not in repr(inventory)
+
+
+@pytest.mark.asyncio
+async def test_pdf_ocr_empty_result_is_not_reported_as_processing_failure(tmp_path, monkeypatch):
+    from src.documents.adapters.parsers import pdf_file_parser
+    path = tmp_path / "blank-scanned.pdf"
+    with fitz.open() as doc:
+        doc.new_page()
+        doc.save(path)
+    monkeypatch.setattr(pdf_file_parser, "OCR_AVAILABLE", True)
+    monkeypatch.setattr(pdf_file_parser.pytesseract, "image_to_string", lambda *a, **k: "  ")
+    inventory = (
+        await CompositeFileParser.create().parse_document_file(
+            SimpleNamespace(file_format=".pdf", document_type=DocumentType.CONTRACT), path
+        )
+    )["document_coverage"]["source_inventory"]
+    assert inventory["pages_ocr_empty_result"] == [1]
+    assert inventory["pages_ocr_failed"] == []
+    assert "ocr_returned_no_text" in inventory["limitations"]
+
+
+def test_docx_nested_table_observation_uses_xml_elements_not_literal_tag(tmp_path):
+    path = tmp_path / "nested.docx"
+    document = Document()
+    parent = document.add_table(rows=1, cols=1)
+    parent.cell(0, 0).text = "Parent"
+    nested = parent.cell(0, 0).add_table(rows=1, cols=1)
+    nested.cell(0, 0).text = "Nested terms"
+    document.save(path)
+    inventory = inspect_docx_source_inventory(path, [{"text": "Parent"}])
+    assert inventory["body_tables"] == 1
+    assert inventory["nested_table_hint"] is True
+    assert inventory["all_body_table_elements"] >= 2
+    assert "nested_tables_not_verified" in inventory["limitations"]
+    assert "Nested terms" not in repr(inventory)
+
+
+def test_docx_textbox_marked_when_element_has_attributes(tmp_path):
+    from docx.oxml import OxmlElement
+    path = tmp_path / "textbox.docx"
+    document = Document()
+    paragraph = document.add_paragraph("Plain text")
+    inline = OxmlElement("w:txbxContent")
+    inline.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    paragraph._p.append(inline)
+    document.save(path)
+    inventory = inspect_docx_source_inventory(path, [{"text": "Plain text"}])
+    assert inventory["contains_textboxes"] is True
+    assert "textbox_content_not_extracted" in inventory["limitations"]

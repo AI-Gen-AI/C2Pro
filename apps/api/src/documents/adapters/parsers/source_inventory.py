@@ -12,6 +12,7 @@ from zipfile import ZipFile
 
 import fitz
 from docx import Document as DocxDocument
+from docx.oxml.ns import qn
 
 from src.documents.adapters.parsers.pdf_file_parser import _is_low_quality_text_layer
 
@@ -68,7 +69,34 @@ def inspect_pdf_source_inventory(
                     and page_number not in ocr_pages
                 ):
                     unreadable_native.append(page_number)
+            # The parser supplies a transient per-page trace. Plain lists
+            # from legacy/mocked parsers have no trace: never invent outcomes.
+            traces = getattr(text_blocks, "ocr_diagnostics", None)
+            valid_outcomes = {
+                "failed", "unavailable", "empty_result", "unclassified_no_text",
+            }
+            outcomes: dict[str, set[int]] = {
+                key: set() for key in valid_outcomes
+            }
+            if isinstance(traces, list):
+                for item in traces:
+                    if (
+                        isinstance(item, dict)
+                        and type(item.get("page")) is int
+                        and 1 <= item["page"] <= page_count
+                        and item.get("outcome") in valid_outcomes
+                    ):
+                        outcomes[item["outcome"]].add(item["page"])
+
             limitations = []
+            if outcomes["failed"]:
+                limitations.append("ocr_processing_failed")
+            if outcomes["unavailable"]:
+                limitations.append("ocr_unavailable_for_candidate_pages")
+            if outcomes["empty_result"]:
+                limitations.append("ocr_returned_no_text")
+            if outcomes["unclassified_no_text"]:
+                limitations.append("ocr_result_unclassified")
             if missing:
                 limitations.append("text_missing_on_source_pages")
             if image_only:
@@ -92,6 +120,11 @@ def inspect_pdf_source_inventory(
                 "pages_with_images_without_text": image_only,
                 "pages_with_suspect_native_text": unreadable_native,
                 "pages_using_ocr": ocr_pages,
+                "ocr_diagnostics_available": isinstance(traces, list),
+                "pages_ocr_failed": sorted(outcomes["failed"]),
+                "pages_ocr_unavailable": sorted(outcomes["unavailable"]),
+                "pages_ocr_empty_result": sorted(outcomes["empty_result"]),
+                "pages_ocr_unclassified": sorted(outcomes["unclassified_no_text"]),
                 "text_block_count": len(text_blocks),
                 "limitations": limitations,
             }
@@ -126,15 +159,18 @@ def inspect_docx_source_inventory(
                 "endnotes": int("word/endnotes.xml" in names),
                 "comments": int("word/comments.xml" in names),
             }
-            # This parser only visits body-level paragraphs/tables. Text
-            # shapes and nested tables can contain source terms it misses.
-            document_xml = archive.getinfo("word/document.xml")
-            if document_xml.file_size > 16_000_000:
-                return _unavailable()
-            body_xml = archive.read("word/document.xml")
-            has_textboxes = b"txbxContent" in body_xml
-            # count explicit table starts (including nested tables)
-            nested_table_hint = body_xml.count(b"<w:tbl>") > body_tables
+        # Inspect parsed XML elements instead of literal byte sequences:
+        # <w:tbl w:rsid...> and another namespace prefix are still tables.
+        # Do not log or persist the contents of any of these elements.
+        all_body_table_elements = 0
+        has_textboxes = False
+        for element in document.element.body.iter():
+            tag = element.tag
+            if tag == qn("w:tbl"):
+                all_body_table_elements += 1
+            if isinstance(tag, str) and tag.rsplit("}", 1)[-1] == "txbxContent":
+                has_textboxes = True
+        nested_table_hint = all_body_table_elements > body_tables
 
         limitations: list[str] = []
         if other_regions["headers"] or other_regions["footers"]:
@@ -154,6 +190,7 @@ def inspect_docx_source_inventory(
             "inspection_available": True,
             "body_paragraphs": body_paragraphs,
             "body_tables": body_tables,
+            "all_body_table_elements": all_body_table_elements,
             "text_block_count": len(text_blocks),
             "omitted_package_regions": other_regions,
             "contains_textboxes": has_textboxes,
