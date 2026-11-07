@@ -49,6 +49,12 @@ describe("CurrentStateReportView", () => {
               }
             : summary.data,
         },
+        coherence: {
+          ...report.sections.coherence,
+          data: report.sections.coherence.data
+            ? { ...report.sections.coherence.data, score: 87, missing_dimensions: [] }
+            : report.sections.coherence.data,
+        },
       },
     });
     expect(screen.getByTestId("executive-summary")).toHaveTextContent(
@@ -393,6 +399,7 @@ describe("CurrentStateReportView", () => {
     expect(card).toHaveTextContent("Provisional");
     expect(card).toHaveTextContent("not approved budget/schedule baselines");
     expect(card).toHaveTextContent("92 days");
+    expect(card).toHaveTextContent(`revision ${revQuote} · locator verified-quote:abcdef123 · hash ${"a".repeat(64)}`);
     expect(within(card).getAllByTestId("source-discrepancy-item")).toHaveLength(1);
     const links = within(card).getAllByTestId("source-discrepancy-evidence-link");
     expect(links).toHaveLength(2);
@@ -403,6 +410,74 @@ describe("CurrentStateReportView", () => {
       `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule!4&expectedHash=${"b".repeat(64)}`,
     );
     expect(card).toHaveTextContent("Quote highlighting is not guaranteed");
+  });
+
+  it("does not invent a second evidence link when a compared source is incomplete", () => {
+    const report = buildCurrentStateReport();
+    const withMissingSource = {
+      ...report,
+      sections: {
+        ...report.sections,
+        source_discrepancies: {
+          status: "available", status_reason: null, source_domain: "project_graph",
+          source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
+          evidence_tier: "weak_linked", evidence_note: "Provisional, not scored.",
+          data: { items: [{
+            rule_id: "DET-CRS-BUDGET", summary: "A value differs between two sources",
+            state: "PROVISIONAL", scored: false, requires_human_review: true,
+            compared_values: { delta: "reported by source data" },
+            sources: [
+              {
+                role: "verified_document_quote", document_id: "document-a", revision_id: "revision-a",
+                source_locator: "clause 3", source_quote_sha256: "a".repeat(64),
+              },
+              {
+                role: "original_source_row", document_id: "document-b", revision_id: null,
+                source_locator: "Budget!5", blob_sha256: "b".repeat(64),
+              },
+            ],
+          }] },
+        },
+      },
+    } as unknown as CurrentStateReport;
+
+    renderReport(withMissingSource);
+    const card = section("source_discrepancies");
+    expect(within(card).getAllByTestId("source-discrepancy-evidence-link")).toHaveLength(1);
+    expect(within(card).getByTestId("source-discrepancy-unverified-source")).toHaveTextContent(
+      "Unverified source: this comparison does not yet have two revision-, locator-, and hash-bound source objects.",
+    );
+    expect(card).toHaveTextContent("Next: locate and verify the missing source");
+    expect(card).not.toHaveTextContent("revision null");
+  });
+
+  it("keeps a null coherence score as NOT EVALUATED rather than normalizing it to zero", () => {
+    const report = buildCurrentStateReport();
+    const summary = report.sections.executive_summary;
+    renderReport({
+      ...report,
+      sections: {
+        ...report.sections,
+        executive_summary: {
+          ...summary,
+          data: summary.data
+            ? {
+                ...summary.data,
+                attention_items: [],
+                not_modeled_section_keys: [],
+                unavailable_section_keys: [],
+                error_section_keys: [],
+                awaiting_analysis_document_count: 0,
+              }
+            : summary.data,
+        },
+      },
+    });
+    const card = section("coherence");
+    expect(card).toHaveTextContent("Score: NOT EVALUATED");
+    expect(card).not.toHaveTextContent("Score: 0");
+    expect(card).not.toHaveTextContent("0%");
+    expect(screen.getByTestId("attention-not-evaluated")).toHaveTextContent("incomplete Coherence");
   });
 
   it("does not invent discrepancy findings when an older backend omits the section", () => {
