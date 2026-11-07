@@ -817,17 +817,93 @@ def snapshot_delta(state: ProjectGraphState) -> dict[str, object]:
     }
 
 
-def write_snapshot(_state: ProjectGraphState) -> dict[str, Any]:
-    return {
-        "snapshot_id": None,
-        "node_results": _skipped("write_snapshot", "pending ADR-015 snapshot write"),
+async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
+    """Record the completed graph state without turning null coherence into a score."""
+    repository = state.get("snapshot_repository")
+    if repository is None:
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "snapshot repository unavailable"),
+        }
+    coherence = state.get("coherence_result")
+    if isinstance(coherence, dict):
+        coherence = ProjectCoherenceResult.model_validate(coherence)
+    if coherence is None or not isinstance(state.get("health_result"), dict):
+        return {
+            "snapshot_id": None,
+            "node_results": _skipped("write_snapshot", "project coherence or health unavailable"),
+        }
+
+    from src.temporal.domain.project_snapshot import ProjectSnapshot, SnapshotTrigger
+
+    artifact_revisions = [_artifact_key(artifact) for artifact in state.get("artifacts", [])]
+    counts = {
+        "project_graph": True,
+        "artifact_count": len(artifact_revisions),
+        "artifact_revision_ids": artifact_revisions,
+        "coherence_llm_on": coherence.llm_on,
+        "score_reason": coherence.score_reason,
+        "score_version": state.get("coherence_score_version"),
+        "missing_dimensions": list(coherence.insufficient_data_reasons),
     }
+    health_vector = state["health_result"]
+    try:
+        previous = await repository.latest(state["project_id"], state["tenant_id"])
+        if (
+            previous is not None
+            and previous.trigger is SnapshotTrigger.GRAPH_COMPLETED
+            and previous.counts == counts
+            and previous.health_vector == health_vector
+            and previous.coherence_subscore == coherence.overall_score
+        ):
+            return {
+                "snapshot_id": previous.snapshot_id,
+                "node_results": _ok("write_snapshot", {"snapshot_reused": True}),
+            }
+        now = datetime.now(UTC).replace(tzinfo=None)
+        snapshot = ProjectSnapshot(
+            snapshot_id=uuid4(),
+            project_id=state["project_id"],
+            tenant_id=state["tenant_id"],
+            captured_at=now,
+            trigger=SnapshotTrigger.GRAPH_COMPLETED,
+            health_vector=health_vector,
+            coherence_subscore=coherence.overall_score,
+            counts=counts,
+            source_event_id=state.get("trigger_event_id"),
+            created_at=now,
+        )
+        persisted = await repository.append_snapshot(snapshot)
+        return {
+            "snapshot_id": persisted.snapshot_id,
+            "node_results": _ok("write_snapshot", {"snapshot_reused": False}),
+        }
+    except Exception as exc:  # no success state is emitted for a failed durable write
+        return {"snapshot_id": None, "node_results": _failed("write_snapshot", exc)}
 
 
-def alert_correlation(_state: ProjectGraphState) -> dict[str, Any]:
-    return {
-        "node_results": _skipped("alert_correlation", "pending ADR-019 alert correlation"),
-    }
+async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
+    """Invoke the Alerts-owned integration only when it is explicitly supplied.
+
+    ProjectGraph does not import or mutate Alerts.  This keeps the call point
+    ready for the P0 integration while making its absence visible to operators.
+    """
+    runner = state.get("alert_correlation_runner")
+    if runner is None:
+        return {
+            "node_results": _skipped(
+                "alert_correlation", "alert correlation integration unavailable"
+            ),
+        }
+    try:
+        outcome = await runner.correlate(
+            project_id=state["project_id"],
+            tenant_id=state["tenant_id"],
+            coherence_result=state.get("coherence_result"),
+        )
+        return {"node_results": _ok("alert_correlation", dict(outcome))}
+    except Exception as exc:  # no silent correlation success
+        return {"node_results": _failed("alert_correlation", exc)}
 
 
 def hitl_routing(_state: ProjectGraphState) -> dict[str, Any]:
@@ -907,16 +983,8 @@ def build_project_graph() -> CompiledStateGraph[
     workflow.add_node("change_impact", change_impact, input_schema=ProjectGraphState)
     workflow.add_node("health", health, input_schema=ProjectGraphState)
     workflow.add_node("snapshot_delta", snapshot_delta, input_schema=ProjectGraphState)
-    workflow.add_node(
-        "write_snapshot",
-        RunnableLambda(write_snapshot),
-        input_schema=ProjectGraphState,
-    )
-    workflow.add_node(
-        "alert_correlation",
-        RunnableLambda(alert_correlation),
-        input_schema=ProjectGraphState,
-    )
+    workflow.add_node("write_snapshot", write_snapshot, input_schema=ProjectGraphState)
+    workflow.add_node("alert_correlation", alert_correlation, input_schema=ProjectGraphState)
     workflow.add_node(
         "hitl_routing",
         RunnableLambda(hitl_routing),

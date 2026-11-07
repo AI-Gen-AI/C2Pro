@@ -5,6 +5,7 @@ TS-UT-ADR017-PG-001
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Any, NotRequired, Protocol, TypedDict
 from uuid import UUID
 
@@ -25,6 +26,24 @@ class ProjectGraphArtifactRepository(Protocol):
         tenant_id: TenantId,
         document_id: UUID,
     ) -> list[DocumentArtifact]: ...
+
+
+class ProjectGraphAlertCorrelationRunner(Protocol):
+    """Optional seam owned by the Alerts integration, not ProjectGraph."""
+
+    async def correlate(
+        self,
+        *,
+        project_id: UUID,
+        tenant_id: TenantId,
+        coherence_result: ProjectCoherenceResult | dict[str, object] | None,
+    ) -> Mapping[str, object]: ...
+
+
+class ProjectGraphSnapshotRepository(Protocol):
+    async def latest(self, project_id: UUID, tenant_id: TenantId) -> Any: ...
+
+    async def append_snapshot(self, snapshot: Any) -> Any: ...
 
 
 class ProjectGraphState(TypedDict):
@@ -49,6 +68,9 @@ class ProjectGraphState(TypedDict):
     impact_result: ChangeImpactReport | dict[str, object] | None
     health_result: dict[str, object] | None
     snapshot_id: UUID | None
+    coherence_score_version: NotRequired[str | None]
+    snapshot_repository: NotRequired[ProjectGraphSnapshotRepository]
+    alert_correlation_runner: NotRequired[ProjectGraphAlertCorrelationRunner]
     node_results: Annotated[list[NodeResult[object]], merge_node_results]
     artifact_repository: NotRequired[ProjectGraphArtifactRepository]
 

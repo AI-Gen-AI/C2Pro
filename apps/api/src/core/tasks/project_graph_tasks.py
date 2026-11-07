@@ -5,12 +5,12 @@ TS-UT-ADR017-TRG-001
 
 from __future__ import annotations
 
-import inspect
-import logging
 import hashlib
+import inspect
 import json
-from datetime import UTC, datetime
+import logging
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +24,9 @@ from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
+from src.analysis.adapters.persistence.trusted_artifact_graph_materializer import (
+    SqlAlchemyTrustedArtifactGraphMaterializer,
+)
 from src.analysis.ports.document_artifact_repository import IDocumentArtifactRepository
 from src.core.database import get_raw_session, init_db
 from src.core.dlq.dlq_service import DLQService
@@ -31,6 +34,9 @@ from src.core.tasks.async_runtime import run_async_db_task
 from src.core.tasks.celery_app import celery_app
 from src.core.tasks.project_graph_governance import ProjectGraphGovernance
 from src.core.tenants.types import TenantId, require_tenant_id
+from src.temporal.adapters.persistence.project_snapshot_repository import (
+    SqlAlchemyProjectSnapshotRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +160,9 @@ async def run_project_graph_once(
     structured_source_refs: list[dict[str, Any]] | None = None,
     structured_source_units: list[dict[str, Any]] | None = None,
     structured_document_quotes: list[dict[str, Any]] | None = None,
+    snapshot_repository: Any | None = None,
+    knowledge_graph_materializer: Any | None = None,
+    alert_correlation_runner: Any | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -178,7 +187,31 @@ async def run_project_graph_once(
         "node_results": [],
         "artifact_repository": artifact_repository,
     }
+    if snapshot_repository is not None:
+        graph_input["snapshot_repository"] = snapshot_repository
+    if alert_correlation_runner is not None:
+        graph_input["alert_correlation_runner"] = alert_correlation_runner
     result = await build_project_graph().ainvoke(graph_input)
+    failed_nodes = [
+        node.node
+        for node in result.get("node_results", [])
+        if getattr(node, "status", None).value == "failed"
+    ]
+    if failed_nodes:
+        raise RuntimeError(f"ProjectGraph execution failed: {', '.join(failed_nodes)}")
+    if snapshot_repository is not None and artifacts and result.get("snapshot_id") is None:
+        raise RuntimeError("ProjectGraph snapshot missing; trusted projection not acknowledged")
+    graph_materialization: dict[str, int] | None = None
+    if knowledge_graph_materializer is not None:
+        materialized = await knowledge_graph_materializer.materialize_trusted_artifacts(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            artifacts=artifacts,
+        )
+        graph_materialization = {
+            "node_count": materialized.node_count,
+            "edge_count": materialized.edge_count,
+        }
     # #714: acknowledge the durable trusted -> ProjectGraph obligations of
     # exactly the artifacts this completed run loaded. The caller commits it
     # together with the run; a failed run rolls it back and stays pending.
@@ -194,6 +227,8 @@ async def run_project_graph_once(
         "artifact_count": len(artifacts),
         "structured_source_revision_count": len(structured_source_refs or []),
         "structured_source_comparison": result.get("structured_source_comparison"),
+        "snapshot_id": str(result["snapshot_id"]) if result.get("snapshot_id") else None,
+        "knowledge_graph_materialization": graph_materialization,
         "node_result_count": len(result.get("node_results", [])),
         "coherence_result": _serializable(result.get("coherence_result")),
         "node_results": result.get("node_results", []),
@@ -262,6 +297,8 @@ async def _run_project_graph_async(
                     structured_source_refs=source_refs,
                     structured_source_units=rows,
                     structured_document_quotes=quotes,
+                    snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
+                    knowledge_graph_materializer=SqlAlchemyTrustedArtifactGraphMaterializer(session),
                 )
                 # Persist only PROVISIONAL, dual-source citations in the same
                 # transaction as Tier-2. No promotion to canonical alerts.
