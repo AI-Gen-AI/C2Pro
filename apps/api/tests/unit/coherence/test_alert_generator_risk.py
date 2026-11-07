@@ -87,6 +87,36 @@ class TestAlertGeneratorRiskAlerts:
         # Third item: impact_level="medium" -> AlertSeverity.MEDIUM
         assert alerts[2].severity == AlertSeverity.MEDIUM
 
+    @pytest.mark.parametrize(
+        ("model_field", "level", "expected"),
+        [
+            ("severity", "CRITICAL", AlertSeverity.CRITICAL),
+            ("severity", "HIGH", AlertSeverity.HIGH),
+            ("impact", "HIGH", AlertSeverity.HIGH),
+            ("impact", "medium", AlertSeverity.MEDIUM),
+        ],
+    )
+    def test_actual_n4_risk_severity_alias_not_downgraded(
+        self, project_id, analysis_id, model_field, level, expected
+    ):
+        """N4 emits severity/impact; no impact_level is present in real V2 risks.
+
+        A verified source quote does not itself validate this severity label.
+        This test only checks faithful field mapping, leaving the alert's
+        evidence authority and review disposition independent.
+        """
+        risk = {
+            "title": "Contractual completion risk",
+            "description": "Grounded risk, interpretation pending review",
+            model_field: level,
+            "source_quote_status": "VERIFIED",
+        }
+        [alert] = AlertGenerator(
+            project_id=project_id, analysis_id=analysis_id
+        ).generate_risk_alerts([risk])
+        assert alert.severity == expected
+        assert alert.alert_metadata["raw"][model_field] == level
+
     def test_generate_risk_alerts_leaves_category_none_when_missing(
         self, project_id, analysis_id
     ):
