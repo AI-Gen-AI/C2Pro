@@ -326,3 +326,52 @@ def test_planner_has_no_database_import_or_write_api() -> None:
     source = inspect.getsource(planner)
     assert "sqlalchemy" not in source and "src.core.database" not in source
     assert "def apply" not in source and "async def" not in source
+
+
+@pytest.mark.parametrize("identity_field", ["document_id", "revision_id"])
+def test_hash_valid_but_wrong_artifact_document_revision_fails_closed(
+    identity_field: str,
+) -> None:
+    """A valid SHA256 cannot authenticate a mismatched document or revision."""
+    ids = _ids()
+    risk = _risk("Approved")
+    data = _input(ids, (risk,), (_alert(ids, risk, ids["one"]),))
+    foreign = UUID("00000000-0000-0000-0000-000000000099")
+    wrong_binding = replace(data.approved_artifact, **{identity_field: foreign})
+
+    plan = plan_historical_risk_alert_reconciliation(replace(data, approved_artifact=wrong_binding))
+
+    assert plan.status is PlanStatus.PLAN_BLOCKED
+    assert "ARTIFACT_DOCUMENT_REVISION_MISMATCH" in plan.blocked_reasons
+    assert not plan.items
+
+
+def test_not_trusted_active_artifact_is_blocked_even_when_digest_matches() -> None:
+    ids = _ids()
+    risk = _risk("Approved")
+    data = _input(ids, (risk,), (_alert(ids, risk, ids["one"]),))
+
+    plan = plan_historical_risk_alert_reconciliation(
+        replace(
+            data,
+            approved_artifact=replace(data.approved_artifact, is_trusted_active=False),
+        )
+    )
+
+    assert plan.status is PlanStatus.PLAN_BLOCKED
+    assert "ARTIFACT_NOT_TRUSTED_ACTIVE" in plan.blocked_reasons
+    assert not plan.items
+
+
+def test_one_historical_alert_against_two_identical_approved_risks_is_ambiguous() -> None:
+    ids = _ids()
+    risk = _risk("Approved")
+    data = _input(ids, (risk, risk), (_alert(ids, risk, ids["one"]),))
+
+    plan = plan_historical_risk_alert_reconciliation(data)
+
+    assert plan.status is PlanStatus.READY
+    assert len(plan.items) == 1
+    assert plan.items[0].match_status is MatchStatus.AMBIGUOUS
+    assert plan.items[0].recommendation is Recommendation.REQUIRES_OPERATOR_REVIEW
+    assert plan.advisory_only and plan.write_authority is WriteAuthority.NONE
