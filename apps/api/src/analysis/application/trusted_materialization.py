@@ -194,18 +194,32 @@ class MaterializationContent:
             from src.analysis.domain.contracts import DocumentArtifact
             from src.analysis.domain.trust import artifact_digest
 
+            approved = DocumentArtifact.model_validate(payload)
+            # Check the *stored immutable bytes* against the approved binding.
+            # The resumed state legitimately includes later N15 citations and
+            # N11 proposals; re-hashing those additions against the pre-HITL
+            # candidate would always fail even when source content is unchanged.
+            if artifact_digest(payload) != expected_artifact_hash:
+                return content
             rebuilt = build_document_artifact(resumed_state)
-            if rebuilt != DocumentArtifact.model_validate(payload):
+            source_fields = (
+                "document_id",
+                "document_revision_id",
+                "doc_type",
+                "document_category",
+                "extracted_risks",
+                "extracted_wbs",
+                "bom_items",
+                "confidence_score",
+                "pii_redaction_count",
+                "structured_source",
+            )
+            if any(getattr(rebuilt, key) != getattr(approved, key) for key in source_fields):
                 return content
-            # Existing artifact payloads may retain optional NULL keys while
-            # current repository writes omit them. Hash exactly the stored
-            # key set: never invent extra None keys in a persisted digest.
-            rebuilt_payload = rebuilt.model_dump(mode="json")
-            for optional_key in ("structured_source", "decision_snapshot"):
-                if optional_key not in payload and rebuilt_payload.get(optional_key) is None:
-                    rebuilt_payload.pop(optional_key, None)
-            if artifact_digest(rebuilt_payload) != expected_artifact_hash:
-                return content
+            # Post-HITL N8 may carry a versioned source-coupled observation.
+            # This does not approve additional N15 citations/N11 proposals, nor
+            # authorise an N8 coherence score derived with changed project inputs.
+            full_candidate_match = rebuilt == approved
             resumed = cls.from_state(resumed_state)
         except (TypeError, ValueError, AttributeError):
             logger.warning("trusted_materialization_resume_score_unverifiable")
@@ -233,6 +247,10 @@ class MaterializationContent:
             else {}
         )
         content = replace(content, assessment=authorized_assessment)
+        # A changed derived context is sufficient for an evaluated observation
+        # but insufficient to promote a numerical coherence score.
+        if not full_candidate_match:
+            return content
         score = resumed.coherence_score
         if (
             isinstance(score, bool)

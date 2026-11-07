@@ -34,8 +34,9 @@ from src.temporal.domain.project_snapshot import SnapshotTrigger
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("post_hitl_derived_citation", [False, True])
 async def test_s3_source_bound_n17_materializer_persists_health_x6_real_pg(
-    db: AsyncSession, test_tenant
+    db: AsyncSession, test_tenant, post_hitl_derived_citation: bool
 ) -> None:
     tenant_id = test_tenant.id
     project_id, event_id = uuid4(), uuid4()
@@ -53,6 +54,16 @@ async def test_s3_source_bound_n17_materializer_persists_health_x6_real_pg(
         "single_document_assessment": build_document_assessment_artifact([], []),
     }
     payload = build_document_artifact(state).model_dump(mode="json")
+    # The approved candidate is immutable; N15 may add citations on resume.
+    if post_hitl_derived_citation:
+        state["citations"] = [
+            {
+                "type": "contract",
+                "item": "8.2",
+                "quote": "Synthetic contractual milestone",
+                "found_in_source": True,
+            }
+        ]
     content = MaterializationContent.from_artifact(
         payload,
         resumed_state=state,

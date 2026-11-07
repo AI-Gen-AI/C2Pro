@@ -84,3 +84,81 @@ def test_s3_invalid_assessment_is_unavailable_not_six_fabricated_categories():
         payload, resumed_state=state, expected_artifact_hash=digest
     )
     assert decode_single_document_assessment(content.assessment) is None
+
+
+def test_s3_post_hitl_verified_citation_update_does_not_erase_source_bound_coverage():
+    """An approved candidate is frozen before N15/N11 add derived state.
+
+    Document identity/source remains byte-equivalent; never infer that the
+    new derived citation itself was reviewed or that a Score is approved.
+    """
+    pre_review = _state(score=None)
+    pre_review.pop("single_document_assessment")
+    payload, digest = _bound(pre_review)
+    resumed = deepcopy(pre_review)
+    resumed["citations"] = [
+        {
+            "type": "contract",
+            "item": "8.2",
+            "quote": "Synthetic delivery requirement",
+            "found_in_source": True,
+        }
+    ]
+    resumed["single_document_assessment"] = build_document_assessment_artifact([], [])
+    content = MaterializationContent.from_artifact(
+        payload, resumed_state=resumed, expected_artifact_hash=digest
+    )
+    decoded = decode_single_document_assessment(content.assessment)
+    assert decoded is not None
+    assert len(decoded.coverage.assessments) == 6
+    assert content.coherence_score is None
+
+
+def test_s3_post_hitl_source_change_still_refused_even_with_citation_update():
+    pre_review = _state(score=None)
+    pre_review.pop("single_document_assessment")
+    payload, digest = _bound(pre_review)
+    resumed = deepcopy(pre_review)
+    resumed["citations"] = [
+        {"type": "contract", "item": "8.2", "quote": "Synthetic quote", "found_in_source": True}
+    ]
+    resumed["extracted_wbs"] = [{"code": "NEW-UNAPPROVED-SCOPE"}]
+    resumed["single_document_assessment"] = build_document_assessment_artifact([], [])
+    content = MaterializationContent.from_artifact(
+        payload, resumed_state=resumed, expected_artifact_hash=digest
+    )
+    assert decode_single_document_assessment(content.assessment) is None
+
+
+def test_s3_post_hitl_derived_citation_does_not_promote_unbound_numerical_score():
+    pre_review = _state(score=74)
+    payload, digest = _bound(pre_review)
+    resumed = deepcopy(pre_review)
+    resumed["citations"] = [
+        {
+            "type": "contract",
+            "item": "8.2",
+            "quote": "After-approval quote",
+            "found_in_source": True,
+        }
+    ]
+    content = MaterializationContent.from_artifact(
+        payload, resumed_state=resumed, expected_artifact_hash=digest
+    )
+    assert len(decode_single_document_assessment(content.assessment).coverage.assessments) == 6
+    assert content.coherence_score is None
+    assert content.decision_snapshot == {}
+
+
+def test_s3_post_hitl_changed_revision_is_not_same_approved_source():
+    pre_review = _state(score=None)
+    payload, digest = _bound(pre_review)
+    resumed = deepcopy(pre_review)
+    resumed["document_revision_id"] = "revision-OTHER"
+    resumed["citations"] = [
+        {"type": "contract", "item": "8.2", "quote": "Different revision", "found_in_source": True}
+    ]
+    content = MaterializationContent.from_artifact(
+        payload, resumed_state=resumed, expected_artifact_hash=digest
+    )
+    assert decode_single_document_assessment(content.assessment) is None
