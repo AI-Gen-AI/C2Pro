@@ -11,6 +11,10 @@ from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser, BC3Par
 from src.documents.adapters.parsers.docx_file_parser import DocxFileParser, DocxParsingError
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
 from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser, PDFParsingError
+from src.documents.adapters.parsers.source_inventory import (
+    inspect_docx_source_inventory,
+    inspect_pdf_source_inventory,
+)
 from src.documents.domain.models import Document, DocumentType
 from src.documents.ports.file_parser_service import IFileParserService
 
@@ -52,13 +56,18 @@ class CompositeFileParser(IFileParserService):
         if file_format == ".pdf":
             try:
                 text_blocks = await self.pdf_parser.extract_text_and_offsets(file_path)
+                inventory = inspect_pdf_source_inventory(file_path, text_blocks)
                 return {
                     "file_format": file_format,
                     "text_blocks": text_blocks,
                     "document_coverage": {
                         "status": "UNVERIFIED",
                         "origin": "pdf_file_parser",
-                        "limitations": ["text_extraction_not_verified_against_source"],
+                        "limitations": [
+                            "text_extraction_not_verified_against_source",
+                            *inventory["limitations"],
+                        ],
+                        "source_inventory": inventory,
                     },
                 }
             except PDFParsingError as e:
@@ -69,13 +78,18 @@ class CompositeFileParser(IFileParserService):
                 raise ValueError("budget/schedule require .xlsx/.bc3")
             try:
                 text_blocks = await self.docx_parser.extract_text_and_offsets(file_path)
+                inventory = inspect_docx_source_inventory(file_path, text_blocks)
                 return {
                     "file_format": file_format,
                     "text_blocks": text_blocks,
                     "document_coverage": {
                         "status": "UNVERIFIED",
                         "origin": "docx_file_parser",
-                        "limitations": ["text_extraction_not_verified_against_source"],
+                        "limitations": [
+                            "text_extraction_not_verified_against_source",
+                            *inventory["limitations"],
+                        ],
+                        "source_inventory": inventory,
                     },
                 }
             except DocxParsingError as e:
