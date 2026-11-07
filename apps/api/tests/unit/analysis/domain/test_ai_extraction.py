@@ -93,38 +93,38 @@ class TestCritiqueExtractionService:
     async def test_returns_ok(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload={"status": "ok", "notes": " looks good "})
-        res = await svc.extract(items=[{"x": 1}], doc_type="contract", ai=ai)
+        res = await svc.extract(items=[{"x": 1}], doc_type="contract", ai=ai, source_text="EPC-01: Original scope and obligations.")
         assert res == CritiqueResult(status="OK", notes="looks good")
 
     @pytest.mark.asyncio
-    async def test_returns_retry(self) -> None:
+    async def test_retry_without_source_is_unassessed(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload={"status": "RETRY", "notes": "redo"})
         res = await svc.extract(items=[], doc_type="budget", ai=ai)
-        assert res.status == "RETRY"
-        assert res.notes == "redo"
+        assert res.status == "UNASSESSED"
+        assert "source unavailable" in res.notes
 
     @pytest.mark.asyncio
     async def test_invalid_status_falls_back(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload={"status": "weird", "notes": ""})
-        res = await svc.extract(items=[], doc_type="x", ai=ai)
-        assert res.status == "RETRY"
-        assert "inconclusive" in res.notes.lower()
+        res = await svc.extract(items=[], doc_type="x", ai=ai, source_text="EPC-01: Original source text.")
+        assert res.status == "UNASSESSED"
+        assert "unrecognized" in res.notes.lower()
 
     @pytest.mark.asyncio
     async def test_non_dict_falls_back(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload="nope")
         res = await svc.extract(items=[], doc_type="x", ai=ai)
-        assert res.status == "RETRY"
+        assert res.status == "UNASSESSED"
 
     @pytest.mark.asyncio
     async def test_exception_falls_back(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(raises=ValueError())
         res = await svc.extract(items=[], doc_type="x", ai=ai)
-        assert res.status == "RETRY"
+        assert res.status == "UNASSESSED"
 
 
 # ── RaciGenerationService ────────────────────────────────────────────────────

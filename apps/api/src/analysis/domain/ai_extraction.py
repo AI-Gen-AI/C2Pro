@@ -96,9 +96,9 @@ class CritiqueExtractionService:
         # Keep the same tenant-scoped AI port as extraction; never fetch another
         # revision or expand access. The bounded excerpt is explicitly non-exhaustive.
         source = (source_text or "").strip()
+        clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
+        excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
         if source:
-            clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
-            excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
             coverage = (
                 "PARTIAL EXCERPT: source longer than context; do not claim absence."
                 if clipped else "COMPLETE INPUT TEXT PROVIDED FOR THIS REVIEW"
@@ -120,8 +120,10 @@ class CritiqueExtractionService:
             if isinstance(payload, dict):
                 status = str(payload.get("status", "")).strip().upper()
                 notes = str(payload.get("notes", "")).strip()
+                # Only verify material that the reviewer actually received.
+                # The unseen remainder cannot corroborate a model finding.
                 verified = source_bound_findings(
-                    payload.get("findings"), source_text=source
+                    payload.get("findings"), source_text=excerpt
                 )
                 if verified:
                     # Verified citations carry review authority, not the
@@ -133,24 +135,53 @@ class CritiqueExtractionService:
                         status="RETRY",
                         notes=format_source_bound_notes(verified),
                     )
-                if source and (status == "RETRY" or payload.get("findings")):
+                # A source-free or truncated review cannot certify that the
+                # extraction covered all contract obligations, even on "OK".
+                if not source:
+                    return CritiqueResult(
+                        status="UNASSESSED",
+                        notes="N12_UNASSESSED: source unavailable for verification.",
+                    )
+                if clipped:
+                    return CritiqueResult(
+                        status="UNASSESSED",
+                        notes="N12_UNASSESSED: only a partial source excerpt was reviewed.",
+                    )
+                if status == "RETRY" or payload.get("findings"):
                     return CritiqueResult(
                         status="UNASSESSED",
                         notes="N12_UNASSESSED: no source-grounded findings available.",
                     )
                 if status == "OK":
+                    # A status string cannot negate an explicitly reported
+                    # unresolved quality concern. Without a structured,
+                    # source-bound finding this is UNKNOWN, not a verified bug.
+                    if re.search(
+                        r"(?i)\b(?:critical\s+(?:quality\s+)?concern"
+                        r"|unresolved\s+(?:quality\s+)?issue"
+                        r"|extracted\s+risks?\s+(?:omit|miss))\b",
+                        notes,
+                    ):
+                        return CritiqueResult(
+                            status="UNASSESSED",
+                            notes="N12_UNASSESSED: unresolved model concern (unverified): "
+                            + notes[:800],
+                        )
                     return CritiqueResult(status="OK", notes=notes)
                 if status == "RETRY":
                     return CritiqueResult(status="RETRY", notes=notes)
                 # Invalid status without verified source evidence is not a
                 # valid critique, regardless of natural-language confidence.
                 return CritiqueResult(
-                    status="RETRY",
+                    status="UNASSESSED",
                     notes="N12_UNASSESSED: unrecognized reviewer status.",
                 )
         except Exception:
             pass
-        return CritiqueResult(status="RETRY", notes="Automatic critique inconclusive.")
+        return CritiqueResult(
+            status="UNASSESSED",
+            notes="N12_UNASSESSED: automatic critique inconclusive.",
+        )
 
 
 # ── RACI Matrix Generation (N7) ──────────────────────────────────────────────

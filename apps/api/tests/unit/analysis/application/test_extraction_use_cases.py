@@ -97,6 +97,7 @@ class TestCritiqueExtractionUseCase:
                 extracted_wbs=[],
                 doc_type="contract",
                 retry_count=0,
+                source_text="EPC-04: Contractor shall complete the works on time.",
             )
         )
         assert res.status == "OK"
@@ -122,7 +123,10 @@ class TestCritiqueExtractionUseCase:
 
     @pytest.mark.asyncio
     async def test_retry_increments_and_preserves_notes(self) -> None:
-        ai = _FakeAI(payload={"status": "RETRY", "notes": "please redo"})
+        ai = _FakeAI(payload={"status": "RETRY", "notes": "please redo", "findings": [
+            {"clause_ref": "EPC-04", "issue_type": "omission",
+             "source_quote": "Contractor shall pay 1% liquidated damages per week of delay.",
+             "explanation": "The extraction omitted delay damages."}]})
         uc = CritiqueExtractionUseCase(ai=ai)
         res = await uc.execute(
             CritiqueExtractionCommand(
@@ -130,17 +134,21 @@ class TestCritiqueExtractionUseCase:
                 extracted_wbs=[],
                 doc_type="contract",
                 retry_count=0,
+                source_text="EPC-04: Contractor shall pay 1% liquidated damages per week of delay.",
             )
         )
         assert res.status == "RETRY"
         assert res.retry_count == 1
-        assert res.critique_notes == "please redo"
+        assert "Source-cited" in res.critique_notes and "EPC-04" in res.critique_notes
         # 0.9 confidence >= 0.8 threshold, retry_count 1 < 2 max → no HITL yet
         assert res.human_approval_required is False
 
     @pytest.mark.asyncio
     async def test_retry_exceeded_triggers_hitl(self) -> None:
-        ai = _FakeAI(payload={"status": "RETRY", "notes": "still bad"})
+        ai = _FakeAI(payload={"status": "RETRY", "notes": "still bad", "findings": [
+            {"clause_ref": "EPC-04", "issue_type": "omission",
+             "source_quote": "Contractor shall pay 1% liquidated damages per week of delay.",
+             "explanation": "The extraction omitted delay damages."}]})
         uc = CritiqueExtractionUseCase(ai=ai)
         res = await uc.execute(
             CritiqueExtractionCommand(
@@ -148,6 +156,7 @@ class TestCritiqueExtractionUseCase:
                 extracted_wbs=[],
                 doc_type="contract",
                 retry_count=2,
+                source_text="EPC-04: Contractor shall pay 1% liquidated damages per week of delay.",
             )
         )
         assert res.retry_count == 3
@@ -186,6 +195,7 @@ class TestCritiqueExtractionUseCase:
                 extracted_wbs=[],
                 doc_type="contract",
                 retry_count=0,
+                source_text="EPC-04: Contractor shall complete the works on time.",
             )
         )
         assert res.human_approval_required is True
@@ -201,13 +211,14 @@ class TestCritiqueExtractionUseCase:
                 extracted_wbs=[{"confidence": 0.85}],
                 doc_type=None,
                 retry_count=0,
+                source_text="EPC-04: Contractor shall complete the works on time.",
             )
         )
         assert res.confidence == 0.85
         assert res.status == "OK"
 
     @pytest.mark.asyncio
-    async def test_ai_failure_forces_retry(self) -> None:
+    async def test_ai_failure_requires_hitl(self) -> None:
         ai = _FakeAI(raises=RuntimeError())
         uc = CritiqueExtractionUseCase(ai=ai)
         res = await uc.execute(
@@ -218,8 +229,10 @@ class TestCritiqueExtractionUseCase:
                 retry_count=0,
             )
         )
-        assert res.status == "RETRY"
-        assert res.retry_count == 1
+        assert res.status == "UNASSESSED"
+        assert res.retry_count == 0
+        assert res.confidence is None
+        assert res.human_approval_required is True
 
 
 # ── GenerateRaciUseCase ──────────────────────────────────────────────────────
@@ -440,6 +453,6 @@ async def test_critique_does_not_invent_contradictions_without_source_or_in_othe
                 retry_count=0, source_text=text,
             )
         )
-        assert result.status == "OK"
-        assert result.human_approval_required is False
-        assert result.critique_notes == ""
+        assert result.status == ("OK" if text else "UNASSESSED")
+        assert result.human_approval_required is (not bool(text))
+        assert result.critique_notes == ("" if text else "N12_UNASSESSED: source unavailable for verification.")
