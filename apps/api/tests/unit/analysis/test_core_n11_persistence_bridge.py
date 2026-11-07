@@ -1,11 +1,12 @@
 """Focused CORE pilot contract: N11 proposal persistence (no approvals invented)."""
 
-from src.analysis.application.trusted_materialization import MaterializationContent
+import asyncio
+
 from src.analysis.adapters.graph.document_artifact_builder import build_document_artifact
 from src.analysis.adapters.graph.nodes import _risk_contract_payload
-from src.analysis.adapters.graph.workflow import build_workflow
 from src.analysis.adapters.graph.nodes_extended import decision_intelligence_node
-import asyncio
+from src.analysis.adapters.graph.workflow import build_workflow
+from src.analysis.application.trusted_materialization import MaterializationContent
 from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
 
