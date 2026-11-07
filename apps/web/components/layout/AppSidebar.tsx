@@ -102,8 +102,9 @@ export function AppSidebar() {
     >
       {/* Overlay for mobile when sidebar is open */}
       {!isCollapsed && (
-        <div 
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm md:hidden" 
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm md:hidden"
           onClick={() => setCollapsed(true)}
         />
       )}
