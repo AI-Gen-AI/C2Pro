@@ -126,6 +126,96 @@ def test_unverified_contract_quotes_and_ambiguous_dates_do_not_raise_conflicts()
     assert "CONTRACT_COMPLETION_OR_SCHEDULE_NOT_UNAMBIGUOUS" in result["not_assessed_reasons"]
 
 
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "El precio del contrato asciende a 1.000.000 € según las condiciones.",
+        "El precio del contrato asciende a 1.000.000,00 €.",
+        "El precio del contrato asciende a 1.000.000€.",
+        "El precio del contrato asciende a 1.000.000,00€, antes de impuestos.",
+    ],
+)
+def test_euro_suffix_in_verified_spanish_contract_produces_source_bound_provisional_discrepancy(quote):
+    """A common EUR-after-amount literal must not silently suppress a real EPC budget overrun."""
+    contract = _artifact("contract", quote)
+    budget = _unit(
+        "budget", {"item": "TOTAL", "total": "1350000.00", "currency": "EUR"},
+        loc="Presupuesto!9",
+    )
+    result = compare_original_source_rows([contract], [budget])
+    findings = [item for item in result["findings"] if item["rule_id"] == "DET-CRS-NEGMARGIN"]
+    assert len(findings) == 1
+    [finding] = findings
+    assert finding["compared_values"] == {
+        "contract_price": 1_000_000.0, "budget_declared_total": 1_350_000.0,
+        "currency": "EUR", "difference": 350_000.0,
+    }
+    assert finding["state"] == "PROVISIONAL"
+    assert finding["scored"] is False
+    assert finding["requires_human_review"] is True
+    source_quote, row = finding["sources"]
+    assert source_quote["source_quote"] == quote
+    assert source_quote["source_quote_sha256"] == hashlib.sha256(quote.encode()).hexdigest()
+    assert source_quote["document_id"] == contract.document_id
+    assert source_quote["revision_id"] == contract.document_revision_id
+    assert (row["document_id"], row["revision_id"], row["source_locator"]) == (
+        budget["document_id"], budget["revision_id"], "Presupuesto!9",
+    )
+    assert row["blob_sha256"] == budget["blob_hash"]
+    assert row["unit_sha256"] == budget["unit_sha256"]
+
+
+@pytest.mark.parametrize(
+    ("literal", "currency"),
+    [
+        ("The total contract price is 1,000,000 $.", "USD"),
+        ("The total contract price is 1,000,000 £.", "GBP"),
+    ],
+)
+def test_symbol_suffix_currency_remains_explicit_and_source_bound(literal, currency):
+    contract = _artifact("contract", literal)
+    budget = _unit("budget", {"item": "TOTAL", "total": "1350000", "currency": currency}, loc="Budget!4")
+    result = compare_original_source_rows([contract], [budget])
+    financial = [item for item in result["findings"] if item["rule_id"] == "DET-CRS-NEGMARGIN"]
+    assert len(financial) == 1
+    assert financial[0]["compared_values"]["currency"] == currency
+    assert financial[0]["scored"] is False
+    assert [source["role"] for source in financial[0]["sources"]] == [
+        "verified_document_quote", "original_source_row",
+    ]
+
+
+@pytest.mark.parametrize(
+    "untrusted_literal",
+    [
+        "The total contract price is 1,000,000 EURwhatever.",
+        "The total contract price is 1,000,000 €€.",
+        "The total contract price is 1,000,000 $USD.",
+    ],
+)
+def test_malformed_currency_suffix_is_not_promoted_to_a_contract_price(untrusted_literal):
+    budget = _unit("budget", {"item": "TOTAL", "total": "1350000", "currency": "EUR"}, loc="Budget!4")
+    result = compare_original_source_rows([_artifact("contract", untrusted_literal)], [budget])
+    assert "DET-CRS-NEGMARGIN" not in {item["rule_id"] for item in result["findings"]}
+
+
+def test_euro_suffix_does_not_erase_currency_ambiguity_or_quote_trust():
+    budget = _unit(
+        "budget", {"item": "TOTAL", "total": "1350000.00", "currency": "EUR"},
+        loc="Presupuesto!9",
+    )
+    quoted = "El precio del contrato es 1.000.000 € o 2.000.000 € pendiente de confirmación."
+    ambiguous = compare_original_source_rows([_artifact("contract", quoted)], [budget])
+    assert not ambiguous["findings"]
+    assert "CONTRACT_PRICE_OR_BUDGET_TOTAL_NOT_UNAMBIGUOUS" in ambiguous["not_assessed_reasons"]
+    unverified = compare_original_source_rows(
+        [_artifact("contract", "El precio del contrato es 1.000.000 €.", status="REQUIRES_SOURCE_VALIDATION")],
+        [budget],
+    )
+    assert not unverified["findings"]
+    assert "CONTRACT_PRICE_OR_BUDGET_TOTAL_NOT_UNAMBIGUOUS" in unverified["not_assessed_reasons"]
+
+
 def test_missing_currency_does_not_invent_financial_contradiction():
     artifacts, rows = _sources()
     rows[-1]["payload"]["currency"] = None

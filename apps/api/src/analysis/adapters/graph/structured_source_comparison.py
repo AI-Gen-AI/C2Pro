@@ -48,7 +48,11 @@ _MONTH_ES = {month: n for n, month in enumerate(
     ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
      "septiembre", "octubre", "noviembre", "diciembre"), 1)}
 _MONTH_ES["setiembre"] = 9
-_CURRENCY_AFTER = re.compile(r"(\d[\d,.]*)\s*(euros?|EUR|USD|GBP|€|\$|£)\b", re.IGNORECASE)
+# Word-boundary (\\b) fails after symbols like €/$/£ because both the symbol and
+# adjacent punctuation/whitespace are non-word characters. Demand instead that
+# the currency marker is NOT followed by a word character. This also rejects
+# malformed suffixes such as "EURwhatever" or repeated currency symbols.
+_CURRENCY_AFTER = re.compile(r"(\d[\d,.]*)\s*(euros?|EUR|USD|GBP|€|\$|£)(?![\w€$£])", re.IGNORECASE)
 
 
 def _source_row(row: Mapping[str, Any]) -> dict[str, Any] | None:
