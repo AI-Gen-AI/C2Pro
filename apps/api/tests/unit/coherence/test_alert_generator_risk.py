@@ -117,6 +117,51 @@ class TestAlertGeneratorRiskAlerts:
         assert alert.severity == expected
         assert alert.alert_metadata["raw"][model_field] == level
 
+    @pytest.mark.parametrize(
+        ("risk_fields", "expected"),
+        [
+            ({"impact_level": "MEDIUM"}, AlertSeverity.MEDIUM),
+            (
+                {
+                    "severity": "low",
+                    "impact_level": "CRITICAL",
+                    "impact": "HIGH",
+                },
+                AlertSeverity.LOW,
+            ),
+            (
+                {
+                    "severity": "unrecognised",
+                    "impact_level": "HIGH",
+                    "impact": "LOW",
+                },
+                AlertSeverity.HIGH,
+            ),
+            (
+                {
+                    "severity": "unrecognised",
+                    "impact_level": "unknown",
+                    "impact": "severe",
+                },
+                AlertSeverity.LOW,
+            ),
+        ],
+    )
+    def test_generate_risk_alerts_maps_severity_aliases_in_precedence_order(
+        self, project_id, analysis_id, risk_fields, expected
+    ):
+        """Severity, legacy impact_level, then impact determine alert severity.
+
+        Unknown values fall through to a recognized lower-precedence alias;
+        without a recognized enum, the conservative fallback remains LOW.
+        """
+        [alert] = AlertGenerator(
+            project_id=project_id, analysis_id=analysis_id
+        ).generate_risk_alerts([risk_fields])
+
+        assert alert.severity == expected
+        assert alert.alert_metadata["raw"] == risk_fields
+
     def test_generate_risk_alerts_leaves_category_none_when_missing(
         self, project_id, analysis_id
     ):
