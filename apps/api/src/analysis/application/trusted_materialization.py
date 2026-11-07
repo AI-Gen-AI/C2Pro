@@ -115,6 +115,7 @@ class MaterializationContent:
     wbs: list[Any]
     coherence_score: int | float | None = None
     coherence_breakdown: Mapping[str, Any] = field(default_factory=dict)
+    coherence_reason: str | None = None
     assessment: Mapping[str, Any] = field(default_factory=dict)
     decision_snapshot: Mapping[str, Any] = field(default_factory=dict)
 
@@ -128,6 +129,7 @@ class MaterializationContent:
             wbs=list(state.get("extracted_wbs") or []),
             coherence_score=state.get("coherence_score"),
             coherence_breakdown=state.get("coherence_breakdown") or {},
+            coherence_reason=_str_or_none(state.get("coherence_reason")),
             assessment=state.get("single_document_assessment") or {},
             decision_snapshot=decision_snapshot_for_persistence(
                 state.get("decision_package"),
@@ -138,23 +140,57 @@ class MaterializationContent:
 
     @classmethod
     def from_artifact(
-        cls, payload: Mapping[str, Any], scoring: Mapping[str, Any] | None
+        cls, payload: Mapping[str, Any], resumed_state: Mapping[str, Any] | None = None
     ) -> MaterializationContent:
+        """Materialize immutable content, accepting N8 only when source-coupled.
+
+        ``document_artifacts.scoring`` is the candidate's provisional score:
+        it may describe a proposal that was corrected after the interrupted
+        graph checkpoint.  It is useful to the pending-review projection, but
+        is not evidence that a trusted canonical Analysis was evaluated.
+
+        A resumed N8 result is published only when rebuilding its artifact
+        from the checkpoint produces the exact immutable payload now trusted.
+        Otherwise the score stays null until a ProjectGraph evaluation reruns
+        against the trusted artifact.
+        """
         from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
-        score = (scoring or {}).get("coherence_score")
-        return cls(
+        content = cls(
             document_id=_str_or_none(payload.get("document_id")),
             risks=list(payload.get("extracted_risks") or []),
             wbs=list(payload.get("extracted_wbs") or []),
-            coherence_score=round(score) if isinstance(score, int | float) else None,
             coherence_breakdown={},
+            coherence_reason="trusted_artifact_score_requires_recalculation",
             assessment={},
             decision_snapshot=decision_snapshot_for_persistence(
                 payload.get("decision_snapshot"),
                 document_id=_str_or_none(payload.get("document_id")),
                 revision_id=_str_or_none(payload.get("document_revision_id")),
             ) or {},
+        )
+        if resumed_state is None:
+            return content
+        try:
+            from src.analysis.adapters.graph.document_artifact_builder import (
+                build_document_artifact,
+            )
+            from src.analysis.domain.contracts import DocumentArtifact
+
+            if build_document_artifact(resumed_state) != DocumentArtifact.model_validate(payload):
+                return content
+        except (TypeError, ValueError):
+            logger.warning("trusted_materialization_resume_score_unverifiable")
+            return content
+
+        resumed = cls.from_state(resumed_state)
+        if not isinstance(resumed.coherence_score, int | float):
+            return content
+        return replace(
+            content,
+            coherence_score=resumed.coherence_score,
+            coherence_breakdown=resumed.coherence_breakdown,
+            coherence_reason=resumed.coherence_reason,
         )
 
 
@@ -349,7 +385,9 @@ async def verify_current_authority(session: Any, ref: ArtifactRef) -> str | None
 
 
 async def content_from_current_authority(
-    session: Any, ref: ArtifactRef
+    session: Any,
+    ref: ArtifactRef,
+    resumed_state: Mapping[str, Any] | None = None,
 ) -> MaterializationContent:
     """Load canonical content from the exact trusted-current artifact.
 
@@ -360,7 +398,7 @@ async def content_from_current_authority(
     state.
     """
     from src.analysis.adapters.persistence.models import DocumentArtifactORM
-    from src.analysis.domain.trust import StaleCandidateError
+    from src.analysis.domain.trust import StaleCandidateError, artifact_digest
 
     reason = await verify_current_authority(session, ref)
     if reason is not None:
@@ -383,7 +421,11 @@ async def content_from_current_authority(
         raise StaleCandidateError(
             f"Candidate {ref.artifact_id} has no exact immutable payload"
         )
-    return MaterializationContent.from_artifact(artifact.payload, artifact.scoring)
+    if artifact_digest(artifact.payload) != ref.artifact_hash:
+        raise StaleCandidateError(
+            f"Candidate {ref.artifact_id} immutable payload digest does not match its binding"
+        )
+    return MaterializationContent.from_artifact(artifact.payload, resumed_state)
 
 
 # -- the materializer ----------------------------------------------------------
@@ -612,6 +654,11 @@ async def write_canonical_effects(
                 "risks": content.risks,
                 "wbs": content.wbs,
                 **dict(content.assessment),
+                **(
+                    {"coherence_score_reason": content.coherence_reason}
+                    if content.coherence_reason
+                    else {}
+                ),
                 **({"decision_snapshot": dict(content.decision_snapshot)} if content.decision_snapshot else {}),
             },
             resume_operation_id=resume.operation_id if resume else None,

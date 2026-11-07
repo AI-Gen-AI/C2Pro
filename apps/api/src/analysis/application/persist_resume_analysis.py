@@ -179,7 +179,9 @@ async def persist_resume_analysis_atomically(
             # A post-HITL candidate is immutable, revision-pinned authority.
             # The graph state may be from the prior candidate, so it must never
             # supply canonical risks (or any other approved artifact content).
-            content = await materializer.content_from_current_authority(session, ref)
+            content = await materializer.content_from_current_authority(
+                session, ref, resumed_state=state
+            )
             outcome = await materializer.materialize_in_transaction(
                 session,
                 ref=ref,
