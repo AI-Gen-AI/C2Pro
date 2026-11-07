@@ -2,7 +2,7 @@
  * Test Suite ID: TS-P0D-REPORT-UI-001
  * Current State Report view: honest states, evidence trust, scanability.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { within } from "@testing-library/react";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import type { CurrentStateReport } from "@/lib/api/generated/models";
@@ -401,13 +401,16 @@ describe("CurrentStateReportView", () => {
     expect(card).toHaveTextContent("92 days");
     expect(card).toHaveTextContent(`revision ${revQuote} · locator verified-quote:abcdef123 · hash ${"a".repeat(64)}`);
     expect(within(card).getAllByTestId("source-discrepancy-item")).toHaveLength(1);
+    expect(within(card).getByTestId("source-discrepancy-item")).toHaveAttribute(
+      "id", "source-discrepancy-a3f1c9d2e4b5-0",
+    );
     const links = within(card).getAllByTestId("source-discrepancy-evidence-link");
     expect(links).toHaveLength(2);
     expect(links[0].getAttribute("href")).toBe(
-      `/projects/${report.project.id}/evidence?documentId=${documentId}&revisionId=${revQuote}`,
+      `/projects/${report.project.id}/evidence?documentId=${documentId}&revisionId=${revQuote}&returnDiscrepancy=source-discrepancy-a3f1c9d2e4b5-0`,
     );
     expect(links[1].getAttribute("href")).toBe(
-      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule!4&expectedHash=${"b".repeat(64)}`,
+      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule!4&expectedHash=${"b".repeat(64)}&returnDiscrepancy=source-discrepancy-a3f1c9d2e4b5-0`,
     );
     expect(card).toHaveTextContent("Quote highlighting is not guaranteed");
   });
@@ -445,10 +448,106 @@ describe("CurrentStateReportView", () => {
     const card = section("source_discrepancies");
     expect(within(card).getAllByTestId("source-discrepancy-evidence-link")).toHaveLength(1);
     expect(within(card).getByTestId("source-discrepancy-unverified-source")).toHaveTextContent(
-      "Unverified source: this comparison does not yet have two revision-, locator-, and hash-bound source objects.",
+      "Unverified source: this comparison needs one verified document quote and one original XLSX row,",
     );
     expect(card).toHaveTextContent("Next: locate and verify the missing source");
     expect(card).not.toHaveTextContent("revision null");
+  });
+
+  it("scrolls to the same report finding after asynchronous report data is rendered", () => {
+    const report = buildCurrentStateReport();
+    const discrepancy = {
+      status: "available", status_reason: null, source_domain: "project_graph",
+      source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
+      evidence_tier: "weak_linked", evidence_note: "Provisional, not scored.",
+      data: { items: [{ rule_id: "DET-CRS-SCHDEAD", summary: "Late schedule",
+        state: "PROVISIONAL", scored: false, requires_human_review: true,
+        compared_values: { delay_days: 92 }, sources: [] }] },
+    };
+    const oldUrl = window.location.href;
+    const oldScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true, value: scrollIntoView,
+    });
+    try {
+      window.history.replaceState(null, "", "#source-discrepancy-a3f1c9d2e4b5-0");
+      const withEvidence = {
+        ...report, sections: { ...report.sections, source_discrepancies: discrepancy },
+      } as unknown as CurrentStateReport;
+      renderReport(withEvidence);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    } finally {
+      window.history.replaceState(null, "", oldUrl);
+      if (oldScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", oldScrollIntoView);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
+  });
+
+  it.each([
+    {
+      title: "two quote sources with no original XLSX row",
+      sources: [
+        { role: "verified_document_quote", document_id: "quote-1", revision_id: "rev-q1",
+          source_locator: "clause 8.2", source_quote_sha256: "a".repeat(64) },
+        { role: "verified_document_quote", document_id: "quote-2", revision_id: "rev-q2",
+          source_locator: "clause 8.3", source_quote_sha256: "b".repeat(64) },
+      ],
+    },
+    {
+      title: "an XLSX row with no pinned blob hash",
+      sources: [
+        { role: "verified_document_quote", document_id: "quote-1", revision_id: "rev-q1",
+          source_locator: "clause 8.2", source_quote_sha256: "a".repeat(64) },
+        { role: "original_source_row", document_id: "row-1", revision_id: "rev-r1",
+          source_locator: "Plan!4", unit_sha256: "c".repeat(64) },
+      ],
+    },
+  ])("does not present $title as a fully verified pair", ({ sources }) => {
+    const report = buildCurrentStateReport();
+    const withMalformedSources = {
+      ...report,
+      sections: {
+        ...report.sections,
+        source_discrepancies: {
+          status: "available", status_reason: null, source_domain: "project_graph",
+          source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
+          evidence_tier: "weak_linked", evidence_note: "Provisional, not scored.",
+          data: { items: [{
+            rule_id: "DET-CRS-SCHDEAD", summary: "Unverified comparison",
+            state: "PROVISIONAL", scored: false, requires_human_review: true,
+            compared_values: { delay_days: 92 }, sources,
+          }] },
+        },
+      },
+    } as unknown as CurrentStateReport;
+    renderReport(withMalformedSources);
+    const card = section("source_discrepancies");
+    expect(within(card).getAllByTestId("source-discrepancy-evidence-link")).toHaveLength(1);
+    expect(within(card).getByTestId("source-discrepancy-unverified-source")).toHaveTextContent(
+      "one verified document quote and one original XLSX row",
+    );
+  });
+
+  it("changes return anchors with the report fingerprint so stale links cannot select a different finding", () => {
+    const report = buildCurrentStateReport();
+    const discrepancy = {
+      status: "available", status_reason: null, source_domain: "project_graph",
+      source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
+      evidence_tier: "weak_linked", evidence_note: "Provisional, not scored.",
+      data: { items: [{ rule_id: "DET-CRS-SCHDEAD", summary: "Late schedule",
+        state: "PROVISIONAL", scored: false, requires_human_review: true,
+        compared_values: { delay_days: 92 }, sources: [] }] },
+    };
+    renderReport({ ...report, content_fingerprint: "b".repeat(64),
+      sections: { ...report.sections, source_discrepancies: discrepancy },
+    } as unknown as CurrentStateReport);
+    const item = within(section("source_discrepancies")).getByTestId("source-discrepancy-item");
+    expect(item).toHaveAttribute("id", "source-discrepancy-bbbbbbbbbbbb-0");
+    expect(item.id).not.toBe("source-discrepancy-a3f1c9d2e4b5-0");
   });
 
   it("keeps a null coherence score as NOT EVALUATED rather than normalizing it to zero", () => {

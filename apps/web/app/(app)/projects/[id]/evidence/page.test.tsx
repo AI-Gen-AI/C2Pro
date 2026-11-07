@@ -371,6 +371,46 @@ describe("EvidencePage highlight mapping", () => {
     expect(link.getAttribute("href")).not.toMatch(/^https?:/);
   });
 
+  it("S4 — returns from a cited XLSX row to the exact Current State finding within this project", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-b", revisionId: "rev-b", locator: "Plan!4",
+        expectedHash: "a".repeat(64),
+        returnDiscrepancy: "source-discrepancy-a3f1c9d2e4b5-0",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-return-to-discrepancy")).toHaveAttribute(
+      "href",
+      "/projects/proj-1/report?mode=current-state#source-discrepancy-a3f1c9d2e4b5-0",
+    );
+    expect(screen.getByTestId("structured-source-row-mock")).toHaveAttribute("data-locator", "Plan!4");
+  });
+
+  it("S4 — rejects an injected or cross-project return route instead of navigating away", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-b", returnDiscrepancy: "https://external.example/other-project",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-return-to-discrepancy")).not.toBeInTheDocument();
+  });
+
+  it("S5 — review-origin return takes precedence over a contradictory Current State return", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-b", returnReviewItemId: "review-3",
+        returnDiscrepancy: "source-discrepancy-a3f1c9d2e4b5-0",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-return-to-review")).toHaveAttribute(
+      "href", "/projects/proj-1/review?itemId=review-3",
+    );
+    expect(screen.queryByTestId("evidence-return-to-discrepancy")).not.toBeInTheDocument();
+  });
+
   it("blocks a stale A revision and never opens another/current PDF", () => {
     useSearchParamsMock.mockReturnValue({
       get: (key: string) => ({
