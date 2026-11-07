@@ -316,17 +316,13 @@ class AlertGenerator:
         }
 
     def _map_risk_severity(self, risk_item: dict[str, Any]) -> AlertSeverity:
+        """Map a supported N4 risk-level field to ``AlertSeverity``.
+
+        N4's canonical ``severity`` takes precedence over the legacy
+        ``impact_level`` and ``impact`` aliases.  An unrecognised value is not
+        treated as a severity, so a valid lower-precedence value is retained;
+        if none is valid, default conservatively to ``LOW``.
         """
-        Map risk impact_level to AlertSeverity.
-
-        Args:
-            risk_item: Risk dictionary with impact_level field
-
-        Returns:
-            AlertSeverity enum value
-        """
-        impact_level = str(risk_item.get("impact_level", "")).lower()
-
         severity_mapping = {
             "critical": AlertSeverity.CRITICAL,
             "high": AlertSeverity.HIGH,
@@ -334,7 +330,14 @@ class AlertGenerator:
             "low": AlertSeverity.LOW,
         }
 
-        return severity_mapping.get(impact_level, AlertSeverity.LOW)
+        for field in ("severity", "impact_level", "impact"):
+            value = risk_item.get(field)
+            if isinstance(value, str):
+                severity = severity_mapping.get(value.strip().lower())
+                if severity is not None:
+                    return severity
+
+        return AlertSeverity.LOW
 
     def _should_group(self, rule_id: str, items: list[dict[str, Any]]) -> bool:
         return rule_id in SUMMARY_TEMPLATES and len(items) > 1
