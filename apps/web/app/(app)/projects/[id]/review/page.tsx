@@ -631,8 +631,11 @@ export default function ReviewPage() {
                 </Badge>
               </div>
               <div>
-                <span className="font-medium">Confidence:</span>{' '}
-                {(modal.item.confidence * 100).toFixed(1)}%
+                <span className="font-medium">Extraction confidence:</span>{' '}
+                {modal.item.item_data?.['confidence_assessed'] === true ||
+                (modal.item.item_data?.['confidence_assessed'] !== false && modal.item.confidence > 0)
+                  ? (modal.item.confidence * 100).toFixed(1) + '%'
+                  : 'Not evaluated'}
               </div>
             </div>
           )}
