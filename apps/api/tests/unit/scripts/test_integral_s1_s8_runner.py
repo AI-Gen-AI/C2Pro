@@ -513,6 +513,52 @@ def test_changed_stored_bytes_fail_the_pin() -> None:
     )
 
 
+def test_contract_a_only_is_valid_for_s2_when_s6_was_not_run() -> None:
+    # A real-AI run stopped at S3 in GitHub Actions #42399068334:
+    # the browser had correctly uploaded A, but its final SQL checker demanded
+    # contract B, which is an S6 action and had never been attempted.
+    facts, browser, expect = _world()
+    contract = browser["documentIds"]["contract"]
+    b_hash = expect.fixture_sha["contractB"]
+    before = [r for r in facts.revisions if str(r["document_id"]) == contract]
+    assert len(before) == 2
+    facts.revisions = [
+        r
+        for r in facts.revisions
+        if not (str(r["document_id"]) == contract and r["blob_hash"] == b_hash)
+    ]
+    browser["stages"][5]["status"] = "NOT_RUN"
+    failed = _failed(facts, browser, expect)
+    assert not any(f.startswith("S2:contract: stored revisions") for f in failed)
+    assert any(f.startswith("S6:") for f in failed)
+
+
+def test_contract_a_only_does_not_hide_a_changed_blob_hash() -> None:
+    facts, browser, expect = _world()
+    contract = browser["documentIds"]["contract"]
+    facts.revisions = [
+        r for r in facts.revisions
+        if not (str(r["document_id"]) == contract and r["blob_hash"] == expect.fixture_sha["contractB"])
+    ]
+    for revision in facts.revisions:
+        if str(revision["document_id"]) == contract:
+            revision["blob_hash"] = "0" * 64
+    assert "S2:contract: stored revisions carry the pinned SHA-256 of the committed files" in _failed(
+        facts, browser, expect
+    )
+
+
+def test_contract_b_with_wrong_blob_hash_does_not_satisfy_s2() -> None:
+    facts, browser, expect = _world()
+    contract = browser["documentIds"]["contract"]
+    for revision in facts.revisions:
+        if str(revision["document_id"]) == contract and revision["blob_hash"] == expect.fixture_sha["contractB"]:
+            revision["blob_hash"] = "0" * 64
+    assert "S2:contract: stored revisions carry the pinned SHA-256 of the committed files" in _failed(
+        facts, browser, expect
+    )
+
+
 def test_a_missing_document_fails() -> None:
     facts, browser, expect = _world()
     facts.documents.pop()
