@@ -62,6 +62,12 @@ jobs:
         run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
       - name: Provision and verify actual nonproduction Clerk fixture
         run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+      # The S7 fixture seeds the local tenant/user rows consumed by the
+      # read-only JWT linkage verifier. It records ZERO human approval events.
+      # All data remain inside the runner's disposable PostgreSQL database.
+      - name: Seed disposable Clerk tenant binding and synthetic sources
+        working-directory: apps/api
+        run: python -m scripts.seed_s7_clerk_uat
       - name: Verify Clerk organization and tenant binding
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
