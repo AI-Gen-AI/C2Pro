@@ -115,6 +115,10 @@ const HEADING_CLASS = "text-base font-semibold leading-none tracking-tight";
 
 export function CurrentStateReportView({ report }: { report: CurrentStateReport }) {
   const sections = report.sections as Sections;
+  // Use only names present in this same report's document register.
+  const documentNames = new Map(
+    (sections.documents.data?.items ?? []).map((document) => [document.id, document.filename]),
+  );
 
   useEffect(() => {
     // The report loads after navigation. Native fragment scrolling can occur
@@ -125,7 +129,9 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
         !fragment.startsWith(expectedPrefix)) {
       return;
     }
-    document.getElementById(fragment)?.scrollIntoView?.({ block: "start" });
+    const finding = document.getElementById(fragment);
+    finding?.focus({ preventScroll: true });
+    finding?.scrollIntoView?.({ block: "start" });
   }, [report.content_fingerprint]);
 
   return (
@@ -154,7 +160,7 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
           if (!envelope) return null; // Older backend: do not invent decisions.
           return (
             <SectionCard key={key} sectionKey={key} section={envelope}>
-              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} reportFingerprint={report.content_fingerprint} />
+              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} reportFingerprint={report.content_fingerprint} documentNames={documentNames} />
             </SectionCard>
           );
         })}
@@ -333,7 +339,13 @@ function SectionCard({
   );
 }
 
-function SectionBody({ sectionKey, sections, projectId, reportFingerprint }: { sectionKey: ContentSectionKey; sections: Sections; projectId: string; reportFingerprint: string }) {
+function SectionBody({ sectionKey, sections, projectId, reportFingerprint, documentNames }: {
+  sectionKey: ContentSectionKey;
+  sections: Sections;
+  projectId: string;
+  reportFingerprint: string;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   switch (sectionKey) {
     case "documents":
       return <DocumentsBody data={sections.documents.data} />;
@@ -346,7 +358,7 @@ function SectionBody({ sectionKey, sections, projectId, reportFingerprint }: { s
     case "alerts":
       return <AlertsBody data={sections.alerts.data} />;
     case "source_discrepancies":
-      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} reportFingerprint={reportFingerprint} />;
+      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} reportFingerprint={reportFingerprint} documentNames={documentNames} />;
     case "decision_proposals":
       return <DecisionProposalsBody data={sections.decision_proposals?.data} projectId={projectId} />;
     case "hitl":
@@ -373,9 +385,10 @@ type RevisionBoundDiscrepancySource = DiscrepancySource & {
 
 function sourceHash(source: DiscrepancySource): string | null {
   // A source role cannot borrow the other role's hash as proof of provenance.
-  return source.role === "original_source_row"
-    ? source.blob_sha256 ?? null
-    : source.source_quote_sha256 ?? null;
+  if (source.role === "original_source_row") return source.blob_sha256 ?? null;
+  if (source.role === "verified_document_quote") return source.source_quote_sha256 ?? null;
+  // External data with an unknown role must never be promoted to a verified quote.
+  return null;
 }
 
 function isRevisionBoundSource(source: DiscrepancySource): source is RevisionBoundDiscrepancySource {
@@ -401,7 +414,12 @@ function discrepancyEvidenceHref(
   return `${base}${rowRef}${returnDiscrepancy ? `&returnDiscrepancy=${encodeURIComponent(returnDiscrepancy)}` : ""}`;
 }
 
-function DiscrepancyEvidence({ finding, projectId, returnDiscrepancy }: { finding: SourceDiscrepancy; projectId: string; returnDiscrepancy: string | null }) {
+function DiscrepancyEvidence({ finding, projectId, returnDiscrepancy, documentNames }: {
+  finding: SourceDiscrepancy;
+  projectId: string;
+  returnDiscrepancy: string | null;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   const evidenceSources = finding.sources.filter(isRevisionBoundSource);
   const hasCompleteComparison =
     finding.sources.length === 2 &&
@@ -416,9 +434,14 @@ function DiscrepancyEvidence({ finding, projectId, returnDiscrepancy }: { findin
         const hash = sourceHash(source);
         return (
           <div key={`${source.document_id}:${source.revision_id}:${source.source_locator}`} className="space-y-1 text-xs">
+            <p data-testid="source-discrepancy-document-name" className="break-words">
+              <strong>{documentNames.get(source.document_id)?.trim() || "Document name unavailable"}</strong>
+              <span className="text-muted-foreground">
+                {" · "}{source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
+              </span>
+            </p>
             <p className="break-words text-muted-foreground">
-              {source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
-              {" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
+              Document ID {source.document_id}{" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
             </p>
             {source.source_quote ? (
               <blockquote className="border-l-2 pl-2 text-muted-foreground">{source.source_quote}</blockquote>
@@ -447,8 +470,13 @@ function DiscrepancyEvidence({ finding, projectId, returnDiscrepancy }: { findin
 }
 
 function SourceDiscrepanciesBody({
-  data, projectId, reportFingerprint,
-}: { data: SourceDiscrepanciesEnvelope["data"]; projectId: string; reportFingerprint: string }) {
+  data, projectId, reportFingerprint, documentNames,
+}: {
+  data: SourceDiscrepanciesEnvelope["data"];
+  projectId: string;
+  reportFingerprint: string;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   if (!data) return null;
   return (
     <div data-testid="current-state-source-discrepancies" className="space-y-3">
@@ -459,8 +487,9 @@ function SourceDiscrepanciesBody({
         <article
           key={`${finding.rule_id}:${index}`}
           id={discrepancyAnchor(reportFingerprint, index) ?? undefined}
+          tabIndex={-1}
           data-testid="source-discrepancy-item"
-          className="scroll-mt-24 space-y-2 rounded-md border p-3"
+          className="scroll-mt-24 space-y-2 rounded-md border p-3 target:ring-2 target:ring-primary"
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">Provisional · human review required</Badge>
@@ -475,7 +504,7 @@ function SourceDiscrepanciesBody({
               </div>
             ))}
           </dl>
-          <DiscrepancyEvidence finding={finding} projectId={projectId} returnDiscrepancy={discrepancyAnchor(reportFingerprint, index)} />
+          <DiscrepancyEvidence finding={finding} projectId={projectId} returnDiscrepancy={discrepancyAnchor(reportFingerprint, index)} documentNames={documentNames} />
           <p className="text-xs text-muted-foreground">
             Links open the pinned revision or re-verify the original XLSX row. Quote highlighting is not guaranteed.
           </p>

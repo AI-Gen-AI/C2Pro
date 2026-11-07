@@ -367,6 +367,17 @@ describe("CurrentStateReportView", () => {
       ...report,
       sections: {
         ...report.sections,
+        documents: {
+          ...report.sections.documents,
+          data: {
+            ...report.sections.documents.data!,
+            items: [
+              ...report.sections.documents.data!.items,
+              { ...report.sections.documents.data!.items[0], id: documentId, filename: "Contract A.docx" },
+              { ...report.sections.documents.data!.items[0], id: rowId, filename: "Schedule.xlsx" },
+            ],
+          },
+        },
         source_discrepancies: {
           status: "available", status_reason: null, source_domain: "project_graph",
           source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
@@ -404,6 +415,10 @@ describe("CurrentStateReportView", () => {
     expect(within(card).getByTestId("source-discrepancy-item")).toHaveAttribute(
       "id", "source-discrepancy-a3f1c9d2e4b5-0",
     );
+    expect(within(card).getByTestId("source-discrepancy-item")).toHaveAttribute("tabindex", "-1");
+    const names = within(card).getAllByTestId("source-discrepancy-document-name");
+    expect(names[0]).toHaveTextContent("Contract A.docx");
+    expect(names[1]).toHaveTextContent("Schedule.xlsx");
     const links = within(card).getAllByTestId("source-discrepancy-evidence-link");
     expect(links).toHaveLength(2);
     expect(links[0].getAttribute("href")).toBe(
@@ -452,6 +467,7 @@ describe("CurrentStateReportView", () => {
     );
     expect(card).toHaveTextContent("Next: locate and verify the missing source");
     expect(card).not.toHaveTextContent("revision null");
+    expect(within(card).getByTestId("source-discrepancy-document-name")).toHaveTextContent("Document name unavailable");
   });
 
   it("scrolls to the same report finding after asynchronous report data is rendered", () => {
@@ -477,6 +493,7 @@ describe("CurrentStateReportView", () => {
       } as unknown as CurrentStateReport;
       renderReport(withEvidence);
       expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+      expect(document.activeElement).toBe(screen.getByTestId("source-discrepancy-item"));
     } finally {
       window.history.replaceState(null, "", oldUrl);
       if (oldScrollIntoView) {
@@ -504,6 +521,15 @@ describe("CurrentStateReportView", () => {
           source_locator: "clause 8.2", source_quote_sha256: "a".repeat(64) },
         { role: "original_source_row", document_id: "row-1", revision_id: "rev-r1",
           source_locator: "Plan!4", unit_sha256: "c".repeat(64) },
+      ],
+    },
+    {
+      title: "an unknown source role masquerading as a verified quote",
+      sources: [
+        { role: "third_party_external", document_id: "unknown-1", revision_id: "rev-u",
+          source_locator: "untrusted", source_quote_sha256: "a".repeat(64) },
+        { role: "original_source_row", document_id: "row-1", revision_id: "rev-r1",
+          source_locator: "Plan!4", blob_sha256: "b".repeat(64) },
       ],
     },
   ])("does not present $title as a fully verified pair", ({ sources }) => {
@@ -548,6 +574,48 @@ describe("CurrentStateReportView", () => {
     const item = within(section("source_discrepancies")).getByTestId("source-discrepancy-item");
     expect(item).toHaveAttribute("id", "source-discrepancy-bbbbbbbbbbbb-0");
     expect(item.id).not.toBe("source-discrepancy-a3f1c9d2e4b5-0");
+  });
+
+  it("does not focus or scroll to a stale discrepancy fingerprint after report regeneration", () => {
+    const report = buildCurrentStateReport();
+    const previousUrl = window.location.href;
+    const previousScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true, value: scrollIntoView,
+    });
+    try {
+      window.history.replaceState(null, "", "#source-discrepancy-a3f1c9d2e4b5-0");
+      renderReport({
+        ...report,
+        content_fingerprint: "b".repeat(64),
+        sections: {
+          ...report.sections,
+          source_discrepancies: {
+            status: "available", status_reason: null, source_domain: "project_graph",
+            source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-2",
+            evidence_tier: "weak_linked", evidence_note: "Provisional, not scored.",
+            data: { items: [{
+              rule_id: "DET-CRS-SCHDEAD", summary: "Updated schedule discrepancy",
+              state: "PROVISIONAL", scored: false, requires_human_review: true,
+              compared_values: { delay_days: 93 }, sources: [],
+            }] },
+          },
+        },
+      } as CurrentStateReport);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(screen.getByTestId("source-discrepancy-item")).toHaveAttribute(
+        "id", "source-discrepancy-bbbbbbbbbbbb-0",
+      );
+      expect(document.activeElement).not.toBe(screen.getByTestId("source-discrepancy-item"));
+    } finally {
+      window.history.replaceState(null, "", previousUrl);
+      if (previousScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", previousScrollIntoView);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
   });
 
   it("keeps a null coherence score as NOT EVALUATED rather than normalizing it to zero", () => {
