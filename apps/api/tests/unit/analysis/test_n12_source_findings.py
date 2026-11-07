@@ -179,3 +179,37 @@ def test_real_ai_parser_accepts_wrapped_json_without_hiding_source():
         '{"status":"RETRY","notes":"Audit needed","findings":[]}\n```'
     )
     assert payload["status"] == "RETRY"
+
+
+def test_numeric_clause_ref_must_contain_quote_not_other_clause():
+    """A real quote in clause 5.2 cannot prove a finding about 6.3."""
+    source = (
+        "5.2 The Contractor shall pay delay damages of 1% per week.\n"
+        "6.3 The Employer shall issue the completion certificate."
+    )
+    wrong = _finding(
+        "6.3", "omission",
+        "The Contractor shall pay delay damages of 1% per week.",
+        "Omitted certificate requirements.",
+    )
+    right = _finding(
+        "5.2", "omission",
+        "The Contractor shall pay delay damages of 1% per week.",
+        "Delay damages lack a clause locator in extraction.",
+    )
+    result = source_bound_findings([wrong, right], source_text=source)
+    assert [x["clause_ref"] for x in result] == ["5.2"]
+
+
+def test_unscoped_source_quote_cannot_claim_known_clause_provenance():
+    """A clause mention without delimiting its body cannot certify locality."""
+    source = (
+        "The specification references clause 5.2 for acceptance tests. "
+        "Separately, damages of 1% apply in case of late delivery."
+    )
+    claim = _finding(
+        "5.2", "omission",
+        "Separately, damages of 1% apply in case of late delivery.",
+        "Allegedly omitted 5.2.",
+    )
+    assert source_bound_findings([claim], source_text=source) == []

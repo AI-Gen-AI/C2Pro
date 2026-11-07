@@ -75,8 +75,7 @@ _CRITIQUE_MAX_SOURCE_CHARS = 16000
 # prose can contain an unstructured, unverified defect despite status="OK".
 _NEUTRAL_OK_NOTES = re.compile(
     r"(?i)\s*(?:looks\s+good|no\s+(?:issues|omissions|discrepancies|errors)\s+"
-    r"(?:found|detected|identified)|(?:review|analysis)\s+complete(?:d)?|"
-    r"extraction\s+(?:matches|aligns\s+with)\s+(?:the\s+)?source)"
+    r"(?:found|detected|identified)|(?:review|analysis)\s+complete(?:d)?)"
     r"\s*[.!]?\s*"
 )
 
@@ -98,6 +97,7 @@ class CritiqueExtractionService:
         doc_type: str,
         ai: AIExtractionPort,
         source_text: str | None = None,
+        source_complete: bool | None = None,
     ) -> CritiqueResult:
         # Extractions are not the source document. Without this evidence the
         # model can invent "corruption" and omitted clauses while sounding certain.
@@ -109,7 +109,10 @@ class CritiqueExtractionService:
         if source:
             coverage = (
                 "PARTIAL EXCERPT: source longer than context; do not claim absence."
-                if clipped else "INPUT NOT CLIPPED BY N12; upstream document completeness NOT VERIFIED."
+                if clipped else (
+                    "INPUT NOT CLIPPED BY N12; upstream document completeness "
+                    + ("VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED.")
+                )
             )
             evidence = (
                 f"Source coverage: {coverage}\n"
@@ -169,6 +172,13 @@ class CritiqueExtractionService:
                             status="UNASSESSED",
                             notes="N12_UNASSESSED: OK verdict has unverified reviewer "
                             "notes that require human assessment: " + notes[:800],
+                        )
+                    if source_complete is not True:
+                        # Received text length does not prove complete parsing
+                        # of the original document and pinned revision.
+                        return CritiqueResult(
+                            status="UNASSESSED",
+                            notes="N12_UNASSESSED: upstream document completeness not verified.",
                         )
                     return CritiqueResult(status="OK", notes=notes)
                 # Invalid status without verified source evidence is not a

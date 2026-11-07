@@ -98,6 +98,7 @@ class TestCritiqueExtractionUseCase:
                 doc_type="contract",
                 retry_count=0,
                 source_text="EPC-04: Contractor shall complete the works on time.",
+                source_complete=True,
             )
         )
         assert res.status == "OK"
@@ -135,6 +136,7 @@ class TestCritiqueExtractionUseCase:
                 doc_type="contract",
                 retry_count=0,
                 source_text="EPC-04: Contractor shall pay 1% liquidated damages per week of delay.",
+                source_complete=True,
             )
         )
         assert res.status == "RETRY"
@@ -157,6 +159,7 @@ class TestCritiqueExtractionUseCase:
                 doc_type="contract",
                 retry_count=2,
                 source_text="EPC-04: Contractor shall pay 1% liquidated damages per week of delay.",
+                source_complete=True,
             )
         )
         assert res.retry_count == 3
@@ -177,6 +180,7 @@ class TestCritiqueExtractionUseCase:
                 doc_type="contract",
                 retry_count=0,
                 source_text="EPC-04: The Contractor shall rectify a notified defect within 14 days.",
+                source_complete=True,
             )
         )
         assert result.status == "UNASSESSED"
@@ -196,6 +200,7 @@ class TestCritiqueExtractionUseCase:
                 doc_type="contract",
                 retry_count=0,
                 source_text="EPC-04: Contractor shall complete the works on time.",
+                source_complete=True,
             )
         )
         assert res.human_approval_required is True
@@ -212,6 +217,7 @@ class TestCritiqueExtractionUseCase:
                 doc_type=None,
                 retry_count=0,
                 source_text="EPC-04: Contractor shall complete the works on time.",
+                source_complete=True,
             )
         )
         assert res.confidence == 0.85
@@ -390,6 +396,7 @@ async def test_critique_flags_false_missing_rectification_period_against_source(
             }],
             extracted_wbs=[], doc_type="contract", retry_count=0,
             source_text=source,
+            source_complete=True,
         )
     )
     assert result.status == "RETRY"
@@ -424,6 +431,7 @@ async def test_critique_flags_false_missing_cure_period_and_wrong_payment_actor(
             ],
             extracted_wbs=[], doc_type="contract", retry_count=0,
             source_text=source,
+            source_complete=True,
         )
     )
     assert result.human_approval_required is True
@@ -451,6 +459,7 @@ async def test_critique_does_not_invent_contradictions_without_source_or_in_othe
             CritiqueExtractionCommand(
                 extracted_risks=risks, extracted_wbs=[], doc_type="contract",
                 retry_count=0, source_text=text,
+                source_complete=True,
             )
         )
         assert result.status == ("OK" if text else "UNASSESSED")

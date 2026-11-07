@@ -167,8 +167,10 @@ class TestRouterNodeThinDelegation:
 
 class TestCritiqueNodeThinDelegation:
     @pytest.mark.asyncio
-    async def test_ok_path(self, monkeypatch) -> None:
+    async def test_ok_from_unverified_revision_must_not_bypass_hitl(self, monkeypatch) -> None:
+        """N12 cannot treat a short, unproven upstream excerpt as full coverage."""
         from src.analysis.adapters.graph import nodes
+        from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
         ai = _FakeAI(payload={"status": "OK", "notes": ""})
@@ -177,8 +179,10 @@ class TestCritiqueNodeThinDelegation:
         result = await nodes.critique_node(
             _make_state(extracted_risks=[{"confidence": 0.9}])
         )
-        assert result["human_approval_required"] is False
-        assert result["confidence_score"] == pytest.approx(0.9)
+        assert result["human_approval_required"] is True
+        assert result["confidence_score"] is None
+        assert "upstream document completeness not verified" in result["critique_notes"]
+        assert _next_after_critique_v2(result) == "human_interrupt"
         assert result["retry_count"] == 0
         node_result = result["node_results"][-1]
         assert node_result.node == "critique"

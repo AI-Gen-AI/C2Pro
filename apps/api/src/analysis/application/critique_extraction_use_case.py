@@ -114,6 +114,9 @@ class CritiqueExtractionCommand:
     doc_type: str | None
     retry_count: int
     source_text: str | None = None
+    # Set True only from a trusted upstream coverage record for this revision.
+    # Neither presence nor short length of text proves complete parsing.
+    source_complete: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,7 @@ class CritiqueExtractionUseCase:
             doc_type=cmd.doc_type or "unknown",
             ai=self.ai,
             source_text=cmd.source_text,
+            source_complete=cmd.source_complete,
         )
         # N4's extraction confidence is not an assessment of N12.  Once the
         # critic cannot substantiate its verdict, keep that uncertainty rather

@@ -93,7 +93,7 @@ class TestCritiqueExtractionService:
     async def test_returns_ok(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload={"status": "ok", "notes": " looks good "})
-        res = await svc.extract(items=[{"x": 1}], doc_type="contract", ai=ai, source_text="EPC-01: Original scope and obligations.")
+        res = await svc.extract(items=[{"x": 1}], doc_type="contract", ai=ai, source_text="EPC-01: Original scope and obligations.", source_complete=True)
         assert res == CritiqueResult(status="OK", notes="looks good")
 
     @pytest.mark.asyncio
@@ -108,7 +108,7 @@ class TestCritiqueExtractionService:
     async def test_invalid_status_falls_back(self) -> None:
         svc = CritiqueExtractionService()
         ai = _FakeAI(payload={"status": "weird", "notes": ""})
-        res = await svc.extract(items=[], doc_type="x", ai=ai, source_text="EPC-01: Original source text.")
+        res = await svc.extract(items=[], doc_type="x", ai=ai, source_text="EPC-01: Original source text.", source_complete=True)
         assert res.status == "UNASSESSED"
         assert "unrecognized" in res.notes.lower()
 

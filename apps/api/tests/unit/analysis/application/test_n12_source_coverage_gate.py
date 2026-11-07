@@ -26,6 +26,7 @@ def command(source_text: str | None) -> CritiqueExtractionCommand:
         }],
         extracted_wbs=[],
         doc_type="contract", retry_count=0, source_text=source_text,
+        source_complete=True,  # controlled complete synthetic fixture
     )
 
 
@@ -177,3 +178,14 @@ async def test_n12_unassessed_routes_to_human_interrupt_even_with_skip_flag(
     }
     assert result.status == "UNASSESSED"
     assert _next_after_critique_v2(state) == "human_interrupt"
+
+
+@pytest.mark.asyncio
+async def test_n12_semantic_claim_in_ok_notes_never_counts_as_neutral() -> None:
+    text = "EPC-04: Contractor shall pay delay damages for late delivery."
+    result = await CritiqueExtractionUseCase(
+        ai=FakeReview({"status": "OK", "notes": "Extraction matches source", "findings": []})
+    ).execute(command(text))
+    assert result.status == "UNASSESSED"
+    assert result.human_approval_required is True
+    assert result.confidence is None

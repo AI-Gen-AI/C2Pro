@@ -55,23 +55,28 @@ def source_bound_findings(
             # extracted risks. Do not create evidence based on title metadata.
             continue
 
-        # If the provided source has explicit lines like "EPC-04: <text>",
-        # ensure the quoted fragment lies within THAT clause, not a different
-        # clause in the same contract. For other document layouts, provenance
-        # guarantees remain quote-global and must be reported accordingly.
+        # The reference and quote must be co-located in an identifiable clause.
+        # Support EPC-04: and numbered clauses such as "5.2 <text>" or
+        # "Section 5.2 <text>", including same-line headings after a full stop.
+        # A reference merely *mentioned* elsewhere is not clause provenance.
         labels = list(
-            re.finditer(r"(?m)^\s*(EPC-\d+)\s*:", source_text, re.IGNORECASE)
+            re.finditer(
+                r"(?im)(?:^|(?<=\n)|(?<=\.)[ \t]+)[ \t]*"
+                r"(?:(?:Clause|Section|Cláusula|Artículo|Articulo|§)[ \t]*)?"
+                r"(?P<ref>EPC-\d+|\d+(?:\.\d+){1,3})(?:[\s:.)-])",
+                source_text,
+            )
         )
-        if labels and re.fullmatch(r"EPC-\d+", clause_ref.strip(), re.IGNORECASE):
-            matched = False
-            for pos, label in enumerate(labels):
-                if label.group(1).casefold() != clause_ref.strip().casefold():
-                    continue
-                end = labels[pos + 1].start() if pos + 1 < len(labels) else len(source_text)
-                matched = quote in _normal(source_text[label.end() : end])
-                break
-            if not matched:
+        matched = False
+        for pos, label in enumerate(labels):
+            if label.group("ref").casefold() != clause_ref.strip().casefold():
                 continue
+            end = labels[pos + 1].start() if pos + 1 < len(labels) else len(source_text)
+            if quote in _normal(source_text[label.start() : end]):
+                matched = True
+                break
+        if not matched:
+            continue
         verified.append(
             {
                 "clause_ref": clause_ref.strip(),
@@ -85,7 +90,7 @@ def source_bound_findings(
 
 def format_source_bound_notes(findings: list[dict[str, str]]) -> str:
     """Keep exact citations visible to existing N12/UI consumers."""
-    return "Source-cited critique findings:\n" + "\n".join(
+    return "Source-cited critique findings (provenance only; interpretation unverified):\n" + "\n".join(
         f"- {item['clause_ref']} [{item['issue_type']}]: "
         f"{item['explanation']} Source: “{item['source_quote']}”"
         for item in findings
