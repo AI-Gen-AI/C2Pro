@@ -348,6 +348,44 @@ async def verify_current_authority(session: Any, ref: ArtifactRef) -> str | None
     return None
 
 
+async def content_from_current_authority(
+    session: Any, ref: ArtifactRef
+) -> MaterializationContent:
+    """Load canonical content from the exact trusted-current artifact.
+
+    A resumed graph state is historical execution input, not authority after a
+    reviewer has approved a corrected candidate.  Recheck the same locked
+    candidate/revision guard used by materialization before reading its frozen
+    payload, then fail closed rather than falling back to caller-provided
+    state.
+    """
+    from src.analysis.adapters.persistence.models import DocumentArtifactORM
+    from src.analysis.domain.trust import StaleCandidateError
+
+    reason = await verify_current_authority(session, ref)
+    if reason is not None:
+        raise StaleCandidateError(
+            f"Candidate {ref.artifact_id} is not trusted-current ({reason})"
+        )
+    artifact = await session.scalar(
+        select(DocumentArtifactORM)
+        .where(
+            DocumentArtifactORM.artifact_id == ref.artifact_id,
+            DocumentArtifactORM.tenant_id == ref.tenant_id,
+            DocumentArtifactORM.project_id == ref.project_id,
+            DocumentArtifactORM.document_id == ref.document_id,
+            DocumentArtifactORM.artifact_version == ref.artifact_version,
+            DocumentArtifactORM.artifact_hash == ref.artifact_hash,
+        )
+        .with_for_update()
+    )
+    if artifact is None or not isinstance(artifact.payload, Mapping):
+        raise StaleCandidateError(
+            f"Candidate {ref.artifact_id} has no exact immutable payload"
+        )
+    return MaterializationContent.from_artifact(artifact.payload, artifact.scoring)
+
+
 # -- the materializer ----------------------------------------------------------
 
 
@@ -661,6 +699,7 @@ __all__ = [
     "ResumeLink",
     "lock_document",
     "lock_project",
+    "content_from_current_authority",
     "materialization_detail",
     "mark_obsolete",
     "materialize_in_transaction",

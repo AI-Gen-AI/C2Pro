@@ -160,7 +160,6 @@ async def persist_resume_analysis_atomically(
         )
 
         # 6. First execution: the ONE canonical materializer, same transaction.
-        content = materializer.MaterializationContent.from_state(state)
         link = materializer.ResumeLink(
             operation_id=provenance.operation_id,
             attempt_id=provenance.attempt_id,
@@ -169,16 +168,21 @@ async def persist_resume_analysis_atomically(
         )
         created = True
         if commit is not None:
+            ref = materializer.ArtifactRef(
+                artifact_id=commit.binding.artifact_id,
+                document_id=commit.binding.document_id,
+                artifact_version=commit.binding.artifact_version,
+                artifact_hash=commit.binding.artifact_hash,
+                project_id=commit.project_id,
+                tenant_id=tenant_id,
+            )
+            # A post-HITL candidate is immutable, revision-pinned authority.
+            # The graph state may be from the prior candidate, so it must never
+            # supply canonical risks (or any other approved artifact content).
+            content = await materializer.content_from_current_authority(session, ref)
             outcome = await materializer.materialize_in_transaction(
                 session,
-                ref=materializer.ArtifactRef(
-                    artifact_id=commit.binding.artifact_id,
-                    document_id=commit.binding.document_id,
-                    artifact_version=commit.binding.artifact_version,
-                    artifact_hash=commit.binding.artifact_hash,
-                    project_id=commit.project_id,
-                    tenant_id=tenant_id,
-                ),
+                ref=ref,
                 content=content,
                 resume=link,
                 actor="analysis_graph",
@@ -200,9 +204,10 @@ async def persist_resume_analysis_atomically(
             # has no canonical revision authority, so any in-memory locator
             # must remain explicitly NOT_VERIFIED rather than being attached
             # to a possibly different current revision.
+            legacy_content = materializer.MaterializationContent.from_state(state)
             content = replace(
-                content,
-                risks=materializer.unverified_resume_risk_sources(content.risks),
+                legacy_content,
+                risks=materializer.unverified_resume_risk_sources(legacy_content.risks),
             )
             analysis_id, _ = await materializer.write_canonical_effects(
                 session,

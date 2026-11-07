@@ -27,7 +27,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.persistence.document_artifact_repository import (
@@ -42,7 +42,7 @@ from src.analysis.domain.trust import (
     StaleCandidateError,
 )
 from src.core.auth.models import Tenant, User
-from src.core.tasks import project_graph_tasks
+from src.core.tasks import materialization_tasks, project_graph_tasks
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.temporal.application import project_snapshot_trigger
@@ -143,10 +143,20 @@ def _final_state(arranged: Any, tenant_id: UUID, *, gated: bool, title: str) -> 
     }
 
 
-async def _propose(completion_sessions, arranged, tenant_id, *, title="AI risk") -> None:
+async def _propose(
+    completion_sessions,
+    arranged,
+    tenant_id,
+    *,
+    title="AI risk",
+    risks: list[dict[str, str]] | None = None,
+) -> None:
     completion_sessions["tenant"] = tenant_id
+    state = _final_state(arranged, tenant_id, gated=True, title=title)
+    if risks is not None:
+        state["extracted_risks"] = risks
     await document_artifact_completion._persist_artifact(
-        _final_state(arranged, tenant_id, gated=True, title=title)
+        state
     )
 
     # This suite shortcuts a full re-analysis by calling the completion hook
@@ -439,6 +449,132 @@ async def test_e_corrected_proposal_commits_only_corrected_version(
     ]
     canonical = await _canonical(independent_sessions, tenant.id, arranged.project_id)
     assert _titles(canonical) == ["Human corrected risk"]
+    assert graph_enqueues == [(arranged.project_id, tenant.id)]
+
+
+async def test_corrected_v2_risks_replace_stale_v1_resume_state_in_analysis_and_alerts(
+    real_saver,
+    independent_sessions,
+    request_sessions,
+    completion_sessions,
+    graph_enqueues,
+    monkeypatch,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """A corrected, approved candidate alone authorizes resume materialization.
+
+    The production change this catches is using ``from_state`` after V2's
+    exact binding is committed: that would resurrect the three V1 findings
+    (including the dismissed one) in the persisted analysis and RISK alerts.
+    """
+    from tests.modules.integration import test_p0b_crash_safe_resume_recovery as p0b
+
+    v1_risks = _risks("V1 dismissed risk")[:3]
+    v2_risks = [
+        RiskItem(title="V2 retained risk A", description="approved A"),
+        RiskItem(title="V2 retained risk B", description="approved B"),
+    ]
+    initial_state = p0b._initial_state
+    monkeypatch.setattr(
+        p0b,
+        "_initial_state",
+        lambda *args, **kwargs: {
+            **initial_state(*args, **kwargs),
+            "extracted_risks": v1_risks,
+        },
+    )
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    await _propose(
+        completion_sessions, arranged, tenant.id, risks=v1_risks
+    )
+    v1 = await _binding(db, arranged.review_row_id)
+    assert v1 is not None
+
+    async with independent_sessions(tenant.id) as session:
+        v2 = await SqlAlchemyDocumentArtifactRepository(session).propose_correction(
+            v1,
+            DocumentArtifact(
+                document_id=str(arranged.document_id),
+                doc_type="contract",
+                extracted_risks=v2_risks,
+            ),
+            tenant_id=tenant.id,
+            review_row_id=arranged.review_row_id,
+        )
+
+    # A superseded V1 binding must fail closed; only the corrected V2 binding
+    # can be approved. V1 remains immutable audit evidence.
+    with pytest.raises(StaleCandidateError):
+        await _commit_in(independent_sessions, tenant.id, v1)
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert [risk["title"] for risk in rows[0].payload["extracted_risks"]] == [
+        risk["title"] for risk in v1_risks
+    ]
+    assert await _binding(db, arranged.review_row_id) == v2
+
+    response = await _post_approve(
+        request_sessions,
+        tenant.id,
+        arranged.review_item_id,
+        saver=saver,
+        app=arranged.app,
+        sessions=independent_sessions,
+    )
+    assert response.current_status == ReviewStatus.APPROVED
+
+    analysis = (
+        await db.execute(
+            select(Analysis)
+            .where(Analysis.source_artifact_id == v2.artifact_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().one()
+    assert [risk["title"] for risk in analysis.result_json["risks"]] == [
+        "V2 retained risk A",
+        "V2 retained risk B",
+    ]
+    alerts = (
+        await db.execute(
+            select(Alert)
+            .where(Alert.analysis_id == analysis.id)
+            .order_by(Alert.title)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert [alert.title for alert in alerts] == ["V2 retained risk A", "V2 retained risk B"]
+
+    # A lost acknowledgement may requeue the V2 obligation. Its artifact-keyed
+    # idempotency guard must only re-link this analysis, never duplicate alerts.
+    async with independent_sessions(tenant.id) as session:
+        await session.execute(
+            text(
+                "UPDATE system_recovery.trusted_projection_index "
+                "SET materialization_state = 'pending' "
+                "WHERE artifact_id = cast(:artifact_id as uuid)"
+            ),
+            {"artifact_id": str(v2.artifact_id)},
+        )
+    replay = await materialization_tasks.materialize_pending_artifact(
+        artifact_id=v2.artifact_id,
+        tenant_id=tenant.id,
+        session_factory=independent_sessions,
+    )
+    assert replay == {
+        "status": "already_materialized",
+        "analysis_id": str(analysis.id),
+        "qualifications": [],
+        "reason": None,
+    }
+    replay_alerts = (
+        await db.execute(
+            select(Alert).where(Alert.analysis_id == analysis.id).execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+    assert len(replay_alerts) == 2
     assert graph_enqueues == [(arranged.project_id, tenant.id)]
 
 
