@@ -371,6 +371,51 @@ describe("EvidencePage highlight mapping", () => {
     expect(link.getAttribute("href")).not.toMatch(/^https?:/);
   });
 
+  it("returns from an alert's original XLSX row to the exact alert in the same project", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-b", revisionId: "rev-b", locator: "Presupuesto!3",
+        expectedHash: "a".repeat(64), origin: "alerts", returnAlertId: "alert-42",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("evidence-return-to-alert")).toHaveAttribute(
+      "href", "/projects/proj-1/alerts#alert-alert-42",
+    );
+    expect(screen.getByTestId("structured-source-row-mock")).toHaveAttribute("data-locator", "Presupuesto!3");
+  });
+
+  it("rejects unscoped or malformed alert return hints without showing an unverified destination", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        origin: "alerts", returnAlertId: "https://outside.invalid/not-this-project",
+      } as Record<string, string>)[key] ?? null,
+    });
+    const { rerender } = render(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-return-to-alert")).not.toBeInTheDocument();
+
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        origin: "health", returnAlertId: "alert-42",
+      } as Record<string, string>)[key] ?? null,
+    });
+    rerender(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-return-to-alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the review's return destination authoritative over an alert hint", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        origin: "alerts", returnAlertId: "alert-42", returnReviewItemId: "review-11",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-return-to-alert")).not.toBeInTheDocument();
+    expect(screen.getByTestId("evidence-return-to-review")).toHaveAttribute(
+      "href", "/projects/proj-1/review?itemId=review-11",
+    );
+  });
+
   it("S4 — returns from a cited XLSX row to the exact Current State finding within this project", () => {
     useSearchParamsMock.mockReturnValue({
       get: (key: string) => ({
