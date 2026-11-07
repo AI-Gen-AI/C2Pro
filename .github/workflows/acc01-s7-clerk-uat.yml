@@ -1,22 +1,17 @@
-# Final post-review verification: explicit Playwright glob selector; disposable test project, NEVER production.
-name: ACC-01 S7 Clerk signout/relogin UAT - isolated
+# QA-ONLY variant of the existing dispatchable workflow, scoped to a disposable
+# GitHub Actions runner. Do not merge this test-workflow override to main/S7.
+# Real Clerk Development A/B, mock AI, isolated PostgreSQL. No HITL decisions.
+name: UX Clerk Development A/B browser gate - isolated QA
 on:
-  push:
-    branches:
-      - feat/acc01-s7-structured-links-20261029
-      - integration/acc01-e2e-20261025
-    paths:
-      - .github/workflows/acc01-s7-clerk-uat.yml
-      - apps/web/src/tests/e2e/s7-clerk-relogin.spec.ts
   workflow_dispatch:
 concurrency:
-  group: acc01-s7-clerk-uat-${{ github.ref }}
+  group: ux-clerk-browser-gate-${{ github.ref }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   s7-clerk:
-    name: Real Clerk re-login + PostgreSQL S7 triple link (synthetic source seed)
+    name: UX real Clerk A/B, four-source onboarding and mobile smoke
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
@@ -24,6 +19,7 @@ jobs:
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.E2E_CLERK_TENANT_B_USER_EMAIL }}
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       REDIS_URL: redis://localhost:6379/0
@@ -66,37 +62,9 @@ jobs:
         run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
       - name: Provision and verify actual nonproduction Clerk fixture
         run: python apps/api/scripts/provision_clerk_e2e_fixture.py
-      - name: Seed S7 WBS and original synthetic sources (zero approvals)
-        working-directory: apps/api
-        run: python -m scripts.seed_s7_clerk_uat
       - name: Verify Clerk organization and tenant binding
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
-      # Reuse the P0b real graph/Health producer; the old source-only S7 fixture
-      # never dispatched graph.completed or wrote a Health project snapshot.
-      - name: Start real document analysis and snapshot Celery consumer
-        working-directory: apps/api
-        run: |
-          python -m celery -A src.core.tasks.celery_app worker \
-            --loglevel=info --queues=document_parsing --concurrency=2 \
-            > "$RUNNER_TEMP/s7-worker.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/s7-worker.pid"
-          python - <<'PY'
-          import time
-          from src.core.tasks.celery_app import celery_app
-          deadline = time.monotonic() + 45
-          while time.monotonic() < deadline:
-              queue_map = celery_app.control.inspect(timeout=3).active_queues() or {}
-              if any(
-                  queue.get("name") == "document_parsing"
-                  for queues in queue_map.values() for queue in queues
-              ):
-                  print("S7 real document_parsing/snapshot consumer READY")
-                  break
-              time.sleep(2)
-          else:
-              raise SystemExit("S7_CELERY_DOCUMENT_ANALYSIS_CONSUMER_NOT_READY")
-          PY
       - name: Start FastAPI and Clerk JWT JWKS fixture
         working-directory: apps/api
         env:
@@ -115,40 +83,28 @@ jobs:
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: ./node_modules/.bin/playwright install --with-deps chromium
-      - name: Run REAL Clerk sign-out + NEW context + sign-in
-        id: clerk_journey
+      - name: Test UX with real Clerk A/B and isolated PostgreSQL
+        id: ux_browser_gate
         working-directory: apps/web
         env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/s7-clerk-results.json
-        run: ./node_modules/.bin/playwright test --project=s7-clerk-uat --workers=1 --reporter=list,json
-      - name: Independently verify real analysis / graph event / Health snapshot lineage in PostgreSQL
-        if: steps.clerk_journey.outcome == 'success'
-        working-directory: apps/api
-        run: |
-          project_id="$(python - <<'PY'
-          import json
-          from pathlib import Path
-          fixture = json.loads(Path("../web/playwright-report/s7-clerk-source.json").read_text())
-          print(fixture["projectId"])
-          PY
-          )"
-          python scripts/verify_p0b_journey.py --project-id "$project_id"
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/ux-clerk-browser-results.json
+        run: ./node_modules/.bin/playwright test --project=ux-clerk-browser-gate --workers=1 --reporter=list,json
       - name: Summarize UAT result without tokens
         if: always()
         working-directory: apps/web
         run: |
-          if test -f playwright-report/s7-clerk-results.json; then
-            node scripts/playwright-summary.mjs playwright-report/s7-clerk-results.json "S7 real Clerk logout/relogin with 3 WBS links" >> "$GITHUB_STEP_SUMMARY"
+          if test -f playwright-report/ux-clerk-browser-results.json; then
+            node scripts/playwright-summary.mjs playwright-report/ux-clerk-browser-results.json "UX real Clerk Development A/B browser smoke" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Upload non-secret Playwright summary
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: acc01-s7-clerk-relogin-evidence
-          path: apps/web/playwright-report/s7-clerk-results.json
+          name: ux-clerk-browser-evidence
+          path: apps/web/playwright-report/ux-clerk-browser-results.json
           if-no-files-found: warn
           retention-days: 3
-      - name: Cleanup disposable Postgres, Redis and worker
+      - name: Cleanup disposable PostgreSQL and Redis
         if: always()
         run: |
           if test -f "$RUNNER_TEMP/s7-worker.pid"; then kill "$(cat "$RUNNER_TEMP/s7-worker.pid")" || true; fi
