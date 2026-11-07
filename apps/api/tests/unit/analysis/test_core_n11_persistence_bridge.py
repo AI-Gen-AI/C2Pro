@@ -67,7 +67,6 @@ def test_n17_resume_content_keeps_only_proposal_and_exact_revision():
 def test_n17_fenced_artifact_without_proposal_cannot_invent_one():
     content = MaterializationContent.from_artifact(
         {"document_id": "doc-A", "extracted_risks": []},
-        {},
     )
     assert not content.decision_snapshot
 
@@ -81,7 +80,7 @@ def test_n11_artifact_roundtrip_keeps_pending_proposals_unapproved():
     })
     assert artifact.decision_snapshot is not None
     assert artifact.decision_snapshot["revision_id"] == "revision-2"
-    restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"), {})
+    restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"))
     assert restored.decision_snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
     assert restored.decision_snapshot["proposed_actions"][0]["owner"] is None
 
@@ -124,8 +123,71 @@ def test_live_n4_candidate_with_mitigation_becomes_projectgraph_artifact():
     # Mitigation is not silently lost: it remains a proposed N11 decision.
     assert artifact.decision_snapshot is not None
     assert artifact.decision_snapshot["proposed_actions"][0]["proposed_action"]
-    restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"), {})
+    restored = MaterializationContent.from_artifact(artifact.model_dump(mode="json"))
     assert restored.decision_snapshot["proposed_actions"][0]["status"] == "PROPOSED_REQUIRES_HUMAN_REVIEW"
+
+
+def test_raw_materialization_ignores_candidate_scoring_and_keeps_null_score(monkeypatch):
+    """A candidate's provisional scoring (60) must never be read as resumed state."""
+    import src.analysis.adapters.graph.document_artifact_builder as builder
+
+    def _boom(_state):
+        raise AssertionError("build_document_artifact must not run without resumed_state")
+
+    monkeypatch.setattr(builder, "build_document_artifact", _boom)
+    payload = {"document_id": "doc-A", "extracted_risks": []}
+    content = MaterializationContent.from_artifact(payload)
+    assert content.coherence_score is None and content.coherence_reason is None
+    # Candidate scoring can no longer be passed positionally as resumed state.
+    import pytest
+
+    with pytest.raises(TypeError):
+        MaterializationContent.from_artifact(payload, {"score": 60})  # type: ignore[misc]
+
+
+def _resumed_state(score, breakdown=None):
+    return {
+        "document_id": "doc-A",
+        "document_revision_id": "revision-2",
+        "doc_type": "contract",
+        "coherence_score": score,
+        "coherence_breakdown": breakdown if breakdown is not None else {"LEGAL": 80},
+        "coherence_reason": "ok",
+    }
+
+
+def _bound(state):
+    from src.analysis.domain.trust import artifact_digest
+
+    artifact = build_document_artifact(state).model_dump(mode="json")
+    return artifact, artifact_digest(artifact)
+
+
+def test_resumed_score_requires_exact_hash_and_wellformed_values():
+    state = _resumed_state(72)
+    payload, digest = _bound(state)
+    ok = MaterializationContent.from_artifact(
+        payload, resumed_state=state, expected_artifact_hash=digest
+    )
+    assert ok.coherence_score == 72 and dict(ok.coherence_breakdown) == {"LEGAL": 80}
+    # No hash / wrong hash -> null score.
+    assert MaterializationContent.from_artifact(payload, resumed_state=state).coherence_score is None
+    assert MaterializationContent.from_artifact(
+        payload, resumed_state=state, expected_artifact_hash="0" * 64
+    ).coherence_score is None
+    # Wrong / malformed scores and breakdowns -> null score.
+    for bad_score in (True, "72", float("nan"), -1, 101):
+        bad = _resumed_state(bad_score)
+        p, d = _bound(bad)
+        assert MaterializationContent.from_artifact(
+            p, resumed_state=bad, expected_artifact_hash=d
+        ).coherence_score is None
+    for bad_breakdown in ({"LEGAL": "x"}, {"LEGAL": 500}, {"LEGAL": True}):
+        bad = _resumed_state(72, bad_breakdown)
+        p, d = _bound(bad)
+        assert MaterializationContent.from_artifact(
+            p, resumed_state=bad, expected_artifact_hash=d
+        ).coherence_score is None
 
 
 def test_n11_precedes_n17_in_executable_graph():

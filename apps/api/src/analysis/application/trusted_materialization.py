@@ -54,6 +54,7 @@ Derived-state policy (C3b-1):
 
 from __future__ import annotations
 
+import math
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -140,19 +141,30 @@ class MaterializationContent:
 
     @classmethod
     def from_artifact(
-        cls, payload: Mapping[str, Any], resumed_state: Mapping[str, Any] | None = None
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        resumed_state: Mapping[str, Any] | None = None,
+        expected_artifact_hash: str | None = None,
     ) -> MaterializationContent:
         """Materialize immutable content, accepting N8 only when source-coupled.
 
         ``document_artifacts.scoring`` is the candidate's provisional score:
         it may describe a proposal that was corrected after the interrupted
-        graph checkpoint.  It is useful to the pending-review projection, but
-        is not evidence that a trusted canonical Analysis was evaluated.
+        graph checkpoint.  It is never read here and never becomes canonical;
+        only an explicit, keyword-only ``resumed_state`` can supply a score.
 
         A resumed N8 result is published only when rebuilding its artifact
-        from the checkpoint produces the exact immutable payload now trusted.
-        Otherwise the score stays null until a ProjectGraph evaluation reruns
-        against the trusted artifact.
+        from the checkpoint equals the immutable payload AND the rebuilt
+        artifact's digest is exactly ``expected_artifact_hash`` (the approved
+        reference hash), and the score/breakdown are well-formed.
+
+        Limitation: that proves the *extracted document content* N8 scored,
+        not its other inputs (project clauses, cross-document evidence, BOM,
+        feature flags), which the artifact does not record.  Those are
+        unverified; the stored score is the resumed N8 output on that
+        content only.  Without a hash or on any mismatch the score stays null
+        (generic NOT_EVALUATED) until ProjectGraph re-evaluates.
         """
         from src.analysis.domain.report_assembly import decision_snapshot_for_persistence
 
@@ -161,7 +173,9 @@ class MaterializationContent:
             risks=list(payload.get("extracted_risks") or []),
             wbs=list(payload.get("extracted_wbs") or []),
             coherence_breakdown={},
-            coherence_reason="trusted_artifact_score_requires_recalculation",
+            # No score reason is persisted when unverified: the dashboard only
+            # surfaces the generic NOT_EVALUATED state for a null score.
+            coherence_reason=None,
             assessment={},
             decision_snapshot=decision_snapshot_for_persistence(
                 payload.get("decision_snapshot"),
@@ -169,22 +183,40 @@ class MaterializationContent:
                 revision_id=_str_or_none(payload.get("document_revision_id")),
             ) or {},
         )
-        if resumed_state is None:
+        if resumed_state is None or not expected_artifact_hash:
             return content
         try:
             from src.analysis.adapters.graph.document_artifact_builder import (
                 build_document_artifact,
             )
             from src.analysis.domain.contracts import DocumentArtifact
+            from src.analysis.domain.trust import artifact_digest
 
-            if build_document_artifact(resumed_state) != DocumentArtifact.model_validate(payload):
+            rebuilt = build_document_artifact(resumed_state)
+            if rebuilt != DocumentArtifact.model_validate(payload):
                 return content
-        except (TypeError, ValueError):
+            if artifact_digest(rebuilt.model_dump(mode="json")) != expected_artifact_hash:
+                return content
+            resumed = cls.from_state(resumed_state)
+        except (TypeError, ValueError, AttributeError):
             logger.warning("trusted_materialization_resume_score_unverifiable")
             return content
-
-        resumed = cls.from_state(resumed_state)
-        if not isinstance(resumed.coherence_score, int | float):
+        score = resumed.coherence_score
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, int | float)
+            or not math.isfinite(score)
+            or not 0 <= score <= 100
+        ):
+            return content
+        breakdown = resumed.coherence_breakdown
+        if not isinstance(breakdown, Mapping) or any(
+            isinstance(v, bool)
+            or not isinstance(v, int | float)
+            or not math.isfinite(v)
+            or not 0 <= v <= 100
+            for v in breakdown.values()
+        ):
             return content
         return replace(
             content,
@@ -425,7 +457,11 @@ async def content_from_current_authority(
         raise StaleCandidateError(
             f"Candidate {ref.artifact_id} immutable payload digest does not match its binding"
         )
-    return MaterializationContent.from_artifact(artifact.payload, resumed_state)
+    return MaterializationContent.from_artifact(
+        artifact.payload,
+        resumed_state=resumed_state,
+        expected_artifact_hash=ref.artifact_hash,
+    )
 
 
 # -- the materializer ----------------------------------------------------------

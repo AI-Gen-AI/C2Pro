@@ -573,7 +573,7 @@ async def test_the_derived_candidate_carries_no_score_and_the_original_score_sta
     payload = event.payload if isinstance(event.payload, dict) else json.loads(event.payload)
     assert payload["source_scoring"] == original and payload["derived_scoring"]["evaluation"] == "PENDING_REEVALUATION"
     # what the TRUSTED materializer would write for Vn+1 is "no score", not the old 82
-    content = MaterializationContent.from_artifact({"document_id": str(w.document_id), "extracted_risks": []}, vn1)
+    content = MaterializationContent.from_artifact({"document_id": str(w.document_id), "extracted_risks": []})
     assert content.coherence_score is None
 
 
