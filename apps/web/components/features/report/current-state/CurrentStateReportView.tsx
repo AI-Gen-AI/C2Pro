@@ -56,9 +56,9 @@ type DecisionProposalsEnvelope = Pick<
 };
 type DiscrepancySource = {
   role: "verified_document_quote" | "original_source_row";
-  document_id: string;
-  revision_id: string;
-  source_locator: string;
+  document_id?: string | null;
+  revision_id?: string | null;
+  source_locator?: string | null;
   family?: "budget" | "schedule" | null;
   source_quote?: string | null;
   source_quote_sha256?: string | null;
@@ -72,7 +72,8 @@ type SourceDiscrepancy = {
   scored: false;
   requires_human_review: true;
   compared_values: Record<string, string | number>;
-  sources: [DiscrepancySource, DiscrepancySource];
+  /** The report normally supplies a pair. Treat it as external data so a partial pair is never linked as evidence. */
+  sources: DiscrepancySource[];
 };
 type SourceDiscrepanciesEnvelope = Pick<
   ReportSections["documents"],
@@ -166,6 +167,11 @@ function ExecutiveSummary({ sections }: { sections: Sections }) {
     { label: "Unavailable", keys: summary.unavailable_section_keys },
     { label: "Could not load", keys: summary.error_section_keys },
   ].filter((group) => group.keys.length > 0);
+  const coherenceIsIncomplete =
+    sections.coherence.status === "available" &&
+    (sections.coherence.data?.score === null ||
+      sections.coherence.data?.score === undefined ||
+      (sections.coherence.data?.missing_dimensions?.length ?? 0) > 0);
 
   const documentCount = summary.document_count;
   const analyzedCount = summary.analyzed_document_count;
@@ -207,10 +213,12 @@ function ExecutiveSummary({ sections }: { sections: Sections }) {
             ))}
           </ul>
         ) : (
-          notCovered.length > 0 || (awaitingCount !== null && awaitingCount !== undefined && awaitingCount > 0) ? (
+          notCovered.length > 0 ||
+          coherenceIsIncomplete ||
+          (awaitingCount !== null && awaitingCount !== undefined && awaitingCount > 0) ? (
             <p className="text-sm text-muted-foreground" data-testid="attention-not-evaluated">
               No attention items were raised, but this is NOT a clean result: parts of the project were not
-              evaluated or documents are still awaiting analysis (see below).
+              evaluated, including incomplete Coherence, or documents are still awaiting analysis (see below).
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">Nothing requires attention in the data that is available.</p>
@@ -345,10 +353,64 @@ function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentS
 }
 
 
-function discrepancyEvidenceHref(projectId: string, source: DiscrepancySource): string {
+type RevisionBoundDiscrepancySource = DiscrepancySource & {
+  document_id: string;
+  revision_id: string;
+  source_locator: string;
+};
+
+function sourceHash(source: DiscrepancySource): string | null {
+  return source.blob_sha256 ?? source.source_quote_sha256 ?? source.unit_sha256 ?? null;
+}
+
+function isRevisionBoundSource(source: DiscrepancySource): source is RevisionBoundDiscrepancySource {
+  return Boolean(source.document_id && source.revision_id && source.source_locator && sourceHash(source));
+}
+
+function discrepancyEvidenceHref(projectId: string, source: RevisionBoundDiscrepancySource): string {
   const base = `/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(source.document_id)}&revisionId=${encodeURIComponent(source.revision_id)}`;
   if (source.role !== "original_source_row" || !source.blob_sha256) return base;
   return `${base}&locator=${encodeURIComponent(source.source_locator)}&expectedHash=${encodeURIComponent(source.blob_sha256)}`;
+}
+
+function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepancy; projectId: string }) {
+  const evidenceSources = finding.sources.filter(isRevisionBoundSource);
+  const hasCompleteComparison = finding.sources.length === 2 && evidenceSources.length === 2;
+  const displayedSources = hasCompleteComparison ? evidenceSources : evidenceSources.slice(0, 1);
+
+  return (
+    <div className="space-y-2 border-t pt-2">
+      {displayedSources.map((source) => {
+        const hash = sourceHash(source);
+        return (
+          <div key={`${source.document_id}:${source.revision_id}:${source.source_locator}`} className="space-y-1 text-xs">
+            <p className="break-words text-muted-foreground">
+              {source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
+              {" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
+            </p>
+            {source.source_quote ? (
+              <blockquote className="border-l-2 pl-2 text-muted-foreground">{source.source_quote}</blockquote>
+            ) : null}
+            <Link
+              data-testid="source-discrepancy-evidence-link"
+              className="inline-block text-primary underline underline-offset-2"
+              href={discrepancyEvidenceHref(projectId, source)}
+            >
+              {source.role === "original_source_row"
+                ? "Inspect original row and file hash"
+                : "Inspect pinned source document revision"}
+            </Link>
+          </div>
+        );
+      })}
+      {!hasCompleteComparison ? (
+        <p data-testid="source-discrepancy-unverified-source" className="text-xs text-muted-foreground">
+          Unverified source: this comparison does not yet have two revision-, locator-, and hash-bound source objects.
+          Next: locate and verify the missing source before treating this as a confirmed discrepancy.
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function SourceDiscrepanciesBody({
@@ -375,28 +437,7 @@ function SourceDiscrepanciesBody({
               </div>
             ))}
           </dl>
-          <div className="space-y-2 border-t pt-2">
-            {finding.sources.map((source) => (
-              <div key={`${source.document_id}:${source.revision_id}:${source.source_locator}`} className="space-y-1 text-xs">
-                <p className="text-muted-foreground">
-                  {source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
-                  {" · "}revision {source.revision_id}{" · "}{source.source_locator}
-                </p>
-                {source.source_quote ? (
-                  <blockquote className="border-l-2 pl-2 text-muted-foreground">{source.source_quote}</blockquote>
-                ) : null}
-                <Link
-                  data-testid="source-discrepancy-evidence-link"
-                  className="inline-block text-primary underline underline-offset-2"
-                  href={discrepancyEvidenceHref(projectId, source)}
-                >
-                  {source.role === "original_source_row"
-                    ? "Inspect original row and file hash"
-                    : "Inspect pinned source document revision"}
-                </Link>
-              </div>
-            ))}
-          </div>
+          <DiscrepancyEvidence finding={finding} projectId={projectId} />
           <p className="text-xs text-muted-foreground">
             Links open the pinned revision or re-verify the original XLSX row. Quote highlighting is not guaranteed.
           </p>
@@ -585,10 +626,11 @@ function MissingEvidenceBody({ data }: { data: SectionData<"missing_evidence"> }
 
 function CoherenceBody({ data }: { data: SectionData<"coherence"> }) {
   if (!data) return null;
+  const scoreIsUnknown = data.score === null || data.score === undefined;
   return (
     <>
       <p>
-        Score: <span className="font-semibold">{formatScore(data.score)}</span>
+        Score: <span className="font-semibold">{scoreIsUnknown ? "NOT EVALUATED" : formatScore(data.score)}</span>
         {data.score_version ? <span className="text-muted-foreground"> · {data.score_version}</span> : null}
       </p>
       {data.score_reason ? <p className="text-muted-foreground">Reason: {humanize(data.score_reason)}</p> : null}
