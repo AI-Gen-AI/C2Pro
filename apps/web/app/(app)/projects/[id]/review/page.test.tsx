@@ -34,6 +34,7 @@ vi.mock('@clerk/nextjs', () => ({
 
 // Mock hooks
 const mockRefetch = vi.fn();
+const mockLoadScopedReviewPage = vi.fn();
 const mockApproveMutate = vi.fn();
 const mockRejectMutate = vi.fn();
 const mockShowToast = vi.fn();
@@ -61,6 +62,7 @@ vi.mock('@/hooks/useProject', () => ({
 
 vi.mock('@/lib/api/generated/hitl/hitl', () => ({
   useListReviewQueueApiV1HitlQueueGet: vi.fn(),
+  listReviewQueueApiV1HitlQueueGet: (...args: unknown[]) => mockLoadScopedReviewPage(...args),
   useApproveItemApiV1HitlQueueItemIdApprovePost: () => ({
     mutateAsync: mockApproveMutate,
     isPending: false,
@@ -145,6 +147,8 @@ describe('ReviewPage', () => {
     vi.clearAllMocks();
     mockSearchParams.mockReturnValue(new URLSearchParams());
     mockCapabilities.mockReturnValue(undefined);
+    mockLoadScopedReviewPage.mockReset();
+    mockLoadScopedReviewPage.mockResolvedValue({ items: [], total: 0 });
   });
 
   it('labels the queue as project-scoped because the API now supports project filtering', () => {
@@ -412,6 +416,7 @@ describe('ReviewPage', () => {
     const fullPage = Array.from({ length: 50 }, (_, index) => ({
       ...MOCK_ITEMS[0],
       item_id: `item-${index}`,
+      row_id: `review-row-${index}`,
     }));
     setupMock({ data: { items: fullPage, total: 50 } });
     render(<ReviewPage />);
@@ -423,6 +428,7 @@ describe('ReviewPage', () => {
     const fullPage = Array.from({ length: 50 }, (_, index) => ({
       ...MOCK_ITEMS[0],
       item_id: `item-${index}`,
+      row_id: `review-row-${index}`,
     }));
     setupMock({ data: { items: fullPage, total: 50 } });
     render(<ReviewPage />);
@@ -736,6 +742,54 @@ describe('ReviewPage', () => {
       expect.anything(),
     );
     expect(document.getElementById('review-item-item-74')).toHaveClass('ring-2');
+    expect(screen.queryByTestId('review-target-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('S5 — opens the 245th project-scoped review without selecting another item', async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=item-245'));
+    setupMock({ data: { items: MOCK_ITEMS, total: 250 } });
+    mockLoadScopedReviewPage.mockResolvedValue({
+      items: [{ ...MOCK_ITEMS[0], item_id: 'item-245', row_id: 'row-245' }],
+      total: 250,
+    });
+    Element.prototype.scrollIntoView = vi.fn();
+
+    render(<ReviewPage />);
+    await waitFor(() => expect(mockLoadScopedReviewPage).toHaveBeenCalledWith(
+      { project_id: 'test-project-id', skip: 200, limit: 200 },
+      expect.any(AbortSignal),
+    ));
+    await waitFor(() => expect(document.getElementById('review-item-item-245')).toHaveClass('ring-2'));
+    expect(screen.queryByTestId('review-target-unavailable')).not.toBeInTheDocument();
+    expect(screen.getByTestId('review-item-item-245')).toBeInTheDocument();
+    expect(document.getElementById('review-item-item-245')).toHaveAttribute('tabindex', '-1');
+    expect(document.activeElement).toBe(document.getElementById('review-item-item-245'));
+    expect(screen.queryByTestId('review-target-searching')).not.toBeInTheDocument();
+  });
+
+  it('S5 — never displays an item from a different project when it is absent in scoped pages', async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=foreign-project-item'));
+    setupMock({ data: { items: MOCK_ITEMS, total: 250 } });
+    mockLoadScopedReviewPage.mockResolvedValue({ items: [], total: 250 });
+    render(<ReviewPage />);
+
+    await waitFor(() => expect(screen.getByTestId('review-target-unavailable')).toHaveTextContent(
+      /no other review was selected/i,
+    ));
+    expect(mockLoadScopedReviewPage).toHaveBeenCalledWith(
+      { project_id: 'test-project-id', skip: 200, limit: 200 },
+      expect.any(AbortSignal),
+    );
+    expect(document.getElementById('review-item-foreign-project-item')).toBeNull();
+  });
+
+  it('S5 — explains lookup failure instead of pretending the linked review is missing or approved', async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('itemId=linked-unavailable'));
+    setupMock({ data: { items: MOCK_ITEMS, total: 250 } });
+    mockLoadScopedReviewPage.mockRejectedValue(new Error('503'));
+    render(<ReviewPage />);
+    const notice = await screen.findByTestId('review-target-search-error');
+    expect(notice).toHaveTextContent(/no other review was selected/i);
     expect(screen.queryByTestId('review-target-unavailable')).not.toBeInTheDocument();
   });
 
