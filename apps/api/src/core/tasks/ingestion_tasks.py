@@ -56,7 +56,9 @@ from src.documents.adapters.storage.factory import build_storage_service
 from src.documents.application.budget_stated_total import record_revision_stated_total
 from src.documents.application.document_coverage import (
     append_document_coverage_omissions,
+    build_n12_source_attestation,
     record_revision_document_coverage,
+    record_revision_parsed_text_digest,
 )
 from src.documents.application.document_source import (
     REVISION_HASH_MISMATCH,
@@ -1017,6 +1019,7 @@ async def _run_analysis_graph_best_effort(
     parsed_text: str,
     tenant_id: TenantId,
     document_id: UUID,
+    source_revision: DocumentRevision | None = None,
 ) -> dict[str, Any]:
     """Run the N1-N17 enrichment graph and report its outcome.
 
@@ -1058,6 +1061,23 @@ async def _run_analysis_graph_best_effort(
     # authority pinned -- never "the latest upload". It binds the #714 artifact
     # to its revision and lets N12 consult the temporal-review seam.
     pinned_revision = getattr(authority, "revision_id", None) if authority is not None else None
+    # Only a tenant-scoped repository object bound to the EXACT processing
+    # revision can establish the parser's claim. Never use metadata's revision
+    # string as authority, nor infer coverage from short extracted text.
+    attestation = None
+    if (
+        pinned_revision is not None
+        and source_revision is not None
+        and str(source_revision.revision_id) == str(pinned_revision)
+    ):
+        attestation = build_n12_source_attestation(
+            metadata=getattr(document, "document_metadata", None),
+            parsed_text=parsed_text,
+            revision=source_revision,
+            tenant_id=tenant_id,
+            project_id=document.project_id,
+            document_id=document_id,
+        )
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "project_id": str(document.project_id),
@@ -1076,6 +1096,7 @@ async def _run_analysis_graph_best_effort(
         "human_approval_required": False,
         "analysis_id": None,
         "document_revision_id": str(pinned_revision) if pinned_revision else None,
+        "n12_source_attestation": attestation,
         "force_full_pipeline": True,
     }
     # #758: take the existing review's lineage over the moment this attempt
@@ -1382,12 +1403,23 @@ async def _analyze_owned(
     # "RAG chunks were not committed").
     human_approval_required = False
     if parsed_text and chunk_count > 0:
+        # Repository read is tenant-scoped and bound to this processing grant.
+        # Missing revision or mismatched identity yields NO coverage assertion.
+        # A repository error is not downgraded to an untrusted positive grant.
+        source_revision = (
+            await SqlAlchemyDocumentRevisionRepository(session).get_by_id(
+                grant.revision_id, tenant_id
+            )
+            if grant.revision_id is not None
+            else None
+        )
         graph_result = await _run_analysis_graph_best_effort(
             orchestrator=orchestrator,
             document=document,
             parsed_text=parsed_text,
             tenant_id=tenant_id,
             document_id=document_id,
+            source_revision=source_revision,
         )
         analysis_id = graph_result["analysis_id"]
         human_approval_required = graph_result["human_approval_required"]
@@ -1900,6 +1932,11 @@ async def _ingest_owned(
         )
     if parsed_text:
         metadata["parsed_text"] = parsed_text
+        record_revision_parsed_text_digest(
+            metadata,
+            parsed_text=parsed_text,
+            revision_id=source_revision.revision_id if source_revision else None,
+        )
         # C3a: parsed_text is overwritten per ingestion; the stamp lets readers serve
         # it only while it is the trusted-current revision's text.
         if source_revision is not None:

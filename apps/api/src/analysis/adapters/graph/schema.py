@@ -43,6 +43,9 @@ class ProjectState(TypedDict):
     # #711 processing authority). Binds the #714 artifact to its revision and
     # lets N12 consult the temporal-review seam. None when no authority pins it.
     document_revision_id: str | None
+    # Server-minted parser coverage and exact-text lineage for the pinned
+    # revision; absent for previews, older ingestion, and unverified parsers.
+    n12_source_attestation: dict[str, str] | None
     # Why the temporal-review seam did or did not require approval (N12).
     temporal_review_reason: str
     human_approval_required: bool

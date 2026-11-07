@@ -92,7 +92,7 @@ async def test_service_exposes_quoted_findings_to_existing_notes_consumer():
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
+    assert result.status == "UNASSESSED"
     assert "EPC-05 [contradiction]" in result.notes
     assert "Price escalation" in result.notes
 
@@ -126,7 +126,7 @@ async def test_service_rejects_ok_with_reported_errors():
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
+    assert result.status == "UNASSESSED"
     assert "EPC-04 [omission]" in result.notes
     assert "14 days" in result.notes
 
@@ -158,8 +158,8 @@ async def test_model_status_variant_cannot_erase_three_source_verified_findings(
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
-    assert "N12_UNASSESSED" not in result.notes
+    assert result.status == "UNASSESSED"
+    assert "N12_UNASSESSED" in result.notes
     assert all(clause in result.notes for clause in ("EPC-04", "EPC-05", "EPC-07"))
     from scripts.n4_n12_real_ai_eval import score_n12
 
@@ -179,3 +179,92 @@ def test_real_ai_parser_accepts_wrapped_json_without_hiding_source():
         '{"status":"RETRY","notes":"Audit needed","findings":[]}\n```'
     )
     assert payload["status"] == "RETRY"
+
+
+def test_numeric_clause_ref_must_contain_quote_not_other_clause():
+    """A real quote in clause 5.2 cannot prove a finding about 6.3."""
+    source = (
+        "5.2 The Contractor shall pay delay damages of 1% per week.\n"
+        "6.3 The Employer shall issue the completion certificate."
+    )
+    wrong = _finding(
+        "6.3", "omission",
+        "The Contractor shall pay delay damages of 1% per week.",
+        "Omitted certificate requirements.",
+    )
+    right = _finding(
+        "5.2", "omission",
+        "The Contractor shall pay delay damages of 1% per week.",
+        "Delay damages lack a clause locator in extraction.",
+    )
+    result = source_bound_findings([wrong, right], source_text=source)
+    assert [x["clause_ref"] for x in result] == ["5.2"]
+
+
+def test_unscoped_source_quote_cannot_claim_known_clause_provenance():
+    """A clause mention without delimiting its body cannot certify locality."""
+    source = (
+        "The specification references clause 5.2 for acceptance tests. "
+        "Separately, damages of 1% apply in case of late delivery."
+    )
+    claim = _finding(
+        "5.2", "omission",
+        "Separately, damages of 1% apply in case of late delivery.",
+        "Allegedly omitted 5.2.",
+    )
+    assert source_bound_findings([claim], source_text=source) == []
+
+
+def test_codex_same_line_section_reference_is_not_clause_heading() -> None:
+    """A cross-reference sentence after a period is not a new clause boundary."""
+    source = (
+        "5.2 Payment terms. Section 6.3 applies separately. "
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    misleading = _finding(
+        "6.3", "omission",
+        "Contractor shall pay delay damages of 1% per week.",
+        "Incorrectly attributes this 5.2 text to section 6.3.",
+    )
+    assert source_bound_findings([misleading], source_text=source) == []
+
+
+def test_codex_line_initial_cross_reference_without_heading_delimiter_is_unverified() -> None:
+    """A line beginning 'Section 6.3 applies ...' still is not a heading."""
+    source = (
+        "5.2 Payment terms.\n"
+        "Section 6.3 applies separately to these terms.\n"
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    misleading = _finding(
+        "6.3", "contradiction",
+        "Contractor shall pay delay damages of 1% per week.",
+        "Incorrect attribution from narrative cross-reference.",
+    )
+    assert source_bound_findings([misleading], source_text=source) == []
+
+
+def test_codex_ambiguous_new_section_breaks_previous_clause_span():
+    """An unpunctuated qualified section is a boundary, not verified authority."""
+    source = (
+        "5.2 Payment terms.\n"
+        "Section 6.3 Delay damages\n"
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    quote = "Contractor shall pay delay damages of 1% per week."
+    wrong_previous = _finding("5.2", "omission", quote, "Wrong previous section.")
+    unsupported_new = _finding("6.3", "omission", quote, "Unpunctuated heading not proven.")
+    assert source_bound_findings([wrong_previous, unsupported_new], source_text=source) == []
+
+
+def test_explicit_new_section_is_scoped_to_its_own_quote():
+    source = (
+        "5.2 Payment terms.\n"
+        "Section 6.3: Delay damages\n"
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    quote = "Contractor shall pay delay damages of 1% per week."
+    wrong_previous = _finding("5.2", "omission", quote, "Wrong previous section.")
+    grounded_new = _finding("6.3", "omission", quote, "Clause 6.3 has this requirement.")
+    findings = source_bound_findings([wrong_previous, grounded_new], source_text=source)
+    assert [item["clause_ref"] for item in findings] == ["6.3"]

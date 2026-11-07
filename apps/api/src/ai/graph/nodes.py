@@ -51,13 +51,17 @@ async def critique_node(state: dict[str, Any]) -> dict[str, Any]:
         skip_hitl=skip_hitl,
     )
 
+    state["confidence_score"] = result.confidence
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    confidence_label = (
+        "not assessed" if result.confidence is None else f"{result.confidence:.2f}"
+    )
     state["messages"].append(
         AIMessage(
             content=(
-                f"Critique status={critique['status']} confidence={confidence:.2f} "
+                f"Critique status={critique['status']} confidence={confidence_label} "
                 f"retry_count={result.retry_count}"
             )
         )

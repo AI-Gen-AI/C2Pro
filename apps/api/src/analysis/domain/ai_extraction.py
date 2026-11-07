@@ -71,6 +71,13 @@ class DocumentTypeClassificationService:
 # Bounded, clearly labeled source context. A clipped excerpt is never proof
 # that a contractual provision does not exist elsewhere in the document.
 _CRITIQUE_MAX_SOURCE_CHARS = 16000
+# Only explicitly neutral summaries may accompany an OK verdict. Arbitrary
+# prose can contain an unstructured, unverified defect despite status="OK".
+_NEUTRAL_OK_NOTES = re.compile(
+    r"(?i)\s*(?:looks\s+good|no\s+(?:issues|omissions|discrepancies|errors)\s+"
+    r"(?:found|detected|identified)|(?:review|analysis)\s+complete(?:d)?)"
+    r"\s*[.!]?\s*"
+)
 
 
 @dataclass(frozen=True)
@@ -90,18 +97,22 @@ class CritiqueExtractionService:
         doc_type: str,
         ai: AIExtractionPort,
         source_text: str | None = None,
+        source_complete: bool | None = None,
     ) -> CritiqueResult:
         # Extractions are not the source document. Without this evidence the
         # model can invent "corruption" and omitted clauses while sounding certain.
         # Keep the same tenant-scoped AI port as extraction; never fetch another
         # revision or expand access. The bounded excerpt is explicitly non-exhaustive.
         source = (source_text or "").strip()
+        clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
+        excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
         if source:
-            clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
-            excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
             coverage = (
                 "PARTIAL EXCERPT: source longer than context; do not claim absence."
-                if clipped else "COMPLETE INPUT TEXT PROVIDED FOR THIS REVIEW"
+                if clipped else (
+                    "INPUT NOT CLIPPED BY N12; upstream document completeness "
+                    + ("VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED.")
+                )
             )
             evidence = (
                 f"Source coverage: {coverage}\n"
@@ -120,37 +131,72 @@ class CritiqueExtractionService:
             if isinstance(payload, dict):
                 status = str(payload.get("status", "")).strip().upper()
                 notes = str(payload.get("notes", "")).strip()
+                # Only verify material that the reviewer actually received.
+                # The unseen remainder cannot corroborate a model finding.
                 verified = source_bound_findings(
-                    payload.get("findings"), source_text=source
+                    payload.get("findings"), source_text=excerpt
                 )
                 if verified:
-                    # Verified citations carry review authority, not the
-                    # model's untrusted status string. A model might return
-                    # NEEDS_REVIEW, FAIL, or even OK while identifying source
-                    # conflicts. Preserve the facts, require human review, and
-                    # NEVER silently replace a supported critique with fallback.
+                    # A located verbatim quote is *provenance*, not proof of
+                    # the model's assertion that an obligation was omitted or
+                    # contradicted. Preserve the cited critique for HITL, but
+                    # do not consume an extraction retry based only on an LLM
+                    # interpretation (including when the model returns OK).
                     return CritiqueResult(
-                        status="RETRY",
-                        notes=format_source_bound_notes(verified),
+                        status="UNASSESSED",
+                        notes=(
+                            "N12_UNASSESSED: source location matched; "
+                            "model interpretation requires human verification.\n"
+                            + format_source_bound_notes(verified)
+                        ),
                     )
-                if source and (status == "RETRY" or payload.get("findings")):
+                # A source-free or truncated review cannot certify that the
+                # extraction covered all contract obligations, even on "OK".
+                if not source:
+                    return CritiqueResult(
+                        status="UNASSESSED",
+                        notes="N12_UNASSESSED: source unavailable for verification.",
+                    )
+                if clipped:
+                    return CritiqueResult(
+                        status="UNASSESSED",
+                        notes="N12_UNASSESSED: only a partial source excerpt was reviewed.",
+                    )
+                if status == "RETRY" or payload.get("findings"):
                     return CritiqueResult(
                         status="UNASSESSED",
                         notes="N12_UNASSESSED: no source-grounded findings available.",
                     )
                 if status == "OK":
+                    # A status string cannot negate an explicitly reported
+                    # unresolved quality concern. Without a structured,
+                    # source-bound finding this is UNKNOWN, not a verified bug.
+                    if notes and not _NEUTRAL_OK_NOTES.fullmatch(notes):
+                        return CritiqueResult(
+                            status="UNASSESSED",
+                            notes="N12_UNASSESSED: OK verdict has unverified reviewer "
+                            "notes that require human assessment: " + notes[:800],
+                        )
+                    if source_complete is not True:
+                        # Received text length does not prove complete parsing
+                        # of the original document and pinned revision.
+                        return CritiqueResult(
+                            status="UNASSESSED",
+                            notes="N12_UNASSESSED: upstream document completeness not verified.",
+                        )
                     return CritiqueResult(status="OK", notes=notes)
-                if status == "RETRY":
-                    return CritiqueResult(status="RETRY", notes=notes)
                 # Invalid status without verified source evidence is not a
                 # valid critique, regardless of natural-language confidence.
                 return CritiqueResult(
-                    status="RETRY",
+                    status="UNASSESSED",
                     notes="N12_UNASSESSED: unrecognized reviewer status.",
                 )
         except Exception:
             pass
-        return CritiqueResult(status="RETRY", notes="Automatic critique inconclusive.")
+        return CritiqueResult(
+            status="UNASSESSED",
+            notes="N12_UNASSESSED: automatic critique inconclusive.",
+        )
 
 
 # ── RACI Matrix Generation (N7) ──────────────────────────────────────────────
