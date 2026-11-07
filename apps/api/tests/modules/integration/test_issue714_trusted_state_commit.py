@@ -150,9 +150,11 @@ async def _propose(
     *,
     title="AI risk",
     risks: list[dict[str, str]] | None = None,
+    state: dict[str, Any] | None = None,
 ) -> None:
     completion_sessions["tenant"] = tenant_id
-    state = _final_state(arranged, tenant_id, gated=True, title=title)
+    if state is None:
+        state = _final_state(arranged, tenant_id, gated=True, title=title)
     if risks is not None:
         state["extracted_risks"] = risks
     await document_artifact_completion._persist_artifact(
@@ -1018,13 +1020,72 @@ async def test_dashboard_trusted_ignores_pending_and_projection_uses_it(
         saver=saver, app=arranged.app, sessions=independent_sessions,
     )
     approved = await _dashboard(request_sessions, tenant.id, arranged.project_id)
-    # The trusted score is RECOMPUTED by the pipeline (N17 persists the
-    # resumed run's engine output: 90 in this harness), not copied from
-    # the projection (60).
-    assert approved.trusted_score == approved.coherence_score == 90
+    # N8=90 belongs to the interrupted graph state, while the approved V2
+    # candidate was independently persisted with different content. Its
+    # provisional candidate score (60) cannot become the trusted score either:
+    # publish no score until N8 runs against this exact trusted artifact.
+    assert approved.trusted_score is approved.coherence_score is None
+    assert approved.score_reason == "not_evaluated"
     assert approved.projected_score is None
     assert approved.pending_review_count == 0
     assert approved.projection_status == "none"
+
+
+async def test_dashboard_publishes_resumed_n8_only_for_the_exact_approved_artifact(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    request_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    monkeypatch,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """A resumed N8 score remains publishable when its input is the approved artifact.
+
+    This catches an over-broad fail-closed implementation that would suppress
+    a score even though the checkpoint and reviewed immutable payload have the
+    same source content.
+    """
+    from tests.modules.integration import test_p0b_crash_safe_resume_recovery as p0b
+
+    exact_risks = _risks("Exact V2 risk")
+    initial_state = p0b._initial_state
+    monkeypatch.setattr(
+        p0b,
+        "_initial_state",
+        lambda *args, **kwargs: {
+            **initial_state(*args, **kwargs),
+            "extracted_risks": exact_risks,
+        },
+    )
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    matching_state = _final_state(arranged, tenant.id, gated=True, title="Exact V2 risk")
+    matching_state.update(
+        {
+            "extracted_risks": exact_risks,
+            "coherence_score": 90,
+            "coherence_score_version": "coherence-v1",
+            "confidence_score": 0.0,
+        }
+    )
+    await _propose(completion_sessions, arranged, tenant.id, state=matching_state)
+
+    await _post_approve(
+        request_sessions,
+        tenant.id,
+        arranged.review_item_id,
+        saver=saver,
+        app=arranged.app,
+        sessions=independent_sessions,
+    )
+    approved = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert approved.trusted_score == approved.coherence_score == 90
+    assert approved.score_reason is None
+    assert graph_enqueues == [(arranged.project_id, tenant.id)]
 
 
 async def test_dashboard_reject_removes_candidate_from_projection(
