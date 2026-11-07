@@ -34,6 +34,8 @@ async def test_s3_six_assessments_survive_real_pg_lineage(db: AsyncSession, test
     tenant_id = test_tenant.id
     project_id, analysis_id, event_id = uuid4(), uuid4(), uuid4()
     db.add(ProjectORM(id=project_id, tenant_id=tenant_id, name="Synthetic S3 lineage only"))
+    # No ORM relationship orders these inserts; flush FK parent before child.
+    await db.flush()
     assessment = build_document_assessment_artifact([], [])
     db.add(
         Analysis(
