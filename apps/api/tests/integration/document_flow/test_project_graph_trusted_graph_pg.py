@@ -4,6 +4,7 @@ The materializer is a projection of an already TRUSTED artifact set; this test
 does not grant trust to a document or permit model-generated WBS to become a
 baseline. Runs in the disposable integration-test PostgreSQL database.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -26,7 +27,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_real_pg_trusted_document_projection_idempotent_and_tenant_scoped(
-    db, test_user,
+    db,
+    test_user,
 ) -> None:
     project_id = await _project(db, test_user.tenant_id)
     await db.execute(
@@ -54,12 +56,24 @@ async def test_real_pg_trusted_document_projection_idempotent_and_tenant_scoped(
     )
     assert first == second == KnowledgeGraphMaterialization(node_count=2, edge_count=1)
 
-    nodes = list((await db.execute(
-        select(KnowledgeGraphNodeORM).where(KnowledgeGraphNodeORM.project_id == project_id)
-    )).scalars().all())
-    edges = list((await db.execute(
-        select(KnowledgeGraphEdgeORM).where(KnowledgeGraphEdgeORM.project_id == project_id)
-    )).scalars().all())
+    nodes = list(
+        (
+            await db.execute(
+                select(KnowledgeGraphNodeORM).where(KnowledgeGraphNodeORM.project_id == project_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    edges = list(
+        (
+            await db.execute(
+                select(KnowledgeGraphEdgeORM).where(KnowledgeGraphEdgeORM.project_id == project_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert len(nodes) == 2, "Project and trusted document must not duplicate on retry"
     assert len(edges) == 1, "The project→document relationship must be idempotent"
     project_node = next(n for n in nodes if n.entity_type == "PROJECT")
@@ -77,26 +91,41 @@ async def test_real_pg_trusted_document_projection_idempotent_and_tenant_scoped(
     await materializer.materialize_trusted_artifacts(
         project_id=project_id,
         tenant_id=test_user.tenant_id,
-        artifacts=[DocumentArtifact(
-            document_id=str(document_id),
-            document_revision_id=str(revision_two),
-            doc_type="contract",
-        )],
+        artifacts=[
+            DocumentArtifact(
+                document_id=str(document_id),
+                document_revision_id=str(revision_two),
+                doc_type="contract",
+            )
+        ],
     )
-    updated = (await db.execute(
-        select(KnowledgeGraphNodeORM).where(
-            KnowledgeGraphNodeORM.project_id == project_id,
-            KnowledgeGraphNodeORM.entity_type == "TRUSTED_DOCUMENT",
+    updated = (
+        await db.execute(
+            select(KnowledgeGraphNodeORM).where(
+                KnowledgeGraphNodeORM.project_id == project_id,
+                KnowledgeGraphNodeORM.entity_type == "TRUSTED_DOCUMENT",
+            )
         )
-    )).scalar_one()
+    ).scalar_one()
     assert updated.id == doc_node.id
     # UPSERT is executed as SQL Core; ORM identity-map values require refresh.
     # The assertion must inspect PostgreSQL state, not the previous Python cache.
     await db.refresh(updated)
     assert updated.properties["document_revision_id"] == str(revision_two)
-    assert len((await db.execute(
-        select(KnowledgeGraphEdgeORM).where(KnowledgeGraphEdgeORM.project_id == project_id)
-    )).scalars().all()) == 1
+    assert (
+        len(
+            (
+                await db.execute(
+                    select(KnowledgeGraphEdgeORM).where(
+                        KnowledgeGraphEdgeORM.project_id == project_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        == 1
+    )
 
     # Authorized project identity must be checked in addition to RLS:
     # a foreign tenant cannot create any canonical graph relation here.
@@ -106,18 +135,29 @@ async def test_real_pg_trusted_document_projection_idempotent_and_tenant_scoped(
             tenant_id=uuid4(),
             artifacts=[artifact_one],
         )
-    assert (await db.scalar(text(
-        "SELECT count(*) FROM knowledge_graph_nodes WHERE project_id=:pid"
-    ), {"pid": project_id})) == 2
-    assert (await db.scalar(text(
-        "SELECT count(*) FROM knowledge_graph_edges WHERE project_id=:pid"
-    ), {"pid": project_id})) == 1
+    assert (
+        await db.scalar(
+            text("SELECT count(*) FROM knowledge_graph_nodes WHERE project_id=:pid"),
+            {"pid": project_id},
+        )
+    ) == 2
+    assert (
+        await db.scalar(
+            text("SELECT count(*) FROM knowledge_graph_edges WHERE project_id=:pid"),
+            {"pid": project_id},
+        )
+    ) == 1
 
     # ProjectGraph identity projection must not create risk alerts or claim
     # that Coherence was evaluated.
-    assert (await db.scalar(text(
-        "SELECT count(*) FROM alerts WHERE project_id=:pid"
-    ), {"pid": project_id})) == 0
-    assert (await db.scalar(text(
-        "SELECT count(*) FROM coherence_results WHERE project_id=:pid"
-    ), {"pid": project_id})) == 0
+    assert (
+        await db.scalar(
+            text("SELECT count(*) FROM alerts WHERE project_id=:pid"), {"pid": project_id}
+        )
+    ) == 0
+    assert (
+        await db.scalar(
+            text("SELECT count(*) FROM coherence_results WHERE project_id=:pid"),
+            {"pid": project_id},
+        )
+    ) == 0
