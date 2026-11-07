@@ -199,9 +199,10 @@ async def _materialize(session: Any, *, artifact_id: UUID, tenant_id: UUID) -> d
             _ARTIFACT_CONTENT_SQL, {"artifact_id": str(artifact_id), "tenant_id": str(tenant_id)}
         )
     ).first()
+    # Worker recovery has no N8 resume state. Provisional candidate scoring
+    # must never be passed as if it were source-bound, recomputed graph state.
     content = materializer.MaterializationContent.from_artifact(
         content_row.payload if content_row is not None else {},
-        content_row.scoring if content_row is not None else None,
     )
     outcome = await materializer.materialize_in_transaction(session, ref=ref, content=content)
     if outcome.status is materializer.MaterializationStatus.OBSOLETE:
