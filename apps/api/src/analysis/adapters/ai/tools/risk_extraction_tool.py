@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -132,6 +133,31 @@ _EXCLUDE_KEYWORDS_EN: tuple[str, ...] = (
 
 _INCLUDE_KEYWORDS: tuple[str, ...] = _INCLUDE_KEYWORDS_ES + _INCLUDE_KEYWORDS_EN
 _EXCLUDE_KEYWORDS: tuple[str, ...] = _EXCLUDE_KEYWORDS_ES + _EXCLUDE_KEYWORDS_EN
+
+
+def _keyword_match_text(original: str) -> str:
+    """Accent-insensitive keyword checks; never rewrite the contract input."""
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", original.casefold())
+        if not unicodedata.combining(character)
+    )
+
+
+# An explicit penalty/contract-default obligation remains relevant even if it
+# names the budget or price schedule as the source of the deduction. The
+# exclusion list is meant for tables, not substantive contractual clauses.
+# Require an operative verb as well, so a table line labelled "Penalty" alone
+# does not put price tables back into the N4 prompt.
+_PENALTY_OR_DEFAULT_CLAUSE = re.compile(
+    r"\b(?:penaliz\w*|multas?|liquidated damages|penalt\w*|incumplim\w*|breach)\b",
+    re.IGNORECASE,
+)
+_OPERATIVE_OBLIGATION = re.compile(
+    r"\b(?:shall|must|pagará|pagarán|pagara|pagaran|deberá|deberán|debera|deberan|"
+    r"deduct\w*|descont\w*|responderá|respondera|aplicará|aplicaran|aplicarán)\b",
+    re.IGNORECASE,
+)
 
 
 def _resolve_max_chars() -> int:
@@ -536,8 +562,13 @@ CRITICAL OUTPUT RULES:
 
         selected: list[str] = []
         for paragraph in paragraphs:
-            lower = paragraph.lower()
-            if any(keyword in lower for keyword in _EXCLUDE_KEYWORDS):
+            lower = _keyword_match_text(paragraph)
+            price_or_bom = any(keyword in lower for keyword in _EXCLUDE_KEYWORDS)
+            substantive_obligation = (
+                _PENALTY_OR_DEFAULT_CLAUSE.search(paragraph)
+                and _OPERATIVE_OBLIGATION.search(paragraph)
+            )
+            if price_or_bom and not substantive_obligation:
                 continue
             if any(keyword in lower for keyword in _INCLUDE_KEYWORDS):
                 selected.append(paragraph)
