@@ -195,7 +195,14 @@ class MaterializationContent:
             rebuilt = build_document_artifact(resumed_state)
             if rebuilt != DocumentArtifact.model_validate(payload):
                 return content
-            if artifact_digest(rebuilt.model_dump(mode="json")) != expected_artifact_hash:
+            # Existing artifact payloads may retain optional NULL keys while
+            # current repository writes omit them. Hash exactly the stored
+            # key set: never invent extra None keys in a persisted digest.
+            rebuilt_payload = rebuilt.model_dump(mode="json")
+            for optional_key in ("structured_source", "decision_snapshot"):
+                if optional_key not in payload and rebuilt_payload.get(optional_key) is None:
+                    rebuilt_payload.pop(optional_key, None)
+            if artifact_digest(rebuilt_payload) != expected_artifact_hash:
                 return content
             resumed = cls.from_state(resumed_state)
         except (TypeError, ValueError, AttributeError):

@@ -191,6 +191,27 @@ def test_resumed_score_requires_exact_hash_and_wellformed_values():
         ).coherence_score is None
 
 
+
+def test_resumed_n8_score_uses_hash_of_persisted_artifact_payload():
+    """Repository strips optional null keys before hashing (ADR-032)."""
+    from src.analysis.domain.trust import artifact_digest
+
+    state = _resumed_state(90)
+    payload, _ = _bound(state)
+    # SqlAlchemyDocumentArtifactRepository._insert intentionally strips null
+    # structured_source and decision_snapshot from the persisted JSON.
+    assert payload["structured_source"] is None
+    assert payload["decision_snapshot"] is None
+    payload.pop("structured_source")
+    payload.pop("decision_snapshot")
+    stored_hash = artifact_digest(payload)
+    trusted = MaterializationContent.from_artifact(
+        payload, resumed_state=state, expected_artifact_hash=stored_hash
+    )
+    assert trusted.coherence_score == 90
+
+
+
 def test_n11_precedes_n17_in_executable_graph():
     """N17-first topology silently wrote analyses before decisions existed."""
     edges = set(build_workflow().edges)
