@@ -333,11 +333,19 @@ def _judge_s2(c: _Ctx) -> None:
     sha = c.expect.fixture_sha
     for key, fixture_key in _FIXTURE_KEY_OF.items():
         revs = revisions_of.get(c.doc(key), [])
-        wanted = [sha["contractA"], sha["contractB"]] if key == "contract" else [sha[fixture_key]]
+        stored = [r["blob_hash"] for r in revs]
+        if key == "contract":
+            # S2 creates only contract A. Revision B arrives later in S6, so
+            # an honest fail-fast run ending in S3 must not fail the S2 pin.
+            # Once B exists, its exact hash is also required here; S6 still
+            # checks both revisions and their trust/lineage independently.
+            valid_pin = stored in ([sha["contractA"]], [sha["contractA"], sha["contractB"]])
+        else:
+            valid_pin = stored == [sha[fixture_key]]
         add(
             "S2",
             f"{key}: stored revisions carry the pinned SHA-256 of the committed files",
-            [r["blob_hash"] for r in revs] == wanted,
+            valid_pin,
             f"{len(revs)} revision(s)",
         )
 
