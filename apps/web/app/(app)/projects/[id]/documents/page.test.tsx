@@ -280,6 +280,46 @@ describe("ProjectDocumentsPage", () => {
     expect(screen.getByTestId("document-row-doc_technical_001")).toHaveTextContent("Processing");
   });
 
+  it("shows four EPC source roles together without confusing registration with evaluation", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        { id: "doc-c", name: "Contract.docx", type: "contract", status: "parsed", lifecycleStatus: "review_required" },
+        { id: "doc-b", name: "Budget.xlsx", type: "budget", status: "parsed", lifecycleStatus: "analyzed" },
+        { id: "doc-s", name: "Schedule.xlsx", type: "schedule", status: "processing", lifecycleStatus: "processing" },
+        { id: "doc-t", name: "Specification.docx", type: "technical_spec", status: "parsed", lifecycleStatus: "analysis_pending" },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(<ProjectDocumentsPage />);
+    const workflow = screen.getByTestId("epc-four-source-workflow");
+    expect(workflow).toHaveTextContent("4 of 4 types registered");
+    expect(workflow).toHaveTextContent("Required document triplet");
+    expect(workflow).toHaveTextContent("Awaiting approval");
+    expect(workflow).not.toHaveTextContent("Triplet complete");
+    const spec = within(workflow).getByTestId("technical-specification-slot");
+    expect(spec).toHaveTextContent("Specification.docx");
+    expect(within(spec).getByTestId("technical-specification-stage-doc-t")).toHaveTextContent("Analysis pending");
+    expect(spec).not.toHaveTextContent("Verified");
+    expect(spec).not.toHaveTextContent("Ready");
+  });
+
+  it("does not mistake an uploaded technical specification for an analyzed source", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        { id: "doc-t", name: "Specification.docx", type: "technical_spec", status: "processing", lifecycleStatus: "review_required" },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(<ProjectDocumentsPage />);
+    expect(screen.getByTestId("epc-source-category-count")).toHaveTextContent("1 of 4 types registered");
+    expect(screen.getByTestId("technical-specification-stage-doc-t")).toHaveTextContent("Review required");
+    expect(screen.queryByText("Triplet complete")).not.toBeInTheDocument();
+  });
+
   it("shows analysis progress while documents are still processing", () => {
     useProjectDocumentsMock.mockReturnValue({
       documents: [

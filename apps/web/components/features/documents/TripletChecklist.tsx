@@ -40,14 +40,19 @@ function isReadyStatus(status: unknown): boolean {
   return ["analyzed", "parsed"].includes(String(status ?? "").toLowerCase());
 }
 
+/** Backend lifecycle takes precedence over old polling status. */
+function isReadyDocument(document: Pick<DocumentInfo, "status" | "lifecycleStatus">): boolean {
+  return document.lifecycleStatus
+    ? document.lifecycleStatus === "analyzed"
+    : isReadyStatus(document.status);
+}
+
 export function deriveTripletChecklist(
   documents: Pick<DocumentInfo, "type" | "status" | "lifecycleStatus">[],
 ): TripletChecklistState {
   const slots = REQUIRED_SLOTS.map(({ type, label }) => {
     const matchingDocuments = documents.filter((document) => document.type === type);
-    const hasReadyDocument = matchingDocuments.some((document) =>
-      isReadyStatus(document.status),
-    );
+    const hasReadyDocument = matchingDocuments.some(isReadyDocument);
 
     return {
       type,
