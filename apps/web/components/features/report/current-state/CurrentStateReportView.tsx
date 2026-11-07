@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -119,20 +119,45 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
   const documentNames = new Map(
     (sections.documents.data?.items ?? []).map((document) => [document.id, document.filename]),
   );
+  const [sourceReturnNotice, setSourceReturnNotice] = useState<"outdated" | "missing" | null>(null);
+  const lastRestoredAnchor = useRef<string | null>(null);
 
   useEffect(() => {
-    // The report loads after navigation. Native fragment scrolling can occur
-    // before the asynchronously fetched finding exists in the DOM.
-    const fragment = window.location.hash.slice(1);
-    const expectedPrefix = "source-discrepancy-" + report.content_fingerprint.slice(0, 12).toLowerCase() + "-";
-    if (!/^source-discrepancy-[0-9a-f]{12}-[0-9]{1,5}$/.test(fragment) ||
-        !fragment.startsWith(expectedPrefix)) {
-      return;
-    }
-    const finding = document.getElementById(fragment);
-    finding?.focus({ preventScroll: true });
-    finding?.scrollIntoView?.({ block: "start" });
-  }, [report.content_fingerprint]);
+    // The report arrives after navigation, and hash-only navigation may occur
+    // without remounting it. Never focus a different observation as a fallback.
+    const restoreLinkedFinding = () => {
+      const fragment = window.location.hash.slice(1);
+      if (!/^source-discrepancy-[0-9a-f]{12}-[0-9]{1,5}$/.test(fragment)) {
+        setSourceReturnNotice(null);
+        lastRestoredAnchor.current = null;
+        return;
+      }
+      const expectedPrefix = "source-discrepancy-" + report.content_fingerprint.slice(0, 12).toLowerCase() + "-";
+      if (!fragment.startsWith(expectedPrefix)) {
+        setSourceReturnNotice("outdated");
+        lastRestoredAnchor.current = null;
+        return;
+      }
+      const finding = document.getElementById(fragment);
+      if (!finding) {
+        setSourceReturnNotice("missing");
+        lastRestoredAnchor.current = null;
+        return;
+      }
+      setSourceReturnNotice(null);
+      // React state refreshes must not repeatedly steal focus from the reader.
+      const restoreKey = report.project.id + ":" + fragment;
+      if (lastRestoredAnchor.current !== restoreKey) {
+        lastRestoredAnchor.current = restoreKey;
+        finding.focus({ preventScroll: true });
+        finding.scrollIntoView?.({ block: "start" });
+      }
+    };
+
+    restoreLinkedFinding();
+    window.addEventListener("hashchange", restoreLinkedFinding);
+    return () => window.removeEventListener("hashchange", restoreLinkedFinding);
+  }, [report.project.id, report.content_fingerprint, sections.source_discrepancies?.data]);
 
   return (
     <div className="space-y-6">
@@ -151,6 +176,14 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
           {report.project.status ? <Badge variant="outline">{humanize(report.project.status)}</Badge> : null}
         </div>
       </header>
+
+      {sourceReturnNotice ? (
+        <p role="status" data-testid="current-state-source-return-notice" className="rounded-md border p-3 text-sm text-muted-foreground">
+          {sourceReturnNotice === "outdated"
+            ? "This evidence link points to an earlier version of Current State. The report has changed; no other finding was selected."
+            : "The linked finding is no longer present in this report. No other finding was selected."}
+        </p>
+      ) : null}
 
       <ExecutiveSummary sections={sections} />
 

@@ -3,7 +3,7 @@
  * Current State Report view: honest states, evidence trust, scanability.
  */
 import { describe, expect, it, vi } from "vitest";
-import { within } from "@testing-library/react";
+import { act, within } from "@testing-library/react";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import type { CurrentStateReport } from "@/lib/api/generated/models";
 import { CurrentStateReportView } from "./CurrentStateReportView";
@@ -615,6 +615,58 @@ describe("CurrentStateReportView", () => {
       } else {
         Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
       }
+    }
+  });
+
+  it("explains an outdated Current State evidence link without selecting a different finding", () => {
+    const previousUrl = window.location.href;
+    try {
+      window.history.replaceState(null, "", "#source-discrepancy-a3f1c9d2e4b5-0");
+      renderReport({
+        ...buildCurrentStateReport(),
+        content_fingerprint: "b".repeat(64),
+      });
+      expect(screen.getByTestId("current-state-source-return-notice")).toHaveTextContent(
+        /earlier version of Current State/i,
+      );
+      expect(screen.getByTestId("current-state-source-return-notice")).toHaveTextContent(
+        /no other finding was selected/i,
+      );
+      expect(screen.getByTestId("report-header")).toHaveTextContent("bbbbbbbbbbbb");
+    } finally {
+      window.history.replaceState(null, "", previousUrl);
+    }
+  });
+
+  it("explains when an exact-version finding ID is missing, without inventing a replacement", () => {
+    const previousUrl = window.location.href;
+    try {
+      window.history.replaceState(null, "", "#source-discrepancy-a3f1c9d2e4b5-99999");
+      renderReport();
+      expect(screen.getByTestId("current-state-source-return-notice")).toHaveTextContent(
+        /no longer present in this report/i,
+      );
+      expect(screen.getByTestId("current-state-source-return-notice")).toHaveTextContent(
+        /no other finding was selected/i,
+      );
+    } finally {
+      window.history.replaceState(null, "", previousUrl);
+    }
+  });
+
+  it("clears an outdated-link notice when navigation changes to a normal report section", () => {
+    const previousUrl = window.location.href;
+    try {
+      window.history.replaceState(null, "", "#source-discrepancy-ffffffffffff-0");
+      renderReport();
+      expect(screen.getByTestId("current-state-source-return-notice")).toBeInTheDocument();
+      act(() => {
+        window.history.replaceState(null, "", "#section-budget");
+        window.dispatchEvent(new Event("hashchange"));
+      });
+      expect(screen.queryByTestId("current-state-source-return-notice")).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState(null, "", previousUrl);
     }
   });
 
