@@ -8,7 +8,7 @@
  */
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -115,6 +115,24 @@ const HEADING_CLASS = "text-base font-semibold leading-none tracking-tight";
 
 export function CurrentStateReportView({ report }: { report: CurrentStateReport }) {
   const sections = report.sections as Sections;
+  // Use only names present in this same report's document register.
+  const documentNames = new Map(
+    (sections.documents.data?.items ?? []).map((document) => [document.id, document.filename]),
+  );
+
+  useEffect(() => {
+    // The report loads after navigation. Native fragment scrolling can occur
+    // before the asynchronously fetched finding exists in the DOM.
+    const fragment = window.location.hash.slice(1);
+    const expectedPrefix = "source-discrepancy-" + report.content_fingerprint.slice(0, 12).toLowerCase() + "-";
+    if (!/^source-discrepancy-[0-9a-f]{12}-[0-9]{1,5}$/.test(fragment) ||
+        !fragment.startsWith(expectedPrefix)) {
+      return;
+    }
+    const finding = document.getElementById(fragment);
+    finding?.focus({ preventScroll: true });
+    finding?.scrollIntoView?.({ block: "start" });
+  }, [report.content_fingerprint]);
 
   return (
     <div className="space-y-6">
@@ -142,7 +160,7 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
           if (!envelope) return null; // Older backend: do not invent decisions.
           return (
             <SectionCard key={key} sectionKey={key} section={envelope}>
-              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} />
+              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} reportFingerprint={report.content_fingerprint} documentNames={documentNames} />
             </SectionCard>
           );
         })}
@@ -321,7 +339,13 @@ function SectionCard({
   );
 }
 
-function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentSectionKey; sections: Sections; projectId: string }) {
+function SectionBody({ sectionKey, sections, projectId, reportFingerprint, documentNames }: {
+  sectionKey: ContentSectionKey;
+  sections: Sections;
+  projectId: string;
+  reportFingerprint: string;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   switch (sectionKey) {
     case "documents":
       return <DocumentsBody data={sections.documents.data} />;
@@ -334,7 +358,7 @@ function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentS
     case "alerts":
       return <AlertsBody data={sections.alerts.data} />;
     case "source_discrepancies":
-      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} />;
+      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} reportFingerprint={reportFingerprint} documentNames={documentNames} />;
     case "decision_proposals":
       return <DecisionProposalsBody data={sections.decision_proposals?.data} projectId={projectId} />;
     case "hitl":
@@ -360,22 +384,48 @@ type RevisionBoundDiscrepancySource = DiscrepancySource & {
 };
 
 function sourceHash(source: DiscrepancySource): string | null {
-  return source.blob_sha256 ?? source.source_quote_sha256 ?? source.unit_sha256 ?? null;
+  // A source role cannot borrow the other role's hash as proof of provenance.
+  if (source.role === "original_source_row") return source.blob_sha256 ?? null;
+  if (source.role === "verified_document_quote") return source.source_quote_sha256 ?? null;
+  // External data with an unknown role must never be promoted to a verified quote.
+  return null;
 }
 
 function isRevisionBoundSource(source: DiscrepancySource): source is RevisionBoundDiscrepancySource {
   return Boolean(source.document_id && source.revision_id && source.source_locator && sourceHash(source));
 }
 
-function discrepancyEvidenceHref(projectId: string, source: RevisionBoundDiscrepancySource): string {
-  const base = `/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(source.document_id)}&revisionId=${encodeURIComponent(source.revision_id)}`;
-  if (source.role !== "original_source_row" || !source.blob_sha256) return base;
-  return `${base}&locator=${encodeURIComponent(source.source_locator)}&expectedHash=${encodeURIComponent(source.blob_sha256)}`;
+function discrepancyAnchor(reportFingerprint: string, index: number): string | null {
+  // A stale report no longer has this anchor. Returning to the report top is
+  // safer than silently taking the user to a different finding after a refresh.
+  const digest = /^[0-9a-f]{12}/i.exec(reportFingerprint)?.[0].toLowerCase();
+  return digest ? `source-discrepancy-${digest}-${index}` : null;
 }
 
-function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepancy; projectId: string }) {
+function discrepancyEvidenceHref(
+  projectId: string,
+  source: RevisionBoundDiscrepancySource,
+  returnDiscrepancy: string | null,
+): string {
+  const base = `/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(source.document_id)}&revisionId=${encodeURIComponent(source.revision_id)}`;
+  const rowRef = source.role === "original_source_row" && source.blob_sha256
+    ? `&locator=${encodeURIComponent(source.source_locator)}&expectedHash=${encodeURIComponent(source.blob_sha256)}`
+    : "";
+  return `${base}${rowRef}${returnDiscrepancy ? `&returnDiscrepancy=${encodeURIComponent(returnDiscrepancy)}` : ""}`;
+}
+
+function DiscrepancyEvidence({ finding, projectId, returnDiscrepancy, documentNames }: {
+  finding: SourceDiscrepancy;
+  projectId: string;
+  returnDiscrepancy: string | null;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   const evidenceSources = finding.sources.filter(isRevisionBoundSource);
-  const hasCompleteComparison = finding.sources.length === 2 && evidenceSources.length === 2;
+  const hasCompleteComparison =
+    finding.sources.length === 2 &&
+    evidenceSources.length === 2 &&
+    evidenceSources.filter((source) => source.role === "verified_document_quote").length === 1 &&
+    evidenceSources.filter((source) => source.role === "original_source_row").length === 1;
   const displayedSources = hasCompleteComparison ? evidenceSources : evidenceSources.slice(0, 1);
 
   return (
@@ -384,9 +434,14 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
         const hash = sourceHash(source);
         return (
           <div key={`${source.document_id}:${source.revision_id}:${source.source_locator}`} className="space-y-1 text-xs">
+            <p data-testid="source-discrepancy-document-name" className="break-words">
+              <strong>{documentNames.get(source.document_id)?.trim() || "Document name unavailable"}</strong>
+              <span className="text-muted-foreground">
+                {" · "}{source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
+              </span>
+            </p>
             <p className="break-words text-muted-foreground">
-              {source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
-              {" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
+              Document ID {source.document_id}{" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
             </p>
             {source.source_quote ? (
               <blockquote className="border-l-2 pl-2 text-muted-foreground">{source.source_quote}</blockquote>
@@ -394,7 +449,7 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
             <Link
               data-testid="source-discrepancy-evidence-link"
               className="inline-block text-primary underline underline-offset-2"
-              href={discrepancyEvidenceHref(projectId, source)}
+              href={discrepancyEvidenceHref(projectId, source, returnDiscrepancy)}
             >
               {source.role === "original_source_row"
                 ? "Inspect original row and file hash"
@@ -405,7 +460,8 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
       })}
       {!hasCompleteComparison ? (
         <p data-testid="source-discrepancy-unverified-source" className="text-xs text-muted-foreground">
-          Unverified source: this comparison does not yet have two revision-, locator-, and hash-bound source objects.
+          Unverified source: this comparison needs one verified document quote and one original XLSX row,
+          each bound to its own document, revision, locator and role-specific hash.
           Next: locate and verify the missing source before treating this as a confirmed discrepancy.
         </p>
       ) : null}
@@ -414,8 +470,13 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
 }
 
 function SourceDiscrepanciesBody({
-  data, projectId,
-}: { data: SourceDiscrepanciesEnvelope["data"]; projectId: string }) {
+  data, projectId, reportFingerprint, documentNames,
+}: {
+  data: SourceDiscrepanciesEnvelope["data"];
+  projectId: string;
+  reportFingerprint: string;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   if (!data) return null;
   return (
     <div data-testid="current-state-source-discrepancies" className="space-y-3">
@@ -423,7 +484,13 @@ function SourceDiscrepanciesBody({
         Observations only — not confirmed breaches, not approved budget/schedule baselines and not included in the Coherence Score.
       </p>
       {data.items.map((finding, index) => (
-        <article key={`${finding.rule_id}:${index}`} data-testid="source-discrepancy-item" className="space-y-2 rounded-md border p-3">
+        <article
+          key={`${finding.rule_id}:${index}`}
+          id={discrepancyAnchor(reportFingerprint, index) ?? undefined}
+          tabIndex={-1}
+          data-testid="source-discrepancy-item"
+          className="scroll-mt-24 space-y-2 rounded-md border p-3 target:ring-2 target:ring-primary"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">Provisional · human review required</Badge>
             <span className="text-xs text-muted-foreground">{finding.rule_id}</span>
@@ -437,7 +504,7 @@ function SourceDiscrepanciesBody({
               </div>
             ))}
           </dl>
-          <DiscrepancyEvidence finding={finding} projectId={projectId} />
+          <DiscrepancyEvidence finding={finding} projectId={projectId} returnDiscrepancy={discrepancyAnchor(reportFingerprint, index)} documentNames={documentNames} />
           <p className="text-xs text-muted-foreground">
             Links open the pinned revision or re-verify the original XLSX row. Quote highlighting is not guaranteed.
           </p>

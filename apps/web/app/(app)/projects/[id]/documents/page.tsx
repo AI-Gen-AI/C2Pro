@@ -172,7 +172,11 @@ export default function ProjectDocumentsPage() {
   const projectId = params.id as string;
   const { data: project } = useProject(projectId);
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
-  const hasTechnicalSpecification = documents.some((doc) => doc.type === 'technical_spec');
+  const technicalSpecifications = documents.filter((doc) => doc.type === 'technical_spec');
+  const hasTechnicalSpecification = technicalSpecifications.length > 0;
+  // Registered source categories are NOT verified or approved analyses.
+  const sourceCategoryCount = (['contract', 'budget', 'schedule', 'technical_spec'] as const)
+    .filter((type) => documents.some((doc) => doc.type === type)).length;
   const { evaluateCoherence, isEvaluating } = useProjectCoherenceActions(projectId);
   const deleteDocument = useDeleteDocumentEndpointApiV1DocumentsDocumentIdDelete();
   const projectName = project?.name?.trim() || projectId;
@@ -405,33 +409,64 @@ export default function ProjectDocumentsPage() {
         <AnalysisProgressTracker projectId={projectId} />
       ) : null}
 
-      <TripletChecklist
-        documents={documents}
-        coherenceHref={`/projects/${projectId}/coherence`}
-        onUploadType={handleOpenUploadDialog}
-        onEvaluateCoherence={() => void evaluateCoherence()}
-        evaluatePending={isEvaluating}
-      />
-
-      {/* The fourth ACC-01 source is distinct from the Coherence triplet. */}
-      <section className="flex flex-col gap-3 rounded-2xl border bg-card/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-testid="technical-specification-slot">
-        <div className="flex items-start gap-3">
-          <FileText className="mt-1 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+      <section
+        data-testid="epc-four-source-workflow"
+        aria-label="EPC four-source document workflow"
+        className="space-y-3"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-muted/40 p-4">
           <div>
-            <h2 className="text-sm font-semibold">Technical specification</h2>
+            <h2 className="font-semibold">EPC source documents · four types</h2>
             <p className="text-sm text-muted-foreground">
-              Fourth project source for technical requirements. Separate from the Contract–Budget–Schedule coherence triplet.
+              Contract, budget and schedule form the coherence triplet. Technical specification
+              is the fourth source for technical analysis; uploading a file does not approve its analysis.
             </p>
           </div>
+          <Badge variant="outline" data-testid="epc-source-category-count">
+            {loading ? 'Checking source documents' : String(sourceCategoryCount) + ' of 4 types registered'}
+          </Badge>
         </div>
-        {hasTechnicalSpecification ? (
-          <Badge variant="outline" data-testid="technical-specification-present">In document register</Badge>
-        ) : (
-          <Button type="button" variant="outline" className="rounded-xl" onClick={() => handleOpenUploadDialog('technical_spec')}>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload technical specification
-          </Button>
-        )}
+        <TripletChecklist
+          documents={documents}
+          coherenceHref={`/projects/${projectId}/coherence`}
+          onUploadType={handleOpenUploadDialog}
+          onEvaluateCoherence={() => void evaluateCoherence()}
+          evaluatePending={isEvaluating}
+        />
+
+        {/* The fourth ACC-01 source is distinct from the Coherence triplet. */}
+        <section className="flex flex-col gap-3 rounded-2xl border bg-card/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between" data-testid="technical-specification-slot">
+          <div className="flex items-start gap-3">
+            <FileText className="mt-1 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <h2 className="text-sm font-semibold">Technical specification</h2>
+              <p className="text-sm text-muted-foreground">
+                Fourth project source for technical requirements. Separate from the Contract–Budget–Schedule coherence triplet.
+              </p>
+              {hasTechnicalSpecification ? (
+                <ul className="mt-2 space-y-1" data-testid="technical-specification-stages">
+                  {technicalSpecifications.map((doc) => (
+                    <li key={doc.id} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="break-all">{doc.name}</span>
+                      <Badge variant="outline" data-testid={"technical-specification-stage-" + doc.id}>
+                        {LIFECYCLE_LABELS[resolveLifecycle(doc.lifecycleStatus, doc.status ?? 'uploaded')]}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </div>
+          {hasTechnicalSpecification ? (
+            <Badge variant="outline" data-testid="technical-specification-present">In document register</Badge>
+          ) : (
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => handleOpenUploadDialog('technical_spec')}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload technical specification
+            </Button>
+          )}
+        </section>
+
       </section>
 
       {/* Upload Dialog */}
