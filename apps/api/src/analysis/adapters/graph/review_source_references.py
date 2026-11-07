@@ -63,10 +63,10 @@ def grounded_review_source_references(
 ) -> list[dict[str, str]]:
     """Return only unique, exact-scope locators for structured clause references.
 
-    A genuine explicit numeric ``clause_code`` remains the preferred locator
-    for legacy clauses. Parser-generated codes (for example ``AUTO-007``)
-    may instead be located by an exact numbered heading at the *start* of the
-    parser-persisted ``full_text``. Both routes fail closed on ambiguity.
+    A genuine explicit numeric ``clause_code`` and an exact numbered heading
+    at the *start* of parser-persisted ``full_text`` are both candidate
+    locators. Their combined physical ClauseORM UUIDs must be unique; this
+    fails closed when the two routes identify different persisted clauses.
     """
     requested_codes = {
         normalized
@@ -110,11 +110,13 @@ def grounded_review_source_references(
     for code in requested_codes:
         if code in conflicted_codes:
             continue
-        direct = direct_matches[code]
-        if len(direct) == 1:
-            resolved[code] = direct[0]
-        elif not direct and len(heading_matches[code]) == 1:
-            resolved[code] = heading_matches[code][0]
+        direct_by_id = {clause.id: clause for clause in direct_matches[code]}
+        heading_by_id = {clause.id: clause for clause in heading_matches[code]}
+        # One physical clause may appear by both routes. Any distinct UUID in
+        # their union is source-identity ambiguity and must not be selected.
+        candidates_by_id = direct_by_id | heading_by_id
+        if len(candidates_by_id) == 1:
+            resolved[code] = next(iter(candidates_by_id.values()))
 
     refs: list[dict[str, str]] = []
     for clause in clauses:

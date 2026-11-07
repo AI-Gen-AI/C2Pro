@@ -85,6 +85,23 @@ def test_two_auto_clauses_with_same_original_number_remain_ambiguous():
     assert refs == []
 
 
+def test_explicit_and_auto_clauses_with_same_original_number_remain_ambiguous():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    explicit_clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="8.2", original_text="8.2 Actual contractual clause",
+    )
+    auto_clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text="8.2 Duplicate parser clause",
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"},
+        persisted_clauses=[explicit_clause, auto_clause],
+    ) == []
+
+
 def test_number_only_inside_persisted_paragraph_is_not_a_clause_heading():
     tenant, project, document, revision = [uuid4() for _ in range(4)]
     clause = _persisted_clause(
