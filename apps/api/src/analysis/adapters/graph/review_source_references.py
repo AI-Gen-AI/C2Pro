@@ -76,4 +76,55 @@ def grounded_review_source_references(
     return refs[:25]
 
 
-__all__ = ["review_risk_clause_codes", "grounded_review_source_references"]
+def bind_risk_alert_source_references(
+    risks: Iterable[Any], source_references: Iterable[dict[str, str]]
+) -> list[dict[str, Any]]:
+    """Attach one already-grounded source ref to each extracted risk, or an honest null.
+
+    ``source_references`` must have been produced by
+    :func:`grounded_review_source_references`; this function never derives a
+    locator from generated risk text.  A duplicate/malformed reference is
+    deliberately treated as unverified rather than selecting one arbitrarily.
+    """
+    by_code: dict[str, list[dict[str, str]]] = {}
+    for reference in source_references:
+        if not isinstance(reference, dict):
+            continue
+        code = reference.get("clause_code")
+        if not isinstance(code, str) or not _EXPLICIT_CLAUSE_CODE.fullmatch(code):
+            continue
+        try:
+            UUID(str(reference.get("document_id")))
+            UUID(str(reference.get("revision_id")))
+            UUID(str(reference.get("clause_id")))
+        except (TypeError, ValueError):
+            continue
+        normalized = {
+            "document_id": str(reference["document_id"]),
+            "revision_id": str(reference["revision_id"]),
+            "clause_id": str(reference["clause_id"]),
+            "clause_code": code.removeprefix("§").strip(),
+        }
+        by_code.setdefault(normalized["clause_code"], []).append(normalized)
+
+    bound: list[dict[str, Any]] = []
+    for raw_risk in risks:
+        risk = dict(raw_risk) if isinstance(raw_risk, dict) else {}
+        raw_code = risk.get("clause_ref")
+        code = raw_code.removeprefix("§").strip() if isinstance(raw_code, str) else ""
+        candidates = by_code.get(code, []) if _EXPLICIT_CLAUSE_CODE.fullmatch(code) else []
+        if len(candidates) == 1:
+            risk["source_references"] = candidates
+            risk["source_locator_status"] = "VERIFIED"
+        else:
+            risk["source_references"] = []
+            risk["source_locator_status"] = "NOT_VERIFIED"
+        bound.append(risk)
+    return bound
+
+
+__all__ = [
+    "bind_risk_alert_source_references",
+    "review_risk_clause_codes",
+    "grounded_review_source_references",
+]

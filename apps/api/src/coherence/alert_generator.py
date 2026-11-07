@@ -234,6 +234,7 @@ class AlertGenerator:
             category = canonical.value if canonical is not None else None
             impact_level = item.get("impact_level")
             confidence = item.get("confidence")
+            source_clause_id, source_provenance = self._risk_source_provenance(item)
 
             alerts.append(
                 AlertCreate(
@@ -248,15 +249,71 @@ class AlertGenerator:
                     alert_metadata={
                         "confidence": confidence,
                         "raw": item,
+                        "source_provenance": source_provenance,
                     },
                                     recommendation=None,
                     rule_id=None,
-                    source_clause_id=None,
+                    source_clause_id=source_clause_id,
                     related_clause_ids=None,
                 )
             )
 
         return alerts
+
+    @staticmethod
+    def _risk_source_provenance(item: dict[str, Any]) -> tuple[UUID | None, dict[str, Any]]:
+        """Keep only an exact, pre-grounded revision locator on a RISK alert.
+
+        The generator has no database access, so it accepts only the internal
+        ``source_references`` shape made by the tenant-scoped projection.  It
+        never turns an extractor's clause label or generated description into a
+        navigable source.
+        """
+        references = item.get("source_references")
+        if item.get("source_locator_status") != "VERIFIED" or not isinstance(references, list):
+            return None, {"verification_status": "NOT_VERIFIED", "source_references": []}
+
+        normalized: list[dict[str, str]] = []
+        raw_clause_code = item.get("clause_ref")
+        expected_clause_code = (
+            raw_clause_code.removeprefix("§").strip()
+            if isinstance(raw_clause_code, str)
+            else ""
+        )
+        for reference in references:
+            if not isinstance(reference, dict):
+                continue
+            try:
+                document_id = str(UUID(str(reference.get("document_id"))))
+                revision_id = str(UUID(str(reference.get("revision_id"))))
+                clause_id = str(UUID(str(reference.get("clause_id"))))
+            except (TypeError, ValueError):
+                continue
+            clause_code = reference.get("clause_code")
+            if (
+                not isinstance(clause_code, str)
+                or not clause_code.strip()
+                or clause_code.removeprefix("§").strip() != expected_clause_code
+            ):
+                continue
+            normalized.append(
+                {
+                    "document_id": document_id,
+                    "revision_id": revision_id,
+                    "clause_id": clause_id,
+                    "clause_code": clause_code,
+                }
+            )
+
+        # One risk may navigate to one exact source clause.  More than one is
+        # ambiguous, so leave the FK null rather than arbitrarily selecting it.
+        if len(normalized) != 1:
+            return None, {"verification_status": "NOT_VERIFIED", "source_references": []}
+        reference = normalized[0]
+        return UUID(reference["clause_id"]), {
+            "verification_status": "VERIFIED",
+            "source_references": [reference],
+        }
 
     def _map_risk_severity(self, risk_item: dict[str, Any]) -> AlertSeverity:
         """
@@ -518,4 +575,3 @@ class AlertGenerator:
 
         cleaned = [label for label in labels if label]
         return ", ".join(cleaned) if cleaned else "sin ejemplos"
-
