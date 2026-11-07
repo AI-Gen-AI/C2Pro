@@ -59,17 +59,25 @@ def source_bound_findings(
         # Support EPC-04: and numbered clauses such as "5.2 <text>" or
         # "Section 5.2 <text>", including same-line headings after a full stop.
         # A reference merely *mentioned* elsewhere is not clause provenance.
+        # Recognise only line-initial headings. Narrative same-line
+        # cross-references such as "... Section 6.3 applies separately" are
+        # NOT a new source span, even if followed by an authentic quotation.
+        # Qualified headings need an explicit punctuation delimiter; without
+        # one a phrase beginning "Section 6.3 applies" is still ambiguous.
         labels = list(
             re.finditer(
-                r"(?im)(?:^|(?<=\n)|(?<=\.)[ \t]+)[ \t]*"
-                r"(?:(?:Clause|Section|Cláusula|Artículo|Articulo|§)[ \t]*)?"
-                r"(?P<ref>EPC-\d+|\d+(?:\.\d+){1,3})(?:[\s:.)-])",
+                r"(?im)^[ \t]*(?:"
+                r"(?:(?:Clause|Section|Cláusula|Artículo|Articulo|§)[ \t]*)"
+                r"(?P<qualified_ref>EPC-\d+|\d+(?:\.\d+){1,3})[ \t]*[:.)-]"
+                r"|(?P<bare_ref>EPC-\d+|\d+(?:\.\d+){1,3})(?:[ \t]*[:.)-]|[ \t]+)"
+                r")",
                 source_text,
             )
         )
         matched = False
         for pos, label in enumerate(labels):
-            if label.group("ref").casefold() != clause_ref.strip().casefold():
+            ref = label.group("qualified_ref") or label.group("bare_ref")
+            if ref.casefold() != clause_ref.strip().casefold():
                 continue
             end = labels[pos + 1].start() if pos + 1 < len(labels) else len(source_text)
             if quote in _normal(source_text[label.start() : end]):

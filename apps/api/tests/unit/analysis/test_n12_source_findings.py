@@ -213,3 +213,32 @@ def test_unscoped_source_quote_cannot_claim_known_clause_provenance():
         "Allegedly omitted 5.2.",
     )
     assert source_bound_findings([claim], source_text=source) == []
+
+
+def test_codex_same_line_section_reference_is_not_clause_heading() -> None:
+    """A cross-reference sentence after a period is not a new clause boundary."""
+    source = (
+        "5.2 Payment terms. Section 6.3 applies separately. "
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    misleading = _finding(
+        "6.3", "omission",
+        "Contractor shall pay delay damages of 1% per week.",
+        "Incorrectly attributes this 5.2 text to section 6.3.",
+    )
+    assert source_bound_findings([misleading], source_text=source) == []
+
+
+def test_codex_line_initial_cross_reference_without_heading_delimiter_is_unverified() -> None:
+    """A line beginning 'Section 6.3 applies ...' still is not a heading."""
+    source = (
+        "5.2 Payment terms.\n"
+        "Section 6.3 applies separately to these terms.\n"
+        "Contractor shall pay delay damages of 1% per week."
+    )
+    misleading = _finding(
+        "6.3", "contradiction",
+        "Contractor shall pay delay damages of 1% per week.",
+        "Incorrect attribution from narrative cross-reference.",
+    )
+    assert source_bound_findings([misleading], source_text=source) == []
