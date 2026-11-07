@@ -16,9 +16,11 @@ from uuid import UUID
 _EXPLICIT_CLAUSE_CODE = re.compile(r"^(?:§\s*)?\d+(?:\.\d+)*$")
 # This deliberately only recognizes a heading at the beginning of original
 # persisted clause text. Do not relax this to search body text: references in
-# a paragraph are not persisted clause identities.
+# a paragraph are not persisted clause identities. Punctuation terminators
+# require whitespace or end-of-text so the numeric pattern cannot backtrack
+# from a malformed token (for example, ``8.2(a)``) to its parent ``8``.
 _LEADING_NUMBERED_HEADING = re.compile(
-    r"^\s*(?:§\s*)?(\d+(?:\.\d+)*)(?=\s|[.:-]|$)"
+    r"^\s*(?:§\s*)?(\d+(?:\.\d+)*)(?=$|\s|[.:-](?=\s|$))"
 )
 
 
@@ -67,6 +69,9 @@ def grounded_review_source_references(
     at the *start* of parser-persisted ``full_text`` are both candidate
     locators. Their combined physical ClauseORM UUIDs must be unique; this
     fails closed when the two routes identify different persisted clauses.
+    An explicit code with present source text that lacks a matching leading
+    numeric heading is likewise unverified: source preservation is required
+    before returning a VERIFIED locator.
     """
     requested_codes = {
         normalized
@@ -95,11 +100,15 @@ def grounded_review_source_references(
         heading = _leading_numbered_clause_code(full_text)
         source_mismatch = code is not None and full_text is not None and heading != code
         # A missing legacy full_text does not weaken its own code identity.
-        # A present malformed or contradictory heading does: it is neither a
-        # trustworthy explicit-code locator nor a fallback heading locator.
+        # Present source text without a matching numbered heading does: it is
+        # neither a trustworthy explicit-code locator nor a fallback heading
+        # locator. A disagreement makes either claimed identity ambiguous.
         if source_mismatch:
-            if code in requested_codes:
-                conflicted_codes.add(code)
+            conflicted_codes.update(
+                candidate
+                for candidate in (code, heading)
+                if candidate in requested_codes
+            )
             continue
         if code in direct_matches:
             direct_matches[code].append(clause)
