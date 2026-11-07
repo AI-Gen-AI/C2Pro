@@ -3,6 +3,8 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 from src.analysis.adapters.graph.review_source_references import grounded_review_source_references
 
 
@@ -67,6 +69,76 @@ def test_number_prefix_8_21_does_not_match_8_2():
         revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
     )
     assert refs == []
+
+
+@pytest.mark.parametrize("malformed_prefix", ["8.2(a)", "8.2A", "8.21abc"])
+def test_malformed_numbered_prefix_never_backtracks_to_parent_clause_code(malformed_prefix):
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text=f"{malformed_prefix} Not a clause heading",
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8"}, persisted_clauses=[clause],
+    ) == []
+
+
+@pytest.mark.parametrize("separator", [" ", ": "])
+def test_valid_numbered_heading_with_space_or_colon_resolves(separator):
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text=f"8.2{separator}The contractual completion deadline",
+    )
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    )
+    assert refs[0]["clause_id"] == str(clause.id)
+
+
+def test_mismatched_explicit_code_conflicts_with_matching_auto_heading():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    mismatched_explicit_clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="8.3", original_text="8.2 Original contractual clause",
+    )
+    auto_clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text="8.2 Duplicate parser clause",
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"},
+        persisted_clauses=[mismatched_explicit_clause, auto_clause],
+    ) == []
+
+
+def test_explicit_code_without_matching_source_heading_is_not_verified():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="8.2", original_text="Time for Completion. Contractor shall proceed.",
+    )
+    # A stored numeric code alone cannot substitute for missing source identity.
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    ) == []
+
+
+def test_whitespace_around_section_symbol_preserves_numeric_heading_identity():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text="  §  8.2 The contractual completion deadline",
+    )
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    )
+    assert refs[0]["clause_id"] == str(clause.id)
 
 
 def test_two_auto_clauses_with_same_original_number_remain_ambiguous():
