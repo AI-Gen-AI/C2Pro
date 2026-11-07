@@ -92,7 +92,7 @@ async def test_service_exposes_quoted_findings_to_existing_notes_consumer():
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
+    assert result.status == "UNASSESSED"
     assert "EPC-05 [contradiction]" in result.notes
     assert "Price escalation" in result.notes
 
@@ -126,7 +126,7 @@ async def test_service_rejects_ok_with_reported_errors():
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
+    assert result.status == "UNASSESSED"
     assert "EPC-04 [omission]" in result.notes
     assert "14 days" in result.notes
 
@@ -158,8 +158,8 @@ async def test_model_status_variant_cannot_erase_three_source_verified_findings(
     result = await CritiqueExtractionService().extract(
         ai=ai, items=[], doc_type="contract", source_text=SOURCE,
     )
-    assert result.status == "RETRY"
-    assert "N12_UNASSESSED" not in result.notes
+    assert result.status == "UNASSESSED"
+    assert "N12_UNASSESSED" in result.notes
     assert all(clause in result.notes for clause in ("EPC-04", "EPC-05", "EPC-07"))
     from scripts.n4_n12_real_ai_eval import score_n12
 

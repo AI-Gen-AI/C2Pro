@@ -137,14 +137,18 @@ class CritiqueExtractionService:
                     payload.get("findings"), source_text=excerpt
                 )
                 if verified:
-                    # Verified citations carry review authority, not the
-                    # model's untrusted status string. A model might return
-                    # NEEDS_REVIEW, FAIL, or even OK while identifying source
-                    # conflicts. Preserve the facts, require human review, and
-                    # NEVER silently replace a supported critique with fallback.
+                    # A located verbatim quote is *provenance*, not proof of
+                    # the model's assertion that an obligation was omitted or
+                    # contradicted. Preserve the cited critique for HITL, but
+                    # do not consume an extraction retry based only on an LLM
+                    # interpretation (including when the model returns OK).
                     return CritiqueResult(
-                        status="RETRY",
-                        notes=format_source_bound_notes(verified),
+                        status="UNASSESSED",
+                        notes=(
+                            "N12_UNASSESSED: source location matched; "
+                            "model interpretation requires human verification.\n"
+                            + format_source_bound_notes(verified)
+                        ),
                     )
                 # A source-free or truncated review cannot certify that the
                 # extraction covered all contract obligations, even on "OK".

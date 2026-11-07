@@ -123,7 +123,7 @@ class TestCritiqueExtractionUseCase:
 
 
     @pytest.mark.asyncio
-    async def test_retry_increments_and_preserves_notes(self) -> None:
+    async def test_model_citation_preserves_notes_without_consuming_retry(self) -> None:
         ai = _FakeAI(payload={"status": "RETRY", "notes": "please redo", "findings": [
             {"clause_ref": "EPC-04", "issue_type": "omission",
              "source_quote": "Contractor shall pay 1% liquidated damages per week of delay.",
@@ -139,14 +139,14 @@ class TestCritiqueExtractionUseCase:
                 source_complete=True,
             )
         )
-        assert res.status == "RETRY"
-        assert res.retry_count == 1
+        assert res.status == "UNASSESSED"
+        assert res.retry_count == 0
+        assert res.confidence is None
         assert "Source-cited" in res.critique_notes and "EPC-04" in res.critique_notes
-        # 0.9 confidence >= 0.8 threshold, retry_count 1 < 2 max → no HITL yet
-        assert res.human_approval_required is False
+        assert res.human_approval_required is True
 
     @pytest.mark.asyncio
-    async def test_retry_exceeded_triggers_hitl(self) -> None:
+    async def test_existing_retry_budget_is_not_consumed_by_model_citation(self) -> None:
         ai = _FakeAI(payload={"status": "RETRY", "notes": "still bad", "findings": [
             {"clause_ref": "EPC-04", "issue_type": "omission",
              "source_quote": "Contractor shall pay 1% liquidated damages per week of delay.",
@@ -162,8 +162,33 @@ class TestCritiqueExtractionUseCase:
                 source_complete=True,
             )
         )
-        assert res.retry_count == 3
+        assert res.status == "UNASSESSED"
+        assert res.retry_count == 2
+        assert res.confidence is None
         assert res.human_approval_required is True
+
+    @pytest.mark.asyncio
+    async def test_deterministic_source_contradiction_keeps_manual_retry_signal(self) -> None:
+        source = (
+            "EPC-04: Defective work shall be rectified within fourteen (14) "
+            "days of written notice."
+        )
+        ai = _FakeAI(payload={"status": "OK", "notes": "", "findings": []})
+        res = await CritiqueExtractionUseCase(ai=ai).execute(
+            CritiqueExtractionCommand(
+                extracted_risks=[{
+                    "title": "Defects", "description": "No rectification deadline.",
+                    "confidence": 0.95,
+                }],
+                extracted_wbs=[], doc_type="contract", retry_count=0,
+                source_text=source, source_complete=True,
+            )
+        )
+        assert res.status == "RETRY"
+        assert res.retry_count == 1
+        assert res.human_approval_required is True
+        assert res.confidence is None
+        assert "source specifies a deadline" in res.critique_notes
 
     @pytest.mark.asyncio
     async def test_unsupported_critique_stays_unassessed_without_consuming_retry(self) -> None:

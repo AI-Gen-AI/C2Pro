@@ -113,7 +113,7 @@ async def test_n12_ok_with_explicit_unverified_quality_concern_requires_hitl() -
 
 
 @pytest.mark.asyncio
-async def test_n12_uses_in_excerpt_source_bound_finding_for_retry() -> None:
+async def test_n12_preserves_in_excerpt_source_finding_for_hitl_without_retry() -> None:
     source = "EPC-04: Contractor shall pay 1% liquidated damages per week of delay."
     reviewer = FakeReview({
         "status": "RETRY", "notes": "Check missed liquidated damages",
@@ -124,8 +124,10 @@ async def test_n12_uses_in_excerpt_source_bound_finding_for_retry() -> None:
         }],
     })
     result = await CritiqueExtractionUseCase(ai=reviewer).execute(command(source))
-    assert result.status == "RETRY"
-    assert result.retry_count == 1
+    assert result.status == "UNASSESSED"
+    assert result.retry_count == 0
+    assert result.confidence is None
+    assert result.human_approval_required is True
     assert "Source-cited" in result.critique_notes
     assert "EPC-04" in result.critique_notes
 
@@ -189,3 +191,59 @@ async def test_n12_semantic_claim_in_ok_notes_never_counts_as_neutral() -> None:
     assert result.status == "UNASSESSED"
     assert result.human_approval_required is True
     assert result.confidence is None
+
+
+@pytest.mark.asyncio
+async def test_cited_model_omission_cannot_retry_if_risk_already_covers_obligation() -> None:
+    """True quote + false interpretation must be HITL, never an automatic RETRY."""
+    source = (
+        "EPC-05: Contractor shall pay liquidated damages of 1% for each "
+        "week of delay in completion."
+    )
+    reviewer = FakeReview({
+        "status": "RETRY", "notes": "The LD risk was omitted",
+        "findings": [{
+            "clause_ref": "EPC-05", "issue_type": "omission",
+            "source_quote": "Contractor shall pay liquidated damages of 1% for each week of delay in completion.",
+            "explanation": "The LLM extracted no liquidated-damages obligation.",
+        }],
+    })
+    cmd = CritiqueExtractionCommand(
+        extracted_risks=[
+            {"title": "Liquidated damages", "description": (
+                "Contractor owes 1% liquidated damages per week of delay."
+            ), "confidence": 0.99}
+        ],
+        extracted_wbs=[], doc_type="contract", retry_count=0,
+        source_text=source, source_complete=True,
+    )
+    result = await CritiqueExtractionUseCase(ai=reviewer).execute(cmd)
+    assert result.status == "UNASSESSED"
+    assert result.retry_count == 0
+    assert result.confidence is None
+    assert result.human_approval_required is True
+    assert "EPC-05" in result.critique_notes
+    assert "interpretation unverified" in result.critique_notes.lower()
+
+
+@pytest.mark.asyncio
+async def test_cited_model_critique_with_partial_source_never_bypasses_hitl() -> None:
+    source = "EPC-05: Contractor shall pay liquidated damages."
+    reviewer = FakeReview({
+        "status": "OK", "notes": "No issues found.",
+        "findings": [{
+            "clause_ref": "EPC-05", "issue_type": "contradiction",
+            "source_quote": "Contractor shall pay liquidated damages.",
+            "explanation": "Contradicts the extraction.",
+        }],
+    })
+    cmd = CritiqueExtractionCommand(
+        extracted_risks=[{"title": "Delay damages", "confidence": 0.95}],
+        extracted_wbs=[], doc_type="contract", retry_count=0,
+        source_text=source, source_complete=False,
+    )
+    result = await CritiqueExtractionUseCase(ai=reviewer).execute(cmd)
+    assert result.status == "UNASSESSED"
+    assert result.retry_count == 0
+    assert result.human_approval_required is True
+    assert "EPC-05" in result.critique_notes

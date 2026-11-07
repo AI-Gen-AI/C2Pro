@@ -216,7 +216,7 @@ class TestCritiqueNodeThinDelegation:
         assert _next_after_critique_v2(result) == "human_interrupt"
 
     @pytest.mark.asyncio
-    async def test_grounded_retry_preserves_the_existing_reextraction_path(self, monkeypatch) -> None:
+    async def test_llm_cited_finding_cannot_auto_reextract_without_semantic_proof(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
         from src.analysis.adapters.graph.workflow import _next_after_critique_v2
 
@@ -243,10 +243,11 @@ class TestCritiqueNodeThinDelegation:
                 retry_count=0,
             )
         )
-        assert result["confidence_score"] == pytest.approx(0.9)
-        assert result["retry_count"] == 1
-        assert result["human_approval_required"] is False
-        assert _next_after_critique_v2(result) == "risk_extractor"
+        assert result["confidence_score"] is None
+        assert result["retry_count"] == 0
+        assert result["human_approval_required"] is True
+        assert "EPC-04" in result["critique_notes"]
+        assert _next_after_critique_v2(result) == "human_interrupt"
 
     @pytest.mark.asyncio
     async def test_use_case_exception_emits_failed_node_result_and_persists_error(
