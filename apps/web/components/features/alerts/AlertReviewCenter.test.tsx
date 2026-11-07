@@ -90,6 +90,11 @@ describe("S3-04 RED - AlertReviewCenter", () => {
       expect(row).toHaveAttribute("tabindex", "-1");
       expect(row).toBe(document.activeElement);
       expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+      fireInAct(() => fireEvent.change(screen.getByLabelText("Status filter"), {
+        target: { value: "pending" },
+      }));
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(row);
     } finally {
       window.history.replaceState(null, "", previousUrl);
       if (oldScroll) {

@@ -104,6 +104,7 @@ export function AlertReviewCenter({
   const [isSaving, setIsSaving] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const restoredAlertRef = useRef<string | null>(null);
   const persistedMode = Boolean(onApprove && onReject && onResolve);
 
   useEffect(() => {
@@ -127,12 +128,14 @@ export function AlertReviewCenter({
   // focus only when the alert is actually present in this project's response.
   useEffect(() => {
     const fragment = window.location.hash.slice(1);
-    if (!fragment.startsWith("alert-")) return;
+    if (!fragment.startsWith("alert-") || restoredAlertRef.current === fragment) return;
     const matching = visibleItems.some((alert) => alertAnchor(alert.id) === fragment);
     if (!matching) return;
     const row = document.getElementById(fragment);
-    row?.focus({ preventScroll: true });
-    row?.scrollIntoView?.({ block: "center" });
+    if (!row) return;
+    restoredAlertRef.current = fragment;
+    row.focus({ preventScroll: true });
+    row.scrollIntoView?.({ block: "center" });
   }, [visibleItems]);
 
   const closeModal = () => {
