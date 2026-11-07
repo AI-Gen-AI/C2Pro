@@ -44,7 +44,8 @@ test("UX-E2E-01: four-source onboarding, mobile and tenant A/B isolation", async
     try {
       const userB = await clerkIdentity(tenantB.page);
       expect(userB.userId).not.toBe(userA.userId);
-      expect(userB.tenantId).not.toBe(userA.tenantId);
+      expect(userB.organizationId, "Development B must select its own Clerk Organization").not.toBe(userA.organizationId);
+      expect(userB.tenantId, "Development B must be a separate tenant").not.toBe(userA.tenantId);
       const statuses = await denialsFor(tenantB.page, projectId);
       expect(statuses).toHaveLength(4);
       for (const status of statuses) {
