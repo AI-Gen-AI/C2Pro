@@ -7,8 +7,8 @@ application, for the SAME project id the browser recorded (and for the second te
 * S1  the two projects belong to two different tenants, each bound to its own Clerk Organization, and each human
       is a user row of its own tenant bound to its own Clerk user;
 * S2  the project holds exactly the five documents the journey uploaded (contract, budget, schedule, technical
-      specification, the draft specification), with the SHA-256 of the committed fixtures as stored bytes, and the
-      contract has exactly revisions A and B;
+      specification, the draft specification), with the SHA-256 of the committed fixtures as stored bytes; contract
+      revision A is required at S2 while optional revision B is validated only when it arrives in S6;
 * S3  the worker completed the graph, a project snapshot carries six Health assessments, and the persisted alerts
       include the expected deterministic findings;
 * S4  an alert's source clause belongs to a revision of the contract document, and a Budget pointer names the exact
@@ -333,11 +333,20 @@ def _judge_s2(c: _Ctx) -> None:
     sha = c.expect.fixture_sha
     for key, fixture_key in _FIXTURE_KEY_OF.items():
         revs = revisions_of.get(c.doc(key), [])
-        wanted = [sha["contractA"], sha["contractB"]] if key == "contract" else [sha[fixture_key]]
+        actual = [r["blob_hash"] for r in revs]
+        if key == "contract":
+            # Revision B is uploaded in S6, NOT S2. A single revision A is
+            # valid at S2; when B is already present, its bytes must also match.
+            valid_hashes = actual in (
+                [sha["contractA"]],
+                [sha["contractA"], sha["contractB"]],
+            )
+        else:
+            valid_hashes = actual == [sha[fixture_key]]
         add(
             "S2",
             f"{key}: stored revisions carry the pinned SHA-256 of the committed files",
-            [r["blob_hash"] for r in revs] == wanted,
+            valid_hashes,
             f"{len(revs)} revision(s)",
         )
 

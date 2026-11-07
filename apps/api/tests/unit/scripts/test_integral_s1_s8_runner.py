@@ -484,6 +484,49 @@ def test_an_honest_run_passes_every_postgres_check() -> None:
     assert _failed(facts, browser, expect) == []
 
 
+def test_s2_accepts_contract_revision_a_before_b_is_uploaded_in_s6() -> None:
+    facts, browser, expect = _world()
+    contract_id = browser["documentIds"]["contract"]
+    facts.revisions = [
+        row
+        for row in facts.revisions
+        if not (
+            str(row["document_id"]) == str(contract_id)
+            and row["blob_hash"] == SHA["contractB"]
+        )
+    ]
+    failed = _failed(facts, browser, expect)
+    assert not any(item.startswith("S2:contract:") for item in failed)
+    assert "S6:the contract has exactly two revisions" in failed
+
+
+def test_s2_rejects_contract_a_with_wrong_bytes_even_before_b() -> None:
+    facts, browser, expect = _world()
+    contract_id = browser["documentIds"]["contract"]
+    facts.revisions = [
+        {**row, "blob_hash": "f" * 64}
+        if str(row["document_id"]) == str(contract_id) and row["blob_hash"] == SHA["contractA"]
+        else row
+        for row in facts.revisions
+        if str(row["document_id"]) != str(contract_id) or row["blob_hash"] != SHA["contractB"]
+    ]
+    assert (
+        "S2:contract: stored revisions carry the pinned SHA-256 of the committed files"
+        in _failed(facts, browser, expect)
+    )
+
+
+def test_s2_rejects_wrong_contract_revision_b_when_already_uploaded() -> None:
+    facts, browser, expect = _world()
+    for revision in facts.revisions:
+        if revision["blob_hash"] == SHA["contractB"]:
+            revision["blob_hash"] = "e" * 64
+    assert (
+        "S2:contract: stored revisions carry the pinned SHA-256 of the committed files"
+        in _failed(facts, browser, expect)
+    )
+
+
 def test_two_projects_in_one_tenant_fail_isolation() -> None:
     facts, browser, expect = _world()
     facts.project_b["tenant_id"] = facts.project_a["tenant_id"]
