@@ -367,6 +367,17 @@ describe("CurrentStateReportView", () => {
       ...report,
       sections: {
         ...report.sections,
+        documents: {
+          ...report.sections.documents,
+          data: {
+            ...report.sections.documents.data!,
+            items: [
+              ...report.sections.documents.data!.items,
+              { ...report.sections.documents.data!.items[0], id: documentId, filename: "Contract A.docx" },
+              { ...report.sections.documents.data!.items[0], id: rowId, filename: "Schedule.xlsx" },
+            ],
+          },
+        },
         source_discrepancies: {
           status: "available", status_reason: null, source_domain: "project_graph",
           source_as_of: "2026-11-04T21:30:00Z", source_ref: "event-1",
@@ -401,13 +412,16 @@ describe("CurrentStateReportView", () => {
     expect(card).toHaveTextContent("92 days");
     expect(card).toHaveTextContent(`revision ${revQuote} · locator verified-quote:abcdef123 · hash ${"a".repeat(64)}`);
     expect(within(card).getAllByTestId("source-discrepancy-item")).toHaveLength(1);
+    expect(within(card).getByTestId("source-discrepancy-item")).toHaveAttribute("id", "source-discrepancy-0");
+    expect(within(card).getAllByTestId("source-discrepancy-document-name")[0]).toHaveTextContent("Contract A.docx");
+    expect(within(card).getAllByTestId("source-discrepancy-document-name")[1]).toHaveTextContent("Schedule.xlsx");
     const links = within(card).getAllByTestId("source-discrepancy-evidence-link");
     expect(links).toHaveLength(2);
     expect(links[0].getAttribute("href")).toBe(
-      `/projects/${report.project.id}/evidence?documentId=${documentId}&revisionId=${revQuote}`,
+      `/projects/${report.project.id}/evidence?documentId=${documentId}&revisionId=${revQuote}&origin=current-state&discrepancyIndex=0`,
     );
     expect(links[1].getAttribute("href")).toBe(
-      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule!4&expectedHash=${"b".repeat(64)}`,
+      `/projects/${report.project.id}/evidence?documentId=${rowId}&revisionId=${revRow}&locator=Schedule!4&expectedHash=${"b".repeat(64)}&origin=current-state&discrepancyIndex=0`,
     );
     expect(card).toHaveTextContent("Quote highlighting is not guaranteed");
   });

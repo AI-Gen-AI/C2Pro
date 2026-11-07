@@ -106,6 +106,15 @@ export default function EvidencePage() {
   // Return path is constructed locally from the authenticated project scope,
   // never from a user-supplied full URL (no open redirects or cross-project jump).
   const returnReviewItemId = searchParams.get("returnReviewItemId");
+  // Preserve a same-project route back to the exact Current State card.
+  // Accept only a bounded index, never a caller-provided URL.
+  const sourceDiscrepancyIndex = searchParams.get("discrepancyIndex");
+  const returnToDiscrepancyIndex =
+    searchParams.get("origin") === "current-state" &&
+    sourceDiscrepancyIndex !== null &&
+    /^(?:[0-9]|1[0-9]|2[0-4])$/.test(sourceDiscrepancyIndex)
+      ? Number(sourceDiscrepancyIndex)
+      : null;
   // Health links cite the persisted source clause, not a semantic/alert alias.
   const requestedFromHealth = searchParams.get("origin") === "health";
   const revisionReadOnly = Boolean(requestedRevisionId);
@@ -923,6 +932,16 @@ export default function EvidencePage() {
           className="inline-flex rounded-md border px-3 py-2 text-sm font-medium text-primary hover:underline"
         >
           Back to this review
+        </Link>
+      ) : null}
+
+      {returnToDiscrepancyIndex !== null ? (
+        <Link
+          data-testid="evidence-return-to-discrepancy"
+          href={`/projects/${encodeURIComponent(id)}/report#source-discrepancy-${returnToDiscrepancyIndex}`}
+          className="inline-flex rounded-md border px-3 py-2 text-sm font-medium text-primary hover:underline"
+        >
+          Back to this discrepancy in Current State
         </Link>
       ) : null}
 

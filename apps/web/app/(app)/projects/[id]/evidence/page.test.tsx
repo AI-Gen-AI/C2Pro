@@ -341,6 +341,38 @@ describe("EvidencePage highlight mapping", () => {
     expect(screen.queryByTestId("structured-source-row-mock")).not.toBeInTheDocument();
   });
 
+  it("returns from an inspected XLSX row to the exact Current State discrepancy in the same project", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        documentId: "doc-b", revisionId: "rev-b", locator: "Presupuesto!3",
+        expectedHash: "a".repeat(64), origin: "current-state", discrepancyIndex: "2",
+      } as Record<string, string>)[key] ?? null,
+    });
+    render(<EvidencePage />);
+    expect(screen.getByTestId("structured-source-row-mock")).toHaveAttribute("data-locator", "Presupuesto!3");
+    expect(screen.getByTestId("evidence-return-to-discrepancy")).toHaveAttribute(
+      "href", "/projects/proj-1/report#source-discrepancy-2",
+    );
+  });
+
+  it("never uses a URL, invalid index, or unrelated origin as a Current State return destination", () => {
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        origin: "current-state", discrepancyIndex: "https://outside.invalid/",
+      } as Record<string, string>)[key] ?? null,
+    });
+    const { rerender } = render(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-return-to-discrepancy")).not.toBeInTheDocument();
+
+    useSearchParamsMock.mockReturnValue({
+      get: (key: string) => ({
+        origin: "health", discrepancyIndex: "0",
+      } as Record<string, string>)[key] ?? null,
+    });
+    rerender(<EvidencePage />);
+    expect(screen.queryByTestId("evidence-return-to-discrepancy")).not.toBeInTheDocument();
+  });
+
   it("S5 — returns from inspected source evidence to the exact review in the same project", () => {
     useSearchParamsMock.mockReturnValue({
       get: (key: string) => ({

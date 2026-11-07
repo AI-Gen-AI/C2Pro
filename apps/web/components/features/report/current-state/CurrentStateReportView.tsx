@@ -115,6 +115,10 @@ const HEADING_CLASS = "text-base font-semibold leading-none tracking-tight";
 
 export function CurrentStateReportView({ report }: { report: CurrentStateReport }) {
   const sections = report.sections as Sections;
+  // Reuse the report's own source register; never infer a filename from an AI finding.
+  const documentNames = new Map(
+    (sections.documents.data?.items ?? []).map((document) => [document.id, document.filename]),
+  );
 
   return (
     <div className="space-y-6">
@@ -142,7 +146,7 @@ export function CurrentStateReportView({ report }: { report: CurrentStateReport 
           if (!envelope) return null; // Older backend: do not invent decisions.
           return (
             <SectionCard key={key} sectionKey={key} section={envelope}>
-              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} />
+              <SectionBody sectionKey={key} sections={sections} projectId={report.project.id} documentNames={documentNames} />
             </SectionCard>
           );
         })}
@@ -321,7 +325,7 @@ function SectionCard({
   );
 }
 
-function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentSectionKey; sections: Sections; projectId: string }) {
+function SectionBody({ sectionKey, sections, projectId, documentNames }: { sectionKey: ContentSectionKey; sections: Sections; projectId: string; documentNames: ReadonlyMap<string, string> }) {
   switch (sectionKey) {
     case "documents":
       return <DocumentsBody data={sections.documents.data} />;
@@ -334,7 +338,7 @@ function SectionBody({ sectionKey, sections, projectId }: { sectionKey: ContentS
     case "alerts":
       return <AlertsBody data={sections.alerts.data} />;
     case "source_discrepancies":
-      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} />;
+      return <SourceDiscrepanciesBody data={sections.source_discrepancies?.data} projectId={projectId} documentNames={documentNames} />;
     case "decision_proposals":
       return <DecisionProposalsBody data={sections.decision_proposals?.data} projectId={projectId} />;
     case "hitl":
@@ -367,13 +371,22 @@ function isRevisionBoundSource(source: DiscrepancySource): source is RevisionBou
   return Boolean(source.document_id && source.revision_id && source.source_locator && sourceHash(source));
 }
 
-function discrepancyEvidenceHref(projectId: string, source: RevisionBoundDiscrepancySource): string {
+function discrepancyEvidenceHref(projectId: string, source: RevisionBoundDiscrepancySource, index: number): string {
   const base = `/projects/${encodeURIComponent(projectId)}/evidence?documentId=${encodeURIComponent(source.document_id)}&revisionId=${encodeURIComponent(source.revision_id)}`;
-  if (source.role !== "original_source_row" || !source.blob_sha256) return base;
-  return `${base}&locator=${encodeURIComponent(source.source_locator)}&expectedHash=${encodeURIComponent(source.blob_sha256)}`;
+  const rowParameters = source.role === "original_source_row" && source.blob_sha256
+    ? `&locator=${encodeURIComponent(source.source_locator)}&expectedHash=${encodeURIComponent(source.blob_sha256)}`
+    : "";
+  return `${base}${rowParameters}&origin=current-state&discrepancyIndex=${index}`;
 }
 
-function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepancy; projectId: string }) {
+function DiscrepancyEvidence({
+  finding, projectId, index, documentNames,
+}: {
+  finding: SourceDiscrepancy;
+  projectId: string;
+  index: number;
+  documentNames: ReadonlyMap<string, string>;
+}) {
   const evidenceSources = finding.sources.filter(isRevisionBoundSource);
   const hasCompleteComparison = finding.sources.length === 2 && evidenceSources.length === 2;
   const displayedSources = hasCompleteComparison ? evidenceSources : evidenceSources.slice(0, 1);
@@ -384,9 +397,14 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
         const hash = sourceHash(source);
         return (
           <div key={`${source.document_id}:${source.revision_id}:${source.source_locator}`} className="space-y-1 text-xs">
+            <p className="break-words" data-testid="source-discrepancy-document-name">
+              <strong>{documentNames.get(source.document_id) ?? "Document name unavailable"}</strong>
+              <span className="text-muted-foreground">
+                {" · "}{source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
+              </span>
+            </p>
             <p className="break-words text-muted-foreground">
-              {source.role === "original_source_row" ? "Original XLSX row" : "Verified source quote"}
-              {" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
+              Document ID {source.document_id}{" · "}revision {source.revision_id}{" · "}locator {source.source_locator}{" · "}hash {hash}
             </p>
             {source.source_quote ? (
               <blockquote className="border-l-2 pl-2 text-muted-foreground">{source.source_quote}</blockquote>
@@ -394,7 +412,7 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
             <Link
               data-testid="source-discrepancy-evidence-link"
               className="inline-block text-primary underline underline-offset-2"
-              href={discrepancyEvidenceHref(projectId, source)}
+              href={discrepancyEvidenceHref(projectId, source, index)}
             >
               {source.role === "original_source_row"
                 ? "Inspect original row and file hash"
@@ -414,8 +432,8 @@ function DiscrepancyEvidence({ finding, projectId }: { finding: SourceDiscrepanc
 }
 
 function SourceDiscrepanciesBody({
-  data, projectId,
-}: { data: SourceDiscrepanciesEnvelope["data"]; projectId: string }) {
+  data, projectId, documentNames,
+}: { data: SourceDiscrepanciesEnvelope["data"]; projectId: string; documentNames: ReadonlyMap<string, string> }) {
   if (!data) return null;
   return (
     <div data-testid="current-state-source-discrepancies" className="space-y-3">
@@ -423,7 +441,13 @@ function SourceDiscrepanciesBody({
         Observations only — not confirmed breaches, not approved budget/schedule baselines and not included in the Coherence Score.
       </p>
       {data.items.map((finding, index) => (
-        <article key={`${finding.rule_id}:${index}`} data-testid="source-discrepancy-item" className="space-y-2 rounded-md border p-3">
+        <article
+          key={`${finding.rule_id}:${index}`}
+          id={`source-discrepancy-${index}`}
+          tabIndex={-1}
+          data-testid="source-discrepancy-item"
+          className="scroll-mt-24 space-y-2 rounded-md border p-3 target:ring-2 target:ring-primary"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">Provisional · human review required</Badge>
             <span className="text-xs text-muted-foreground">{finding.rule_id}</span>
@@ -437,7 +461,7 @@ function SourceDiscrepanciesBody({
               </div>
             ))}
           </dl>
-          <DiscrepancyEvidence finding={finding} projectId={projectId} />
+          <DiscrepancyEvidence finding={finding} projectId={projectId} index={index} documentNames={documentNames} />
           <p className="text-xs text-muted-foreground">
             Links open the pinned revision or re-verify the original XLSX row. Quote highlighting is not guaranteed.
           </p>
