@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
+import { act } from "@testing-library/react";
 import { renderWithProviders, screen } from "@/src/tests/test-utils";
 import { useSidebarStore } from "@/stores/sidebar";
 import { AppSidebar } from "./AppSidebar";
@@ -56,6 +57,32 @@ describe("AppSidebar", () => {
     mockEnv.FEATURE_INTERNAL_DASHBOARDS = false;
     mockEnv.FEATURE_PHASE2_MODULES = false;
     mockEnv.FEATURE_RACI_GENERATION = false;
+  });
+
+  it("collapses when the viewport enters mobile width but preserves a deliberate open menu during mobile resizing", () => {
+    const initialWidth = window.innerWidth;
+    try {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+      renderWithProviders(<AppSidebar />);
+      expect(useSidebarStore.getState().isCollapsed).toBe(false);
+
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 500 });
+      act(() => window.dispatchEvent(new Event("resize")));
+      expect(useSidebarStore.getState().isCollapsed).toBe(true);
+
+      act(() => useSidebarStore.getState().setCollapsed(false));
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 480 });
+      act(() => window.dispatchEvent(new Event("resize")));
+      expect(useSidebarStore.getState().isCollapsed).toBe(false);
+
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 960 });
+      act(() => window.dispatchEvent(new Event("resize")));
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 550 });
+      act(() => window.dispatchEvent(new Event("resize")));
+      expect(useSidebarStore.getState().isCollapsed).toBe(true);
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: initialWidth });
+    }
   });
 
   it("renders primary navigation with active link state", () => {
