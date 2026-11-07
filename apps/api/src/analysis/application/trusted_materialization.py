@@ -136,7 +136,8 @@ class MaterializationContent:
                 state.get("decision_package"),
                 document_id=_str_or_none(state.get("document_id")),
                 revision_id=_str_or_none(state.get("document_revision_id")),
-            ) or {},
+            )
+            or {},
         )
 
     @classmethod
@@ -181,7 +182,8 @@ class MaterializationContent:
                 payload.get("decision_snapshot"),
                 document_id=_str_or_none(payload.get("document_id")),
                 revision_id=_str_or_none(payload.get("document_revision_id")),
-            ) or {},
+            )
+            or {},
         )
         if resumed_state is None or not expected_artifact_hash:
             return content
@@ -208,6 +210,29 @@ class MaterializationContent:
         except (TypeError, ValueError, AttributeError):
             logger.warning("trusted_materialization_resume_score_unverifiable")
             return content
+
+        # S3 / N8→N17: the approved artifact's exact identity/hash has now
+        # been verified. The six-category N8 assessment is a distinct,
+        # versioned observation; its presence does not imply a scored or
+        # approved baseline. Preserve it only when the resumed observation
+        # strictly decodes. Never reconstruct a missing assessment or accept
+        # an assessment from an unbound/stale checkpoint.
+        from src.health.domain.analysis_assessment import (
+            SINGLE_DOCUMENT_ASSESSMENT_KEY,
+            decode_single_document_assessment,
+        )
+
+        try:
+            decoded_assessment = decode_single_document_assessment(resumed.assessment)
+        except (TypeError, ValueError):
+            logger.warning("trusted_materialization_resume_assessment_unverifiable")
+            decoded_assessment = None
+        authorized_assessment = (
+            {SINGLE_DOCUMENT_ASSESSMENT_KEY: decoded_assessment.model_dump(mode="json")}
+            if decoded_assessment is not None
+            else {}
+        )
+        content = replace(content, assessment=authorized_assessment)
         score = resumed.coherence_score
         if (
             isinstance(score, bool)
@@ -441,9 +466,7 @@ async def content_from_current_authority(
 
     reason = await verify_current_authority(session, ref)
     if reason is not None:
-        raise StaleCandidateError(
-            f"Candidate {ref.artifact_id} is not trusted-current ({reason})"
-        )
+        raise StaleCandidateError(f"Candidate {ref.artifact_id} is not trusted-current ({reason})")
     artifact = await session.scalar(
         select(DocumentArtifactORM)
         .where(
@@ -457,9 +480,7 @@ async def content_from_current_authority(
         .with_for_update()
     )
     if artifact is None or not isinstance(artifact.payload, Mapping):
-        raise StaleCandidateError(
-            f"Candidate {ref.artifact_id} has no exact immutable payload"
-        )
+        raise StaleCandidateError(f"Candidate {ref.artifact_id} has no exact immutable payload")
     if artifact_digest(artifact.payload) != ref.artifact_hash:
         raise StaleCandidateError(
             f"Candidate {ref.artifact_id} immutable payload digest does not match its binding"
@@ -702,7 +723,11 @@ async def write_canonical_effects(
                     if content.coherence_reason
                     else {}
                 ),
-                **({"decision_snapshot": dict(content.decision_snapshot)} if content.decision_snapshot else {}),
+                **(
+                    {"decision_snapshot": dict(content.decision_snapshot)}
+                    if content.decision_snapshot
+                    else {}
+                ),
             },
             resume_operation_id=resume.operation_id if resume else None,
             resume_attempt_id=resume.attempt_id if resume else None,
