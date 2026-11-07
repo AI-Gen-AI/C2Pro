@@ -8,13 +8,32 @@ that the critique or risk statement is correct.
 from __future__ import annotations
 
 import re
-from collections import Counter
 from collections.abc import Iterable
 from typing import Any
 from uuid import UUID
 
 # Accept explicit numbered contractual clause codes; never mine free text.
 _EXPLICIT_CLAUSE_CODE = re.compile(r"^(?:§\s*)?\d+(?:\.\d+)*$")
+# This deliberately only recognizes a heading at the beginning of original
+# persisted clause text. Do not relax this to search body text: references in
+# a paragraph are not persisted clause identities.
+_LEADING_NUMBERED_HEADING = re.compile(
+    r"^\s*(?:§\s*)?(\d+(?:\.\d+)*)(?=\s|[.:-]|$)"
+)
+
+
+def _normalized_numbered_clause_code(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.removeprefix("§").strip()
+    return normalized if _EXPLICIT_CLAUSE_CODE.fullmatch(value.strip()) else None
+
+
+def _leading_numbered_clause_code(full_text: object) -> str | None:
+    if not isinstance(full_text, str):
+        return None
+    match = _LEADING_NUMBERED_HEADING.match(full_text)
+    return match.group(1) if match else None
 
 
 def review_risk_clause_codes(risks: object) -> set[str]:
@@ -42,37 +61,72 @@ def grounded_review_source_references(
     clause_codes: set[str],
     persisted_clauses: Iterable[Any],
 ) -> list[dict[str, str]]:
-    """Only exact unique revision-bound persisted clause IDs are navigable."""
-    clauses = list(persisted_clauses)
-    seen_counts = Counter(
-        str(getattr(clause, "clause_code", "")) for clause in clauses
+    """Return only unique, exact-scope locators for structured clause references.
+
+    A genuine explicit numeric ``clause_code`` remains the preferred locator
+    for legacy clauses. Parser-generated codes (for example ``AUTO-007``)
+    may instead be located by an exact numbered heading at the *start* of the
+    parser-persisted ``full_text``. Both routes fail closed on ambiguity.
+    """
+    requested_codes = {
+        normalized
+        for code in clause_codes
+        if (normalized := _normalized_numbered_clause_code(code)) is not None
+    }
+    if not requested_codes:
+        return []
+
+    clauses = [
+        clause for clause in persisted_clauses
         if (
             getattr(clause, "tenant_id", None) == tenant_id
             and getattr(clause, "project_id", None) == project_id
             and getattr(clause, "document_id", None) == document_id
             and getattr(clause, "revision_id", None) == revision_id
+            and isinstance(getattr(clause, "id", None), UUID)
         )
-    )
+    ]
+    direct_matches: dict[str, list[Any]] = {code: [] for code in requested_codes}
+    heading_matches: dict[str, list[Any]] = {code: [] for code in requested_codes}
+    conflicted_codes: set[str] = set()
+    for clause in clauses:
+        code = _normalized_numbered_clause_code(getattr(clause, "clause_code", None))
+        full_text = getattr(clause, "full_text", None)
+        heading = _leading_numbered_clause_code(full_text)
+        source_mismatch = code is not None and full_text is not None and heading != code
+        # A missing legacy full_text does not weaken its own code identity.
+        # A present malformed or contradictory heading does: it is neither a
+        # trustworthy explicit-code locator nor a fallback heading locator.
+        if source_mismatch:
+            if code in requested_codes:
+                conflicted_codes.add(code)
+            continue
+        if code in direct_matches:
+            direct_matches[code].append(clause)
+        if heading in heading_matches:
+            heading_matches[heading].append(clause)
+
+    resolved: dict[str, Any] = {}
+    for code in requested_codes:
+        if code in conflicted_codes:
+            continue
+        direct = direct_matches[code]
+        if len(direct) == 1:
+            resolved[code] = direct[0]
+        elif not direct and len(heading_matches[code]) == 1:
+            resolved[code] = heading_matches[code][0]
+
     refs: list[dict[str, str]] = []
     for clause in clauses:
-        code = getattr(clause, "clause_code", None)
-        if (
-            not isinstance(code, str)
-            or code not in clause_codes
-            or seen_counts[code] != 1
-            or getattr(clause, "tenant_id", None) != tenant_id
-            or getattr(clause, "project_id", None) != project_id
-            or getattr(clause, "document_id", None) != document_id
-            or getattr(clause, "revision_id", None) != revision_id
-            or not isinstance(getattr(clause, "id", None), UUID)
-        ):
-            continue
-        refs.append({
-            "document_id": str(document_id),
-            "revision_id": str(revision_id),
-            "clause_id": str(clause.id),
-            "clause_code": code,
-        })
+        for code, resolved_clause in resolved.items():
+            if clause is resolved_clause:
+                refs.append({
+                    "document_id": str(document_id),
+                    "revision_id": str(revision_id),
+                    "clause_id": str(clause.id),
+                    "clause_code": code,
+                })
+                break
     return refs[:25]
 
 

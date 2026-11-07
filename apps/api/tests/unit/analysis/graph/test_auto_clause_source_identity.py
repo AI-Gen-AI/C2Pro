@@ -42,6 +42,20 @@ def test_epc_8_2_original_prefix_uniquely_resolves_auto_007_clause_id():
     }]
 
 
+def test_epc_8_3_original_prefix_uniquely_resolves_auto_clause_id():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-009", original_text="8.3 Contractor may request an extension.",
+    )
+    refs = grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.3"}, persisted_clauses=[clause],
+    )
+    assert refs[0]["clause_id"] == str(clause.id)
+    assert refs[0]["clause_code"] == "8.3"
+
+
 def test_number_prefix_8_21_does_not_match_8_2():
     tenant, project, document, revision = [uuid4() for _ in range(4)]
     clause = _persisted_clause(
@@ -71,6 +85,43 @@ def test_two_auto_clauses_with_same_original_number_remain_ambiguous():
     assert refs == []
 
 
+def test_number_only_inside_persisted_paragraph_is_not_a_clause_heading():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007",
+        original_text="The deadline in section 8.2 is commercially significant.",
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    ) == []
+
+
+def test_explicit_code_with_conflicting_persisted_heading_is_not_genuine():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="8.2", original_text="8.3 Different original clause heading",
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    ) == []
+
+
+def test_auto_clause_without_original_text_is_not_a_locator():
+    tenant, project, document, revision = [uuid4() for _ in range(4)]
+    clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=revision,
+        auto_code="AUTO-007", original_text=None,
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
+    ) == []
+
+
 def test_auto_clause_from_other_revision_or_tenant_never_binds():
     tenant, project, document, revision = [uuid4() for _ in range(4)]
     clause = _persisted_clause(
@@ -82,3 +133,12 @@ def test_auto_clause_from_other_revision_or_tenant_never_binds():
         revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[clause],
     )
     assert refs == []
+
+    stale_revision_clause = _persisted_clause(
+        tenant=tenant, project=project, document=document, revision=uuid4(),
+        auto_code="AUTO-008", original_text="8.2 Original wording",
+    )
+    assert grounded_review_source_references(
+        tenant_id=tenant, project_id=project, document_id=document,
+        revision_id=revision, clause_codes={"8.2"}, persisted_clauses=[stale_revision_clause],
+    ) == []
