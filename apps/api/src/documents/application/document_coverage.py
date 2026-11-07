@@ -26,9 +26,11 @@ def record_revision_document_coverage(
         return
 
     stamped_coverage = {
+        **coverage,
+        # Server-derived identity wins even if the parser payload accidentally
+        # supplies similarly named fields.
         "revision_id": str(revision_id) if revision_id is not None else None,
         "blob_hash": blob_hash,
-        **coverage,
         "parser_observations": summarize_parser_observations(parsed_payload),
     }
     if revision_id is None:
@@ -130,3 +132,102 @@ def summarize_parser_observations(parsed_payload: dict[str, Any]) -> dict[str, A
         }
 
     return observations
+
+
+# N12 source attestation is a revision-anchored parser claim, not legal or
+# semantic verification of extracted clauses. No currently deployed PDF/DOCX
+# parser emits the required verified_full_source_text assurance.
+N12_TEXT_DIGEST_KEY = "n12_parsed_text_sha256_by_revision"
+_N12_TEXT_ORIGINS = frozenset({"pdf_file_parser", "docx_file_parser"})
+
+
+def record_revision_parsed_text_digest(
+    metadata: dict[str, Any], *, parsed_text: str, revision_id: UUID | None
+) -> None:
+    """Stamp the exact text stored by ingestion; no prose in the digest record."""
+    from hashlib import sha256
+
+    if revision_id is None or not parsed_text:
+        return
+    hashes = dict(metadata.get(N12_TEXT_DIGEST_KEY) or {})
+    hashes[str(revision_id)] = sha256(parsed_text.encode("utf-8")).hexdigest()
+    metadata[N12_TEXT_DIGEST_KEY] = hashes
+
+
+def build_n12_source_attestation(
+    *,
+    metadata: dict[str, Any] | None,
+    parsed_text: str,
+    revision: Any,
+    tenant_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+) -> dict[str, str] | None:
+    """Accept only externally revision-pinned, explicitly assured parser text.
+
+    The revision must come from a tenant-scoped revision repository, not from
+    metadata. COMPLETE by itself and mere text length are never assurance.
+    False or missing attestation means N12 stays UNASSESSED and routes to HITL.
+    """
+    from hashlib import sha256
+    import re
+
+    if not metadata or not parsed_text or revision is None:
+        return None
+
+    if (
+        revision.tenant_id != tenant_id
+        or revision.project_id != project_id
+        or revision.document_id != document_id
+        or not isinstance(revision.blob_hash, str)
+        or re.fullmatch(r"[0-9a-fA-F]{64}", revision.blob_hash) is None
+    ):
+        return None
+
+    revision_id = str(revision.revision_id)
+    coverage_by_revision = metadata.get(COVERAGE_METADATA_KEY)
+    if not isinstance(coverage_by_revision, dict):
+        return None
+    coverage = coverage_by_revision.get(revision_id)
+    if not isinstance(coverage, dict):
+        return None
+    if (
+        coverage.get("revision_id") != revision_id
+        or coverage.get("blob_hash") != revision.blob_hash
+        or coverage.get("status") != "COMPLETE"
+        or coverage.get("origin") not in _N12_TEXT_ORIGINS
+        or coverage.get("text_coverage_assurance") != "verified_full_source_text"
+        or coverage.get("limitations")
+        or coverage.get("known_omissions")
+    ):
+        return None
+
+    observed = coverage.get("parser_observations")
+    units = observed.get("text_blocks") if isinstance(observed, dict) else None
+    if (
+        not isinstance(units, dict)
+        or type(units.get("count")) is not int
+        or units["count"] <= 0
+        or type(units.get("characters")) is not int
+        or units["characters"] <= 0
+    ):
+        return None
+
+    digests = metadata.get(N12_TEXT_DIGEST_KEY)
+    digest = sha256(parsed_text.encode("utf-8")).hexdigest()
+    if (
+        not isinstance(digests, dict)
+        or digests.get(revision_id) != digest
+        or metadata.get("parsed_text_revision_id") != revision_id
+        or metadata.get("parsed_text") != parsed_text
+    ):
+        return None
+
+    return {
+        "revision_id": revision_id,
+        "document_id": str(document_id),
+        "project_id": str(project_id),
+        "tenant_id": str(tenant_id),
+        "blob_hash": revision.blob_hash,
+        "parsed_text_sha256": digest,
+    }
