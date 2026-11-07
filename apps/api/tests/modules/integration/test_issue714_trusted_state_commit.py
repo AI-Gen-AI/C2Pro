@@ -1074,6 +1074,30 @@ async def test_dashboard_publishes_resumed_n8_only_for_the_exact_approved_artifa
     )
     await _propose(completion_sessions, arranged, tenant.id, state=matching_state)
 
+    # QA-only diagnostic: compare actual LangGraph N17 state and approved V2 payload
+    # before deciding whether a resumed score can be attributed to that artifact.
+    from src.analysis.application.trusted_materialization import MaterializationContent
+    from src.analysis.adapters.graph.document_artifact_builder import build_document_artifact
+    from src.analysis.domain.contracts import DocumentArtifact
+    from src.analysis.domain.trust import artifact_digest
+
+    original_from_artifact = MaterializationContent.from_artifact
+
+    def _qa_trace(cls, payload, *, resumed_state=None, expected_artifact_hash=None):
+        if resumed_state is not None:
+            rebuilt = build_document_artifact(resumed_state).model_dump(mode="json")
+            persisted = DocumentArtifact.model_validate(payload).model_dump(mode="json")
+            diffs = {
+                key: {"checkpoint": str(rebuilt.get(key))[:700], "approved": str(persisted.get(key))[:700]}
+                for key in rebuilt if rebuilt.get(key) != persisted.get(key)
+            }
+            print("P0D_QA_KEY_DIFFS", diffs, flush=True)
+            print("P0D_QA_HASHES", artifact_digest(rebuilt), expected_artifact_hash, flush=True)
+            print("P0D_QA_SCORE", resumed_state.get("coherence_score"), flush=True)
+        return original_from_artifact(payload, resumed_state=resumed_state, expected_artifact_hash=expected_artifact_hash)
+
+    monkeypatch.setattr(MaterializationContent, "from_artifact", classmethod(_qa_trace))
+
     await _post_approve(
         request_sessions,
         tenant.id,
