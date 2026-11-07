@@ -45,6 +45,8 @@ import type { StructuredSourceReference } from "./structuredSourceReference";
 export interface DetectionEvidenceResponse {
   source_clause_id?: string | null;
   source_document_id?: string | null;
+  source_revision_id?: string | null;
+  source_locator?: string | null;
   claim?: string;
   quote?: string;
   structured_sources?: StructuredSourceReference[];

@@ -517,6 +517,23 @@ async def _bind_risk_alert_sources(
     return bind_risk_alert_source_references(risks, refs)
 
 
+def unverified_resume_risk_sources(risks: list[Any]) -> list[dict[str, Any]]:
+    """Clear source locators when a legacy resume has no artifact authority.
+
+    Narrow pre-#714 blocker: this route has an approved HITL decision but no
+    candidate binding, artifact digest, or trusted-current revision to pass to
+    ``_bind_risk_alert_sources``. Reusing a document's current revision would
+    change that legacy decision's authority and could attach a clause from a
+    different revision. Keep the risk, but make every locator explicitly
+    ``NOT_VERIFIED`` until such a resume is bound to an exact artifact.
+    """
+    from src.analysis.adapters.graph.review_source_references import (
+        bind_risk_alert_source_references,
+    )
+
+    return bind_risk_alert_source_references(risks, [])
+
+
 async def write_canonical_effects(
     session: Any,
     *,
@@ -647,6 +664,7 @@ __all__ = [
     "materialization_detail",
     "mark_obsolete",
     "materialize_in_transaction",
+    "unverified_resume_risk_sources",
     "verify_current_authority",
     "write_canonical_effects",
 ]
