@@ -85,6 +85,11 @@ describe("AppSidebar", () => {
     }
   });
 
+  it("hides the visual close backdrop from screen readers while the sidebar is open", () => {
+    const { container } = renderWithProviders(<AppSidebar />);
+    expect(container.querySelector(".backdrop-blur-sm")).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("renders primary navigation with active link state", () => {
     pathnameState.value = "/projects";
     renderWithProviders(<AppSidebar />);
