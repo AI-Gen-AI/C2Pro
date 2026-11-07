@@ -201,7 +201,6 @@ async def _materialize(session: Any, *, artifact_id: UUID, tenant_id: UUID) -> d
     ).first()
     content = materializer.MaterializationContent.from_artifact(
         content_row.payload if content_row is not None else {},
-        content_row.scoring if content_row is not None else None,
     )
     outcome = await materializer.materialize_in_transaction(session, ref=ref, content=content)
     if outcome.status is materializer.MaterializationStatus.OBSOLETE:
