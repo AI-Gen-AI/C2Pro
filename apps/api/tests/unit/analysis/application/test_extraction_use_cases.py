@@ -340,7 +340,7 @@ async def test_critique_receives_original_clause_source_before_asserting_corrupt
     prompt, content = ai.calls[0]
     assert "do not claim source text is corrupted" in prompt.lower()
     assert "Contractor's cost within fourteen (14) days" in content
-    assert "COMPLETE INPUT TEXT" in content
+    assert "INPUT NOT CLIPPED BY N12" in content
     assert "Extraction results" in content
 
 

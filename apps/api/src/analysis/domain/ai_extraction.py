@@ -71,6 +71,14 @@ class DocumentTypeClassificationService:
 # Bounded, clearly labeled source context. A clipped excerpt is never proof
 # that a contractual provision does not exist elsewhere in the document.
 _CRITIQUE_MAX_SOURCE_CHARS = 16000
+# Only explicitly neutral summaries may accompany an OK verdict. Arbitrary
+# prose can contain an unstructured, unverified defect despite status="OK".
+_NEUTRAL_OK_NOTES = re.compile(
+    r"(?i)\s*(?:looks\s+good|no\s+(?:issues|omissions|discrepancies|errors)\s+"
+    r"(?:found|detected|identified)|(?:review|analysis)\s+complete(?:d)?|"
+    r"extraction\s+(?:matches|aligns\s+with)\s+(?:the\s+)?source)"
+    r"\s*[.!]?\s*"
+)
 
 
 @dataclass(frozen=True)
@@ -101,7 +109,7 @@ class CritiqueExtractionService:
         if source:
             coverage = (
                 "PARTIAL EXCERPT: source longer than context; do not claim absence."
-                if clipped else "COMPLETE INPUT TEXT PROVIDED FOR THIS REVIEW"
+                if clipped else "INPUT NOT CLIPPED BY N12; upstream document completeness NOT VERIFIED."
             )
             evidence = (
                 f"Source coverage: {coverage}\n"
@@ -156,20 +164,13 @@ class CritiqueExtractionService:
                     # A status string cannot negate an explicitly reported
                     # unresolved quality concern. Without a structured,
                     # source-bound finding this is UNKNOWN, not a verified bug.
-                    if re.search(
-                        r"(?i)\b(?:critical\s+(?:quality\s+)?concern"
-                        r"|unresolved\s+(?:quality\s+)?issue"
-                        r"|extracted\s+risks?\s+(?:omit|miss))\b",
-                        notes,
-                    ):
+                    if notes and not _NEUTRAL_OK_NOTES.fullmatch(notes):
                         return CritiqueResult(
                             status="UNASSESSED",
-                            notes="N12_UNASSESSED: unresolved model concern (unverified): "
-                            + notes[:800],
+                            notes="N12_UNASSESSED: OK verdict has unverified reviewer "
+                            "notes that require human assessment: " + notes[:800],
                         )
                     return CritiqueResult(status="OK", notes=notes)
-                if status == "RETRY":
-                    return CritiqueResult(status="RETRY", notes=notes)
                 # Invalid status without verified source evidence is not a
                 # valid critique, regardless of natural-language confidence.
                 return CritiqueResult(
