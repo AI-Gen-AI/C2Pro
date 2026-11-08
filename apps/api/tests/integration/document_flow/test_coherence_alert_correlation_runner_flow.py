@@ -178,18 +178,18 @@ async def test_a_superseded_revision_clause_does_not_link_an_alert(
     await _trust(db, test_user, project_id, contract, revision_b)
     assert stale_clause not in await _contract_clause_ids(db, project_id, test_user, contract)
 
+    # The trust transition itself may have reconciled historical alerts. Isolate
+    # fresh creation from stale input: previous alert records retain historical
+    # lineage and must not be misclassified as newly-authorized source links.
+    await db.execute(
+        text("DELETE FROM alerts WHERE project_id = :p AND rule_id = :r"),
+        {"p": project_id, "r": PROVISIONAL_RULE},
+    )
+    await db.commit()
     await _correlate(db, tenant_id=test_user.tenant_id, project_id=project_id, alerts=[advisory])
 
-    # Trusting a newer revision may also create unrelated current alerts.
-    # Inspect this exact stale finding, not every alert belonging to the project.
-    rows = await _rows(db, project_id)
-    stale_rows = [
-        item for item in rows
-        if (item.evidence or {}).get("source_clause_id") == stale_clause
-    ]
-    assert stale_rows
-    for row in stale_rows:
-        _assert_unlinked(row, contract)
+    [row] = await _rows(db, project_id)
+    _assert_unlinked(row, contract)
 
 
 async def test_a_clause_of_another_project_does_not_link_an_alert(
