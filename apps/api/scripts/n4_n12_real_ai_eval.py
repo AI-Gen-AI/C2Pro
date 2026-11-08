@@ -177,6 +177,28 @@ def score_n12(notes: str, source: str | None = None) -> dict[str, Any]:
     }
 
 
+def score_n12_structured_provenance(payload: Any, source: str) -> dict[str, Any]:
+    """Account for raw model findings BEFORE source-bound sanitization.
+
+    The product correctly removes hallucinated citations from displayed
+    critique notes. The golden evaluation must also count what was rejected,
+    or it could report 3/3 valid notes despite invalid raw model findings.
+    Provenance checking does NOT approve the legal interpretation.
+    """
+    from src.analysis.domain.critique_findings import source_bound_findings
+
+    raw = payload.get("findings") if isinstance(payload, dict) else None
+    candidates = raw if isinstance(raw, list) else []
+    verified = source_bound_findings(candidates, source_text=source)
+    return {
+        "model_findings_submitted": len(candidates),
+        "model_findings_source_verified": len(verified),
+        "model_findings_unverified": len(candidates) - len(verified),
+        "model_verified_clause_refs": sorted({item["clause_ref"] for item in verified}),
+        "model_findings_payload_valid": isinstance(raw, list),
+    }
+
+
 def _adversarial_risks(fixture: dict[str, Any]) -> list[dict[str, Any]]:
     clauses = {entry["id"]: entry["text"] for entry in fixture["contract"]["clauses"]}
     risks = []
@@ -313,6 +335,9 @@ async def run() -> dict[str, Any]:
     )
     n12_notes = n12_result.critique_notes
     n12_metrics = score_n12(n12_notes, source)
+    structured_provenance = score_n12_structured_provenance(n12_port.payload, source)
+    # UNASSESSED with three verified quotes is the intended HITL state:
+    # proving source location does not prove a legal interpretation.
     source_grounded = not (
         n12_port.parse_failure_type
         or n12_notes.startswith("Automatic critique inconclusive.")
@@ -327,7 +352,9 @@ async def run() -> dict[str, Any]:
         "n4": n4_metrics,
         "n12": {
             **n12_metrics,
+            **structured_provenance,
             "status": n12_result.status,
+            "human_approval_required": n12_result.human_approval_required,
             "quality_state": "ASSESSED" if source_grounded else "NOT_ASSESSED",
             "parse_failure_type": n12_port.parse_failure_type,
             "response_sha256": n12_port.response_sha256,
