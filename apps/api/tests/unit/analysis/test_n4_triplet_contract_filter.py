@@ -126,7 +126,7 @@ def test_n4_golden_epc_all_nine_source_clauses_reach_the_model() -> None:
     [
         "Defects. The Contractor shall rectify each notified defect within 14 days.",
         "Variations. The Contractor may act in emergency but must obtain written confirmation.",
-        "Defectos. El contratista deberá subsanar cualquier defecto en un plazo de 14 días.",
+        "Defectos. El contratista deberá subsanar cualquier defecto en 14 días.",
         "Variaciones. El contratista ejecutará una orden de cambio únicamente con autorización.",
     ],
 )
