@@ -234,6 +234,24 @@ class CategoryRouter:
             _thresholds=self._thresholds,
         )
 
+    @staticmethod
+    def clause_has_contractual_party(text: str) -> bool:
+        """Require an identifiable EPC contracting actor for v2 Health coverage.
+
+        This intentionally sacrifices recall on vague clauses rather than
+        turning generic category words in unrelated prose into PRESENT.
+        """
+        return bool(
+            re.search(
+                r"\b(?:contractor|subcontractor|employer|engineer|supplier|"
+                r"vendor|customer|client|owner|party|parties|seller|buyer|"
+                r"contratista|subcontratista|promotor|proveedor|cliente|"
+                r"propiedad|adjudicatario|comprador|vendedor|partes|parte)\b",
+                text,
+                re.IGNORECASE | re.UNICODE,
+            )
+        )
+
     def clause_source_evidence_categories(self, text: str) -> set[CanonicalCategory]:
         """Conservatively identify clause-anchored Health evidence without priors.
 
@@ -255,6 +273,14 @@ class CategoryRouter:
         # DOCX clauses; never pool evidence across either single or blank lines.
         for paragraph in re.split(r"\r?\n+", text):
             if not paragraph.strip():
+                continue
+            # Presence is a claim about a contractual obligation/term, not
+            # about arbitrary prose mentioning EPC category words. In the
+            # conservative no-embedding fallback require an identifiable
+            # contracting actor/party in the SAME source paragraph. This is
+            # intentionally fail-closed: clauses without explicit context
+            # remain insufficient rather than fabricating Health coverage.
+            if not self.clause_has_contractual_party(paragraph):
                 continue
             # A structural heading can itself contain two lexicon terms:
             # "Completion Date." must NOT become a schedule assessment.

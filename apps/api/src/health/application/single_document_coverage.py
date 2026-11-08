@@ -89,6 +89,11 @@ def _router_qualifier(
         # A whole-document synthetic Clause may combine unrelated paragraphs.
         if not allow_clause_anchors:
             return threshold_qualified
+        # Applied to the ENTIRE v2 Health decision, not just its fallback:
+        # even the legacy threshold can classify an unrelated numeric heading
+        # as positive. Contractual source context is mandatory in CLAUSE mode.
+        if not router.clause_has_contractual_party(text):
+            return set()
         return threshold_qualified | router.clause_source_evidence_categories(text)
 
     return qualify

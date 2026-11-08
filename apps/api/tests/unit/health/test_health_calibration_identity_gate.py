@@ -107,6 +107,27 @@ def test_non_contract_prose_is_not_health_evidence(unrelated: str) -> None:
     assert all(item.evidence_count == 0 for item in outcome.assessments)
 
 
+@pytest.mark.parametrize(
+    "non_contract_statement",
+    [
+        "The museum will display its quality inspection certification.",
+        "The newspaper will publish a completion date and milestone timeline.",
+        "The museum shall report the price, payment amount and cost of tickets.",
+        "An inspection museum will perform quality tests on exhibits.",
+        "5.2 Completion Date: 30 days, delay, milestone.",
+    ],
+)
+def test_operative_but_non_contractual_prose_is_not_evidence(
+    non_contract_statement: str,
+) -> None:
+    result = assess_single_document_coverage(
+        [Clause(id="persisted-looking-id", text=non_contract_statement)],
+        [],
+        granularity=EvidenceGranularity.CLAUSE,
+    )
+    assert all(item.evidence_count == 0 for item in result.assessments)
+
+
 def test_single_newline_does_not_pool_header_and_unrelated_payment_terms() -> None:
     # This used to generate BUDGET merely by pooling separate lines.
     combined = "Price.\nThe payment amount shall be recorded elsewhere."
