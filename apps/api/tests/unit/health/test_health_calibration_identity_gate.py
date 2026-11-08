@@ -139,11 +139,15 @@ def test_single_newline_does_not_pool_header_and_unrelated_payment_terms() -> No
     assert _budget(outcome).state is CategoryCoverageState.INSUFFICIENT_EVIDENCE
 
 
-def test_contract_actor_in_other_paragraph_cannot_authorize_category() -> None:
+@pytest.mark.parametrize("separator", ["\n", "\r", "\r\n", "\u2028", "\u2029", "\x85", "\v"])
+def test_contract_actor_in_other_paragraph_cannot_authorize_category(
+    separator: str,
+) -> None:
     # Reproduces the independently audited P1 threshold-pooling defect.
     mixed = (
-        "The Contractor shall perform the Works.\n"
-        "The newspaper will publish a completion date and milestone timeline."
+        "The Contractor shall perform the Works."
+        + separator
+        + "The newspaper will publish a completion date and milestone timeline."
     )
     outcome = assess_single_document_coverage(
         [Clause(id="real-clause-id", text=mixed)],

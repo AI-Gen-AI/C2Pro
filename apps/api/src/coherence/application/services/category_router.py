@@ -271,7 +271,7 @@ class CategoryRouter:
         # separate paragraphs into a single positive Health category.
         # A single line break can separate unrelated paragraphs in extracted
         # DOCX clauses; never pool evidence across either single or blank lines.
-        for paragraph in re.split(r"\r?\n+", text):
+        for paragraph in text.splitlines():
             if not paragraph.strip():
                 continue
             # Presence is a claim about a contractual obligation/term, not

@@ -36,7 +36,6 @@ no numeric Health score are produced here.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Sequence
 from uuid import UUID
 
@@ -84,7 +83,9 @@ def _router_qualifier(
         # CLAUSE mode, all signals (including legacy router threshold) are
         # scoped to ONE paragraph with its OWN contractual context. Never let
         # an actor in paragraph A certify lexical evidence from paragraph B.
-        paragraphs = re.split(r"\r?\n+", text) if allow_clause_anchors else [text]
+        # splitlines handles LF/CRLF/lone-CR and Unicode paragraph/line
+        # separators. A normalization variant must never merge source spans.
+        paragraphs = text.splitlines() if allow_clause_anchors else [text]
         qualified: set[CanonicalCategory] = set()
         for paragraph in paragraphs:
             if not paragraph.strip():
