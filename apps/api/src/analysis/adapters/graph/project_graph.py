@@ -24,7 +24,7 @@ from src.analysis.adapters.graph.project_graph_state import (
     CoherenceAlertEvidence,
     ProjectGraphState,
 )
-from src.analysis.adapters.graph.review_source_references import risk_source_key
+from src.analysis.adapters.graph.review_source_references import risk_quote_source_key
 from src.analysis.adapters.graph.risk_signal_bridge import RiskBridgeResult, build_risk_signals
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.domain.contracts import (
@@ -212,12 +212,19 @@ def _risk_clause_id(
     risk: RiskItem,
     risk_source_clause_ids: Mapping[str, str] | None,
 ) -> str:
-    """Physical clause UUID only for a VERIFIED-quote risk with a pre-grounded
-    numeric ``clause_ref``; otherwise the artifact revision surrogate."""
+    """Physical clause UUID only for a VERIFIED, non-empty-quote risk whose per-risk
+    (doc, revision, code, quote SHA256) key was pre-grounded; else the surrogate."""
     if risk_source_clause_ids and risk.source_quote_status == "VERIFIED":
-        key = risk_source_key(artifact.document_id, artifact.document_revision_id, risk.clause_ref)
-        if key is not None and key in risk_source_clause_ids:
-            return risk_source_clause_ids[key]
+        key = risk_quote_source_key(
+            artifact.document_id, artifact.document_revision_id,
+            risk.clause_ref, risk.source_quote,
+        )
+        mapped = risk_source_clause_ids.get(key) if key is not None else None
+        if mapped is not None:
+            try:
+                return str(UUID(str(mapped)))
+            except ValueError:
+                pass
     return _artifact_key(artifact)
 
 
