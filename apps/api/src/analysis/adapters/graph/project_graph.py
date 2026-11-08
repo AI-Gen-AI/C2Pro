@@ -6,7 +6,7 @@ TS-UT-ADR017-PG-001
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
@@ -24,7 +24,8 @@ from src.analysis.adapters.graph.project_graph_state import (
     CoherenceAlertEvidence,
     ProjectGraphState,
 )
-from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
+from src.analysis.adapters.graph.review_source_references import risk_source_key
+from src.analysis.adapters.graph.risk_signal_bridge import RiskBridgeResult, build_risk_signals
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.domain.contracts import (
     BudgetItem,
@@ -206,18 +207,61 @@ def _finding_signal_for_artifact(
     )
 
 
+def _risk_clause_id(
+    artifact: DocumentArtifact,
+    risk: RiskItem,
+    risk_source_clause_ids: Mapping[str, str] | None,
+) -> str:
+    """Physical clause UUID only for a VERIFIED-quote risk with a pre-grounded
+    numeric ``clause_ref``; otherwise the artifact revision surrogate."""
+    if risk_source_clause_ids and risk.source_quote_status == "VERIFIED":
+        key = risk_source_key(artifact.document_id, artifact.document_revision_id, risk.clause_ref)
+        if key is not None and key in risk_source_clause_ids:
+            return risk_source_clause_ids[key]
+    return _artifact_key(artifact)
+
+
+def _artifact_risk_signals(
+    artifact: DocumentArtifact,
+    risk_source_clause_ids: Mapping[str, str] | None,
+) -> RiskBridgeResult:
+    if not risk_source_clause_ids:
+        return build_risk_signals(
+            [risk.model_dump(mode="json") for risk in artifact.extracted_risks],
+            clause_id=_artifact_key(artifact),
+        )
+    # Per-risk bridging keeps risk order and every score/severity/confidence
+    # identical to the single call; only clause_id differs.
+    signals: list[FindingSignal] = []
+    coverage: dict[str, bool] = {}
+    dropped: dict[str, int] = {}
+    for risk in artifact.extracted_risks:
+        one = build_risk_signals(
+            [risk.model_dump(mode="json")],
+            clause_id=_risk_clause_id(artifact, risk, risk_source_clause_ids),
+        )
+        signals.extend(one.signals)
+        coverage.update(one.coverage_seed)
+        for reason, count in one.dropped_reasons.items():
+            dropped[reason] = dropped.get(reason, 0) + count
+    return RiskBridgeResult(
+        signals=tuple(signals),
+        coverage_seed=coverage,
+        dropped_count=sum(dropped.values()),
+        dropped_reasons=dropped,
+    )
+
+
 def _aggregate_cross_doc_inputs(
     artifacts: list[DocumentArtifact],
+    risk_source_clause_ids: Mapping[str, str] | None = None,
 ) -> tuple[list[FindingSignal], dict[str, bool], int]:
     signals: list[FindingSignal] = []
     coverage: dict[str, bool] = {}
     finding_count = 0
 
     for artifact in artifacts:
-        risk_result = build_risk_signals(
-            [risk.model_dump(mode="json") for risk in artifact.extracted_risks],
-            clause_id=_artifact_key(artifact),
-        )
+        risk_result = _artifact_risk_signals(artifact, risk_source_clause_ids)
         for signal in risk_result.signals:
             signals.append(
                 signal.model_copy(
@@ -288,6 +332,7 @@ async def evaluate_artifact_set(
     project_id: UUID | str,
     tenant_id: UUID | str,
     llm_on: bool,
+    risk_source_clause_ids: Mapping[str, str] | None = None,
 ) -> ArtifactSetEvaluation:
     """THE canonical ProjectGraph Coherence evaluation of an artifact set.
 
@@ -296,7 +341,9 @@ async def evaluate_artifact_set(
     through exactly the same aggregation, engine and score_version.
     Read-only: it never persists anything.
     """
-    signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
+    signals, coverage, finding_count = _aggregate_cross_doc_inputs(
+        artifacts, risk_source_clause_ids
+    )
     source_clauses: tuple[Any, ...] = ()
     engine_result = await evaluate_coherence_async(
         list(source_clauses),
@@ -352,8 +399,10 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     overall_score_present = False
     signal_count = 0
     try:
+        source_clause_ids = state.get("risk_source_clause_ids")
         evaluation = await evaluate_artifact_set(
-            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on
+            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on,
+            **({"risk_source_clause_ids": source_clause_ids} if source_clause_ids else {}),
         )
         summary = evaluation.summary
         signal_count = summary.signal_count

@@ -81,6 +81,9 @@ class ProjectGraphState(TypedDict):
     structured_source_units: NotRequired[list[dict[str, Any]]]
     # Read-only, literal clause facts from revision-stamped DOCX source chunks.
     structured_document_quotes: NotRequired[list[dict[str, Any]]]
+    # Immutable ``doc_id|rev_id|numeric_ref`` -> physical clauses.id, pre-grounded for
+    # TRUSTED artifacts only by the task layer. Absent => revision-surrogate clause_id.
+    risk_source_clause_ids: NotRequired[Mapping[str, str]]
     # Non-scoring, provisional discrepancies with two immutable evidence pointers.
     structured_source_comparison: NotRequired[dict[str, Any]]
     coherence_result: ProjectCoherenceResult | dict[str, object] | None

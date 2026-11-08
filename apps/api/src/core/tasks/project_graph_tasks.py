@@ -166,6 +166,7 @@ async def run_project_graph_once(
     snapshot_repository: Any | None = None,
     knowledge_graph_materializer: Any | None = None,
     alert_correlation_runner: Any | None = None,
+    risk_source_clause_id_loader: Any | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -190,6 +191,15 @@ async def run_project_graph_once(
         "node_results": [],
         "artifact_repository": artifact_repository,
     }
+    if risk_source_clause_id_loader is not None and artifacts:
+        # Trusted artifacts only; a loader failure keeps revision-surrogate ids.
+        try:
+            clause_ids = await risk_source_clause_id_loader(artifacts)
+        except Exception:  # noqa: BLE001
+            logger.warning("project_graph.risk_source_clause_binding_failed", exc_info=True)
+            clause_ids = {}
+        if clause_ids:
+            graph_input["risk_source_clause_ids"] = dict(clause_ids)
     if snapshot_repository is not None:
         graph_input["snapshot_repository"] = snapshot_repository
     if alert_correlation_runner is not None:
@@ -292,10 +302,20 @@ async def _run_project_graph_async(
                 quotes = await load_revision_bound_source_quotes(
                     session=session, tenant_id=tenant_id, project_id=project_id,
                 )
+                from src.analysis.adapters.persistence.risk_source_clause_binding import (
+                    load_trusted_risk_source_clause_ids,
+                )
+
+                async def _risk_source_loader(trusted: list[Any]) -> dict[str, str]:
+                    return await load_trusted_risk_source_clause_ids(
+                        session, tenant_id=tenant_id, project_id=project_id, artifacts=trusted,
+                    )
+
                 result = await run_project_graph_once(
                     project_id=project_id,
                     tenant_id=tenant_id,
                     trigger_event_id=trigger_event_id,
+                    risk_source_clause_id_loader=_risk_source_loader,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
                     structured_source_refs=source_refs,
                     structured_source_units=rows,
