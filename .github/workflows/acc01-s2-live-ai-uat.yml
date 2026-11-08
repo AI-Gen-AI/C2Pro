@@ -481,7 +481,7 @@ jobs:
   integral-clerk-preflight:
     # Read-only: can the run start? Both Clerk DEVELOPMENT identities, in two Organizations/tenants.
     # No database, no worker, no AI, no mutation. It never reads or prints an email, an id or a key.
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only == 'true'
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only == 'true'
     name: Integral UAT - Clerk Development identities A and B (read-only)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -516,7 +516,7 @@ jobs:
   integral-prepare-dev-a:
     # Separate, authorised, Development-only. Never creates a user (A must exist); reconciles only A's own
     # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_a == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_a_sha == github.sha
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_a == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_a_sha == github.sha
     name: Integral UAT - prepare Clerk Development A (authorised write)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -535,7 +535,7 @@ jobs:
   integral-discover-dev-b:
     # Read-only inventory of the Clerk Development users: which EXISTING synthetic account could be identity B.
     # Every Clerk call is a GET; counts and pseudonyms only (no email, no id, no key). Never part of a UAT.
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_discover_dev_b == 'true' && github.event.inputs.integral_uat != 'true'
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_discover_dev_b == 'true' && github.event.inputs.integral_uat != 'true'
     name: Integral UAT - discover an existing Clerk Development B (read-only)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -568,7 +568,7 @@ jobs:
   integral-prepare-dev-b:
     # Separate, authorised, Development-only. Never creates a user (B must exist); reconciles only B's own
     # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_b == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_b_sha == github.sha
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_b == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_b_sha == github.sha
     name: Integral UAT - prepare Clerk Development B (authorised write)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -592,7 +592,7 @@ jobs:
             --export-prefix TENANT_B_
 
   integral-s1-s8:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only != 'true'
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only != 'true'
     name: Integral S1-S8 - one project, two Clerk tenants (${{ github.event.inputs.integral_ai_mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -938,6 +938,8 @@ jobs:
       github.event.inputs.n4_n12_focused_sha != '' &&
       github.event.inputs.n4_n12_focused_sha == github.sha &&
       github.event.inputs.integral_uat != 'true' &&
+      github.event.inputs.integral_preflight_only != 'true' &&
+      github.event.inputs.integral_discover_dev_b != 'true' &&
       github.event.inputs.integral_prepare_dev_a != 'true' &&
       github.event.inputs.integral_prepare_dev_b != 'true'
     name: Focused N4/N12 golden EPC — two real calls maximum
