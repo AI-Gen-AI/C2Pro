@@ -21,6 +21,9 @@ from src.analysis.adapters.graph.project_graph import (
     is_project_graph_enabled,
 )
 from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
+from src.analysis.adapters.persistence.coherence_alert_correlation import (
+    SqlAlchemyCoherenceAlertCorrelationRunner,
+)
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
@@ -299,6 +302,11 @@ async def _run_project_graph_async(
                     structured_document_quotes=quotes,
                     snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
                     knowledge_graph_materializer=SqlAlchemyTrustedArtifactGraphMaterializer(session),
+                    # Same session/transaction; a reconciliation failure fails the
+                    # run (node FAILED -> RuntimeError -> rollback), never a partial commit.
+                    alert_correlation_runner=SqlAlchemyCoherenceAlertCorrelationRunner(
+                        session, project_id=project_id, tenant_id=tenant_id
+                    ),
                 )
                 # Persist only PROVISIONAL, dual-source citations in the same
                 # transaction as Tier-2. No promotion to canonical alerts.

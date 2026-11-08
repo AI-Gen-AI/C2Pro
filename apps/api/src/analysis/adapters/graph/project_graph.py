@@ -20,7 +20,10 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
-from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
+from src.analysis.adapters.graph.project_graph_state import (
+    CoherenceAlertEvidence,
+    ProjectGraphState,
+)
 from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.domain.contracts import (
@@ -270,6 +273,13 @@ class ArtifactSetEvaluation:
 
     summary: ProjectCoherenceResult
     score_version: str | None
+    # The unmodified engine result (alerts, finding signals, breakdown) behind
+    # ``summary``.  Alert reconciliation must use this, never the summary.
+    engine_result: EnrichedCoherenceResult | None = None
+    # Clauses the engine was evaluated with.  Artifact-set evaluation seeds
+    # signals and passes no clauses, so this is empty; verified clause
+    # provenance is resolved later against persisted trusted-current clauses.
+    source_clauses: tuple[Any, ...] = ()
 
 
 async def evaluate_artifact_set(
@@ -287,8 +297,9 @@ async def evaluate_artifact_set(
     Read-only: it never persists anything.
     """
     signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
+    source_clauses: tuple[Any, ...] = ()
     engine_result = await evaluate_coherence_async(
-        [],
+        list(source_clauses),
         str(project_id),
         config=EvaluationConfig(
             low_budget_mode=not llm_on,
@@ -312,6 +323,8 @@ async def evaluate_artifact_set(
             llm_on=llm_on,
         ),
         score_version=getattr(engine_result, "score_version", None),
+        engine_result=engine_result,
+        source_clauses=source_clauses,
     )
 
 
@@ -329,6 +342,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     if not artifacts:
         return {
             "coherence_result": None,
+            "coherence_alert_evidence": None,
             "structured_source_comparison": source_comparison,
             "node_results": _skipped("cross_doc_coherence", "no artifacts"),
         }
@@ -345,8 +359,19 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         signal_count = summary.signal_count
         overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
+        engine_result = evaluation.engine_result
         return {
             "coherence_result": summary,
+            "coherence_alert_evidence": (
+                CoherenceAlertEvidence(
+                    alerts=tuple(engine_result.alerts),
+                    source_clauses=tuple(evaluation.source_clauses),
+                    score_version=evaluation.score_version,
+                    artifact_revision_ids=tuple(_artifact_key(a) for a in artifacts),
+                )
+                if engine_result is not None
+                else None
+            ),
             "structured_source_comparison": source_comparison,
             "node_results": status,
         }
@@ -354,6 +379,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         degraded = True
         return {
             "coherence_result": None,
+            "coherence_alert_evidence": None,
             "structured_source_comparison": source_comparison,
             "node_results": _degraded("cross_doc_coherence", str(exc)),
         }
@@ -883,10 +909,11 @@ async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
 
 
 async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
-    """Invoke the Alerts-owned integration only when it is explicitly supplied.
+    """Reconcile the RAW Coherence alerts through the supplied Alerts runner.
 
-    ProjectGraph does not import or mutate Alerts.  This keeps the call point
-    ready for the P0 integration while making its absence visible to operators.
+    The runner receives ``evaluation.alerts`` and the source clauses captured by
+    ``cross_doc_coherence``.  Alerts are never reconstructed from the
+    ``ProjectCoherenceResult`` summary: without raw evidence the node is SKIPPED.
     """
     runner = state.get("alert_correlation_runner")
     if runner is None:
@@ -895,20 +922,64 @@ async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
                 "alert_correlation", "alert correlation integration unavailable"
             ),
         }
+    evidence = state.get("coherence_alert_evidence")
+    if evidence is None:
+        return {
+            "node_results": _skipped(
+                "alert_correlation", "raw coherence evaluation unavailable"
+            ),
+        }
     try:
         outcome = await runner.correlate(
             project_id=state["project_id"],
             tenant_id=state["tenant_id"],
             coherence_result=state.get("coherence_result"),
+            evaluation_alerts=evidence.alerts,
+            source_clauses=evidence.source_clauses,
         )
         return {"node_results": _ok("alert_correlation", dict(outcome))}
     except Exception as exc:  # no silent correlation success
         return {"node_results": _failed("alert_correlation", exc)}
 
 
-def hitl_routing(_state: ProjectGraphState) -> dict[str, Any]:
+def hitl_routing(state: ProjectGraphState) -> dict[str, Any]:
+    """Expose the existing Alert review surface from the actual reconciliation.
+
+    Read-only: nothing is approved, resolved or dismissed here.  Without a
+    successful ``alert_correlation`` the node stays SKIPPED (fail-closed: absence
+    of evidence is never reported as "nothing needs review").
+    """
+    correlation = next(
+        (
+            item
+            for item in reversed(state.get("node_results", []))
+            if item.node == "alert_correlation"
+        ),
+        None,
+    )
+    data = correlation.data if correlation is not None else None
+    if (
+        correlation is None
+        or correlation.status is not NodeStatus.OK
+        or not isinstance(data, dict)
+        or not isinstance(data.get("review_alert_ids"), list)
+    ):
+        return {
+            "node_results": _skipped(
+                "hitl_routing", "alert reconciliation unavailable; review routing not evaluated"
+            ),
+        }
+    review_ids = [str(alert_id) for alert_id in data["review_alert_ids"]]
     return {
-        "node_results": _skipped("hitl_routing", "pending ADR-020 HITL routing"),
+        "node_results": _ok(
+            "hitl_routing",
+            {
+                "review_surface": "alerts",
+                "requires_human_review_count": len(review_ids),
+                "review_alert_ids": review_ids,
+                "auto_approved": False,
+            },
+        ),
     }
 
 

@@ -156,7 +156,7 @@ async def test_project_graph_downstream_stubs_remain_honest_null_and_skipped(
         by_node["alert_correlation"].degradation_reason or ""
     )
     assert by_node["hitl_routing"].status is NodeStatus.SKIPPED
-    assert "pending" in (by_node["hitl_routing"].degradation_reason or "")
+    assert "not evaluated" in (by_node["hitl_routing"].degradation_reason or "")
 
 
 @pytest.mark.asyncio
