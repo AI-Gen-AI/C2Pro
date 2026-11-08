@@ -33,9 +33,11 @@ if TYPE_CHECKING:
 # Per-category signal breakdown (Capa 1 traceability)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CategorySignalDetail:
     """Per-category signal breakdown from a single chunk."""
+
     structural: float = 0.0
     lexicon: float = 0.0
     embedding: float = 0.0
@@ -50,9 +52,11 @@ class CategorySignalDetail:
 # Chunk input to the router
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ChunkSignal:
     """Input chunk for category routing."""
+
     chunk_id: str
     text: str
     structural_hits: int = 0
@@ -64,9 +68,11 @@ class ChunkSignal:
 # RouteResult
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class InsufficientEvidenceCategory:
     """A category that fell below the insufficient_evidence threshold."""
+
     category: CanonicalCategory
     relevance: float
     threshold: float
@@ -75,14 +81,19 @@ class InsufficientEvidenceCategory:
 @dataclass
 class RouteResult:
     """Result of category routing for a document."""
+
     doc_type: str
     category_relevance: dict[CanonicalCategory, float]
     category_status: dict[CanonicalCategory, str]
     _router: CategoryRouter = field(repr=False)
     _priors: dict[CanonicalCategory, float] = field(default_factory=dict)
-    _thresholds: DefaultsThresholds = field(default_factory=lambda: DefaultsThresholds(
-        escalate_low=0.35, escalate_high=0.65, insufficient_evidence=0.20,
-    ))
+    _thresholds: DefaultsThresholds = field(
+        default_factory=lambda: DefaultsThresholds(
+            escalate_low=0.35,
+            escalate_high=0.65,
+            insufficient_evidence=0.20,
+        )
+    )
 
     def relevant_categories(self) -> list[CanonicalCategory]:
         """Categories with relevance above insufficient_evidence threshold."""
@@ -105,6 +116,7 @@ class RouteResult:
 # ---------------------------------------------------------------------------
 # CategoryRouter
 # ---------------------------------------------------------------------------
+
 
 class CategoryRouter:
     """Deterministic category router using Capa 0 (priors) + Capa 1 (structural + lexicon).
@@ -131,8 +143,7 @@ class CategoryRouter:
 
         # Pre-compute priors lookup for O(1) access
         self._priors_by_doc_type: dict[str, dict[CanonicalCategory, float]] = {
-            doc_type: dict(priors)
-            for doc_type, priors in registry.doc_type_priors.items()
+            doc_type: dict(priors) for doc_type, priors in registry.doc_type_priors.items()
         }
 
         # Pre-extract structural signals and lexicon for each category
@@ -151,12 +162,13 @@ class CategoryRouter:
             self._cat_structural[cat] = all_titles
 
             # Compile regex patterns
-            self._cat_patterns[cat] = [re.compile(p, re.IGNORECASE | re.UNICODE) for p in signals.patterns]
+            self._cat_patterns[cat] = [
+                re.compile(p, re.IGNORECASE | re.UNICODE) for p in signals.patterns
+            ]
 
             # Collect lexicon (ES + EN)
             self._cat_lexicon[cat] = {
-                lang: [w.lower() for w in words]
-                for lang, words in cat_def.lexicon.items()
+                lang: [w.lower() for w in words] for lang, words in cat_def.lexicon.items()
             }
 
     @classmethod
@@ -195,10 +207,7 @@ class CategoryRouter:
         aggregated: dict[CanonicalCategory, float] = {}
         for cat in CanonicalCategory:
             if chunk_signals:
-                signals = [
-                    self._weighted_signal(sig[cat])
-                    for sig in chunk_signals
-                ]
+                signals = [self._weighted_signal(sig[cat]) for sig in chunk_signals]
                 aggregated[cat] = sum(signals) / len(signals)
             else:
                 aggregated[cat] = 0.0
@@ -225,7 +234,96 @@ class CategoryRouter:
             _thresholds=self._thresholds,
         )
 
-    def _compute_chunk_relevance(self, chunk: ChunkSignal) -> dict[CanonicalCategory, CategorySignalDetail]:
+    @staticmethod
+    def clause_has_contractual_party(text: str) -> bool:
+        """Require an identifiable EPC contracting actor for v2 Health coverage.
+
+        This intentionally sacrifices recall on vague clauses rather than
+        turning generic category words in unrelated prose into PRESENT.
+        """
+        return bool(
+            re.search(
+                r"\b(?:contractor|subcontractor|employer|engineer|supplier|"
+                r"vendor|customer|client|owner|party|parties|seller|buyer|"
+                r"contratista|subcontratista|promotor|proveedor|cliente|"
+                r"propiedad|adjudicatario|comprador|vendedor|partes|parte)\b",
+                text,
+                re.IGNORECASE | re.UNICODE,
+            )
+        )
+
+    def clause_source_evidence_categories(self, text: str) -> set[CanonicalCategory]:
+        """Conservatively identify clause-anchored Health evidence without priors.
+
+        Category routing's 0.20 document threshold includes a reserved 0.60
+        embedding weight, but no embeddings are currently computed. Even
+        explicit clauses with one structural and two distinct lexicon signals
+        can score below that threshold. For single-document Health evidence
+        ONLY, accept the conjunction of both signal families from the SAME
+        actual clause. A lone title, lone keyword or doc-type expectation
+        cannot establish presence. This does not change routing, Coherence,
+        scoring, or source-citation verification.
+        """
+        if not text.strip():
+            return set()
+        qualified: set[CanonicalCategory] = set()
+        # A persisted clause can contain paragraphs. Never combine anchors from
+        # separate paragraphs into a single positive Health category.
+        # A single line break can separate unrelated paragraphs in extracted
+        # DOCX clauses; never pool evidence across either single or blank lines.
+        for paragraph in text.splitlines():
+            if not paragraph.strip():
+                continue
+            # Presence is a claim about a contractual obligation/term, not
+            # about arbitrary prose mentioning EPC category words. In the
+            # conservative no-embedding fallback require an identifiable
+            # contracting actor/party in the SAME source paragraph. This is
+            # intentionally fail-closed: clauses without explicit context
+            # remain insufficient rather than fabricating Health coverage.
+            if not self.clause_has_contractual_party(paragraph):
+                continue
+            # A structural heading can itself contain two lexicon terms:
+            # "Completion Date." must NOT become a schedule assessment.
+            # Require an operative fact (obligation/constraint) or a concrete
+            # numeric value; category keywords alone are not substance.
+            operative = re.search(
+                r"\b(?:shall|must|may|will|requires?|includes?|bears?|"
+                r"within|before|after|payable|entitled|"
+                r"deber[aá]n?|debe(?:r[aá])?|ser[aá]|tendr[aá]|"
+                r"pag(a|ar)[aá]?|incluye|se\s+obliga)\b"
+                r"|\b(?:is|are)\s+(?:fixed|capped|due|payable|binding|"
+                r"required|responsible|entitled)\b"
+                r"|\b\d+(?:[.,]\d+)?(?:%|[/-]\d+)?\b",
+                paragraph,
+                re.IGNORECASE | re.UNICODE,
+            )
+            if not operative:
+                continue
+            details = self._compute_chunk_relevance(
+                ChunkSignal(chunk_id="health-evidence", text=paragraph)
+            )
+            for cat, evidence in details.items():
+                if evidence.structural < 0.25:
+                    continue
+                # Require TWO DISTINCT in-source lexicon phrases in this same
+                # paragraph; repeated words and language aliases do not count.
+                matched_terms = {
+                    term.casefold()
+                    for terms in self._cat_lexicon.get(cat, {}).values()
+                    for term in terms
+                    if re.search(
+                        rf"\b{re.escape(term)}\b",
+                        paragraph,
+                        re.IGNORECASE | re.UNICODE,
+                    )
+                }
+                if len(matched_terms) >= 2:
+                    qualified.add(cat)
+        return qualified
+
+    def _compute_chunk_relevance(
+        self, chunk: ChunkSignal
+    ) -> dict[CanonicalCategory, CategorySignalDetail]:
         """Capa 1: deterministic per-chunk × per-category relevance."""
         results: dict[CanonicalCategory, CategorySignalDetail] = {}
 

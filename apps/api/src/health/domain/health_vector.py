@@ -14,6 +14,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.evidence.domain.runtime_trust import EvidenceRef
+from src.health.domain.analysis_assessment import (
+    HEALTH_METHOD_CLAUSE_V2,
+    HealthMethodVersion,
+)
 from src.health.domain.contract_clarity import ContractClarityFinding
 from src.health.domain.null_reason import HealthNullReason
 from src.health.domain.single_document_coverage import (
@@ -126,6 +130,9 @@ class HealthVector(BaseModel):
     # ``documents.clauses`` UUIDs, or one synthetic document-level marker. Carried
     # explicitly so no consumer has to infer it from the shape of an id.
     single_document_evidence_granularity: EvidenceGranularity | None = None
+    # Method provenance is part of the evidence contract: historical snapshots
+    # lacking the field remain explicitly unknown, not silently upgraded to v2.
+    single_document_classification_method_version: HealthMethodVersion | None = None
 
     @model_validator(mode="after")
     def _enforce_granularity_pairing(self) -> HealthVector:
@@ -136,6 +143,8 @@ class HealthVector(BaseModel):
         meaningless, so both are rejected rather than silently tolerated.
         """
         if self.single_document_coverage is None:
+            if self.single_document_classification_method_version is not None:
+                raise ValueError("classification method requires single_document_coverage")
             if self.single_document_evidence_granularity is not None:
                 raise ValueError(
                     "single_document_evidence_granularity requires single_document_coverage"
@@ -144,6 +153,11 @@ class HealthVector(BaseModel):
             raise ValueError(
                 "single_document_coverage requires single_document_evidence_granularity"
             )
+        if (
+            self.single_document_classification_method_version == HEALTH_METHOD_CLAUSE_V2
+            and self.single_document_evidence_granularity is not EvidenceGranularity.CLAUSE
+        ):
+            raise ValueError("v2 classification method requires clause granularity")
         return self
 
 

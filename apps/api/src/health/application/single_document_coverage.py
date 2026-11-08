@@ -15,12 +15,14 @@ Reuses existing contracts — the deterministic ``CategoryRouter`` (classificati
 ``category_coverage`` domain — rather than introducing parallel models.
 
 Qualifying-evidence contract (owned by this mapping layer, made explicit):
-- A clause is *qualifying supporting evidence* for a category iff the deterministic
-  ``CategoryRouter`` reports ``has_evidence`` for that category when routing the clause's
-  own text with **no doc_type prior** (``doc_type=""``). That is: the clause's in-document
-  Capa-1 relevance exceeds the registry ``insufficient_evidence`` threshold (ADR D4/D5).
-  It is therefore NOT "a clause exists", and it deliberately excludes the doc_type prior
-  (a routing *expectation* is not substantive evidence — honoring INV-1, no fabricated green).
+- A clause is *qualifying supporting evidence* when its text, with **no doc_type
+  prior**, passes the canonical ``CategoryRouter`` threshold. Additionally, ONLY
+  for verified CLAUSE granularity from persisted source rows, a conjunction of
+  structural signal and two distinct lexicon terms in the SAME paragraph may
+  qualify; never infer that a document-level synthetic blob is an actual clause. The latter corrects
+  a Capa-1 blind spot caused by reserving 60% router weight for unavailable
+  embeddings. A category name or a document-type expectation alone is not
+  evidence. No source-free evidence, relational score or synthetic green is produced.
 - ``evidence_count`` for a category is the number of *distinct* qualifying clauses; the
   category is ``PRESENT`` iff that count is >= 1, else ``INSUFFICIENT_EVIDENCE``.
 
@@ -50,6 +52,7 @@ from src.health.domain.single_document_coverage import (
 )
 from src.health.domain.single_document_coverage import (
     CategoryAssessment,
+    EvidenceGranularity,
     SingleDocumentCoverage,
 )
 
@@ -68,18 +71,38 @@ _CANONICAL_TO_COHERENCE: dict[CanonicalCategory, CoherenceCategory] = {
 QualifyingCategoriesFn = Callable[[str], set[CanonicalCategory]]
 
 
-def _router_qualifier(router: CategoryRouter) -> QualifyingCategoriesFn:
+def _router_qualifier(
+    router: CategoryRouter, *, allow_clause_anchors: bool = False
+) -> QualifyingCategoriesFn:
     """Deterministic, prior-free qualifier backed by the real ``CategoryRouter``."""
 
     def qualify(text: str) -> set[CanonicalCategory]:
         if not text.strip():
             return set()
-        result = router.route([ChunkSignal(chunk_id="clause", text=text)], doc_type="", segments=[])
-        return {
-            category
-            for category, status in result.category_status.items()
-            if status == "has_evidence"
-        }
+        # A DOCUMENT blob retains its historical v1 semantics. For verified
+        # CLAUSE mode, all signals (including legacy router threshold) are
+        # scoped to ONE paragraph with its OWN contractual context. Never let
+        # an actor in paragraph A certify lexical evidence from paragraph B.
+        # splitlines handles LF/CRLF/lone-CR and Unicode paragraph/line
+        # separators. A normalization variant must never merge source spans.
+        paragraphs = text.splitlines() if allow_clause_anchors else [text]
+        qualified: set[CanonicalCategory] = set()
+        for paragraph in paragraphs:
+            if not paragraph.strip():
+                continue
+            if allow_clause_anchors and not router.clause_has_contractual_party(paragraph):
+                continue
+            result = router.route(
+                [ChunkSignal(chunk_id="clause", text=paragraph)], doc_type="", segments=[]
+            )
+            qualified.update(
+                category
+                for category, status in result.category_status.items()
+                if status == "has_evidence"
+            )
+            if allow_clause_anchors:
+                qualified.update(router.clause_source_evidence_categories(paragraph))
+        return qualified
 
     return qualify
 
@@ -91,7 +114,9 @@ def _partition_findings(
 
     An unrecognised label raises rather than silently losing a finding.
     """
-    grouped: dict[CoherenceCategory, list[FindingSignal]] = {category: [] for category in CoherenceCategory}
+    grouped: dict[CoherenceCategory, list[FindingSignal]] = {
+        category: [] for category in CoherenceCategory
+    }
     cross: list[FindingSignal] = []
     for finding in findings:
         if finding.category == _CROSS_CATEGORY:
@@ -107,6 +132,7 @@ def assess_single_document_coverage(
     *,
     qualifier: QualifyingCategoriesFn | None = None,
     document_id: UUID | None = None,
+    granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT,
 ) -> SingleDocumentCoverage:
     """Assess single-document category coverage from extracted clauses + findings.
 
@@ -115,10 +141,17 @@ def assess_single_document_coverage(
     are produced (single-document scope).
     """
     if qualifier is None:
-        qualifier = _router_qualifier(CategoryRouter.from_registry())
+        qualifier = _router_qualifier(
+            CategoryRouter.from_registry(),
+            allow_clause_anchors=granularity is EvidenceGranularity.CLAUSE,
+        )
 
-    qualifying_ids: dict[CoherenceCategory, list[str]] = {category: [] for category in CoherenceCategory}
-    seen_ids: dict[CoherenceCategory, set[str]] = {category: set() for category in CoherenceCategory}
+    qualifying_ids: dict[CoherenceCategory, list[str]] = {
+        category: [] for category in CoherenceCategory
+    }
+    seen_ids: dict[CoherenceCategory, set[str]] = {
+        category: set() for category in CoherenceCategory
+    }
     for clause in clauses:
         for canonical in qualifier(clause.text):
             category = _CANONICAL_TO_COHERENCE[canonical]

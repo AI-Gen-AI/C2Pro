@@ -10106,6 +10106,14 @@ components:
           anyOf:
           - $ref: '#/components/schemas/EvidenceGranularity'
           - type: 'null'
+        single_document_classification_method_version:
+          anyOf:
+          - type: string
+            enum:
+            - router_no_prior_v1
+            - router_clause_anchors_v2
+          - type: 'null'
+          title: Single Document Classification Method Version
       additionalProperties: false
       type: object
       required:
