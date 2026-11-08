@@ -269,6 +269,8 @@ async def _bridge_alerts(
     # The parser persists clause_code AUTO-NNN; the unique numbered heading is in full_text.
     [clause] = [c for c in clauses if (c.full_text or "").startswith(PENALTY_REF + " ")]
     assert clause.clause_code != PENALTY_REF and PENALTY_QUOTE in clause.full_text
+    # The risk is a synthetic, deliberately source-quoted input. This verifies
+    # downstream physical provenance, not N4 LLM extraction correctness.
     risk = RiskItem(
         title="Late delivery penalty",
         description="Daily penalty for late final delivery.",
@@ -353,10 +355,15 @@ async def test_a_quote_from_another_clause_gets_no_verified_uuid_and_no_link(
         db, test_user, project_id, contract, revision, quote=other_quote
     )
     assert mapping == {}
+    assert alerts, "negative test requires real Coherence detections, not an empty result"
     assert all(a.evidence.source_clause_id != str(clause.id) for a in alerts)
 
     await _correlate_with(db, test_user, project_id, alerts)
-    assert all(r.clause is None for r in await _alert_rows(db, project_id))
+    rows = await _alert_rows(db, project_id)
+    assert rows, "negative test must verify actual persisted Alerts"
+    assert all(r.clause is None for r in rows)
+    assert all(not (r.affected_entities or {}).get("documents") for r in rows)
+    assert all((r.evidence or {}).get("source_document_id") is None for r in rows)
 
 
 async def _correlate_with(
