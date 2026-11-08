@@ -52,6 +52,10 @@ on:
         description: "Integral UAT, real-ai only: the full candidate SHA, typed to confirm that paid provider calls are intended."
         type: string
         default: ""
+      n4_n12_focused_sha:
+        description: "N4/N12 ONLY: full CORE candidate SHA; max 2 Anthropic calls and USD 1; no S2/browser/deploy."
+        type: string
+        default: ""
 
 concurrency:
   group: acc01-s2-live-ai-${{ github.ref }}
@@ -62,7 +66,7 @@ permissions:
 
 jobs:
   s2-live-ai:
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
+    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.n4_n12_focused_sha == '' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_discover_dev_b != 'true' && github.event.inputs.integral_prepare_dev_a != 'true' && github.event.inputs.integral_prepare_dev_b != 'true') || contains(github.event.head_commit.message, '[S2-LIVE-AI-ONCE]')
     # Scheduled, so it never blocks a PR. Its status is the suite's real result.
     # Runs every "chromium" spec (the intentionally RED backlog is excluded in
     # playwright.config.ts) against a real local backend started exactly as the
@@ -477,7 +481,7 @@ jobs:
   integral-clerk-preflight:
     # Read-only: can the run start? Both Clerk DEVELOPMENT identities, in two Organizations/tenants.
     # No database, no worker, no AI, no mutation. It never reads or prints an email, an id or a key.
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only == 'true'
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only == 'true'
     name: Integral UAT - Clerk Development identities A and B (read-only)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -501,7 +505,7 @@ jobs:
           {
             echo '### Integral UAT - Clerk Development identities (read-only)'
             echo
-            echo "Candidate SHA: \`${GITHUB_SHA}\`  exit code: \`${rc}\` (0 ready, 3 only B's Organization is missing, 1 not usable)"
+            echo "Candidate SHA: `${GITHUB_SHA}`  exit code: `${rc}` (0 ready, 3 only B's Organization is missing, 1 not usable)"
             echo
             echo '```json'
             cat "$RUNNER_TEMP/preflight.json" 2>/dev/null || true
@@ -512,7 +516,7 @@ jobs:
   integral-prepare-dev-a:
     # Separate, authorised, Development-only. Never creates a user (A must exist); reconciles only A's own
     # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_a == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_a_sha == github.sha
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_a == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_a_sha == github.sha
     name: Integral UAT - prepare Clerk Development A (authorised write)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -531,7 +535,7 @@ jobs:
   integral-discover-dev-b:
     # Read-only inventory of the Clerk Development users: which EXISTING synthetic account could be identity B.
     # Every Clerk call is a GET; counts and pseudonyms only (no email, no id, no key). Never part of a UAT.
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_discover_dev_b == 'true' && github.event.inputs.integral_uat != 'true'
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_discover_dev_b == 'true' && github.event.inputs.integral_uat != 'true'
     name: Integral UAT - discover an existing Clerk Development B (read-only)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -554,7 +558,7 @@ jobs:
           {
             echo '### Integral UAT - Development B discovery (read-only)'
             echo
-            echo "Candidate SHA: \`${GITHUB_SHA}\`  exit code: \`${rc}\`"
+            echo "Candidate SHA: `${GITHUB_SHA}`  exit code: `${rc}`"
             echo '```json'
             cat "$RUNNER_TEMP/discovery.json" 2>/dev/null || true
             echo '```'
@@ -564,7 +568,7 @@ jobs:
   integral-prepare-dev-b:
     # Separate, authorised, Development-only. Never creates a user (B must exist); reconciles only B's own
     # Organization/tenant. Never runs inside a UAT and never touches Production (the provisioner refuses it).
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_b == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_b_sha == github.sha
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_prepare_dev_b == 'true' && github.event.inputs.integral_uat != 'true' && github.event.inputs.integral_confirm_prepare_dev_b_sha == github.sha
     name: Integral UAT - prepare Clerk Development B (authorised write)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -588,7 +592,7 @@ jobs:
             --export-prefix TENANT_B_
 
   integral-s1-s8:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only != 'true'
+    if: github.event.inputs.n4_n12_focused_sha == '' && github.event_name == 'workflow_dispatch' && github.event.inputs.integral_uat == 'true' && github.event.inputs.integral_preflight_only != 'true'
     name: Integral S1-S8 - one project, two Clerk tenants (${{ github.event.inputs.integral_ai_mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -925,3 +929,146 @@ jobs:
             fi
           done
           docker compose -f docker-compose.test.yml down -v || true
+
+  # Explicitly scoped two-call evaluation: no web browser, DB, Celery, S2 or UAT.
+  n4-n12-real-ai-focal:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_name == 'release/core-candidate-20261108' &&
+      github.event.inputs.n4_n12_focused_sha != '' &&
+      github.event.inputs.n4_n12_focused_sha == github.sha &&
+      github.event.inputs.integral_uat != 'true' &&
+      github.event.inputs.integral_preflight_only != 'true' &&
+      github.event.inputs.integral_discover_dev_b != 'true' &&
+      github.event.inputs.integral_prepare_dev_a != 'true' &&
+      github.event.inputs.integral_prepare_dev_b != 'true'
+    name: Focused N4/N12 golden EPC — two real calls maximum
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
+      REDIS_URL: redis://localhost:6379/0
+      ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
+      AI_MAX_TOKENS_OUTPUT: "4096"
+      C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/web/playwright-report/n4n12-once-governor.jsonl
+      C2PRO_AI_GOVERNOR_MAX_CALLS: "2"
+      C2PRO_AI_GOVERNOR_MAX_USD: "1.0"
+      PYTHONPATH: ${{ github.workspace }}/apps/api
+    steps:
+      - name: Checkout exact candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fail closed on SHA, fixture, mode and bounded provider
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "release/core-candidate-20261108"
+          test "${GITHUB_SHA}" = "${{ github.event.inputs.n4_n12_focused_sha }}"
+          test "${C2PRO_AI_MOCK}" = '0'
+          test "${C2PRO_EMBEDDINGS_MOCK}" = '1'
+          test "${C2PRO_AI_GOVERNOR_MAX_CALLS}" = '2'
+          test "${C2PRO_AI_GOVERNOR_MAX_USD}" = '1.0'
+          test -n "${ANTHROPIC_API_KEY:-}" || { echo "::error::Dedicated test-only Anthropic key unavailable"; exit 2; }
+          test "$(sha256sum c2pro-n4n12-epc-synthetic-v1.json | awk '{print $1}')" = "6206d62492e786b2b97902cb59f19ba36f3bd996184470e5aecc3009cdf2c8eb"
+          mkdir -p apps/web/playwright-report
+          echo "N4/N12 focused preflight passed; at most TWO calls under USD 1. No other jobs should run."
+
+      - name: Install Python backend for isolated evaluator
+        uses: ./.github/actions/setup-python-backend
+
+      - name: Verify SDK call governor is installed before any model call
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api:${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          python - <<'PY2'
+          from anthropic.resources.messages import AsyncMessages, Messages
+          from real_ai_governor import _limits
+          import os
+          assert getattr(Messages.create, "_c2pro_governed", False)
+          assert getattr(AsyncMessages.create, "_c2pro_governed", False)
+          _, count, cap = _limits()
+          assert count == 2 and cap == 1.0
+          assert os.environ["C2PRO_AI_MOCK"] == "0"
+          print("GOVERNOR_PRECHECK_OK (2 requests, USD 1 cap, SDK retries disabled)")
+          PY2
+
+      - name: Execute N4 and N12 on immutable EPC corpus with genuine AI
+        working-directory: apps/api
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api:${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          set -euo pipefail
+          python scripts/n4_n12_real_ai_eval.py
+
+      - name: Independent oracle gate (model accuracy and verified citations)
+        shell: bash
+        run: |
+          python - <<'PY2'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("apps/web/playwright-report/n4-n12-real-ai-evaluation.json").read_text())
+          n4,n12,p=m["n4"],m["n12"],m["provider"]
+          print("N4:",n4["true_positives"],"/",n4["expected_risks"],
+                "omissions",n4["omissions"],"invalid quotes",n4["invalid_citations"],
+                "extra unsupported",n4["false_positives"])
+          print("N12:",n12["omissions_detected"],"/2; false interpretation:",
+                n12["incorrect_interpretation_detected"],"quality_state:",n12["quality_state"])
+          print("Provider calls:",p["calls"],"completed:",p["completed_calls"],
+                "estimated USD:",p["estimated_cost_usd"])
+          assert m["provider_call"]=="real" and m["ai_mock"] is False
+          assert p["calls"]==2 and p["completed_calls"]==2 and p["estimated_cost_usd"]<=1.0
+          assert n4["true_positives"]==9 and n4["expected_risks"]==9
+          assert n4["omissions"]==0 and n4["false_positives"]==0 and n4["invalid_citations"]==0
+          assert n12["omissions_detected"]==2
+          assert n12["incorrect_interpretation_detected"] is True
+          assert n12["critique_citation_validity"] is True and n12["quality_state"]=="ASSESSED"
+          assert n12["critique_quoted_citations"] >= 3
+          assert n12["critique_valid_quoted_citations"] == n12["critique_quoted_citations"]
+          assert n12["critique_invalid_quoted_citations"] == 0
+          assert {"EPC-04", "EPC-05", "EPC-07"}.issubset(set(n12["critique_citation_clause_refs"]))
+          print("N4_N12_FUNCTIONAL_GOLDEN_PASS")
+          PY2
+
+      - name: Report only sanitized facts and exact SHA
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY2'
+          import json, os
+          from pathlib import Path
+          path=Path("apps/web/playwright-report/n4-n12-real-ai-evaluation.json")
+          rows=["### Focused N4 / N12 real-AI evaluation", "",
+                "Exact SHA: `"+os.environ["GITHUB_SHA"]+"`", ""]
+          if path.exists():
+              m=json.loads(path.read_text())
+              n4,n12,p=m["n4"],m["n12"],m["provider"]
+              rows += [
+                  f"N4: {n4['true_positives']}/{n4['expected_risks']} expected, {n4['invalid_citations']} invalid citations, {n4['false_positives']} extra risks",
+                  f"N12 omissions: {n12['omissions_detected']}/2, wrong interpretation: {n12['incorrect_interpretation_detected']}",
+                  f"N12 quality state: {n12['quality_state']}",
+                  f"Provider: {p['calls']} reserved, {p['completed_calls']} completed, estimated USD {p['estimated_cost_usd']}",
+                  "Functional acceptance requires all oracle gates; a model response alone is not acceptance.",
+              ]
+          else:
+              rows.append("BLOCKED: no verifier artifact; do not assert model success or zero cost.")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as f:
+              f.write("\n".join(rows)+"\n")
+          PY2
+
+      - name: Preserve bounded sanitized evidence (no prompts/completions)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: c2pro-n4-n12-focal-real-ai-${{ github.sha }}
+          path: |
+            apps/web/playwright-report/n4-n12-real-ai-evaluation.json
+            apps/web/playwright-report/n4n12-once-governor.jsonl
+          if-no-files-found: warn
+          retention-days: 7

@@ -69,6 +69,39 @@ class TestN4N12RealAiEval(unittest.TestCase):
         self.assertEqual(result["omissions_detected"], 2)
         self.assertTrue(result["incorrect_interpretation_detected"])
 
+    def test_n12_citation_gate_rejects_mixed_genuine_and_invented_quotes(self) -> None:
+        source = (
+            "EPC-04: The Contractor must rectify each notified defect within fourteen days. "
+            "EPC-07: The Contractor liability cap excludes deliberate misconduct."
+        )
+        real_quote = "The Contractor must rectify each notified defect within fourteen days."
+        invented_quote = "The parties agreed unlimited insurance coverage with no exclusions."
+        notes = (
+            "EPC-04 defect obligation: “" + real_quote + "” "
+            "EPC-07 liability: “" + invented_quote + "”"
+        )
+        metric = runner.score_n12(notes, source)
+        self.assertEqual(metric["critique_quoted_citations"], 2)
+        self.assertEqual(metric["critique_valid_quoted_citations"], 1)
+        self.assertEqual(metric["critique_invalid_quoted_citations"], 1)
+        self.assertFalse(metric["critique_citation_validity"])
+
+    def test_n12_citation_gate_requires_source_quotes_not_bare_ids(self) -> None:
+        source = (
+            "EPC-04: The Contractor shall rectify defects after notice. "
+            "EPC-07: The Contractor shall indemnify the Client."
+        )
+        self.assertFalse(
+            runner.score_n12("EPC-04 and EPC-07 are omitted", source)["critique_citation_validity"]
+        )
+        good = (
+            "EPC-04: “The Contractor shall rectify defects after notice.” "
+            "EPC-07: “The Contractor shall indemnify the Client.”"
+        )
+        metric = runner.score_n12(good, source)
+        self.assertTrue(metric["critique_citation_validity"])
+        self.assertEqual(metric["critique_invalid_quoted_citations"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
