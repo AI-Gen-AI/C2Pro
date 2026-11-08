@@ -8,6 +8,7 @@ import pytest
 
 from scripts import n4_n12_real_ai_eval as oracle
 from scripts import n4_n12_representative_gate as gate
+from scripts.real_ai_governor.real_ai_governor import usd as governed_usd
 from tests.unit.scripts.test_n4_n12_representative_eval import representative_success
 
 
@@ -51,6 +52,7 @@ def valid_evidence() -> tuple[dict, list[dict], dict]:
     a = report["n12_adversarial"]
     a.update(
         evaluation="adversarial_fixture",
+        model_declared_status="RETRY",
         quality_state="NOT_ASSESSED",
         parse_failure_type=None,
         response_sha256="b" * 64,
@@ -61,6 +63,8 @@ def valid_evidence() -> tuple[dict, list[dict], dict]:
         evaluation="actual_n4_output",
         quality_state="NOT_ASSESSED",
         n4_risks_submitted=9,
+        model_declared_status="OK",
+        model_neutral_ok_notes=True,
         response_sha256="d" * 64,
         notes_sha256="e" * 64,
     )
@@ -76,11 +80,12 @@ def valid_evidence() -> tuple[dict, list[dict], dict]:
                     "in": tokens_in,
                     "out": tokens_out,
                     "stop_reason": "end_turn",
-                    "usd": 0.05,
+                    "usd": round(governed_usd(gate.EXPECTED_MODEL, tokens_in, tokens_out), 6),
                 },
             ]
         )
     provider = report["provider"]
+    total_cost = round(sum(e["usd"] for e in ledger if e["ev"] == "done"), 6)
     provider.update(
         calls=3,
         completed_calls=3,
@@ -89,7 +94,7 @@ def valid_evidence() -> tuple[dict, list[dict], dict]:
         models=[gate.EXPECTED_MODEL],
         input_tokens=7933,
         output_tokens=4590,
-        estimated_cost_usd=0.15,
+        estimated_cost_usd=total_cost,
     )
     return report, ledger, fixture
 
@@ -111,6 +116,7 @@ def test_gate_accepts_complete_raw_oracle_without_human_approval() -> None:
             lambda r, e: e.append({"ev": "reserve", "id": "extra", "model": gate.EXPECTED_MODEL}),
         ),
         ("ledger_over_budget", lambda r, e: e[1].update(usd=1.1)),
+        ("ledger_underpriced_from_tokens", lambda r, e: e[1].update({"in": 999999})),
         ("n4_case_category", lambda r, e: r["n4"]["cases"][0].update(expected_category="LEGAL")),
         ("n12_bad_source", lambda r, e: r["n12_adversarial"].update(model_findings_unverified=1)),
         (
@@ -124,6 +130,14 @@ def test_gate_accepts_complete_raw_oracle_without_human_approval() -> None:
         (
             "n12_human_gate_lost",
             lambda r, e: r["n12_chained"].update(human_approval_required=False),
+        ),
+        (
+            "chained_empty_retry",
+            lambda r, e: r["n12_chained"].update(model_declared_status="RETRY"),
+        ),
+        (
+            "chained_empty_unverified_ok",
+            lambda r, e: r["n12_chained"].update(model_neutral_ok_notes=False),
         ),
         ("graph_hitl_falsely_claimed", lambda r, e: r.update(hitl_pause_in_graph_tested=True)),
     ],

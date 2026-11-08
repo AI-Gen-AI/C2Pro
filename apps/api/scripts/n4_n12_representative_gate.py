@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts import n4_n12_real_ai_eval as fixture_contract
+from scripts.real_ai_governor.real_ai_governor import usd as governed_usd
 
 REPORT_PATH = (
     fixture_contract.API_ROOT.parent / "web/playwright-report/n4-n12-representative-evaluation.json"
@@ -58,7 +59,12 @@ def verify_report(
     assert all(e["model"] == EXPECTED_MODEL for e in dones)
     assert all(e.get("stop_reason") == "end_turn" for e in dones)
     assert all(0 < int(e["out"]) <= 8192 and int(e["in"]) > 0 for e in dones)
-    total = sum(float(e["usd"]) for e in dones)
+    independently_priced = [
+        round(governed_usd(EXPECTED_MODEL, int(e["in"]), int(e["out"])), 6) for e in dones
+    ]
+    for actual, expected in zip(dones, independently_priced, strict=True):
+        assert math.isclose(float(actual["usd"]), expected, abs_tol=0.000001)
+    total = sum(independently_priced)
     assert math.isfinite(total) and 0 < total <= 1.0
     assert report["limits"] == {"max_calls": 3, "max_usd": 1.0}
     provider = report["provider"]
@@ -99,6 +105,7 @@ def verify_report(
     assert a["critique_quoted_citations"] >= 3
     assert a["critique_valid_quoted_citations"] == a["critique_quoted_citations"]
     assert a["critique_invalid_quoted_citations"] == 0
+    assert a["model_declared_status"] == "RETRY"
     assert a["model_findings_payload_valid"] is True
     assert a["model_findings_submitted"] >= 3
     assert a["model_findings_source_verified"] == a["model_findings_submitted"]
@@ -110,6 +117,14 @@ def verify_report(
     assert c["model_findings_payload_valid"] is True
     assert c["model_findings_source_verified"] == c["model_findings_submitted"]
     assert c["model_findings_unverified"] == 0
+    # Zero findings are meaningful only for an explicit, neutral model OK.
+    # Requiring a fabricated criticism when N4 covered all clauses would
+    # make the evaluator reward false positives; RETRY requires findings.
+    if c["model_findings_submitted"] == 0:
+        assert c["model_declared_status"] == "OK"
+        assert c["model_neutral_ok_notes"] is True
+    else:
+        assert c["model_declared_status"] == "RETRY"
     assert c["critique_invalid_quoted_citations"] == 0
     for item in (a, c):
         assert item["status"] == "UNASSESSED"

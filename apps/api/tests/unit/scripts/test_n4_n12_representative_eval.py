@@ -109,6 +109,8 @@ def representative_success() -> dict:
         "critique_invalid_quoted_citations": 0,
         "parse_failure_type": None,
         "response_sha256": "a" * 64,
+        "model_declared_status": "OK",
+        "model_neutral_ok_notes": True,
         "semantic_approval": False,
     }
     return {
@@ -172,6 +174,14 @@ def test_technical_gates_pass_only_with_all_source_grounded_results() -> None:
             lambda r: r["n12_chained"].update(parse_failure_type="JSONDecodeError"),
         ),
         ("n12_chained_no_invented_source", lambda r: r["n12_chained"].update(response_sha256=None)),
+        (
+            "n12_chained_no_invented_source",
+            lambda r: r["n12_chained"].update(model_declared_status="RETRY"),
+        ),
+        (
+            "n12_chained_no_invented_source",
+            lambda r: r["n12_chained"].update(model_neutral_ok_notes=False),
+        ),
     ],
 )
 def test_gates_fail_closed(axis, mutate) -> None:

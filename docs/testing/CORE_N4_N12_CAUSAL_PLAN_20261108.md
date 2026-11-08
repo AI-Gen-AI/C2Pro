@@ -45,3 +45,9 @@ La PR se revisó adversarialmente y se corrigieron tres defectos de sus controle
 3. El indicador de revisión requerida proviene de human_approval_required de ambos CritiqueExtractionUseCase. El informe dice explícitamente hitl_pause_in_graph_tested=False: no afirma que se haya ejecutado o persistido una interrupción HITL real.
 
 La validación es de calidad de extracción y citas. No sustituye la revisión jurídica ni constituye un segundo validador semántico del texto legal.
+
+## Segundo cierre de QA — verificación de coste y crítica sin defectos
+
+- La puerta independiente recalcula el coste de cada llamada a partir de tokens de entrada/salida, usando la misma tabla oficial del gobernador interno de C2Pro para Sonnet; compara ese importe con el registro, en lugar de confiar en un total declarado. Un ledger artificialmente infravalorado falla.
+- El resultado N12 encadenado puede contener cero hallazgos legítimamente, pero solo cuando la respuesta estructurada del modelo declara OK, sin findings, con notas vacías o neutrales según la regla del dominio. RETRY sin hallazgos falla; RETRY con hallazgos citados puede ser revisado sin aprobar semántica. No se fuerza al modelo a inventar defectos.
+- En ambas alternativas, el estado resultante del caso de uso sigue UNASSESSED, con human_approval_required=True. No se inventa una pausa de LangGraph.

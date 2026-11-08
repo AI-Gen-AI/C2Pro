@@ -99,8 +99,18 @@ def score_critique(
     result: Any, port: ObservedRealCritiquePort, source: str, *, evaluation: str
 ) -> dict[str, Any]:
     notes = result.critique_notes
+    from src.analysis.domain.ai_extraction import _NEUTRAL_OK_NOTES
+
+    raw = port.payload if isinstance(port.payload, dict) else {}
+    declared = str(raw.get("status") or "").strip().upper()
+    model_notes = raw.get("notes")
+    neutral_ok = isinstance(model_notes, str) and (
+        not model_notes.strip() or _NEUTRAL_OK_NOTES.fullmatch(model_notes.strip()) is not None
+    )
     return {
         **oracle.score_n12(notes, source),
+        "model_declared_status": declared,
+        "model_neutral_ok_notes": neutral_ok,
         **oracle.score_n12_structured_provenance(port.payload, source),
         "evaluation": evaluation,
         "status": result.status,
@@ -183,6 +193,17 @@ def verify_technical_gate(report: dict[str, Any]) -> dict[str, bool]:
             and chained["critique_invalid_quoted_citations"] == 0
             and chained["parse_failure_type"] is None
             and chained["response_sha256"] is not None
+            and (
+                (
+                    chained["model_findings_submitted"] == 0
+                    and chained["model_declared_status"] == "OK"
+                    and chained["model_neutral_ok_notes"] is True
+                )
+                or (
+                    chained["model_findings_submitted"] > 0
+                    and chained["model_declared_status"] == "RETRY"
+                )
+            )
             and chained["semantic_approval"] is False
             and chained["status"] == "UNASSESSED"
         ),
