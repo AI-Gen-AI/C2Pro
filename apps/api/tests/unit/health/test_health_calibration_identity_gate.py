@@ -66,6 +66,58 @@ def test_anchors_from_unrelated_paragraphs_cannot_be_combined() -> None:
     assert _budget(outcome).state is CategoryCoverageState.INSUFFICIENT_EVIDENCE
 
 
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Completion Date.",
+        "Completion Date: TBD.",
+        "Contract Price.",
+        "Scope of Work.",
+        "Technical Specification.",
+        "Quality Inspection.",
+        "Fecha de finalización.",
+    ],
+)
+def test_bare_headings_do_not_count_as_evidence(heading: str) -> None:
+    outcome = assess_single_document_coverage(
+        [Clause(id="persisted-heading", text=heading)],
+        [],
+        granularity=EvidenceGranularity.CLAUSE,
+    )
+    assert all(item.evidence_count == 0 for item in outcome.assessments)
+
+
+@pytest.mark.parametrize(
+    "unrelated",
+    [
+        "The price of admission was a small amount compared with the cost of travel.",
+        "The inspection article discussed test quality in a school laboratory.",
+        "The television program announced the completion date and milestone celebration.",
+        "The standards magazine compared equipment design in consumer advertising.",
+        "The school project scope included supply of deliverables.",
+        "A magazine article summarized contract liability and warranty.",
+    ],
+)
+def test_non_contract_prose_is_not_health_evidence(unrelated: str) -> None:
+    outcome = assess_single_document_coverage(
+        [Clause(id="single", text=unrelated)],
+        [],
+        granularity=EvidenceGranularity.CLAUSE,
+    )
+    assert all(item.evidence_count == 0 for item in outcome.assessments)
+
+
+def test_single_newline_does_not_pool_header_and_unrelated_payment_terms() -> None:
+    # This used to generate BUDGET merely by pooling separate lines.
+    combined = "Price.\nThe payment amount shall be recorded elsewhere."
+    outcome = assess_single_document_coverage(
+        [Clause(id="single", text=combined)],
+        [],
+        granularity=EvidenceGranularity.CLAUSE,
+    )
+    assert _budget(outcome).state is CategoryCoverageState.INSUFFICIENT_EVIDENCE
+
+
 def test_legacy_method_not_reinterpreted_and_v2_rejected_for_document_blob() -> None:
     legacy = build_document_assessment_artifact(
         [Clause(id="old", text=_epc_price())], [], granularity=EvidenceGranularity.DOCUMENT

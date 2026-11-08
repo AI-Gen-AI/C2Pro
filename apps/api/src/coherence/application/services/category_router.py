@@ -251,8 +251,27 @@ class CategoryRouter:
         qualified: set[CanonicalCategory] = set()
         # A persisted clause can contain paragraphs. Never combine anchors from
         # separate paragraphs into a single positive Health category.
-        for paragraph in re.split(r"\r?\n[ \t]*\r?\n+", text):
+        # A single line break can separate unrelated paragraphs in extracted
+        # DOCX clauses; never pool evidence across either single or blank lines.
+        for paragraph in re.split(r"\r?\n+", text):
             if not paragraph.strip():
+                continue
+            # A structural heading can itself contain two lexicon terms:
+            # "Completion Date." must NOT become a schedule assessment.
+            # Require an operative fact (obligation/constraint) or a concrete
+            # numeric value; category keywords alone are not substance.
+            operative = re.search(
+                r"\b(?:shall|must|may|will|requires?|includes?|bears?|"
+                r"within|before|after|payable|entitled|"
+                r"deber[aá]n?|debe(?:r[aá])?|ser[aá]|tendr[aá]|"
+                r"pag(a|ar)[aá]?|incluye|se\s+obliga)\b"
+                r"|\b(?:is|are)\s+(?:fixed|capped|due|payable|binding|"
+                r"required|responsible|entitled)\b"
+                r"|\b\d+(?:[.,]\d+)?(?:%|[/-]\d+)?\b",
+                paragraph,
+                re.IGNORECASE | re.UNICODE,
+            )
+            if not operative:
                 continue
             details = self._compute_chunk_relevance(
                 ChunkSignal(chunk_id="health-evidence", text=paragraph)
