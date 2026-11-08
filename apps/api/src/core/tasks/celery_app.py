@@ -127,12 +127,13 @@ celery_app.conf.update(
     },
 )
 
+
 # Opt-in PILOT scheduler scope. The default production schedule stays unchanged.
 # A dedicated pilot Beat must not dispatch unrelated HITL, recovery, retention
 # or budget jobs merely to test ProjectGraph durable re-enqueue (#714).
 def select_beat_schedule(
-    schedule: dict[str, dict], *, project_graph_only: bool
-) -> dict[str, dict]:
+    schedule: dict[str, dict[str, object]], *, project_graph_only: bool
+) -> dict[str, dict[str, object]]:
     if not project_graph_only:
         return schedule
     key = "project-graph-trusted-projection-reconcile"
