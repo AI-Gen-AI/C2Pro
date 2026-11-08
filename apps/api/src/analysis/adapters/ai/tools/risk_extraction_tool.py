@@ -422,9 +422,11 @@ CRITICAL OUTPUT RULES:
 1. Respond with ONLY a JSON object — no markdown, no prose, no explanations, no code fences.
 2. The JSON envelope MUST be exactly: {"risks": [ ... ]}
 3. Every risk MUST have all keys above. Omit risks you cannot ground in a verbatim quote.
-4. Prefer FEWER, well-grounded risks (3-8) over many superficial ones.
-5. source_quote must be ≥80 characters of contract text. NEVER use section labels alone.
-6. clause_ref is ONLY the exact numeric section number explicitly printed in the contract adjacent to the cited text (e.g., 5.2). If none is explicit, emit null; never infer a clause number.
+4. Review ALL substantive contract clauses before deciding which risks to return. Include each distinct material risk supported by a verbatim source quote; do not stop after an arbitrary number of items. Do not invent a risk merely to represent every clause.
+5. Examine obligations and their exceptions together: notice windows, carve-outs, exclusions, conditions for relief, and clauses stating when relief is NOT available can materially change the risk.
+6. Prefer fewer supported risks to superficial, duplicative or speculative ones, but never omit an independently supported material risk solely to keep the list short.
+7. source_quote must be ≥80 characters of contract text. NEVER use section labels alone.
+8. clause_ref is ONLY the exact numeric section number explicitly printed in the contract adjacent to the cited text (e.g., 5.2). If none is explicit, emit null; never infer a clause number.
 """.strip()
 
         user_prompt = f"CONTRACT:\n\n{input_data.document_text}"
