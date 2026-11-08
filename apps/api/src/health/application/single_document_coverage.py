@@ -15,12 +15,13 @@ Reuses existing contracts — the deterministic ``CategoryRouter`` (classificati
 ``category_coverage`` domain — rather than introducing parallel models.
 
 Qualifying-evidence contract (owned by this mapping layer, made explicit):
-- A clause is *qualifying supporting evidence* for a category iff the deterministic
-  ``CategoryRouter`` reports ``has_evidence`` for that category when routing the clause's
-  own text with **no doc_type prior** (``doc_type=""``). That is: the clause's in-document
-  Capa-1 relevance exceeds the registry ``insufficient_evidence`` threshold (ADR D4/D5).
-  It is therefore NOT "a clause exists", and it deliberately excludes the doc_type prior
-  (a routing *expectation* is not substantive evidence — honoring INV-1, no fabricated green).
+- A clause is *qualifying supporting evidence* only when its real text, with
+  **no doc_type prior**, either passes the canonical ``CategoryRouter`` threshold
+  or carries an explicitly source-anchored conjunction of one structural signal
+  and at least two DIFFERENT lexicon terms in the SAME clause. The latter corrects
+  a Capa-1 blind spot caused by reserving 60% router weight for unavailable
+  embeddings. A category name or a document-type expectation alone is not
+  evidence. No source-free evidence, relational score or synthetic green is produced.
 - ``evidence_count`` for a category is the number of *distinct* qualifying clauses; the
   category is ``PRESENT`` iff that count is >= 1, else ``INSUFFICIENT_EVIDENCE``.
 
@@ -75,11 +76,15 @@ def _router_qualifier(router: CategoryRouter) -> QualifyingCategoriesFn:
         if not text.strip():
             return set()
         result = router.route([ChunkSignal(chunk_id="clause", text=text)], doc_type="", segments=[])
-        return {
+        threshold_qualified = {
             category
             for category, status in result.category_status.items()
             if status == "has_evidence"
         }
+        # Independently evidenced clauses must not be reported missing merely
+        # because this Capa-1-only router has a reserved embedding weight.
+        # Source clauses require BOTH structural and >=2 lexicon hits.
+        return threshold_qualified | router.clause_source_evidence_categories(text)
 
     return qualify
 
@@ -91,7 +96,9 @@ def _partition_findings(
 
     An unrecognised label raises rather than silently losing a finding.
     """
-    grouped: dict[CoherenceCategory, list[FindingSignal]] = {category: [] for category in CoherenceCategory}
+    grouped: dict[CoherenceCategory, list[FindingSignal]] = {
+        category: [] for category in CoherenceCategory
+    }
     cross: list[FindingSignal] = []
     for finding in findings:
         if finding.category == _CROSS_CATEGORY:
@@ -117,8 +124,12 @@ def assess_single_document_coverage(
     if qualifier is None:
         qualifier = _router_qualifier(CategoryRouter.from_registry())
 
-    qualifying_ids: dict[CoherenceCategory, list[str]] = {category: [] for category in CoherenceCategory}
-    seen_ids: dict[CoherenceCategory, set[str]] = {category: set() for category in CoherenceCategory}
+    qualifying_ids: dict[CoherenceCategory, list[str]] = {
+        category: [] for category in CoherenceCategory
+    }
+    seen_ids: dict[CoherenceCategory, set[str]] = {
+        category: set() for category in CoherenceCategory
+    }
     for clause in clauses:
         for canonical in qualifier(clause.text):
             category = _CANONICAL_TO_COHERENCE[canonical]

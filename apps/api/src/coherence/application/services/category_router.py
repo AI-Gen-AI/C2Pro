@@ -33,9 +33,11 @@ if TYPE_CHECKING:
 # Per-category signal breakdown (Capa 1 traceability)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CategorySignalDetail:
     """Per-category signal breakdown from a single chunk."""
+
     structural: float = 0.0
     lexicon: float = 0.0
     embedding: float = 0.0
@@ -50,9 +52,11 @@ class CategorySignalDetail:
 # Chunk input to the router
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ChunkSignal:
     """Input chunk for category routing."""
+
     chunk_id: str
     text: str
     structural_hits: int = 0
@@ -64,9 +68,11 @@ class ChunkSignal:
 # RouteResult
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class InsufficientEvidenceCategory:
     """A category that fell below the insufficient_evidence threshold."""
+
     category: CanonicalCategory
     relevance: float
     threshold: float
@@ -75,14 +81,19 @@ class InsufficientEvidenceCategory:
 @dataclass
 class RouteResult:
     """Result of category routing for a document."""
+
     doc_type: str
     category_relevance: dict[CanonicalCategory, float]
     category_status: dict[CanonicalCategory, str]
     _router: CategoryRouter = field(repr=False)
     _priors: dict[CanonicalCategory, float] = field(default_factory=dict)
-    _thresholds: DefaultsThresholds = field(default_factory=lambda: DefaultsThresholds(
-        escalate_low=0.35, escalate_high=0.65, insufficient_evidence=0.20,
-    ))
+    _thresholds: DefaultsThresholds = field(
+        default_factory=lambda: DefaultsThresholds(
+            escalate_low=0.35,
+            escalate_high=0.65,
+            insufficient_evidence=0.20,
+        )
+    )
 
     def relevant_categories(self) -> list[CanonicalCategory]:
         """Categories with relevance above insufficient_evidence threshold."""
@@ -105,6 +116,7 @@ class RouteResult:
 # ---------------------------------------------------------------------------
 # CategoryRouter
 # ---------------------------------------------------------------------------
+
 
 class CategoryRouter:
     """Deterministic category router using Capa 0 (priors) + Capa 1 (structural + lexicon).
@@ -131,8 +143,7 @@ class CategoryRouter:
 
         # Pre-compute priors lookup for O(1) access
         self._priors_by_doc_type: dict[str, dict[CanonicalCategory, float]] = {
-            doc_type: dict(priors)
-            for doc_type, priors in registry.doc_type_priors.items()
+            doc_type: dict(priors) for doc_type, priors in registry.doc_type_priors.items()
         }
 
         # Pre-extract structural signals and lexicon for each category
@@ -151,12 +162,13 @@ class CategoryRouter:
             self._cat_structural[cat] = all_titles
 
             # Compile regex patterns
-            self._cat_patterns[cat] = [re.compile(p, re.IGNORECASE | re.UNICODE) for p in signals.patterns]
+            self._cat_patterns[cat] = [
+                re.compile(p, re.IGNORECASE | re.UNICODE) for p in signals.patterns
+            ]
 
             # Collect lexicon (ES + EN)
             self._cat_lexicon[cat] = {
-                lang: [w.lower() for w in words]
-                for lang, words in cat_def.lexicon.items()
+                lang: [w.lower() for w in words] for lang, words in cat_def.lexicon.items()
             }
 
     @classmethod
@@ -195,10 +207,7 @@ class CategoryRouter:
         aggregated: dict[CanonicalCategory, float] = {}
         for cat in CanonicalCategory:
             if chunk_signals:
-                signals = [
-                    self._weighted_signal(sig[cat])
-                    for sig in chunk_signals
-                ]
+                signals = [self._weighted_signal(sig[cat]) for sig in chunk_signals]
                 aggregated[cat] = sum(signals) / len(signals)
             else:
                 aggregated[cat] = 0.0
@@ -225,7 +234,40 @@ class CategoryRouter:
             _thresholds=self._thresholds,
         )
 
-    def _compute_chunk_relevance(self, chunk: ChunkSignal) -> dict[CanonicalCategory, CategorySignalDetail]:
+    def clause_source_evidence_categories(self, text: str) -> set[CanonicalCategory]:
+        """Conservatively identify clause-anchored Health evidence without priors.
+
+        Category routing's 0.20 document threshold includes a reserved 0.60
+        embedding weight, but no embeddings are currently computed. Even
+        explicit clauses with one structural and two distinct lexicon signals
+        can score below that threshold. For single-document Health evidence
+        ONLY, accept the conjunction of both signal families from the SAME
+        actual clause. A lone title, lone keyword or doc-type expectation
+        cannot establish presence. This does not change routing, Coherence,
+        scoring, or source-citation verification.
+        """
+        if not text.strip():
+            return set()
+        details = self._compute_chunk_relevance(ChunkSignal(chunk_id="health-evidence", text=text))
+        qualified: set[CanonicalCategory] = set()
+        for cat, evidence in details.items():
+            if evidence.structural < 0.25:
+                continue
+            # Require TWO DIFFERENT in-source words, not a duplicate across
+            # Spanish/English lexicons or repeated occurrences of one term.
+            matched_terms = {
+                term.casefold()
+                for terms in self._cat_lexicon.get(cat, {}).values()
+                for term in terms
+                if re.search(rf"\b{re.escape(term)}\b", text, re.IGNORECASE | re.UNICODE)
+            }
+            if len(matched_terms) >= 2:
+                qualified.add(cat)
+        return qualified
+
+    def _compute_chunk_relevance(
+        self, chunk: ChunkSignal
+    ) -> dict[CanonicalCategory, CategorySignalDetail]:
         """Capa 1: deterministic per-chunk × per-category relevance."""
         results: dict[CanonicalCategory, CategorySignalDetail] = {}
 
