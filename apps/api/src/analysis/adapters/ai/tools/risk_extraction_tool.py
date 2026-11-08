@@ -5,6 +5,7 @@ Extracts contractual and project risks from narrative sections.
 
 Test Suite ID: TS-QA-SWAGGER-ANALYSIS-001
 """
+
 from __future__ import annotations
 
 import json
@@ -53,6 +54,13 @@ _INCLUDE_KEYWORDS_ES: tuple[str, ...] = (
     "memoria tecnica",
     "memoria del proyecto",
     "alcance",
+    "objeto",
+    "precio del contrato",
+    "precio contractual",
+    "plazo",
+    "fecha de finalizacion",
+    "fecha de entrega",
+    "importe contractual",
     "penal",
     "multa",
     "garantia",
@@ -77,6 +85,13 @@ _INCLUDE_KEYWORDS_EN: tuple[str, ...] = (
     "particular conditions",
     "general conditions",
     "scope",
+    "subject matter",
+    "contract price",
+    "contract sum",
+    "time for completion",
+    "completion date",
+    "contract period",
+    "payment terms",
     "penalty",
     "liquidated damages",
     "fine",
@@ -84,7 +99,7 @@ _INCLUDE_KEYWORDS_EN: tuple[str, ...] = (
     "warranties",
     "liability",
     "liabilities",
-    "indemnif",          # indemnify, indemnification, indemnity
+    "indemnif",  # indemnify, indemnification, indemnity
     "responsibility",
     "obligation",
     "default",
@@ -187,9 +202,7 @@ class RiskExtractionInput(BaseModel):
 
     document_text: str = Field(..., description="Contract text to analyze")
     max_risks: int = Field(20, ge=1, le=50, description="Maximum risks to extract")
-    filter_relevant: bool = Field(
-        True, description="Apply relevance filtering to document"
-    )
+    filter_relevant: bool = Field(True, description="Apply relevance filtering to document")
 
 
 @register_tool("risk_extraction", version="1.0")
@@ -259,9 +272,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             extra={
                 "raw_output_chars": len(ai_response.content or ""),
                 "payload_type": type(payload).__name__,
-                "payload_keys": list(payload.keys())[:20]
-                if isinstance(payload, dict)
-                else None,
+                "payload_keys": list(payload.keys())[:20] if isinstance(payload, dict) else None,
                 "candidate_item_count": len(items),
                 "parsed_risk_count": len(risks),
             },
@@ -422,13 +433,11 @@ CRITICAL OUTPUT RULES:
 
     def _is_immediate_alert(self, risk: RiskExtractionCandidate) -> bool:
         """Check if risk requires immediate alert."""
-        return (
-            risk.impact == RiskImpact.CRITICAL
-            and risk.probability == RiskProbability.HIGH
-        )
+        return risk.impact == RiskImpact.CRITICAL and risk.probability == RiskProbability.HIGH
 
     def _extract_items(self, payload: Any) -> list[dict[str, Any]]:
         """Extract risk items from payload."""
+
         def dict_items(value: Any) -> list[dict[str, Any]]:
             if isinstance(value, list):
                 return [item for item in value if isinstance(item, dict)]
@@ -517,11 +526,12 @@ CRITICAL OUTPUT RULES:
     def _looks_like_risk_item(self, item: dict[str, Any]) -> bool:
         has_label = any(self._clean_text(item.get(key)) for key in ("title", "risk", "name"))
         has_detail = any(
-            self._clean_text(item.get(key))
-            for key in ("summary", "description", "detail")
+            self._clean_text(item.get(key)) for key in ("summary", "description", "detail")
         )
         has_category = self._normalize_category(item.get("category")) is not None
-        has_severity = self._normalize_impact(item.get("impact") or item.get("severity")) is not None
+        has_severity = (
+            self._normalize_impact(item.get("impact") or item.get("severity")) is not None
+        )
         return has_label or (has_detail and (has_category or has_severity))
 
     def _normalize_category(self, value: Any) -> RiskCategory | None:
@@ -564,10 +574,9 @@ CRITICAL OUTPUT RULES:
         for paragraph in paragraphs:
             lower = _keyword_match_text(paragraph)
             price_or_bom = any(keyword in lower for keyword in _EXCLUDE_KEYWORDS)
-            substantive_obligation = (
-                _PENALTY_OR_DEFAULT_CLAUSE.search(paragraph)
-                and _OPERATIVE_OBLIGATION.search(paragraph)
-            )
+            substantive_obligation = _PENALTY_OR_DEFAULT_CLAUSE.search(
+                paragraph
+            ) and _OPERATIVE_OBLIGATION.search(paragraph)
             if price_or_bom and not substantive_obligation:
                 continue
             if any(keyword in lower for keyword in _INCLUDE_KEYWORDS):
@@ -614,6 +623,7 @@ CRITICAL OUTPUT RULES:
 
     def _extract_json_from_text(self, text: str) -> Any:
         """Extract JSON from text that may contain markdown or other formatting."""
+
         def parse_candidate(candidate: str) -> Any | None:
             cleaned = candidate.strip()
             if not cleaned:
