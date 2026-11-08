@@ -23,10 +23,18 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.analysis.adapters.graph.project_graph import evaluate_artifact_set
 from src.analysis.adapters.persistence.coherence_alert_correlation import (
     SqlAlchemyCoherenceAlertCorrelationRunner,
 )
+from src.analysis.adapters.persistence.risk_source_clause_binding import (
+    load_trusted_risk_source_clause_ids,
+)
+from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.coherence.router import get_clauses_from_rag
+from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+    SqlAlchemyDocumentRepository,
+)
 from src.documents.domain.models import DocumentType
 from tests.integration.document_flow.test_budget_revision_authority_flow import (
     _propose,
@@ -40,8 +48,11 @@ from tests.integration.document_flow.test_contract_revision_authority_flow impor
     _other_contract,
 )
 from tests.integration.document_flow.test_contract_schedule_completion_flow import (
+    LATE_SCHEDULE,
+    PRICE_CLAUSE,
     PROVISIONAL_RULE,
     _project,
+    _scenario,
     _upload_and_ingest,
     worker,  # noqa: F401  (pytest fixture)
 )
@@ -240,3 +251,115 @@ async def test_a_mismatched_scope_is_refused_before_any_write(
             source_clauses=[],
         )
     assert await _rows(db, project_id) == []
+
+
+PENALTY_CLAUSE = "7.3 Penalidades: el contratista abonara 500 euros por cada dia de retraso en la entrega final."
+WARRANTY_CLAUSE = "9.1 Garantia: el contratista garantiza las obras durante veinticuatro meses."
+PENALTY_REF = "7.3"
+PENALTY_QUOTE = "500 euros por cada dia de retraso"
+
+
+async def _bridge_alerts(
+    db: AsyncSession, test_user: Any, project_id: UUID, contract: Any, revision: Any, *, quote: str
+) -> tuple[Any, list[Any], dict[str, str]]:
+    """Real N4 binding: persisted clause -> trusted loader mapping -> real engine alerts."""
+    clauses = await SqlAlchemyDocumentRepository(db).list_clauses_bound_to_revision(
+        test_user.tenant_id, contract.id, revision.revision_id
+    )
+    # The parser persists clause_code AUTO-NNN; the unique numbered heading is in full_text.
+    [clause] = [c for c in clauses if (c.full_text or "").startswith(PENALTY_REF + " ")]
+    assert clause.clause_code != PENALTY_REF and PENALTY_QUOTE in clause.full_text
+    risk = RiskItem(
+        title="Late delivery penalty",
+        description="Daily penalty for late final delivery.",
+        category="LEGAL",
+        impact="HIGH",
+        clause_ref=PENALTY_REF,
+        source_quote=quote,
+        source_quote_status="VERIFIED",
+    )
+    artifact = DocumentArtifact(
+        document_id=str(contract.id),
+        document_revision_id=str(revision.revision_id),
+        doc_type="contract",
+        extracted_risks=[risk],
+    )
+    mapping = await load_trusted_risk_source_clause_ids(
+        db, tenant_id=test_user.tenant_id, project_id=project_id, artifacts=[artifact]
+    )
+    evaluation = await evaluate_artifact_set(
+        [artifact],
+        project_id=project_id,
+        tenant_id=test_user.tenant_id,
+        llm_on=False,
+        risk_source_clause_ids=mapping,
+    )
+    return clause, list(evaluation.engine_result.alerts), mapping
+
+
+async def _alert_rows(db: AsyncSession, project_id: UUID) -> list[Any]:
+    result = await db.execute(
+        text(
+            "SELECT id, source_clause_id::text AS clause, affected_entities, "
+            "alert_metadata->'detection_evidence' AS evidence "
+            "FROM alerts WHERE project_id = :p ORDER BY created_at, id"
+        ),
+        {"p": project_id},
+    )
+    return list(result.all())
+
+
+async def test_a_verified_n4_risk_binds_the_physical_trusted_clause_to_the_canonical_alert(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    project_id, contract, revision, *_ = await _scenario(
+        db, worker, test_user,
+        contract=[PENALTY_CLAUSE, WARRANTY_CLAUSE, PRICE_CLAUSE],
+        schedule=LATE_SCHEDULE,
+    )
+    await _propose(db, test_user, project_id, contract, revision)
+    await _trust(db, test_user, project_id, contract, revision)
+
+    clause, alerts, mapping = await _bridge_alerts(
+        db, test_user, project_id, contract, revision, quote=PENALTY_QUOTE
+    )
+    assert list(mapping.values()) == [str(clause.id)]
+    linked = [a for a in alerts if a.evidence.source_clause_id == str(clause.id)]
+    assert linked, "the engine must emit an alert carrying the physical clause UUID"
+
+    for _ in range(2):  # second pass proves idempotency
+        await _correlate_with(db, test_user, project_id, alerts)
+    rows = [r for r in await _alert_rows(db, project_id) if r.clause == str(clause.id)]
+    assert len(rows) == len(linked)
+    for row in rows:
+        assert row.affected_entities["documents"] == [str(contract.id)]
+        assert row.evidence["source_document_id"] == str(contract.id)
+    assert len(await _alert_rows(db, project_id)) == len(alerts)
+
+
+async def test_a_quote_from_another_clause_gets_no_verified_uuid_and_no_link(
+    db: AsyncSession, worker: Any, test_user: Any
+) -> None:
+    project_id, contract, revision, *_ = await _scenario(
+        db, worker, test_user,
+        contract=[PENALTY_CLAUSE, WARRANTY_CLAUSE, PRICE_CLAUSE],
+        schedule=LATE_SCHEDULE,
+    )
+    await _propose(db, test_user, project_id, contract, revision)
+    await _trust(db, test_user, project_id, contract, revision)
+    other_quote = "veinticuatro meses"
+
+    clause, alerts, mapping = await _bridge_alerts(
+        db, test_user, project_id, contract, revision, quote=other_quote
+    )
+    assert mapping == {}
+    assert all(a.evidence.source_clause_id != str(clause.id) for a in alerts)
+
+    await _correlate_with(db, test_user, project_id, alerts)
+    assert all(r.clause is None for r in await _alert_rows(db, project_id))
+
+
+async def _correlate_with(
+    db: AsyncSession, test_user: Any, project_id: UUID, alerts: list[Any]
+) -> None:
+    await _correlate(db, tenant_id=test_user.tenant_id, project_id=project_id, alerts=alerts)
