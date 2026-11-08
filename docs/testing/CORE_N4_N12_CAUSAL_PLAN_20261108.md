@@ -51,3 +51,44 @@ La validación es de calidad de extracción y citas. No sustituye la revisión j
 - La puerta independiente recalcula el coste de cada llamada a partir de tokens de entrada/salida, usando la misma tabla oficial del gobernador interno de C2Pro para Sonnet; compara ese importe con el registro, en lugar de confiar en un total declarado. Un ledger artificialmente infravalorado falla.
 - El resultado N12 encadenado puede contener cero hallazgos legítimamente, pero solo cuando la respuesta estructurada del modelo declara OK, sin findings, con notas vacías o neutrales según la regla del dominio. RETRY sin hallazgos falla; RETRY con hallazgos citados puede ser revisado sin aprobar semántica. No se fuerza al modelo a inventar defectos.
 - En ambas alternativas, el estado resultante del caso de uso sigue UNASSESSED, con human_approval_required=True. No se inventa una pausa de LangGraph.
+
+## Evidencia real incorporada — Sonnet 4.6, 8 de noviembre (después de la PR #1202)
+
+Ejecución GitHub Actions: https://github.com/AI-Gen-AI/C2Pro/actions/runs/42514971086
+SHA evaluado: c6e5cc5679128f65ed7518b61d6c5052b7a89a69.
+Modelo observado en el SDK: claude-sonnet-4-6; 8.192 tokens de salida disponibles por llamada;
+sin max_tokens en las tres finalizaciones (stop_reason=end_turn).
+N2 fue una proyección sintética; no hubo ingestión documental completa.
+N4 recibió nueve cláusulas íntegramente y emitió nueve registros, pero el
+oráculo identificó **4/9** verdaderos positivos, **5/9** citas verificadas,
+**4/9** citas no verificadas, **5** registros no emparejados y cinco cláusulas
+sin match: EPC-01, EPC-05, EPC-06, EPC-07, EPC-09. Sin exponer texto bruto,
+no se conoce aún qué proporción de las cinco diferencias procede de categoría,
+cita reformulada/inexacta u omisión semántica; no etiquetar cinco riesgos como
+«omitidos» sin analizar el contenido. El modelo no se truncó por cupo de salida.
+
+N12 adversarial detectó **1/2** omisiones (EPC-04 sí, EPC-07 no) y **1/1**
+interpretación incorrecta EPC-05; 2/2 referencias propuestas en bruto verificadas,
+pero el conjunto requerido EPC-04/05/07 no se cubrió. N12 sobre salida auténtica de N4
+produjo cuatro referencias brutas verificadas (EPC-01/05/06/07) y conservó UNASSESSED.
+Los modelos devolvieron statuses en el JSON de crítica «NEEDS_REVIEW» y «FLAGGED»
+en vez de los enums de prompt OK/RETRY. Esta deriva es una posible causa técnica
+adicional y no debe normalizarse silenciosamente para pasar el gate.
+
+Governor: tres llamadas completadas; USD 0,114078 estimados (sin reintentos,
+sin denegaciones ni despliegue); seis jobs del workflow fueron omitidos.
+**Resultado funcional: FAIL, NOT_UAT.** Ninguna aceptación semántica HITL.
+
+### Corrección de observabilidad sin más gasto
+
+- La ejecución de extracción devuelve código cero después de escribir artefacto
+  incluso si la puntuación falla; la puerta independiente CI posterior decide
+  PASS/FAIL para no quedar skippeada al detectar los defectos de modelo.
+- La puerta independiente vuelve a calcular la correspondencia de las citas N4
+  recuperadas desde posiciones/hashes de la fuente sintética inmutable; el
+  artefacto nunca incluye la respuesta textual de modelo ni evidencia sensible.
+- Las nuevas pruebas adversariales comprueban que un oráculo falseado, cita
+  inválida, categoría errónea o artefacto incompleto no puedan pasar por la
+  segunda puerta.
+- No se repite la ejecución pagada hasta que las causas N4/N12 se separen:
+  riesgo semántico, pérdida de cita, clasificación, prompt/schema y oráculo.

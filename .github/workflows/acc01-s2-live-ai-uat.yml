@@ -1008,6 +1008,7 @@ jobs:
           python scripts/n4_n12_representative_eval.py
 
       - name: Independent oracle gate — recalculate ledger and source metrics
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
