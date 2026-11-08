@@ -23,6 +23,55 @@ REPORT_PATH = (
 EXPECTED_MODEL = "claude-sonnet-4-6"
 
 
+def independently_rescore_n4(
+    fixture: dict[str, Any], fingerprints: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Reconstruct source quotes from fixture offsets; do not trust score flags.
+
+    Input contains only hashes, offsets, source-status and categories. Actual
+    model text is never saved in GitHub artifacts.
+    """
+    normalized_source = fixture_contract._normalized(fixture_contract._source_text(fixture))
+    recovered: list[dict[str, Any]] = []
+    assert isinstance(fingerprints, list) and fingerprints
+    for index, proof in enumerate(fingerprints):
+        assert proof["index"] == index
+        assert proof["category"] in {"LEGAL", "SCHEDULE", "QUALITY", "SCOPE", "TECHNICAL", "BUDGET"}
+        status = proof["source_quote_status"]
+        assert status in {
+            "VERIFIED",
+            "NOT_FOUND_IN_DOCUMENT",
+            "NOT_PROVIDED",
+            "NOT_CHECKED",
+            "SOURCE_UNAVAILABLE",
+            "AMBIGUOUS",
+            "UNVERIFIED",
+        }
+        length = proof["normalized_quote_characters"]
+        assert isinstance(length, int) and length >= 0
+        digest = proof["normalized_quote_sha256"]
+        assert isinstance(digest, str) and len(digest) == 64
+        start = proof["normalized_start"]
+        end = proof["normalized_end"]
+        if status == "VERIFIED":
+            assert isinstance(start, int) and isinstance(end, int)
+            assert 0 <= start < end <= len(normalized_source)
+            quote = normalized_source[start:end]
+            assert len(quote) == length
+            assert hashlib.sha256(quote.encode()).hexdigest() == digest
+        else:
+            assert start is None and end is None
+            quote = ""
+        recovered.append(
+            {
+                "category": proof["category"],
+                "source_quote_status": status,
+                "source_quote": quote,
+            }
+        )
+    return fixture_contract.score_n4(fixture, recovered)
+
+
 def verify_report(
     report: dict[str, Any],
     ledger_events: list[dict[str, Any]],
@@ -91,6 +140,18 @@ def verify_report(
         assert case["extracted"] is True and case["citation_valid"] is True
     assert n4["input_tokens"] == int(dones[0]["in"])
     assert n4["output_tokens"] == int(dones[0]["out"])
+    rescored = independently_rescore_n4(fixture, n4["citation_fingerprints"])
+    for metric in (
+        "emitted_risks",
+        "expected_risks",
+        "true_positives",
+        "omissions",
+        "false_positives",
+        "valid_citations",
+        "invalid_citations",
+        "cases",
+    ):
+        assert rescored[metric] == n4[metric], "N4_ORACLE_RESCORING_MISMATCH: " + metric
 
     a = report["n12_adversarial"]
     assert a["evaluation"] == "adversarial_fixture"

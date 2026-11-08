@@ -188,3 +188,59 @@ def test_gates_fail_closed(axis, mutate) -> None:
     report = deepcopy(representative_success())
     mutate(report)
     assert trial.verify_technical_gate(report)[axis] is False
+
+
+def test_n4_fingerprints_contain_offsets_and_hashes_not_model_prose() -> None:
+    fixture = old.load_fixture()
+    source = old._source_text(fixture)
+    clause = fixture["contract"]["clauses"][0]
+    fingerprint = trial.n4_citation_fingerprints(
+        [
+            {
+                "category": "SCHEDULE",
+                "source_quote_status": "VERIFIED",
+                "source_quote": clause["text"],
+            }
+        ],
+        source,
+    )[0]
+    assert fingerprint["category"] == "SCHEDULE"
+    assert fingerprint["normalized_start"] is not None
+    assert fingerprint["normalized_end"] > fingerprint["normalized_start"]
+    assert fingerprint["normalized_quote_characters"] > 80
+    assert clause["text"] not in str(fingerprint)
+    assert (
+        trial.n4_citation_fingerprints(
+            [
+                {
+                    "category": "LEGAL",
+                    "source_quote_status": "NOT_FOUND_IN_DOCUMENT",
+                    "source_quote": "A fictional risk.",
+                }
+            ],
+            source,
+        )[0]["normalized_start"]
+        is None
+    )
+
+
+def test_evaluator_reports_oracle_failure_without_skipping_independent_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    import json
+
+    report = {
+        "fixture_id": "synthetic",
+        "profile": "normal_core_sonnet_8192",
+        "gates": {"n4_nine_source_risks": False},
+        "provider": {"completed_calls": 3, "estimated_cost_usd": 0.15},
+    }
+
+    async def fake_run() -> dict:
+        return report
+
+    output = tmp_path / "report.json"
+    monkeypatch.setattr(trial, "run", fake_run)
+    monkeypatch.setattr(trial, "RESULT_PATH", output)
+    assert trial.main() == 0
+    assert json.loads(output.read_text())["gates"]["n4_nine_source_risks"] is False

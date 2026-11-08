@@ -35,6 +35,8 @@ def test_representative_workflow_is_exact_sha_and_mutually_exclusive() -> None:
 def test_representative_workflow_steps_well_formed_and_script_is_scoped() -> None:
     w = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
     steps = w["jobs"]["n4-n12-real-ai-focal"]["steps"]
+    gate_step = next(s for s in steps if s.get("name", "").startswith("Independent oracle gate"))
+    assert gate_step["if"] == "always()"
     scripts = "\n".join(str(step.get("run", "")) for step in steps)
     assert "scripts/n4_n12_representative_eval.py" in scripts
     assert "scripts/n4_n12_real_ai_eval.py" not in scripts
