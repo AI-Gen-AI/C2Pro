@@ -9,6 +9,8 @@ This is the entry point for Celery workers.
 Refers to Suite ID: TS-OPS-CELERY-QUEUE-001.
 """
 
+import os
+
 from celery import Celery
 
 import src.analysis.adapters.ai.tools  # noqa: F401 - registers @register_tool classes for workers
@@ -124,6 +126,27 @@ celery_app.conf.update(
         },
     },
 )
+
+# Opt-in PILOT scheduler scope. The default production schedule stays unchanged.
+# A dedicated pilot Beat must not dispatch unrelated HITL, recovery, retention
+# or budget jobs merely to test ProjectGraph durable re-enqueue (#714).
+def select_beat_schedule(
+    schedule: dict[str, dict], *, project_graph_only: bool
+) -> dict[str, dict]:
+    if not project_graph_only:
+        return schedule
+    key = "project-graph-trusted-projection-reconcile"
+    if key not in schedule:
+        raise RuntimeError("PROJECT_GRAPH_BEAT_ENTRY_MISSING")
+    return {key: schedule[key]}
+
+
+celery_app.conf.beat_schedule = select_beat_schedule(
+    dict(celery_app.conf.beat_schedule),
+    project_graph_only=os.getenv("C2PRO_BEAT_PROJECTGRAPH_ONLY", "").strip().lower()
+    in {"1", "true", "yes"},
+)
+
 
 if __name__ == "__main__":
     celery_app.start()
