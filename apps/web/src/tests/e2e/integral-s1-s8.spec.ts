@@ -84,6 +84,7 @@ import {
   type WbsCanonicalView,
 } from "./support/integral/flow";
 import { IntegralLedger, digestOf, sha256Hex, type StageId } from "./support/integral/ledger";
+import { assertSyntheticSpecDecisionsPersisted, planSyntheticSpecReview } from "./support/integral/spec-review-plan";
 import { Pj01RunRecorder } from "./support/pj01/run-recorder";
 import { uploadNewVersionThroughUi } from "./support/pj01/revision";
 import { createProjectThroughUi, signInAsJourneyUser } from "./support/pj01/session";
@@ -505,6 +506,51 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
 
         await ledger.stage("S5", async () => {
           if (str(specGate.lifecycle_status) === "review_required") {
+            // The real provider may extract 0..N findings. Approval is forbidden until EACH
+            // has a current ledger decision. Simulated decisions below are confined to
+            // this disposable CI database, never a persistent customer's project or
+            // the owner's actual review. They exercise the UI, not the semantic validity
+            // of a model-generated specification.
+            if (!AI_MOCK) {
+              const reviewRowId = await reviewRowIdOf(pageA, projectId, specificationId);
+              const before = await callApi(pageA, `/api/v1/hitl/reviews/${reviewRowId}/findings`);
+              const plan = planSyntheticSpecReview(before.status, before.data, reviewRowId, {
+                environment: process.env.ENVIRONMENT,
+                integralUat: process.env.INTEGRAL_UAT,
+                aiMode: process.env.INTEGRAL_AI_MODE,
+                aiMock: process.env.C2PRO_AI_MOCK,
+              });
+              if (plan.findingCount > 0) {
+                const reviewed = await decideFindingsThroughUi(pageA, recorder, {
+                  projectId,
+                  documentId: specificationId,
+                  plan: { kind: "confirm", ordinals: plan.ordinals },
+                });
+                ledger.check(
+                  "the synthetic test reviewer recorded every real-AI specification finding through the UI",
+                  reviewed.surfaced &&
+                    reviewed.persistedAfterReload &&
+                    reviewed.decided.length === plan.findingCount &&
+                    reviewed.reviewRowId === plan.reviewRowId,
+                  `${reviewed.decided.length}/${plan.findingCount}`,
+                );
+                if (
+                  !reviewed.surfaced ||
+                  !reviewed.persistedAfterReload ||
+                  reviewed.decided.length !== plan.findingCount ||
+                  reviewed.reviewRowId !== plan.reviewRowId
+                ) throw new Error("G5_SPEC_SYNTHETIC_REVIEW_UI_INCOMPLETE");
+              }
+              const after = await callApi(pageA, `/api/v1/hitl/reviews/${reviewRowId}/findings`);
+              assertSyntheticSpecDecisionsPersisted(plan, after.status, after.data);
+              ledger.evidence("specificationAutomatedReview", {
+                ...plan,
+                provenance: "isolated_synthetic_e2e_only",
+              });
+              ledger.partial(
+                "the specification was reconciled by an automated synthetic test actor; this proves the technical path, NOT owner review or source-fidelity acceptance",
+              );
+            }
             const approved = await approveThroughUi(pageA, recorder, { projectId, documentId: specificationId });
             ledger.check("the specification approval names who decided", approved.decidedBy.length > 0);
             state.reviewIds.specification = approved.itemId;
