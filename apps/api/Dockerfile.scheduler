@@ -1,0 +1,94 @@
+# ===========================================
+# C2PRO Backend - Multi-Stage Dockerfile
+# ===========================================
+#
+# Build:
+#   docker build -t c2pro-api .
+#
+# Run:
+#   docker run -p 8000:8000 --env-file .env c2pro-api
+#
+# Multi-stage build reduces final image size by ~50%
+# - Builder stage: installs dependencies with build tools
+# - Runtime stage: minimal image with only runtime requirements
+
+# ===========================================
+# Stage 1: Builder
+# ===========================================
+FROM python:3.11-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+ # Install Python dependencies
+ COPY requirements.txt constraints.txt .
+ RUN pip install --no-cache-dir --upgrade pip && \
+     pip install --no-cache-dir --only-binary=:all: -r requirements.txt -c constraints.txt
+
+# Scheduler only: the NER model is loaded lazily by workers, not by Celery Beat.
+# Keep the API/Worker model install in the original Dockerfile.
+
+# ===========================================
+# Stage 2: Runtime
+# ===========================================
+FROM python:3.11-slim AS runtime
+
+# Metadata
+LABEL maintainer="C2Pro Team <dev@c2pro.app>"
+LABEL description="C2Pro ProjectGraph Beat Scheduler"
+LABEL version="1.0.0"
+
+# Environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PATH="/opt/venv/bin:$PATH"
+
+# Install runtime dependencies only (no build tools)
+# Includes Tesseract OCR for scanned PDF text extraction
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq5 \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+
+# Working directory
+WORKDIR /app
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy only production runtime surfaces. COPY defaults to root:root here,
+# keeping runtime code/config immutable to the non-root app user.
+# Requirements/constraints were consumed in the builder and the resulting
+# virtualenv is copied above.
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
+COPY scripts/ ./scripts/
+COPY start.sh ./start.sh
+RUN sed -i 's/\r$//' /app/start.sh /app/scripts/*.sh
+
+# Create uploads directory with proper ownership for non-root user
+RUN mkdir -p /app/uploads && chown appuser:appgroup /app/uploads
+
+# Switch to non-root user
+USER appuser
+
+# Celery Beat is not an HTTP server; the API healthcheck is invalid here.
+HEALTHCHECK NONE
+
+CMD ["bash", "scripts/run_scheduler.sh"]
