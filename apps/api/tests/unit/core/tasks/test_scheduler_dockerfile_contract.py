@@ -14,7 +14,10 @@ def test_scheduler_image_avoids_external_spacy_model_download():
     # Beat only emits Celery messages; model loading is lazy in anonymizer.py.
     assert "es_core_news_md" not in beat
     assert "github.com/explosion/spacy-models" not in beat
-    assert "RUN pip install --no-cache-dir --only-binary=:all:" in beat
+    assert (
+        "pip install --no-cache-dir --only-binary=:all: -r requirements.txt -c constraints.txt"
+        in beat
+    )
 
 
 def test_scheduler_image_preserves_build_runtime_and_nonroot_identity():
