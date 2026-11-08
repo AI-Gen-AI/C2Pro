@@ -55,6 +55,11 @@ y `generate(request)` con uso de tokens, latencia y modelo solicitado.
 No introduce fallbacks silenciosos, no expone respuestas upstream de error
 y no asigna coste cero a tarifas desconocidas: `cost_usd=None`.
 
+El punto de entrada explícito para evaluación del grafo es
+`src.analysis.adapters.graph.dependencies.build_omniroute_pilot_ai_service()`.
+Acepta tenant, modelo, URL y clave en memoria; rechaza entorno `production`.
+`get_ai_service()` (ruta por defecto de CORE) no se ha modificado.
+
 El piloto se ejecuta explícitamente. No lo seleccionar como motor automático
 para documentos reales todavía: el flujo Anthropic actual también implementa
 anonimización, caché, cálculo de costes y controles de tenant que habría que
