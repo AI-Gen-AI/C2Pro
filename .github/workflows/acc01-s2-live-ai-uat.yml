@@ -612,6 +612,10 @@ jobs:
       OPENAI_API_KEY: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && secrets.S2_E2E_OPENAI_API_KEY || '' }}
       INTEGRAL_UAT: "1"
       INTEGRAL_AI_MODE: ${{ github.event.inputs.integral_ai_mode }}
+      # The real-AI Complete Journey must exercise N8 LLM and ProjectGraph.
+      # Rehearsals keep these flags off; exact-SHA paid-run confirmation remains mandatory.
+      FEATURE_V3_COHERENCE_LLM: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && 'true' || 'false' }}
+      FEATURE_V3_PROJECT_GRAPH: ${{ github.event.inputs.integral_ai_mode == 'real-ai' && 'true' || 'false' }}
       FRONTEND_RUNTIME_SHA: ${{ github.sha }}
       BACKEND_RUNTIME_SHA: ${{ github.sha }}
       NEXT_PUBLIC_API_URL: /api
@@ -699,6 +703,42 @@ jobs:
       - name: Verify Clerk <-> local tenant linkage (identity A)
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
+
+      - name: Require effective N8 and ProjectGraph flags for tenant A (real-ai only)
+        if: github.event.inputs.integral_ai_mode == 'real-ai'
+        working-directory: apps/api
+        run: |
+          # Read tenant overrides with the same service used by N8; no secrets or IDs logged.
+          python - <<'PYCODE'
+          import asyncio
+          import os
+          from uuid import UUID
+
+          from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
+          from src.config import settings
+          from src.core.database import get_raw_session, init_db
+          from src.core.feature_flags import TenantFlagsService
+
+          async def check():
+              if settings.skip_hitl or settings.ai_mock:
+                  raise SystemExit("CORE_UAT_GUARD_HITL_OR_MODEL_MOCK_ENABLED")
+              if not settings.feature_v3_project_graph:
+                  raise SystemExit("CORE_UAT_GUARD_PROJECT_GRAPH_DISABLED")
+              tenant_id = UUID(os.environ["E2E_EXPECTED_TENANT_ID"])
+              # This is a new Python process, separate from the tenant-seed step.
+              # The pool must be initialized in this process before opening a session.
+              await init_db()
+              async with get_raw_session() as session:
+                  enabled = await TenantFlagsService(
+                      tenant_repository=SqlAlchemyTenantRepository(session),
+                      settings=settings,
+                  ).is_enabled(tenant_id, "feature_v3_coherence_llm")
+              if not enabled:
+                  raise SystemExit("CORE_UAT_GUARD_N8_LLM_DISABLED_OR_TENANT_OVERRIDE")
+              print("PASS: tenant A flags effective; HITL protected; no model call")
+
+          asyncio.run(check())
+          PYCODE
 
       - name: Require genuine noncached Anthropic provider response (real-ai only)
         if: github.event.inputs.integral_ai_mode == 'real-ai'
@@ -805,12 +845,16 @@ jobs:
           from pathlib import Path
           log = Path(os.environ["RUNNER_TEMP"]) / "c2pro-integral-worker.log"
           text = log.read_text(errors="replace") if log.exists() else ""
+          import sys
+          sys.path.insert(0, str(Path("apps/api").resolve()))
+          from scripts.uat_s3_worker_diagnostics import summarize_s3_worker_diagnostics
           preflight = Path("apps/web/playwright-report/integral-provider-preflight.json")
           receipt = {
               "mode": os.environ["INTEGRAL_AI_MODE"],
               "ai_mock": os.environ["C2PRO_AI_MOCK"] == "1",
               "worker_provider_successes": text.count("anthropic_wrapper_request_success"),
               "worker_provider_errors": text.count("anthropic_wrapper_request_error"),
+              "s3_worker_diagnostics": summarize_s3_worker_diagnostics(text),
               "preflight": json.loads(preflight.read_text()) if preflight.exists() else None,
           }
           out = Path("apps/web/playwright-report/integral-provider-receipt.json")

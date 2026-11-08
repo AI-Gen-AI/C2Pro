@@ -127,6 +127,8 @@ class Facts:
     graph_events: int = 0
     analyses: int = 0
     six_dimension_snapshots: int = 0
+    # Diagnostic only; no document text, prompts, Clerk identities or raw DB rows.
+    s3_lineage_diagnostic: dict[str, Any] = field(default_factory=dict)
     projection_artifacts: list[str] = field(
         default_factory=list
     )  # artifact ids with a projection obligation
@@ -277,25 +279,70 @@ def _judge_s1_authority(c: _Ctx) -> None:
     """D1: the per-project authority the run's HITL operations were taken under (enforce, explicit grants, audit)."""
     add = c.add
     for label, tenant in (("A", c.tenant_a), ("B", c.tenant_b)):
-        marker = ((c.facts.tenants.get(tenant) or {}).get("settings") or {}).get("hitl_project_authorization") or {}
-        add("S1", f"tenant {label} runs HITL project authorization in enforce (not the transitional off/audit)", marker.get("mode") == "enforce" and not marker.get("transitional"))
+        marker = ((c.facts.tenants.get(tenant) or {}).get("settings") or {}).get(
+            "hitl_project_authorization"
+        ) or {}
+        add(
+            "S1",
+            f"tenant {label} runs HITL project authorization in enforce (not the transitional off/audit)",
+            marker.get("mode") == "enforce" and not marker.get("transitional"),
+        )
     grants = [g for g in c.facts.project_grants if str(g["project_id"]) == str(c.project_a["id"])]
     active = [g for g in grants if g.get("revoked_at") is None]
     humans = {str(u["id"]) for u in c.users_of(c.tenant_a, c.expect.clerk_user_a)}
-    add("S1", "project A holds exactly the three review capabilities, once each, as active grants", sorted(g["permission"] for g in active) == list(GRANTED_CAPABILITIES))
-    add("S1", "every grant of project A belongs to tenant A and to the authenticated Clerk user of tenant A", bool(active) and all(str(g["tenant_id"]) == c.tenant_a and str(g["user_id"]) in humans for g in active))
-    add("S1", "every grant carries its actor and a reason", bool(active) and all(g.get("granted_by") and str(g.get("grant_reason") or "").strip() for g in active))
+    add(
+        "S1",
+        "project A holds exactly the three review capabilities, once each, as active grants",
+        sorted(g["permission"] for g in active) == list(GRANTED_CAPABILITIES),
+    )
+    add(
+        "S1",
+        "every grant of project A belongs to tenant A and to the authenticated Clerk user of tenant A",
+        bool(active)
+        and all(str(g["tenant_id"]) == c.tenant_a and str(g["user_id"]) in humans for g in active),
+    )
+    add(
+        "S1",
+        "every grant carries its actor and a reason",
+        bool(active)
+        and all(g.get("granted_by") and str(g.get("grant_reason") or "").strip() for g in active),
+    )
     self_granted = [g for g in active if str(g["granted_by"]) == str(g["user_id"])]
-    exception = (((c.facts.tenants.get(c.tenant_a) or {}).get("settings") or {}).get("hitl_project_authorization") or {}).get("single_person_exception")
+    exception = (
+        ((c.facts.tenants.get(c.tenant_a) or {}).get("settings") or {}).get(
+            "hitl_project_authorization"
+        )
+        or {}
+    ).get("single_person_exception")
     add(
         "S1",
         "a self-grant exists only with the complete audited single-person exception of tenant A and is labelled",
-        not self_granted or (_exception_complete(exception) and all(g.get("self_grant_exception") is True for g in self_granted)),
+        not self_granted
+        or (
+            _exception_complete(exception)
+            and all(g.get("self_grant_exception") is True for g in self_granted)
+        ),
     )
-    b_exception = (((c.facts.tenants.get(c.tenant_b) or {}).get("settings") or {}).get("hitl_project_authorization") or {}).get("single_person_exception")
-    add("S1", "tenant B has no single-person exception and no grant on project A or B", b_exception is None and not [g for g in c.facts.project_grants if str(g["tenant_id"]) == c.tenant_b])
+    b_exception = (
+        ((c.facts.tenants.get(c.tenant_b) or {}).get("settings") or {}).get(
+            "hitl_project_authorization"
+        )
+        or {}
+    ).get("single_person_exception")
+    add(
+        "S1",
+        "tenant B has no single-person exception and no grant on project A or B",
+        b_exception is None
+        and not [g for g in c.facts.project_grants if str(g["tenant_id"]) == c.tenant_b],
+    )
     created = [e for e in c.facts.events if e["event_type"] == "hitl.project_grant_created"]
-    add("S1", "each grant has its audit event, written with it", len(created) == len(grants) and {str((e.get("payload") or {}).get("grant_id")) for e in created} == {str(g["grant_id"]) for g in grants})
+    add(
+        "S1",
+        "each grant has its audit event, written with it",
+        len(created) == len(grants)
+        and {str((e.get("payload") or {}).get("grant_id")) for e in created}
+        == {str(g["grant_id"]) for g in grants},
+    )
 
 
 _FIXTURE_KEY_OF = {
@@ -333,11 +380,19 @@ def _judge_s2(c: _Ctx) -> None:
     sha = c.expect.fixture_sha
     for key, fixture_key in _FIXTURE_KEY_OF.items():
         revs = revisions_of.get(c.doc(key), [])
-        wanted = [sha["contractA"], sha["contractB"]] if key == "contract" else [sha[fixture_key]]
+        stored = [r["blob_hash"] for r in revs]
+        if key == "contract":
+            # S2 creates only contract A. Revision B arrives later in S6, so
+            # an honest fail-fast run ending in S3 must not fail the S2 pin.
+            # Once B exists, its exact hash is also required here; S6 still
+            # checks both revisions and their trust/lineage independently.
+            valid_pin = stored in ([sha["contractA"]], [sha["contractA"], sha["contractB"]])
+        else:
+            valid_pin = stored == [sha[fixture_key]]
         add(
             "S2",
             f"{key}: stored revisions carry the pinned SHA-256 of the committed files",
-            [r["blob_hash"] for r in revs] == wanted,
+            valid_pin,
             f"{len(revs)} revision(s)",
         )
 
@@ -402,12 +457,7 @@ def _judge_s4(c: _Ctx) -> None:
     budget_revisions = {
         str(r["revision_id"]): str(r["blob_hash"]) for r in c.revisions_of.get(budget_id, [])
     }
-    pointers = [
-        p
-        for a in c.alerts
-        for p in _structured_pointers(a)
-        if p.get("family") == "budget"
-    ]
+    pointers = [p for a in c.alerts for p in _structured_pointers(a) if p.get("family") == "budget"]
     exact = [
         p
         for p in pointers
@@ -491,7 +541,14 @@ def _rows_of(c: _Ctx, document: str) -> list[dict[str, Any]]:
 
 
 def _first_final_act(c: _Ctx, document: str) -> Any:
-    return min((_utc_naive(r["approved_at"]) for r in c.reviews if str(r["document_id"]) == c.doc(document) and r.get("approved_at")), default=None)
+    return min(
+        (
+            _utc_naive(r["approved_at"])
+            for r in c.reviews
+            if str(r["document_id"]) == c.doc(document) and r.get("approved_at")
+        ),
+        default=None,
+    )
 
 
 def _judge_s5_finding_decisions(c: _Ctx) -> None:
@@ -502,7 +559,12 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
     if decided <= 0:
         return
     rows = c.facts.finding_decisions
-    c.add("S5", "every finding decision taken in the browser is a ledger row", len(rows) == decided, f"{len(rows)}/{decided}")
+    c.add(
+        "S5",
+        "every finding decision taken in the browser is a ledger row",
+        len(rows) == decided,
+        f"{len(rows)}/{decided}",
+    )
     c.add(
         "S5",
         "each finding decision is attributed to the authenticated Clerk user of tenant A (ledger: user id)",
@@ -519,14 +581,17 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
         c.add(
             "S5",
             "the positive route: the contract's ledger holds five CONFIRMED decisions on five distinct findings and nothing else",
-            len(mine) == 5 and {str(r["action"]) for r in mine} == {"CONFIRMED"} and len({str(r["finding_id"]) for r in mine}) == 5,
+            len(mine) == 5
+            and {str(r["action"]) for r in mine} == {"CONFIRMED"}
+            and len({str(r["finding_id"]) for r in mine}) == 5,
             ",".join(str(r["action"]) for r in mine),
         )
     elif positive.get("controlled"):
         c.add(
             "S5",
             "the controlled candidate's ledger holds the four actions CONFIRMED, DISMISSED, NEEDS_INFO and CORRECTION_PROPOSED",
-            {str(r["action"]) for r in rows} == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
+            {str(r["action"]) for r in rows}
+            == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
             ",".join(sorted({str(r["action"]) for r in rows})),
         )
     if negative:
@@ -534,21 +599,25 @@ def _judge_s5_finding_decisions(c: _Ctx) -> None:
         c.add(
             "S5",
             "the negative route: the rejected candidate's ledger holds the four actions CONFIRMED, DISMISSED, NEEDS_INFO and CORRECTION_PROPOSED",
-            len(mine) == 4 and {str(r["action"]) for r in mine} == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
+            len(mine) == 4
+            and {str(r["action"]) for r in mine}
+            == {"CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED"},
             ",".join(str(r["action"]) for r in mine),
         )
         first_rejection = _first_final_act(c, "rejectedCandidate")
         c.add(
             "S5",
             "the negative route's decisions were recorded before the rejection, which is a separate act",
-            first_rejection is not None and all(_utc_naive(r["recorded_at"]) <= first_rejection for r in mine),
+            first_rejection is not None
+            and all(_utc_naive(r["recorded_at"]) <= first_rejection for r in mine),
         )
     first_approval = _first_final_act(c, "contract")
     contract_rows = _rows_of(c, "contract") if positive.get("route") == "positive" else rows
     c.add(
         "S5",
         "the decisions were recorded before the final approval, which is a separate act",
-        first_approval is not None and all(_utc_naive(r["recorded_at"]) <= first_approval for r in contract_rows),
+        first_approval is not None
+        and all(_utc_naive(r["recorded_at"]) <= first_approval for r in contract_rows),
     )
 
 
@@ -583,26 +652,46 @@ def _judge_s5_reconciled_approval(c: _Ctx) -> None:
             and set(attempt.get("derivations") or []) == _NEGATIVE_DERIVATIONS,
             json.dumps(attempt, sort_keys=True),
         )
-        rejected_rows = {str(r["id"]) for r in c.reviews if str(r["document_id"]) == c.doc("rejectedCandidate")}
+        rejected_rows = {
+            str(r["id"]) for r in c.reviews if str(r["document_id"]) == c.doc("rejectedCandidate")
+        }
         approving = [
-            o for o in c.facts.resume_operations if str(o["review_row_id"]) in rejected_rows and str(o["decision"]).startswith("APPROVE")
+            o
+            for o in c.facts.resume_operations
+            if str(o["review_row_id"]) in rejected_rows and str(o["decision"]).startswith("APPROVE")
         ]
-        c.add("S5", "S5-04: the refused approval created no approve operation and promoted nothing", not approving)
+        c.add(
+            "S5",
+            "S5-04: the refused approval created no approve operation and promoted nothing",
+            not approving,
+        )
 
 
 def _judge_s5_authority(c: _Ctx) -> None:
     """The review that holds the contract's ledger (revision A) -- not the later approval of revision B -- carries the authority."""
     ledger = _rows_of(c, "contract")
     holders = {str(r["review_row_id"]) for r in ledger}
-    c.add("S5", "S5-03: the contract's decisions belong to exactly one review row", len(holders) == 1, str(len(holders)))
+    c.add(
+        "S5",
+        "S5-03: the contract's decisions belong to exactly one review row",
+        len(holders) == 1,
+        str(len(holders)),
+    )
     operations = [o for o in c.facts.resume_operations if str(o["review_row_id"]) in holders]
-    c.add("S5", "S5-05: that review's approval created exactly one resume operation", len(operations) == 1, str(len(operations)))
+    c.add(
+        "S5",
+        "S5-05: that review's approval created exactly one resume operation",
+        len(operations) == 1,
+        str(len(operations)),
+    )
     authority = (operations[0].get("authority") if len(operations) == 1 else None) or {}
     receipt = authority.get("receipt") or {}
     review = next((r for r in c.reviews if str(r["id"]) in holders), {})
     bound = _binding(review).get("artifact_id")
     trusted = [
-        a for a in c.artifacts_of.get(c.doc("contract"), []) if a["trust_state"] == "trusted" and str(a["artifact_id"]) == str(bound)
+        a
+        for a in c.artifacts_of.get(c.doc("contract"), [])
+        if a["trust_state"] == "trusted" and str(a["artifact_id"]) == str(bound)
     ]
     grant = next(
         (
@@ -625,7 +714,11 @@ def _judge_s5_authority(c: _Ctx) -> None:
         and str(authority.get("review_row_id")) in holders
         and str(authority.get("user_id")) in c.actor_ids,
     )
-    c.add("S5", "S5-05: the authority points at an active APPROVE_CANDIDATE grant of that user on this project", grant is not None)
+    c.add(
+        "S5",
+        "S5-05: the authority points at an active APPROVE_CANDIDATE grant of that user on this project",
+        grant is not None,
+    )
     digest = str(receipt.get("digest") or "")
     c.add(
         "S5",
@@ -636,7 +729,8 @@ def _judge_s5_authority(c: _Ctx) -> None:
         and str(receipt.get("artifact_id")) == str(trusted[0]["artifact_id"])
         and receipt.get("artifact_hash") == trusted[0]["artifact_hash"]
         and bool(ledger)
-        and int(receipt.get("ledger_revision") or -1) == max(int(r["ledger_revision"]) for r in ledger),
+        and int(receipt.get("ledger_revision") or -1)
+        == max(int(r["ledger_revision"]) for r in ledger),
         f"digest={digest[:12]} ledger_revision={receipt.get('ledger_revision')}",
     )
 
@@ -1106,8 +1200,90 @@ async def _rows(conn: AsyncConnection, sql: str, **params: Any) -> list[dict[str
 
 
 async def _scalar_exists(conn: AsyncConnection, relation: str) -> bool:
-    rows = (await conn.execute(text("SELECT to_regclass(:r) IS NOT NULL AS present"), {"r": relation})).all()
+    rows = (
+        await conn.execute(text("SELECT to_regclass(:r) IS NOT NULL AS present"), {"r": relation})
+    ).all()
     return bool(rows and rows[0][0])
+
+
+def summarize_s3_lineage(
+    analysis_rows: list[dict[str, Any]],
+    graph_rows: list[dict[str, Any]],
+    snapshot_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Sanitized, stage-local evidence for the first S3 failure.
+
+    Count observed transitions without guessing which link is broken; use only
+    server-computed booleans and assessment lengths, never result_json or ids.
+    The latest snapshot is first because the collection query sorts DESC.
+    """
+    latest = snapshot_rows[0] if snapshot_rows else {}
+    return {
+        "schema": "c2pro-s3-lineage-diagnostic/v1",
+        "evidence": "read_only_counts_not_a_root_cause_verdict",
+        "analyses_total": len(analysis_rows),
+        "analyses_with_assessment": sum(bool(r.get("has_assessment")) for r in analysis_rows),
+        "analyses_with_six_assessments": sum(r.get("assessment_count") == 6 for r in analysis_rows),
+        "graph_completed_total": len(graph_rows),
+        "graph_with_analysis_id": sum(bool(r.get("has_analysis_id")) for r in graph_rows),
+        "graph_with_matching_analysis": sum(bool(r.get("matching_analysis")) for r in graph_rows),
+        "graph_with_assessment": sum(bool(r.get("analysis_has_assessment")) for r in graph_rows),
+        "graph_with_snapshot": sum(int(r.get("snapshot_count") or 0) > 0 for r in graph_rows),
+        "snapshots_total": len(snapshot_rows),
+        "snapshots_with_coverage": sum(
+            r.get("assessment_count") is not None for r in snapshot_rows
+        ),
+        "snapshots_with_six_assessments": sum(
+            r.get("assessment_count") == 6 for r in snapshot_rows
+        ),
+        "latest_snapshot_trigger": str(latest.get("trigger") or "") or None,
+        "latest_snapshot_assessment_count": latest.get("assessment_count"),
+    }
+
+
+async def collect_s3_lineage_diagnostic(
+    conn: AsyncConnection, project_id: UUID, tenant_id: UUID
+) -> dict[str, Any]:
+    """Read only the minimum status/length fields; never retrieve JSON bodies."""
+    params = {"p": project_id, "t": tenant_id}
+    assess_len = (
+        "CASE WHEN jsonb_typeof(result_json->'single_document_assessment'->'coverage'->'assessments') = 'array' "
+        "THEN jsonb_array_length(result_json->'single_document_assessment'->'coverage'->'assessments') "
+        "ELSE NULL END"
+    )
+    analysis_rows = await _rows(
+        conn,
+        "SELECT result_json ? 'single_document_assessment' AS has_assessment, "
+        f"{assess_len} AS assessment_count "
+        "FROM analyses WHERE project_id = :p AND tenant_id = :t",
+        **params,
+    )
+    graph_rows = await _rows(
+        conn,
+        "SELECT (e.payload->>'analysis_id') IS NOT NULL AS has_analysis_id, "
+        "(a.id IS NOT NULL) AS matching_analysis, "
+        "COALESCE(a.result_json ? 'single_document_assessment', false) AS analysis_has_assessment, "
+        "(SELECT count(*) FROM project_snapshots s "
+        " WHERE s.source_event_id = e.event_id AND s.project_id = e.project_id "
+        " AND s.tenant_id = e.tenant_id) AS snapshot_count "
+        "FROM project_events e "
+        "LEFT JOIN analyses a ON a.id::text = (e.payload->>'analysis_id') "
+        " AND a.project_id = e.project_id AND a.tenant_id = e.tenant_id "
+        "WHERE e.project_id = :p AND e.tenant_id = :t AND e.event_type = 'graph.completed' "
+        "ORDER BY e.occurred_at, e.event_id",
+        **params,
+    )
+    snapshot_rows = await _rows(
+        conn,
+        "SELECT trigger, "
+        "CASE WHEN jsonb_typeof(health_vector->'single_document_coverage'->'assessments') = 'array' "
+        "THEN jsonb_array_length(health_vector->'single_document_coverage'->'assessments') "
+        "ELSE NULL END AS assessment_count "
+        "FROM project_snapshots WHERE project_id = :p AND tenant_id = :t "
+        "ORDER BY captured_at DESC, snapshot_id DESC",
+        **params,
+    )
+    return summarize_s3_lineage(analysis_rows, graph_rows, snapshot_rows)
 
 
 async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Facts:
@@ -1220,6 +1396,9 @@ async def collect(conn: AsyncConnection, project_a: UUID, project_b: UUID) -> Fa
             )
         ).scalar_one()
     )
+    facts.s3_lineage_diagnostic = await collect_s3_lineage_diagnostic(
+        conn, project_a, facts.project_a["tenant_id"]
+    )
     facts.projection_artifacts = [
         str(row["artifact_id"])
         for row in await _rows(
@@ -1320,6 +1499,8 @@ def build_manifest(
     checks: list[Check],
     receipt: dict[str, Any],
     env: dict[str, str | None],
+    *,
+    s3_lineage_diagnostic: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One manifest tied to the project id: the browser half, the PostgreSQL verdicts and the first failure."""
     steps = _step_rows(browser, checks)
@@ -1340,6 +1521,7 @@ def build_manifest(
         "wbs": browser.get("wbs"),
         "structured_trust": browser.get("structuredTrust"),
         "structured_trust_independence": _trust_independence(browser.get("structuredTrust")),
+        "s3_lineage_diagnostic": s3_lineage_diagnostic or {},
         "provider_real_call_receipt": receipt,
         "clerk_identity_checks": browser.get("clerkIdentityChecks"),
         "snapshot_digests": browser.get("snapshotDigests"),
@@ -1458,6 +1640,7 @@ def main() -> int:
             "frontend_runtime_sha": _sha_from_env("FRONTEND_RUNTIME_SHA"),
             "backend_runtime_sha": _sha_from_env("BACKEND_RUNTIME_SHA"),
         },
+        s3_lineage_diagnostic=facts.s3_lineage_diagnostic,
     )
     # The manifest goes to stdout (the workflow redirects it): this process writes no file at all.
     sys.stdout.write(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
