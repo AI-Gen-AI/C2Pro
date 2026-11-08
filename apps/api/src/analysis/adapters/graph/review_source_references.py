@@ -7,6 +7,7 @@ that the critique or risk statement is correct.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Iterable
 from typing import Any
@@ -202,7 +203,25 @@ def risk_source_key(document_id: object, revision_id: object, clause_ref: object
     return f"{document}|{revision}|{code}" if code is not None else None
 
 
+def risk_quote_source_key(
+    document_id: object, revision_id: object, clause_ref: object, source_quote: object
+) -> str | None:
+    """Per-risk key ``doc|rev|numeric_ref|sha256(source_quote)``.
+
+    Two risks sharing a clause code but quoting different text get distinct keys,
+    so a binding validated for one quote can never upgrade another risk. None
+    unless the quote is a non-blank string and ``risk_source_key`` is valid.
+    """
+    if not isinstance(source_quote, str) or not source_quote.strip():
+        return None
+    base = risk_source_key(document_id, revision_id, clause_ref)
+    if base is None:
+        return None
+    return f"{base}|{hashlib.sha256(source_quote.encode('utf-8')).hexdigest()}"
+
+
 __all__ = [
+    "risk_quote_source_key",
     "risk_source_key",
     "bind_risk_alert_source_references",
     "review_risk_clause_codes",

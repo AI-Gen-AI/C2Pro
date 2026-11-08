@@ -18,7 +18,7 @@ from uuid import UUID
 from src.analysis.adapters.graph.review_source_references import (
     grounded_review_source_references,
     review_risk_clause_codes,
-    risk_source_key,
+    risk_quote_source_key,
 )
 from src.analysis.domain.contracts import DocumentArtifact
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
@@ -50,7 +50,7 @@ async def load_trusted_risk_source_clause_ids(
     artifacts: Sequence[DocumentArtifact],
     repository: Any | None = None,
 ) -> dict[str, str]:
-    """Return ``{doc|rev|numeric_ref: physical clause UUID}`` for resolvable risks."""
+    """Return ``{doc|rev|code|sha256(quote): physical clause UUID}`` per resolvable risk."""
     tenant, project = _uuid(tenant_id), _uuid(project_id)
     if tenant is None or project is None:
         return {}
@@ -60,12 +60,16 @@ async def load_trusted_risk_source_clause_ids(
         document, revision = _uuid(artifact.document_id), _uuid(artifact.document_revision_id)
         if document is None or revision is None:
             continue
-        codes = review_risk_clause_codes([
-            risk.model_dump(mode="json")
+        candidates = [
+            (risk, code)
             for risk in artifact.extracted_risks
             if risk.source_quote_status == VERIFIED_QUOTE_STATUS
-        ])
-        if not codes:
+            and isinstance(risk.source_quote, str)
+            and risk.source_quote.strip()
+            and (codes := review_risk_clause_codes([{"clause_ref": risk.clause_ref}]))
+            for code in codes
+        ]
+        if not candidates:
             continue
         try:
             # Savepoint: a failed read must not poison the run's transaction.
@@ -77,13 +81,25 @@ async def load_trusted_risk_source_clause_ids(
                 extra={"document_id": str(document), "revision_id": str(revision)},
             )
             continue
-        for ref in grounded_review_source_references(
-            tenant_id=tenant, project_id=project, document_id=document,
-            revision_id=revision, clause_codes=codes, persisted_clauses=clauses,
-        ):
-            key = risk_source_key(ref["document_id"], ref["revision_id"], ref["clause_code"])
+        by_id = {getattr(c, "id", None): c for c in clauses}
+        resolved: dict[str, Any] = {}
+        for risk, code in candidates:
+            if code not in resolved:
+                refs = grounded_review_source_references(
+                    tenant_id=tenant, project_id=project, document_id=document,
+                    revision_id=revision, clause_codes={code}, persisted_clauses=clauses,
+                )
+                resolved[code] = refs[0] if len(refs) == 1 else None
+            ref = resolved[code]
+            clause = by_id.get(_uuid(ref["clause_id"])) if ref else None
+            full_text = getattr(clause, "full_text", None)
+            # The quote must sit verbatim inside THIS physical clause (no
+            # normalisation); a missing legacy full_text fails closed.
+            if not isinstance(full_text, str) or risk.source_quote not in full_text:
+                continue
+            key = risk_quote_source_key(document, revision, code, risk.source_quote)
             if key is not None:
-                mapping[key] = ref["clause_id"]
+                mapping[key] = str(clause.id)
     return mapping
 
 
