@@ -57,6 +57,7 @@ _INCLUDE_KEYWORDS_ES: tuple[str, ...] = (
     "objeto",
     "precio del contrato",
     "precio contractual",
+    "presupuesto contractual",
     "plazo",
     "fecha de finalizacion",
     "fecha de entrega",
@@ -148,6 +149,21 @@ _EXCLUDE_KEYWORDS_EN: tuple[str, ...] = (
 
 _INCLUDE_KEYWORDS: tuple[str, ...] = _INCLUDE_KEYWORDS_ES + _INCLUDE_KEYWORDS_EN
 _EXCLUDE_KEYWORDS: tuple[str, ...] = _EXCLUDE_KEYWORDS_ES + _EXCLUDE_KEYWORDS_EN
+
+# The broad "presupuesto" exclusion must not erase operative commercial terms
+# just because a narrative EPC clause calls the contract price its budget.
+# A tabular price list with the same phrase still belongs outside N4 context.
+_CONTRACTUAL_BUDGET_NARRATIVE = re.compile(
+    r"\b(?:presupuesto contractual|presupuesto total del contrato|"
+    r"precio del contrato|contract price|contract sum)\b",
+    re.IGNORECASE,
+)
+_TABULAR_PRICE_CONTEXT = re.compile(
+    r"\b(?:tabla de precios|tabla de presupuesto|cuadro de presupuesto|"
+    r"precio unitario|subtotal|medicion y pago|price schedule|"
+    r"unit price|bill of materials|bom)\b",
+    re.IGNORECASE,
+)
 
 
 def _keyword_match_text(original: str) -> str:
@@ -577,7 +593,10 @@ CRITICAL OUTPUT RULES:
             substantive_obligation = _PENALTY_OR_DEFAULT_CLAUSE.search(
                 paragraph
             ) and _OPERATIVE_OBLIGATION.search(paragraph)
-            if price_or_bom and not substantive_obligation:
+            commercial_narrative = _CONTRACTUAL_BUDGET_NARRATIVE.search(
+                lower
+            ) and not _TABULAR_PRICE_CONTEXT.search(lower)
+            if price_or_bom and not substantive_obligation and not commercial_narrative:
                 continue
             if any(keyword in lower for keyword in _INCLUDE_KEYWORDS):
                 selected.append(paragraph)
