@@ -55,23 +55,53 @@ def source_bound_findings(
             # extracted risks. Do not create evidence based on title metadata.
             continue
 
-        # If the provided source has explicit lines like "EPC-04: <text>",
-        # ensure the quoted fragment lies within THAT clause, not a different
-        # clause in the same contract. For other document layouts, provenance
-        # guarantees remain quote-global and must be reported accordingly.
+        # The reference and quote must be co-located in an identifiable clause.
+        # Support line-initial EPC-04: and numbered clauses such as "5.2 <text>"
+        # or "Section 5.2: <text>". Same-line mentions are not headings.
+        # A reference merely *mentioned* elsewhere is not clause provenance.
+        # Recognise only line-initial headings. Narrative same-line
+        # cross-references such as "... Section 6.3 applies separately" are
+        # NOT a new source span, even if followed by an authentic quotation.
+        # Qualified headings need an explicit punctuation delimiter; without
+        # one a phrase beginning "Section 6.3 applies" is still ambiguous.
         labels = list(
-            re.finditer(r"(?m)^\s*(EPC-\d+)\s*:", source_text, re.IGNORECASE)
+            re.finditer(
+                r"(?im)^[ \t]*(?:"
+                r"(?:(?:Clause|Section|Cláusula|Artículo|Articulo|§)[ \t]*)"
+                r"(?P<qualified_ref>EPC-\d+|\d+(?:\.\d+){1,3})[ \t]*[:.)-]"
+                r"|(?P<bare_ref>EPC-\d+|\d+(?:\.\d+){1,3})(?:[ \t]*[:.)-]|[ \t]+)"
+                r")",
+                source_text,
+            )
         )
-        if labels and re.fullmatch(r"EPC-\d+", clause_ref.strip(), re.IGNORECASE):
-            matched = False
-            for pos, label in enumerate(labels):
-                if label.group(1).casefold() != clause_ref.strip().casefold():
-                    continue
-                end = labels[pos + 1].start() if pos + 1 < len(labels) else len(source_text)
-                matched = quote in _normal(source_text[label.end() : end])
-                break
-            if not matched:
+        # An uncertain qualified line still interrupts the *previous* known
+        # clause, but is not itself sufficient to certify the new clause.
+        # Otherwise a valid 5.2 heading can absorb an ambiguous Section 6.3.
+        ambiguous_boundaries = [
+            m.start()
+            for m in re.finditer(
+                r"(?im)^[ \t]*(?:Clause|Section|Cláusula|Artículo|Articulo|§)"
+                r"[ \t]*(?:EPC-\d+|\d+(?:\.\d+){1,3})\b",
+                source_text,
+            )
+        ]
+        boundaries = sorted(
+            {label.start() for label in labels} | set(ambiguous_boundaries)
+        )
+        matched = False
+        for label in labels:
+            ref = label.group("qualified_ref") or label.group("bare_ref")
+            if ref.casefold() != clause_ref.strip().casefold():
                 continue
+            end = min(
+                (point for point in boundaries if point > label.start()),
+                default=len(source_text),
+            )
+            if quote in _normal(source_text[label.start() : end]):
+                matched = True
+                break
+        if not matched:
+            continue
         verified.append(
             {
                 "clause_ref": clause_ref.strip(),
@@ -85,7 +115,7 @@ def source_bound_findings(
 
 def format_source_bound_notes(findings: list[dict[str, str]]) -> str:
     """Keep exact citations visible to existing N12/UI consumers."""
-    return "Source-cited critique findings:\n" + "\n".join(
+    return "Source-cited critique findings (provenance only; interpretation unverified):\n" + "\n".join(
         f"- {item['clause_ref']} [{item['issue_type']}]: "
         f"{item['explanation']} Source: “{item['source_quote']}”"
         for item in findings

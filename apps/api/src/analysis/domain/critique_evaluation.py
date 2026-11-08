@@ -86,13 +86,20 @@ class CritiqueEvaluationService:
             cleared_notes = critique_notes
         # OK clears notes.
 
-        human_approval_required = False if skip_hitl else (
-            confidence is None or confidence < self.confidence_threshold
-            or (normalized_status == "RETRY" and new_retry_count >= self.max_retries)
-        )
+        # UNASSESSED is an evidence failure, not a low-confidence model
+        # verdict. Never inherit N4's score or bypass HITL in mock mode.
+        if normalized_status == "UNASSESSED":
+            assessed_confidence = None
+            human_approval_required = True
+        else:
+            assessed_confidence = confidence
+            human_approval_required = False if skip_hitl else (
+                confidence is None or confidence < self.confidence_threshold
+                or (normalized_status == "RETRY" and new_retry_count >= self.max_retries)
+            )
 
         return CritiqueEvaluationResult(
-            confidence=confidence,
+            confidence=assessed_confidence,
             retry_count=new_retry_count,
             human_approval_required=human_approval_required,
             critique_notes=cleared_notes,

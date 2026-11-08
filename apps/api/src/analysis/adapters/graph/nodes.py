@@ -47,6 +47,7 @@ from src.analysis.application.critique_extraction_use_case import (
     CritiqueExtractionUseCase,
 )
 from src.analysis.domain.ai_source_text import llm_document_text
+from src.analysis.domain.n12_source_attestation import is_n12_source_attestation_valid
 from src.analysis.domain.ai_extraction import (
     CritiqueExtractionService,
     DeterministicRiskRulesService,
@@ -470,6 +471,12 @@ async def critique_node(state: ProjectState) -> ProjectState:
         return state
 
     use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
+    source_text = llm_document_text(state)
+    # N2 can redact or replace source text. An attestation of the *original*
+    # does not certify a transformed projection, even with a matching revision.
+    source_complete = is_n12_source_attestation_valid(
+        state, source_text=source_text,
+    )
     try:
         result = await use_case.execute(
             CritiqueExtractionCommand(
@@ -479,7 +486,8 @@ async def critique_node(state: ProjectState) -> ProjectState:
                 retry_count=state["retry_count"],
                 # Reuse the same document already held by this graph; prefer
                 # its PII-protected form. No additional document or tenant read.
-                source_text=llm_document_text(state) or None,
+                source_text=source_text or None,
+                source_complete=source_complete,
             )
         )
     # N12 isolates critique service failures and routes to HITL for review.

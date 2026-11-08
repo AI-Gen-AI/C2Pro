@@ -11,7 +11,10 @@ from fastapi import HTTPException, status
 from src.core.json_types import JsonDict
 from src.core.tenants.types import require_tenant_id
 from src.documents.application.budget_stated_total import record_revision_stated_total
-from src.documents.application.document_coverage import record_revision_document_coverage
+from src.documents.application.document_coverage import (
+    record_revision_document_coverage,
+    record_revision_parsed_text_digest,
+)
 from src.documents.application.document_source import fetch_source_file, resolve_source_revision
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
@@ -214,6 +217,11 @@ class ParseDocumentUseCase:
             )
             if parsed_text:
                 metadata["parsed_text"] = parsed_text
+                record_revision_parsed_text_digest(
+                    metadata,
+                    parsed_text=parsed_text,
+                    revision_id=revision.revision_id if revision is not None else None,
+                )
                 if revision is not None:
                     metadata["parsed_text_revision_id"] = str(revision.revision_id)
                 else:

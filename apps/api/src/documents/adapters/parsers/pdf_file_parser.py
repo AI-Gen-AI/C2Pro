@@ -98,6 +98,19 @@ class PDFParsingError(Exception):
     pass
 
 
+class PDFExtractionBlocks(list[dict[str, Any]]):
+    """A list with transient per-page OCR diagnostics for the inventory.
+
+    The composite adapter serializes ordinary list elements as extracted
+    content; this diagnostic-only sidecar is emitted separately as metadata.
+    No OCR exception text or source content enters the sidecar.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.ocr_diagnostics: list[dict[str, Any]] = []
+
+
 class PDFFileParser:
     """
     Adapter class for parsing PDF files.
@@ -135,7 +148,7 @@ class PDFFileParser:
         if not pdf_path.suffix.lower() == ".pdf":
             raise PDFParsingError(f"File is not a PDF: {pdf_path}")
 
-        text_blocks = []
+        text_blocks = PDFExtractionBlocks()
         ocr_pages = 0
 
         try:
@@ -151,20 +164,38 @@ class PDFFileParser:
                 # broken embedded text layer). In the corrupt case OCR replaces the
                 # garbage blocks so downstream steps see real text.
                 page_text = " ".join(block["text"] for block in page_text_blocks)
-                if OCR_AVAILABLE and (
-                    not page_text_blocks or _is_low_quality_text_layer(page_text)
-                ):
-                    ocr_text = self._ocr_page(page, page_num)
-                    if ocr_text:
-                        page_text_blocks = [
-                            {
-                                "text": ocr_text,
-                                "bbox": (0, 0, page.rect.width, page.rect.height),
-                                "page": page_num + 1,
-                                "ocr": True,
-                            }
-                        ]
-                        ocr_pages += 1
+                ocr_reason = (
+                    "no_native_text"
+                    if not page_text_blocks
+                    else "suspect_native_text" if _is_low_quality_text_layer(page_text)
+                    else None
+                )
+                if ocr_reason is not None:
+                    observation: dict[str, Any] = {
+                        "page": page_num + 1, "reason": ocr_reason
+                    }
+                    if OCR_AVAILABLE:
+                        ocr_text = self._ocr_page(
+                            page, page_num, diagnostic=observation,
+                        )
+                        if ocr_text:
+                            page_text_blocks = [
+                                {
+                                    "text": ocr_text,
+                                    "bbox": (0, 0, page.rect.width, page.rect.height),
+                                    "page": page_num + 1,
+                                    "ocr": True,
+                                }
+                            ]
+                            ocr_pages += 1
+                            observation["outcome"] = "succeeded"
+                        else:
+                            # If the method was replaced by an adapter or mock,
+                            # distinguish unknown from an observed OCR exception.
+                            observation.setdefault("outcome", "unclassified_no_text")
+                    else:
+                        observation["outcome"] = "unavailable"
+                    text_blocks.ocr_diagnostics.append(observation)
 
                 text_blocks.extend(page_text_blocks)
 
@@ -207,11 +238,14 @@ class PDFFileParser:
 
         return blocks
 
-    def _ocr_page(self, page: fitz.Page, page_num: int) -> str | None:
-        """Apply OCR to a PDF page to extract text from images."""
-        if not OCR_AVAILABLE:
-            return None
-        if pytesseract is None:
+    def _ocr_page(
+        self, page: fitz.Page, page_num: int,
+        *, diagnostic: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Apply OCR, exposing only an outcome code to the caller."""
+        if not OCR_AVAILABLE or pytesseract is None or Image is None:
+            if diagnostic is not None:
+                diagnostic["outcome"] = "unavailable"
             return None
 
         try:
@@ -229,10 +263,16 @@ class PDFFileParser:
             # Clean up
             ocr_text = ocr_text.strip()
             if ocr_text:
+                if diagnostic is not None:
+                    diagnostic["outcome"] = "succeeded"
                 logger.debug("ocr_page_success", page=page_num + 1, chars=len(ocr_text))
                 return ocr_text
+            if diagnostic is not None:
+                diagnostic["outcome"] = "empty_result"
 
         except Exception as e:
+            if diagnostic is not None:
+                diagnostic["outcome"] = "failed"
             logger.warning("ocr_page_failed", page=page_num + 1, error=str(e))
 
         return None

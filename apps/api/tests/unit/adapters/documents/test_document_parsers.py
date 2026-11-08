@@ -834,7 +834,10 @@ class TestCompositeParser:
 
         result = await parser.parse_document_file(sample_document, Path("doc.pdf"))
 
-        assert result == {"file_format": ".pdf", "text_blocks": [{"text": "alpha"}]}
+        assert result["file_format"] == ".pdf"
+        assert result["text_blocks"] == [{"text": "alpha"}]
+        assert result["document_coverage"]["status"] == "UNVERIFIED"
+        assert "source_inventory_unavailable" in result["document_coverage"]["limitations"]
 
     @pytest.mark.asyncio
     async def test_composite_parser_routes_docx_text_documents(self, sample_document):
@@ -861,7 +864,10 @@ class TestCompositeParser:
 
         result = await parser.parse_document_file(document, Path("contract.docx"))
 
-        assert result == {"file_format": ".docx", "text_blocks": [{"text": "contract"}]}
+        assert result["file_format"] == ".docx"
+        assert result["text_blocks"] == [{"text": "contract"}]
+        assert result["document_coverage"]["status"] == "UNVERIFIED"
+        assert "source_inventory_unavailable" in result["document_coverage"]["limitations"]
         docx_parser.extract_text_and_offsets.assert_awaited_once_with(Path("contract.docx"))
 
     @pytest.mark.asyncio
@@ -871,6 +877,9 @@ class TestCompositeParser:
 
         excel_parser = MagicMock()
         excel_parser.parse_schedule = AsyncMock(return_value=[{"task": "Install"}])
+        excel_parser.inspect_coverage = AsyncMock(return_value={
+            "status": "UNVERIFIED", "origin": "excel_file_parser",
+        })
         parser = CompositeFileParser(MagicMock(), excel_parser, MagicMock())
         document = Document(
             id=sample_document.id,
@@ -884,7 +893,9 @@ class TestCompositeParser:
 
         result = await parser.parse_document_file(document, Path("schedule.xlsx"))
 
-        assert result == {"file_format": ".xlsx", "schedule": [{"task": "Install"}]}
+        assert result["file_format"] == ".xlsx"
+        assert result["schedule"] == [{"task": "Install"}]
+        assert "document_coverage" in result
 
     @pytest.mark.asyncio
     async def test_composite_parser_routes_excel_budget(self, sample_document):
@@ -893,6 +904,9 @@ class TestCompositeParser:
 
         excel_parser = MagicMock()
         excel_parser.parse_budget = AsyncMock(return_value=[{"item": "Steel"}])
+        excel_parser.inspect_coverage = AsyncMock(return_value={
+            "status": "UNVERIFIED", "origin": "excel_file_parser",
+        })
         parser = CompositeFileParser(MagicMock(), excel_parser, MagicMock())
         document = Document(
             id=sample_document.id,
@@ -906,7 +920,9 @@ class TestCompositeParser:
 
         result = await parser.parse_document_file(document, Path("budget.xlsx"))
 
-        assert result == {"file_format": ".xlsx", "budget": [{"item": "Steel"}]}
+        assert result["file_format"] == ".xlsx"
+        assert result["budget"] == [{"item": "Steel"}]
+        assert "document_coverage" in result
 
     @pytest.mark.asyncio
     async def test_composite_parser_rejects_docx_budget(self, sample_document):
@@ -956,7 +972,9 @@ class TestCompositeParser:
 
         result = await parser.parse_document_file(document, Path("budget.bc3"))
 
-        assert result == {"file_format": ".bc3", "budget": {"chapters": []}}
+        assert result["file_format"] == ".bc3"
+        assert result["budget"] == {"chapters": []}
+        assert result["document_coverage"]["status"] == "UNVERIFIED"
 
     @pytest.mark.asyncio
     async def test_composite_parser_rejects_unsupported_excel_document_type(self, sample_document):

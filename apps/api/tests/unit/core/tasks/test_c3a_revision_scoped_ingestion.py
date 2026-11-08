@@ -203,3 +203,8 @@ async def test_sync_parse_stamps_chunks_and_parsed_text_with_its_revision() -> N
     assert rag.ingest_document_chunks.await_args.kwargs["revision_id"] == revision.revision_id
     metadata = repo.update_metadata.await_args.args[2]
     assert metadata["parsed_text_revision_id"] == str(revision.revision_id)
+    # Both synchronous and Celery ingestion must stamp the exact source text.
+    from hashlib import sha256
+    assert metadata["n12_parsed_text_sha256_by_revision"][str(revision.revision_id)] == (
+        sha256(metadata["parsed_text"].encode("utf-8")).hexdigest()
+    )
