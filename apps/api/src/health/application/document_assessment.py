@@ -15,7 +15,11 @@ from uuid import UUID
 
 from src.coherence.models import Clause, FindingSignal
 from src.health.application.single_document_coverage import assess_single_document_coverage
-from src.health.domain.analysis_assessment import encode_single_document_assessment
+from src.health.domain.analysis_assessment import (
+    HEALTH_METHOD_CLAUSE_V2,
+    HEALTH_METHOD_ROUTER_V1,
+    encode_single_document_assessment,
+)
 from src.health.domain.single_document_coverage import EvidenceGranularity
 
 
@@ -34,9 +38,20 @@ def build_document_assessment_artifact(
     that could have been clause-granular was not, so the reason survives into
     ``result_json`` instead of living only in a log line.
     """
-    coverage = assess_single_document_coverage(clauses, finding_signals, document_id=document_id)
+    coverage = assess_single_document_coverage(
+        clauses, finding_signals, document_id=document_id, granularity=granularity
+    )
+    method = (
+        HEALTH_METHOD_CLAUSE_V2
+        if granularity is EvidenceGranularity.CLAUSE
+        else HEALTH_METHOD_ROUTER_V1
+    )
     return encode_single_document_assessment(
-        coverage, finding_signals, granularity, degradation_reason
+        coverage,
+        finding_signals,
+        granularity,
+        degradation_reason,
+        classification_method_version=method,
     )
 
 

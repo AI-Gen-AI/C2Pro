@@ -14,12 +14,13 @@ from src.coherence.domain.category_weights import CoherenceCategory
 from src.coherence.models import Clause
 from src.health.application.single_document_coverage import assess_single_document_coverage
 from src.health.domain.category_coverage import CategoryCoverageState
+from src.health.domain.single_document_coverage import EvidenceGranularity
 
 
 def _coverage():
     fixture = load_fixture()  # nine versioned source clauses; SHA pinned by fixture loader
     clauses = [Clause(id=part["id"], text=part["text"]) for part in fixture["contract"]["clauses"]]
-    return assess_single_document_coverage(clauses, [])
+    return assess_single_document_coverage(clauses, [], granularity=EvidenceGranularity.CLAUSE)
 
 
 def test_rich_epc_contract_carries_exact_category_evidence_without_score() -> None:
@@ -72,7 +73,7 @@ def test_category_evidence_retains_document_clause_identity_and_no_fabricated_di
             text=next(c["text"] for c in fixture["contract"]["clauses"] if c["id"] == "EPC-02"),
         ),
     ]
-    coverage = assess_single_document_coverage(clauses, [])
+    coverage = assess_single_document_coverage(clauses, [], granularity=EvidenceGranularity.CLAUSE)
     budget = next(a for a in coverage.assessments if a.category is CoherenceCategory.BUDGET)
     assert budget.evidence_clause_ids == ("EPC-02",)
     assert budget.evidence_count == 1

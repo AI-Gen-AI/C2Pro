@@ -248,21 +248,32 @@ class CategoryRouter:
         """
         if not text.strip():
             return set()
-        details = self._compute_chunk_relevance(ChunkSignal(chunk_id="health-evidence", text=text))
         qualified: set[CanonicalCategory] = set()
-        for cat, evidence in details.items():
-            if evidence.structural < 0.25:
+        # A persisted clause can contain paragraphs. Never combine anchors from
+        # separate paragraphs into a single positive Health category.
+        for paragraph in re.split(r"\r?\n[ \t]*\r?\n+", text):
+            if not paragraph.strip():
                 continue
-            # Require TWO DIFFERENT in-source words, not a duplicate across
-            # Spanish/English lexicons or repeated occurrences of one term.
-            matched_terms = {
-                term.casefold()
-                for terms in self._cat_lexicon.get(cat, {}).values()
-                for term in terms
-                if re.search(rf"\b{re.escape(term)}\b", text, re.IGNORECASE | re.UNICODE)
-            }
-            if len(matched_terms) >= 2:
-                qualified.add(cat)
+            details = self._compute_chunk_relevance(
+                ChunkSignal(chunk_id="health-evidence", text=paragraph)
+            )
+            for cat, evidence in details.items():
+                if evidence.structural < 0.25:
+                    continue
+                # Require TWO DISTINCT in-source lexicon phrases in this same
+                # paragraph; repeated words and language aliases do not count.
+                matched_terms = {
+                    term.casefold()
+                    for terms in self._cat_lexicon.get(cat, {}).values()
+                    for term in terms
+                    if re.search(
+                        rf"\b{re.escape(term)}\b",
+                        paragraph,
+                        re.IGNORECASE | re.UNICODE,
+                    )
+                }
+                if len(matched_terms) >= 2:
+                    qualified.add(cat)
         return qualified
 
     def _compute_chunk_relevance(

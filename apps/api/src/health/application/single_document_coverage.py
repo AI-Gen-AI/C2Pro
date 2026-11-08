@@ -15,10 +15,11 @@ Reuses existing contracts — the deterministic ``CategoryRouter`` (classificati
 ``category_coverage`` domain — rather than introducing parallel models.
 
 Qualifying-evidence contract (owned by this mapping layer, made explicit):
-- A clause is *qualifying supporting evidence* only when its real text, with
-  **no doc_type prior**, either passes the canonical ``CategoryRouter`` threshold
-  or carries an explicitly source-anchored conjunction of one structural signal
-  and at least two DIFFERENT lexicon terms in the SAME clause. The latter corrects
+- A clause is *qualifying supporting evidence* when its text, with **no doc_type
+  prior**, passes the canonical ``CategoryRouter`` threshold. Additionally, ONLY
+  for verified CLAUSE granularity from persisted source rows, a conjunction of
+  structural signal and two distinct lexicon terms in the SAME paragraph may
+  qualify; never infer that a document-level synthetic blob is an actual clause. The latter corrects
   a Capa-1 blind spot caused by reserving 60% router weight for unavailable
   embeddings. A category name or a document-type expectation alone is not
   evidence. No source-free evidence, relational score or synthetic green is produced.
@@ -51,6 +52,7 @@ from src.health.domain.single_document_coverage import (
 )
 from src.health.domain.single_document_coverage import (
     CategoryAssessment,
+    EvidenceGranularity,
     SingleDocumentCoverage,
 )
 
@@ -69,7 +71,9 @@ _CANONICAL_TO_COHERENCE: dict[CanonicalCategory, CoherenceCategory] = {
 QualifyingCategoriesFn = Callable[[str], set[CanonicalCategory]]
 
 
-def _router_qualifier(router: CategoryRouter) -> QualifyingCategoriesFn:
+def _router_qualifier(
+    router: CategoryRouter, *, allow_clause_anchors: bool = False
+) -> QualifyingCategoriesFn:
     """Deterministic, prior-free qualifier backed by the real ``CategoryRouter``."""
 
     def qualify(text: str) -> set[CanonicalCategory]:
@@ -81,9 +85,10 @@ def _router_qualifier(router: CategoryRouter) -> QualifyingCategoriesFn:
             for category, status in result.category_status.items()
             if status == "has_evidence"
         }
-        # Independently evidenced clauses must not be reported missing merely
-        # because this Capa-1-only router has a reserved embedding weight.
-        # Source clauses require BOTH structural and >=2 lexicon hits.
+        # Stronger source anchors are safe only for verified persisted clauses.
+        # A whole-document synthetic Clause may combine unrelated paragraphs.
+        if not allow_clause_anchors:
+            return threshold_qualified
         return threshold_qualified | router.clause_source_evidence_categories(text)
 
     return qualify
@@ -114,6 +119,7 @@ def assess_single_document_coverage(
     *,
     qualifier: QualifyingCategoriesFn | None = None,
     document_id: UUID | None = None,
+    granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT,
 ) -> SingleDocumentCoverage:
     """Assess single-document category coverage from extracted clauses + findings.
 
@@ -122,7 +128,10 @@ def assess_single_document_coverage(
     are produced (single-document scope).
     """
     if qualifier is None:
-        qualifier = _router_qualifier(CategoryRouter.from_registry())
+        qualifier = _router_qualifier(
+            CategoryRouter.from_registry(),
+            allow_clause_anchors=granularity is EvidenceGranularity.CLAUSE,
+        )
 
     qualifying_ids: dict[CoherenceCategory, list[str]] = {
         category: [] for category in CoherenceCategory

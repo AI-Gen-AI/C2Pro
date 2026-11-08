@@ -31,7 +31,7 @@ an id. When granularity is ``DOCUMENT`` for a contract, ``degradation_reason`` r
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -49,6 +49,11 @@ SINGLE_DOCUMENT_ASSESSMENT_KEY = "single_document_assessment"
 # Bumped whenever the artifact's shape changes incompatibly. A reader that does not
 # recognise the version treats the artifact as unavailable rather than misreading it.
 SINGLE_DOCUMENT_ASSESSMENT_VERSION = 1
+# Method revisions are distinct from serialization shape revisions. Historical
+# v1 artifacts without the field decode as the legacy classifier, never as v2.
+HEALTH_METHOD_ROUTER_V1 = "router_no_prior_v1"
+HEALTH_METHOD_CLAUSE_V2 = "router_clause_anchors_v2"
+HealthMethodVersion = Literal["router_no_prior_v1", "router_clause_anchors_v2"]
 
 
 class SingleDocumentAssessment(BaseModel):
@@ -61,6 +66,7 @@ class SingleDocumentAssessment(BaseModel):
     # before R1 was whole-document, which is exactly this default. Bumping the version
     # instead would strand those artifacts as "not evaluated" and lose real data.
     evidence_granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT
+    classification_method_version: HealthMethodVersion = HEALTH_METHOD_ROUTER_V1
     # Why the evidence is document-level. Set only when a document that *could* have
     # carried clause-granular evidence did not — an unreadable clause store reads very
     # differently from a document type that is never segmented, and both read
@@ -71,6 +77,11 @@ class SingleDocumentAssessment(BaseModel):
 
     @model_validator(mode="after")
     def _enforce_reason_scope(self) -> SingleDocumentAssessment:
+        if (
+            self.classification_method_version == HEALTH_METHOD_CLAUSE_V2
+            and self.evidence_granularity is not EvidenceGranularity.CLAUSE
+        ):
+            raise ValueError("clause-anchor method requires verified clause granularity")
         if (
             self.evidence_granularity is EvidenceGranularity.CLAUSE
             and self.degradation_reason is not None
@@ -84,6 +95,7 @@ def encode_single_document_assessment(
     finding_signals: Sequence[FindingSignal],
     granularity: EvidenceGranularity = EvidenceGranularity.DOCUMENT,
     degradation_reason: str | None = None,
+    classification_method_version: HealthMethodVersion = HEALTH_METHOD_ROUTER_V1,
 ) -> dict[str, Any]:
     """Build the additive ``result_json`` fragment for one analysis.
 
@@ -94,6 +106,7 @@ def encode_single_document_assessment(
         version=SINGLE_DOCUMENT_ASSESSMENT_VERSION,
         evidence_granularity=granularity,
         degradation_reason=degradation_reason,
+        classification_method_version=classification_method_version,
         finding_signals=tuple(finding_signals),
         coverage=coverage,
     )
@@ -124,6 +137,8 @@ def decode_single_document_assessment(
 __all__ = [
     "SINGLE_DOCUMENT_ASSESSMENT_KEY",
     "SINGLE_DOCUMENT_ASSESSMENT_VERSION",
+    "HEALTH_METHOD_ROUTER_V1",
+    "HEALTH_METHOD_CLAUSE_V2",
     "EvidenceGranularity",
     "SingleDocumentAssessment",
     "decode_single_document_assessment",
