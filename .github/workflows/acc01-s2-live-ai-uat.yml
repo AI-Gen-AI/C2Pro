@@ -1028,12 +1028,23 @@ jobs:
           assert n4["omissions"]==0 and n4["false_positives"]==0 and n4["invalid_citations"]==0
           assert n12["omissions_detected"]==2
           assert n12["incorrect_interpretation_detected"] is True
-          assert n12["critique_citation_validity"] is True and n12["quality_state"]=="ASSESSED"
+          # A source-verified critique is intentionally UNASSESSED until HITL
+          # validates the interpretation; do not manufacture ASSESSED here.
+          assert n12["status"] == "UNASSESSED" and n12["quality_state"] == "NOT_ASSESSED"
+          assert n12["human_approval_required"] is True
+          assert n12["critique_citation_validity"] is True
           assert n12["critique_quoted_citations"] >= 3
           assert n12["critique_valid_quoted_citations"] == n12["critique_quoted_citations"]
           assert n12["critique_invalid_quoted_citations"] == 0
           assert {"EPC-04", "EPC-05", "EPC-07"}.issubset(set(n12["critique_citation_clause_refs"]))
-          print("N4_N12_FUNCTIONAL_GOLDEN_PASS")
+          # Inspect raw model findings too; the domain deliberately hides
+          # invalid citations in notes. Never let that filtering fake 3/3.
+          assert n12["model_findings_payload_valid"] is True
+          assert n12["model_findings_submitted"] >= 3
+          assert n12["model_findings_unverified"] == 0
+          assert n12["model_findings_source_verified"] == n12["model_findings_submitted"]
+          assert {"EPC-04", "EPC-05", "EPC-07"}.issubset(set(n12["model_verified_clause_refs"]))
+          print("N4_N12_SOURCE_GROUNDED_DETECTION_PASS; HITL_SEMANTIC_REVIEW_REQUIRED")
           PY2
 
       - name: Report only sanitized facts and exact SHA
@@ -1052,7 +1063,8 @@ jobs:
               rows += [
                   f"N4: {n4['true_positives']}/{n4['expected_risks']} expected, {n4['invalid_citations']} invalid citations, {n4['false_positives']} extra risks",
                   f"N12 omissions: {n12['omissions_detected']}/2, wrong interpretation: {n12['incorrect_interpretation_detected']}",
-                  f"N12 quality state: {n12['quality_state']}",
+                  f"N12 quality state: {n12['quality_state']} (semantic HITL review required)",
+                  f"N12 raw findings: {n12.get('model_findings_source_verified', 'unknown')}/{n12.get('model_findings_submitted', 'unknown')} source-verified",
                   f"Provider: {p['calls']} reserved, {p['completed_calls']} completed, estimated USD {p['estimated_cost_usd']}",
                   "Functional acceptance requires all oracle gates; a model response alone is not acceptance.",
               ]

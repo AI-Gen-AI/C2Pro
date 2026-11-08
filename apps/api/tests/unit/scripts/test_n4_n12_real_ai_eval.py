@@ -86,6 +86,55 @@ class TestN4N12RealAiEval(unittest.TestCase):
         self.assertEqual(metric["critique_invalid_quoted_citations"], 1)
         self.assertFalse(metric["critique_citation_validity"])
 
+    @staticmethod
+    def _three_source_findings() -> tuple[str, list[dict[str, str]]]:
+        fixture = runner.load_fixture()
+        source = runner._source_text(fixture)
+        clauses = {clause["id"]: clause["text"] for clause in fixture["contract"]["clauses"]}
+        findings = [
+            {
+                "clause_ref": ref,
+                "issue_type": "contradiction" if ref == "EPC-05" else "omission",
+                "source_quote": clauses[ref][:155],
+                "explanation": "Check the source-backed obligation, interpretation awaits HITL.",
+            }
+            for ref in ("EPC-04", "EPC-05", "EPC-07")
+        ]
+        return source, findings
+
+    def test_n12_raw_payload_all_three_provenances_verified_without_semantic_approval(self) -> None:
+        source, findings = self._three_source_findings()
+        actual = runner.score_n12_structured_provenance(
+            {"findings": findings, "status": "RETRY"}, source
+        )
+        self.assertTrue(actual["model_findings_payload_valid"])
+        self.assertEqual(actual["model_findings_submitted"], 3)
+        self.assertEqual(actual["model_findings_source_verified"], 3)
+        self.assertEqual(actual["model_findings_unverified"], 0)
+        self.assertEqual(set(actual["model_verified_clause_refs"]), {"EPC-04", "EPC-05", "EPC-07"})
+
+    def test_n12_raw_payload_cannot_hide_hallucination_after_notes_sanitization(self) -> None:
+        source, findings = self._three_source_findings()
+        hallucinated = {
+            **findings[0],
+            "clause_ref": "EPC-07",
+            "source_quote": findings[0]["source_quote"],
+            "explanation": "Invented EPC-07 provenance for an EPC-04 quote.",
+        }
+        stats = runner.score_n12_structured_provenance(
+            {"findings": findings + [hallucinated]}, source
+        )
+        self.assertTrue(stats["model_findings_payload_valid"])
+        self.assertEqual(stats["model_findings_submitted"], 4)
+        self.assertEqual(stats["model_findings_source_verified"], 3)
+        self.assertEqual(stats["model_findings_unverified"], 1)
+
+    def test_n12_unstructured_model_response_never_passes_provenance_gate(self) -> None:
+        source, _ = self._three_source_findings()
+        stats = runner.score_n12_structured_provenance({"status": "OK"}, source)
+        self.assertFalse(stats["model_findings_payload_valid"])
+        self.assertEqual(stats["model_findings_source_verified"], 0)
+
     def test_n12_citation_gate_requires_source_quotes_not_bare_ids(self) -> None:
         source = (
             "EPC-04: The Contractor shall rectify defects after notice. "
