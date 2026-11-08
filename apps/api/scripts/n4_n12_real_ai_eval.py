@@ -17,7 +17,6 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-
 API_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = API_ROOT.parents[1]
 FIXTURE_PATH = REPOSITORY_ROOT / "c2pro-n4n12-epc-synthetic-v1.json"
@@ -33,8 +32,7 @@ def _normalized(value: object) -> str:
 
 def _source_text(fixture: dict[str, Any]) -> str:
     return "\n\n".join(
-        f"{clause['id']}: {clause['text']}"
-        for clause in fixture["contract"]["clauses"]
+        f"{clause['id']}: {clause['text']}" for clause in fixture["contract"]["clauses"]
     )
 
 
@@ -126,12 +124,10 @@ def score_n12(notes: str, source: str | None = None) -> dict[str, Any]:
     """Score only the three deliberately injected N12 failures."""
     normalized_notes = _normalized(notes)
     omission_detection = {
-        "EPC-04": "epc-04" in normalized_notes and any(
-            term in normalized_notes for term in ("defect", "rectif", "cure")
-        ),
-        "EPC-07": "epc-07" in normalized_notes and any(
-            term in normalized_notes for term in ("liability", "indemn", "cap")
-        ),
+        "EPC-04": "epc-04" in normalized_notes
+        and any(term in normalized_notes for term in ("defect", "rectif", "cure")),
+        "EPC-07": "epc-07" in normalized_notes
+        and any(term in normalized_notes for term in ("liability", "indemn", "cap")),
     }
     wrong_interpretation = (
         "epc-05" in normalized_notes
@@ -170,7 +166,14 @@ def score_n12(notes: str, source: str | None = None) -> dict[str, Any]:
         "critique_citation_clause_refs": cited_clause_ids,
         "critique_quoted_citations": len(quoted_fragments),
         "critique_valid_quoted_citations": len(valid_quoted_fragments),
-        "critique_citation_validity": bool(valid_quoted_fragments) if source is not None else None,
+        "critique_invalid_quoted_citations": len(quoted_fragments) - len(valid_quoted_fragments),
+        # Do not pass with only one valid citation when other quotes are hallucinated.
+        # A source-cited critique must substantiate EVERY quoted source fragment.
+        "critique_citation_validity": (
+            bool(quoted_fragments) and len(valid_quoted_fragments) == len(quoted_fragments)
+        )
+        if source is not None
+        else None,
     }
 
 
@@ -288,9 +291,7 @@ async def run() -> dict[str, Any]:
                     use_cache=False,
                 )
             )
-            self.response_sha256 = hashlib.sha256(
-                response.content.encode("utf-8")
-            ).hexdigest()
+            self.response_sha256 = hashlib.sha256(response.content.encode("utf-8")).hexdigest()
             try:
                 self.payload = parser._parse_json_response(response.content)
             except Exception as exc:
@@ -341,7 +342,11 @@ def main() -> int:
     result = asyncio.run(run())
     RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULT_PATH.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"fixture_id": result["fixture_id"], "provider": result["provider"]}, sort_keys=True))
+    print(
+        json.dumps(
+            {"fixture_id": result["fixture_id"], "provider": result["provider"]}, sort_keys=True
+        )
+    )
     return 0
 
 

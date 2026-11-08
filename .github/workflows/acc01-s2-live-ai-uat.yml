@@ -1029,6 +1029,10 @@ jobs:
           assert n12["omissions_detected"]==2
           assert n12["incorrect_interpretation_detected"] is True
           assert n12["critique_citation_validity"] is True and n12["quality_state"]=="ASSESSED"
+          assert n12["critique_quoted_citations"] >= 3
+          assert n12["critique_valid_quoted_citations"] == n12["critique_quoted_citations"]
+          assert n12["critique_invalid_quoted_citations"] == 0
+          assert {"EPC-04", "EPC-05", "EPC-07"}.issubset(set(n12["critique_citation_clause_refs"]))
           print("N4_N12_FUNCTIONAL_GOLDEN_PASS")
           PY2
 
