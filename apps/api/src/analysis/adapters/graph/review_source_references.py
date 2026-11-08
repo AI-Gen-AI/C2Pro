@@ -188,7 +188,22 @@ def bind_risk_alert_source_references(
     return bound
 
 
+def risk_source_key(document_id: object, revision_id: object, clause_ref: object) -> str | None:
+    """Immutable ``doc|rev|numeric_ref`` key for a risk-origin physical clause.
+
+    Returns None unless both IDs are UUIDs and ``clause_ref`` is an
+    explicit numeric clause code; callers then keep the revision surrogate.
+    """
+    code = _normalized_numbered_clause_code(clause_ref)
+    try:
+        document, revision = UUID(str(document_id)), UUID(str(revision_id))
+    except (TypeError, ValueError):
+        return None
+    return f"{document}|{revision}|{code}" if code is not None else None
+
+
 __all__ = [
+    "risk_source_key",
     "bind_risk_alert_source_references",
     "review_risk_clause_codes",
     "grounded_review_source_references",

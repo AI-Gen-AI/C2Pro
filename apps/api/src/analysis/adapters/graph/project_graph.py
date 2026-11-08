@@ -6,7 +6,7 @@ TS-UT-ADR017-PG-001
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
@@ -20,8 +20,12 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from src.analysis.adapters.graph.project_coherence_result import ProjectCoherenceResult
-from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
-from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
+from src.analysis.adapters.graph.project_graph_state import (
+    CoherenceAlertEvidence,
+    ProjectGraphState,
+)
+from src.analysis.adapters.graph.review_source_references import risk_source_key
+from src.analysis.adapters.graph.risk_signal_bridge import RiskBridgeResult, build_risk_signals
 from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.domain.contracts import (
     BudgetItem,
@@ -203,18 +207,61 @@ def _finding_signal_for_artifact(
     )
 
 
+def _risk_clause_id(
+    artifact: DocumentArtifact,
+    risk: RiskItem,
+    risk_source_clause_ids: Mapping[str, str] | None,
+) -> str:
+    """Physical clause UUID only for a VERIFIED-quote risk with a pre-grounded
+    numeric ``clause_ref``; otherwise the artifact revision surrogate."""
+    if risk_source_clause_ids and risk.source_quote_status == "VERIFIED":
+        key = risk_source_key(artifact.document_id, artifact.document_revision_id, risk.clause_ref)
+        if key is not None and key in risk_source_clause_ids:
+            return risk_source_clause_ids[key]
+    return _artifact_key(artifact)
+
+
+def _artifact_risk_signals(
+    artifact: DocumentArtifact,
+    risk_source_clause_ids: Mapping[str, str] | None,
+) -> RiskBridgeResult:
+    if not risk_source_clause_ids:
+        return build_risk_signals(
+            [risk.model_dump(mode="json") for risk in artifact.extracted_risks],
+            clause_id=_artifact_key(artifact),
+        )
+    # Per-risk bridging keeps risk order and every score/severity/confidence
+    # identical to the single call; only clause_id differs.
+    signals: list[FindingSignal] = []
+    coverage: dict[str, bool] = {}
+    dropped: dict[str, int] = {}
+    for risk in artifact.extracted_risks:
+        one = build_risk_signals(
+            [risk.model_dump(mode="json")],
+            clause_id=_risk_clause_id(artifact, risk, risk_source_clause_ids),
+        )
+        signals.extend(one.signals)
+        coverage.update(one.coverage_seed)
+        for reason, count in one.dropped_reasons.items():
+            dropped[reason] = dropped.get(reason, 0) + count
+    return RiskBridgeResult(
+        signals=tuple(signals),
+        coverage_seed=coverage,
+        dropped_count=sum(dropped.values()),
+        dropped_reasons=dropped,
+    )
+
+
 def _aggregate_cross_doc_inputs(
     artifacts: list[DocumentArtifact],
+    risk_source_clause_ids: Mapping[str, str] | None = None,
 ) -> tuple[list[FindingSignal], dict[str, bool], int]:
     signals: list[FindingSignal] = []
     coverage: dict[str, bool] = {}
     finding_count = 0
 
     for artifact in artifacts:
-        risk_result = build_risk_signals(
-            [risk.model_dump(mode="json") for risk in artifact.extracted_risks],
-            clause_id=_artifact_key(artifact),
-        )
+        risk_result = _artifact_risk_signals(artifact, risk_source_clause_ids)
         for signal in risk_result.signals:
             signals.append(
                 signal.model_copy(
@@ -270,6 +317,13 @@ class ArtifactSetEvaluation:
 
     summary: ProjectCoherenceResult
     score_version: str | None
+    # The unmodified engine result (alerts, finding signals, breakdown) behind
+    # ``summary``.  Alert reconciliation must use this, never the summary.
+    engine_result: EnrichedCoherenceResult | None = None
+    # Clauses the engine was evaluated with.  Artifact-set evaluation seeds
+    # signals and passes no clauses, so this is empty; verified clause
+    # provenance is resolved later against persisted trusted-current clauses.
+    source_clauses: tuple[Any, ...] = ()
 
 
 async def evaluate_artifact_set(
@@ -278,6 +332,7 @@ async def evaluate_artifact_set(
     project_id: UUID | str,
     tenant_id: UUID | str,
     llm_on: bool,
+    risk_source_clause_ids: Mapping[str, str] | None = None,
 ) -> ArtifactSetEvaluation:
     """THE canonical ProjectGraph Coherence evaluation of an artifact set.
 
@@ -286,9 +341,12 @@ async def evaluate_artifact_set(
     through exactly the same aggregation, engine and score_version.
     Read-only: it never persists anything.
     """
-    signals, coverage, finding_count = _aggregate_cross_doc_inputs(artifacts)
+    signals, coverage, finding_count = _aggregate_cross_doc_inputs(
+        artifacts, risk_source_clause_ids
+    )
+    source_clauses: tuple[Any, ...] = ()
     engine_result = await evaluate_coherence_async(
-        [],
+        list(source_clauses),
         str(project_id),
         config=EvaluationConfig(
             low_budget_mode=not llm_on,
@@ -312,6 +370,8 @@ async def evaluate_artifact_set(
             llm_on=llm_on,
         ),
         score_version=getattr(engine_result, "score_version", None),
+        engine_result=engine_result,
+        source_clauses=source_clauses,
     )
 
 
@@ -329,6 +389,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     if not artifacts:
         return {
             "coherence_result": None,
+            "coherence_alert_evidence": None,
             "structured_source_comparison": source_comparison,
             "node_results": _skipped("cross_doc_coherence", "no artifacts"),
         }
@@ -338,15 +399,30 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     overall_score_present = False
     signal_count = 0
     try:
+        source_clause_ids = state.get("risk_source_clause_ids")
         evaluation = await evaluate_artifact_set(
-            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on
+            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on,
+            **({"risk_source_clause_ids": source_clause_ids} if source_clause_ids else {}),
         )
         summary = evaluation.summary
         signal_count = summary.signal_count
         overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
+        # Legacy/mock evaluations may contain only a score summary. Missing
+        # raw evidence must not erase that score or manufacture alerts.
+        engine_result = getattr(evaluation, "engine_result", None)
         return {
             "coherence_result": summary,
+            "coherence_alert_evidence": (
+                CoherenceAlertEvidence(
+                    alerts=tuple(engine_result.alerts),
+                    source_clauses=tuple(evaluation.source_clauses),
+                    score_version=evaluation.score_version,
+                    artifact_revision_ids=tuple(_artifact_key(a) for a in artifacts),
+                )
+                if engine_result is not None
+                else None
+            ),
             "structured_source_comparison": source_comparison,
             "node_results": status,
         }
@@ -354,6 +430,7 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         degraded = True
         return {
             "coherence_result": None,
+            "coherence_alert_evidence": None,
             "structured_source_comparison": source_comparison,
             "node_results": _degraded("cross_doc_coherence", str(exc)),
         }
@@ -883,10 +960,11 @@ async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
 
 
 async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
-    """Invoke the Alerts-owned integration only when it is explicitly supplied.
+    """Reconcile the RAW Coherence alerts through the supplied Alerts runner.
 
-    ProjectGraph does not import or mutate Alerts.  This keeps the call point
-    ready for the P0 integration while making its absence visible to operators.
+    The runner receives ``evaluation.alerts`` and the source clauses captured by
+    ``cross_doc_coherence``.  Alerts are never reconstructed from the
+    ``ProjectCoherenceResult`` summary: without raw evidence the node is SKIPPED.
     """
     runner = state.get("alert_correlation_runner")
     if runner is None:
@@ -895,20 +973,64 @@ async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
                 "alert_correlation", "alert correlation integration unavailable"
             ),
         }
+    evidence = state.get("coherence_alert_evidence")
+    if evidence is None:
+        return {
+            "node_results": _skipped(
+                "alert_correlation", "raw coherence evaluation unavailable"
+            ),
+        }
     try:
         outcome = await runner.correlate(
             project_id=state["project_id"],
             tenant_id=state["tenant_id"],
             coherence_result=state.get("coherence_result"),
+            evaluation_alerts=evidence.alerts,
+            source_clauses=evidence.source_clauses,
         )
         return {"node_results": _ok("alert_correlation", dict(outcome))}
     except Exception as exc:  # no silent correlation success
         return {"node_results": _failed("alert_correlation", exc)}
 
 
-def hitl_routing(_state: ProjectGraphState) -> dict[str, Any]:
+def hitl_routing(state: ProjectGraphState) -> dict[str, Any]:
+    """Expose the existing Alert review surface from the actual reconciliation.
+
+    Read-only: nothing is approved, resolved or dismissed here.  Without a
+    successful ``alert_correlation`` the node stays SKIPPED (fail-closed: absence
+    of evidence is never reported as "nothing needs review").
+    """
+    correlation = next(
+        (
+            item
+            for item in reversed(state.get("node_results", []))
+            if item.node == "alert_correlation"
+        ),
+        None,
+    )
+    data = correlation.data if correlation is not None else None
+    if (
+        correlation is None
+        or correlation.status is not NodeStatus.OK
+        or not isinstance(data, dict)
+        or not isinstance(data.get("review_alert_ids"), list)
+    ):
+        return {
+            "node_results": _skipped(
+                "hitl_routing", "alert reconciliation unavailable; review routing not evaluated"
+            ),
+        }
+    review_ids = [str(alert_id) for alert_id in data["review_alert_ids"]]
     return {
-        "node_results": _skipped("hitl_routing", "pending ADR-020 HITL routing"),
+        "node_results": _ok(
+            "hitl_routing",
+            {
+                "review_surface": "alerts",
+                "requires_human_review_count": len(review_ids),
+                "review_alert_ids": review_ids,
+                "auto_approved": False,
+            },
+        ),
     }
 
 
