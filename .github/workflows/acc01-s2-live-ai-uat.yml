@@ -53,7 +53,7 @@ on:
         type: string
         default: ""
       n4_n12_focused_sha:
-        description: "N4/N12 ONLY: full CORE candidate SHA; max 2 Anthropic calls and USD 1; no S2/browser/deploy."
+        description: "N4/N12 representative CORE: exact SHA; 3 Sonnet calls max, USD 1; no S2/UAT/deploy."
         type: string
         default: ""
 
@@ -930,7 +930,7 @@ jobs:
           done
           docker compose -f docker-compose.test.yml down -v || true
 
-  # Explicitly scoped two-call evaluation: no web browser, DB, Celery, S2 or UAT.
+  # Explicitly scoped three-call representative evaluation: no web browser, DB, Celery, S2 or UAT.
   n4-n12-real-ai-focal:
     if: >-
       github.event_name == 'workflow_dispatch' &&
@@ -942,7 +942,7 @@ jobs:
       github.event.inputs.integral_discover_dev_b != 'true' &&
       github.event.inputs.integral_prepare_dev_a != 'true' &&
       github.event.inputs.integral_prepare_dev_b != 'true'
-    name: Focused N4/N12 golden EPC — two real calls maximum
+    name: CORE N4 Sonnet + adversarial/chained N12 — 3 calls maximum
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -954,9 +954,9 @@ jobs:
       JWT_SECRET_KEY: test-secret-key-min-32-chars-required-for-testing-purposes-only
       REDIS_URL: redis://localhost:6379/0
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
-      AI_MAX_TOKENS_OUTPUT: "4096"
+      AI_MAX_TOKENS_OUTPUT: "8192"
       C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/web/playwright-report/n4n12-once-governor.jsonl
-      C2PRO_AI_GOVERNOR_MAX_CALLS: "2"
+      C2PRO_AI_GOVERNOR_MAX_CALLS: "3"
       C2PRO_AI_GOVERNOR_MAX_USD: "1.0"
       PYTHONPATH: ${{ github.workspace }}/apps/api
     steps:
@@ -971,12 +971,12 @@ jobs:
           test "${GITHUB_SHA}" = "${{ github.event.inputs.n4_n12_focused_sha }}"
           test "${C2PRO_AI_MOCK}" = '0'
           test "${C2PRO_EMBEDDINGS_MOCK}" = '1'
-          test "${C2PRO_AI_GOVERNOR_MAX_CALLS}" = '2'
+          test "${C2PRO_AI_GOVERNOR_MAX_CALLS}" = '3'
           test "${C2PRO_AI_GOVERNOR_MAX_USD}" = '1.0'
           test -n "${ANTHROPIC_API_KEY:-}" || { echo "::error::Dedicated test-only Anthropic key unavailable"; exit 2; }
           test "$(sha256sum c2pro-n4n12-epc-synthetic-v1.json | awk '{print $1}')" = "6206d62492e786b2b97902cb59f19ba36f3bd996184470e5aecc3009cdf2c8eb"
           mkdir -p apps/web/playwright-report
-          echo "N4/N12 focused preflight passed; at most TWO calls under USD 1. No other jobs should run."
+          echo "N4/N12 focused preflight passed; at most THREE calls under USD 1. No other jobs should run."
 
       - name: Install Python backend for isolated evaluator
         uses: ./.github/actions/setup-python-backend
@@ -993,58 +993,43 @@ jobs:
           assert getattr(Messages.create, "_c2pro_governed", False)
           assert getattr(AsyncMessages.create, "_c2pro_governed", False)
           _, count, cap = _limits()
-          assert count == 2 and cap == 1.0
+          assert count == 3 and cap == 1.0
           assert os.environ["C2PRO_AI_MOCK"] == "0"
-          print("GOVERNOR_PRECHECK_OK (2 requests, USD 1 cap, SDK retries disabled)")
+          print("GOVERNOR_PRECHECK_OK (3 requests, USD 1 cap, SDK retries disabled)")
           PY2
 
-      - name: Execute N4 and N12 on immutable EPC corpus with genuine AI
+      - name: Execute N4 Sonnet then N12 adversarial and chained critiques
         working-directory: apps/api
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}/apps/api:${{ github.workspace }}/apps/api/scripts/real_ai_governor
         run: |
           set -euo pipefail
-          python scripts/n4_n12_real_ai_eval.py
+          python scripts/n4_n12_representative_eval.py
 
-      - name: Independent oracle gate (model accuracy and verified citations)
+      - name: Independent oracle gate — grounded detection without HITL approval
         shell: bash
         run: |
           python - <<'PY2'
           import json
           from pathlib import Path
-          m=json.loads(Path("apps/web/playwright-report/n4-n12-real-ai-evaluation.json").read_text())
-          n4,n12,p=m["n4"],m["n12"],m["provider"]
-          print("N4:",n4["true_positives"],"/",n4["expected_risks"],
-                "omissions",n4["omissions"],"invalid quotes",n4["invalid_citations"],
-                "extra unsupported",n4["false_positives"])
-          print("N12:",n12["omissions_detected"],"/2; false interpretation:",
-                n12["incorrect_interpretation_detected"],"quality_state:",n12["quality_state"])
-          print("Provider calls:",p["calls"],"completed:",p["completed_calls"],
-                "estimated USD:",p["estimated_cost_usd"])
-          assert m["provider_call"]=="real" and m["ai_mock"] is False
-          assert p["calls"]==2 and p["completed_calls"]==2 and p["estimated_cost_usd"]<=1.0
-          assert n4["true_positives"]==9 and n4["expected_risks"]==9
-          assert n4["omissions"]==0 and n4["false_positives"]==0 and n4["invalid_citations"]==0
-          assert n12["omissions_detected"]==2
-          assert n12["incorrect_interpretation_detected"] is True
-          # A source-verified critique is intentionally UNASSESSED until HITL
-          # validates the interpretation; do not manufacture ASSESSED here.
-          assert n12["status"] == "UNASSESSED" and n12["quality_state"] == "NOT_ASSESSED"
-          assert n12["human_approval_required"] is True
-          assert n12["critique_citation_validity"] is True
-          assert n12["critique_quoted_citations"] >= 3
-          assert n12["critique_valid_quoted_citations"] == n12["critique_quoted_citations"]
-          assert n12["critique_invalid_quoted_citations"] == 0
-          assert {"EPC-04", "EPC-05", "EPC-07"}.issubset(set(n12["critique_citation_clause_refs"]))
-          # Inspect raw model findings too; the domain deliberately hides
-          # invalid citations in notes. Never let that filtering fake 3/3.
-          assert n12["model_findings_payload_valid"] is True
-          assert n12["model_findings_submitted"] >= 3
-          assert n12["model_findings_unverified"] == 0
-          assert n12["model_findings_source_verified"] == n12["model_findings_submitted"]
-          assert {"EPC-04", "EPC-05", "EPC-07"}.issubset(set(n12["model_verified_clause_refs"]))
-          print("N4_N12_SOURCE_GROUNDED_DETECTION_PASS; HITL_SEMANTIC_REVIEW_REQUIRED")
+          m=json.loads(Path("apps/web/playwright-report/n4-n12-representative-evaluation.json").read_text())
+          n4,a,c,p=m["n4"],m["n12_adversarial"],m["n12_chained"],m["provider"]
+          g=m["gates"]
+          print("N4 Sonnet:",n4["true_positives"],"/9, invalid",n4["invalid_citations"],"FP",n4["false_positives"])
+          print("N12 adversarial:",a["omissions_detected"],"/2, claim",a["incorrect_interpretation_detected"],"raw citations",a["model_findings_source_verified"],"/",a["model_findings_submitted"])
+          print("N12 chained:",c["status"],"human approval",c["human_approval_required"],"raw invalid",c["model_findings_unverified"])
+          print("Provider:",p["models"],"calls",p["completed_calls"],"USD",p["estimated_cost_usd"])
+          print("Technical gates:",g)
+          assert m["profile"]=="normal_core_sonnet_8192" and m["model"]=="claude-sonnet-4-6"
+          assert m["ai_mock"] is False and m["production_uat"] is False
+          assert m["human_review_pending"] is True
+          assert set(g)=={
+            "provider_bounded","n4_source_prepared","n4_nine_source_risks",
+            "n12_adversarial_grounded","n12_chained_no_invented_source"
+          }
+          assert all(g.values()), "REPRESENTATIVE_CORE_GOLDEN_NOT_ACCEPTED"
+          print("SOURCE_GROUNDED_GOLDEN_PASS; HUMAN_LEGAL_REVIEW_STILL_REQUIRED")
           PY2
 
       - name: Report only sanitized facts and exact SHA
@@ -1054,22 +1039,22 @@ jobs:
           python - <<'PY2'
           import json, os
           from pathlib import Path
-          path=Path("apps/web/playwright-report/n4-n12-real-ai-evaluation.json")
-          rows=["### Focused N4 / N12 real-AI evaluation", "",
-                "Exact SHA: `"+os.environ["GITHUB_SHA"]+"`", ""]
+          path=Path("apps/web/playwright-report/n4-n12-representative-evaluation.json")
+          rows=["### C2Pro CORE N4/N12 Sonnet representative", "",
+                "Exact SHA: "+os.environ["GITHUB_SHA"], ""]
           if path.exists():
               m=json.loads(path.read_text())
-              n4,n12,p=m["n4"],m["n12"],m["provider"]
+              n4,a,c,p=m["n4"],m["n12_adversarial"],m["n12_chained"],m["provider"]
               rows += [
-                  f"N4: {n4['true_positives']}/{n4['expected_risks']} expected, {n4['invalid_citations']} invalid citations, {n4['false_positives']} extra risks",
-                  f"N12 omissions: {n12['omissions_detected']}/2, wrong interpretation: {n12['incorrect_interpretation_detected']}",
-                  f"N12 quality state: {n12['quality_state']} (semantic HITL review required)",
-                  f"N12 raw findings: {n12.get('model_findings_source_verified', 'unknown')}/{n12.get('model_findings_submitted', 'unknown')} source-verified",
-                  f"Provider: {p['calls']} reserved, {p['completed_calls']} completed, estimated USD {p['estimated_cost_usd']}",
-                  "Functional acceptance requires all oracle gates; a model response alone is not acceptance.",
+                  f"N4 Sonnet: {n4['true_positives']}/9, invalid cites {n4['invalid_citations']}, FP {n4['false_positives']}",
+                  f"N12 adversarial: {a['omissions_detected']}/2 omissions, wrong claim {a['incorrect_interpretation_detected']}, raw source-verified {a['model_findings_source_verified']}/{a['model_findings_submitted']}",
+                  f"N12 chained: {c['status']}, HITL required {c['human_approval_required']}, raw invalid {c['model_findings_unverified']}",
+                  f"Provider: {p['completed_calls']}/{p['calls']} calls, models {p['models']}, estimated USD {p['estimated_cost_usd']}",
+                  f"Technical gates: {m['gates']}",
+                  "This does not approve legal interpretation, Coherence Score, tenant isolation or UAT.",
               ]
           else:
-              rows.append("BLOCKED: no verifier artifact; do not assert model success or zero cost.")
+              rows.append("BLOCKED: no source metric artifact; inspect ledger, no model success claim.")
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as f:
               f.write("\n".join(rows)+"\n")
           PY2
@@ -1080,7 +1065,7 @@ jobs:
         with:
           name: c2pro-n4-n12-focal-real-ai-${{ github.sha }}
           path: |
-            apps/web/playwright-report/n4-n12-real-ai-evaluation.json
+            apps/web/playwright-report/n4-n12-representative-evaluation.json
             apps/web/playwright-report/n4n12-once-governor.jsonl
           if-no-files-found: warn
           retention-days: 7
