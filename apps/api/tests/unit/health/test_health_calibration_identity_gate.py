@@ -139,6 +139,20 @@ def test_single_newline_does_not_pool_header_and_unrelated_payment_terms() -> No
     assert _budget(outcome).state is CategoryCoverageState.INSUFFICIENT_EVIDENCE
 
 
+def test_contract_actor_in_other_paragraph_cannot_authorize_category() -> None:
+    # Reproduces the independently audited P1 threshold-pooling defect.
+    mixed = (
+        "The Contractor shall perform the Works.\n"
+        "The newspaper will publish a completion date and milestone timeline."
+    )
+    outcome = assess_single_document_coverage(
+        [Clause(id="real-clause-id", text=mixed)],
+        [],
+        granularity=EvidenceGranularity.CLAUSE,
+    )
+    assert all(item.evidence_count == 0 for item in outcome.assessments)
+
+
 def test_legacy_method_not_reinterpreted_and_v2_rejected_for_document_blob() -> None:
     legacy = build_document_assessment_artifact(
         [Clause(id="old", text=_epc_price())], [], granularity=EvidenceGranularity.DOCUMENT

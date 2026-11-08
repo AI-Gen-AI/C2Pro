@@ -36,6 +36,7 @@ no numeric Health score are produced here.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from uuid import UUID
 
@@ -79,22 +80,28 @@ def _router_qualifier(
     def qualify(text: str) -> set[CanonicalCategory]:
         if not text.strip():
             return set()
-        result = router.route([ChunkSignal(chunk_id="clause", text=text)], doc_type="", segments=[])
-        threshold_qualified = {
-            category
-            for category, status in result.category_status.items()
-            if status == "has_evidence"
-        }
-        # Stronger source anchors are safe only for verified persisted clauses.
-        # A whole-document synthetic Clause may combine unrelated paragraphs.
-        if not allow_clause_anchors:
-            return threshold_qualified
-        # Applied to the ENTIRE v2 Health decision, not just its fallback:
-        # even the legacy threshold can classify an unrelated numeric heading
-        # as positive. Contractual source context is mandatory in CLAUSE mode.
-        if not router.clause_has_contractual_party(text):
-            return set()
-        return threshold_qualified | router.clause_source_evidence_categories(text)
+        # A DOCUMENT blob retains its historical v1 semantics. For verified
+        # CLAUSE mode, all signals (including legacy router threshold) are
+        # scoped to ONE paragraph with its OWN contractual context. Never let
+        # an actor in paragraph A certify lexical evidence from paragraph B.
+        paragraphs = re.split(r"\r?\n+", text) if allow_clause_anchors else [text]
+        qualified: set[CanonicalCategory] = set()
+        for paragraph in paragraphs:
+            if not paragraph.strip():
+                continue
+            if allow_clause_anchors and not router.clause_has_contractual_party(paragraph):
+                continue
+            result = router.route(
+                [ChunkSignal(chunk_id="clause", text=paragraph)], doc_type="", segments=[]
+            )
+            qualified.update(
+                category
+                for category, status in result.category_status.items()
+                if status == "has_evidence"
+            )
+            if allow_clause_anchors:
+                qualified.update(router.clause_source_evidence_categories(paragraph))
+        return qualified
 
     return qualify
 
