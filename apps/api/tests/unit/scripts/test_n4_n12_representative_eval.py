@@ -103,6 +103,12 @@ def representative_success() -> dict:
         "status": "UNASSESSED",
         "human_approval_required": True,
         "model_findings_unverified": 0,
+        "model_findings_payload_valid": True,
+        "model_findings_submitted": 0,
+        "model_findings_source_verified": 0,
+        "critique_invalid_quoted_citations": 0,
+        "parse_failure_type": None,
+        "response_sha256": "a" * 64,
         "semantic_approval": False,
     }
     return {
@@ -153,6 +159,19 @@ def test_technical_gates_pass_only_with_all_source_grounded_results() -> None:
             "n12_chained_no_invented_source",
             lambda r: r["n12_chained"].update(semantic_approval=True),
         ),
+        (
+            "n12_chained_no_invented_source",
+            lambda r: r["n12_chained"].update(model_findings_payload_valid=False),
+        ),
+        (
+            "n12_chained_no_invented_source",
+            lambda r: r["n12_chained"].update(critique_invalid_quoted_citations=1),
+        ),
+        (
+            "n12_chained_no_invented_source",
+            lambda r: r["n12_chained"].update(parse_failure_type="JSONDecodeError"),
+        ),
+        ("n12_chained_no_invented_source", lambda r: r["n12_chained"].update(response_sha256=None)),
     ],
 )
 def test_gates_fail_closed(axis, mutate) -> None:

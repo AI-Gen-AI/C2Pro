@@ -41,7 +41,8 @@ def test_representative_workflow_steps_well_formed_and_script_is_scoped() -> Non
     assert "assert count == 3 and cap == 1.0" in scripts
     assert "max_retries" not in scripts
     assert "n4-n12-representative-evaluation.json" in scripts
-    assert "REPRESENTATIVE_CORE_GOLDEN_NOT_ACCEPTED" in scripts
+    assert "scripts/n4_n12_representative_gate.py" in scripts
+    assert "Independent oracle gate" in str(steps)
     for step in steps:
         if "run" not in step:
             continue

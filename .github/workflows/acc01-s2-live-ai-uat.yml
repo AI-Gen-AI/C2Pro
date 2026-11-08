@@ -1007,30 +1007,11 @@ jobs:
           set -euo pipefail
           python scripts/n4_n12_representative_eval.py
 
-      - name: Independent oracle gate — grounded detection without HITL approval
+      - name: Independent oracle gate — recalculate ledger and source metrics
         shell: bash
         run: |
-          python - <<'PY2'
-          import json
-          from pathlib import Path
-          m=json.loads(Path("apps/web/playwright-report/n4-n12-representative-evaluation.json").read_text())
-          n4,a,c,p=m["n4"],m["n12_adversarial"],m["n12_chained"],m["provider"]
-          g=m["gates"]
-          print("N4 Sonnet:",n4["true_positives"],"/9, invalid",n4["invalid_citations"],"FP",n4["false_positives"])
-          print("N12 adversarial:",a["omissions_detected"],"/2, claim",a["incorrect_interpretation_detected"],"raw citations",a["model_findings_source_verified"],"/",a["model_findings_submitted"])
-          print("N12 chained:",c["status"],"human approval",c["human_approval_required"],"raw invalid",c["model_findings_unverified"])
-          print("Provider:",p["models"],"calls",p["completed_calls"],"USD",p["estimated_cost_usd"])
-          print("Technical gates:",g)
-          assert m["profile"]=="normal_core_sonnet_8192" and m["model"]=="claude-sonnet-4-6"
-          assert m["ai_mock"] is False and m["production_uat"] is False
-          assert m["human_review_pending"] is True
-          assert set(g)=={
-            "provider_bounded","n4_source_prepared","n4_nine_source_risks",
-            "n12_adversarial_grounded","n12_chained_no_invented_source"
-          }
-          assert all(g.values()), "REPRESENTATIVE_CORE_GOLDEN_NOT_ACCEPTED"
-          print("SOURCE_GROUNDED_GOLDEN_PASS; HUMAN_LEGAL_REVIEW_STILL_REQUIRED")
-          PY2
+          set -euo pipefail
+          python apps/api/scripts/n4_n12_representative_gate.py
 
       - name: Report only sanitized facts and exact SHA
         if: always()

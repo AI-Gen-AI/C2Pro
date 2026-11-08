@@ -35,3 +35,13 @@ Rama objetivo: release/core-candidate-20261108. Estado: aceptación técnica lim
 - No aprobar HITL ni Coherence Score automáticamente; estado NOT_ASSESSED es correcto cuando la semántica sigue pendiente.
 - No afirmar equivalencia con N2 real, OCR, acceso de tenants, bases de datos ni journey completo.
 - No hacer despliegues ni modificaciones de infraestructura ajenas al CORE. Evidencia técnica y fallos deben conservarse vinculados al SHA probado.
+
+## Refuerzo de revisión adversarial sobre el evaluador
+
+La PR se revisó adversarialmente y se corrigieron tres defectos de sus controles de aceptación:
+
+1. El paso CI ya no confía en los booleanos calculados por el evaluador. El módulo separado apps/api/scripts/n4_n12_representative_gate.py vuelve a inspeccionar los nueve casos, el contenido del artefacto de métricas y cada reserva/liquidación del registro SDK, incluidos modelo, tokens, coste y fin de respuesta. Un falso mapa de gates=True no puede sustituir este examen.
+2. N12 encadenado exige respuesta estructurada, ninguna cita inválida en notas ni en hallazgos brutos, ausencia de fallo de parseo y respuesta real con hash. Un UNASSESSED por JSON malformado NO es un éxito.
+3. El indicador de revisión requerida proviene de human_approval_required de ambos CritiqueExtractionUseCase. El informe dice explícitamente hitl_pause_in_graph_tested=False: no afirma que se haya ejecutado o persistido una interrupción HITL real.
+
+La validación es de calidad de extracción y citas. No sustituye la revisión jurídica ni constituye un segundo validador semántico del texto legal.

@@ -177,7 +177,12 @@ def verify_technical_gate(report: dict[str, Any]) -> dict[str, bool]:
         ),
         "n12_chained_no_invented_source": (
             chained["human_approval_required"] is True
+            and chained["model_findings_payload_valid"] is True
             and chained["model_findings_unverified"] == 0
+            and chained["model_findings_source_verified"] == chained["model_findings_submitted"]
+            and chained["critique_invalid_quoted_citations"] == 0
+            and chained["parse_failure_type"] is None
+            and chained["response_sha256"] is not None
             and chained["semantic_approval"] is False
             and chained["status"] == "UNASSESSED"
         ),
@@ -274,7 +279,10 @@ async def run() -> dict[str, Any]:
         "provider": provider_trace(),
         "limits": {"max_calls": MAX_CALLS, "max_usd": MAX_USD},
         "production_uat": False,
-        "human_review_pending": True,
+        "human_review_required_by_use_case": (
+            adversarial_result.human_approval_required and chained_result.human_approval_required
+        ),
+        "hitl_pause_in_graph_tested": False,
     }
     report["gates"] = verify_technical_gate(report)
     return report
