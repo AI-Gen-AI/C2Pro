@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from scripts import pilot_first_admin_bootstrap as boot
@@ -26,9 +27,7 @@ REASON = "single human on the pilot tenant until a second admin is invited"
 
 
 def _req(**kw: Any) -> Request:
-    base = Request(
-        uuid4(), uuid4(), "user_abc", "OWNER-APPROVED:ticket-0001", "operator_x", apply=True
-    )
+    base = Request(uuid4(), uuid4(), "user_abc", "approval.json", boot.OPERATOR_ROLE, apply=True)
     return replace(base, **kw)
 
 
@@ -44,7 +43,7 @@ def _clerk(email: str = "a@example.invalid", **over: Any) -> Any:
         **over,
     }
     return lambda path, _s: (
-        {"data": [{"organization": {"id": "org_1"}}]}
+        {"data": [{"organization": {"id": "org_1"}, "role": "org:member", "status": "active"}]}
         if "organization_memberships" in path
         else user
     )
@@ -56,9 +55,9 @@ def _clerk(email: str = "a@example.invalid", **over: Any) -> Any:
         ({**OK_ENV, "RAILWAY_PROJECT_ID": "other"}, _req(), "RAILWAY_PROJECT"),
         ({**OK_ENV, "RAILWAY_ENVIRONMENT_ID": "other"}, _req(), "RAILWAY_ENVIRONMENT"),
         ({}, _req(), "RAILWAY_PROJECT"),
-        (OK_ENV, _req(owner_marker=""), "OWNER_AUTHORIZATION"),
-        (OK_ENV, _req(owner_marker="OWNER-APPROVED:"), "OWNER_AUTHORIZATION"),
-        (OK_ENV, _req(owner_marker="approved by me, trust me"), "OWNER_AUTHORIZATION"),
+        (OK_ENV, _req(owner_marker=""), "SIGNED_OWNER_APPROVAL"),
+        (OK_ENV, _req(operator_role="other_operator"), "OPERATOR_ROLE"),
+        (OK_ENV, _req(operator_role="authenticated"), "OPERATOR_ROLE"),
         (OK_ENV, _req(self_review_reason="short"), "SELF_REVIEW_REASON"),
         (OK_ENV, _req(clerk_user_id="not-a-clerk-id"), "CLERK_USER_ID"),
     ],
@@ -82,8 +81,8 @@ def test_the_parser_defaults_to_dry_run_and_self_review_is_a_separate_opt_in() -
             str(uuid4()),
             "--clerk-user-id",
             "user_x",
-            "--owner-authorization-marker",
-            "OWNER-APPROVED:t",
+            "--owner-approval-file",
+            "approval.json",
             "--operator-role",
             "op",
         ]
@@ -115,6 +114,28 @@ def test_clerk_proof_passes_and_returns_no_payload() -> None:
 def test_clerk_proof_refuses(over: dict[str, Any], email: str, org: str | None, code: str) -> None:
     with pytest.raises(BootstrapRefused, match=code):
         boot.verify_clerk(_req(), email, org, _clerk(**over))
+
+
+@pytest.mark.parametrize(
+    "membership",
+    [
+        {"organization": {"id": "org_1"}, "role": "org:member", "status": "pending"},
+        {"organization": {"id": "org_1"}, "role": "org:member", "status": "revoked"},
+        {"organization": {"id": "org_1"}, "role": "org:member", "deleted": True},
+        {"organization": {"id": "org_1"}, "role": None},
+        {"organization": {"id": "org_1"}},
+    ],
+)
+def test_clerk_org_membership_must_be_active_and_have_role(membership: dict[str, Any]) -> None:
+    normal = _clerk()
+
+    def fetch(path: str, secret: str) -> dict[str, Any]:
+        return (
+            {"data": [membership]} if "organization_memberships" in path else normal(path, secret)
+        )
+
+    with pytest.raises(BootstrapRefused, match="NOT_A_MEMBER_OF_THE_TENANT_ORG"):
+        boot.verify_clerk(_req(), "a@example.invalid", "org_1", fetch)
 
 
 def test_clerk_unverifiable_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -182,11 +203,17 @@ async def _pilot(
     ).scalar_one()
     me = (await db.execute(text("SELECT current_user"))).scalar_one()
     await db.rollback()
-    req = Request(w.tenant_a, w.reviewer_a, row[0], "OWNER-APPROVED:ticket-0001", me, apply=True)
+    monkeypatch.setattr(boot, "OPERATOR_ROLE", me)
+    monkeypatch.setattr(
+        boot, "verify_signed_owner_approval", lambda *_a, **_kw: "approval_sha256:isolated_pg_test"
+    )
+    req = Request(w.tenant_a, w.reviewer_a, row[0], "isolated-test-approval.json", me, apply=True)
 
     def fetch(path: str, _s: str) -> dict[str, Any]:
         if "organization_memberships" in path:
-            return {"data": [{"organization": {"id": org}}]}
+            return {
+                "data": [{"organization": {"id": org}, "role": "org:member", "status": "active"}]
+            }
         return {
             "id": row[0],
             "banned": False,
@@ -233,7 +260,8 @@ async def test_dry_run_reads_only_and_reports_counts_pg(
     await db.rollback()
     assert (
         report["mode"] == "DRY_RUN"
-        and report["apply_ready"] is True
+        and report["apply_ready"] is False
+        and report["clerk_ready"] is True
         and report["active_admins"] == 0
     )
     assert "@" not in str(report) and req.clerk_user_id not in str(report)
@@ -270,6 +298,26 @@ async def test_apply_promotes_only_the_selected_user_and_audits_pg(
     assert (
         await db.execute(text("SELECT role::text FROM users WHERE id = :u"), {"u": w.user_b})
     ).scalar_one() == "user", "other tenant untouched"
+
+
+@pytest.mark.asyncio
+async def test_existing_user_table_writer_forces_first_admin_bootstrap_to_refuse_pg(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Even an unrelated active writer on users blocks the one-time admin claim.
+    # A separate connection holds the lock, exactly as another role writer does.
+    _w, req, fetch = await _pilot(db, monkeypatch)
+    before = await _snapshot(db)
+    await db.rollback()
+    engine = db.bind
+    assert engine is not None
+    async with engine.connect() as conn:
+        async with conn.begin():
+            await conn.execute(text("LOCK TABLE public.users IN ROW EXCLUSIVE MODE"))
+            with pytest.raises(DBAPIError, match="could not obtain lock|lock not available"):
+                await boot.execute(db, req, env=OK_ENV, clerk_fetch=fetch)
+            await db.rollback()
+    assert await _snapshot(db) == before
 
 
 @pytest.mark.asyncio

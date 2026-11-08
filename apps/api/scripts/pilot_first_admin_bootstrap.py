@@ -4,13 +4,13 @@ There is no HTTP grant endpoint and no elevation path: this script is the single
 It is NEVER imported by application runtime and has two modes:
 
 * default DRY-RUN: only READs (read-only transaction, always rolled back); prints counts and fingerprints, no email, no
-  secret, no Clerk payload; reports ``apply_ready``;
+  secret, no Clerk payload; never claims apply-ready without an owner-signed approval;
 * ``--apply``: one transaction that locks tenant / project / user, re-verifies everything, promotes ONLY the selected
   existing user ``user -> admin``, appends a ``hitl.first_admin_bootstrap`` project event and (only with the separate
   ``--non-independent-self-review-with-reason``) records the audited single-person exception, creates the three grants
   through the EXISTING ``ProjectReviewGrantRepository.grant`` and sets ``enforce``. Any failed pre/post check rolls back.
 
-Fail closed: wrong Railway project/environment, wrong target project, non-operator DB role, tenant that already has an
+Fail closed: unverifiable owner Ed25519 signature, wrong Railway project/environment, wrong target project, non-operator DB role, tenant that already has an
 active admin, user/Clerk mismatch, or Clerk unverifiable => nothing is written. No SQL privilege, RLS, migration or user
 creation/move is performed; the grants stay revocable. Secrets are read from the environment only and never printed.
 """
@@ -33,6 +33,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from scripts.pilot_owner_approval import ApprovalRefused, verify_signed_owner_approval
 from src.modules.hitl.adapters.persistence.project_review_grants import (
     ProjectGrantRefused,
     ProjectReviewGrantRepository,
@@ -52,7 +53,7 @@ RUNTIME_ROLES = frozenset(
 )
 CAPABILITIES = (Cap.READ_REVIEW, Cap.REVIEW_FINDING, Cap.APPROVE_CANDIDATE)
 CLERK_API = "https://api.clerk.com/v1"
-MARKER_PREFIX = "OWNER-APPROVED:"
+OPERATOR_ROLE = "c2pro_owner"  # fixed operator DB login, never caller-selectable authority
 Fetch = Callable[[str, str], dict[str, Any]]
 
 
@@ -81,9 +82,10 @@ def check_gates(req: Request, env: dict[str, str] | os._Environ[str]) -> None:
         raise BootstrapRefused("GATE_RAILWAY_PROJECT_IS_NOT_THE_PILOT")
     if env.get("RAILWAY_ENVIRONMENT_ID") != PILOT_RAILWAY_ENVIRONMENT_ID:
         raise BootstrapRefused("GATE_RAILWAY_ENVIRONMENT_IS_NOT_THE_PILOT")
-    marker = req.owner_marker.strip()
-    if not marker.startswith(MARKER_PREFIX) or len(marker) < len(MARKER_PREFIX) + 8:
-        raise BootstrapRefused("GATE_OWNER_AUTHORIZATION_MARKER_MISSING_OR_MALFORMED")
+    if not req.owner_marker.strip():
+        raise BootstrapRefused("GATE_SIGNED_OWNER_APPROVAL_FILE_REQUIRED")
+    if req.operator_role != OPERATOR_ROLE:
+        raise BootstrapRefused("GATE_OPERATOR_ROLE_NOT_ALLOWLISTED")
     if req.self_review_reason is not None and len(req.self_review_reason.strip()) < 20:
         raise BootstrapRefused("GATE_SELF_REVIEW_REASON_TOO_SHORT")
     if not req.clerk_user_id.startswith("user_"):
@@ -131,7 +133,13 @@ def verify_clerk(
     if str(primary.get("email_address", "")).strip().lower() != db_email.strip().lower():
         raise BootstrapRefused("CLERK_PRIMARY_EMAIL_DOES_NOT_MATCH_DB_USER")
     if clerk_org_id and not any(
-        (m.get("organization") or {}).get("id") == clerk_org_id for m in memberships.get("data", [])
+        (m.get("organization") or {}).get("id") == clerk_org_id
+        and isinstance(m.get("role"), str)
+        and m["role"].startswith("org:")
+        and m.get("status", "active") == "active"
+        and not m.get("deleted")
+        and not m.get("revoked")
+        for m in memberships.get("data", [])
     ):
         raise BootstrapRefused("CLERK_USER_NOT_A_MEMBER_OF_THE_TENANT_ORG")
     return {
@@ -150,7 +158,7 @@ async def _preflight(session: AsyncSession, req: Request, *, lock: bool) -> dict
             text("SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user")
         )
     ).one()
-    if role[0] in RUNTIME_ROLES or role[0] != req.operator_role:
+    if role[0] in RUNTIME_ROLES or role[0] != OPERATOR_ROLE or role[0] != req.operator_role:
         raise BootstrapRefused("DB_ROLE_IS_NOT_THE_DECLARED_OPERATOR_ROLE")
     t = {"t": str(req.tenant_id), "p": str(PILOT_PROJECT_ID), "u": str(req.user_id)}
     tenant = (
@@ -241,9 +249,33 @@ async def execute(
     clerk_fetch: Fetch | None = None,
 ) -> dict[str, Any]:
     """Dry-run: read-only + rolled back by the caller. Apply: the caller commits ONLY if this returns."""
+    approval_receipt: str | None = None
     if req.apply:
         check_gates(req, env)
+        expected = {
+            "action": "C2PRO_PILOT_FIRST_ADMIN_V1",
+            "railway_project_id": PILOT_RAILWAY_PROJECT_ID,
+            "railway_environment_id": PILOT_RAILWAY_ENVIRONMENT_ID,
+            "project_id": str(PILOT_PROJECT_ID),
+            "tenant_id": str(req.tenant_id),
+            "user_id": str(req.user_id),
+            "clerk_user_id": req.clerk_user_id,
+            "operator_role": OPERATOR_ROLE,
+            "self_review_reason_sha256": (
+                hashlib.sha256(req.self_review_reason.strip().encode()).hexdigest()
+                if req.self_review_reason
+                else None
+            ),
+        }
+        try:
+            approval_receipt = verify_signed_owner_approval(req.owner_marker, expected=expected)
+        except ApprovalRefused as exc:
+            raise BootstrapRefused(str(exc)) from exc
     await session.execute(text("SET TRANSACTION " + ("READ WRITE" if req.apply else "READ ONLY")))
+    if req.apply:
+        # Blocks all concurrent user INSERT/UPDATE, including writers outside this CLI.
+        # NOWAIT refuses rather than waiting while an admin role is being changed.
+        await session.execute(text("LOCK TABLE public.users IN SHARE ROW EXCLUSIVE MODE NOWAIT"))
     facts = await _preflight(session, req, lock=req.apply)
     try:
         clerk: dict[str, Any] | None = verify_clerk(
@@ -254,7 +286,14 @@ async def execute(
             raise
         clerk = None  # dry-run reports it; it can never be apply_ready without the proof
     if not req.apply:
-        return _report(req, facts, clerk, apply_ready=clerk is not None)
+        return _report(
+            req,
+            facts,
+            clerk,
+            clerk_ready=clerk is not None,
+            apply_ready=False,
+            approval_required=True,
+        )
 
     t, u, p = req.tenant_id, req.user_id, PILOT_PROJECT_ID
     await session.execute(text("SELECT set_config('app.current_tenant', :t, true)"), {"t": str(t)})
@@ -273,7 +312,7 @@ async def execute(
         "operator_fp": fp(req.operator_role),
         "user_fp": fp(u),
         "clerk_user_fp": fp(req.clerk_user_id),
-        "owner_marker_fp": fp(req.owner_marker.strip()),
+        "signed_owner_approval": approval_receipt,
         "previous_role": "user",
         "new_role": "admin",
         "self_review": req.self_review_reason is not None,
@@ -387,7 +426,7 @@ async def _main(args: argparse.Namespace) -> dict[str, Any]:
         args.tenant_id,
         args.user_id,
         args.clerk_user_id,
-        args.owner_authorization_marker,
+        args.owner_approval_file,
         args.operator_role,
         args.apply,
         args.non_independent_self_review_with_reason,
@@ -412,9 +451,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--user-id", type=UUID, required=True)
     parser.add_argument("--clerk-user-id", required=True)
     parser.add_argument(
-        "--owner-authorization-marker",
+        "--owner-approval-file",
         required=True,
-        help=f"{MARKER_PREFIX}<token> from the owner approval",
+        help="Owner-signed exact-scope JSON; verifier key pre-provisioned under /etc/c2pro",
     )
     parser.add_argument(
         "--operator-role", required=True, help="must equal current_user of the operator connection"
