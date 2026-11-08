@@ -824,7 +824,52 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
         if (okPending) ledger.milestone("current-state-pending");
 
         if (pending) {
-          const approved = await ledger.stage("S5", async () => approveThroughUi(pageA, recorder, { projectId, documentId: contractId }));
+          const approved = await ledger.stage("S5", async () => {
+            // The revised contract has a NEW proposed analysis candidate, not the
+            // already decided ledger of revision A. Real AI may yield any N findings.
+            // These are test-only synthetic decisions, NOT the owner's signoff.
+            if (!AI_MOCK) {
+              const reviewRowId = await reviewRowIdOf(pageA, projectId, contractId);
+              const before = await callApi(pageA, `/api/v1/hitl/reviews/${reviewRowId}/findings`);
+              const plan = planSyntheticSpecReview(before.status, before.data, reviewRowId, {
+                environment: process.env.ENVIRONMENT,
+                integralUat: process.env.INTEGRAL_UAT,
+                aiMode: process.env.INTEGRAL_AI_MODE,
+                aiMock: process.env.C2PRO_AI_MOCK,
+              });
+              if (plan.findingCount > 0) {
+                const reviewed = await decideFindingsThroughUi(pageA, recorder, {
+                  projectId,
+                  documentId: contractId,
+                  plan: { kind: "confirm", ordinals: plan.ordinals },
+                });
+                ledger.check(
+                  "all real-AI findings of contract revision B received test-actor decisions through the UI",
+                  reviewed.surfaced &&
+                    reviewed.persistedAfterReload &&
+                    reviewed.decided.length === plan.findingCount &&
+                    reviewed.reviewRowId === plan.reviewRowId,
+                  `${reviewed.decided.length}/${plan.findingCount}`,
+                );
+                if (
+                  !reviewed.surfaced ||
+                  !reviewed.persistedAfterReload ||
+                  reviewed.decided.length !== plan.findingCount ||
+                  reviewed.reviewRowId !== plan.reviewRowId
+                ) throw new Error("G5_REVISION_B_SYNTHETIC_REVIEW_UI_INCOMPLETE");
+              }
+              const after = await callApi(pageA, `/api/v1/hitl/reviews/${reviewRowId}/findings`);
+              assertSyntheticSpecDecisionsPersisted(plan, after.status, after.data);
+              ledger.evidence("revisionBAutomatedReview", {
+                ...plan,
+                provenance: "isolated_synthetic_e2e_only",
+              });
+              ledger.partial(
+                "contract revision B decisions were recorded by an automated synthetic test actor; they prove the UI workflow, NOT independent owner approval or source-fidelity acceptance",
+              );
+            }
+            return approveThroughUi(pageA, recorder, { projectId, documentId: contractId });
+          });
           ledger.check("revision B's approval names who decided", Boolean(approved?.decidedBy));
           await waitForDocument(pageA, projectId, contractId, ["analyzed"]);
           if (approved) state.reviewIds.contractB = approved.itemId;
