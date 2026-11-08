@@ -106,3 +106,46 @@ def test_n4_safeguards_tabular_commercial_claim_even_with_contract_language() ->
     filtered = RiskExtractionTool()._filter_relevant_text(table + "\n\n" + context)
     assert context in filtered
     assert table not in filtered
+
+
+def test_n4_golden_epc_all_nine_source_clauses_reach_the_model() -> None:
+    """No paid AI: pre-model input must retain every oracle clause verbatim."""
+    from scripts.n4_n12_real_ai_eval import _source_text, load_fixture
+
+    fixture = load_fixture()  # verifies immutable source SHA-256
+    source = _source_text(fixture)
+    filtered = RiskExtractionTool()._filter_relevant_text(source)
+    for clause in fixture["contract"]["clauses"]:
+        marker = f"{clause['id']}: {clause['text']}"
+        assert marker in filtered, f"N4 silently dropped {clause['id']}"
+    assert len(filtered) <= 40_000
+
+
+@pytest.mark.parametrize(
+    "clause",
+    [
+        "Defects. The Contractor shall rectify each notified defect within 14 days.",
+        "Variations. The Contractor may act in emergency but must obtain written confirmation.",
+        "Defectos. El contratista deberá subsanar cualquier defecto en un plazo de 14 días.",
+        "Variaciones. El contratista ejecutará una orden de cambio únicamente con autorización.",
+    ],
+)
+def test_n4_retains_defects_and_variation_obligations_without_filter_fallthrough(
+    clause: str,
+) -> None:
+    source = (
+        "This is an unrelated note.\n\n"
+        + clause
+        + "\n\nThe Contractor shall pay penalties for delay."
+    )
+    filtered = RiskExtractionTool()._filter_relevant_text(source)
+    assert clause in filtered
+    assert "unrelated note" not in filtered
+
+
+def test_n4_still_discards_price_table_containing_defects_or_variations() -> None:
+    table = "Price schedule: unit price of defect repair and variation, subtotal EUR 12,000."
+    clause = "Defects. The Contractor shall rectify each notified defect within 14 days."
+    filtered = RiskExtractionTool()._filter_relevant_text(table + "\n\n" + clause)
+    assert table not in filtered
+    assert clause in filtered

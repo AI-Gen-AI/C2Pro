@@ -65,6 +65,12 @@ _INCLUDE_KEYWORDS_ES: tuple[str, ...] = (
     "penal",
     "multa",
     "garantia",
+    # EPC completion does not end at delivery: defect remedies and instructed
+    # scope changes are operative obligations, not irrelevant price tables.
+    "defecto",
+    "subsan",
+    "variacion",
+    "orden de cambio",
     "responsabilidad",
     "retraso",
     "cronograma",
@@ -98,6 +104,11 @@ _INCLUDE_KEYWORDS_EN: tuple[str, ...] = (
     "fine",
     "warranty",
     "warranties",
+    "defect",
+    "rectif",
+    "variation",
+    "change order",
+    "written confirmation",
     "liability",
     "liabilities",
     "indemnif",  # indemnify, indemnification, indemnity
