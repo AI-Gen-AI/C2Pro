@@ -1,7 +1,7 @@
 # C2Pro × OmniRoute — prueba mínima EPC
 
 Este piloto **no cambia la ruta Anthropic de C2Pro**. Añade un cliente compatible
-con el puerto \`IAIClient.extract_json\` y un ensayo muy breve para comparar
+con el puerto `IAIClient.extract_json` y un ensayo muy breve para comparar
 las ocho **rutas** que respondieron a solicitudes simples en OmniRoute.
 Dos rutas Antigravity pueden compartir la misma cuenta/cuota.
 
@@ -9,8 +9,8 @@ Dos rutas Antigravity pueden compartir la misma cuenta/cuota.
 
 En el checkout de esta rama (sobre el VPS que ya aloja OmniRoute):
 
-1. Entrar en \`apps/api\`.
-2. Ejecutar \`python3 scripts/smoke_omniroute_epc.py --all\`.
+1. Entrar en `apps/api`.
+2. Ejecutar `python3 scripts/smoke_omniroute_epc.py --all`.
 3. Introducir la **clave CLIENTE existente de OmniRoute** en la solicitud
    oculta del terminal, no la API key de Google ni las credenciales de los
    proveedores. No incluirla en argumentos, tickets ni el chat.
@@ -20,12 +20,12 @@ En el checkout de esta rama (sobre el VPS que ya aloja OmniRoute):
 Se evalúan tres fuentes EPC sintéticas: contrato con fin 30/09/2026 y
 precio 1.000.000 EUR; cronograma con fin 31/10/2026; presupuesto de
 1.200.000 EUR. Para pasar, cada respuesta debe entregar **JSON** con
-\`delay_days=31\`, \`over_budget_eur=200000\` y citas a las tres fuentes.
+`delay_days=31`, `over_budget_eur=200000` y citas a las tres fuentes.
 HTTP 200 con respuesta vacía, JSON inválido, datos incorrectos o ausencia de
 citas no pasa. Los resultados son evidencia *de este ensayo*, no UAT del
 journey documental N4/N12 ni demostración de aislamiento entre tenants.
 
-El cliente acepta \`http://127.0.0.1:20128\` para pruebas en el propio VPS.
+El cliente acepta `http://127.0.0.1:20128` para pruebas en el propio VPS.
 C2Pro desplegado en Railway **no accede al loopback del VPS**. Para usarlo
 fuera de ese host hará falta un endpoint HTTPS autorizado y alcanzable, sin
 publicar indiscriminadamente el puerto del gateway.
@@ -49,11 +49,11 @@ AI Horde había quedado inconcluso. No se añaden como candidatos aprobados.
 
 ## Alcance de la implementación
 
-\`src/analysis/adapters/ai/omniroute_pilot.py\` ofrece
-\`OmniRoutePilotClient.extract_json(system_prompt, user_content, task_type)\`
-y \`generate(request)\` con uso de tokens, latencia y modelo solicitado.
+`src/analysis/adapters/ai/omniroute_pilot.py` ofrece
+`OmniRoutePilotClient.extract_json(system_prompt, user_content, task_type)`
+y `generate(request)` con uso de tokens, latencia y modelo solicitado.
 No introduce fallbacks silenciosos, no expone respuestas upstream de error
-y no asigna coste cero a tarifas desconocidas: \`cost_usd=None\`.
+y no asigna coste cero a tarifas desconocidas: `cost_usd=None`.
 
 El piloto se ejecuta explícitamente. No lo seleccionar como motor automático
 para documentos reales todavía: el flujo Anthropic actual también implementa
