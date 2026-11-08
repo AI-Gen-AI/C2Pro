@@ -18,7 +18,12 @@ from src.health.application.documentation_scorer import score_documentation_dime
 from src.health.application.governance_scorer import score_governance_dimension
 from src.health.application.health_engine import assemble_health_vector
 from src.health.application.risk_scorer import score_risk_dimension
-from src.health.domain.analysis_assessment import decode_single_document_assessment
+from src.health.domain.analysis_assessment import (
+    HEALTH_METHOD_CLAUSE_V2,
+    HEALTH_METHOD_ROUTER_V1,
+    HealthMethodVersion,
+    decode_single_document_assessment,
+)
 from src.health.domain.single_document_coverage import (
     EvidenceGranularity,
     SingleDocumentCoverage,
@@ -69,10 +74,18 @@ class ResolvedAssessment:
     lineage: AssessmentLineage
     coverage: SingleDocumentCoverage | None = None
     granularity: EvidenceGranularity | None = None
+    method_version: HealthMethodVersion | None = None
 
     def __post_init__(self) -> None:
         if (self.coverage is None) != (self.granularity is None):
             raise ValueError("coverage and granularity are present together or not at all")
+        if self.coverage is None and self.method_version is not None:
+            raise ValueError("method version requires coverage")
+        if (
+            self.method_version == HEALTH_METHOD_CLAUSE_V2
+            and self.granularity is not EvidenceGranularity.CLAUSE
+        ):
+            raise ValueError("v2 method requires clause granularity")
 
 
 def _utcnow() -> datetime:
@@ -145,6 +158,7 @@ class SnapshotWriter:
             prior_composite=self._prior_composite(prior_snapshot),
             single_document_coverage=resolved_assessment.coverage,
             single_document_evidence_granularity=resolved_assessment.granularity,
+            single_document_classification_method_version=resolved_assessment.method_version,
         )
         snapshot = ProjectSnapshot(
             snapshot_id=uuid4(),
@@ -190,18 +204,26 @@ class SnapshotWriter:
             resolved = await self._coverage_from_lineage(tenant_id, source_event_id)
             if resolved is None:
                 return ResolvedAssessment(AssessmentLineage.UNAVAILABLE)
-            coverage, granularity = resolved
-            return ResolvedAssessment(AssessmentLineage.RESOLVED, coverage, granularity)
+            coverage, granularity, method_version = resolved
+            return ResolvedAssessment(
+                AssessmentLineage.RESOLVED, coverage, granularity, method_version
+            )
         carried = self._carry_forward_coverage(prior_snapshot)
         if carried is None:
             return ResolvedAssessment(AssessmentLineage.NO_NEW_ANALYSIS)
-        coverage, granularity = carried
-        return ResolvedAssessment(AssessmentLineage.NO_NEW_ANALYSIS, coverage, granularity)
+        coverage, granularity, method_version = carried
+        return ResolvedAssessment(
+            AssessmentLineage.NO_NEW_ANALYSIS, coverage, granularity, method_version
+        )
 
     async def _coverage_from_lineage(
         self, tenant_id: TenantId, source_event_id: UUID | None
-    ) -> tuple[SingleDocumentCoverage, EvidenceGranularity] | None:
-        if source_event_id is None or self._event_repository is None or self._analysis_repository is None:
+    ) -> tuple[SingleDocumentCoverage, EvidenceGranularity, HealthMethodVersion] | None:
+        if (
+            source_event_id is None
+            or self._event_repository is None
+            or self._analysis_repository is None
+        ):
             return None
         event = await self._event_repository.get(source_event_id, tenant_id)
         if event is None:
@@ -217,13 +239,17 @@ class SnapshotWriter:
         assessment = decode_single_document_assessment(result_json)
         if assessment is None:
             return None
-        return assessment.coverage, assessment.evidence_granularity
+        return (
+            assessment.coverage,
+            assessment.evidence_granularity,
+            assessment.classification_method_version,
+        )
 
     @staticmethod
     def _carry_forward_coverage(
         snapshot: ProjectSnapshot | None,
-    ) -> tuple[SingleDocumentCoverage, EvidenceGranularity] | None:
-        """Carry the last known assessment forward, granularity included; never fabricate one.
+    ) -> tuple[SingleDocumentCoverage, EvidenceGranularity, HealthMethodVersion] | None:
+        """Carry the last known assessment forward with provenance; never fabricate one.
 
         A carried-forward coverage keeps the granularity it was written with — the prior
         assessment's evidence ids did not change meaning just because time passed. A
@@ -242,7 +268,17 @@ class SnapshotWriter:
             granularity = EvidenceGranularity(raw_granularity)
         except ValueError:
             return None
-        return SingleDocumentCoverage.model_validate(stored), granularity
+        # Pre-v2 snapshots with coverage were computed with method v1. If a
+        # method field is present but unknown, fail closed rather than treating
+        # the assessment as a known method.
+        raw_method = snapshot.health_vector.get(
+            "single_document_classification_method_version", HEALTH_METHOD_ROUTER_V1
+        )
+        if raw_method not in (HEALTH_METHOD_ROUTER_V1, HEALTH_METHOD_CLAUSE_V2):
+            return None
+        if raw_method == HEALTH_METHOD_CLAUSE_V2 and granularity is not EvidenceGranularity.CLAUSE:
+            return None
+        return SingleDocumentCoverage.model_validate(stored), granularity, raw_method
 
     async def _find_existing_snapshot(
         self,

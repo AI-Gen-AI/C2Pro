@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from src.health.domain.analysis_assessment import HealthMethodVersion
 from src.health.domain.contract_clarity import ContractClarityFinding
 from src.health.domain.health_vector import (
     HealthBand,
@@ -30,6 +31,7 @@ def assemble_health_vector(
     contract_clarity_findings: list[ContractClarityFinding] | None = None,
     single_document_coverage: SingleDocumentCoverage | None = None,
     single_document_evidence_granularity: EvidenceGranularity | None = None,
+    single_document_classification_method_version: HealthMethodVersion | None = None,
 ) -> HealthVector:
     """Assemble a project HealthVector from already honest-null dimension signals.
 
@@ -53,10 +55,13 @@ def assemble_health_vector(
         total_weight = sum((signal.confidence for signal in scored), 0.0)
         if total_weight <= 0:
             total_weight = float(len(scored))
-            composite_score = sum((float(signal.score or 0.0) for signal in scored), 0.0) / total_weight
+            composite_score = (
+                sum((float(signal.score or 0.0) for signal in scored), 0.0) / total_weight
+            )
         else:
             composite_score = (
-                sum((float(signal.score or 0.0) * signal.confidence for signal in scored), 0.0) / total_weight
+                sum((float(signal.score or 0.0) * signal.confidence for signal in scored), 0.0)
+                / total_weight
             )
         composite_band = band_for_score(composite_score)
 
@@ -71,6 +76,7 @@ def assemble_health_vector(
         contract_clarity_findings=contract_clarity_findings or [],
         single_document_coverage=single_document_coverage,
         single_document_evidence_granularity=single_document_evidence_granularity,
+        single_document_classification_method_version=single_document_classification_method_version,
         computed_at=datetime.now(UTC).replace(tzinfo=None),
     )
 
