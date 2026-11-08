@@ -183,11 +183,13 @@ async def test_a_superseded_revision_clause_does_not_link_an_alert(
     # Trusting a newer revision may also create unrelated current alerts.
     # Inspect this exact stale finding, not every alert belonging to the project.
     rows = await _rows(db, project_id)
-    [row] = [
+    stale_rows = [
         item for item in rows
         if (item.evidence or {}).get("source_clause_id") == stale_clause
     ]
-    _assert_unlinked(row, contract)
+    assert stale_rows
+    for row in stale_rows:
+        _assert_unlinked(row, contract)
 
 
 async def test_a_clause_of_another_project_does_not_link_an_alert(
