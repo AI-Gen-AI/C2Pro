@@ -359,7 +359,9 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
         signal_count = summary.signal_count
         overall_score_present = summary.overall_score is not None
         status = _ok("cross_doc_coherence", summary)
-        engine_result = evaluation.engine_result
+        # Legacy/mock evaluations may contain only a score summary. Missing
+        # raw evidence must not erase that score or manufacture alerts.
+        engine_result = getattr(evaluation, "engine_result", None)
         return {
             "coherence_result": summary,
             "coherence_alert_evidence": (
