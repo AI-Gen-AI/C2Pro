@@ -992,7 +992,7 @@ jobs:
           import os
           import sysconfig
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
-              stream.write("site=" + sysconfig.get_path("purelib") + "\\n")
+              stream.write("site=" + sysconfig.get_path("purelib") + "\n")
           PY2
 
       - name: Restore pinned Spanish spaCy model (privacy preflight)
