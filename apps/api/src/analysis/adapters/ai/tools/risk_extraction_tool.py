@@ -37,15 +37,9 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Filter configuration — multilingual (ES + EN) and env-tunable.
-#
-# Background: the filter is applied to the full document text before the LLM
-# call. It (1) drops obviously irrelevant paragraphs (price tables, BOMs) and
-# (2) selects substantive risk-bearing paragraphs. Until this change the
-# keyword lists were Spanish-only, which silently fell through on English
-# contracts ("filter matched nothing → use all paragraphs") and then
-# truncated to 15000 chars — losing ~37% of even modestly-sized contracts.
-# Diagnosis: scripts/diagnose_chunks.py on the live EPC contract.
+# Historic multilingual keyword lists remain for backward compatibility with
+# older test fixtures. They are NOT used by the N4 model-facing input path.
+# Contractual relevance must be determined by the model, not a lexical gate.
 # ---------------------------------------------------------------------------
 
 _INCLUDE_KEYWORDS_ES: tuple[str, ...] = (
@@ -228,8 +222,8 @@ class RiskExtractionInput(BaseModel):
     """Input for risk extraction."""
 
     document_text: str = Field(..., description="Contract text to analyze")
-    max_risks: int = Field(20, ge=1, le=50, description="Maximum risks to extract")
-    filter_relevant: bool = Field(True, description="Apply relevance filtering to document")
+    max_risks: int = Field(20, ge=1, le=50, description="Deprecated legacy hint; never truncates parsed risks")
+    filter_relevant: bool = Field(False, description="Deprecated; full N2 source is always retained")
 
 
 @register_tool("risk_extraction", version="1.0")
@@ -241,7 +235,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     - Identifies legal, financial, schedule, technical, HSE, and quality risks
     - Assigns probability and impact scores
     - Flags immediate alerts for critical risks
-    - Filters out irrelevant sections (pricing tables, BOMs)
+    - Preserves all source sections, including price tables and annexes
 
     Input: Document text
     Output: list of adapter-local candidates with category, probability, impact, mitigation.

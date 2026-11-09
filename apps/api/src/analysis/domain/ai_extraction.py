@@ -68,9 +68,8 @@ class DocumentTypeClassificationService:
 
 # ── Critique Extraction (N12) ────────────────────────────────────────────────
 
-# Bounded, clearly labeled source context. A clipped excerpt is never proof
-# that a contractual provision does not exist elsewhere in the document.
-_CRITIQUE_MAX_SOURCE_CHARS = 16000
+# N12 receives the entire N2-protected projection. If the provider cannot
+# analyze it, the existing fail-closed behavior requires human review.
 # Only explicitly neutral summaries may accompany an OK verdict. Arbitrary
 # prose can contain an unstructured, unverified defect despite status="OK".
 _NEUTRAL_OK_NOTES = re.compile(
@@ -102,7 +101,7 @@ class CritiqueExtractionService:
         # Extractions are not the source document. Without this evidence the
         # model can invent "corruption" and omitted clauses while sounding certain.
         # Keep the same tenant-scoped AI port as extraction; never fetch another
-        # revision or expand access. The bounded excerpt is explicitly non-exhaustive.
+        # revision or expand access. An unattested source remains UNASSESSED.
         source = (source_text or "").strip()
         # N12 must receive the same complete model-safe document projection as
         # N4. An actual provider context failure remains UNASSESSED via the

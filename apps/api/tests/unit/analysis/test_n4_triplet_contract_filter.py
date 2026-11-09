@@ -78,10 +78,10 @@ def test_n4_keeps_bilingual_contract_scope_commercial_and_completion_clause(sour
         "Price schedule: Contract price unit prices subtotal and tax values.",
     ],
 )
-def test_n4_still_excludes_price_tables_even_when_terms_match(table_line: str) -> None:
+def test_n4_preserves_price_tables_even_when_terms_match(table_line: str) -> None:
     source = table_line + "\n\nThe Contractor shall maintain a warranty for thirty months."
     filtered = RiskExtractionTool()._filter_relevant_text(source)
-    assert table_line not in filtered
+    assert table_line in filtered
     assert "warranty" in filtered
 
 
@@ -97,7 +97,7 @@ def test_n4_does_not_discard_narrative_contract_budget_obligation(narrative: str
     source = narrative + "\n\n" + price_table
     filtered = RiskExtractionTool()._filter_relevant_text(source)
     assert narrative in filtered
-    assert price_table not in filtered
+    assert price_table in filtered
 
 
 def test_n4_safeguards_tabular_commercial_claim_even_with_contract_language() -> None:
@@ -105,7 +105,7 @@ def test_n4_safeguards_tabular_commercial_claim_even_with_contract_language() ->
     context = "2. The contract price is fixed at EUR 1,000,000."
     filtered = RiskExtractionTool()._filter_relevant_text(table + "\n\n" + context)
     assert context in filtered
-    assert table not in filtered
+    assert table in filtered
 
 
 def test_n4_golden_epc_all_nine_source_clauses_reach_the_model() -> None:
@@ -140,12 +140,12 @@ def test_n4_retains_defects_and_variation_obligations_without_filter_fallthrough
     )
     filtered = RiskExtractionTool()._filter_relevant_text(source)
     assert clause in filtered
-    assert "unrelated note" not in filtered
+    assert "unrelated note" in filtered
 
 
-def test_n4_still_discards_price_table_containing_defects_or_variations() -> None:
+def test_n4_preserves_price_table_containing_defects_or_variations() -> None:
     table = "Price schedule: unit price of defect repair and variation, subtotal EUR 12,000."
     clause = "Defects. The Contractor shall rectify each notified defect within 14 days."
     filtered = RiskExtractionTool()._filter_relevant_text(table + "\n\n" + clause)
-    assert table not in filtered
+    assert table in filtered
     assert clause in filtered
