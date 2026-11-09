@@ -284,6 +284,7 @@ async def run_project_graph_once(
     # remain bounded by MAX_RECONCILE_ENQUEUES. Legacy callers without a
     # canonical dependency retain their original acknowledgement behavior.
     canonical_blocked = canonical_outcome is not None and canonical_outcome.status in {
+        "no_trusted_artifacts",
         "source_provenance_unavailable",
         "reconciliation_required",
     }

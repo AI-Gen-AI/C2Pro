@@ -616,3 +616,79 @@ async def test_stale_trusted_revision_cannot_be_acknowledged_as_fresh(monkeypatc
             artifact_repository=_FakeRepo([source]),
             canonical_state_materializer=materialize,
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "blocked_status",
+    [
+        "source_provenance_unavailable",
+        "reconciliation_required",
+    ],
+)
+async def test_all_unmaterialized_or_stale_states_keep_projection_pending(
+    monkeypatch, blocked_status
+) -> None:
+    from src.core.tasks import project_graph_tasks
+    from src.project_state.application.materialize_trusted_state import MaterializationOutcome
+
+    class TrackedRepo(_FakeRepo):
+        def __init__(self, artifacts):
+            super().__init__(artifacts)
+            self.acks = 0
+
+        async def mark_loaded_projected(self, **_kwargs):
+            self.acks += 1
+            return 1
+
+    source = DocumentArtifact(
+        document_id=str(uuid4()), document_revision_id=str(uuid4()), doc_type="contract"
+    )
+    repo = TrackedRepo([source])
+
+    async def blocked(_trusted):
+        return MaterializationOutcome(blocked_status, 0, 0, 1, 1), None
+
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: _FakeGraph())
+    result = await project_graph_tasks.run_project_graph_once(
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        artifact_repository=repo,
+        canonical_state_materializer=blocked,
+    )
+    assert result["canonical_state_materialization"]["status"] == blocked_status
+    assert result["status"] == "partial_canonical_state"
+    assert repo.acks == 0
+
+
+@pytest.mark.asyncio
+async def test_no_trusted_artifacts_has_no_projection_ack_and_is_explicit_partial(
+    monkeypatch,
+) -> None:
+    from src.core.tasks import project_graph_tasks
+    from src.project_state.application.materialize_trusted_state import MaterializationOutcome
+
+    class TrackedRepo(_FakeRepo):
+        def __init__(self):
+            super().__init__([])
+            self.acks = 0
+
+        async def mark_loaded_projected(self, **_kwargs):
+            self.acks += 1
+            return 1
+
+    repo = TrackedRepo()
+
+    async def none(_trusted):
+        return MaterializationOutcome("no_trusted_artifacts", 0, 0, 0, 0), None
+
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: _FakeGraph())
+    result = await project_graph_tasks.run_project_graph_once(
+        project_id=uuid4(),
+        tenant_id=uuid4(),
+        artifact_repository=repo,
+        canonical_state_materializer=none,
+    )
+    assert result["status"] == "partial_canonical_state"
+    assert result["projected_obligations"] == 0
+    assert repo.acks == 0

@@ -31,3 +31,7 @@ En EPC-SYN-2026-11-05 existen datos contractuales analizados y físicos, pero no
 ## Corrección P1 de revisión cruzada Codex
 
 Codex detectó que una ejecución con `source_provenance_unavailable` o `reconciliation_required` aún llamaba a `mark_loaded_projected()` y podía cerrar prematuramente la obligación de recuperación. Corregido: en esos dos estados el runner devuelve `status=partial_canonical_state`, `projected_obligations=0`, y no invoca el acuse `mark_loaded_projected`. El índice durable de proyecciones TRUSTED sigue `pending`, para el reconciliador existente (reintentos limitados por MAX_RECONCILE_ENQUEUES); no se marca un estado no materializado como resuelto. Los siguientes intentos exitosos sí pueden cerrar la obligación. El `no_trusted_artifacts` informado con artifacts no vacíos también causa error fail-closed. No se cambia la política de Score.
+
+## Revisión adicional de Claude
+
+El control de proyección pendiente y el nodo Health utilizan ahora el mismo conjunto exhaustivo de estados bloqueados: no_trusted_artifacts, source_provenance_unavailable y reconciliation_required. Se prohíbe un acuse positivo si no se ha creado/verificado una materialización completa; un conjunto vacío no genera un falso acuse. Se añadieron regresiones que espían mark_loaded_projected en ambos estados con artefactos confiables, y en el caso de cero artefactos; el reintento de una proyección pendiente permanece sujeto al reconciliador ya existente.
