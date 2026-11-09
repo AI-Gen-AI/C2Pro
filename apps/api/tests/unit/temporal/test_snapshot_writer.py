@@ -244,3 +244,64 @@ def test_snapshot_writer_source_has_no_commit_call() -> None:
         / "snapshot_writer.py"
     )
     assert not re.search(r"\.commit\s*\(", path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.asyncio
+async def test_missing_canonical_state_is_not_misreported_as_missing_source_documents() -> None:
+    """Production EPC has parsed clauses/risks but no canonical ProjectState row.
+
+    The snapshot must explain the projection gap, not assert extraction never
+    ran. No score, evidence promotion or HITL decision is manufactured.
+    """
+    from src.temporal.application.snapshot_writer import SnapshotWriter
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    repo = _SnapshotRepo()
+    writer = SnapshotWriter(
+        project_state_repository=_ProjectStateRepo(None),
+        snapshot_repository=repo,
+        clock=_now,
+    )
+    snapshot = await writer.write_snapshot(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.GRAPH_COMPLETED,
+    )
+    dimensions = {row["dimension"]: row for row in snapshot.health_vector["dimensions"]}
+    assert snapshot.health_vector["composite_score"] is None
+    assert snapshot.coherence_subscore is None
+    assert snapshot.counts["clauses"] == snapshot.counts["risks"] == 0
+    for key in ("contract", "risk"):
+        assert dimensions[key]["score"] is None
+        assert dimensions[key]["band"] == "unknown"
+        assert dimensions[key]["null_reason"] == "insufficient_evidence"
+        assert dimensions[key]["evidence"] == []
+        assert "canonical project state not materialized" in dimensions[key]["missing_data"][0]
+    assert "no contract clauses extracted" not in dimensions["contract"]["missing_data"]
+    assert "risk assessment did not run" not in dimensions["risk"]["missing_data"]
+    assert repo.snapshots == [snapshot]
+
+
+@pytest.mark.asyncio
+async def test_present_empty_canonical_state_keeps_its_distinct_null_explanations() -> None:
+    from src.temporal.application.snapshot_writer import SnapshotWriter
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    state = ProjectState(project_id=project_id, tenant_id=tenant_id)
+    writer = SnapshotWriter(
+        project_state_repository=_ProjectStateRepo(state),
+        snapshot_repository=_SnapshotRepo(),
+        clock=_now,
+    )
+    snapshot = await writer.write_snapshot(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.REVISION_INGESTED,
+    )
+    dimensions = {row["dimension"]: row for row in snapshot.health_vector["dimensions"]}
+    assert dimensions["contract"]["missing_data"] == ["no contract clauses extracted"]
+    assert dimensions["risk"]["missing_data"] != [
+        "canonical project state not materialized; risk assessment availability unverified"
+    ]

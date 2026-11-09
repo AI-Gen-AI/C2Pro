@@ -139,19 +139,41 @@ class SnapshotWriter:
             source_event_id=source_event_id,
             prior_snapshot=prior_snapshot,
         )
+        risk_signal = score_risk_dimension(
+            state.risks if state is not None else [],
+            assessment_ran=state is not None,
+        )
+        contract_signal = score_contract_dimension(
+            state.clauses if state is not None else [],
+            state.obligations if state is not None else [],
+            coherence_subscore=None,
+        )
+        if state is None:
+            # An absent canonical ProjectState is a projection gap, NOT proof
+            # that no document was parsed or no risk extraction took place.
+            # A separate analysis/clauses table can hold relevant evidence,
+            # but without tenant+revision-verified canonical materialization
+            # it must never be auto-promoted into Health or Coherence Score.
+            risk_signal = risk_signal.model_copy(
+                update={
+                    "missing_data": [
+                        "canonical project state not materialized; risk assessment availability unverified"
+                    ]
+                }
+            )
+            contract_signal = contract_signal.model_copy(
+                update={
+                    "missing_data": [
+                        "canonical project state not materialized; contract clauses not projected"
+                    ]
+                }
+            )
         health_vector = assemble_health_vector(
             project_id,
             tenant_id,
             signals=[
-                score_risk_dimension(
-                    state.risks if state is not None else [],
-                    assessment_ran=state is not None,
-                ),
-                score_contract_dimension(
-                    state.clauses if state is not None else [],
-                    state.obligations if state is not None else [],
-                    coherence_subscore=None,
-                ),
+                risk_signal,
+                contract_signal,
                 score_documentation_dimension(None),
                 score_governance_dimension(None),
             ],
