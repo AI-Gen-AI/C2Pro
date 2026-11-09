@@ -988,9 +988,11 @@ jobs:
         id: spacy-meta
         shell: bash
         run: |
-          python - <<'PY2' >> "$GITHUB_OUTPUT"
+          python - <<'PY2'
+          import os
           import sysconfig
-          print("site=" + sysconfig.get_path("purelib"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write("site=" + sysconfig.get_path("purelib") + "\\n")
           PY2
 
       - name: Restore pinned Spanish spaCy model (privacy preflight)
