@@ -90,3 +90,25 @@ no inferir PASS a partir de la lista de modelos o de tests con mocks.
 Una sola ejecución diferencial del script con `--only openrouter` probará
 JSON, 31 días, 200.000 EUR y tres referencias; un 429 se reportará como
 cuota, no como defecto funcional.
+
+
+## Ensayo 09/11/2026 06:28 UTC: OpenRouter Gemma 4 HTTP429
+
+La ejecución real `--only openrouter` con `google/gemma-4-31b-it:free`
+devolvió `FAIL_UPSTREAM`, HTTP 429, 37.214 segundos, 0 tokens de inferencia
+útiles. En OmniRoute, el `correlation_id` de la solicitud registró **cuatro
+ciclos de reintento**, cada uno con **tres intentos upstream** HTTP 429
+(12 intentos contra proveedor a partir de una sola llamada del script).
+El detalle del motivo de `429` (cuenta, capacidad del modelo o cuota)
+no está demostrado por el mensaje genérico disponible.
+
+**Decisión:** Suspender OpenRouter en los barridos por defecto;
+`--all` selecciona las otras siete rutas EPC. Solo `--only openrouter`
+puede incluirlo expresamente cuando haya evidencia de disponibilidad. Los
+contadores del script miden solicitudes del cliente y **no** el número de
+reintentos internos de OmniRoute. No se activa fallback automático ni se
+sustituye un modelo por otro sin validación funcional.
+
+**Criterio de aceptación del piloto sin OpenRouter:** 7 rutas acreditadas en
+EPC sintético. No implica UAT de N4/N12, cumplimiento contractual, licencias,
+citas verificadas de documentos reales ni disponibilidad desde Railway.
