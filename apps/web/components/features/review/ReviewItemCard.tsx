@@ -116,6 +116,30 @@ function hasData(data: ReviewItemResponse['item_data']): boolean {
   return Boolean(data && Object.keys(data).length > 0);
 }
 
+type WbsReviewEvidence = {
+  code: string;
+  name: string;
+  sourceQuote: string | null;
+  foundInAnalysisText: boolean;
+};
+
+function readWbsEvidence(data: ReviewItemResponse['item_data']): WbsReviewEvidence[] {
+  const raw: unknown = data?.['wbs_source_evidence'];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item: unknown) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const row = item as Record<string, unknown>;
+    if (typeof row.code !== 'string') return [];
+    const found = row.found_in_analysis_text === true;
+    return [{
+      code: row.code,
+      name: typeof row.name === 'string' ? row.name : '',
+      sourceQuote: found && typeof row.source_quote === 'string' ? row.source_quote : null,
+      foundInAnalysisText: found,
+    }];
+  });
+}
+
 // Default outcome copy, used only when the backend didn't supply
 // item_data.approve_meaning / reject_meaning (older review rows created
 // before this field existed). Never shown for a graph-resumable review,
@@ -203,6 +227,13 @@ export function ReviewItemCard({
   const modelConclusion = getString(item.item_data, 'critique_notes');
   const critiqueObservations = modelConclusion ? parseCritiqueObservations(modelConclusion) : null;
   const structuredSource = item.trust_kind === 'structured_source';
+  // G1: pre-HITL evidence is a textual match, NOT semantic source approval.
+  const wbsEvidence = readWbsEvidence(item.item_data);
+  const wbsEvidenceSupplied = typeof item.item_data?.['wbs_source_evidence_passed'] === 'boolean';
+  const wbsApprovalBlocked =
+    item.item_data?.['doc_type'] === 'technical_spec' &&
+    item.item_data?.['wbs_source_evidence_passed'] === false;
+  const wbsVerified = wbsEvidence.filter((entry) => entry.foundInAnalysisText).length;
   const approveMeaning =
     getString(item.item_data, 'approve_meaning') ??
     (structuredSource
@@ -330,6 +361,43 @@ export function ReviewItemCard({
             </details>
           ) : null}
 
+          {wbsEvidenceSupplied ? (
+            <div className="mt-2 rounded-md border p-3 text-sm" data-testid={`review-wbs-evidence-${item.item_id}`}>
+              <p className="font-medium">
+                WBS source-text matches: {wbsVerified}/{wbsEvidence.length}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                A literal match in the analyzed text is not a semantic approval or a verified signature of the original file.
+              </p>
+              {wbsApprovalBlocked ? (
+                <p className="mt-1 text-xs text-amber-700" data-testid={`review-wbs-unverified-${item.item_id}`}>
+                  Source evidence is incomplete. Approval is blocked; review and reject or request correction.
+                </p>
+              ) : null}
+              {wbsEvidence.length ? (
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-medium">Inspect WBS source quotations</summary>
+                  <ul className="mt-2 space-y-2">
+                    {wbsEvidence.map((entry, index) => (
+                      <li key={`${entry.code}-${index}`} className="rounded border p-2">
+                        <span className="font-medium">{entry.code} — {entry.name}</span>
+                        {entry.foundInAnalysisText && entry.sourceQuote ? (
+                          <p className="mt-1 whitespace-pre-wrap break-words text-xs">
+                            Text matched in analyzed document: “{entry.sourceQuote}”
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-amber-700">
+                            No matching literal source quotation. This is an unverified model proposal.
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {category ? <span>Category: {category}</span> : null}
             {slaDueDate ? <span>SLA: {slaDueDate}</span> : null}
@@ -384,8 +452,8 @@ export function ReviewItemCard({
                 size="sm"
                 variant="outline"
                 className="text-green-600 hover:bg-green-50"
-                disabled={actionsDisabled}
-                title={actionsTitle}
+                disabled={actionsDisabled || wbsApprovalBlocked}
+                title={wbsApprovalBlocked ? 'WBS source-text evidence incomplete; approval blocked' : actionsTitle}
                 onClick={() => onApprove(item)}
                 data-testid={`approve-${item.item_id}`}
               >
