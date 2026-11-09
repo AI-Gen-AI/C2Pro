@@ -644,6 +644,54 @@ async def _claim_checkpoint_lineage_for_current_attempt(state: ProjectState) -> 
     )
 
 
+def _technical_wbs_review_summary(state: ProjectState) -> dict[str, Any]:
+    """Reviewer-visible source evidence, without promoting model claims.
+
+    Only quotes already matched exactly to the N2-protected analysis text
+    are labeled verified-in-text. Missing or invented quotes remain explicitly
+    unverified; this is NOT a cryptographic source-file attestation.
+    """
+    if state.get("doc_type") != "technical_spec":
+        return {}
+    items = state.get("extracted_wbs")
+    proposed = items if isinstance(items, list) else []
+    all_citations = state.get("citations")
+    citations = all_citations if isinstance(all_citations, list) else []
+    rows: list[dict[str, Any]] = []
+    for item in proposed:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("code")
+        name = item.get("name")
+        quote = item.get("source_quote")
+        if not isinstance(code, str):
+            continue
+        valid = [
+            c for c in citations
+            if isinstance(c, dict) and c.get("type") == "wbs"
+            and c.get("item") == code and c.get("quote") == quote
+            and c.get("found_in_source") is True
+        ]
+        verified = bool(isinstance(quote, str) and quote.strip() and len(valid) == 1)
+        rows.append({
+            "code": code,
+            "name": name if isinstance(name, str) else "",
+            "found_in_analysis_text": verified,
+            # No invented quotation may be shown as source evidence.
+            "source_quote": quote if verified else None,
+        })
+    verified_count = sum(1 for item in rows if item["found_in_analysis_text"])
+    return {
+        "wbs_source_evidence": rows,
+        "wbs_source_evidence_verified": verified_count,
+        "wbs_source_evidence_total": len(rows),
+        "wbs_source_evidence_passed": bool(
+            rows and verified_count == len(rows)
+            and state.get("citation_validation_passed") is True
+        ),
+    }
+
+
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
 
@@ -754,6 +802,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "confidence_assessed": assessed_confidence is not None,
                         "critique_notes": state.get("critique_notes", ""),
                         "source_references": source_references,
+                        **_technical_wbs_review_summary(state),
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}
