@@ -405,7 +405,9 @@ Extract risks from the narrative clauses of the contract. Identify:
 PRIMARY CATEGORY SELECTION — select the main contractual mechanism, not a keyword:
 - LEGAL: force majeure relief, notification and its exclusions; liability caps and carve-outs; indemnities; termination rights, compensation entitlements and exclusions such as lost profit. A deadline or payment amount inside such a clause does not automatically make it SCHEDULE or BUDGET.
 - SCHEDULE: late-completion liquidated damages, milestone deadlines and entitlement to extensions of time, even when damages are expressed as a percentage of price.
+- When an extension of time is conditional on qualifying as force majeure, including its exclusions and notice requirements, the primary category is LEGAL, not SCHEDULE; classify the qualification test rather than the time relief granted.
 - BUDGET: standalone payment, guarantees, escalation, currency and financing exposure when not primarily a termination, liability or force-majeure legal entitlement.
+- Payment mechanics that arise from a termination right (demobilization, committed non-cancellable purchase orders, denial of lost profit) remain LEGAL, not BUDGET: the termination right is the governing obligation even when its remedy is monetary.
 - For mixed clauses, account for every material exception in the summary and quote. Do not fabricate a separate risk just to fill each category.
 
 For each risk, return a JSON object with EXACTLY these keys:
