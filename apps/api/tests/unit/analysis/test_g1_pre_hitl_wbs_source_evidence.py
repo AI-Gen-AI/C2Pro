@@ -140,6 +140,7 @@ async def test_non_hitl_completion_rejects_failed_n15_before_database_init() -> 
     state["citation_validation_passed"] = False
     state["human_approval_required"] = False
     state["tenant_id"] = str(uuid4())
+    state["project_id"] = str(uuid4())
     with pytest.raises(StaleCandidateError, match="TECHNICAL_WBS_FINAL_CITATION_VALIDATION_REQUIRED"):
         await _persist_artifact(state)
 
