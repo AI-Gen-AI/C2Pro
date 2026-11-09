@@ -985,6 +985,27 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
         return state
 
+    # A post-HITL N15 failure or missing citation result cannot produce
+    # canonical TRUSTED state. The human decision remains an audited fact,
+    # not authorization to persist unsupported source claims.
+    if (
+        state.get("doc_type") == "technical_spec"
+        and state.get("citation_validation_passed") is not True
+    ):
+        logger.warning("n17_technical_wbs_source_validation_not_passed", document_id=state.get("document_id"))
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="save_to_db",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="technical_wbs_source_validation_required",
+            ),
+        ]
+        state["messages"].append(
+            AIMessage(content="N17 save_to_db: skipped -- technical source citations are not validated.")
+        )
+        return state
+
     # Lane C / C3a: canonical state (analysis row, risk alerts, canonical WBS,
     # graph.completed) is written only by a run that needs no human approval or
     # that a human approved (N13 sets the flag to False). A run that reached N17
