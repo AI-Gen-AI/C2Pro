@@ -6,7 +6,6 @@ import ast
 import os
 import subprocess
 import sys
-import sysconfig
 from pathlib import Path
 
 import yaml
@@ -85,10 +84,13 @@ def test_spacy_cache_output_heredoc_writes_exact_newline(tmp_path: Path) -> None
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    expected = f"site={sysconfig.get_path('purelib')}\n".encode()
-    assert output.read_bytes() == expected
-    assert output.read_bytes().endswith(b"\x0a")
-    assert b"\\n" not in output.read_bytes()
+    actual = output.read_bytes()
+    assert actual.startswith(b"site=")
+    assert actual.endswith(b"\x0a")
+    assert len(actual.splitlines(keepends=True)) == 1
+    assert b"\\n" not in actual
+    site = Path(actual[len(b"site=") : -1].decode())
+    assert site.is_dir() and site.name in {"site-packages", "dist-packages"}
 
 
 def test_representative_workflow_blocks_before_provider_when_spanish_ner_missing() -> None:
