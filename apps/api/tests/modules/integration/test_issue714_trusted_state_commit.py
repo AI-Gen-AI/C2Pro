@@ -1613,3 +1613,59 @@ async def test_g1_uncited_technical_wbs_candidate_cannot_cross_trusted_boundary(
     assert len(after) == 1 and after[0].trust_state == "proposed"
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
     assert graph_enqueues == []
+
+
+async def test_g1_pre_hitl_technical_spec_is_proposed_with_literal_citations(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """Real PG: a source-cited technical candidate can be reviewed, not auto-trusted.
+
+    N15 runs only after a human resume. The source-citation seam before
+    N13 must already persist exact WBS citations into the initial artifact.
+    """
+    from src.analysis.adapters.graph.nodes import _stamp_pre_hitl_technical_wbs_evidence
+
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    quote = "Factory acceptance testing shall be completed no later than 2027-06-10"
+    state = _final_state(arranged, tenant.id, gated=True, title="FAT evidence")
+    state["doc_type"] = "technical_spec"
+    state["document_text"] = "6.3 Factory Acceptance Test: " + quote + " before dispatch."
+    state["anonymized_text"] = state["document_text"]
+    state["extracted_wbs"] = [{
+        "code": "1.2",
+        "name": "Factory Acceptance Test",
+        "description": "Complete FAT before dispatch",
+        "source_quote": quote,
+    }]
+    _stamp_pre_hitl_technical_wbs_evidence(state)
+    assert state["citation_validation_passed"] is True
+    await _propose(completion_sessions, arranged, tenant.id, state=state)
+
+    [proposed] = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert proposed.trust_state == "proposed"
+    assert proposed.payload["citations"] == [{
+        "type": "wbs",
+        "item": "1.2",
+        "quote": quote,
+        "found_in_source": True,
+    }]
+    binding = CandidateBinding(
+        artifact_id=proposed.artifact_id,
+        document_id=proposed.document_id,
+        artifact_version=proposed.artifact_version,
+        artifact_hash=proposed.artifact_hash,
+    )
+    async with independent_sessions(tenant.id) as session:
+        await SqlAlchemyDocumentArtifactRepository(session).verify_candidate(
+            binding, tenant_id=tenant.id
+        )
+
+    assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
+    assert graph_enqueues == []
