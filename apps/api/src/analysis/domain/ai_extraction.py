@@ -108,9 +108,8 @@ class CritiqueExtractionService:
         # exception handler below; never silently clip at 16,000 characters.
         excerpt = source
         if source:
-            coverage = (
-                "SOURCE PROVIDED IN FULL; upstream original completeness "
-                + ("VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED.")
+            coverage = "SOURCE PROVIDED IN FULL; upstream original completeness " + (
+                "VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED."
             )
             evidence = (
                 f"Source coverage: {coverage}\n"
@@ -122,7 +121,11 @@ class CritiqueExtractionService:
                 "missing source clauses, or factual contradictions as verified."
             )
         try:
-            payload = await ai.run_extraction(
+            # Inspect the real adapter type: bare AsyncMock creates arbitrary
+            # callable attributes and would bypass its configured mock result.
+            full_review = getattr(type(ai), "run_full_source_review", None)
+            review = ai.run_full_source_review if callable(full_review) else ai.run_extraction
+            payload = await review(
                 CRITIQUE_SYSTEM_PROMPT,
                 f"Document type: {doc_type}\n{evidence}\nExtraction results: {items}",
             )
@@ -131,9 +134,7 @@ class CritiqueExtractionService:
                 notes = str(payload.get("notes", "")).strip()
                 # Only verify material that the reviewer actually received.
                 # The unseen remainder cannot corroborate a model finding.
-                verified = source_bound_findings(
-                    payload.get("findings"), source_text=excerpt
-                )
+                verified = source_bound_findings(payload.get("findings"), source_text=excerpt)
                 if verified:
                     # A located verbatim quote is *provenance*, not proof of
                     # the model's assertion that an obligation was omitted or
@@ -207,9 +208,7 @@ class RaciGenerationService:
         ai: AIExtractionPort,
     ) -> list[dict[str, Any]]:
         prompt = (
-            f"{RACI_GENERATION_PROMPT}\n\n"
-            f"Stakeholders: {stakeholders}\n\n"
-            f"WBS Items: {wbs_items}"
+            f"{RACI_GENERATION_PROMPT}\n\nStakeholders: {stakeholders}\n\nWBS Items: {wbs_items}"
         )
         payload = await ai.run_extraction(prompt, "")
         if isinstance(payload, list):
@@ -254,9 +253,7 @@ class BudgetExtractionService:
 
 def _source_sentences(text: str) -> list[str]:
     return [
-        sentence.strip()
-        for sentence in re.split(r"(?<=[.!?])\s+|\n+", text)
-        if sentence.strip()
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+|\n+", text) if sentence.strip()
     ]
 
 

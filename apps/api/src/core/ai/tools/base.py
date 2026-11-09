@@ -65,6 +65,8 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
     # Configuration (can override in subclasses)
     default_model_tier: ModelTier = ModelTier.STANDARD
     timeout_seconds: int = 120
+    # Full-document analysis is an explicit tool capability, not a user prompt.
+    full_source_analysis: bool = False
     retry_policy: RetryPolicy = RetryPolicy()  # type: ignore[call-arg]
     prompt_template_name: str | None = None
     prompt_version: str = "latest"
@@ -327,7 +329,12 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                     task_type=self.task_type,
                     low_budget_mode=low_budget_mode,
                     tenant_id=tenant_id,
-                    metadata={"execution_id": execution_id, "attempt": attempt},
+                    use_cache=not self.full_source_analysis,
+                    metadata={
+                        "execution_id": execution_id,
+                        "attempt": attempt,
+                        "full_source_analysis": self.full_source_analysis,
+                    },
                 )
 
                 ai_response = await self.anthropic_wrapper.generate(ai_request)

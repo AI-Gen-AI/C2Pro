@@ -32,8 +32,9 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 
-def _get_cost_controller(
-) -> tuple[type[CostControllerService] | None, type[BudgetExceededException] | None]:
+def _get_cost_controller() -> tuple[
+    type[CostControllerService] | None, type[BudgetExceededException] | None
+]:
     if os.getenv("C2PRO_TEST_LIGHT") == "1":
         return None, None
     from src.core.ai.cost_controller import (
@@ -69,7 +70,9 @@ class AIService:
             # In a real scenario, we might want to prevent the service from even starting
             # without a DB connection, but for now, we'll allow it and let it fail at runtime.
             self.cost_controller = None
-            logger.warning("AIService initialized without a database session. Cost control will be disabled.")
+            logger.warning(
+                "AIService initialized without a database session. Cost control will be disabled."
+            )
 
     @retry(
         stop=stop_after_attempt(3),
@@ -77,7 +80,13 @@ class AIService:
         retry=retry_if_exception_type((RateLimitError, APIError)),
         reraise=True,
     )
-    async def _call_wrapper(self, system_prompt: str, user_content: str) -> Any:
+    async def _call_wrapper(
+        self,
+        system_prompt: str,
+        user_content: str,
+        *,
+        full_source_analysis: bool = False,
+    ) -> Any:
         if self.wrapper is None:
             raise AIServiceError(message="AI client is not configured.")
         request = WrapperRequest(
@@ -85,6 +94,8 @@ class AIService:
             system_prompt=system_prompt,
             task_type=AITaskType.COMPLEX_EXTRACTION,
             tenant_id=self._tenant_uuid(),
+            use_cache=not full_source_analysis,
+            metadata={"full_source_analysis": full_source_analysis},
         )
         return await self.wrapper.generate(request)
 
@@ -93,7 +104,17 @@ class AIService:
             return None
         return UUID(str(self.tenant_id))
 
-    async def run_extraction(self, system_prompt: str, user_content: str) -> Any:
+    async def run_full_source_review(self, system_prompt: str, user_content: str) -> Any:
+        """N12: review the entire N2-safe source with provider-native capacity."""
+        return await self.run_extraction(system_prompt, user_content, full_source_analysis=True)
+
+    async def run_extraction(
+        self,
+        system_prompt: str,
+        user_content: str,
+        *,
+        full_source_analysis: bool = False,
+    ) -> Any:
         """
         Runs an extraction with retries, robust JSON parsing, and usage logging.
         """
@@ -134,9 +155,7 @@ class AIService:
             async with get_session_with_tenant(tenant_uuid) as db_session:
                 if self._cost_controller_class:
                     cost_controller = self._cost_controller_class(db_session)
-                    await cost_controller.check_budget_availability(
-                        tenant_uuid, estimated_cost
-                    )
+                    await cost_controller.check_budget_availability(tenant_uuid, estimated_cost)
         except Exception as exc:
             if self._budget_exception and isinstance(exc, self._budget_exception):
                 raise AIServiceError(message=str(exc)) from exc
@@ -148,7 +167,12 @@ class AIService:
                 raise AIServiceError("Error al verificar el presupuesto.") from exc
 
         try:
-            response = await self._call_wrapper(system_prompt, user_content)
+            if full_source_analysis:
+                response = await self._call_wrapper(
+                    system_prompt, user_content, full_source_analysis=True
+                )
+            else:
+                response = await self._call_wrapper(system_prompt, user_content)
         except RetryError as exc:
             raise AIServiceError(
                 message="El servicio de IA está temporalmente no disponible."
@@ -176,7 +200,15 @@ class AIService:
             # as the user has already received the response.
             # This is a trade-off. We could also have a retry mechanism for tracking.
 
-        parsed = self._parse_json_response(response.content)
+        # An output assembled from continuations must be ONE complete JSON
+        # document; legacy repair could accept only the first JSON object.
+        if getattr(response, "continuations", 0):
+            try:
+                parsed = json.loads(response.content)
+            except json.JSONDecodeError as exc:
+                raise AIServiceError(message="Continued AI output is incomplete JSON") from exc
+        else:
+            parsed = self._parse_json_response(response.content)
 
         latency_ms = response.latency_ms or (time.perf_counter() - start_time) * 1000
         logger.info(

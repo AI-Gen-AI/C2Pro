@@ -222,8 +222,15 @@ class RiskExtractionInput(BaseModel):
     """Input for risk extraction."""
 
     document_text: str = Field(..., description="Contract text to analyze")
-    max_risks: int = Field(20, ge=1, le=50, description="Deprecated legacy hint; never truncates parsed risks")
-    filter_relevant: bool = Field(False, description="Deprecated; full N2 source is always retained")
+    max_risks: int = Field(
+        20, ge=1, le=50, description="Deprecated legacy hint; never truncates parsed risks"
+    )
+    filter_relevant: bool = Field(
+        False, description="Deprecated; full N2 source is always retained"
+    )
+    strict_completeness: bool = Field(
+        False, description="Reject model candidates that cannot be normalized"
+    )
 
 
 @register_tool("risk_extraction", version="1.0")
@@ -245,6 +252,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     version = "1.0"
     description = "Extracts and scores risks from contract documents"
     task_type = AITaskType.COMPLEX_EXTRACTION
+    full_source_analysis = True
     prompt_template_name = None  # Using inline prompt for now
     retry_policy = RetryPolicy(
         max_retries=0,
@@ -261,10 +269,8 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     ) -> list[RiskExtractionCandidate]:
         """Parse AI response and apply domain logic.
 
-        Note: relevance filtering is applied in ``extract_input_from_state``
-        BEFORE the LLM call, not here. Historically the filter ran in this
-        method on a local copy that was immediately discarded, so the LLM
-        always saw the unfiltered text. That was a latent no-op.
+        Full-source graph calls require every generated risk candidate to be
+        normalized or the entire attempt to be marked incomplete.
         """
         _ = tenant_id
 
@@ -272,11 +278,22 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         try:
             payload = json.loads(ai_response.content)
         except json.JSONDecodeError:
-            # Fallback: try to extract JSON from text
+            # A continued response must form one complete JSON document.
+            # Lenient salvage could silently throw away appended risks.
+            if getattr(ai_response, "continuations", 0):
+                raise ValueError("N4 continued response is not one complete JSON document")
             payload = self._extract_json_from_text(ai_response.content)
 
-        # Extract risk items
+        # Extract risk items. A non-dict model item cannot disappear when
+        # converting the JSON array to typed candidates.
         items = self._extract_items(payload)
+        if input_data.strict_completeness and isinstance(payload, dict):
+            raw = payload.get("risks")
+            if isinstance(raw, list) and len(raw) != len(items):
+                raise ValueError(
+                    f"N4 incomplete payload: {len(raw)} model items, "
+                    f"{len(items)} structured candidates"
+                )
 
         # Coerce adapter-local candidates before N4 normalizes the graph contract.
         risks: list[RiskExtractionCandidate] = []
@@ -299,6 +316,13 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             },
         )
 
+        # The model may emit more objects than the normalizer can accept.
+        # A complete-contract extraction must not drop any silently.
+        if input_data.strict_completeness and len(risks) != len(items):
+            raise ValueError(
+                f"N4 incomplete normalization: {len(items)} candidates, {len(risks)} normalized"
+            )
+
         if not risks:
             return []
 
@@ -312,18 +336,20 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     def extract_input_from_state(self, state: ProjectState) -> RiskExtractionInput:
         """Extract input from LangGraph state.
 
-        Applies relevance filtering HERE (pre-LLM) so the prompt actually
-        respects the multilingual include/exclude keywords and the
-        ``RISK_EXTRACTION_MAX_CHARS`` cap. The augmentation suffixes
-        (critique_notes, human_feedback) are appended after filtering so
-        they are never stripped — they are always relevant signal.
+        Sends the whole N2-safe source without lexical filtering or character
+        cuts. Feedback and critique remain explicit appendices, not filters.
         """
         # N2 is the privacy boundary. Preserve its complete model-safe projection;
         # lexical filters and character caps must never hide contractual clauses.
         doc_text = llm_document_text(state)
-        logger.info("risk_extraction_input_prepared", extra={
-            "original_chars": len(doc_text), "filtered_chars": len(doc_text), "delta": 0,
-        })
+        logger.info(
+            "risk_extraction_input_prepared",
+            extra={
+                "original_chars": len(doc_text),
+                "filtered_chars": len(doc_text),
+                "delta": 0,
+            },
+        )
 
         # Augmentation suffixes — keep them OUTSIDE the filter so they
         # always reach the LLM.
@@ -337,6 +363,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             document_text=doc_text,
             max_risks=20,  # Deprecated legacy hint: not enforced on extraction
             filter_relevant=False,
+            strict_completeness=True,
         )
 
     def inject_output_into_state(
