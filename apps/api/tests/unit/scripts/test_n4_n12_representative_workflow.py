@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import subprocess
+import sys
 import sysconfig
 from pathlib import Path
 
@@ -67,11 +68,18 @@ def test_spacy_cache_output_heredoc_writes_exact_newline(tmp_path: Path) -> None
         s for s in steps if s["name"] == "Resolve spaCy model cache directory"
     )
     output = tmp_path / "github-output"
+    # The isolated pytest runner exposes Python as python3, whereas GitHub
+    # Actions exposes "python"; retain the EXACT workflow command unmodified.
+    (tmp_path / "python").symlink_to(sys.executable)
     completed = subprocess.run(
         ["bash"],
         input=step["run"],
         cwd=ROOT,
-        env={**os.environ, "GITHUB_OUTPUT": str(output)},
+        env={
+            **os.environ,
+            "GITHUB_OUTPUT": str(output),
+            "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}",
+        },
         text=True,
         capture_output=True,
         check=False,
