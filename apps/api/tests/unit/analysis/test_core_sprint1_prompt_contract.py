@@ -42,7 +42,7 @@ def test_n12_prompt_uses_exact_status_enum_without_human_approval() -> None:
     assert 'output "RETRY" for one or more source-supported findings' in prompt
     assert 'or "OK" for none' in prompt
     assert "NEEDS_REVIEW, FLAGGED, UNASSESSED" in prompt
-    assert "Return ONLY a JSON object" in prompt
+    assert "Return ONLY ONE syntactically valid JSON object" in prompt
     assert "human review" in prompt.lower()
 
 
