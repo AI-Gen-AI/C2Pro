@@ -39,6 +39,9 @@ class WBSItemOutput(BaseModel):
     code: str = Field(..., description="WBS code (e.g., 1.2.3)")
     name: str = Field(..., description="Item name")
     description: str | None = Field(None, description="Item description")
+    source_quote: str | None = Field(
+        None, description="Verbatim contiguous passage from the technical source that supports this WBS element"
+    )
     level: int | None = Field(
         default=None,
         ge=0,
@@ -152,7 +155,14 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
         """Inject output into LangGraph state."""
         # Convert WBSItemOutput to dicts for state storage
         resolved_items = self._resolve_hierarchy(result.data)
-        state["extracted_wbs"] = [item.model_dump(mode="json") for item in resolved_items]
+        # Preserve the legacy payload shape for old outputs without evidence,
+        # but carry any NEW literal source_quote through to N15 and the artifact.
+        state["extracted_wbs"] = []
+        for item in resolved_items:
+            payload = item.model_dump(mode="json")
+            if payload.get("source_quote") is None:
+                payload.pop("source_quote", None)
+            state["extracted_wbs"].append(payload)
 
         # Tool-level quality metadata is not individual WBS confidence.
         # A synthetic 0.9 default would falsely certify every unassessed item.
@@ -173,7 +183,8 @@ Genera una lista WBS a partir del texto técnico proporcionado.
 Para cada elemento WBS identifica:
 - code: Código jerárquico (ej: 1.2.3)
 - name: Nombre del elemento
-- description: Descripción detallada
+- description: Descripción basada exclusivamente en la fuente; evita desglosar actividades implícitas como hechos
+- source_quote: Fragmento CONTIGUO y LITERAL del DOCUMENTO TÉCNICO que justifica este elemento. Copia el texto exacto, no una paráfrasis. Si no existe respaldo textual, OMITE el elemento.
 - level: Nivel WBS de la fuente si se declara; si no, null
 - parent_code: Código del padre directo solo si dicho padre también aparece en la salida
 - item_type: Tipo de elemento (deliverable | work_package | activity)
@@ -193,6 +204,7 @@ IMPORTANTE: Devuelve SOLO un JSON con el formato:
     "code": "1.1",
     "name": "Diseño estructural",
     "description": "Diseño completo de la estructura del edificio",
+    "source_quote": "Texto exacto del documento que describe este trabajo",
     "level": 1,
     "parent_code": "1",
     "item_type": "work_package",
@@ -211,6 +223,8 @@ Reglas:
 - No inventes nodos padre ni agrupaciones. Si falta el padre directo en el texto/salida, usa parent_code: null.
 - parent_code no valida una relación semántica: el sistema solo conservará el padre directo
   derivable del código numérico y presente en la salida. No presentes una agrupación inferida como fuente.
+- Cada elemento debe incluir source_quote literal, presente en el texto suministrado; sin fuente inequívoca NO generes el elemento.
+- No conviertas una explicación o consecuencia genérica en una actividad WBS supuestamente explícita.
 - No inventes detalles técnicos no respaldados por el documento (incluidos as-built o certificados).
   Conserva una fecha FAT explícita exactamente como aparece; no la sustituyas por una fecha inferida.
 - Los detalles técnicos no corroborados son provisionales y requieren revisión humana. Un JSON
