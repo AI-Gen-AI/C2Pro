@@ -77,6 +77,29 @@ CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60.0  # seconds
 # ===========================================
 
 
+class LLMPartialGenerationError(ValueError):
+    """A billed full-source generation failed before complete structured output.
+
+    Preserve measured token/cost facts; never retry the whole contract
+    automatically after a continuation already consumed resources.
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+    ) -> None:
+        super().__init__(reason)
+        self.model = model
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cost_usd = cost_usd
+
+
 class LLMErrorType(StrEnum):
     """Tipos de errores del LLM."""
 
@@ -407,7 +430,7 @@ class LLMClient:
                     total_input_tokens,
                     total_output_tokens,
                     continuation_count,
-                ) = self._complete_provider_generation(api_kwargs, request)
+                ) = await asyncio.to_thread(self._complete_provider_generation, api_kwargs, request)
 
                 # Success!
                 execution_time_ms = (time.perf_counter() - start_time) * 1000
@@ -496,6 +519,19 @@ class LLMClient:
                 last_error = e
                 error_type = self._classify_error(e)
 
+                if isinstance(e, LLMPartialGenerationError):
+                    # A completed partial provider turn is billable even if
+                    # the final JSON is unusable. Never report zero usage.
+                    self.total_cost_usd += e.cost_usd
+                    logger.error(
+                        "llm_full_document_partial_billed",
+                        request_id=request.request_id,
+                        model=e.model,
+                        input_tokens=e.input_tokens,
+                        output_tokens=e.output_tokens,
+                        cost_usd=e.cost_usd,
+                    )
+
                 logger.warning(
                     "llm_request_attempt_failed",
                     request_id=request.request_id or str(uuid4()),
@@ -511,6 +547,13 @@ class LLMClient:
                 # Check if we should retry
                 if attempt >= self.max_retries:
                     break  # No more retries
+
+                # A full-source provider call may already have billed work even
+                # if its stream disconnects. Never replay it automatically.
+                if (request.metadata or {}).get("full_source_analysis"):
+                    break
+                if isinstance(e, LLMPartialGenerationError):
+                    break
 
                 if not self._should_retry(error_type, e):
                     logger.error(
@@ -584,6 +627,25 @@ class LLMClient:
                 return stream.get_final_message()
         return self.client.messages.create(**api_kwargs)
 
+    def _partial_generation_error(
+        self,
+        request: LLMRequest,
+        reason: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> LLMPartialGenerationError:
+        return LLMPartialGenerationError(
+            reason,
+            model=request.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=self._calculate_cost(
+                model=request.model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            ),
+        )
+
     def _complete_provider_generation(
         self,
         api_kwargs: dict[str, Any],
@@ -604,12 +666,30 @@ class LLMClient:
         continuations = 0
 
         while True:
-            response = self._provider_message(api_kwargs)
+            try:
+                response = self._provider_message(api_kwargs)
+            except Exception as exc:
+                if input_tokens or output_tokens:
+                    raise self._partial_generation_error(
+                        request,
+                        "LLM continuation failed after billable response",
+                        input_tokens,
+                        output_tokens,
+                    ) from exc
+                raise
             stop = getattr(response, "stop_reason", None)
             if stop == "max_tokens" and not full_source:
                 raise ValueError("LLM output incomplete: stop_reason=max_tokens")
             if full_source and stop not in {"max_tokens", "end_turn"}:
-                raise ValueError(f"Full-document generation incomplete: stop_reason={stop}")
+                if getattr(response, "usage", None):
+                    input_tokens += response.usage.input_tokens
+                    output_tokens += response.usage.output_tokens
+                raise self._partial_generation_error(
+                    request,
+                    f"Full-document generation incomplete: stop_reason={stop}",
+                    input_tokens,
+                    output_tokens,
+                )
             if stop in {"max_tokens", "end_turn"}:
                 usage = response.usage
                 input_tokens += usage.input_tokens
@@ -636,7 +716,12 @@ class LLMClient:
                 )
 
             if not part:
-                raise ValueError("LLM output incomplete: empty continuation fragment")
+                raise self._partial_generation_error(
+                    request,
+                    "LLM output incomplete: empty continuation fragment",
+                    input_tokens,
+                    output_tokens,
+                )
             fragments.append(part)
             continuations += 1
 
@@ -646,8 +731,13 @@ class LLMClient:
             from src.core.ai.model_capabilities import full_document_capacity
 
             context_cap, _ = full_document_capacity(request.model)
-            if response.usage.input_tokens + output_tokens >= context_cap:
-                raise ValueError("LLM output incomplete: provider context exhausted")
+            if response.usage.input_tokens + response.usage.output_tokens >= context_cap:
+                raise self._partial_generation_error(
+                    request,
+                    "LLM output incomplete: provider context exhausted",
+                    input_tokens,
+                    output_tokens,
+                )
 
             assembled = "".join(fragments)
             api_kwargs = {

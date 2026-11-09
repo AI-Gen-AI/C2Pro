@@ -189,6 +189,9 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                 error=str(e),
                 error_type=type(e).__name__,
                 latency_ms=round(latency_ms, 2),
+                billable_input_tokens=getattr(e, "input_tokens", 0),
+                billable_output_tokens=getattr(e, "output_tokens", 0),
+                billable_cost_usd=getattr(e, "cost_usd", 0.0),
             )
 
             # Return failed result

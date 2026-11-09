@@ -19,7 +19,10 @@ from tenacity import (
 
 from src.core.ai.anthropic_wrapper import AIRequest as WrapperRequest
 from src.core.ai.anthropic_wrapper import AnthropicWrapper, get_anthropic_wrapper
+from src.core.ai.llm_client import LLMPartialGenerationError
+from src.core.ai.model_capabilities import full_document_capacity
 from src.core.ai.model_router import AITaskType
+from src.core.ai.token_counter import get_token_counter
 from src.core.database import get_session_with_tenant
 from src.core.exceptions import AIServiceError
 
@@ -149,12 +152,42 @@ class AIService:
                     tenant_id=str(tenant_uuid),
                 )
 
-        # Before making the call, check the budget
-        estimated_cost = 0.01  # A small amount to represent a potential call
+        # Full-source N12 preflight cannot authorize a possible 128k-token
+        # response based on a fictitious one-cent estimate. Forecast one
+        # provider-capacity call; actual usage is always tracked separately.
+        estimated_cost = 0.01  # Legacy small calls keep their existing policy.
         try:
             async with get_session_with_tenant(tenant_uuid) as db_session:
                 if self._cost_controller_class:
                     cost_controller = self._cost_controller_class(db_session)
+                    if full_source_analysis:
+                        if self.wrapper is None:
+                            raise AIServiceError("AI client is not configured")
+                        model = self.wrapper.model_router.select_model_with_budget_mode(
+                            task_type=AITaskType.COMPLEX_EXTRACTION,
+                            low_budget_mode=False,
+                            input_token_estimate=len(user_content) // 4,
+                        )
+                        _, output_capacity = full_document_capacity(model.name)
+                        estimate = get_token_counter().estimate_request(
+                            model=model.name,
+                            messages=[{"role": "user", "content": user_content}],
+                            system=system_prompt,
+                            max_tokens=output_capacity,
+                        )
+                        estimated_cost = cost_controller.calculate_cost(
+                            model=model.name,
+                            input_tokens=estimate.input_tokens,
+                            output_tokens=output_capacity,
+                        )
+                        logger.info(
+                            "n12_full_source_cost_preflight",
+                            tenant_id=str(tenant_uuid),
+                            model=model.name,
+                            forecast_input_tokens=estimate.input_tokens,
+                            reserved_output_capacity=output_capacity,
+                            estimated_cost_usd=estimated_cost,
+                        )
                     await cost_controller.check_budget_availability(tenant_uuid, estimated_cost)
         except Exception as exc:
             if self._budget_exception and isinstance(exc, self._budget_exception):
@@ -173,6 +206,30 @@ class AIService:
                 )
             else:
                 response = await self._call_wrapper(system_prompt, user_content)
+        except LLMPartialGenerationError as exc:
+            # A completed provider segment is billable even if continuation
+            # failed and no valid N12 review can be used. Persist this usage.
+            try:
+                async with get_session_with_tenant(tenant_uuid) as db_session:
+                    if self._cost_controller_class:
+                        cost_controller = self._cost_controller_class(db_session)
+                        actual_cost = cost_controller.calculate_cost(
+                            model=exc.model,
+                            input_tokens=exc.input_tokens,
+                            output_tokens=exc.output_tokens,
+                        )
+                        await cost_controller.track_usage(tenant_uuid, actual_cost)
+            except Exception:
+                logger.exception(
+                    "n12_partial_usage_persistence_failed",
+                    tenant_id=str(tenant_uuid),
+                    model=exc.model,
+                    output_tokens=exc.output_tokens,
+                    cost_usd=exc.cost_usd,
+                )
+            raise AIServiceError(
+                message="Incomplete N12 provider output; billable partial usage recorded or flagged."
+            ) from exc
         except RetryError as exc:
             raise AIServiceError(
                 message="El servicio de IA está temporalmente no disponible."
