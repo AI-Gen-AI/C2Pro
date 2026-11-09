@@ -88,9 +88,7 @@ async def test_project_graph_health_node_consumes_documentation_health_signal() 
         }
     )
 
-    dimensions = {
-        item["dimension"]: item for item in result["health_result"]["dimensions"]
-    }
+    dimensions = {item["dimension"]: item for item in result["health_result"]["dimensions"]}
     documentation = dimensions[HealthDimension.DOCUMENTATION.value]
     assert documentation["score"] is not None
     assert documentation["band"] != "unknown"
@@ -98,7 +96,9 @@ async def test_project_graph_health_node_consumes_documentation_health_signal() 
 
 
 @pytest.mark.asyncio
-async def test_project_graph_health_node_degrades_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_project_graph_health_node_degrades_without_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from src.analysis.adapters.graph import project_graph
 
     def _explode(*_args: object, **_kwargs: object) -> object:
@@ -117,3 +117,78 @@ async def test_project_graph_health_node_degrades_without_crashing(monkeypatch: 
 
     assert result["health_result"] is None
     assert result["node_results"][0].status is NodeStatus.DEGRADED
+
+
+def test_trusted_canonical_state_supplies_contract_and_source_bound_risk_health() -> None:
+    """A trusted revision changes Health only, not global Coherence or HITL."""
+    from src.analysis.adapters.graph.project_graph import health
+    from src.project_state.domain.aggregate import ProjectState
+    from src.project_state.domain.entities import Clause, ProjectRisk
+
+    project_id, tenant_id, rev = uuid4(), uuid4(), uuid4()
+    state = ProjectState(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        document_revision_ids=[rev],
+        clauses=[
+            Clause(
+                entity_id=uuid4(),
+                source_revision_id=rev,
+                clause_id="8.2",
+                text="Delay damages capped at 10 percent",
+            )
+        ],
+        risks=[
+            ProjectRisk(
+                entity_id=uuid4(),
+                source_revision_id=rev,
+                payload=RiskItem(
+                    title="Delay damages", description="Cap at 10%", severity=Severity.HIGH
+                ),
+            )
+        ],
+    )
+    result = health(
+        {
+            "project_id": project_id,
+            "tenant_id": tenant_id,
+            "artifacts": [_artifact()],
+            "canonical_project_state": state,
+            "canonical_materialization_status": "created",
+            "coherence_result": None,
+            "node_results": [],
+        }
+    )
+    assert result["node_results"][0].status is NodeStatus.OK
+    dims = {row["dimension"]: row for row in result["health_result"]["dimensions"]}
+    assert dims["contract"]["score"] is not None
+    assert dims["risk"]["score"] is not None
+    assert dims["governance"]["score"] is None
+    assert result["health_result"]["composite_score"] is not None
+
+
+@pytest.mark.parametrize(
+    "blocked",
+    ["no_trusted_artifacts", "source_provenance_unavailable", "reconciliation_required"],
+)
+def test_blocked_canonical_state_never_scores_unverified_risks_or_empty_as_clean(
+    blocked: str,
+) -> None:
+    from src.analysis.adapters.graph.project_graph import health
+
+    result = health(
+        {
+            "project_id": uuid4(),
+            "tenant_id": uuid4(),
+            "artifacts": [_artifact()],
+            "canonical_materialization_status": blocked,
+            "coherence_result": None,
+            "node_results": [],
+        }
+    )
+    dims = {row["dimension"]: row for row in result["health_result"]["dimensions"]}
+    assert dims["risk"]["score"] is None
+    assert dims["contract"]["score"] is None
+    assert blocked in dims["risk"]["missing_data"][0]
+    assert blocked in dims["contract"]["missing_data"][0]
+    assert result["health_result"]["composite_score"] is None

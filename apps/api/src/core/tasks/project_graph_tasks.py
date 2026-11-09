@@ -76,7 +76,12 @@ def summarize_canonical_source_revisions(rows: list[dict[str, Any]]) -> list[dic
         document_id = str(row.get("document_id") or "")
         revision_id = str(row.get("revision_id") or "")
         blob_hash = str(row.get("blob_hash") or "")
-        if family not in {"budget", "schedule"} or not document_id or not revision_id or not blob_hash:
+        if (
+            family not in {"budget", "schedule"}
+            or not document_id
+            or not revision_id
+            or not blob_hash
+        ):
             continue
         groups[(family, document_id, revision_id, blob_hash)] += 1
     return [
@@ -93,7 +98,10 @@ def summarize_canonical_source_revisions(rows: list[dict[str, Any]]) -> list[dic
 
 
 async def persist_provisional_source_discrepancies(
-    session: Any, *, project_id: UUID, tenant_id: TenantId,
+    session: Any,
+    *,
+    project_id: UUID,
+    tenant_id: TenantId,
     comparison: dict[str, Any] | None,
 ) -> bool:
     """Append only changed source-cited observations; NEVER canonical alerts/scores.
@@ -105,7 +113,8 @@ async def persist_provisional_source_discrepancies(
     if not isinstance(findings, list) or not findings:
         return False
     if any(
-        item.get("state") != "PROVISIONAL" or item.get("scored") is not False
+        item.get("state") != "PROVISIONAL"
+        or item.get("scored") is not False
         or len(item.get("sources") or []) != 2
         for item in findings
     ):
@@ -117,11 +126,14 @@ async def persist_provisional_source_discrepancies(
     fingerprint = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
     last = (
         await session.execute(
-            select(ProjectEventORM.payload).where(
+            select(ProjectEventORM.payload)
+            .where(
                 ProjectEventORM.project_id == project_id,
                 ProjectEventORM.tenant_id == tenant_id,
                 ProjectEventORM.event_type == event_type,
-            ).order_by(ProjectEventORM.occurred_at.desc()).limit(1)
+            )
+            .order_by(ProjectEventORM.occurred_at.desc())
+            .limit(1)
         )
     ).scalar_one_or_none()
     if isinstance(last, dict) and last.get("fingerprint") == fingerprint:
@@ -135,21 +147,34 @@ async def persist_provisional_source_discrepancies(
             "role": source["role"],
             **({"unit_sha256": source["unit_sha256"]} if source.get("unit_sha256") else {}),
             **({"blob_sha256": source["blob_sha256"]} if source.get("blob_sha256") else {}),
-            **({"source_quote_sha256": source["source_quote_sha256"]} if source.get("source_quote_sha256") else {}),
+            **(
+                {"source_quote_sha256": source["source_quote_sha256"]}
+                if source.get("source_quote_sha256")
+                else {}
+            ),
         }
-        for finding in findings for source in finding["sources"]
+        for finding in findings
+        for source in finding["sources"]
     ]
     now = datetime.now(UTC).replace(tzinfo=None)
-    session.add(ProjectEventORM(
-        project_id=project_id, tenant_id=tenant_id, event_type=event_type,
-        payload={
-            "state": "PROVISIONAL", "scoring_policy": "not_scored",
-            "requires_human_review": True, "fingerprint": fingerprint,
-            "findings": findings,
-        },
-        evidence_refs=references, actor="project_graph_source_comparator",
-        occurred_at=now, created_at=now,
-    ))
+    session.add(
+        ProjectEventORM(
+            project_id=project_id,
+            tenant_id=tenant_id,
+            event_type=event_type,
+            payload={
+                "state": "PROVISIONAL",
+                "scoring_policy": "not_scored",
+                "requires_human_review": True,
+                "fingerprint": fingerprint,
+                "findings": findings,
+            },
+            evidence_refs=references,
+            actor="project_graph_source_comparator",
+            occurred_at=now,
+            created_at=now,
+        )
+    )
     await session.flush()
     return True
 
@@ -167,6 +192,7 @@ async def run_project_graph_once(
     knowledge_graph_materializer: Any | None = None,
     alert_correlation_runner: Any | None = None,
     risk_source_clause_id_loader: Any | None = None,
+    canonical_state_materializer: Any | None = None,
 ) -> dict[str, object]:
     # #714: canonical input is TRUSTED artifacts only -- never a pending
     # PROPOSED candidate, even when it is the newest row for its document.
@@ -174,6 +200,26 @@ async def run_project_graph_once(
         project_id=project_id,
         tenant_id=tenant_id,
     )
+    canonical_outcome = None
+    canonical_state = None
+    if canonical_state_materializer is not None:
+        # Same trusted artifact set as the graph; not source-only XLSX or
+        # pending PROPOSED candidates. Runtime callback owns DB transaction.
+        canonical_outcome, canonical_state = await canonical_state_materializer(artifacts)
+        if canonical_outcome.status in ("created", "unchanged"):
+            if canonical_state is None:
+                raise RuntimeError("CANONICAL_STATE_PROJECTION_ACK_MISSING_STATE")
+            if canonical_state.project_id != project_id or canonical_state.tenant_id != tenant_id:
+                raise RuntimeError("CANONICAL_STATE_PROJECTION_IDENTITY_MISMATCH")
+            expected_revisions = {
+                UUID(str(artifact.document_revision_id)) for artifact in artifacts
+            }
+            if set(canonical_state.document_revision_ids) != expected_revisions:
+                raise RuntimeError("CANONICAL_STATE_PROJECTION_REVISION_MISMATCH")
+        elif canonical_state is not None:
+            raise RuntimeError("CANONICAL_STATE_UNVERIFIED_PROJECTION")
+        if canonical_outcome.status == "no_trusted_artifacts" and artifacts:
+            raise RuntimeError("CANONICAL_STATE_UNEXPECTED_EMPTY_TRUSTED_SET")
     graph_input: ProjectGraphState = {
         "project_id": project_id,
         "tenant_id": tenant_id,
@@ -181,6 +227,12 @@ async def run_project_graph_once(
         "previous_snapshot_id": None,
         "changed_artifact_ids": [],
         "artifacts": artifacts,
+        **(
+            {"canonical_materialization_status": canonical_outcome.status}
+            if canonical_outcome is not None
+            else {}
+        ),
+        **({"canonical_project_state": canonical_state} if canonical_state is not None else {}),
         "structured_source_refs": list(structured_source_refs or []),
         "structured_source_units": list(structured_source_units or []),
         "structured_document_quotes": list(structured_document_quotes or []),
@@ -225,19 +277,38 @@ async def run_project_graph_once(
             "node_count": materialized.node_count,
             "edge_count": materialized.edge_count,
         }
-    # #714: acknowledge the durable trusted -> ProjectGraph obligations of
-    # exactly the artifacts this completed run loaded. The caller commits it
-    # together with the run; a failed run rolls it back and stays pending.
+    # #714: a successful graph is NOT sufficient to acknowledge that the
+    # canonical ProjectState has been materialized. Otherwise a source-
+    # incomplete revision is removed from the recovery queue and never retried.
+    # Keep the existing trusted_projection_index obligation pending; retries
+    # remain bounded by MAX_RECONCILE_ENQUEUES. Legacy callers without a
+    # canonical dependency retain their original acknowledgement behavior.
+    canonical_blocked = canonical_outcome is not None and canonical_outcome.status in {
+        "no_trusted_artifacts",
+        "source_provenance_unavailable",
+        "reconciliation_required",
+    }
     mark_projected = getattr(artifact_repository, "mark_loaded_projected", None)
     projected = (
         await mark_projected(project_id=project_id, tenant_id=tenant_id)
-        if mark_projected is not None
+        if mark_projected is not None and not canonical_blocked
         else 0
     )
     return {
-        "status": "ok",
+        "status": "partial_canonical_state" if canonical_blocked else "ok",
         "projected_obligations": projected,
         "artifact_count": len(artifacts),
+        "canonical_state_materialization": (
+            {
+                "status": canonical_outcome.status,
+                "clause_count": canonical_outcome.clause_count,
+                "risk_count": canonical_outcome.risk_count,
+                "trusted_revisions": canonical_outcome.trusted_revisions,
+                "rejected_unverified_risks": canonical_outcome.rejected_unverified_risks,
+            }
+            if canonical_outcome is not None
+            else None
+        ),
         "structured_source_revision_count": len(structured_source_refs or []),
         "structured_source_comparison": result.get("structured_source_comparison"),
         "snapshot_id": str(result["snapshot_id"]) if result.get("snapshot_id") else None,
@@ -299,8 +370,11 @@ async def _run_project_graph_async(
                 from src.analysis.adapters.graph.source_clause_evidence import (
                     load_revision_bound_source_quotes,
                 )
+
                 quotes = await load_revision_bound_source_quotes(
-                    session=session, tenant_id=tenant_id, project_id=project_id,
+                    session=session,
+                    tenant_id=tenant_id,
+                    project_id=project_id,
                 )
                 from src.analysis.adapters.persistence.risk_source_clause_binding import (
                     load_trusted_risk_source_clause_ids,
@@ -308,20 +382,81 @@ async def _run_project_graph_async(
 
                 async def _risk_source_loader(trusted: list[Any]) -> dict[str, str]:
                     return await load_trusted_risk_source_clause_ids(
-                        session, tenant_id=tenant_id, project_id=project_id, artifacts=trusted,
+                        session,
+                        tenant_id=tenant_id,
+                        project_id=project_id,
+                        artifacts=trusted,
                     )
+
+                # Canonical ProjectState is a separate tenant-scoped read model.
+                # Bind it ONLY to current TRUSTED+ACTIVE artifact revisions and
+                # their physical clause rows, in the same ProjectGraph transaction.
+                from src.documents.adapters.persistence.sqlalchemy_document_repository import (
+                    SqlAlchemyDocumentRepository,
+                )
+                from src.project_state.adapters.persistence.project_state_repository import (
+                    SqlAlchemyProjectStateRepository,
+                )
+                from src.project_state.application.materialize_trusted_state import (
+                    materialize_trusted_state_if_absent,
+                )
+                from src.project_state.application.trusted_artifact_projector import (
+                    TrustedRevisionBundle,
+                )
+
+                document_repository = SqlAlchemyDocumentRepository(session)
+                project_state_repository = SqlAlchemyProjectStateRepository(session)
+
+                async def _canonical_state_materializer(
+                    trusted_artifacts: list[Any],
+                ) -> tuple[Any, Any]:
+                    bundles = []
+                    for trusted in trusted_artifacts:
+                        doc_id = UUID(trusted.document_id)
+                        revision_id = UUID(str(trusted.document_revision_id))
+                        physical = await document_repository.list_clauses_bound_to_revision(
+                            tenant_id,
+                            doc_id,
+                            revision_id,
+                        )
+                        # The caller's artifact_repository is the authoritative
+                        # TRUSTED+ACTIVE tenant-scoped reader. Do not trust an
+                        # artifact-provided boolean or inferred doc status.
+                        bundles.append(
+                            TrustedRevisionBundle(
+                                artifact=trusted,
+                                source_clauses=tuple(physical),
+                                trust_state="trusted",
+                                lifecycle_status="active",
+                            )
+                        )
+                    outcome = await materialize_trusted_state_if_absent(
+                        project_id=project_id,
+                        tenant_id=tenant_id,
+                        bundles=bundles,
+                        repository=project_state_repository,
+                    )
+                    canonical = (
+                        await project_state_repository.get(project_id, tenant_id)
+                        if outcome.status in ("created", "unchanged")
+                        else None
+                    )
+                    return outcome, canonical
 
                 result = await run_project_graph_once(
                     project_id=project_id,
                     tenant_id=tenant_id,
                     trigger_event_id=trigger_event_id,
                     risk_source_clause_id_loader=_risk_source_loader,
+                    canonical_state_materializer=_canonical_state_materializer,
                     artifact_repository=SqlAlchemyDocumentArtifactRepository(session),
                     structured_source_refs=source_refs,
                     structured_source_units=rows,
                     structured_document_quotes=quotes,
                     snapshot_repository=SqlAlchemyProjectSnapshotRepository(session),
-                    knowledge_graph_materializer=SqlAlchemyTrustedArtifactGraphMaterializer(session),
+                    knowledge_graph_materializer=SqlAlchemyTrustedArtifactGraphMaterializer(
+                        session
+                    ),
                     # Same session/transaction; a reconciliation failure fails the
                     # run (node FAILED -> RuntimeError -> rollback), never a partial commit.
                     alert_correlation_runner=SqlAlchemyCoherenceAlertCorrelationRunner(
@@ -331,7 +466,9 @@ async def _run_project_graph_async(
                 # Persist only PROVISIONAL, dual-source citations in the same
                 # transaction as Tier-2. No promotion to canonical alerts.
                 await persist_provisional_source_discrepancies(
-                    session, project_id=project_id, tenant_id=tenant_id,
+                    session,
+                    project_id=project_id,
+                    tenant_id=tenant_id,
                     comparison=result.get("structured_source_comparison"),
                 )
                 await session.commit()
@@ -513,7 +650,11 @@ async def reconcile_trusted_projections(
                 increment = 1
             await session.execute(
                 _TOUCH_PENDING_SQL,
-                {"tenant_id": str(tenant_id), "project_id": str(project_id), "increment": increment},
+                {
+                    "tenant_id": str(tenant_id),
+                    "project_id": str(project_id),
+                    "increment": increment,
+                },
             )
         await session.commit()
     logger.info("trusted_projection_reconcile", extra=counts)
