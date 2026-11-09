@@ -13,6 +13,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.tenants.types import TenantId
@@ -141,15 +142,12 @@ class SqlAlchemyProjectStateRepository(ProjectStateRepository):
                 for rid in state_orm.document_revision_ids
             ],
             procurement_refs=[
-                UUID(ref) if isinstance(ref, str) else ref
-                for ref in state_orm.procurement_refs
+                UUID(ref) if isinstance(ref, str) else ref for ref in state_orm.procurement_refs
             ],
             **collection_buckets,
         )
 
-    async def get(
-        self, project_id: UUID, tenant_id: TenantId
-    ) -> ProjectState | None:
+    async def get(self, project_id: UUID, tenant_id: TenantId) -> ProjectState | None:
         result = await self._session.execute(
             select(ProjectStateORM).where(
                 ProjectStateORM.project_id == project_id,
@@ -170,6 +168,33 @@ class SqlAlchemyProjectStateRepository(ProjectStateRepository):
         entity_orms: list[ProjectStateEntityORM] = list(entities_result.scalars().all())
 
         return self._from_orm_rows((state_orm, entity_orms))
+
+    async def insert_if_absent(self, state: ProjectState) -> bool:
+        """Atomic bootstrap: never MERGE or DELETE existing canonical entities.
+
+        Caller owns the transaction, including its commit/rollback. A concurrent
+        bootstrap is resolved by the database primary-key constraint; the loser
+        can safely re-read current canonical state after the winner commits.
+        """
+        state_orm, entity_orms = self._to_orm_rows(state)
+        result = await self._session.execute(
+            pg_insert(ProjectStateORM)
+            .values(
+                project_id=state_orm.project_id,
+                tenant_id=state_orm.tenant_id,
+                lifecycle_status=state_orm.lifecycle_status,
+                document_revision_ids=state_orm.document_revision_ids,
+                procurement_refs=state_orm.procurement_refs,
+            )
+            .on_conflict_do_nothing(index_elements=[ProjectStateORM.project_id])
+            .returning(ProjectStateORM.project_id)
+        )
+        if result.scalar_one_or_none() is None:
+            return False
+        self._session.add_all(entity_orms)
+        # Preserve read-your-own-writes even if AsyncSession.autoflush=False.
+        await self._session.flush()
+        return True
 
     async def save(self, state: ProjectState) -> ProjectState:
         state_orm, entity_orms = self._to_orm_rows(state)

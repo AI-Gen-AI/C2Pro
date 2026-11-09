@@ -77,29 +77,37 @@ async def materialize_trusted_state_if_absent(
         )
 
     state = candidate.state
-    existing = await repository.get(project_id, tenant_id)
-    if existing is not None:
-        if existing.model_dump(mode="json") == state.model_dump(mode="json"):
-            return MaterializationOutcome(
-                "unchanged",
-                len(state.clauses),
-                len(state.risks),
-                diagnostics.input_bundles,
-                diagnostics.rejected_unverified_risks,
-            )
-        # A different trusted set OR manual edits require explicit reconciliation.
-        # The caller must leave the projection pending; cannot acknowledge stale.
+    insert_if_absent = getattr(repository, "insert_if_absent", None)
+    if not callable(insert_if_absent):
+        raise RuntimeError("TRUSTED_STATE_ATOMIC_INSERT_REQUIRED")
+    # Never race between get() and destructive save(): the DB PK arbitrates.
+    # Never call ProjectStateRepository.save() during bootstrap.
+    created = await insert_if_absent(state)
+    if created:
         return MaterializationOutcome(
-            "reconciliation_required",
+            "created",
             len(state.clauses),
             len(state.risks),
             diagnostics.input_bundles,
             diagnostics.rejected_unverified_risks,
         )
 
-    await repository.save(state)
+    existing = await repository.get(project_id, tenant_id)
+    if existing is None:
+        # Example: conflicting row exists for a different tenant under RLS.
+        raise RuntimeError("TRUSTED_STATE_ATOMIC_CONFLICT_NOT_VISIBLE")
+    if existing.model_dump(mode="json") == state.model_dump(mode="json"):
+        return MaterializationOutcome(
+            "unchanged",
+            len(state.clauses),
+            len(state.risks),
+            diagnostics.input_bundles,
+            diagnostics.rejected_unverified_risks,
+        )
+    # Different trusted set OR manual edits require an explicit,
+    # revision-aware reconciliation. Do not overwrite existing state.
     return MaterializationOutcome(
-        "created",
+        "reconciliation_required",
         len(state.clauses),
         len(state.risks),
         diagnostics.input_bundles,

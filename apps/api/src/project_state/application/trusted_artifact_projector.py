@@ -11,6 +11,7 @@ artifact repository; constructing this input type does not confer trust.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
@@ -130,7 +131,7 @@ def build_trusted_state_candidate(
                     ],
                 )
             )
-        for index, risk in enumerate(art.extracted_risks):
+        for risk in art.extracted_risks:
             if (
                 risk.source_quote_status != "VERIFIED"
                 or not isinstance(risk.source_quote, str)
@@ -147,8 +148,19 @@ def build_trusted_state_candidate(
                 rejected_risks += 1
                 continue
             physical_clause = matching_clauses[0]
-            digest = sha256(risk.source_quote.encode("utf-8")).hexdigest()
-            key = f"c2pro/canonical-risk/{tenant_id}/{project_id}/{doc_id}/{revision}/{index}/{digest}"
+            # Stable across extraction-list permutations; repeated identical
+            # risk claims cannot gain extra identities and inflate Health.
+            normalized = json.dumps(
+                risk.model_dump(mode="json"),
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            digest = sha256(normalized.encode("utf-8")).hexdigest()
+            key = (
+                f"c2pro/canonical-risk/{tenant_id}/{project_id}/{doc_id}/"
+                f"{revision}/{physical_clause.id}/{digest}"
+            )
             risk_id = uuid5(NAMESPACE_URL, key)
             if risk_id in seen_risk_ids:
                 raise ValueError("TRUSTED_STATE_DUPLICATE_RISK")
@@ -174,8 +186,8 @@ def build_trusted_state_candidate(
             project_id=project_id,
             tenant_id=tenant_id,
             document_revision_ids=sorted(revisions, key=str),
-            clauses=clauses,
-            risks=risks,
+            clauses=sorted(clauses, key=lambda item: str(item.entity_id)),
+            risks=sorted(risks, key=lambda item: str(item.entity_id)),
         ),
         diagnostics=ProjectionDiagnostics(
             input_bundles=len(bundles),

@@ -229,10 +229,15 @@ class _FakeCanonicalRepository:
             return self.state
         return None
 
-    async def save(self, state):
+    async def insert_if_absent(self, state):
+        if self.state is not None:
+            return False
         self.saves += 1
         self.state = state
-        return state
+        return True
+
+    async def save(self, _state):
+        raise AssertionError("destructive save() is forbidden during bootstrap")
 
 
 @pytest.mark.asyncio
@@ -388,3 +393,57 @@ async def test_any_missing_current_trusted_document_revision_blocks_partial_proj
     )
     assert result.status == "source_provenance_unavailable"
     assert repo.saves == 0
+
+
+def test_duplicate_identical_risk_cannot_double_count_health() -> None:
+    identical = _artifact().extracted_risks[0]
+    artifact = _artifact().model_copy(update={"extracted_risks": [identical, identical]})
+    bundle = replace(_bundle(), artifact=artifact)
+    with pytest.raises(ValueError, match="DUPLICATE_RISK"):
+        build_trusted_state_candidate(project_id=_PROJECT, tenant_id=_TENANT, bundles=[bundle])
+
+
+def test_risk_ids_and_state_are_order_invariant_for_same_trusted_revision() -> None:
+    different = RiskItem(
+        title="LD completion delay carve-out",
+        description="Delay damages still apply on contractor caused lateness",
+        category="LEGAL",
+        source_quote=_QUOTE,
+        source_quote_status="VERIFIED",
+    )
+    old_art = _artifact()
+    one = replace(
+        _bundle(),
+        artifact=old_art.model_copy(
+            update={"extracted_risks": [old_art.extracted_risks[0], different]}
+        ),
+    )
+    two = replace(
+        one,
+        artifact=old_art.model_copy(
+            update={"extracted_risks": [different, old_art.extracted_risks[0]]}
+        ),
+    )
+    a = build_trusted_state_candidate(project_id=_PROJECT, tenant_id=_TENANT, bundles=[one])
+    b = build_trusted_state_candidate(project_id=_PROJECT, tenant_id=_TENANT, bundles=[two])
+    assert a is not None and b is not None
+    assert a.state.model_dump(mode="json") == b.state.model_dump(mode="json")
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_requires_atomic_repository_insert_instead_of_save() -> None:
+    from src.project_state.application.materialize_trusted_state import (
+        materialize_trusted_state_if_absent,
+    )
+
+    class NoAtomicRepo:
+        async def get(self, *_args):
+            return None
+
+        async def save(self, _state):
+            raise AssertionError("Must never use destructive save")
+
+    with pytest.raises(RuntimeError, match="ATOMIC_INSERT_REQUIRED"):
+        await materialize_trusted_state_if_absent(
+            project_id=_PROJECT, tenant_id=_TENANT, bundles=[_bundle()], repository=NoAtomicRepo()
+        )

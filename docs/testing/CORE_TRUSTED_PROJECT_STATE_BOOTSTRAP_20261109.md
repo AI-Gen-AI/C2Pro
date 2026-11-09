@@ -24,3 +24,11 @@ Para EPC-SYN-2026-11-05, PostgreSQL contiene 4 documentos, 6 cláusulas de contr
 4. Health y Coherence son distintos. El bootstrap puede habilitar una dimensión Health con evidencia confiable, pero nunca eleva N8 Coherence global por la puerta trasera, ni aprueba HITL ni justifica UAT.
 
 No deployment, no backfill de usuario, sin IA pagada, sin cambios de umbrales.
+
+## Correcciones P1 de revisión Codex
+
+- Atomicidad: la escritura ya no llama al reemplazo destructivo de ProjectState. Un nuevo método del adaptador SQL realiza INSERT ... ON CONFLICT (project_id) DO NOTHING RETURNING project_id, seguido de inserción de entidades y flush (SIN COMMIT). La transacción y tenant siguen siendo responsabilidad del caller. Ante conflicto, se compara el estado actual y se devuelve unchanged o reconciliation_required; si otro tenant oculta la fila, se rechaza.
+- Idempotencia de riesgos: la identidad incluye SHA256 de payload canónico, tenant, proyecto, documento, revisión y UUID de la cláusula física. Eliminado el índice en la lista, de modo que ordenar resultados no cambia su identidad. Repetir riesgos idénticos produce DUPLICATE_RISK, no suma Health.
+- La primera prueba con PostgreSQL encontró reconciliation_required en una segunda lectura después de save() antiguo, debido a falta de garantía read-your-own-writes / semántica de sustitución; el método atómico nuevo y su flush deben validarse por QA independiente en el SHA actualizado antes de aceptar esta PR.
+
+No se ha conectado al flujo runtime ni se ha realizado backfill de producción.
