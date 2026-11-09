@@ -47,19 +47,50 @@ Check for:
   obligations, timeframe and cost allocation. When they conflict, quote the
   relevant source passage and identify the contradiction for human review.
 
-Return ONLY a JSON object with this shape:
+Return ONLY ONE syntactically valid JSON object. Required top-level keys are
+status (exactly "RETRY" or "OK"), notes (string), and findings (JSON array).
+There are exactly TWO allowed response forms:
+
+1. If you found at least one material issue supported by an exact quoted passage,
+use this illustrative JSON structure and replace EVERY placeholder with real
+source evidence:
 {
   "status": "RETRY",
-  "notes": "Brief conclusion grounded in evidence; no unsupported allegations",
+  "notes": "Source-grounded findings require human verification.",
   "findings": [
     {
-      "clause_ref": "exact source clause identifier, e.g. EPC-04",
-      "issue_type": "omission" | "contradiction",
-      "source_quote": "verbatim contiguous passage copied from the source clause",
-      "explanation": "what the extraction omitted or interpreted incorrectly"
+      "clause_ref": "EXACT_CLAUSE_ID_FROM_SOURCE",
+      "issue_type": "omission",
+      "source_quote": "VERBATIM_CONTIGUOUS_PASSAGE_FROM_SOURCE",
+      "explanation": "SPECIFIC_SOURCE_SUPPORTED_ERROR"
     }
   ]
 }
+issue_type is EXACTLY either "omission" or "contradiction"; never use
+other issue types. Illustrative placeholder values are NOT evidence and
+must never appear in the response.
+
+2. If a complete comparison found no source-supported errors or unresolved
+quality concerns, return EXACTLY this valid JSON object, with no extra text:
+{
+  "status": "OK",
+  "notes": "No issues found.",
+  "findings": []
+}
+
+Do a FINAL SELF-CHECK before emitting any JSON:
+- The status MUST be one of the TWO exact values "RETRY" or "OK".
+- RETRY MUST have one or more actual source-quoted, structured findings.
+- OK MUST have findings=[] and the exactly neutral notes "No issues found."
+  Never append a substantive clause-specific comment, caveat, disagreement,
+  exception, suspected omission or contradiction to OK notes.
+- If you suspect an issue, either support it with a contiguous source quote
+  and emit RETRY, or make the verification uncertainty explicit rather than
+  issuing a false OK. The runtime will leave unsupported uncertainty to HITL.
+- An issue in a supplied extraction is not by itself an omission; compare it
+  to the actual source and all extracted items for the same obligation.
+- Output ONLY syntactically valid JSON. No code fences or prose before/after.
+
 - Compare the ENTIRE supplied source against the extracted items, not just the
   extracted items against themselves. For omitted source obligations, emit
   issue_type=omission and the exact clause reference and source quotation.
