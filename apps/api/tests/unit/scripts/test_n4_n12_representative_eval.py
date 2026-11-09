@@ -3,12 +3,130 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from scripts import n4_n12_real_ai_eval as old
 from scripts import n4_n12_representative_eval as trial
+
+
+
+def test_focal_ner_fails_closed_when_presidio_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.core.privacy import anonymizer as privacy
+
+    monkeypatch.setattr(privacy, "PRESIDIO_AVAILABLE", False)
+    with pytest.raises(RuntimeError, match="PII_NER_NOT_AVAILABLE"):
+        trial._require_fail_closed_spanish_ner()
+
+
+def test_focal_ner_fails_closed_when_analyzer_cannot_initialize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.core.privacy import anonymizer as privacy
+
+    monkeypatch.setattr(privacy, "PRESIDIO_AVAILABLE", True)
+    monkeypatch.setattr(
+        privacy.PiiAnonymizerService,
+        "_get_analyzer",
+        classmethod(lambda cls: None),
+    )
+    with pytest.raises(RuntimeError, match="PII_NER_NOT_AVAILABLE"):
+        trial._require_fail_closed_spanish_ner()
+
+
+def test_focal_ner_fails_closed_when_initial_inference_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.core.privacy import anonymizer as privacy
+
+    class Broken:
+        def analyze(self, **kwargs):
+            raise RuntimeError("simulated model failure")
+
+    monkeypatch.setattr(privacy, "PRESIDIO_AVAILABLE", True)
+    monkeypatch.setattr(
+        privacy.PiiAnonymizerService,
+        "_get_analyzer",
+        classmethod(lambda cls: Broken()),
+    )
+    with pytest.raises(RuntimeError, match="PII_NER_PREFLIGHT_FAILED"):
+        trial._require_fail_closed_spanish_ner()
+
+
+@pytest.mark.asyncio
+async def test_focal_ner_failure_blocks_anthropic_before_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Inference may fail AFTER the in-process preflight; still zero provider calls."""
+    from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
+    from src.core.ai.model_router import AITaskType
+    from src.core.privacy import anonymizer as privacy
+
+    class FlakyAnalyzer:
+        calls = 0
+
+        def analyze(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return []
+            raise RuntimeError("simulated spaCy inference failure")
+
+    analyzer = FlakyAnalyzer()
+    monkeypatch.setattr(privacy, "PRESIDIO_AVAILABLE", True)
+    monkeypatch.setattr(
+        privacy.PiiAnonymizerService,
+        "_get_analyzer",
+        classmethod(lambda cls: analyzer),
+    )
+    strict = trial._require_fail_closed_spanish_ner()
+    wrapper = object.__new__(AnthropicWrapper)
+    wrapper.total_requests = 0
+    wrapper.anonymizer_service = strict
+    wrapper.model_router = MagicMock()
+    provider = AsyncMock()
+    wrapper.llm_client = SimpleNamespace(generate=provider)
+    with pytest.raises(RuntimeError, match="PII_NER_INFERENCE_FAILED"):
+        await wrapper.generate(
+            AIRequest(
+                prompt="Firmado por María García en Madrid.",
+                task_type=AITaskType.COMPLEX_EXTRACTION,
+                use_cache=False,
+            )
+        )
+    provider.assert_not_awaited()
+    assert analyzer.calls == 2
+
+
+def test_focal_ner_keeps_original_tokenization_for_detected_pii() -> None:
+    from src.core.privacy import anonymizer as privacy
+
+    class PersonAnalyzer:
+        def analyze(self, *, text, **kwargs):
+            from types import SimpleNamespace
+            start = text.index("Juan Perez")
+            return [SimpleNamespace(entity_type="PERSON", start=start, end=start + 10)]
+
+    strict = trial._FailClosedSpanishPiiAnonymizer(PersonAnalyzer())
+    source = "Juan Perez, juan@empresa.com"
+    result = strict.anonymize_document(source)
+    assert "[PERSON_001]" in result.anonymized_text
+    assert "<EMAIL_ADDRESS_1>" in result.anonymized_text
+    assert result.mapping["[PERSON_001]"] == "Juan Perez"
+    assert result.mapping["<EMAIL_ADDRESS_1>"] == "juan@empresa.com"
+    # The production anonymizer remains in graceful-degradation mode.
+    assert not hasattr(privacy.PiiAnonymizerService, "strict_ci_mode")
+
+
+def test_focal_strict_ner_shared_by_n4_and_both_n12_calls() -> None:
+    source = Path(trial.__file__).read_text(encoding="utf-8")
+    assert "_require_fail_closed_spanish_ner()" in source
+    assert "wrapper.anonymizer_service = cast(Any, strict_anonymizer)" in source
+    assert "RiskExtractionTool(anthropic_wrapper=wrapper)" in source
+    assert source.count("ObservedRealCritiquePort(wrapper)") == 2
+    assert "bypass_anonymization=True" not in source
 
 
 def test_representative_n4_uses_same_prellm_graph_preparation() -> None:
