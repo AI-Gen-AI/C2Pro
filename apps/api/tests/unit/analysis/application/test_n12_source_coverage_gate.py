@@ -247,3 +247,25 @@ async def test_cited_model_critique_with_partial_source_never_bypasses_hitl() ->
     assert result.retry_count == 0
     assert result.human_approval_required is True
     assert "EPC-05" in result.critique_notes
+
+
+@pytest.mark.asyncio
+async def test_n12_flagged_status_does_not_approve_or_auto_retry_even_with_valid_quote() -> None:
+    """Observed FLAGGED variant remains HITL, even with a real quoted source."""
+    source = "EPC-07: Liability is capped at 100% of the Contract Price."
+    reviewer = FakeReview({
+        "status": "FLAGGED",
+        "notes": "The EPC-07 cap was not identified.",
+        "findings": [{
+            "clause_ref": "EPC-07",
+            "issue_type": "omission",
+            "source_quote": "Liability is capped at 100% of the Contract Price.",
+            "explanation": "The liability cap may be missing.",
+        }],
+    })
+    result = await CritiqueExtractionUseCase(ai=reviewer).execute(command(source))
+    assert result.status == "UNASSESSED"
+    assert result.human_approval_required is True
+    assert result.retry_count == 0
+    assert result.confidence is None
+    assert "EPC-07" in result.critique_notes
