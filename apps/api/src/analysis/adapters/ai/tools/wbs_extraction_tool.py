@@ -155,7 +155,14 @@ class WBSExtractionTool(BaseTool[WBSExtractionInput, list[WBSItemOutput]]):
         """Inject output into LangGraph state."""
         # Convert WBSItemOutput to dicts for state storage
         resolved_items = self._resolve_hierarchy(result.data)
-        state["extracted_wbs"] = [item.model_dump(mode="json") for item in resolved_items]
+        # Preserve the legacy payload shape for old outputs without evidence,
+        # but carry any NEW literal source_quote through to N15 and the artifact.
+        state["extracted_wbs"] = []
+        for item in resolved_items:
+            payload = item.model_dump(mode="json")
+            if payload.get("source_quote") is None:
+                payload.pop("source_quote", None)
+            state["extracted_wbs"].append(payload)
 
         # Tool-level quality metadata is not individual WBS confidence.
         # A synthetic 0.9 default would falsely certify every unassessed item.
