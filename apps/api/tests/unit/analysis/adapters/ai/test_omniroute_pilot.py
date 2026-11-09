@@ -147,3 +147,9 @@ async def test_reasoning_model_has_visible_json_token_budget(
     )
     result = await client.extract_json("You are an EPC analyst", EPC_PROMPT, "n4")
     assert result == EPC_RESULT
+
+
+
+def test_openrouter_epc_switch_does_not_reactivate_liquid() -> None:
+    assert PILOT_MODELS["openrouter"] == "openrouter/google/gemma-4-31b-it:free"
+    assert "openrouter/liquid/lfm-3-1.7b:free" not in PILOT_MODELS.values()
