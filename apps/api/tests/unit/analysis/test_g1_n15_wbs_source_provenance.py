@@ -65,6 +65,18 @@ def test_exact_source_quote_allows_cited_wbs_without_autoapproving_it() -> None:
     # N15 citation validity is NOT a human approval, a signed WBS association or TRUSTED.
 
 
+
+def test_case_modified_wbs_quote_is_not_literal_evidence() -> None:
+    # The source contains capitalized FAT. Lowercasing the model quote is NOT
+    # verbatim preservation and must not pass the transactional citation gate.
+    quote = "factory acceptance testing shall be completed no later than 2027-06-10"
+    result = CitationValidatorService().validate(
+        SPEC, [], [{"code": "1.2", "name": "FAT", "source_quote": quote}]
+    )
+    assert result.citations[0].found_in_source is False
+    assert result.validation_passed is False
+
+
 def test_no_extractions_keep_existing_empty_pass_semantics() -> None:
     result = CitationValidatorService().validate(SPEC, [], [])
     assert result.validation_passed is True
