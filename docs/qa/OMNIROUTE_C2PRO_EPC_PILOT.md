@@ -35,7 +35,7 @@ publicar indiscriminadamente el puerto del gateway.
 | Ruta | Modelo ensayado previamente | Estado anterior |
 |---|---|---|
 | NVIDIA | nvidia/nvidia/nemotron-3.5-bolt-e4b | E2E texto simple |
-| OpenRouter | openrouter/liquid/lfm-3-1.7b:free | E2E texto simple |
+| OpenRouter | openrouter/google/gemma-4-31b-it:free | Candidato alternativo; EPC pendiente |
 | Gemini API | gemini/gemini-3.1-flash-lite | E2E texto simple |
 | Grok Build | grok-cli/grok-4.7 | E2E texto simple |
 | Antigravity CLI | agy/claude-opus-4-6-thinking | E2E texto simple |
@@ -72,3 +72,21 @@ Pruebas sintéticas con permisos de la cuenta no equivalen a derechos para
 procesar contratos de clientes. No habilitarlos automáticamente con datos
 reales sin confirmar condiciones de uso. Las rutas API oficiales son mejores
 candidatas para una integración productiva.
+
+
+## Diagnóstico diferencial OpenRouter (9/11/2026)
+
+Liquid respondió HTTP 200 sin texto visible en **dos** ejecuciones EPC reales.
+La primera consumió 256 tokens de salida, todos de razonamiento; la segunda
+consumió 1.024, también todos de razonamiento, con `has_content=0`.
+Aumentar el límite no resolvió la extracción. Se descarta **Liquid para EPC**,
+sin marcar la conexión OpenRouter como fallida globalmente.
+
+Se selecciona explícitamente `openrouter/google/gemma-4-31b-it:free` como
+modelo alternativo de la misma conexión (en la historia previa de OmniRoute
+existe HTTP 200 con contenido breve, así como errores 429 por cuota).
+El ensayo C2Pro EPC sigue **pendiente de respuesta real** para Gemma 4:
+no inferir PASS a partir de la lista de modelos o de tests con mocks.
+Una sola ejecución diferencial del script con `--only openrouter` probará
+JSON, 31 días, 200.000 EUR y tres referencias; un 429 se reportará como
+cuota, no como defecto funcional.
