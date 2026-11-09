@@ -17,6 +17,8 @@ def test_n4_prompt_uses_dominant_legal_vs_schedule_or_budget_category() -> None:
     assert "termination rights" in system_prompt
     assert "late-completion liquidated damages" in system_prompt
     assert "standalone payment" in system_prompt
+    assert "primary category is LEGAL, not SCHEDULE" in system_prompt
+    assert "remain LEGAL, not BUDGET" in system_prompt
 
 
 def test_n4_prompt_demands_literal_quote_with_exceptions() -> None:
