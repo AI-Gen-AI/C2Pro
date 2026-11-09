@@ -997,8 +997,10 @@ jobs:
         id: spacy-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ steps.spacy-meta.outputs.site }}/es_core_news_md
-          key: spacy-es-core-news-md-3.7.0-${{ runner.os }}
+          # Include package metadata as well as the model directory, otherwise
+          # spaCy's package resolution can fail on a restored cache hit.
+          path: ${{ steps.spacy-meta.outputs.site }}/es_core_news_md*
+          key: spacy-es-core-news-md-3.7.0-core-focal-${{ runner.os }}
 
       - name: Install pinned Spanish spaCy model if missing
         if: steps.spacy-cache.outputs.cache-hit != 'true'
