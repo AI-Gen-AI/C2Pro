@@ -987,7 +987,11 @@ jobs:
       - name: Resolve spaCy model cache directory
         id: spacy-meta
         shell: bash
-        run: echo "site=$(python -c 'import sysconfig; print(sysconfig.get_path(\"purelib\"))')" >> "$GITHUB_OUTPUT"
+        run: |
+          python - <<'PY2' >> "$GITHUB_OUTPUT"
+          import sysconfig
+          print("site=" + sysconfig.get_path("purelib"))
+          PY2
 
       - name: Restore pinned Spanish spaCy model (privacy preflight)
         id: spacy-cache
