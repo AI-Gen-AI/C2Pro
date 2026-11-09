@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
+import sysconfig
 from pathlib import Path
 
 import yaml
@@ -54,6 +56,31 @@ def test_representative_workflow_steps_well_formed_and_script_is_scoped() -> Non
         if "python - <<'PY2'" in command:
             embedded = command.split("python - <<'PY2'", 1)[1].split("\nPY2", 1)[0].strip()
             ast.parse(embedded)
+
+
+
+def test_spacy_cache_output_heredoc_writes_exact_newline(tmp_path: Path) -> None:
+    """Run the actual CI heredoc: a literal backslash-n is not a line break."""
+    workflow = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
+    steps = workflow["jobs"]["n4-n12-real-ai-focal"]["steps"]
+    step = next(
+        s for s in steps if s["name"] == "Resolve spaCy model cache directory"
+    )
+    output = tmp_path / "github-output"
+    completed = subprocess.run(
+        ["bash"],
+        input=step["run"],
+        cwd=ROOT,
+        env={**os.environ, "GITHUB_OUTPUT": str(output)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    expected = f"site={sysconfig.get_path('purelib')}\n".encode()
+    assert output.read_bytes() == expected
+    assert output.read_bytes().endswith(b"\x0a")
+    assert b"\\n" not in output.read_bytes()
 
 
 def test_representative_workflow_blocks_before_provider_when_spanish_ner_missing() -> None:
