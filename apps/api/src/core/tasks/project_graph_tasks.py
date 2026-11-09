@@ -218,6 +218,8 @@ async def run_project_graph_once(
                 raise RuntimeError("CANONICAL_STATE_PROJECTION_REVISION_MISMATCH")
         elif canonical_state is not None:
             raise RuntimeError("CANONICAL_STATE_UNVERIFIED_PROJECTION")
+        if canonical_outcome.status == "no_trusted_artifacts" and artifacts:
+            raise RuntimeError("CANONICAL_STATE_UNEXPECTED_EMPTY_TRUSTED_SET")
     graph_input: ProjectGraphState = {
         "project_id": project_id,
         "tenant_id": tenant_id,
@@ -275,17 +277,24 @@ async def run_project_graph_once(
             "node_count": materialized.node_count,
             "edge_count": materialized.edge_count,
         }
-    # #714: acknowledge the durable trusted -> ProjectGraph obligations of
-    # exactly the artifacts this completed run loaded. The caller commits it
-    # together with the run; a failed run rolls it back and stays pending.
+    # #714: a successful graph is NOT sufficient to acknowledge that the
+    # canonical ProjectState has been materialized. Otherwise a source-
+    # incomplete revision is removed from the recovery queue and never retried.
+    # Keep the existing trusted_projection_index obligation pending; retries
+    # remain bounded by MAX_RECONCILE_ENQUEUES. Legacy callers without a
+    # canonical dependency retain their original acknowledgement behavior.
+    canonical_blocked = canonical_outcome is not None and canonical_outcome.status in {
+        "source_provenance_unavailable",
+        "reconciliation_required",
+    }
     mark_projected = getattr(artifact_repository, "mark_loaded_projected", None)
     projected = (
         await mark_projected(project_id=project_id, tenant_id=tenant_id)
-        if mark_projected is not None
+        if mark_projected is not None and not canonical_blocked
         else 0
     )
     return {
-        "status": "ok",
+        "status": "partial_canonical_state" if canonical_blocked else "ok",
         "projected_obligations": projected,
         "artifact_count": len(artifacts),
         "canonical_state_materialization": (

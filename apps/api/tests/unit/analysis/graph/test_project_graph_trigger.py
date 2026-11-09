@@ -550,6 +550,8 @@ async def test_canonical_materialization_block_is_explicit_not_canonical_score(m
         canonical_state_materializer=materialize,
     )
     assert result["canonical_state_materialization"]["status"] == "source_provenance_unavailable"
+    assert result["status"] == "partial_canonical_state"
+    assert result["projected_obligations"] == 0
     assert seen["canonical_materialization_status"] == "source_provenance_unavailable"
     assert "canonical_project_state" not in seen
 

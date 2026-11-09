@@ -809,6 +809,7 @@ def health(state: ProjectGraphState) -> dict[str, object]:
         # Never score a partial state when a risk could not be anchored to a
         # unique physical clause or a source revision is still pending.
         blocked_canonical = materialization_status in {
+            "no_trusted_artifacts",
             "source_provenance_unavailable",
             "reconciliation_required",
         }
