@@ -75,6 +75,68 @@ def _source_marker_matches(marker: str, quote: str) -> bool:
     return True
 
 
+def diagnose_n4_unmatched(
+    fixture: dict[str, Any],
+    risks: list[dict[str, Any]],
+    cases: list[dict[str, Any]],
+    consumed: set[int],
+) -> list[dict[str, Any]]:
+    """Describe evidence mismatch without pretending to decide legal semantics.
+
+    Diagnostic output contains only clause IDs, categories, reason codes and
+    counts. It is NOT an alternative oracle: source verification and canonical
+    score remain strict. The model might be semantically right while quoting a
+    non-determinative excerpt, or wrong despite citing the right passage.
+    """
+    source = _source_text(fixture)
+    verified = [_valid_quote(risk, source) for risk in risks]
+    clauses = fixture["contract"]["clauses"]
+    result: list[dict[str, Any]] = []
+    for item, case in zip(fixture["n4_oracle"]["expected_risks"], cases, strict=True):
+        if case["extracted"]:
+            continue
+        expected_clause = next(clause for clause in clauses if clause["id"] == item["clause_id"])
+        clause_norm = _normalized(f"{expected_clause['id']}: {expected_clause['text']}")
+        marker = item["citation_must_include"]
+        desired = _normalized(item["category"])
+        reason_counts = {
+            "valid_marker_different_category": 0,
+            "same_category_clause_quote_missing_marker": 0,
+            "valid_clause_different_category_and_marker": 0,
+            "unrelated_valid_quotes": 0,
+            "globally_unverified_quotes": 0,
+        }
+        for risk_index, (risk, valid) in enumerate(zip(risks, verified, strict=True)):
+            # Never count a risk already consumed by another expected clause
+            # as evidence for this missing clause in the diagnostic.
+            if risk_index in consumed:
+                continue
+            if not valid:
+                reason_counts["globally_unverified_quotes"] += 1
+                continue
+            quote = _normalized(risk.get("source_quote"))
+            risk_category = _normalized(risk.get("category"))
+            marker_matches = _source_marker_matches(marker, quote)
+            in_target_clause = bool(quote and quote in clause_norm)
+            if marker_matches and risk_category != desired:
+                reason_counts["valid_marker_different_category"] += 1
+            elif in_target_clause and risk_category == desired and not marker_matches:
+                reason_counts["same_category_clause_quote_missing_marker"] += 1
+            elif in_target_clause and risk_category != desired and not marker_matches:
+                reason_counts["valid_clause_different_category_and_marker"] += 1
+            else:
+                reason_counts["unrelated_valid_quotes"] += 1
+        result.append(
+            {
+                "clause_id": item["clause_id"],
+                "expected_category": item["category"],
+                "candidate_count_by_reason": reason_counts,
+                "diagnostic_only_no_semantic_acceptance": True,
+            }
+        )
+    return result
+
+
 def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, Any]:
     """Score emitted N4 risks against independently authored fixture evidence."""
     source = _source_text(fixture)
@@ -113,10 +175,13 @@ def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, 
         "emitted_risks": len(risks),
         "true_positives": len(consumed),
         "omissions": len(expected) - len(consumed),
+        # Legacy: unmatched entries, NOT proven model fabrications.
         "false_positives": len(risks) - len(consumed),
+        "unmatched_emitted_risks": len(risks) - len(consumed),
         "valid_citations": sum(valid),
         "invalid_citations": len(risks) - sum(valid),
         "cases": cases,
+        "unmatched_diagnosis": diagnose_n4_unmatched(fixture, risks, cases, consumed),
     }
 
 

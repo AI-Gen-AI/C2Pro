@@ -147,9 +147,11 @@ def verify_report(
         "true_positives",
         "omissions",
         "false_positives",
+        "unmatched_emitted_risks",
         "valid_citations",
         "invalid_citations",
         "cases",
+        "unmatched_diagnosis",
     ):
         assert rescored[metric] == n4[metric], "N4_ORACLE_RESCORING_MISMATCH: " + metric
 
