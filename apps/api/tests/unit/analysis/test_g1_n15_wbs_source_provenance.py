@@ -5,6 +5,7 @@ EVERY claimed WBS has a verbatim passage from its source document.
 """
 
 from src.analysis.adapters.ai.tools.wbs_extraction_tool import WBSExtractionInput, WBSExtractionTool, WBSItemOutput
+from src.analysis.adapters.graph.nodes import _wbs_contract_payload
 from src.analysis.domain.citation_validation import CitationValidatorService
 from src.analysis.domain.contracts import WbsActivity
 
@@ -73,7 +74,7 @@ def test_no_extractions_keep_existing_empty_pass_semantics() -> None:
 def test_wbs_models_preserve_verbatim_quote_end_to_end() -> None:
     quote = "The FAT protocol and result must be traceable."
     dto = WBSItemOutput(code="1.2", name="FAT", item_type="work_package", source_quote=quote)
-    artifact_item = WbsActivity.model_validate(dto.model_dump())
+    artifact_item = WbsActivity.model_validate(_wbs_contract_payload(dto.model_dump()))
     assert artifact_item.source_quote == quote
 
 
