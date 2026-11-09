@@ -40,6 +40,16 @@ async def _persist_artifact(final_state: Mapping[str, Any]) -> None:
     tenant_id = require_tenant_id(str(final_state["tenant_id"]))
     artifact = build_document_artifact(final_state)
     gated = _requires_human_approval(final_state)
+    # N15 evaluates after HITL. An invalid/degraded final N15 may NEVER be
+    # silently saved as TRUSTED via the non-gated completion hook.
+    if (
+        not gated
+        and final_state.get("doc_type") == "technical_spec"
+        and final_state.get("citation_validation_passed") is not True
+    ):
+        from src.analysis.domain.trust import StaleCandidateError
+
+        raise StaleCandidateError("TECHNICAL_WBS_FINAL_CITATION_VALIDATION_REQUIRED")
     trust_state = TrustState.PROPOSED if gated else TrustState.TRUSTED
     thread_id = final_state.get("thread_id")
     await init_db()

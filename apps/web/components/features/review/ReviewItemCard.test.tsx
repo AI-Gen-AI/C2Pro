@@ -407,3 +407,81 @@ describe('ACC-01 review critique disclosure', () => {
     expect(screen.getByText(/Check the computed milestone/i)).toBeInTheDocument();
   });
 });
+
+
+describe('ReviewItemCard - G1 source-bound technical WBS', () => {
+  it('shows verified analyzed-text quotes, marks fabricated items unverified and blocks only approval', async () => {
+    const spec: ReviewItemResponse = {
+      ...graphGatedItem,
+      item_type: 'technical_spec',
+      item_data: {
+        ...graphGatedItem.item_data,
+        doc_type: 'technical_spec',
+        wbs_source_evidence_passed: false,
+        wbs_source_evidence_total: 2,
+        wbs_source_evidence_verified: 1,
+        wbs_source_evidence: [
+          {
+            code: '1.2',
+            name: 'FAT',
+            found_in_analysis_text: true,
+            source_quote: 'Factory acceptance testing shall be completed',
+          },
+          {
+            code: '1.2.1',
+            name: 'Invented pressure test',
+            found_in_analysis_text: false,
+            source_quote: null,
+          },
+        ],
+      },
+    };
+    render(
+      <ReviewItemCard
+        item={spec}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('WBS source-text matches: 1/2')).toBeInTheDocument();
+    expect(screen.getByTestId('approve-doc-456')).toBeDisabled();
+    expect(screen.getByTestId('reject-doc-456')).not.toBeDisabled();
+    await userEvent.click(screen.getByText('Inspect WBS source quotations'));
+    expect(screen.getByText(/Factory acceptance testing shall be completed/)).toBeInTheDocument();
+    expect(screen.getByText(/No matching literal source quotation/)).toBeInTheDocument();
+    expect(screen.getByText(/literal match in the analyzed text is not a semantic approval/i)).toBeInTheDocument();
+  });
+
+  it('keeps the review action available when the pre-HITL WBS citations all match', () => {
+    const spec: ReviewItemResponse = {
+      ...graphGatedItem,
+      item_type: 'technical_spec',
+      item_data: {
+        ...graphGatedItem.item_data,
+        doc_type: 'technical_spec',
+        wbs_source_evidence_passed: true,
+        wbs_source_evidence_total: 1,
+        wbs_source_evidence_verified: 1,
+        wbs_source_evidence: [{
+          code: '1.2',
+          name: 'FAT',
+          found_in_analysis_text: true,
+          source_quote: 'Factory acceptance testing shall be completed',
+        }],
+      },
+    };
+    render(
+      <ReviewItemCard
+        item={spec}
+        projectId="project-1"
+        reviewerIdentityReady
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('approve-doc-456')).not.toBeDisabled();
+    expect(screen.queryByTestId('review-wbs-unverified-doc-456')).not.toBeInTheDocument();
+  });
+});

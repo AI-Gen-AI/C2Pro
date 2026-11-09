@@ -355,6 +355,41 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
     return updated_state
 
 
+def _stamp_pre_hitl_technical_wbs_evidence(state: ProjectState) -> None:
+    """Validate technical-spec WBS against source text BEFORE N13 interrupt.
+
+    N15 runs after HITL. Without this deterministic early check, the bound
+    PROPOSED candidate has no citations and cannot cross its G1 trust gate.
+    Only the original N2-protected document text is evaluated, never N12
+    critique prose or human feedback. N15 still runs after an approved resume.
+    """
+    if state.get("doc_type") != "technical_spec":
+        return
+    from src.analysis.domain.citation_validation import CitationValidatorService
+
+    original = state.get("anonymized_text") or state.get("document_text")
+    source_text = original if isinstance(original, str) else ""
+    items = state.get("extracted_wbs")
+    wbs_items = items if isinstance(items, list) else []
+    try:
+        checked = CitationValidatorService().validate(source_text, [], wbs_items)
+        state["citations"] = [
+            {
+                "type": citation.type,
+                "item": citation.item,
+                "quote": citation.quote,
+                "found_in_source": citation.found_in_source,
+            }
+            for citation in checked.citations
+        ]
+        # No N5 items means no technical evidence, not a passing evaluation.
+        state["citation_validation_passed"] = bool(wbs_items and checked.validation_passed)
+    except Exception:
+        logger.warning("pre_hitl_technical_wbs_citation_validation_failed", exc_info=True)
+        state["citations"] = []
+        state["citation_validation_passed"] = False
+
+
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
 
 
@@ -366,6 +401,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
             for item in _wbs_rules.extract(llm_document_text(state))
         ]
         state["extracted_wbs"] = wbs_items
+        _stamp_pre_hitl_technical_wbs_evidence(state)
         state["node_results"] = [
             *state.get("node_results", []),
             _ok_node_result("wbs_extractor", wbs_items),
@@ -384,11 +420,13 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
             for item in (updated_state.get("extracted_wbs") or [])
         ]
         updated_state["extracted_wbs"] = wbs_items
+        _stamp_pre_hitl_technical_wbs_evidence(updated_state)
     # N5 isolates extraction tool failures and surfaces them as NodeResult.
     except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("wbs_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["extracted_wbs"] = []
+        _stamp_pre_hitl_technical_wbs_evidence(state)
         state["node_results"] = [*state.get("node_results", []), node_result]
         state["messages"].append(
             AIMessage(content="N5 wbs_extractor: failed (see node_results)")
@@ -455,6 +493,8 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["critique_notes"] = "Mock critique: not assessed; human review required."
         state["human_approval_required"] = True
         await _apply_temporal_review_gate(state)
+        if state.get("doc_type") == "technical_spec" and state.get("citation_validation_passed") is not True:
+            state["human_approval_required"] = True
         state["node_results"] = [
             *state.get("node_results", []),
             _ok_node_result(
@@ -506,6 +546,9 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
     await _apply_temporal_review_gate(state)
+    if state.get("doc_type") == "technical_spec" and state.get("citation_validation_passed") is not True:
+        # An N12 confidence estimate never substitutes for N5 source evidence.
+        state["human_approval_required"] = True
     state["node_results"] = [
         *state.get("node_results", []),
         _ok_node_result(
@@ -599,6 +642,54 @@ async def _claim_checkpoint_lineage_for_current_attempt(state: ProjectState) -> 
         tenant_id=state.get("tenant_id"),
         document_id=state.get("document_id"),
     )
+
+
+def _technical_wbs_review_summary(state: ProjectState) -> dict[str, Any]:
+    """Reviewer-visible source evidence, without promoting model claims.
+
+    Only quotes already matched exactly to the N2-protected analysis text
+    are labeled verified-in-text. Missing or invented quotes remain explicitly
+    unverified; this is NOT a cryptographic source-file attestation.
+    """
+    if state.get("doc_type") != "technical_spec":
+        return {}
+    items = state.get("extracted_wbs")
+    proposed = items if isinstance(items, list) else []
+    all_citations = state.get("citations")
+    citations = all_citations if isinstance(all_citations, list) else []
+    rows: list[dict[str, Any]] = []
+    for item in proposed:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("code")
+        name = item.get("name")
+        quote = item.get("source_quote")
+        if not isinstance(code, str):
+            continue
+        valid = [
+            c for c in citations
+            if isinstance(c, dict) and c.get("type") == "wbs"
+            and c.get("item") == code and c.get("quote") == quote
+            and c.get("found_in_source") is True
+        ]
+        verified = bool(isinstance(quote, str) and quote.strip() and len(valid) == 1)
+        rows.append({
+            "code": code,
+            "name": name if isinstance(name, str) else "",
+            "found_in_analysis_text": verified,
+            # No invented quotation may be shown as source evidence.
+            "source_quote": quote if verified else None,
+        })
+    verified_count = sum(1 for item in rows if item["found_in_analysis_text"])
+    return {
+        "wbs_source_evidence": rows,
+        "wbs_source_evidence_verified": verified_count,
+        "wbs_source_evidence_total": len(rows),
+        "wbs_source_evidence_passed": bool(
+            rows and verified_count == len(rows)
+            and state.get("citation_validation_passed") is True
+        ),
+    }
 
 
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
@@ -711,6 +802,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "confidence_assessed": assessed_confidence is not None,
                         "critique_notes": state.get("critique_notes", ""),
                         "source_references": source_references,
+                        **_technical_wbs_review_summary(state),
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}
@@ -891,6 +983,27 @@ async def save_to_db_node(state: ProjectState) -> ProjectState:
     """N17 — Persist analysis and alerts via PersistAnalysisUseCase (WBS stays a proposal, #830)."""
     if not state.get("tenant_id"):
         state["messages"].append(AIMessage(content="Missing tenant_id; skipping persistence."))
+        return state
+
+    # A post-HITL N15 failure or missing citation result cannot produce
+    # canonical TRUSTED state. The human decision remains an audited fact,
+    # not authorization to persist unsupported source claims.
+    if (
+        state.get("doc_type") == "technical_spec"
+        and state.get("citation_validation_passed") is not True
+    ):
+        logger.warning("n17_technical_wbs_source_validation_not_passed", document_id=state.get("document_id"))
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="save_to_db",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="technical_wbs_source_validation_required",
+            ),
+        ]
+        state["messages"].append(
+            AIMessage(content="N17 save_to_db: skipped -- technical source citations are not validated.")
+        )
         return state
 
     # Lane C / C3a: canonical state (analysis row, risk alerts, canonical WBS,
