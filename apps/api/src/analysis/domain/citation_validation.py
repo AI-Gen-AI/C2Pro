@@ -68,7 +68,7 @@ class CitationValidatorService:
 
         wbs_evidence_complete = True
         for wbs in wbs_items:
-            citation = self._validate_wbs_citation(wbs, text_lower)
+            citation = self._validate_wbs_citation(wbs, source_text)
             citations.append(citation)
             if not citation.found_in_source:
                 wbs_evidence_complete = False
@@ -109,7 +109,7 @@ class CitationValidatorService:
     def _validate_wbs_citation(
         self,
         wbs: dict[str, Any],
-        text_lower: str,
+        source_text: str,
     ) -> Citation:
         """Validate a WBS item citation."""
         # Generated descriptions are summaries, not source evidence.
@@ -119,7 +119,7 @@ class CitationValidatorService:
         if not isinstance(quote, str):
             quote = ""
         quote = quote.strip()
-        found = bool(quote and quote.lower() in text_lower)
+        found = bool(quote and quote in source_text)
         return Citation(
             type="wbs",
             item=wbs.get("code", ""),
