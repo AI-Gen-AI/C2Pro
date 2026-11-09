@@ -103,6 +103,9 @@ class WbsActivity(BaseModel):
     code: str
     name: str
     description: str | None = None
+    # N5/N15: a source-bound WBS element must preserve a literal passage.
+    # Missing source quotes remain unverified and require human review.
+    source_quote: str | None = None
     level: int | None = Field(default=None, ge=0)
     parent_code: str | None = None
     budget_allocated: float | None = None
