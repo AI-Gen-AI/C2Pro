@@ -193,7 +193,10 @@ class OmniRoutePilotClient:
             SimpleNamespace(
                 system_prompt=system_prompt,
                 prompt=user_content,
-                max_tokens=256,
+                # OpenRouter Liquid reported 256/256 completion tokens as
+                # reasoning with no visible content during the first EPC run.
+                # Give this model enough output budget for reasoning and JSON.
+                max_tokens=1024 if self.model == PILOT_MODELS["openrouter"] else 256,
                 task_type=task_type,
                 request_id=str(uuid4()),
             )
