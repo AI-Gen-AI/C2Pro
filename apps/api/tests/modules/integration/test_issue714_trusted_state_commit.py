@@ -1562,3 +1562,54 @@ async def test_older_projection_cannot_acknowledge_a_newer_trusted_version(
         (1, "obsolete"),
         (2, "pending"),
     ], "V2 stays pending until a run that actually loaded V2 completes"
+
+
+async def test_g1_uncited_technical_wbs_candidate_cannot_cross_trusted_boundary(
+    real_saver,  # noqa: F811
+    independent_sessions,  # noqa: F811
+    completion_sessions,
+    graph_enqueues,
+    db: AsyncSession,
+    test_user: User,
+) -> None:
+    """Real PG: a 6-WBS/0-citation technical candidate remains PROPOSED.
+
+    This protects the case where the tenant is in transitional HITL mode OFF;
+    authority/grants do not substitute for source evidence at commit time.
+    """
+    saver, register = real_saver
+    tenant = await db.get(Tenant, test_user.tenant_id)
+    arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
+    state = _final_state(arranged, tenant.id, gated=True, title="FAT risk")
+    state["doc_type"] = "technical_spec"
+    state["extracted_wbs"] = [
+        {"code": f"1.{i}", "name": f"Proposed technical task {i}", "description": "Not source verified"}
+        for i in range(1, 7)
+    ]
+    state["citations"] = []
+    await _propose(completion_sessions, arranged, tenant.id, state=state)
+
+    rows = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert len(rows) == 1
+    proposed = rows[0]
+    assert proposed.trust_state == "proposed"
+    binding = CandidateBinding(
+        artifact_id=proposed.artifact_id,
+        document_id=proposed.document_id,
+        artifact_version=proposed.artifact_version,
+        artifact_hash=proposed.artifact_hash,
+    )
+
+    async with independent_sessions(tenant.id) as session:
+        with pytest.raises(StaleCandidateError, match="TECHNICAL_WBS_SOURCE_EVIDENCE"):
+            await SqlAlchemyDocumentArtifactRepository(session).verify_candidate(
+                binding, tenant_id=tenant.id
+            )
+
+    with pytest.raises(StaleCandidateError, match="TECHNICAL_WBS_SOURCE_EVIDENCE"):
+        await _commit_in(independent_sessions, tenant.id, binding)
+
+    after = await _rows(independent_sessions, tenant.id, arranged.document_id)
+    assert len(after) == 1 and after[0].trust_state == "proposed"
+    assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
+    assert graph_enqueues == []
