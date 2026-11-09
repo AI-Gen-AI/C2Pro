@@ -23,6 +23,85 @@ MAX_CALLS = 3
 MAX_USD = 1.0
 
 
+class _FailClosedSpanishPiiAnonymizer:
+    """Focal-only counterpart to the production anonymizer, without regex fallback.
+
+    Uses the SAME regexes, recognizers, confidence threshold and token
+    generation algorithm as PiiAnonymizerService. Any spaCy/Presidio failure
+    raises before AnthropicWrapper can reach its model transport.
+    """
+
+    def __init__(self, analyzer: Any) -> None:
+        self._analyzer = analyzer
+
+    def anonymize_document(self, text: str) -> Any:
+        from src.core.privacy import anonymizer as privacy
+
+        mapping: dict[str, str] = {}
+        anonymized = text
+        for index, match in enumerate(privacy.PiiAnonymizerService._EMAIL_RE.findall(text), start=1):
+            token = f"<EMAIL_ADDRESS_{index}>"
+            mapping[token] = match
+            anonymized = anonymized.replace(match, token, 1)
+        for index, match in enumerate(privacy.PiiAnonymizerService._SPANISH_ID_RE.findall(text), start=1):
+            token = f"<SPANISH_ID_{index}>"
+            mapping[token] = match
+            anonymized = anonymized.replace(match, token, 1)
+
+        try:
+            results = self._analyzer.analyze(
+                text=anonymized,
+                language=privacy._PRESIDIO_LANGUAGE,
+                entities=list(privacy._PRESIDIO_ENTITIES),
+                score_threshold=privacy._PRESIDIO_SCORE_THRESHOLD,
+            )
+            counters: dict[str, int] = {}
+            token_by_value: dict[tuple[str, str], str] = {}
+            replacements: list[tuple[int, int, str]] = []
+            presidio_mapping: dict[str, str] = {}
+            for result in sorted(results, key=lambda row: row.start):
+                value = anonymized[result.start : result.end]
+                key = (result.entity_type, value)
+                token = token_by_value.get(key)
+                if token is None:
+                    counters[result.entity_type] = counters.get(result.entity_type, 0) + 1
+                    token = f"[{result.entity_type}_{counters[result.entity_type]:03d}]"
+                    token_by_value[key] = token
+                    presidio_mapping[token] = value
+                replacements.append((result.start, result.end, token))
+            for start, end, token in sorted(replacements, key=lambda row: row[0], reverse=True):
+                anonymized = anonymized[:start] + token + anonymized[end:]
+            mapping.update(presidio_mapping)
+        except Exception as exc:
+            raise RuntimeError("PII_NER_INFERENCE_FAILED") from exc
+
+        return privacy.AnonymizedResult(anonymized_text=anonymized, mapping=mapping)
+
+
+def _require_fail_closed_spanish_ner() -> _FailClosedSpanishPiiAnonymizer:
+    """Preflight in the SAME Python process that issues the paid N4/N12 calls."""
+    from src.core.privacy import anonymizer as privacy
+
+    if not privacy.PRESIDIO_AVAILABLE:
+        raise RuntimeError("PII_NER_NOT_AVAILABLE")
+    try:
+        analyzer = privacy.PiiAnonymizerService._get_analyzer()
+    except Exception as exc:
+        raise RuntimeError("PII_NER_PREFLIGHT_FAILED") from exc
+    if analyzer is None:
+        raise RuntimeError("PII_NER_NOT_AVAILABLE")
+    try:
+        analyzer.analyze(
+            text="El contrato lo firma Juan Perez en Madrid.",
+            language=privacy._PRESIDIO_LANGUAGE,
+            entities=list(privacy._PRESIDIO_ENTITIES),
+            score_threshold=privacy._PRESIDIO_SCORE_THRESHOLD,
+        )
+    except Exception as exc:
+        raise RuntimeError("PII_NER_PREFLIGHT_FAILED") from exc
+    return _FailClosedSpanishPiiAnonymizer(analyzer)
+
+
 def prepare_graph_n4_input(tool: Any, source: str) -> Any:
     """Use the same state->input method as the real N4 graph tool.
 
@@ -262,9 +341,12 @@ async def run() -> dict[str, Any]:
     )
     if standard.name != REQUIRED_MODEL or standard.max_tokens != MAX_OUTPUT_TOKENS:
         raise RuntimeError("PRODUCTION_STANDARD_MODEL_ROUTE_DRIFT")
+    # Mandatory same-process NER is exercised before any paid provider call.
+    strict_anonymizer = _require_fail_closed_spanish_ner()
     wrapper = AnthropicWrapper(
         enable_cache=False, enable_retry=False, max_tokens_limit=MAX_OUTPUT_TOKENS
     )
+    wrapper.anonymizer_service = cast(Any, strict_anonymizer)
     n4_tool = RiskExtractionTool(anthropic_wrapper=wrapper)
     prepared = prepare_graph_n4_input(n4_tool, source)
     coverage = input_coverage(source, prepared.document_text, fixture)

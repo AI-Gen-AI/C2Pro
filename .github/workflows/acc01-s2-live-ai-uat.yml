@@ -981,6 +981,50 @@ jobs:
       - name: Install Python backend for isolated evaluator
         uses: ./.github/actions/setup-python-backend
 
+      # GATE 8 (PII): Presidio's spaCy model MUST be available before the
+      # first governed provider request. A lazy download in AnthropicWrapper
+      # can otherwise fail with SystemExit on transient upstream HTTP 504.
+      - name: Resolve spaCy model cache directory
+        id: spacy-meta
+        shell: bash
+        run: |
+          python - <<'PY2'
+          import os
+          import sysconfig
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write("site=" + sysconfig.get_path("purelib") + "\n")
+          PY2
+
+      - name: Restore pinned Spanish spaCy model (privacy preflight)
+        id: spacy-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # Include package metadata as well as the model directory, otherwise
+          # spaCy's package resolution can fail on a restored cache hit.
+          path: ${{ steps.spacy-meta.outputs.site }}/es_core_news_md*
+          key: spacy-es-core-news-md-3.7.0-core-focal-${{ runner.os }}
+
+      - name: Install pinned Spanish spaCy model if missing
+        if: steps.spacy-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pip install --retries 3 --timeout 45 "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl"
+
+      - name: Fail closed if Spanish PII NER is unavailable
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY2'
+          import spacy
+          from src.core.privacy.anonymizer import PiiAnonymizerService
+          nlp = spacy.load("es_core_news_md")
+          assert nlp.meta["lang"] == "es"
+          assert nlp.meta["version"] == "3.7.0"
+          assert PiiAnonymizerService._get_analyzer() is not None, "PII_NER_NOT_READY"
+          print("PII_NER_PREFLIGHT_OK: es_core_news_md 3.7.0; no runtime download")
+          PY2
+
       - name: Verify SDK call governor is installed before any model call
         shell: bash
         env:
