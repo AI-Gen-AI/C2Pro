@@ -445,6 +445,11 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         """
         if trust_state not in {TrustState.TRUSTED, TrustState.PROPOSED}:
             raise ValueError(f"save() cannot persist a {trust_state.value} artifact")
+        # A non-HITL completion may save TRUSTED directly, without passing
+        # through verify_candidate/commit_candidate. Enforce the SAME WBS
+        # evidence rule BEFORE superseding any previously trusted revision.
+        if trust_state is TrustState.TRUSTED:
+            _require_source_bound_technical_wbs_payload(artifact.model_dump(mode="json"))
         document_id = self._artifact_document_id(artifact)
         superseded = await self._supersede_proposed(document_id)
         if trust_state is TrustState.TRUSTED:
@@ -1049,14 +1054,14 @@ def _refuse_structured(row: DocumentArtifactORM, operation: str) -> None:
         )
 
 
-def _require_source_bound_technical_wbs(row: DocumentArtifactORM) -> None:
+def _require_source_bound_technical_wbs_payload(payload: object) -> None:
     """Block technical-spec approval when N5 WBS lacks source-backed N15 citations.
 
     This narrow trust-boundary check does not trust generative descriptions or
     risk confidence. The candidate's immutable source quotes must already have
     been validated against the document by N15; missing evidence fails closed.
     """
-    payload = row.payload if isinstance(row.payload, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
     if payload.get("doc_type") != "technical_spec":
         return
     items = payload.get("extracted_wbs")
@@ -1082,6 +1087,11 @@ def _require_source_bound_technical_wbs(row: DocumentArtifactORM) -> None:
         ]
         if len(matches) != 1:
             raise StaleCandidateError("TECHNICAL_WBS_SOURCE_EVIDENCE_UNVERIFIED")
+
+
+def _require_source_bound_technical_wbs(row: DocumentArtifactORM) -> None:
+    """Use the same immutable citation contract for a reviewed candidate."""
+    _require_source_bound_technical_wbs_payload(row.payload)
 
 
 def _binding_of(row: DocumentArtifactORM) -> CandidateBinding:
