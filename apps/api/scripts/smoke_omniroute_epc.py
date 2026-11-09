@@ -24,6 +24,11 @@ from src.analysis.adapters.ai.omniroute_pilot import (  # noqa: E402
     OmniRoutePilotError,
 )
 
+# An upstream 429 on this provider led OmniRoute to issue 12 outbound
+# attempts from ONE client-side request on 2026-11-09.
+# Keep it explicit-only until real availability is demonstrated.
+SUSPENDED_FROM_DEFAULT = frozenset({"openrouter"})
+
 EXPECTED = {
     "delay_days": 31,
     "over_budget_eur": 200000,
@@ -81,7 +86,7 @@ async def check_one(
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--all", action="store_true", help="Run all 8 previously smoke-tested routes.")
+    parser.add_argument("--all", action="store_true", help="Run all eligible routes, excluding availability-blocked models.")
     parser.add_argument("--only", default="", help="Comma-separated route names from --list.")
     parser.add_argument("--list", action="store_true", help="List the 8 routes and exit without network.")
     parser.add_argument("--base-url", default="http://127.0.0.1:20128")
@@ -93,11 +98,16 @@ async def main() -> int:
             print(f"{provider}: {model}")
         return 0
 
+    if args.all and args.only:
+        parser.error("--all and --only cannot be combined.")
     providers = (
-        list(PILOT_MODELS)
+        [name for name in PILOT_MODELS if name not in SUSPENDED_FROM_DEFAULT]
         if args.all or not args.only
         else [x.strip() for x in args.only.split(",") if x.strip()]
     )
+    if args.all or not args.only:
+        print("SUSPENDED_FROM_DEFAULT: " + ",".join(sorted(SUSPENDED_FROM_DEFAULT)))
+        print("To test a suspended provider intentionally, select it with --only.")
     if not providers or len(set(providers)) != len(providers) or any(
         x not in PILOT_MODELS for x in providers
     ):
@@ -113,7 +123,8 @@ async def main() -> int:
         print("ERROR: empty OmniRoute client key; no requests sent.")
         return 2
 
-    print(f"C2PRO_EPC_SYNTHETIC total_routes={len(providers)} calls_at_most={len(providers)}")
+    print(f"C2PRO_EPC_SYNTHETIC total_routes={len(providers)} client_requests_at_most={len(providers)}")
+    print("NOTE: OmniRoute may retry one client request multiple times upstream on HTTP 429.")
     rows: list[dict[str, object]] = []
     for provider in providers:
         row = await check_one(provider, key, args.base_url, args.timeout)
