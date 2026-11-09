@@ -66,6 +66,6 @@ def test_n12_prompt_requires_sourced_findings_not_hidden_ok_caveats() -> None:
     assert "RETRY MUST have one or more actual source-quoted" in prompt
     assert 'the exactly neutral notes "No issues found."' in prompt
     assert "Never append a substantive clause-specific comment" in prompt
-    assert "runtime handles absent/truncated source as UNASSESSED with HITL" in prompt.lower()
+    assert "runtime handles absent/truncated source as unassessed with hitl" in prompt.lower()
     assert "mark it UNASSESSED in notes" not in prompt
     assert "make the verification uncertainty explicit" not in prompt
