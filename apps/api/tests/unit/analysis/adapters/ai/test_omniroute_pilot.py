@@ -120,3 +120,30 @@ def test_invalid_or_insecure_endpoint_rejected() -> None:
         OmniRoutePilotClient(base_url="https://user:pass@example.com", api_key="secret", model=PILOT_MODELS["nvidia"])
     with pytest.raises(ValueError):
         OmniRoutePilotClient(base_url="http://127.0.0.1:20128", api_key="secret", model="amazon-q/unverified-model")
+
+
+
+@pytest.mark.parametrize(
+    "provider,expected_budget",
+    [("openrouter", 1024), ("gemini", 256), ("grok-cli", 256)],
+)
+@pytest.mark.asyncio
+async def test_reasoning_model_has_visible_json_token_budget(
+    provider: str, expected_budget: int
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["model"] == PILOT_MODELS[provider]
+        assert payload["max_tokens"] == expected_budget
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(EPC_RESULT)}}]}
+        )
+
+    client = OmniRoutePilotClient(
+        base_url="http://127.0.0.1:20128",
+        api_key="synthetic-test-secret",
+        model=PILOT_MODELS[provider],
+        transport=httpx.MockTransport(handler),
+    )
+    result = await client.extract_json("You are an EPC analyst", EPC_PROMPT, "n4")
+    assert result == EPC_RESULT
