@@ -692,3 +692,47 @@ async def test_no_trusted_artifacts_has_no_projection_ack_and_is_explicit_partia
     assert result["status"] == "partial_canonical_state"
     assert result["projected_obligations"] == 0
     assert repo.acks == 0
+
+
+@pytest.mark.asyncio
+async def test_nonempty_trusted_set_with_no_trusted_status_fails_before_graph_or_ack(
+    monkeypatch,
+) -> None:
+    """Contract drift must never turn a nonempty trusted set into a success."""
+    from src.core.tasks import project_graph_tasks
+    from src.project_state.application.materialize_trusted_state import MaterializationOutcome
+
+    class Repo(_FakeRepo):
+        def __init__(self, artifacts):
+            super().__init__(artifacts)
+            self.acks = 0
+
+        async def mark_loaded_projected(self, **_kwargs):
+            self.acks += 1
+            return 1
+
+    artifact = DocumentArtifact(
+        document_id=str(uuid4()), document_revision_id=str(uuid4()), doc_type="contract"
+    )
+    repository = Repo([artifact])
+    calls = []
+
+    class Graph:
+        async def ainvoke(self, _state):
+            calls.append("graph")
+            return {}
+
+    async def contradictory(trusted):
+        assert trusted == [artifact]
+        return MaterializationOutcome("no_trusted_artifacts", 0, 0, 0, 0), None
+
+    monkeypatch.setattr(project_graph_tasks, "build_project_graph", lambda: Graph())
+    with pytest.raises(RuntimeError, match="CANONICAL_STATE_UNEXPECTED_EMPTY_TRUSTED_SET"):
+        await project_graph_tasks.run_project_graph_once(
+            project_id=uuid4(),
+            tenant_id=uuid4(),
+            artifact_repository=repository,
+            canonical_state_materializer=contradictory,
+        )
+    assert repository.acks == 0
+    assert calls == []

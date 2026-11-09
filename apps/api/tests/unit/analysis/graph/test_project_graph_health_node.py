@@ -167,7 +167,10 @@ def test_trusted_canonical_state_supplies_contract_and_source_bound_risk_health(
     assert result["health_result"]["composite_score"] is not None
 
 
-@pytest.mark.parametrize("blocked", ["source_provenance_unavailable", "reconciliation_required"])
+@pytest.mark.parametrize(
+    "blocked",
+    ["no_trusted_artifacts", "source_provenance_unavailable", "reconciliation_required"],
+)
 def test_blocked_canonical_state_never_scores_unverified_risks_or_empty_as_clean(
     blocked: str,
 ) -> None:
