@@ -355,6 +355,41 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
     return updated_state
 
 
+def _stamp_pre_hitl_technical_wbs_evidence(state: ProjectState) -> None:
+    """Validate technical-spec WBS against source text BEFORE N13 interrupt.
+
+    N15 runs after HITL. Without this deterministic early check, the bound
+    PROPOSED candidate has no citations and cannot cross its G1 trust gate.
+    Only the original N2-protected document text is evaluated, never N12
+    critique prose or human feedback. N15 still runs after an approved resume.
+    """
+    if state.get("doc_type") != "technical_spec":
+        return
+    from src.analysis.domain.citation_validation import CitationValidatorService
+
+    original = state.get("anonymized_text") or state.get("document_text")
+    source_text = original if isinstance(original, str) else ""
+    items = state.get("extracted_wbs")
+    wbs_items = items if isinstance(items, list) else []
+    try:
+        checked = CitationValidatorService().validate(source_text, [], wbs_items)
+        state["citations"] = [
+            {
+                "type": citation.type,
+                "item": citation.item,
+                "quote": citation.quote,
+                "found_in_source": citation.found_in_source,
+            }
+            for citation in checked.citations
+        ]
+        # No N5 items means no technical evidence, not a passing evaluation.
+        state["citation_validation_passed"] = bool(wbs_items and checked.validation_passed)
+    except Exception:
+        logger.warning("pre_hitl_technical_wbs_citation_validation_failed", exc_info=True)
+        state["citations"] = []
+        state["citation_validation_passed"] = False
+
+
 # ── N5 — WBS Extractor ──────────────────────────────────────────────────────
 
 
@@ -366,6 +401,7 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
             for item in _wbs_rules.extract(llm_document_text(state))
         ]
         state["extracted_wbs"] = wbs_items
+        _stamp_pre_hitl_technical_wbs_evidence(state)
         state["node_results"] = [
             *state.get("node_results", []),
             _ok_node_result("wbs_extractor", wbs_items),
@@ -384,11 +420,13 @@ async def wbs_extractor_node(state: ProjectState) -> ProjectState:
             for item in (updated_state.get("extracted_wbs") or [])
         ]
         updated_state["extracted_wbs"] = wbs_items
+        _stamp_pre_hitl_technical_wbs_evidence(updated_state)
     # N5 isolates extraction tool failures and surfaces them as NodeResult.
     except Exception as exc:  # noqa: BLE001
         node_result = _failed_node_result("wbs_extractor", exc)
         await _maybe_await(_persist_node_error(state, node_result))
         state["extracted_wbs"] = []
+        _stamp_pre_hitl_technical_wbs_evidence(state)
         state["node_results"] = [*state.get("node_results", []), node_result]
         state["messages"].append(
             AIMessage(content="N5 wbs_extractor: failed (see node_results)")
@@ -455,6 +493,8 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["critique_notes"] = "Mock critique: not assessed; human review required."
         state["human_approval_required"] = True
         await _apply_temporal_review_gate(state)
+        if state.get("doc_type") == "technical_spec" and state.get("citation_validation_passed") is not True:
+            state["human_approval_required"] = True
         state["node_results"] = [
             *state.get("node_results", []),
             _ok_node_result(
@@ -506,6 +546,9 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
     await _apply_temporal_review_gate(state)
+    if state.get("doc_type") == "technical_spec" and state.get("citation_validation_passed") is not True:
+        # An N12 confidence estimate never substitutes for N5 source evidence.
+        state["human_approval_required"] = True
     state["node_results"] = [
         *state.get("node_results", []),
         _ok_node_result(
