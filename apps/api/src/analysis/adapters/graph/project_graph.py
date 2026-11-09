@@ -183,11 +183,7 @@ def _finding_signal_for_artifact(
     if category is None:
         return None
     score = finding.score
-    impact = (
-        1.0 - (score / 100.0)
-        if score is not None
-        else _severity_to_impact(finding.severity)
-    )
+    impact = 1.0 - (score / 100.0) if score is not None else _severity_to_impact(finding.severity)
     return FindingSignal(
         rule_id=finding.rule_id or "ARTIFACT-COHERENCE-FINDING",
         clause_id=f"{_artifact_key(artifact)}:finding:{finding_index}",
@@ -216,8 +212,10 @@ def _risk_clause_id(
     (doc, revision, code, quote SHA256) key was pre-grounded; else the surrogate."""
     if risk_source_clause_ids and risk.source_quote_status == "VERIFIED":
         key = risk_quote_source_key(
-            artifact.document_id, artifact.document_revision_id,
-            risk.clause_ref, risk.source_quote,
+            artifact.document_id,
+            artifact.document_revision_id,
+            risk.clause_ref,
+            risk.source_quote,
         )
         mapped = risk_source_clause_ids.get(key) if key is not None else None
         if mapped is not None:
@@ -306,8 +304,7 @@ def _coherence_summary(
     return ProjectCoherenceResult(
         overall_score=result.overall_score,
         category_scores={
-            str(item.category).upper(): item.score
-            for item in result.category_breakdown
+            str(item.category).upper(): item.score for item in result.category_breakdown
         },
         signal_count=signal_count,
         finding_count=finding_count,
@@ -390,7 +387,8 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     # The source-only comparison is deliberately outside the scored Coherence
     # engine. No XLSX observation is interpreted as an approved project baseline.
     source_comparison = compare_original_source_rows(
-        artifacts, state.get("structured_source_units", []),
+        artifacts,
+        state.get("structured_source_units", []),
         state.get("structured_document_quotes", []),
     )
     if not artifacts:
@@ -408,7 +406,10 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
     try:
         source_clause_ids = state.get("risk_source_clause_ids")
         evaluation = await evaluate_artifact_set(
-            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on,
+            artifacts,
+            project_id=project_id,
+            tenant_id=tenant_id,
+            llm_on=llm_on,
             **({"risk_source_clause_ids": source_clause_ids} if source_clause_ids else {}),
         )
         summary = evaluation.summary
@@ -583,7 +584,9 @@ def _paired_entries(
                 continue
             confidence = _anchor_ratio(prior_entry, current_entry)
             if confidence >= _FUZZY_MATCH_THRESHOLD:
-                candidates.append((confidence, prior_index, current_index, prior_entry, current_entry))
+                candidates.append(
+                    (confidence, prior_index, current_index, prior_entry, current_entry)
+                )
 
     for confidence, prior_index, current_index, prior_entry, current_entry in sorted(
         candidates,
@@ -800,33 +803,61 @@ def health(state: ProjectGraphState) -> dict[str, object]:
         artifacts = state.get("artifacts", [])
         project_id = state["project_id"]
         tenant_id = state["tenant_id"]
-        risks = [
-            ProjectRisk(entity_id=UUID(risk.source or artifact.document_id), payload=risk)
-            if _is_uuid(risk.source)
-            else ProjectRisk(entity_id=UUID(int=0), payload=risk)
-            for artifact in artifacts
-            for risk in artifact.extracted_risks
-        ]
+        canonical = state.get("canonical_project_state")
+        materialization_status = state.get("canonical_materialization_status")
+        # Canonical evidence originates from a verified TRUSTED+ACTIVE set only.
+        # Never score a partial state when a risk could not be anchored to a
+        # unique physical clause or a source revision is still pending.
+        blocked_canonical = materialization_status in {
+            "source_provenance_unavailable",
+            "reconciliation_required",
+        }
+        if canonical is not None:
+            risks = canonical.risks
+            clauses = canonical.clauses
+            obligations = canonical.obligations
+        elif blocked_canonical:
+            risks = []
+            clauses = []
+            obligations = []
+        else:
+            # Legacy callers without the trusted projection dependency remain
+            # compatible. The production route supplies this dependency.
+            risks = [
+                ProjectRisk(entity_id=UUID(risk.source or artifact.document_id), payload=risk)
+                if _is_uuid(risk.source)
+                else ProjectRisk(entity_id=UUID(int=0), payload=risk)
+                for artifact in artifacts
+                for risk in artifact.extracted_risks
+            ]
+            clauses = []
+            obligations = []
         coherence = state.get("coherence_result")
         coherence_result: ProjectCoherenceResult | None
         if isinstance(coherence, dict):
             coherence_result = ProjectCoherenceResult.model_validate(coherence)
         else:
             coherence_result = coherence
+        risk_signal = score_risk_dimension(
+            risks,
+            assessment_ran=bool(artifacts) and not blocked_canonical,
+            extraction_quality=_artifact_confidence(artifacts),
+        )
+        contract_signal = score_contract_dimension(
+            clauses,
+            obligations,
+            coherence_subscore=coherence_subscore_from_result(coherence_result),
+        )
+        if blocked_canonical:
+            note = f"canonical state withheld: {materialization_status}"
+            risk_signal = risk_signal.model_copy(update={"missing_data": [note]})
+            contract_signal = contract_signal.model_copy(update={"missing_data": [note]})
         vector = assemble_health_vector(
             project_id,
             tenant_id,
             signals=[
-                score_risk_dimension(
-                    risks,
-                    assessment_ran=bool(artifacts),
-                    extraction_quality=_artifact_confidence(artifacts),
-                ),
-                score_contract_dimension(
-                    [],
-                    [],
-                    coherence_subscore=coherence_subscore_from_result(coherence_result),
-                ),
+                risk_signal,
+                contract_signal,
                 score_documentation_dimension(_documentation_health_signal(artifacts)),
                 score_governance_dimension(None),
             ],
@@ -855,9 +886,7 @@ def _is_uuid(value: str | None) -> bool:
 
 def _artifact_confidence(artifacts: list[DocumentArtifact]) -> float | None:
     scores = [
-        artifact.confidence_score
-        for artifact in artifacts
-        if artifact.confidence_score is not None
+        artifact.confidence_score for artifact in artifacts if artifact.confidence_score is not None
     ]
     if not scores:
         return None
@@ -983,9 +1012,7 @@ async def alert_correlation(state: ProjectGraphState) -> dict[str, Any]:
     evidence = state.get("coherence_alert_evidence")
     if evidence is None:
         return {
-            "node_results": _skipped(
-                "alert_correlation", "raw coherence evaluation unavailable"
-            ),
+            "node_results": _skipped("alert_correlation", "raw coherence evaluation unavailable"),
         }
     try:
         outcome = await runner.correlate(

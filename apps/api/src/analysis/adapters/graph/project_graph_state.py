@@ -15,6 +15,7 @@ from src.analysis.domain.contracts import DocumentArtifact
 from src.analysis.domain.node_result import NodeResult, merge_node_results
 from src.change_intelligence.domain.change_impact_report import ChangeImpactReport
 from src.core.tenants.types import TenantId
+from src.project_state.domain.aggregate import ProjectState
 
 
 class ProjectGraphArtifactRepository(Protocol):
@@ -74,6 +75,11 @@ class ProjectGraphState(TypedDict):
     previous_snapshot_id: UUID | None
     changed_artifact_ids: list[UUID | str]
     artifacts: list[DocumentArtifact]
+    # Only state freshly bootstrapped/read from the authenticated canonical
+    # repository for this same tenant and exact trusted revision set.
+    canonical_project_state: NotRequired[ProjectState | None]
+    # Distinguish a blocked provenance bootstrap from a completed risk review.
+    canonical_materialization_status: NotRequired[str]
     # Read-only references to canonical XLSX source rows, not approved baselines
     # and not extra trusted DocumentArtifact records.
     structured_source_refs: NotRequired[list[dict[str, Any]]]
