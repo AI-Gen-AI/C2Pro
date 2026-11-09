@@ -754,6 +754,8 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 f"Candidate {binding.artifact_id} is {row.trust_state}; only a "
                 "PROPOSED candidate can become trusted"
             )
+        # G1: no technical-spec TRUSTED commit with uncited WBS.
+        _require_source_bound_technical_wbs(row)
         await self._supersede_active_trusted(binding.document_id)
         await self._session.execute(
             update(DocumentArtifactORM)
@@ -806,6 +808,8 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
                 f"Candidate {binding.artifact_id} v{binding.artifact_version} is no "
                 "longer the reviewed proposal; refusing the decision"
             )
+        if not for_reject and row.trust_state == TrustState.PROPOSED.value:
+            _require_source_bound_technical_wbs(row)
 
     async def reject_candidate(
         self,
@@ -1043,6 +1047,41 @@ def _refuse_structured(row: DocumentArtifactORM, operation: str) -> None:
             f"{operation} cannot be applied to a structured-source candidate; "
             "use the structured trust-decision command"
         )
+
+
+def _require_source_bound_technical_wbs(row: DocumentArtifactORM) -> None:
+    """Block technical-spec approval when N5 WBS lacks source-backed N15 citations.
+
+    This narrow trust-boundary check does not trust generative descriptions or
+    risk confidence. The candidate's immutable source quotes must already have
+    been validated against the document by N15; missing evidence fails closed.
+    """
+    payload = row.payload if isinstance(row.payload, dict) else {}
+    if payload.get("doc_type") != "technical_spec":
+        return
+    items = payload.get("extracted_wbs")
+    if not isinstance(items, list) or not items:
+        return
+    citations = payload.get("citations")
+    if not isinstance(citations, list):
+        raise StaleCandidateError("TECHNICAL_WBS_SOURCE_EVIDENCE_MISSING")
+    for item in items:
+        if not isinstance(item, dict):
+            raise StaleCandidateError("TECHNICAL_WBS_SOURCE_EVIDENCE_INVALID")
+        code = item.get("code")
+        quote = item.get("source_quote")
+        if not isinstance(code, str) or not code or not isinstance(quote, str) or not quote.strip():
+            raise StaleCandidateError("TECHNICAL_WBS_SOURCE_EVIDENCE_MISSING")
+        matches = [
+            citation for citation in citations
+            if isinstance(citation, dict)
+            and citation.get("type") == "wbs"
+            and citation.get("item") == code
+            and citation.get("quote") == quote.strip()
+            and citation.get("found_in_source") is True
+        ]
+        if len(matches) != 1:
+            raise StaleCandidateError("TECHNICAL_WBS_SOURCE_EVIDENCE_UNVERIFIED")
 
 
 def _binding_of(row: DocumentArtifactORM) -> CandidateBinding:
