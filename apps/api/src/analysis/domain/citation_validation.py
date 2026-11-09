@@ -66,15 +66,22 @@ class CitationValidatorService:
             if not citation.found_in_source and citation.quote:
                 all_valid = False
 
+        wbs_evidence_complete = True
         for wbs in wbs_items:
             citation = self._validate_wbs_citation(wbs, text_lower)
             citations.append(citation)
+            if not citation.found_in_source:
+                wbs_evidence_complete = False
 
         validated_count = sum(1 for c in citations if c.found_in_source)
         total_count = len(citations)
 
-        validation_passed = all_valid or (
-            total_count > 0 and validated_count / total_count >= self.VALIDATION_THRESHOLD
+        # N5/G1: a probabilistic aggregate threshold must never hide an
+        # unsourced WBS item, even if other citations are valid. In particular,
+        # a 0/6 WBS result cannot be approved as a source-backed extraction.
+        validation_passed = wbs_evidence_complete and (
+            all_valid
+            or (total_count > 0 and validated_count / total_count >= self.VALIDATION_THRESHOLD)
         )
 
         return CitationValidationResult(
@@ -105,13 +112,18 @@ class CitationValidatorService:
         text_lower: str,
     ) -> Citation:
         """Validate a WBS item citation."""
-        desc = wbs.get("description") or wbs.get("name") or ""
-        fragment = desc[: self.WBS_FRAGMENT_LENGTH].lower() if desc else ""
-        found = bool(fragment and fragment in text_lower)
+        # Generated descriptions are summaries, not source evidence.
+        # Only an explicit, verbatim passage from the provided revision can
+        # validate an extracted WBS item.
+        quote = wbs.get("source_quote")
+        if not isinstance(quote, str):
+            quote = ""
+        quote = quote.strip()
+        found = bool(quote and quote.lower() in text_lower)
         return Citation(
             type="wbs",
             item=wbs.get("code", ""),
-            quote=desc[:120] if desc else "",
+            quote=quote,
             found_in_source=found,
         )
 
