@@ -18,7 +18,7 @@ import httpx
 # The two Antigravity aliases may share an upstream account and quota.
 PILOT_MODELS: dict[str, str] = {
     "nvidia": "nvidia/nvidia/nemotron-3.5-bolt-e4b",
-    "openrouter": "openrouter/liquid/lfm-3-1.7b:free",
+    "openrouter": "openrouter/google/gemma-4-31b-it:free",
     "gemini": "gemini/gemini-3.1-flash-lite",
     "grok-cli": "grok-cli/grok-4.7",
     "agy": "agy/claude-opus-4-6-thinking",
@@ -193,9 +193,9 @@ class OmniRoutePilotClient:
             SimpleNamespace(
                 system_prompt=system_prompt,
                 prompt=user_content,
-                # OpenRouter Liquid reported 256/256 completion tokens as
-                # reasoning with no visible content during the first EPC run.
-                # Give this model enough output budget for reasoning and JSON.
+                # OpenRouter Liquid consumed 256/256 and 1024/1024 completion
+                # tokens in reasoning with no visible JSON. Gemma 4 is the
+                # explicit alternative; allow room for reasoning and content.
                 max_tokens=1024 if self.model == PILOT_MODELS["openrouter"] else 256,
                 task_type=task_type,
                 request_id=str(uuid4()),
