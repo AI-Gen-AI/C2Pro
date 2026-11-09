@@ -87,3 +87,71 @@ def test_real_stored_synthetic_artifact_proposed_not_promoted():
     with pytest.raises(ValueError,match="UNTRUSTED_ARTIFACT"):
         build_trusted_state_candidate(project_id=PROJECT,tenant_id=TENANT,bundles=[
             replace(b,trust_state="proposed")])
+
+
+@pytest.mark.asyncio
+async def test_real_supabase_synthetic_artifact_pg_persistence_and_health(
+    db, test_tenant
+):
+    """Use REAL isolated PostgreSQL; preserve source/revision, remap tenant/project only."""
+    from uuid import uuid4
+    from src.project_state.adapters.persistence.project_state_repository import (
+        SqlAlchemyProjectStateRepository,
+    )
+    from src.projects.adapters.persistence.models import ProjectORM
+    from src.temporal.adapters.persistence.project_snapshot_repository import (
+        SqlAlchemyProjectSnapshotRepository,
+    )
+    from src.temporal.application.snapshot_writer import SnapshotWriter
+    from src.temporal.domain.project_snapshot import SnapshotTrigger
+
+    project_id = uuid4()
+    tenant_id = test_tenant.id
+    original = _bundle()
+    source = replace(
+        original,
+        source_clauses=tuple(
+            replace(c, project_id=project_id, tenant_id=tenant_id)
+            for c in original.source_clauses
+        ),
+    )
+    db.add(ProjectORM(
+        id=project_id, tenant_id=tenant_id,
+        name="Isolated Supabase synthetic EPC canonical replay"
+    ))
+    await db.flush()
+    repository = SqlAlchemyProjectStateRepository(db)
+    first = await materialize_trusted_state_if_absent(
+        project_id=project_id, tenant_id=tenant_id, bundles=[source], repository=repository
+    )
+    second = await materialize_trusted_state_if_absent(
+        project_id=project_id, tenant_id=tenant_id, bundles=[source], repository=repository
+    )
+    assert first.status == "created"
+    assert second.status == "unchanged"
+    await db.flush()
+    stored = await repository.get(project_id, tenant_id)
+    assert stored is not None
+    assert len(stored.clauses) == 6
+    assert len(stored.risks) == 2
+    assert stored.document_revision_ids == [UUID(DATA["revision_id"])]
+    assert all(r.evidence for r in stored.risks)
+    assert await repository.get(project_id, UUID("00000000-0000-4000-8000-000000000001")) is None
+
+    snap = await SnapshotWriter(
+        project_state_repository=repository,
+        snapshot_repository=SqlAlchemyProjectSnapshotRepository(db),
+    ).write_snapshot(
+        project_id=project_id,
+        tenant_id=tenant_id,
+        trigger=SnapshotTrigger.REVISION_INGESTED,
+    )
+    assert snap.counts["clauses"] == 6
+    assert snap.counts["risks"] == 2
+    dims = {d["dimension"]: d for d in snap.health_vector["dimensions"]}
+    assert dims["contract"]["score"] is not None
+    assert dims["risk"]["score"] is not None
+    # Partial 4-document sources and HITL remain genuinely incomplete.
+    assert snap.coherence_subscore is None
+    assert dims["governance"]["score"] is None
+    await db.flush()
