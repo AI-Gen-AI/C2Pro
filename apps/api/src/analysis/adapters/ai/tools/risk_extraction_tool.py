@@ -402,6 +402,14 @@ Extract risks from the narrative clauses of the contract. Identify:
 - QUALITY risks: inspections, standards, factory/site acceptance tests, defects liability, safety, environmental, permits
 - SCOPE risks: scope of work, exclusions, responsibilities, interfaces, change management
 
+PRIMARY CATEGORY SELECTION — select the main contractual mechanism, not a keyword:
+- LEGAL: force majeure relief, notification and its exclusions; liability caps and carve-outs; indemnities; termination rights, compensation entitlements and exclusions such as lost profit. A deadline or payment amount inside such a clause does not automatically make it SCHEDULE or BUDGET.
+- SCHEDULE: late-completion liquidated damages, milestone deadlines and entitlement to extensions of time, even when damages are expressed as a percentage of price.
+- When an extension of time is conditional on qualifying as force majeure, including its exclusions and notice requirements, the primary category is LEGAL, not SCHEDULE; classify the qualification test rather than the time relief granted.
+- BUDGET: standalone payment, guarantees, escalation, currency and financing exposure when not primarily a termination, liability or force-majeure legal entitlement.
+- Payment mechanics that arise from a termination right (demobilization, committed non-cancellable purchase orders, denial of lost profit) remain LEGAL, not BUDGET: the termination right is the governing obligation even when its remedy is monetary.
+- For mixed clauses, account for every material exception in the summary and quote. Do not fabricate a separate risk just to fill each category.
+
 For each risk, return a JSON object with EXACTLY these keys:
 
 {
@@ -427,6 +435,8 @@ CRITICAL OUTPUT RULES:
 6. Prefer fewer supported risks to superficial, duplicative or speculative ones, but never omit an independently supported material risk solely to keep the list short.
 7. source_quote must be ≥80 characters of contract text. NEVER use section labels alone.
 8. clause_ref is ONLY the exact numeric section number explicitly printed in the contract adjacent to the cited text (e.g., 5.2). If none is explicit, emit null; never infer a clause number.
+9. source_quote MUST be a single, contiguous, character-for-character substring of the provided CONTRACT, with the original words, numbers, punctuation and exceptions. Never paraphrase, rewrite, merge non-adjacent text or invent a quotation. Check each quote against the CONTRACT before emitting JSON.
+10. When the operative clause contains carve-outs, limits, conditions, excluded relief or denied compensation, include that operative exception in the cited excerpt and in the interpretation; do not cite only its introductory sentence.
 """.strip()
 
         user_prompt = f"CONTRACT:\n\n{input_data.document_text}"

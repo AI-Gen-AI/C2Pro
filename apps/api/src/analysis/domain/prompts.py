@@ -49,7 +49,7 @@ Check for:
 
 Return ONLY a JSON object with this shape:
 {
-  "status": "OK" | "RETRY",
+  "status": "RETRY",
   "notes": "Brief conclusion grounded in evidence; no unsupported allegations",
   "findings": [
     {
@@ -69,6 +69,7 @@ Return ONLY a JSON object with this shape:
   different: check the substance of the existing risks first.
 - Never invent a clause reference or source_quote. If source text is missing,
   truncated, or unable to support a finding, mark it UNASSESSED in notes.
+- The status is an EXACT two-value enum: output "RETRY" for one or more source-supported findings, or "OK" for none. Never output synonyms such as NEEDS_REVIEW, FLAGGED, UNASSESSED, UNKNOWN or REVIEW; these are not JSON contract statuses and will be treated as unassessed by the product.
 - "RETRY" requires at least one evidence-backed finding; otherwise state
   explicitly that verification is inconclusive, not a validated defect.
 - "OK": The supplied source was reviewed and there are no supported issues.
