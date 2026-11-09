@@ -399,6 +399,11 @@ class LLMClient:
                     api_kwargs["tools"] = request.tools
 
                 raw_response = self.client.messages.create(**api_kwargs)
+                # A valid-looking JSON prefix is not an exhaustive answer.
+                # Never cache, parse, or persist a generation stopped by the
+                # output-token cap; the caller must report an incomplete run.
+                if getattr(raw_response, "stop_reason", None) == "max_tokens":
+                    raise ValueError("LLM output incomplete: stop_reason=max_tokens")
 
                 # Success!
                 execution_time_ms = (time.perf_counter() - start_time) * 1000

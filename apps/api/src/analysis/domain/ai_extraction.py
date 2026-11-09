@@ -104,15 +104,14 @@ class CritiqueExtractionService:
         # Keep the same tenant-scoped AI port as extraction; never fetch another
         # revision or expand access. The bounded excerpt is explicitly non-exhaustive.
         source = (source_text or "").strip()
-        clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
-        excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
+        # N12 must receive the same complete model-safe document projection as
+        # N4. An actual provider context failure remains UNASSESSED via the
+        # exception handler below; never silently clip at 16,000 characters.
+        excerpt = source
         if source:
             coverage = (
-                "PARTIAL EXCERPT: source longer than context; do not claim absence."
-                if clipped else (
-                    "INPUT NOT CLIPPED BY N12; upstream document completeness "
-                    + ("VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED.")
-                )
+                "SOURCE PROVIDED IN FULL; upstream original completeness "
+                + ("VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED.")
             )
             evidence = (
                 f"Source coverage: {coverage}\n"
@@ -156,11 +155,6 @@ class CritiqueExtractionService:
                     return CritiqueResult(
                         status="UNASSESSED",
                         notes="N12_UNASSESSED: source unavailable for verification.",
-                    )
-                if clipped:
-                    return CritiqueResult(
-                        status="UNASSESSED",
-                        notes="N12_UNASSESSED: only a partial source excerpt was reviewed.",
                     )
                 if status == "RETRY" or payload.get("findings"):
                     return CritiqueResult(

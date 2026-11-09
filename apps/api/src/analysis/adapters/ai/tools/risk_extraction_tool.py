@@ -311,10 +311,8 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         # Sort by risk score
         risks.sort(key=lambda r: r.risk_score, reverse=True)
 
-        # Apply max_risks limit
-        if len(risks) > input_data.max_risks:
-            risks = risks[: input_data.max_risks]
-
+        # Never discard supported risks just to satisfy a presentation limit.
+        # The UI may paginate the complete result after persistence.
         return risks
 
     def extract_input_from_state(self, state: ProjectState) -> RiskExtractionInput:
@@ -326,19 +324,12 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         (critique_notes, human_feedback) are appended after filtering so
         they are never stripped — they are always relevant signal.
         """
+        # N2 is the privacy boundary. Preserve its complete model-safe projection;
+        # lexical filters and character caps must never hide contractual clauses.
         doc_text = llm_document_text(state)
-        original_chars = len(doc_text)
-
-        filtered = self._filter_relevant_text(doc_text)
-        logger.info(
-            "risk_extraction_input_prepared",
-            extra={
-                "original_chars": original_chars,
-                "filtered_chars": len(filtered),
-                "delta": original_chars - len(filtered),
-            },
-        )
-        doc_text = filtered
+        logger.info("risk_extraction_input_prepared", extra={
+            "original_chars": len(doc_text), "filtered_chars": len(doc_text), "delta": 0,
+        })
 
         # Augmentation suffixes — keep them OUTSIDE the filter so they
         # always reach the LLM.
@@ -350,8 +341,8 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
 
         return RiskExtractionInput(
             document_text=doc_text,
-            max_risks=20,
-            filter_relevant=True,
+            max_risks=20,  # Deprecated legacy hint: not enforced on extraction
+            filter_relevant=False,
         )
 
     def inject_output_into_state(
@@ -598,59 +589,8 @@ CRITICAL OUTPUT RULES:
         return None
 
     def _filter_relevant_text(self, text: str) -> str:
-        """Filter text to relevant sections for risk extraction.
-
-        Multilingual (ES+EN) keyword include/exclude. Truncation cap is
-        configurable via ``RISK_EXTRACTION_MAX_CHARS`` (default 40,000).
-        Logs structured events when the include filter falls through
-        (no paragraphs matched), so this failure mode is observable.
-        """
-        paragraphs = self._split_paragraphs(text)
-        if not paragraphs:
-            return text.strip()
-
-        selected: list[str] = []
-        for paragraph in paragraphs:
-            lower = _keyword_match_text(paragraph)
-            price_or_bom = any(keyword in lower for keyword in _EXCLUDE_KEYWORDS)
-            substantive_obligation = _PENALTY_OR_DEFAULT_CLAUSE.search(
-                paragraph
-            ) and _OPERATIVE_OBLIGATION.search(paragraph)
-            commercial_narrative = _CONTRACTUAL_BUDGET_NARRATIVE.search(
-                lower
-            ) and not _TABULAR_PRICE_CONTEXT.search(lower)
-            if price_or_bom and not substantive_obligation and not commercial_narrative:
-                continue
-            if any(keyword in lower for keyword in _INCLUDE_KEYWORDS):
-                selected.append(paragraph)
-
-        filter_fell_through = not selected
-        if filter_fell_through:
-            selected = paragraphs
-            logger.info(
-                "risk_extraction_filter_fellthrough",
-                extra={
-                    "paragraphs_total": len(paragraphs),
-                    "doc_chars": len(text),
-                    "reason": "no_include_keyword_match",
-                },
-            )
-
-        combined = "\n\n".join(selected)
-        max_chars = _resolve_max_chars()
-        truncated = self._truncate(combined, max_chars=max_chars)
-        if len(combined) > len(truncated):
-            logger.info(
-                "risk_extraction_filter_truncated",
-                extra={
-                    "original_chars": len(combined),
-                    "truncated_chars": len(truncated),
-                    "dropped_chars": len(combined) - len(truncated),
-                    "max_chars_cap": max_chars,
-                    "filter_fell_through": filter_fell_through,
-                },
-            )
-        return truncated
+        """Deprecated compatibility method. Never prune source text for N4."""
+        return text
 
     def _split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""
