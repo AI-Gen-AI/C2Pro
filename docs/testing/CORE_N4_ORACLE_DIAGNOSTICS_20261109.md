@@ -31,3 +31,7 @@ P1 Health/Score: seguir nulidades por documento, revisión y tenant, identificar
 P2: una vez superada la calidad, UAT vertical EPC completo con dos fuentes, HITL y Coherence Score real; hasta entonces CORE NOT_UAT / NO_RELEASE.
 
 Sin nuevas llamadas pagadas, despliegue o aprobación HITL en esta PR.
+
+## Revisión cruzada y ajuste
+
+Claude identificó que un riesgo ya emparejado podía volver a contarse como candidato en el diagnóstico de otra cláusula. Ahora se excluyen los índices consumidos al construir los recuentos explicativos; el score de aceptación original no cambia. Codex validó la independencia entre diagnóstico y oráculo. Se añadió regresión para impedir doble contabilización. La validación de citas que cruza límites entre cláusulas concatenadas es un riesgo heredado separado, que deberá abordarse con evidencia por unidad física antes de modificar la aceptación.

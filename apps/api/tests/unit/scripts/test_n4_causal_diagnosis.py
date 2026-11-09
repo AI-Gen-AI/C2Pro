@@ -114,3 +114,28 @@ def test_diagnosis_is_deterministic_and_does_not_store_raw_llm_text() -> None:
     assert metrics["true_positives"] == 9
     assert not metrics["unmatched_diagnosis"]
     assert source[:80] not in str(metrics)
+
+
+def test_diagnosis_does_not_reuse_already_matched_risk_for_missing_clause() -> None:
+    fixture = _mini_fixture()
+    fixture["n4_oracle"]["expected_risks"][1]["citation_must_include"] = "The Employer shall pay"
+    risks = [
+        {
+            "category": "SCHEDULE",
+            "source_quote": fixture["contract"]["clauses"][0]["text"],
+            "source_quote_status": "VERIFIED",
+        },
+        {
+            "category": "BUDGET",
+            "source_quote": "The Contractor pays LD for delay",
+            "source_quote_status": "VERIFIED",
+        },
+    ]
+    m = runner.score_n4(fixture, risks)
+    assert m["true_positives"] == 1
+    by_id = {x["clause_id"]: x for x in m["unmatched_diagnosis"]}
+    assert "EPC-02" in by_id
+    assert by_id["EPC-02"]["candidate_count_by_reason"]["valid_marker_different_category"] == 0
+    # Both entries are unrelated to EPC-02: the consumed N4 LD risk must not
+    # appear twice as a candidate for another expected risk.
+    assert sum(by_id["EPC-02"]["candidate_count_by_reason"].values()) == 1

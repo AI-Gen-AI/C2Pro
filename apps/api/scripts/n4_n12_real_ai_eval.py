@@ -79,6 +79,7 @@ def diagnose_n4_unmatched(
     fixture: dict[str, Any],
     risks: list[dict[str, Any]],
     cases: list[dict[str, Any]],
+    consumed: set[int],
 ) -> list[dict[str, Any]]:
     """Describe evidence mismatch without pretending to decide legal semantics.
 
@@ -105,7 +106,11 @@ def diagnose_n4_unmatched(
             "unrelated_valid_quotes": 0,
             "globally_unverified_quotes": 0,
         }
-        for risk, valid in zip(risks, verified, strict=True):
+        for risk_index, (risk, valid) in enumerate(zip(risks, verified, strict=True)):
+            # Never count a risk already consumed by another expected clause
+            # as evidence for this missing clause in the diagnostic.
+            if risk_index in consumed:
+                continue
             if not valid:
                 reason_counts["globally_unverified_quotes"] += 1
                 continue
@@ -176,7 +181,7 @@ def score_n4(fixture: dict[str, Any], risks: list[dict[str, Any]]) -> dict[str, 
         "valid_citations": sum(valid),
         "invalid_citations": len(risks) - sum(valid),
         "cases": cases,
-        "unmatched_diagnosis": diagnose_n4_unmatched(fixture, risks, cases),
+        "unmatched_diagnosis": diagnose_n4_unmatched(fixture, risks, cases, consumed),
     }
 
 
