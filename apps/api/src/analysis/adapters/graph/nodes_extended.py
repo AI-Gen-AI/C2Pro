@@ -522,7 +522,13 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         if bridge_result.dropped_count:
             # Never count rejected N4 evidence. Independently assessed clauses
             # may still yield a qualified score, explicitly flagged PARTIAL.
-            has_other_evidence = bool(result.finding_signals)
+            # N4's own seeded EXTRACTOR-RISK signals are NOT independent
+            # evidence. Never use one accepted N4 proposal to certify another
+            # rejected N4 proposal in the same run.
+            has_other_evidence = any(
+                signal.rule_id != "EXTRACTOR-RISK"
+                for signal in result.finding_signals
+            )
             partial_score = result.overall_score if has_other_evidence else None
             result = result.model_copy(update={
                 "overall_score": partial_score,
