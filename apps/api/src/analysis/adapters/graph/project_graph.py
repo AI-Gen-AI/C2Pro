@@ -234,6 +234,8 @@ def _artifact_risk_signals(
         return build_risk_signals(
             [risk.model_dump(mode="json") for risk in artifact.extracted_risks],
             clause_id=_artifact_key(artifact),
+            document_id=artifact.document_id,
+            document_revision_id=artifact.document_revision_id,
         )
     # Per-risk bridging keeps risk order and every score/severity/confidence
     # identical to the single call; only clause_id differs.
@@ -241,9 +243,16 @@ def _artifact_risk_signals(
     coverage: dict[str, bool] = {}
     dropped: dict[str, int] = {}
     for risk in artifact.extracted_risks:
+        grounded_clause = _risk_clause_id(artifact, risk, risk_source_clause_ids)
         one = build_risk_signals(
             [risk.model_dump(mode="json")],
-            clause_id=_risk_clause_id(artifact, risk, risk_source_clause_ids),
+            clause_id=grounded_clause,
+            document_id=artifact.document_id,
+            document_revision_id=artifact.document_revision_id,
+            source_binding_kind=(
+                "verified_clause" if grounded_clause != _artifact_key(artifact)
+                else "document"
+            ),
         )
         signals.extend(one.signals)
         coverage.update(one.coverage_seed)

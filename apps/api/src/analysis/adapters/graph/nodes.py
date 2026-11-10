@@ -46,14 +46,14 @@ from src.analysis.application.critique_extraction_use_case import (
     CritiqueExtractionCommand,
     CritiqueExtractionUseCase,
 )
-from src.analysis.domain.ai_source_text import llm_document_text
-from src.analysis.domain.n12_source_attestation import is_n12_source_attestation_valid
 from src.analysis.domain.ai_extraction import (
     CritiqueExtractionService,
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
 )
+from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.contracts import RiskItem, WbsActivity
+from src.analysis.domain.n12_source_attestation import is_n12_source_attestation_valid
 from src.analysis.domain.node_result import NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.analysis.domain.risk_provenance import classify_quote
@@ -170,14 +170,17 @@ def _risk_contract_item(item: RiskItem | dict[str, Any], document_text: str | No
         data["description"] = item["summary"]
     if not data.get("description") and data.get("title"):
         data["description"] = data["title"]
-    if not data.get("source"):
-        data["source"] = item.get("source_quote") or item.get("source_text_snippet")
     if not data.get("likelihood") and item.get("probability"):
         data["likelihood"] = item["probability"]
-    # The model's quote is a claim: it is stored as a citation only if it is found verbatim in the document (never invented).
-    data["source_quote"], data["source_quote_status"] = classify_quote(
-        item.get("source_quote") or item.get("source_text_snippet"), document_text
+    # The source field is a legacy citation alias, not independent provenance.
+    # Never retain a raw model quote here when classify_quote rejected it: N8
+    # previously read source first and could resurface invented text as evidence.
+    claimed_quote = (
+        item.get("source_quote") or item.get("source_text_snippet") or item.get("source")
     )
+    verified_quote, quote_status = classify_quote(claimed_quote, document_text)
+    data["source_quote"], data["source_quote_status"] = verified_quote, quote_status
+    data["source"] = verified_quote
     return RiskItem.model_validate(data)
 
 

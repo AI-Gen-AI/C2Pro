@@ -489,7 +489,12 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         # fabricate provenance, so the bridge keeps the document-level identifier even
         # when the evidence itself is clause-granular.
         clause_id = whole_document_clause_id(*_document_identity(state))
-        bridge_result = build_risk_signals(extracted_risks, clause_id=clause_id)
+        bridge_result = build_risk_signals(
+            extracted_risks,
+            clause_id=clause_id,
+            document_id=state.get("document_id"),
+            document_revision_id=state.get("document_revision_id"),
+        )
         logger.info(
             "node_coherence_scorer_bridge",
             extra={

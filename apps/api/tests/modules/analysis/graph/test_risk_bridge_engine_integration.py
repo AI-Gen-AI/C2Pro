@@ -67,6 +67,7 @@ def _epc_risks() -> list[dict]:
             "impact": "CRITICAL",
             "probability": "MEDIUM",
             "source_quote": "any default or breach under the 'Second Contract' shall automatically be deemed as a default",
+            "source_quote_status": "VERIFIED",
         },
         {
             "category": "TECHNICAL",
@@ -76,6 +77,7 @@ def _epc_risks() -> list[dict]:
             "impact": "HIGH",
             "probability": "HIGH",
             "source_quote": "port handling and custom clearance of Plant and Equipment",
+            "source_quote_status": "VERIFIED",
         },
         {
             "category": "SCHEDULE",
@@ -85,6 +87,7 @@ def _epc_risks() -> list[dict]:
             "impact": "HIGH",
             "probability": "MEDIUM",
             "source_quote": "Effective Date from which the Time for Completion shall be counted",
+            "source_quote_status": "VERIFIED",
         },
     ]
 

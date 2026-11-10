@@ -88,6 +88,7 @@ def test_the_boundary_keeps_the_verified_quote_and_the_clause_reference_next_to_
 def test_the_boundary_never_stores_an_invented_quote_but_says_why() -> None:
     payload = _risk_contract_payload(_raw(source_quote=Q31 + " " + Q32), CONTRACT)
     assert payload["source_quote"] is None and payload["source_quote_status"] == NOT_FOUND
+    assert payload["source"] is None, "legacy source must never bypass quote validation"
     assert payload["clause_ref"] == "3.1", "the clause label is the extractor's own and is kept either way"
 
 
