@@ -329,3 +329,30 @@ async def test_independent_finding_keeps_partial_score_without_scoring_unbound_r
     assert outcome.summary.score_reason == "partial_withheld_risk_provenance"
     assert outcome.summary.excluded_risk_count == 1
     assert "risk_provenance" in outcome.summary.insufficient_data_reasons
+
+
+@pytest.mark.asyncio
+async def test_mixed_bound_and_unbound_n4_risks_still_unassessed_without_independent_signal(monkeypatch):
+    """One physically bound N4 seed does NOT certify a second withheld N4 risk."""
+    from src.analysis.adapters.graph import project_graph as mod
+    from src.coherence.models import EnrichedCoherenceResult
+
+    async def fake_evaluate(*args, **kwargs):
+        signals = kwargs["seed_signals"]
+        assert len(signals) == 1
+        assert signals[0].rule_id == "EXTRACTOR-RISK"
+        assert signals[0].source == "llm"
+        return EnrichedCoherenceResult(overall_score=91.0)
+
+    monkeypatch.setattr(mod, "evaluate_coherence_async", fake_evaluate)
+    art = _artifact(_risk("6.1"), _risk("6.2"))
+    outcome = await mod.evaluate_artifact_set(
+        [art], project_id=PROJECT, tenant_id=TENANT, llm_on=False,
+        risk_source_clause_ids={_k("6.1"): str(uuid4())},
+        risk_source_binding_status="AVAILABLE",
+    )
+    assert outcome.summary.overall_score is None
+    assert outcome.summary.excluded_risk_count == 1
+    assert outcome.summary.score_reason == "unassessed_unbound_risk_provenance"
+    assert art.extracted_risks[0].source_quote_status == "VERIFIED"
+    assert len(art.extracted_risks) == 2

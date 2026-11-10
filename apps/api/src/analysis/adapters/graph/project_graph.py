@@ -401,7 +401,13 @@ async def evaluate_artifact_set(
         # Preserve independently grounded/deterministic signals and their score.
         # With NO independently proven signals, fail closed to NULL. Otherwise
         # expose PARTIAL rather than describing a subset as complete evidence.
-        partial_score = engine_result.overall_score if signals else None
+        # A bound N4 risk has an authenticated physical quote, but is still
+        # N4's probabilistic interpretation. With other N4 risks withheld,
+        # a remaining N4 seed alone does not certify the aggregate as partial.
+        has_independent_evidence = any(
+            signal.rule_id != "EXTRACTOR-RISK" for signal in signals
+        )
+        partial_score = engine_result.overall_score if has_independent_evidence else None
         engine_result = engine_result.model_copy(update={
             "overall_score": partial_score,
             "score_reason": (
