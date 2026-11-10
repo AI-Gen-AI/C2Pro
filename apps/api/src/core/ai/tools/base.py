@@ -15,6 +15,7 @@ import structlog
 from pydantic import BaseModel, ValidationError
 
 from src.core.ai.anthropic_wrapper import AIRequest, AIResponse, get_anthropic_wrapper
+from src.core.ai.llm_client import LLMPartialGenerationError
 from src.core.ai.model_router import AITaskType, ModelTier
 from src.core.ai.prompts import get_prompt_manager
 
@@ -199,10 +200,10 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                 data=None,  # type: ignore
                 status=ToolStatus.FAILED,
                 success=False,
-                model_used="",
-                input_tokens=0,
-                output_tokens=0,
-                cost_usd=0.0,
+                model_used=getattr(e, "model", ""),
+                input_tokens=getattr(e, "input_tokens", 0),
+                output_tokens=getattr(e, "output_tokens", 0),
+                cost_usd=getattr(e, "cost_usd", 0.0),
                 latency_ms=latency_ms,
                 execution_id=execution_id,
                 tool_name=self.name,
@@ -367,6 +368,10 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                     retries=retries,
                 )
 
+            except LLMPartialGenerationError:
+                # A billed provider continuation must never become a generic
+                # validation retry or lose its source exception and token usage.
+                raise
             except (ValidationError, ValueError) as e:
                 last_error = e
                 retries += 1

@@ -29,6 +29,7 @@ from src.analysis.domain.risk_categories import RiskCategory, normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
 from src.core.ai.tools import BaseTool, RetryPolicy, ToolResult, register_tool
+from src.core.ai.tools.metadata import ToolStatus
 
 if TYPE_CHECKING:
     from src.analysis.adapters.graph.schema import ProjectState
@@ -260,6 +261,64 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         exponential_backoff=True,
         initial_delay_ms=1000,
     )
+
+    async def execute(
+        self,
+        input_data: RiskExtractionInput,
+        tenant_id: UUID | None = None,
+        low_budget_mode: bool = False,
+        **kwargs: Any,
+    ) -> ToolResult[list[RiskExtractionCandidate]]:
+        """Account for N4 partial billable failures exactly once per tool attempt.
+
+        Reuse the existing tenant-scoped cost controller. A persistence failure
+        remains a FAILED extraction and is explicitly logged; it never makes
+        a partial JSON or risks TRUSTED.
+        """
+        result = await super().execute(
+            input_data,
+            tenant_id=tenant_id,
+            low_budget_mode=low_budget_mode,
+            **kwargs,
+        )
+        if (
+            result.status is ToolStatus.FAILED
+            and result.error_type == "LLMPartialGenerationError"
+            and result.cost_usd > 0
+        ):
+            if tenant_id is None:
+                logger.error(
+                    "n4_partial_billable_usage_unattributed",
+                    extra={"execution_id": result.execution_id, "cost_usd": result.cost_usd},
+                )
+            else:
+                try:
+                    from src.core.ai.cost_controller import CostControllerService
+                    from src.core.database import get_session_with_tenant
+
+                    async with get_session_with_tenant(tenant_id) as session:
+                        await CostControllerService(session).track_usage(
+                            tenant_id,
+                            result.cost_usd,
+                        )
+                    logger.info(
+                        "n4_partial_billable_usage_recorded",
+                        extra={
+                            "execution_id": result.execution_id,
+                            "tenant_id": str(tenant_id),
+                            "cost_usd": result.cost_usd,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "n4_partial_billable_usage_persistence_failed",
+                        extra={
+                            "execution_id": result.execution_id,
+                            "tenant_id": str(tenant_id),
+                            "cost_usd": result.cost_usd,
+                        },
+                    )
+        return result
 
     async def _execute_impl(
         self,
