@@ -192,3 +192,22 @@ def test_blocked_canonical_state_never_scores_unverified_risks_or_empty_as_clean
     assert blocked in dims["risk"]["missing_data"][0]
     assert blocked in dims["contract"]["missing_data"][0]
     assert result["health_result"]["composite_score"] is None
+
+
+def test_mixed_artifact_confidence_is_not_critique_assessed() -> None:
+    from src.analysis.adapters.graph.project_graph import health
+
+    unassessed = _artifact().model_copy(update={"confidence_score": None})
+    assessed = _artifact().model_copy(update={"confidence_score": 0.9})
+    result = health(
+        {
+            "project_id": uuid4(),
+            "tenant_id": uuid4(),
+            "artifacts": [unassessed, assessed],
+            "coherence_result": None,
+            "node_results": [],
+        }
+    )
+    risk = {r["dimension"]: r for r in result["health_result"]["dimensions"]}["risk"]
+    assert "critique not assessed" in risk["missing_data"]
+    assert risk["confidence"] <= 0.3

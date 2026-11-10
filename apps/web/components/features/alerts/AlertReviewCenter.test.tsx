@@ -544,3 +544,23 @@ describe("Line B evidence provenance", () => {
   });
 });
 
+
+describe("Evidence status label", () => {
+  it("labels unverified and verified alerts distinctly, and nothing when status is absent", () => {
+    render(
+      <AlertReviewCenter
+        projectId="proj-42"
+        alerts={[
+          { id: "a-bad", title: "Unverified", severity: "high", status: "pending", evidenceStatus: "NOT_VERIFIED" },
+          { id: "a-ok", title: "Verified", severity: "high", status: "pending", evidenceStatus: "VERIFIED" },
+          { id: "a-none", title: "Legacy", severity: "high", status: "pending" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("alert-evidence-status-a-bad")).toHaveTextContent(/unverified evidence/i);
+    expect(screen.getByTestId("alert-evidence-status-a-bad")).toHaveAttribute("data-evidence-status", "NOT_VERIFIED");
+    expect(screen.getByTestId("alert-evidence-status-a-ok")).toHaveTextContent("Evidence verified");
+    expect(screen.queryByTestId("alert-evidence-status-a-none")).not.toBeInTheDocument();
+  });
+});

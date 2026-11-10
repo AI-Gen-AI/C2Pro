@@ -56,6 +56,7 @@ interface AlertResponse {
   /** Real, persisted source clause -- never fabricated. */
   source_clause_id?: string | null;
   detection_evidence?: DetectionEvidenceResponse | null;
+  evidence_status?: "VERIFIED" | "NOT_VERIFIED" | null;
 }
 
 interface AlertListResponse {
@@ -98,6 +99,7 @@ function transformAlert(alert: AlertResponse): ReviewAlert {
     severity: SEVERITY_MAP[alert.severity] ?? "medium",
     status: STATUS_MAP[alert.status] ?? "pending",
     assignee: ASSIGNEE_MAP[alert.category] ?? "project.manager",
+    ...(alert.evidence_status ? { evidenceStatus: alert.evidence_status } : {}),
     ...(clauseId ? { clauseId } : {}),
     ...(persistedClauseId && sourceDocumentId
       ? { addressableClauseId: persistedClauseId, sourceDocumentId }

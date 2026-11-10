@@ -179,7 +179,9 @@ def bind_risk_alert_source_references(
         raw_code = risk.get("clause_ref")
         code = raw_code.removeprefix("§").strip() if isinstance(raw_code, str) else ""
         candidates = by_code.get(code, []) if _EXPLICIT_CLAUSE_CODE.fullmatch(code) else []
-        if len(candidates) == 1:
+        # A clause locator is VERIFIED only for a risk whose quote itself is VERIFIED:
+        # a code match alone must not make an unverified claim look source-backed.
+        if len(candidates) == 1 and risk.get("source_quote_status") == "VERIFIED":
             risk["source_references"] = candidates
             risk["source_locator_status"] = "VERIFIED"
         else:

@@ -39,6 +39,7 @@ function mapAlertToReviewAlert(alert: {
   status: string;
   message: string;
   source_clause_id?: string | null;
+  evidence_status?: "VERIFIED" | "NOT_VERIFIED" | null;
   detection_evidence?: {
     source_clause_id?: string | null;
     source_document_id?: string | null;
@@ -64,6 +65,7 @@ function mapAlertToReviewAlert(alert: {
     title: alert.message,
     severity: SEVERITY_MAP[alert.severity] ?? "medium",
     status: STATUS_MAP[alert.status] ?? "pending",
+    ...(alert.evidence_status ? { evidenceStatus: alert.evidence_status } : {}),
     ...(clauseId ? { clauseId } : {}),
     ...(persistedClauseId && sourceDocumentId
       ? { addressableClauseId: persistedClauseId, sourceDocumentId }

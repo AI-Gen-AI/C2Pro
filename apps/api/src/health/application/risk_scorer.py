@@ -21,6 +21,7 @@ from src.project_state.domain.entities import ProjectRisk
 
 _QUALITY_FLOOR = 0.4
 _DEFAULT_CONFIDENCE = 0.7
+_UNASSESSED_CRITIQUE_CONFIDENCE_CAP = 0.3
 _CLEAN_ASSESSMENT_SCORE = 90.0
 _SEVERITY_WEIGHTS = {
     "LOW": 5.0,
@@ -35,6 +36,8 @@ def score_risk_dimension(
     *,
     assessment_ran: bool,
     extraction_quality: float | None = None,
+    withheld_risks: int = 0,
+    critique_assessed: bool = True,
 ) -> HealthSignal:
     """Score project risk health without treating missing assessment as green."""
 
@@ -49,9 +52,16 @@ def score_risk_dimension(
             confidence=confidence,
             missing_data=["poor extraction quality"],
         )
+    if not risks and withheld_risks > 0:
+        # Proposals existed but none is source-verified: absence of trusted risks is
+        # NOT a clean assessment.
+        return _unknown_signal(
+            confidence=confidence,
+            missing_data=[f"{withheld_risks} risk proposal(s) withheld: evidence not verified"],
+        )
     if not risks:
         score = _CLEAN_ASSESSMENT_SCORE
-        return HealthSignal(
+        return _qualify(HealthSignal(
             dimension=HealthDimension.RISK,
             score=score,
             band=band_for_score(score),
@@ -64,17 +74,27 @@ def score_risk_dimension(
                     locator="assessment",
                 )
             ],
-        )
+        ), critique_assessed)
 
     penalty = sum(_risk_penalty(risk) for risk in risks)
     score = max(0.0, 95.0 - penalty)
-    return HealthSignal(
+    return _qualify(HealthSignal(
         dimension=HealthDimension.RISK,
         score=score,
         band=band_for_score(score),
         confidence=confidence,
         evidence=_risk_evidence(risks),
-    )
+    ), critique_assessed)
+
+
+def _qualify(signal: HealthSignal, critique_assessed: bool) -> HealthSignal:
+    """Critique (N12) not assessed: keep the number but flag it and cap its confidence."""
+    if critique_assessed:
+        return signal
+    return signal.model_copy(update={
+        "confidence": min(signal.confidence, _UNASSESSED_CRITIQUE_CONFIDENCE_CAP),
+        "missing_data": [*signal.missing_data, "critique not assessed"],
+    })
 
 
 def _unknown_signal(*, confidence: float, missing_data: list[str]) -> HealthSignal:
