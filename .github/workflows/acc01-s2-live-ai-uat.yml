@@ -991,7 +991,8 @@ jobs:
           # N2 PII NER preflight: verify the exact release wheel before pip runs.
           # The digest was measured from the explosion/spacy-models 3.7.0 release asset.
           wheel="$RUNNER_TEMP/es_core_news_md-3.7.0-py3-none-any.whl"
-          curl --fail --location --retry 3 --max-time 180 \
+          curl --fail --proto '=https' --proto-redir '=https' \
+            --location --retry 3 --max-time 180 \
             --output "$wheel" \
             "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl"
           printf '%s  %s\n' \
