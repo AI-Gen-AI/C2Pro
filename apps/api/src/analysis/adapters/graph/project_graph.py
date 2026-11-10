@@ -231,11 +231,15 @@ def _artifact_risk_signals(
     risk_source_clause_ids: Mapping[str, str] | None,
 ) -> RiskBridgeResult:
     if not risk_source_clause_ids:
-        return build_risk_signals(
-            [risk.model_dump(mode="json") for risk in artifact.extracted_risks],
-            clause_id=_artifact_key(artifact),
-            document_id=artifact.document_id,
-            document_revision_id=artifact.document_revision_id,
+        # A persisted risk's VERIFIED flag is not independent proof of the
+        # original document revision. Keep proposals in the artifact, but
+        # never score or certify the category without a grounded clause.
+        withheld = len(artifact.extracted_risks)
+        return RiskBridgeResult(
+            signals=(), coverage_seed={}, dropped_count=withheld,
+            dropped_reasons=(
+                {"quote_not_independently_verified": withheld} if withheld else {}
+            ),
         )
     # Per-risk bridging keeps risk order and every score/severity/confidence
     # identical to the single call; only clause_id differs.
@@ -244,6 +248,13 @@ def _artifact_risk_signals(
     dropped: dict[str, int] = {}
     for risk in artifact.extracted_risks:
         grounded_clause = _risk_clause_id(artifact, risk, risk_source_clause_ids)
+        if grounded_clause == _artifact_key(artifact):
+            # A claimed VERIFIED status, with no physical clause binding,
+            # cannot justify a risk signal or a coverage seed.
+            dropped["quote_not_independently_verified"] = (
+                dropped.get("quote_not_independently_verified", 0) + 1
+            )
+            continue
         one = build_risk_signals(
             [risk.model_dump(mode="json")],
             clause_id=grounded_clause,
@@ -309,6 +320,7 @@ def _coherence_summary(
     finding_count: int,
     artifact_count: int,
     llm_on: bool,
+    excluded_risk_count: int = 0,
 ) -> ProjectCoherenceResult:
     return ProjectCoherenceResult(
         overall_score=result.overall_score,
@@ -321,6 +333,11 @@ def _coherence_summary(
         llm_on=llm_on,
         insufficient_data_reasons=list(result.score_missing_dimensions or []),
         score_reason=result.score_reason,
+        excluded_risk_count=excluded_risk_count,
+        excluded_risk_reasons=(
+            {"quote_not_independently_verified": excluded_risk_count}
+            if excluded_risk_count else {}
+        ),
     )
 
 
@@ -346,6 +363,7 @@ async def evaluate_artifact_set(
     tenant_id: UUID | str,
     llm_on: bool,
     risk_source_clause_ids: Mapping[str, str] | None = None,
+    risk_source_binding_status: str = "NOT_CONFIGURED",
 ) -> ArtifactSetEvaluation:
     """THE canonical ProjectGraph Coherence evaluation of an artifact set.
 
@@ -357,6 +375,11 @@ async def evaluate_artifact_set(
     signals, coverage, finding_count = _aggregate_cross_doc_inputs(
         artifacts, risk_source_clause_ids
     )
+    # Only independently grounded risk signals enter the scored engine.
+    # Keep an explicit incomplete-evidence reason when proposals were withheld.
+    total_proposed_risks = sum(len(artifact.extracted_risks) for artifact in artifacts)
+    scored_risks = sum(s.rule_id == "EXTRACTOR-RISK" for s in signals)
+    excluded_risks = total_proposed_risks - scored_risks
     source_clauses: tuple[Any, ...] = ()
     engine_result = await evaluate_coherence_async(
         list(source_clauses),
@@ -374,6 +397,21 @@ async def evaluate_artifact_set(
         seed_signals=signals,
         seed_coverage=coverage,
     )
+    if excluded_risks:
+        # Independent coherence_findings remain in category breakdown/alerts,
+        # but the aggregate must not look complete with unverified risk proposals.
+        engine_result = engine_result.model_copy(update={
+            "overall_score": None,
+            "score_reason": (
+                "unassessed_risk_source_lookup_unavailable"
+                if risk_source_binding_status == "UNAVAILABLE"
+                else "unassessed_unbound_risk_provenance"
+            ),
+            "score_missing_dimensions": list(dict.fromkeys([
+                *(engine_result.score_missing_dimensions or []),
+                "risk_provenance",
+            ])),
+        })
     return ArtifactSetEvaluation(
         summary=_coherence_summary(
             engine_result,
@@ -381,6 +419,7 @@ async def evaluate_artifact_set(
             finding_count=finding_count,
             artifact_count=len(artifacts),
             llm_on=llm_on,
+            excluded_risk_count=excluded_risks,
         ),
         score_version=getattr(engine_result, "score_version", None),
         engine_result=engine_result,
@@ -419,7 +458,10 @@ async def cross_doc_coherence(state: ProjectGraphState) -> dict[str, object]:
             project_id=project_id,
             tenant_id=tenant_id,
             llm_on=llm_on,
-            **({"risk_source_clause_ids": source_clause_ids} if source_clause_ids else {}),
+            risk_source_clause_ids=source_clause_ids,
+            risk_source_binding_status=state.get(
+                "risk_source_binding_status", "NOT_CONFIGURED"
+            ),
         )
         summary = evaluation.summary
         signal_count = summary.signal_count

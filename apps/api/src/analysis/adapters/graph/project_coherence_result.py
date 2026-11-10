@@ -21,6 +21,9 @@ class ProjectCoherenceResult(BaseModel):
     llm_on: bool
     insufficient_data_reasons: list[str] = Field(default_factory=list)
     score_reason: str | None = None
+    # Excluded proposed N4 risks are never equivalent to 'no risks detected'.
+    excluded_risk_count: int = Field(default=0, ge=0)
+    excluded_risk_reasons: dict[str, int] = Field(default_factory=dict)
 
 
 __all__ = ["ProjectCoherenceResult"]

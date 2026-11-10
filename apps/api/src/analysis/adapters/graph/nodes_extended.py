@@ -519,6 +519,17 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             seed_signals=list(bridge_result.signals),
             seed_coverage=bridge_result.coverage_seed,
         )
+        if bridge_result.dropped_count:
+            # The N4 proposals remain available for HITL, but a score based on
+            # a subset must not masquerade as fully assessed.
+            result = result.model_copy(update={
+                "overall_score": None,
+                "score_reason": "unassessed_unverified_risk_evidence",
+                "score_missing_dimensions": list(dict.fromkeys([
+                    *(result.score_missing_dimensions or []),
+                    "risk_provenance",
+                ])),
+            })
         score = result.overall_score
         score_version = result.score_version
         breakdown: dict[str, Any] = {
@@ -546,6 +557,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         result_missing_dimensions = result.score_missing_dimensions or missing_dimensions
         bridge_marker = (
             f" bridge[seeded={len(bridge_result.signals)},"
+            f"withheld={bridge_result.dropped_count},"
             f"cov={','.join(sorted(bridge_result.coverage_seed)) or '∅'}]"
         )
         node_result = _ok_node_result(

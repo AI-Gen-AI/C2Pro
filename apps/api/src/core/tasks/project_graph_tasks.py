@@ -243,15 +243,23 @@ async def run_project_graph_once(
         "node_results": [],
         "artifact_repository": artifact_repository,
     }
-    if risk_source_clause_id_loader is not None and artifacts:
-        # Trusted artifacts only; a loader failure keeps revision-surrogate ids.
-        try:
-            clause_ids = await risk_source_clause_id_loader(artifacts)
-        except Exception:  # noqa: BLE001
-            logger.warning("project_graph.risk_source_clause_binding_failed", exc_info=True)
-            clause_ids = {}
-        if clause_ids:
-            graph_input["risk_source_clause_ids"] = dict(clause_ids)
+    if artifacts:
+        # An empty successful lookup is different from a failed lookup.
+        # Neither is permission to score a persisted VERIFIED claim.
+        if risk_source_clause_id_loader is None:
+            graph_input["risk_source_binding_status"] = "NOT_CONFIGURED"
+        else:
+            try:
+                clause_ids = await risk_source_clause_id_loader(artifacts)
+            except Exception:  # noqa: BLE001
+                logger.warning("project_graph.risk_source_clause_binding_failed", exc_info=True)
+                graph_input["risk_source_binding_status"] = "UNAVAILABLE"
+            else:
+                graph_input["risk_source_binding_status"] = (
+                    "AVAILABLE" if clause_ids else "EMPTY"
+                )
+                if clause_ids:
+                    graph_input["risk_source_clause_ids"] = dict(clause_ids)
     if snapshot_repository is not None:
         graph_input["snapshot_repository"] = snapshot_repository
     if alert_correlation_runner is not None:
