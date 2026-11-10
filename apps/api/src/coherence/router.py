@@ -1988,6 +1988,9 @@ async def _attach_trusted_projection(
     from src.analysis.adapters.persistence.document_artifact_repository import (
         SqlAlchemyDocumentArtifactRepository,
     )
+    from src.analysis.adapters.persistence.risk_source_clause_binding import (
+        load_trusted_risk_source_clause_ids,
+    )
     from src.coherence.application.trusted_projection import project_pending_coherence
     from src.core.tenants.types import require_tenant_id
 
@@ -2007,8 +2010,16 @@ async def _attach_trusted_projection(
         llm_on = await is_coherence_llm_enabled(scoped) if pending else False
 
         async def _evaluate(artifacts: list[Any]) -> Any:
+            # Use exactly the production revision-bound, tenant-scoped resolver.
+            # An empty/error binding never grants scoring authority to proposals.
+            binding = await load_trusted_risk_source_clause_ids(
+                db, tenant_id=scoped, project_id=project_id,
+                artifacts=artifacts, strict_on_error=True,
+            )
             return await evaluate_artifact_set(
-                artifacts, project_id=project_id, tenant_id=scoped, llm_on=llm_on
+                artifacts, project_id=project_id, tenant_id=scoped, llm_on=llm_on,
+                risk_source_clause_ids=binding,
+                risk_source_binding_status="AVAILABLE" if binding else "EMPTY",
             )
 
         projection = await project_pending_coherence(

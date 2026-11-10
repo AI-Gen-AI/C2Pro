@@ -489,7 +489,12 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         # fabricate provenance, so the bridge keeps the document-level identifier even
         # when the evidence itself is clause-granular.
         clause_id = whole_document_clause_id(*_document_identity(state))
-        bridge_result = build_risk_signals(extracted_risks, clause_id=clause_id)
+        bridge_result = build_risk_signals(
+            extracted_risks,
+            clause_id=clause_id,
+            document_id=state.get("document_id"),
+            document_revision_id=state.get("document_revision_id"),
+        )
         logger.info(
             "node_coherence_scorer_bridge",
             extra={
@@ -514,6 +519,29 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             seed_signals=list(bridge_result.signals),
             seed_coverage=bridge_result.coverage_seed,
         )
+        if bridge_result.dropped_count:
+            # Never count rejected N4 evidence. Independently assessed clauses
+            # may still yield a qualified score, explicitly flagged PARTIAL.
+            # N4's own seeded EXTRACTOR-RISK signals are NOT independent
+            # evidence. Never use one accepted N4 proposal to certify another
+            # rejected N4 proposal in the same run.
+            has_other_evidence = any(
+                signal.rule_id != "EXTRACTOR-RISK"
+                for signal in result.finding_signals
+            )
+            partial_score = result.overall_score if has_other_evidence else None
+            result = result.model_copy(update={
+                "overall_score": partial_score,
+                "score_reason": (
+                    "partial_withheld_risk_evidence"
+                    if partial_score is not None
+                    else "unassessed_unverified_risk_evidence"
+                ),
+                "score_missing_dimensions": list(dict.fromkeys([
+                    *(result.score_missing_dimensions or []),
+                    "risk_provenance",
+                ])),
+            })
         score = result.overall_score
         score_version = result.score_version
         breakdown: dict[str, Any] = {
@@ -541,6 +569,7 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
         result_missing_dimensions = result.score_missing_dimensions or missing_dimensions
         bridge_marker = (
             f" bridge[seeded={len(bridge_result.signals)},"
+            f"withheld={bridge_result.dropped_count},"
             f"cov={','.join(sorted(bridge_result.coverage_seed)) or '∅'}]"
         )
         node_result = _ok_node_result(

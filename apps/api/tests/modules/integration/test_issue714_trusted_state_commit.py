@@ -1001,13 +1001,17 @@ async def test_dashboard_trusted_ignores_pending_and_projection_uses_it(
     expected = await _expected_projection(
         arranged.project_id, tenant.id, [candidates[0].artifact]
     )
-    assert expected is not None
-    assert pending.projected_score == expected, "canonical evaluation, not a stored score"
-    assert pending.projection_baseline_score is None, "nothing trusted yet"
+    # This fixture has no source_quote, revision-bound clause or physical
+    # binding. It is not eligible for canonical risk scoring; a stored
+    # candidate score must NOT resurrect an unverified projection.
+    assert expected is None
+    assert pending.projected_score is None
+    assert pending.projection_baseline_score is None
     assert pending.projected_delta is None
     assert pending.pending_review_count == 1
-    assert pending.projection_status == "provisional"
-    assert pending.projection_score_version == "coherence-v1"
+    assert pending.projection_status == "unavailable"
+    assert pending.projection_reason == "unassessed_unbound_risk_provenance"
+    assert pending.projection_score_version is None
 
     # reload/relogin: a brand-new session sees the identical durable state.
     again = await _dashboard(request_sessions, tenant.id, arranged.project_id)
@@ -1101,7 +1105,10 @@ async def test_dashboard_reject_removes_candidate_from_projection(
     tenant = await db.get(Tenant, test_user.tenant_id)
     arranged = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _propose(completion_sessions, arranged, tenant.id)
-    assert (await _dashboard(request_sessions, tenant.id, arranged.project_id)).projected_score is not None
+    pending = await _dashboard(request_sessions, tenant.id, arranged.project_id)
+    assert pending.projected_score is None
+    assert pending.projection_status == "unavailable"
+    assert pending.pending_review_count == 1
 
     await _post_reject(
         request_sessions, tenant.id, arranged.review_item_id,
@@ -1153,8 +1160,18 @@ async def test_dashboard_correction_replaces_candidate_in_projection(
     assert view.projected_score == await _expected_projection(
         arranged.project_id, tenant.id, [corrected]
     )
-    assert view.projected_score != before.projected_score, "the corrected version is projected"
+    assert view.projected_score is None
+    assert view.projection_status == "unavailable"
+    assert before.projected_score is None
     assert view.projected_score != 75.0, "stored per-run scores are never used"
+    # Verify actual correction replaced the pending candidate even though
+    # neither ungrounded version may produce a numerical projection.
+    async with independent_sessions(tenant.id) as session:
+        candidates = await SqlAlchemyDocumentArtifactRepository(
+            session
+        ).list_pending_candidates(project_id=arranged.project_id, tenant_id=tenant.id)
+    assert len(candidates) == 1
+    assert candidates[0].artifact.extracted_risks[0].title == "Corrected"
 
 
 # ── P0 race: a decision before the candidate is persisted/bound ─────────────

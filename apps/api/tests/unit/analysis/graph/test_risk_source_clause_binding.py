@@ -7,7 +7,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.analysis.adapters.graph.project_graph import _aggregate_cross_doc_inputs
+from src.analysis.adapters.graph.project_graph import (
+    _aggregate_cross_doc_inputs,
+    _artifact_risk_signals,
+)
 from src.analysis.adapters.graph.review_source_references import risk_quote_source_key
 from src.analysis.adapters.persistence.risk_source_clause_binding import (
     load_trusted_risk_source_clause_ids,
@@ -114,32 +117,49 @@ def test_multiple_independent_risks_bind_per_risk_and_keep_order() -> None:
         _k("6.1"): str(a.id),
         _k("6.3"): str(b.id),
     }
-    signals, _, _ = _aggregate_cross_doc_inputs([art], mapping)
-    assert [s.clause_id for s in signals] == [str(a.id), str(REV), str(b.id), str(REV)]
-    assert [s.raw_data["title"] for s in signals] == [r.title for r in art.extracted_risks]
+    signals, _, finding_count = _aggregate_cross_doc_inputs([art], mapping)
+    # Unverified proposals remain in the artifact, but do not feed N8 scoring.
+    assert len(art.extracted_risks) == 4
+    assert finding_count == 0  # unrelated, counts coherence findings only
+    assert _artifact_risk_signals(art, mapping).dropped_reasons == {
+        "quote_not_independently_verified": 2
+    }
+    assert [s.clause_id for s in signals] == [str(a.id), str(b.id)]
+    assert [s.raw_data["title"] for s in signals] == [
+        art.extracted_risks[0].title, art.extracted_risks[2].title
+    ]
 
 
-def test_scoring_inputs_and_provenance_identical_with_and_without_binding() -> None:
+def test_only_revision_bound_risks_are_scored_without_changing_the_proposals() -> None:
     art = _artifact(_risk("6.1", likelihood="LOW"), _risk("6.2", confidence=0.4))
     clause = uuid4()
     base, base_cov, base_n = _aggregate_cross_doc_inputs([art])
     bound, bound_cov, bound_n = _aggregate_cross_doc_inputs(
         [art], {_k("6.1"): str(clause)}
     )
-    assert (base_cov, base_n) == (bound_cov, bound_n)
-    strip = lambda s: s.model_copy(update={"clause_id": ""}).model_dump()  # noqa: E731
-    assert [strip(s) for s in base] == [strip(s) for s in bound]
+    assert len(art.extracted_risks) == 2  # never erase proposals
+    assert base == [] and base_cov == {}
+    assert base_n == bound_n == 0
+    assert bound_cov == {"LEGAL": True}
+    assert len(bound) == 1
+    assert bound[0].clause_id == str(clause)
+    assert bound[0].raw_data["source_binding_kind"] == "verified_clause"
     assert bound[0].raw_data["artifact_revision_id"] == str(REV)
     assert bound[0].raw_data["source"] == "document_artifact.extracted_risks"
-    assert [s.clause_id for s in base] == [str(REV)] * 2
+    assert _artifact_risk_signals(art, {_k("6.1"): str(clause)}).dropped_count == 1
 
 
 def test_unverified_status_ignores_mapping_even_if_key_present() -> None:
     art = _artifact(_risk("6.1", "NOT_FOUND"))
-    signals, _, _ = _aggregate_cross_doc_inputs(
+    signals, _, finding_count = _aggregate_cross_doc_inputs(
         [art], {_k("6.1"): str(uuid4())}
     )
-    assert signals[0].clause_id == str(REV)
+    assert signals == []
+    assert finding_count == 0
+    assert _artifact_risk_signals(art, {_k("6.1"): str(uuid4())}).dropped_reasons == {
+        "quote_not_independently_verified": 1
+    }
+    assert len(art.extracted_risks) == 1  # proposal is not erased
 
 
 @pytest.mark.asyncio
@@ -178,8 +198,12 @@ async def test_two_risks_same_code_only_valid_quote_binds() -> None:
     mapping = await _load(art, _Repo([clause]))
     assert list(mapping.values()) == [str(clause.id)]
     signals, _, _ = _aggregate_cross_doc_inputs([art], mapping)
-    assert [s.clause_id for s in signals] == [str(REV), str(clause.id)]
-    assert [s.raw_data["title"] for s in signals] == [bad.title, good.title]
+    assert [s.clause_id for s in signals] == [str(clause.id)]
+    assert [s.raw_data["title"] for s in signals] == [good.title]
+    assert len(art.extracted_risks) == 2
+    assert _artifact_risk_signals(art, mapping).dropped_reasons == {
+        "quote_not_independently_verified": 1
+    }
 
 
 @pytest.mark.asyncio
@@ -195,7 +219,7 @@ async def test_exact_trusted_bound_keeps_original_quote() -> None:
 def test_invalid_mapped_uuid_falls_back_to_surrogate(bad: str) -> None:
     art = _artifact(_risk("6.1"))
     signals, _, _ = _aggregate_cross_doc_inputs([art], {_k("6.1"): bad})
-    assert signals[0].clause_id == str(REV)
+    assert signals == []
 
 
 def test_mapped_uuid_is_canonicalised_and_code_only_key_ignored() -> None:
@@ -205,4 +229,130 @@ def test_mapped_uuid_is_canonicalised_and_code_only_key_ignored() -> None:
     assert signals[0].clause_id == str(clause)
     legacy = f"{DOC}|{REV}|6.1"
     signals, _, _ = _aggregate_cross_doc_inputs([art], {legacy: str(clause)})
-    assert signals[0].clause_id == str(REV)
+    assert signals == []
+
+
+def test_unbound_verified_flag_must_not_seed_projectgraph_score() -> None:
+    """The persisted artifact may claim VERIFIED without any original-source proof."""
+    risk = _risk("6.1", source_quote="INVENTED SOURCE PASSAGE")
+    art = _artifact(risk)
+    signals, coverage, _ = _aggregate_cross_doc_inputs([art], None)
+    assert signals == [] and coverage == {}
+    result = _artifact_risk_signals(art, None)
+    assert result.dropped_reasons == {"quote_not_independently_verified": 1}
+    assert art.extracted_risks == [risk]
+
+
+def test_empty_mapping_is_not_a_source_binding() -> None:
+    art = _artifact(_risk("6.1"))
+    signals, coverage, _ = _aggregate_cross_doc_inputs([art], {})
+    assert signals == [] and coverage == {}
+
+
+@pytest.mark.asyncio
+async def test_cross_document_unbound_risk_reports_unassessed(monkeypatch):
+    """Failure to bind cannot yield a global score even if another signal scores."""
+    from src.analysis.adapters.graph import project_graph as mod
+    from src.coherence.models import EnrichedCoherenceResult
+
+    async def fake_evaluate(*args, **kwargs):
+        return EnrichedCoherenceResult(overall_score=91.0)
+
+    monkeypatch.setattr(mod, "evaluate_coherence_async", fake_evaluate)
+    art = _artifact(_risk("6.1"))
+    outcome = await mod.evaluate_artifact_set(
+        [art], project_id=PROJECT, tenant_id=TENANT, llm_on=False,
+        risk_source_clause_ids={},
+    )
+    assert outcome.summary.overall_score is None
+    assert outcome.summary.score_reason == "unassessed_unbound_risk_provenance"
+    assert outcome.summary.excluded_risk_count == 1
+    assert outcome.summary.excluded_risk_reasons == {
+        "quote_not_independently_verified": 1
+    }
+    assert "risk_provenance" in outcome.summary.insufficient_data_reasons
+    assert art.extracted_risks[0].title == "risk 6.1"
+
+@pytest.mark.asyncio
+async def test_unavailable_source_loader_has_distinct_reason(monkeypatch):
+    from src.analysis.adapters.graph import project_graph as mod
+    from src.coherence.models import EnrichedCoherenceResult
+
+    async def fake_evaluate(*args, **kwargs):
+        return EnrichedCoherenceResult(overall_score=94.0)
+
+    monkeypatch.setattr(mod, "evaluate_coherence_async", fake_evaluate)
+    result = await mod.evaluate_artifact_set(
+        [_artifact(_risk("6.1"))],
+        project_id=PROJECT, tenant_id=TENANT, llm_on=False,
+        risk_source_clause_ids={}, risk_source_binding_status="UNAVAILABLE",
+    )
+    assert result.summary.overall_score is None
+    assert result.summary.score_reason == "unassessed_risk_source_lookup_unavailable"
+    assert result.summary.excluded_risk_count == 1
+
+
+@pytest.mark.asyncio
+async def test_strict_loader_failure_cannot_masquerade_as_empty_mapping() -> None:
+    with pytest.raises(RuntimeError, match="database temporarily unavailable"):
+        await load_trusted_risk_source_clause_ids(
+            None, tenant_id=TENANT, project_id=PROJECT,
+            artifacts=[_artifact(_risk("6.1"))],
+            repository=_Repo(RuntimeError("database temporarily unavailable")),
+            strict_on_error=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_independent_finding_keeps_partial_score_without_scoring_unbound_risk(monkeypatch):
+    from src.analysis.adapters.graph import project_graph as mod
+    from src.analysis.domain.contracts import CoherenceFinding
+    from src.coherence.models import EnrichedCoherenceResult
+
+    async def fake_evaluate(*args, **kwargs):
+        assert len(kwargs["seed_signals"]) == 1  # deterministic finding only
+        assert kwargs["seed_signals"][0].source == "deterministic"
+        return EnrichedCoherenceResult(overall_score=76.0)
+
+    monkeypatch.setattr(mod, "evaluate_coherence_async", fake_evaluate)
+    item = _artifact(_risk("6.1")).model_copy(update={
+        "coherence_findings": [
+            CoherenceFinding(category="BUDGET", message="Exact verified arithmetic",
+                             rule_id="DET-COST", score=76.0)
+        ],
+    })
+    outcome = await mod.evaluate_artifact_set(
+        [item], project_id=PROJECT, tenant_id=TENANT, llm_on=False,
+        risk_source_clause_ids={}, risk_source_binding_status="EMPTY",
+    )
+    assert outcome.summary.overall_score == 76.0
+    assert outcome.summary.score_reason == "partial_withheld_risk_provenance"
+    assert outcome.summary.excluded_risk_count == 1
+    assert "risk_provenance" in outcome.summary.insufficient_data_reasons
+
+
+@pytest.mark.asyncio
+async def test_mixed_bound_and_unbound_n4_risks_still_unassessed_without_independent_signal(monkeypatch):
+    """One physically bound N4 seed does NOT certify a second withheld N4 risk."""
+    from src.analysis.adapters.graph import project_graph as mod
+    from src.coherence.models import EnrichedCoherenceResult
+
+    async def fake_evaluate(*args, **kwargs):
+        signals = kwargs["seed_signals"]
+        assert len(signals) == 1
+        assert signals[0].rule_id == "EXTRACTOR-RISK"
+        assert signals[0].source == "llm"
+        return EnrichedCoherenceResult(overall_score=91.0)
+
+    monkeypatch.setattr(mod, "evaluate_coherence_async", fake_evaluate)
+    art = _artifact(_risk("6.1"), _risk("6.2"))
+    outcome = await mod.evaluate_artifact_set(
+        [art], project_id=PROJECT, tenant_id=TENANT, llm_on=False,
+        risk_source_clause_ids={_k("6.1"): str(uuid4())},
+        risk_source_binding_status="AVAILABLE",
+    )
+    assert outcome.summary.overall_score is None
+    assert outcome.summary.excluded_risk_count == 1
+    assert outcome.summary.score_reason == "unassessed_unbound_risk_provenance"
+    assert art.extracted_risks[0].source_quote_status == "VERIFIED"
+    assert len(art.extracted_risks) == 2

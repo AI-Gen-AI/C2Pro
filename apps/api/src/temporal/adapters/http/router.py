@@ -205,6 +205,9 @@ async def get_revision_projector(
     from src.analysis.adapters.persistence.document_artifact_repository import (
         SqlAlchemyDocumentArtifactRepository,
     )
+    from src.analysis.adapters.persistence.risk_source_clause_binding import (
+        load_trusted_risk_source_clause_ids,
+    )
 
     tenant_id = require_tenant_id(current_user.tenant_id)
     async with get_session_with_tenant(tenant_id) as db:
@@ -215,7 +218,15 @@ async def get_revision_projector(
         ) -> RevisionProjection:
             async def _evaluate(artifacts: list[Any]) -> Any:
                 llm_on = await is_coherence_llm_enabled(tenant_id)
-                return await evaluate_artifact_set(artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=llm_on)
+                binding = await load_trusted_risk_source_clause_ids(
+                    db, tenant_id=tenant_id, project_id=project_id,
+                    artifacts=artifacts, strict_on_error=True,
+                )
+                return await evaluate_artifact_set(
+                    artifacts, project_id=project_id, tenant_id=tenant_id,
+                    llm_on=llm_on, risk_source_clause_ids=binding,
+                    risk_source_binding_status="AVAILABLE" if binding else "EMPTY",
+                )
 
             try:
                 async with db.begin_nested():

@@ -33,6 +33,8 @@ def _risk(**overrides: object) -> dict:
         "impact": "HIGH",
         "probability": 0.4,
         "source_quote": "The Contractor shall be entitled to suspend...",
+        # A bridge sees already-validated N4 data; the raw fixture models that.
+        "source_quote_status": "VERIFIED",
         "immediate_alert": False,
         "mitigation_suggestion": "Include cross-default clause",
     }
@@ -203,6 +205,8 @@ class TestRiskItemShapedInput:
             "likelihood": "MEDIUM",
             "confidence": 0.8,
             "source": "The Contractor shall be entitled to suspend...",
+            "source_quote": "The Contractor shall be entitled to suspend...",
+            "source_quote_status": "VERIFIED",
         }
         base.update(overrides)
         return RiskItem.model_validate(base).model_dump(mode="json")
@@ -216,7 +220,7 @@ class TestRiskItemShapedInput:
         assert "Cross-contract default risk" in sig.evidence_summary
         assert "Owner may default on cross-contract obligations" in sig.evidence_summary
 
-        # quote is built from `source` (not `source_quote`/`source_text_snippet`).
+        # The bridge must use the verified `source_quote`, never a raw `source`.
         assert sig.quote == "The Contractor shall be entitled to suspend..."
 
         # likelihood metadata survives into raw_data under the canonical key.
@@ -247,3 +251,77 @@ class TestRiskBridgeResult:
         result = build_risk_signals(risks, clause_id="c")
         assert isinstance(result.signals, tuple)
         assert len(result.signals) == 2
+
+
+class TestP0EvidenceIntegrity:
+    """P0: unverified model text must never become scored contractual evidence."""
+
+    @pytest.mark.parametrize("status", [None, "NOT_FOUND_IN_DOCUMENT", "NOT_CHECKED", "NOT_PROVIDED"])
+    def test_unverified_quote_never_seeds_scored_finding(self, status):
+        raw = _risk(
+            source="INVENTED TEXT, not contained in source",
+            source_quote=None,
+            source_quote_status=status,
+        )
+        result = build_risk_signals([raw], clause_id="whole-document")
+        assert result.signals == ()
+        assert result.coverage_seed == {}
+        assert result.dropped_reasons == {"unverified_quote": 1}
+
+    def test_provenance_context_preserved_without_inventing_page_or_blob_hash(self):
+        raw = _risk(
+            clause_ref="9.6",
+            confidence=0.86,
+            source="UNVERIFIED LEGACY TEXT",
+            source_quote="The Contractor shall be entitled to suspend...",
+            source_quote_status="VERIFIED",
+        )
+        result = build_risk_signals(
+            [raw], clause_id="whole-document",
+            document_id="doc-1", document_revision_id="rev-1",
+        )
+        signal = result.signals[0]
+        assert signal.quote == raw["source_quote"]
+        assert signal.confidence == pytest.approx(0.86)
+        assert signal.raw_data["extractor_clause_ref"] == "9.6"
+        assert signal.raw_data["source_quote_status"] == "VERIFIED"
+        assert signal.raw_data["document_id"] == "doc-1"
+        assert signal.raw_data["document_revision_id"] == "rev-1"
+        assert signal.raw_data["source_binding_kind"] == "document"
+        assert signal.clause_id == "whole-document"
+        assert "page" not in signal.raw_data
+        assert "blob_hash" not in signal.raw_data
+
+    def test_quote_over_1000_chars_remains_contiguous_and_unmodified(self):
+        quote = ("Contractor shall perform and verify the full scope. " * 24).strip()
+        assert len(quote) > 1000
+        result = build_risk_signals(
+            [_risk(source_quote=quote, source_quote_status="VERIFIED")], clause_id="c"
+        )
+        assert result.signals[0].quote == quote
+
+    @pytest.mark.parametrize("alias", ["HSE", "SAFETY", "SEGURIDAD", "ENVIRONMENTAL"])
+    def test_canonical_category_alias_does_not_drop_a_valid_risk(self, alias):
+        result = build_risk_signals([_risk(category=alias)], clause_id="c")
+        assert result.dropped_count == 0
+        assert result.signals[0].category == "QUALITY"
+
+    def test_canonical_severity_used_when_legacy_impact_absent(self):
+        risk = _risk(risk_score=None, impact=None, severity="CRITICAL")
+        result = build_risk_signals([risk], clause_id="c")
+        assert result.dropped_count == 0
+        assert result.signals[0].impact_score == pytest.approx(0.9)
+        assert result.signals[0].severity == "critical"
+
+    def test_missing_impact_does_not_invent_severity(self):
+        result = build_risk_signals(
+            [_risk(risk_score=None, impact="UNKNOWN")], clause_id="c"
+        )
+        assert result.signals == ()
+        assert result.dropped_reasons == {"no_impact_signal": 1}
+
+    def test_canonical_risk_confidence_missing_is_marked_as_fallback(self):
+        raw = _risk(confidence=None)
+        result = build_risk_signals([raw], clause_id="c")
+        assert result.signals[0].confidence == pytest.approx(0.7)
+        assert result.signals[0].raw_data["confidence_origin"] == "heuristic_fallback"

@@ -90,6 +90,8 @@ class ProjectGraphState(TypedDict):
     # Immutable ``doc_id|rev_id|numeric_ref`` -> physical clauses.id, pre-grounded for
     # TRUSTED artifacts only by the task layer. Absent => revision-surrogate clause_id.
     risk_source_clause_ids: NotRequired[Mapping[str, str]]
+    # Independent binding outcome: AVAILABLE, EMPTY, UNAVAILABLE, NOT_CONFIGURED.
+    risk_source_binding_status: NotRequired[str]
     # Non-scoring, provisional discrepancies with two immutable evidence pointers.
     structured_source_comparison: NotRequired[dict[str, Any]]
     coherence_result: ProjectCoherenceResult | dict[str, object] | None

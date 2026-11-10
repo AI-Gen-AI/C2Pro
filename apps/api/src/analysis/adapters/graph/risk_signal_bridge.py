@@ -19,17 +19,16 @@ category that has at least one extracted risk.
 
 Design notes:
 
-* Risks with missing/unknown ``category`` are dropped (with a log
-  warning + a counter in the returned summary) rather than fabricated
-  into SCOPE.  Coherence is what we sell — we do not invent it.
+* Risks with unknown categories, impact or unverified quotations are
+  withheld from scored signals with a drop counter, not reassigned or
+  misrepresented. They remain in N4 proposals for human review.
 * ``risk_score`` (0-10 scale from N4) maps to ``impact_score`` ∈ [0,1].
   When ``risk_score`` is absent, we fall back to mapping the
   categorical ``impact`` field (CRITICAL=0.9, HIGH=0.7, MEDIUM=0.5,
   LOW=0.3) — never a default of 0 (would silently zero out the
   category) or 1 (would dominate the bucket).
-* ``confidence`` is fixed at 0.7 to reflect that this is an LLM
-  extraction, not a deterministic rule hit.  Downstream scoring
-  weighs LLM evidence less than deterministic, which is correct.
+* ``confidence`` uses a valid reported score or a clearly labelled
+  0.7 heuristic fallback. Neither is independently calibrated.
 * This is an **interim bridge**.  It will be removed when 2A.5 wires
   the evidence module to the coherence engine through ``EvidenceClaim``
   + CVC.
@@ -65,9 +64,11 @@ IR-3 (TASK-V3-013-12) — producer/consumer key drift:
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any
 
+from src.analysis.domain.risk_categories import normalize_category
 from src.coherence.models import CoherenceCategory, FindingSignal, SeverityLevel
 
 logger = logging.getLogger(__name__)
@@ -101,8 +102,7 @@ _IMPACT_TO_SCORE: dict[str, float] = {
 }
 
 _EXTRACTOR_RULE_ID = "EXTRACTOR-RISK"
-_EXTRACTOR_CONFIDENCE = 0.7
-_QUOTE_MAX_CHARS = 1000
+_EXTRACTOR_CONFIDENCE = 0.7  # Explicit fallback, NOT measured model precision.
 
 
 @dataclass(frozen=True)
@@ -119,6 +119,9 @@ def build_risk_signals(
     risks: list[dict[str, Any]],
     *,
     clause_id: str,
+    document_id: str | None = None,
+    document_revision_id: str | None = None,
+    source_binding_kind: str = "document",
 ) -> RiskBridgeResult:
     """Convert N4 risk dicts into coherence FindingSignals + coverage seed.
 
@@ -143,8 +146,13 @@ def build_risk_signals(
             _bump(dropped_reasons, "not_a_dict")
             continue
 
-        raw_category = (raw.get("category") or "").upper().strip()
-        canonical = _RISK_CATEGORY_TO_COHERENCE.get(raw_category)
+        raw_category = str(raw.get("category") or "").upper().strip()
+        normalized_category = normalize_category(raw_category)
+        canonical = (
+            _RISK_CATEGORY_TO_COHERENCE.get(normalized_category.value)
+            if normalized_category is not None
+            else None
+        )
         if canonical is None:
             _bump(dropped_reasons, "unknown_category")
             logger.warning(
@@ -158,19 +166,36 @@ def build_risk_signals(
             _bump(dropped_reasons, "no_impact_signal")
             continue
 
+        # Only a quote validated against the N2-safe document projection can
+        # be used as evidence or seed an assessed category. Unverified risks
+        # remain in N4's proposed extraction, not in coherence scored signals.
+        if raw.get("source_quote_status") != "VERIFIED" or not _quote_for(raw):
+            _bump(dropped_reasons, "unverified_quote")
+            continue
+
         signals.append(
             FindingSignal(
                 rule_id=_EXTRACTOR_RULE_ID,
                 clause_id=clause_id,
                 source="llm",
                 impact_score=impact_score,
-                confidence=_EXTRACTOR_CONFIDENCE,
+                confidence=_confidence_for(raw),
                 severity=_severity_for(raw),
                 category=canonical,
                 evidence_summary=_summary_for(raw),
                 quote=_quote_for(raw),
                 raw_data={
                     "extractor_category": raw_category,
+                    "extractor_clause_ref": raw.get("clause_ref"),
+                    "source_quote_status": raw.get("source_quote_status"),
+                    # Context from the caller; this is NOT a certified locator.
+                    "document_id": document_id,
+                    "document_revision_id": document_revision_id,
+                    "source_binding_kind": source_binding_kind,
+                    "confidence_origin": (
+                        "model_reported" if _valid_confidence(raw.get("confidence"))
+                        else "heuristic_fallback"
+                    ),
                     # `likelihood` is the RiskItem contract field; `probability`
                     # is N4's pre-contract raw key for the same concept (IR-3).
                     "likelihood": raw.get("likelihood", raw.get("probability")),
@@ -209,13 +234,15 @@ def _impact_score_for(raw: dict[str, Any]) -> float | None:
         normalized = float(score) / 10.0 if score <= 10 else float(score) / 100.0
         return max(0.0, min(1.0, normalized))
 
-    impact = (raw.get("impact") or "").upper().strip()
-    return _IMPACT_TO_SCORE.get(impact)
+    impact = raw.get("impact") or raw.get("severity")
+    normalized = str(getattr(impact, "value", impact) or "").upper().strip()
+    return _IMPACT_TO_SCORE.get(normalized)
 
 
 def _severity_for(raw: dict[str, Any]) -> SeverityLevel:
-    impact = (raw.get("impact") or "").upper().strip()
-    return _IMPACT_TO_SEVERITY.get(impact, "medium")
+    impact = raw.get("impact") or raw.get("severity")
+    normalized = str(getattr(impact, "value", impact) or "").upper().strip()
+    return _IMPACT_TO_SEVERITY.get(normalized, "medium")
 
 
 def _summary_for(raw: dict[str, Any]) -> str:
@@ -228,19 +255,28 @@ def _summary_for(raw: dict[str, Any]) -> str:
     return title or summary or "Risk extracted by LLM"
 
 
-def _quote_for(raw: dict[str, Any]) -> str:
-    # `source` is the RiskItem contract field; `source_quote` /
-    # `source_text_snippet` are N4's pre-contract raw keys (IR-3).
-    quote = (
-        raw.get("source")
-        or raw.get("source_quote")
-        or raw.get("source_text_snippet")
-        or ""
+def _valid_confidence(value: object) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and 0.0 <= value <= 1.0
     )
-    quote = str(quote).strip()
-    if len(quote) > _QUOTE_MAX_CHARS:
-        return quote[:_QUOTE_MAX_CHARS] + "..."
-    return quote
+
+
+def _confidence_for(raw: dict[str, Any]) -> float:
+    value = raw.get("confidence")
+    return float(value) if _valid_confidence(value) else _EXTRACTOR_CONFIDENCE
+
+
+def _quote_for(raw: dict[str, Any]) -> str:
+    # Never use `source` (legacy, possibly unverified), nor splice or truncate
+    # a verified quotation. Only the N4 canonical quote with a verified status
+    # may flow downstream as evidence.
+    if raw.get("source_quote_status") != "VERIFIED":
+        return ""
+    quote = raw.get("source_quote")
+    return quote.strip() if isinstance(quote, str) else ""
 
 
 def _bump(counter: dict[str, int], key: str) -> None:
