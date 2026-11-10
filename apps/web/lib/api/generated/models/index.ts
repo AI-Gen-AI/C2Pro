@@ -49,6 +49,7 @@ export * from "./alertItem";
 export * from "./alertListResponse";
 export * from "./alertResponse";
 export * from "./alertResponseAffectedEntities";
+export * from "./alertResponseEvidenceStatus";
 export * from "./alertRuleConfigPayload";
 export * from "./alertsData";
 export * from "./alertsDataOpenBySeverity";

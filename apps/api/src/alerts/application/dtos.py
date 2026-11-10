@@ -139,7 +139,7 @@ class AlertResponse(BaseModel):
     source_clause_id: UUID | None = None
     detection_evidence: DetectionEvidenceResponse | None = None
     # Additive: "VERIFIED" | "NOT_VERIFIED" for detector-origin risk alerts; None when unknown.
-    evidence_status: str | None = None
+    evidence_status: Literal["VERIFIED", "NOT_VERIFIED"] | None = None
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
     root_cause: str | None = None

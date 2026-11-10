@@ -52,6 +52,7 @@ def test_contract_risk_alert_retains_grounded_document_revision_and_clause_locat
     assert alert.source_clause_id == clause
     assert alert.alert_metadata["source_provenance"] == {
         "verification_status": "VERIFIED",
+        "quote_verification_status": "VERIFIED",
         "source_references": [{
             "document_id": str(document),
             "revision_id": str(revision),
@@ -72,6 +73,7 @@ def test_unlinked_contract_risk_is_explicitly_not_verified_not_invented() -> Non
     assert alert.source_clause_id is None
     assert alert.alert_metadata["source_provenance"] == {
         "verification_status": "NOT_VERIFIED",
+        "quote_verification_status": "NOT_VERIFIED",
         "source_references": [],
     }
 

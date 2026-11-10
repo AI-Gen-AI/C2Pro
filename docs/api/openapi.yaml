@@ -5766,6 +5766,14 @@ components:
           anyOf:
           - $ref: '#/components/schemas/DetectionEvidenceResponse'
           - type: 'null'
+        evidence_status:
+          anyOf:
+          - type: string
+            enum:
+            - VERIFIED
+            - NOT_VERIFIED
+          - type: 'null'
+          title: Evidence Status
         reviewed_by:
           anyOf:
           - type: string

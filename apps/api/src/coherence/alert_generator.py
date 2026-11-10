@@ -270,8 +270,15 @@ class AlertGenerator:
         navigable source.
         """
         references = item.get("source_references")
+        # Marks provenance written after the quote check; unmarked (historical)
+        # provenance is of unknown evidence status.
+        quote_status = "VERIFIED" if item.get("source_quote_status") == "VERIFIED" else "NOT_VERIFIED"
         if item.get("source_locator_status") != "VERIFIED" or not isinstance(references, list):
-            return None, {"verification_status": "NOT_VERIFIED", "source_references": []}
+            return None, {
+                "verification_status": "NOT_VERIFIED",
+                "quote_verification_status": quote_status,
+                "source_references": [],
+            }
 
         normalized: list[dict[str, str]] = []
         raw_clause_code = item.get("clause_ref")
@@ -308,10 +315,15 @@ class AlertGenerator:
         # One risk may navigate to one exact source clause.  More than one is
         # ambiguous, so leave the FK null rather than arbitrarily selecting it.
         if len(normalized) != 1:
-            return None, {"verification_status": "NOT_VERIFIED", "source_references": []}
+            return None, {
+                "verification_status": "NOT_VERIFIED",
+                "quote_verification_status": quote_status,
+                "source_references": [],
+            }
         reference = normalized[0]
         return UUID(reference["clause_id"]), {
             "verification_status": "VERIFIED",
+            "quote_verification_status": quote_status,
             "source_references": [reference],
         }
 

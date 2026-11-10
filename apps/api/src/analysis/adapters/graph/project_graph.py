@@ -907,7 +907,8 @@ def health(state: ProjectGraphState) -> dict[str, object]:
             withheld_risks=max(
                 0, sum(len(a.extracted_risks) for a in artifacts) - len(risks)
             ) if canonical is not None else 0,
-            critique_assessed=_artifact_confidence(artifacts) is not None,
+            critique_assessed=bool(artifacts)
+            and all(a.confidence_score is not None for a in artifacts),
         )
         contract_signal = score_contract_dimension(
             clauses,

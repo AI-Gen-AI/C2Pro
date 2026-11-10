@@ -90,3 +90,18 @@ def test_c_withheld_risks_never_yield_clean_score() -> None:
 def test_c_truly_empty_assessment_still_clean() -> None:
     sig = score_risk_dimension([], assessment_ran=True, extraction_quality=0.9)
     assert sig.score == 90.0
+
+
+def test_a_legacy_persisted_verified_provenance_shows_no_evidence_label() -> None:
+    """Provenance persisted before the quote check carries no quote_verification_status."""
+    alert = Alert(
+        id=uuid4(), project_id=PROJECT, severity=AlertSeverity.HIGH, category="SCOPE",
+        status=list(AlertStatus)[0], approval_status=list(ApprovalStatus)[0], rule_id=None,
+        title="x", description="y", created_at=datetime.now(UTC), source_clause_id=CLAUSE,
+        alert_metadata={"source_provenance": {
+            "verification_status": "VERIFIED", "source_references": [REF]}},
+    )
+    assert AlertMapper.to_response(alert, TENANT).evidence_status is None
+    alert.alert_metadata = {"source_provenance": {
+        "verification_status": "NOT_VERIFIED", "source_references": []}}
+    assert AlertMapper.to_response(alert, TENANT).evidence_status is None

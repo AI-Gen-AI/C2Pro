@@ -66,7 +66,13 @@ class AlertMapper:
         provenance = metadata.get("source_provenance")
         if not isinstance(provenance, dict):
             return None
-        return "VERIFIED" if provenance.get("verification_status") == "VERIFIED" else "NOT_VERIFIED"
+        # Historical provenance (no quote_verification_status) was produced without the
+        # quote check, so its "VERIFIED" is unknown evidence: show neither label.
+        quote_status = provenance.get("quote_verification_status")
+        if quote_status not in ("VERIFIED", "NOT_VERIFIED"):
+            return None
+        verified = provenance.get("verification_status") == "VERIFIED" and quote_status == "VERIFIED"
+        return "VERIFIED" if verified else "NOT_VERIFIED"
 
     @staticmethod
     def to_response(alert: Alert, tenant_id: UUID) -> AlertResponse:
