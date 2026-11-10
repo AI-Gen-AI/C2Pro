@@ -107,6 +107,7 @@ _TOUCH_SQL = text(
     UPDATE system_recovery.trusted_projection_index
        SET materialization_checked_at = (clock_timestamp() AT TIME ZONE 'UTC')
      WHERE artifact_id = cast(:artifact_id as uuid)
+       AND tenant_id = cast(:tenant_id as uuid)
        AND materialization_state = 'pending'
     """
 )
@@ -272,7 +273,10 @@ async def reconcile_pending_materializations(
                 tenant_id=require_tenant_id(str(row.tenant_id)),
             )
             counts["enqueued"] += 1
-            await session.execute(_TOUCH_SQL, {"artifact_id": str(row.artifact_id)})
+            await session.execute(
+                _TOUCH_SQL,
+                {"artifact_id": str(row.artifact_id), "tenant_id": str(row.tenant_id)},
+            )
         await session.commit()
     logger.info("trusted_materialization_reconcile", extra=counts)
     return counts
