@@ -398,12 +398,16 @@ async def evaluate_artifact_set(
         seed_coverage=coverage,
     )
     if excluded_risks:
-        # Independent coherence_findings remain in category breakdown/alerts,
-        # but the aggregate must not look complete with unverified risk proposals.
+        # Preserve independently grounded/deterministic signals and their score.
+        # With NO independently proven signals, fail closed to NULL. Otherwise
+        # expose PARTIAL rather than describing a subset as complete evidence.
+        partial_score = engine_result.overall_score if signals else None
         engine_result = engine_result.model_copy(update={
-            "overall_score": None,
+            "overall_score": partial_score,
             "score_reason": (
-                "unassessed_risk_source_lookup_unavailable"
+                "partial_withheld_risk_provenance"
+                if partial_score is not None
+                else "unassessed_risk_source_lookup_unavailable"
                 if risk_source_binding_status == "UNAVAILABLE"
                 else "unassessed_unbound_risk_provenance"
             ),

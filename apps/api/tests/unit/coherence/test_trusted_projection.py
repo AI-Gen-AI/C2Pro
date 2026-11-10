@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
 
 from src.analysis.adapters.graph.project_graph import evaluate_artifact_set
+from src.analysis.adapters.graph.review_source_references import risk_quote_source_key
 from src.analysis.adapters.persistence.document_artifact_repository import PendingCandidate
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.analysis.domain.trust import CandidateBinding
@@ -32,12 +33,20 @@ B_CATEGORIES = ("BUDGET", "TIME", "QUALITY")
 
 
 def _artifact(document_id: str, categories: tuple[str, ...], level: str = "LOW", n: int = 1):
+    # A revision-bound synthetic fixture: this test measures projection math,
+    # not the external physical-clause resolver (covered independently).
+    revision = str(uuid5(NAMESPACE_URL, f"{document_id}|{categories}|{level}|{n}"))
     return DocumentArtifact(
-        document_id=document_id,
+        document_id=document_id, document_revision_id=revision,
         doc_type="contract",
         extracted_risks=[
-            RiskItem(title=f"{c}-{i}", description="d", category=c, impact=level, likelihood=level)
-            for c in categories
+            RiskItem(
+                title=f"{c}-{i}", description="d", category=c,
+                impact=level, likelihood=level, clause_ref=f"{j + 1}.{i + 1}",
+                source_quote=f"Contract source for {c} item {i} in revision {revision}",
+                source_quote_status="VERIFIED",
+            )
+            for j, c in enumerate(categories)
             for i in range(n)
         ],
     )
@@ -58,8 +67,21 @@ def _real_evaluator():
     project_id, tenant_id = uuid4(), uuid4()
 
     async def evaluate(artifacts: list[DocumentArtifact]):
+        # Synthetic pre-grounded physical clause IDs stand in for an independent
+        # successful DB resolver. Without these, P0-A correctly returns NULL.
+        mapping = {}
+        for artifact in artifacts:
+            for risk in artifact.extracted_risks:
+                key = risk_quote_source_key(
+                    artifact.document_id, artifact.document_revision_id,
+                    risk.clause_ref, risk.source_quote,
+                )
+                assert key is not None
+                mapping[key] = str(uuid5(NAMESPACE_URL, key))
         return await evaluate_artifact_set(
-            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=False
+            artifacts, project_id=project_id, tenant_id=tenant_id, llm_on=False,
+            risk_source_clause_ids=mapping,
+            risk_source_binding_status="AVAILABLE",
         )
 
     return evaluate

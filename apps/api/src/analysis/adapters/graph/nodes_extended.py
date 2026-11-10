@@ -520,11 +520,17 @@ async def coherence_scorer_node(state: ProjectState) -> dict[str, Any]:
             seed_coverage=bridge_result.coverage_seed,
         )
         if bridge_result.dropped_count:
-            # The N4 proposals remain available for HITL, but a score based on
-            # a subset must not masquerade as fully assessed.
+            # Never count rejected N4 evidence. Independently assessed clauses
+            # may still yield a qualified score, explicitly flagged PARTIAL.
+            has_other_evidence = bool(result.finding_signals)
+            partial_score = result.overall_score if has_other_evidence else None
             result = result.model_copy(update={
-                "overall_score": None,
-                "score_reason": "unassessed_unverified_risk_evidence",
+                "overall_score": partial_score,
+                "score_reason": (
+                    "partial_withheld_risk_evidence"
+                    if partial_score is not None
+                    else "unassessed_unverified_risk_evidence"
+                ),
                 "score_missing_dimensions": list(dict.fromkeys([
                     *(result.score_missing_dimensions or []),
                     "risk_provenance",

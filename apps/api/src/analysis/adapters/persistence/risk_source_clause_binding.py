@@ -49,6 +49,7 @@ async def load_trusted_risk_source_clause_ids(
     project_id: UUID | str,
     artifacts: Sequence[DocumentArtifact],
     repository: Any | None = None,
+    strict_on_error: bool = False,
 ) -> dict[str, str]:
     """Return ``{doc|rev|code|sha256(quote): physical clause UUID}`` per resolvable risk."""
     tenant, project = _uuid(tenant_id), _uuid(project_id)
@@ -80,6 +81,10 @@ async def load_trusted_risk_source_clause_ids(
                 "risk_source_clause_binding.lookup_failed",
                 extra={"document_id": str(document), "revision_id": str(revision)},
             )
+            if strict_on_error:
+                # One failed revision cannot be misreported as an empty,
+                # successful lookup. Task caller records UNAVAILABLE.
+                raise
             continue
         by_id = {getattr(c, "id", None): c for c in clauses}
         resolved: dict[str, Any] = {}

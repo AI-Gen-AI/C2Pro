@@ -394,6 +394,7 @@ async def _run_project_graph_async(
                         tenant_id=tenant_id,
                         project_id=project_id,
                         artifacts=trusted,
+                        strict_on_error=True,
                     )
 
                 # Canonical ProjectState is a separate tenant-scoped read model.

@@ -290,3 +290,42 @@ async def test_unavailable_source_loader_has_distinct_reason(monkeypatch):
     assert result.summary.overall_score is None
     assert result.summary.score_reason == "unassessed_risk_source_lookup_unavailable"
     assert result.summary.excluded_risk_count == 1
+
+
+@pytest.mark.asyncio
+async def test_strict_loader_failure_cannot_masquerade_as_empty_mapping() -> None:
+    with pytest.raises(RuntimeError, match="database temporarily unavailable"):
+        await load_trusted_risk_source_clause_ids(
+            None, tenant_id=TENANT, project_id=PROJECT,
+            artifacts=[_artifact(_risk("6.1"))],
+            repository=_Repo(RuntimeError("database temporarily unavailable")),
+            strict_on_error=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_independent_finding_keeps_partial_score_without_scoring_unbound_risk(monkeypatch):
+    from src.analysis.adapters.graph import project_graph as mod
+    from src.analysis.domain.contracts import CoherenceFinding
+    from src.coherence.models import EnrichedCoherenceResult
+
+    async def fake_evaluate(*args, **kwargs):
+        assert len(kwargs["seed_signals"]) == 1  # deterministic finding only
+        assert kwargs["seed_signals"][0].source == "deterministic"
+        return EnrichedCoherenceResult(overall_score=76.0)
+
+    monkeypatch.setattr(mod, "evaluate_coherence_async", fake_evaluate)
+    item = _artifact(_risk("6.1")).model_copy(update={
+        "coherence_findings": [
+            CoherenceFinding(category="BUDGET", message="Exact verified arithmetic",
+                             rule_id="DET-COST", score=76.0)
+        ],
+    })
+    outcome = await mod.evaluate_artifact_set(
+        [item], project_id=PROJECT, tenant_id=TENANT, llm_on=False,
+        risk_source_clause_ids={}, risk_source_binding_status="EMPTY",
+    )
+    assert outcome.summary.overall_score == 76.0
+    assert outcome.summary.score_reason == "partial_withheld_risk_provenance"
+    assert outcome.summary.excluded_risk_count == 1
+    assert "risk_provenance" in outcome.summary.insufficient_data_reasons
