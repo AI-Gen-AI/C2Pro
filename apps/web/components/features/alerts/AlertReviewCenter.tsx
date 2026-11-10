@@ -29,6 +29,8 @@ export interface ReviewAlert {
   sourceDocumentId?: string;
   evidenceClaim?: string;
   evidenceQuote?: string;
+  /** Backend evidence status for risk alerts; absent for alerts without recorded provenance. */
+  evidenceStatus?: "VERIFIED" | "NOT_VERIFIED";
   structuredSources?: AlertStructuredSource[];
   assignee?: string;
   rejectionReason?: string;
@@ -387,8 +389,18 @@ export function AlertReviewCenter({
                 )}
               </td>
               <td>
-                {alert.evidenceClaim || alert.evidenceQuote || alert.structuredSources?.length ? (
+                {alert.evidenceClaim || alert.evidenceQuote || alert.structuredSources?.length || alert.evidenceStatus ? (
                   <div className="space-y-1">
+                    {alert.evidenceStatus ? (
+                      <div
+                        data-testid={"alert-evidence-status-" + alert.id}
+                        data-evidence-status={alert.evidenceStatus}
+                      >
+                        {alert.evidenceStatus === "VERIFIED"
+                          ? "Evidence verified"
+                          : "Unverified evidence — source not confirmed"}
+                      </div>
+                    ) : null}
                     {alert.evidenceClaim ? <div>{alert.evidenceClaim}</div> : null}
                     {alert.evidenceQuote ? (
                       <q className="text-sm text-muted-foreground">

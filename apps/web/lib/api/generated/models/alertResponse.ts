@@ -51,6 +51,7 @@ export interface AlertResponse {
   status: string;
   affected_entities?: AlertResponseAffectedEntities;
   source_clause_id?: string | null;
+  evidence_status?: "VERIFIED" | "NOT_VERIFIED" | null;
   detection_evidence?: DetectionEvidenceResponse | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;

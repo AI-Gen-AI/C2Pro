@@ -61,6 +61,14 @@ class AlertMapper:
         return None
 
     @staticmethod
+    def _evidence_status(metadata: dict[str, object]) -> str | None:
+        """Explicit evidence status of a risk alert; None when no provenance was recorded."""
+        provenance = metadata.get("source_provenance")
+        if not isinstance(provenance, dict):
+            return None
+        return "VERIFIED" if provenance.get("verification_status") == "VERIFIED" else "NOT_VERIFIED"
+
+    @staticmethod
     def to_response(alert: Alert, tenant_id: UUID) -> AlertResponse:
         """
         Convert domain Alert to AlertResponse DTO.
@@ -93,6 +101,7 @@ class AlertMapper:
                 "detection_evidence": AlertMapper._detection_evidence(
                     metadata, alert.source_clause_id
                 ),
+                "evidence_status": AlertMapper._evidence_status(metadata),
                 "reviewed_by": alert.reviewed_by,
                 "reviewed_at": alert.reviewed_at,
                 "root_cause": metadata.get("root_cause"),

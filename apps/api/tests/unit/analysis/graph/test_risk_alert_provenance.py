@@ -43,7 +43,8 @@ def test_contract_risk_alert_retains_grounded_document_revision_and_clause_locat
     )
 
     [risk] = bind_risk_alert_source_references(
-        [{"title": "Delay exposure", "description": "Generated analysis", "clause_ref": "6.1"}],
+        [{"title": "Delay exposure", "description": "Generated analysis", "clause_ref": "6.1",
+          "source_quote_status": "VERIFIED"}],
         refs,
     )
     [alert] = AlertGenerator(project_id=project).generate_risk_alerts([risk])
