@@ -21,7 +21,7 @@ else:
     RequestType = Request
 
 from sqlalchemy import event, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -36,6 +36,7 @@ logger = structlog.get_logger()
 SLOW_QUERY_THRESHOLD_MS = 100
 POSTGRESQL_URL_PREFIX = "postgresql://"
 ASYNC_POSTGRESQL_URL_PREFIX = "postgresql+asyncpg://"
+UNPARSEABLE_DATABASE_URL = "<unparseable database URL>"
 
 # UUID validation pattern (safe for SQL string interpolation)
 _UUID_PATTERN = re.compile(
@@ -56,6 +57,20 @@ def _validate_uuid_for_sql(value: UUID | str) -> str:
         raise ValueError(f"Invalid UUID format: {str_value}")
 
     return str_value
+
+
+def _database_url_for_log(database_url: str) -> str:
+    """Return connection metadata without credentials or URL query parameters."""
+    try:
+        url = make_url(database_url)
+        host = url.host
+        if host and ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        port = f":{url.port}" if url.port is not None else ""
+        database = f"/{url.database.lstrip('/')}" if url.database else ""
+        return f"{url.drivername}://{host or ''}{port}{database}"
+    except Exception:
+        return UNPARSEABLE_DATABASE_URL
 
 
 @event.listens_for(Engine, "before_cursor_execute")
@@ -199,7 +214,7 @@ async def init_db() -> None:
         autoflush=False,
     )
 
-    logger.info("database_engine_created", url=database_url[:50] + "...")
+    logger.info("database_engine_created", url=_database_url_for_log(database_url))
 
 
 async def close_db() -> None:
