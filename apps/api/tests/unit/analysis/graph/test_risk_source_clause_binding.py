@@ -7,7 +7,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.analysis.adapters.graph.project_graph import _aggregate_cross_doc_inputs
+from src.analysis.adapters.graph.project_graph import (
+    _aggregate_cross_doc_inputs,
+    _artifact_risk_signals,
+)
 from src.analysis.adapters.graph.review_source_references import risk_quote_source_key
 from src.analysis.adapters.persistence.risk_source_clause_binding import (
     load_trusted_risk_source_clause_ids,
@@ -114,12 +117,16 @@ def test_multiple_independent_risks_bind_per_risk_and_keep_order() -> None:
         _k("6.1"): str(a.id),
         _k("6.3"): str(b.id),
     }
-    signals, _, _ = _aggregate_cross_doc_inputs([art], mapping)
-    assert [s.clause_id for s in signals] == [str(a.id), str(REV), str(b.id), str(REV)]
-    assert [s.raw_data["title"] for s in signals] == [r.title for r in art.extracted_risks]
+    signals, _, finding_count = _aggregate_cross_doc_inputs([art], mapping)
+    # Unverified proposals remain in the artifact, but do not feed N8 scoring.
+    assert len(art.extracted_risks) == 4
+    assert finding_count == 0  # unrelated, counts coherence findings only
+    assert _artifact_risk_signals(art, mapping).dropped_reasons == {"unverified_quote": 1}
+    assert [s.clause_id for s in signals] == [str(a.id), str(REV), str(b.id)]
+    assert [s.raw_data["title"] for s in signals] == [r.title for r in art.extracted_risks[:3]]
 
 
-def test_scoring_inputs_and_provenance_identical_with_and_without_binding() -> None:
+def test_scoring_inputs_identical_but_binding_provenance_explicit() -> None:
     art = _artifact(_risk("6.1", likelihood="LOW"), _risk("6.2", confidence=0.4))
     clause = uuid4()
     base, base_cov, base_n = _aggregate_cross_doc_inputs([art])
@@ -127,8 +134,14 @@ def test_scoring_inputs_and_provenance_identical_with_and_without_binding() -> N
         [art], {_k("6.1"): str(clause)}
     )
     assert (base_cov, base_n) == (bound_cov, bound_n)
-    strip = lambda s: s.model_copy(update={"clause_id": ""}).model_dump()  # noqa: E731
-    assert [strip(s) for s in base] == [strip(s) for s in bound]
+    def scoring_only(signal):
+        data = signal.model_copy(update={"clause_id": ""}).model_dump()
+        data["raw_data"].pop("source_binding_kind", None)
+        return data
+
+    assert [scoring_only(s) for s in base] == [scoring_only(s) for s in bound]
+    assert base[0].raw_data["source_binding_kind"] == "document"
+    assert bound[0].raw_data["source_binding_kind"] == "verified_clause"
     assert bound[0].raw_data["artifact_revision_id"] == str(REV)
     assert bound[0].raw_data["source"] == "document_artifact.extracted_risks"
     assert [s.clause_id for s in base] == [str(REV)] * 2
@@ -136,10 +149,13 @@ def test_scoring_inputs_and_provenance_identical_with_and_without_binding() -> N
 
 def test_unverified_status_ignores_mapping_even_if_key_present() -> None:
     art = _artifact(_risk("6.1", "NOT_FOUND"))
-    signals, _, _ = _aggregate_cross_doc_inputs(
+    signals, _, finding_count = _aggregate_cross_doc_inputs(
         [art], {_k("6.1"): str(uuid4())}
     )
-    assert signals[0].clause_id == str(REV)
+    assert signals == []
+    assert finding_count == 0
+    assert _artifact_risk_signals(art, {_k("6.1"): str(uuid4())}).dropped_count == 1
+    assert len(art.extracted_risks) == 1  # proposal is not erased
 
 
 @pytest.mark.asyncio

@@ -565,9 +565,9 @@ class TestN8ClauseEvidence:
         seen_ids: list[str] = []
         real_bridge = node_module.build_risk_signals
 
-        def recording_bridge(risks, *, clause_id):  # noqa: ANN001, ANN202
+        def recording_bridge(risks, *, clause_id, **context):  # noqa: ANN001, ANN202
             seen_ids.append(clause_id)
-            return real_bridge(risks, clause_id=clause_id)
+            return real_bridge(risks, clause_id=clause_id, **context)
 
         monkeypatch.setattr(node_module, "build_risk_signals", recording_bridge)
 
