@@ -16,6 +16,22 @@
     },
     {
       "behavior": {
+        "env": {
+          "PYTHONPATH": "${{ github.workspace }}/apps/api"
+        },
+        "run": "set -euo pipefail\n# N2 PII NER preflight: verify the exact release wheel before pip runs.\n# The digest was measured from the explosion/spacy-models 3.7.0 release asset.\nwheel=\"$RUNNER_TEMP/es_core_news_md-3.7.0-py3-none-any.whl\"\ncurl --fail --location --retry 3 --max-time 180 \\\n  --output \"$wheel\" \\\n  \"https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl\"\nprintf '%s  %s\\n' \\\n  '0d6d6ebed875869a9759c8c096f2cef581fa32d861646030f771c83e5799de82' \"$wheel\" \\\n  | sha256sum --check --status\n# spaCy and dependencies are installed by setup-python-backend.\n# No restored package cache may bypass the SHA-256 check.\npython -m pip install --no-deps --force-reinstall \"$wheel\"\n",
+        "shell": "bash",
+        "working_directory": null
+      },
+      "context": ".github/workflows/acc01-s2-live-ai-uat.yml::jobs.n4-n12-real-ai-focal::name:Install SHA-256-verified Spanish spaCy model",
+      "file": ".github/workflows/acc01-s2-live-ai-uat.yml",
+      "owner": "AI-Gen-AI / C2Pro CI-Security (approval requested)",
+      "reason": "CI/Security review candidate: GATE-8 real-AI N2 Spanish PII NER requires es_core_news_md v3.7.0. The pinned official release wheel is downloaded every run, SHA-256 verified before forced installation and installed with --no-deps; removing the restored spaCy model cache prevents verification bypass. This manifest entry documents the exact install behavior for independent security review; it grants no merge/deploy authority.",
+      "remediation_issue": "#600",
+      "sha256": "db91033468b5e06fb67a0cbe5b1e9690fa1e9209ef13291cde6a40cb6923a7af"
+    },
+    {
+      "behavior": {
         "env": {},
         "run": "pip install \"pyyaml==6.0.3\" \"pytest==9.1.1\" \"jsonschema==4.25.1\"",
         "shell": null,
