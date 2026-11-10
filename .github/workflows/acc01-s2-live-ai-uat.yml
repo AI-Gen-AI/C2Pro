@@ -984,32 +984,23 @@ jobs:
       # GATE 8 (PII): Presidio's spaCy model MUST be available before the
       # first governed provider request. A lazy download in AnthropicWrapper
       # can otherwise fail with SystemExit on transient upstream HTTP 504.
-      - name: Resolve spaCy model cache directory
-        id: spacy-meta
-        shell: bash
-        run: |
-          python - <<'PY2'
-          import os
-          import sysconfig
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
-              stream.write("site=" + sysconfig.get_path("purelib") + "\n")
-          PY2
-
-      - name: Restore pinned Spanish spaCy model (privacy preflight)
-        id: spacy-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          # Include package metadata as well as the model directory, otherwise
-          # spaCy's package resolution can fail on a restored cache hit.
-          path: ${{ steps.spacy-meta.outputs.site }}/es_core_news_md*
-          key: spacy-es-core-news-md-3.7.0-core-focal-${{ runner.os }}
-
-      - name: Install pinned Spanish spaCy model if missing
-        if: steps.spacy-cache.outputs.cache-hit != 'true'
+      - name: Install SHA-256-verified Spanish spaCy model
         shell: bash
         run: |
           set -euo pipefail
-          pip install --retries 3 --timeout 45 "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl"
+          # N2 PII NER preflight: verify the exact release wheel before pip runs.
+          # The digest was measured from the explosion/spacy-models 3.7.0 release asset.
+          wheel="$RUNNER_TEMP/es_core_news_md-3.7.0-py3-none-any.whl"
+          curl --fail --proto '=https' --proto-redir '=https' \
+            --location --retry 3 --max-time 180 \
+            --output "$wheel" \
+            "https://github.com/explosion/spacy-models/releases/download/es_core_news_md-3.7.0/es_core_news_md-3.7.0-py3-none-any.whl"
+          printf '%s  %s\n' \
+            '0d6d6ebed875869a9759c8c096f2cef581fa32d861646030f771c83e5799de82' "$wheel" \
+            | sha256sum --check --status
+          # spaCy and dependencies are installed by setup-python-backend.
+          # No restored package cache may bypass the SHA-256 check.
+          python -m pip install --no-deps --force-reinstall "$wheel"
 
       - name: Fail closed if Spanish PII NER is unavailable
         shell: bash
