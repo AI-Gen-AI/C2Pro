@@ -29,6 +29,7 @@ from src.analysis.domain.risk_categories import RiskCategory, normalize_category
 from src.core.ai.anthropic_wrapper import AIResponse
 from src.core.ai.model_router import AITaskType
 from src.core.ai.tools import BaseTool, RetryPolicy, ToolResult, register_tool
+from src.core.ai.tools.metadata import ToolStatus
 
 if TYPE_CHECKING:
     from src.analysis.adapters.graph.schema import ProjectState
@@ -37,15 +38,9 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Filter configuration — multilingual (ES + EN) and env-tunable.
-#
-# Background: the filter is applied to the full document text before the LLM
-# call. It (1) drops obviously irrelevant paragraphs (price tables, BOMs) and
-# (2) selects substantive risk-bearing paragraphs. Until this change the
-# keyword lists were Spanish-only, which silently fell through on English
-# contracts ("filter matched nothing → use all paragraphs") and then
-# truncated to 15000 chars — losing ~37% of even modestly-sized contracts.
-# Diagnosis: scripts/diagnose_chunks.py on the live EPC contract.
+# Historic multilingual keyword lists remain for backward compatibility with
+# older test fixtures. They are NOT used by the N4 model-facing input path.
+# Contractual relevance must be determined by the model, not a lexical gate.
 # ---------------------------------------------------------------------------
 
 _INCLUDE_KEYWORDS_ES: tuple[str, ...] = (
@@ -228,8 +223,15 @@ class RiskExtractionInput(BaseModel):
     """Input for risk extraction."""
 
     document_text: str = Field(..., description="Contract text to analyze")
-    max_risks: int = Field(20, ge=1, le=50, description="Maximum risks to extract")
-    filter_relevant: bool = Field(True, description="Apply relevance filtering to document")
+    max_risks: int = Field(
+        20, ge=1, le=50, description="Deprecated legacy hint; never truncates parsed risks"
+    )
+    filter_relevant: bool = Field(
+        False, description="Deprecated; full N2 source is always retained"
+    )
+    strict_completeness: bool = Field(
+        False, description="Reject model candidates that cannot be normalized"
+    )
 
 
 @register_tool("risk_extraction", version="1.0")
@@ -241,7 +243,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     - Identifies legal, financial, schedule, technical, HSE, and quality risks
     - Assigns probability and impact scores
     - Flags immediate alerts for critical risks
-    - Filters out irrelevant sections (pricing tables, BOMs)
+    - Preserves all source sections, including price tables and annexes
 
     Input: Document text
     Output: list of adapter-local candidates with category, probability, impact, mitigation.
@@ -251,6 +253,7 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     version = "1.0"
     description = "Extracts and scores risks from contract documents"
     task_type = AITaskType.COMPLEX_EXTRACTION
+    full_source_analysis = True
     prompt_template_name = None  # Using inline prompt for now
     retry_policy = RetryPolicy(
         max_retries=0,
@@ -258,6 +261,64 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         exponential_backoff=True,
         initial_delay_ms=1000,
     )
+
+    async def execute(
+        self,
+        input_data: RiskExtractionInput,
+        tenant_id: UUID | None = None,
+        low_budget_mode: bool = False,
+        **kwargs: Any,
+    ) -> ToolResult[list[RiskExtractionCandidate]]:
+        """Account for N4 partial billable failures exactly once per tool attempt.
+
+        Reuse the existing tenant-scoped cost controller. A persistence failure
+        remains a FAILED extraction and is explicitly logged; it never makes
+        a partial JSON or risks TRUSTED.
+        """
+        result = await super().execute(
+            input_data,
+            tenant_id=tenant_id,
+            low_budget_mode=low_budget_mode,
+            **kwargs,
+        )
+        if (
+            result.status is ToolStatus.FAILED
+            and result.error_type == "LLMPartialGenerationError"
+            and result.cost_usd > 0
+        ):
+            if tenant_id is None:
+                logger.error(
+                    "n4_partial_billable_usage_unattributed",
+                    extra={"execution_id": result.execution_id, "cost_usd": result.cost_usd},
+                )
+            else:
+                try:
+                    from src.core.ai.cost_controller import CostControllerService
+                    from src.core.database import get_session_with_tenant
+
+                    async with get_session_with_tenant(tenant_id) as session:
+                        await CostControllerService(session).track_usage(
+                            tenant_id,
+                            result.cost_usd,
+                        )
+                    logger.info(
+                        "n4_partial_billable_usage_recorded",
+                        extra={
+                            "execution_id": result.execution_id,
+                            "tenant_id": str(tenant_id),
+                            "cost_usd": result.cost_usd,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "n4_partial_billable_usage_persistence_failed",
+                        extra={
+                            "execution_id": result.execution_id,
+                            "tenant_id": str(tenant_id),
+                            "cost_usd": result.cost_usd,
+                        },
+                    )
+        return result
 
     async def _execute_impl(
         self,
@@ -267,10 +328,8 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
     ) -> list[RiskExtractionCandidate]:
         """Parse AI response and apply domain logic.
 
-        Note: relevance filtering is applied in ``extract_input_from_state``
-        BEFORE the LLM call, not here. Historically the filter ran in this
-        method on a local copy that was immediately discarded, so the LLM
-        always saw the unfiltered text. That was a latent no-op.
+        Full-source graph calls require every generated risk candidate to be
+        normalized or the entire attempt to be marked incomplete.
         """
         _ = tenant_id
 
@@ -278,11 +337,22 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         try:
             payload = json.loads(ai_response.content)
         except json.JSONDecodeError:
-            # Fallback: try to extract JSON from text
+            # A continued response must form one complete JSON document.
+            # Lenient salvage could silently throw away appended risks.
+            if getattr(ai_response, "continuations", 0):
+                raise ValueError("N4 continued response is not one complete JSON document")
             payload = self._extract_json_from_text(ai_response.content)
 
-        # Extract risk items
+        # Extract risk items. A non-dict model item cannot disappear when
+        # converting the JSON array to typed candidates.
         items = self._extract_items(payload)
+        if input_data.strict_completeness and isinstance(payload, dict):
+            raw = payload.get("risks")
+            if isinstance(raw, list) and len(raw) != len(items):
+                raise ValueError(
+                    f"N4 incomplete payload: {len(raw)} model items, "
+                    f"{len(items)} structured candidates"
+                )
 
         # Coerce adapter-local candidates before N4 normalizes the graph contract.
         risks: list[RiskExtractionCandidate] = []
@@ -305,40 +375,40 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             },
         )
 
+        # The model may emit more objects than the normalizer can accept.
+        # A complete-contract extraction must not drop any silently.
+        if input_data.strict_completeness and len(risks) != len(items):
+            raise ValueError(
+                f"N4 incomplete normalization: {len(items)} candidates, {len(risks)} normalized"
+            )
+
         if not risks:
             return []
 
         # Sort by risk score
         risks.sort(key=lambda r: r.risk_score, reverse=True)
 
-        # Apply max_risks limit
-        if len(risks) > input_data.max_risks:
-            risks = risks[: input_data.max_risks]
-
+        # Never discard supported risks just to satisfy a presentation limit.
+        # The UI may paginate the complete result after persistence.
         return risks
 
     def extract_input_from_state(self, state: ProjectState) -> RiskExtractionInput:
         """Extract input from LangGraph state.
 
-        Applies relevance filtering HERE (pre-LLM) so the prompt actually
-        respects the multilingual include/exclude keywords and the
-        ``RISK_EXTRACTION_MAX_CHARS`` cap. The augmentation suffixes
-        (critique_notes, human_feedback) are appended after filtering so
-        they are never stripped — they are always relevant signal.
+        Sends the whole N2-safe source without lexical filtering or character
+        cuts. Feedback and critique remain explicit appendices, not filters.
         """
+        # N2 is the privacy boundary. Preserve its complete model-safe projection;
+        # lexical filters and character caps must never hide contractual clauses.
         doc_text = llm_document_text(state)
-        original_chars = len(doc_text)
-
-        filtered = self._filter_relevant_text(doc_text)
         logger.info(
             "risk_extraction_input_prepared",
             extra={
-                "original_chars": original_chars,
-                "filtered_chars": len(filtered),
-                "delta": original_chars - len(filtered),
+                "original_chars": len(doc_text),
+                "filtered_chars": len(doc_text),
+                "delta": 0,
             },
         )
-        doc_text = filtered
 
         # Augmentation suffixes — keep them OUTSIDE the filter so they
         # always reach the LLM.
@@ -350,8 +420,9 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
 
         return RiskExtractionInput(
             document_text=doc_text,
-            max_risks=20,
-            filter_relevant=True,
+            max_risks=20,  # Deprecated legacy hint: not enforced on extraction
+            filter_relevant=False,
+            strict_completeness=True,
         )
 
     def inject_output_into_state(
@@ -598,59 +669,8 @@ CRITICAL OUTPUT RULES:
         return None
 
     def _filter_relevant_text(self, text: str) -> str:
-        """Filter text to relevant sections for risk extraction.
-
-        Multilingual (ES+EN) keyword include/exclude. Truncation cap is
-        configurable via ``RISK_EXTRACTION_MAX_CHARS`` (default 40,000).
-        Logs structured events when the include filter falls through
-        (no paragraphs matched), so this failure mode is observable.
-        """
-        paragraphs = self._split_paragraphs(text)
-        if not paragraphs:
-            return text.strip()
-
-        selected: list[str] = []
-        for paragraph in paragraphs:
-            lower = _keyword_match_text(paragraph)
-            price_or_bom = any(keyword in lower for keyword in _EXCLUDE_KEYWORDS)
-            substantive_obligation = _PENALTY_OR_DEFAULT_CLAUSE.search(
-                paragraph
-            ) and _OPERATIVE_OBLIGATION.search(paragraph)
-            commercial_narrative = _CONTRACTUAL_BUDGET_NARRATIVE.search(
-                lower
-            ) and not _TABULAR_PRICE_CONTEXT.search(lower)
-            if price_or_bom and not substantive_obligation and not commercial_narrative:
-                continue
-            if any(keyword in lower for keyword in _INCLUDE_KEYWORDS):
-                selected.append(paragraph)
-
-        filter_fell_through = not selected
-        if filter_fell_through:
-            selected = paragraphs
-            logger.info(
-                "risk_extraction_filter_fellthrough",
-                extra={
-                    "paragraphs_total": len(paragraphs),
-                    "doc_chars": len(text),
-                    "reason": "no_include_keyword_match",
-                },
-            )
-
-        combined = "\n\n".join(selected)
-        max_chars = _resolve_max_chars()
-        truncated = self._truncate(combined, max_chars=max_chars)
-        if len(combined) > len(truncated):
-            logger.info(
-                "risk_extraction_filter_truncated",
-                extra={
-                    "original_chars": len(combined),
-                    "truncated_chars": len(truncated),
-                    "dropped_chars": len(combined) - len(truncated),
-                    "max_chars_cap": max_chars,
-                    "filter_fell_through": filter_fell_through,
-                },
-            )
-        return truncated
+        """Deprecated compatibility method. Never prune source text for N4."""
+        return text
 
     def _split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""

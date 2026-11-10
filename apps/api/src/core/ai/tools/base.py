@@ -15,6 +15,7 @@ import structlog
 from pydantic import BaseModel, ValidationError
 
 from src.core.ai.anthropic_wrapper import AIRequest, AIResponse, get_anthropic_wrapper
+from src.core.ai.llm_client import LLMPartialGenerationError
 from src.core.ai.model_router import AITaskType, ModelTier
 from src.core.ai.prompts import get_prompt_manager
 
@@ -65,6 +66,8 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
     # Configuration (can override in subclasses)
     default_model_tier: ModelTier = ModelTier.STANDARD
     timeout_seconds: int = 120
+    # Full-document analysis is an explicit tool capability, not a user prompt.
+    full_source_analysis: bool = False
     retry_policy: RetryPolicy = RetryPolicy()  # type: ignore[call-arg]
     prompt_template_name: str | None = None
     prompt_version: str = "latest"
@@ -187,6 +190,9 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                 error=str(e),
                 error_type=type(e).__name__,
                 latency_ms=round(latency_ms, 2),
+                billable_input_tokens=getattr(e, "input_tokens", 0),
+                billable_output_tokens=getattr(e, "output_tokens", 0),
+                billable_cost_usd=getattr(e, "cost_usd", 0.0),
             )
 
             # Return failed result
@@ -194,10 +200,10 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                 data=None,  # type: ignore
                 status=ToolStatus.FAILED,
                 success=False,
-                model_used="",
-                input_tokens=0,
-                output_tokens=0,
-                cost_usd=0.0,
+                model_used=getattr(e, "model", ""),
+                input_tokens=getattr(e, "input_tokens", 0),
+                output_tokens=getattr(e, "output_tokens", 0),
+                cost_usd=getattr(e, "cost_usd", 0.0),
                 latency_ms=latency_ms,
                 execution_id=execution_id,
                 tool_name=self.name,
@@ -327,7 +333,12 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                     task_type=self.task_type,
                     low_budget_mode=low_budget_mode,
                     tenant_id=tenant_id,
-                    metadata={"execution_id": execution_id, "attempt": attempt},
+                    use_cache=not self.full_source_analysis,
+                    metadata={
+                        "execution_id": execution_id,
+                        "attempt": attempt,
+                        "full_source_analysis": self.full_source_analysis,
+                    },
                 )
 
                 ai_response = await self.anthropic_wrapper.generate(ai_request)
@@ -357,6 +368,10 @@ class BaseTool(ABC, Generic[TInput, TOutput]):
                     retries=retries,
                 )
 
+            except LLMPartialGenerationError:
+                # A billed provider continuation must never become a generic
+                # validation retry or lose its source exception and token usage.
+                raise
             except (ValidationError, ValueError) as e:
                 last_error = e
                 retries += 1

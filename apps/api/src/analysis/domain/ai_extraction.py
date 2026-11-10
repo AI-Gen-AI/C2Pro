@@ -68,9 +68,8 @@ class DocumentTypeClassificationService:
 
 # ── Critique Extraction (N12) ────────────────────────────────────────────────
 
-# Bounded, clearly labeled source context. A clipped excerpt is never proof
-# that a contractual provision does not exist elsewhere in the document.
-_CRITIQUE_MAX_SOURCE_CHARS = 16000
+# N12 receives the entire N2-protected projection. If the provider cannot
+# analyze it, the existing fail-closed behavior requires human review.
 # Only explicitly neutral summaries may accompany an OK verdict. Arbitrary
 # prose can contain an unstructured, unverified defect despite status="OK".
 _NEUTRAL_OK_NOTES = re.compile(
@@ -102,17 +101,15 @@ class CritiqueExtractionService:
         # Extractions are not the source document. Without this evidence the
         # model can invent "corruption" and omitted clauses while sounding certain.
         # Keep the same tenant-scoped AI port as extraction; never fetch another
-        # revision or expand access. The bounded excerpt is explicitly non-exhaustive.
+        # revision or expand access. An unattested source remains UNASSESSED.
         source = (source_text or "").strip()
-        clipped = len(source) > _CRITIQUE_MAX_SOURCE_CHARS
-        excerpt = source[:_CRITIQUE_MAX_SOURCE_CHARS]
+        # N12 must receive the same complete model-safe document projection as
+        # N4. An actual provider context failure remains UNASSESSED via the
+        # exception handler below; never silently clip at 16,000 characters.
+        excerpt = source
         if source:
-            coverage = (
-                "PARTIAL EXCERPT: source longer than context; do not claim absence."
-                if clipped else (
-                    "INPUT NOT CLIPPED BY N12; upstream document completeness "
-                    + ("VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED.")
-                )
+            coverage = "SOURCE PROVIDED IN FULL; upstream original completeness " + (
+                "VERIFIED BY CALLER." if source_complete is True else "NOT VERIFIED."
             )
             evidence = (
                 f"Source coverage: {coverage}\n"
@@ -124,7 +121,11 @@ class CritiqueExtractionService:
                 "missing source clauses, or factual contradictions as verified."
             )
         try:
-            payload = await ai.run_extraction(
+            # Inspect the real adapter type: bare AsyncMock creates arbitrary
+            # callable attributes and would bypass its configured mock result.
+            full_review = getattr(type(ai), "run_full_source_review", None)
+            review = ai.run_full_source_review if callable(full_review) else ai.run_extraction
+            payload = await review(
                 CRITIQUE_SYSTEM_PROMPT,
                 f"Document type: {doc_type}\n{evidence}\nExtraction results: {items}",
             )
@@ -133,9 +134,7 @@ class CritiqueExtractionService:
                 notes = str(payload.get("notes", "")).strip()
                 # Only verify material that the reviewer actually received.
                 # The unseen remainder cannot corroborate a model finding.
-                verified = source_bound_findings(
-                    payload.get("findings"), source_text=excerpt
-                )
+                verified = source_bound_findings(payload.get("findings"), source_text=excerpt)
                 if verified:
                     # A located verbatim quote is *provenance*, not proof of
                     # the model's assertion that an obligation was omitted or
@@ -156,11 +155,6 @@ class CritiqueExtractionService:
                     return CritiqueResult(
                         status="UNASSESSED",
                         notes="N12_UNASSESSED: source unavailable for verification.",
-                    )
-                if clipped:
-                    return CritiqueResult(
-                        status="UNASSESSED",
-                        notes="N12_UNASSESSED: only a partial source excerpt was reviewed.",
                     )
                 if status == "RETRY" or payload.get("findings"):
                     return CritiqueResult(
@@ -214,9 +208,7 @@ class RaciGenerationService:
         ai: AIExtractionPort,
     ) -> list[dict[str, Any]]:
         prompt = (
-            f"{RACI_GENERATION_PROMPT}\n\n"
-            f"Stakeholders: {stakeholders}\n\n"
-            f"WBS Items: {wbs_items}"
+            f"{RACI_GENERATION_PROMPT}\n\nStakeholders: {stakeholders}\n\nWBS Items: {wbs_items}"
         )
         payload = await ai.run_extraction(prompt, "")
         if isinstance(payload, list):
@@ -261,9 +253,7 @@ class BudgetExtractionService:
 
 def _source_sentences(text: str) -> list[str]:
     return [
-        sentence.strip()
-        for sentence in re.split(r"(?<=[.!?])\s+|\n+", text)
-        if sentence.strip()
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+|\n+", text) if sentence.strip()
     ]
 
 

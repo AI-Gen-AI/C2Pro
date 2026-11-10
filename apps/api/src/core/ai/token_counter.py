@@ -77,7 +77,8 @@ MODEL_CONTEXT_LIMITS: dict[str, int] = {
     "claude-opus-4-20250514": 200_000,
     "claude-opus-4-6": 200_000,
     "claude-sonnet-4-20250514": 200_000,
-    "claude-sonnet-4-6": 200_000,
+    "claude-sonnet-4-6": 1_000_000,
+    "claude-opus-4-7": 1_000_000,
     "claude-haiku-4-5": 200_000,
     # Claude 4 models (2025)
     "claude-haiku-4-20250514": 200_000,

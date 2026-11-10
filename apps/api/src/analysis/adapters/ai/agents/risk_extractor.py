@@ -58,8 +58,7 @@ class RiskExtractorAgent(BaseAgent):
         if not text_chunk or not text_chunk.strip():
             return []
 
-        filtered_text = _filter_relevant_text(text_chunk)
-        payload = await self._run_with_retry(RISK_SYSTEM_PROMPT, filtered_text)
+        payload = await self._run_with_retry(RISK_SYSTEM_PROMPT, text_chunk)
         items = _extract_items(payload)
 
         risks: list[RiskExtractionCandidate] = []
@@ -168,59 +167,8 @@ def _normalize_impact(value: Any) -> RiskImpact | None:
 
 
 def _filter_relevant_text(text: str) -> str:
-    paragraphs = _split_paragraphs(text)
-    if not paragraphs:
-        return text.strip()
-
-    include_keywords = (
-        "condiciones particulares",
-        "condiciones especiales",
-        "memoria tecnica",
-        "memoria del proyecto",
-        "alcance",
-        "penal",
-        "multa",
-        "garantia",
-        "responsabilidad",
-        "retraso",
-        "cronograma",
-        "ruta critica",
-        "dependencia",
-        "permisos",
-        "aprobacion",
-        "geotec",
-        "suelo",
-        "seguridad",
-        "ambiental",
-        "calidad",
-        "especificacion",
-        "ensayo",
-        "prueba",
-    )
-    exclude_keywords = (
-        "tabla de precios",
-        "precio unitario",
-        "medicion y pago",
-        "presupuesto",
-        "subtotal",
-        "total",
-        "bill of materials",
-        "bom",
-    )
-
-    selected = []
-    for paragraph in paragraphs:
-        lower = paragraph.lower()
-        if any(keyword in lower for keyword in exclude_keywords):
-            continue
-        if any(keyword in lower for keyword in include_keywords):
-            selected.append(paragraph)
-
-    if not selected:
-        selected = paragraphs
-
-    combined = "\n\n".join(selected)
-    return _truncate(combined, max_chars=15000)
+    """Deprecated compatibility shim; contract data must be supplied in full."""
+    return text
 
 
 def _split_paragraphs(text: str) -> list[str]:

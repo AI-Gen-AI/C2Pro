@@ -77,6 +77,29 @@ CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60.0  # seconds
 # ===========================================
 
 
+class LLMPartialGenerationError(ValueError):
+    """A billed full-source generation failed before complete structured output.
+
+    Preserve measured token/cost facts; never retry the whole contract
+    automatically after a continuation already consumed resources.
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+    ) -> None:
+        super().__init__(reason)
+        self.model = model
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cost_usd = cost_usd
+
+
 class LLMErrorType(StrEnum):
     """Tipos de errores del LLM."""
 
@@ -148,6 +171,7 @@ class LLMResponse:
 
     # Raw response (opcional)
     raw_response: Message | None = None
+    continuations: int = 0
 
 
 @dataclass
@@ -307,14 +331,15 @@ class LLMClient:
 
         # TS-AI-FLASH-001: Check flash cache first
         tenant_id_str = str(request.tenant_id) if request.tenant_id else ""
-        cached_entry = await self.flash_cache.get(
-            model_id=request.model,
-            system_prompt=request.system,
-            messages=request.messages,
-            tools=request.tools,
-            temperature=request.temperature,
-            bypass_cache=request.bypass_cache,
-        )
+        cached_entry = None
+        if not request.bypass_cache:
+            cached_entry = await self.flash_cache.get(
+                model_id=request.model,
+                system_prompt=request.system,
+                messages=request.messages,
+                tools=request.tools,
+                temperature=request.temperature,
+            )
 
         if cached_entry:
             # Cache hit - return cached response
@@ -341,8 +366,9 @@ class LLMClient:
                 cached=True,
             )
 
-        # Cache miss - proceed with normal flow
-        record_ai_cache_miss(tenant_id_str, request.model)
+        # Explicit full-document runs bypass old caches, not a cache miss.
+        if not request.bypass_cache:
+            record_ai_cache_miss(tenant_id_str, request.model)
 
         # Pre-execution token counting and cost estimation
         token_counter = get_token_counter()
@@ -398,19 +424,22 @@ class LLMClient:
                 if request.tools is not None:
                     api_kwargs["tools"] = request.tools
 
-                raw_response = self.client.messages.create(**api_kwargs)
+                (
+                    raw_response,
+                    content,
+                    total_input_tokens,
+                    total_output_tokens,
+                    continuation_count,
+                ) = await asyncio.to_thread(self._complete_provider_generation, api_kwargs, request)
 
                 # Success!
                 execution_time_ms = (time.perf_counter() - start_time) * 1000
 
-                # Extract content
-                content = self._extract_content(raw_response)
-
-                # Calculate cost
+                # Calculate total usage across all streamed continuations.
                 cost_usd = self._calculate_cost(
                     model=request.model,
-                    input_tokens=raw_response.usage.input_tokens,
-                    output_tokens=raw_response.usage.output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
                 )
 
                 # Update statistics
@@ -426,8 +455,8 @@ class LLMClient:
                 input_accuracy = (
                     (
                         1
-                        - abs(raw_response.usage.input_tokens - pre_estimate.input_tokens)
-                        / max(raw_response.usage.input_tokens, 1)
+                        - abs(total_input_tokens - pre_estimate.input_tokens)
+                        / max(total_input_tokens, 1)
                     )
                     * 100
                     if pre_estimate.input_tokens > 0
@@ -439,11 +468,13 @@ class LLMClient:
                     request_id=request.request_id or str(uuid4()),
                     tenant_id=str(request.tenant_id) if request.tenant_id else None,
                     model=request.model,
-                    input_tokens=raw_response.usage.input_tokens,
-                    output_tokens=raw_response.usage.output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
                     cost_usd=cost_usd,
                     execution_time_ms=round(execution_time_ms, 2),
                     retries=attempt,
+                    continuations=continuation_count,
+                    stop_reason=getattr(raw_response, "stop_reason", None),
                     circuit_breaker_state=self.circuit_breaker.state.value
                     if self.circuit_breaker
                     else None,
@@ -454,36 +485,52 @@ class LLMClient:
                 )
 
                 # TS-AI-FLASH-001: Cache the response for future use
-                await self.flash_cache.set(
-                    model_id=request.model,
-                    system_prompt=request.system,
-                    messages=request.messages,
-                    tools=request.tools,
-                    temperature=request.temperature,
-                    content=content,
-                    input_tokens=raw_response.usage.input_tokens,
-                    output_tokens=raw_response.usage.output_tokens,
-                    cost_usd=cost_usd,
-                    execution_time_ms=execution_time_ms,
-                    request_id=request.request_id or str(uuid4()),
-                )
-                record_ai_cache_size(self.flash_cache.size)
+                if not request.bypass_cache:
+                    await self.flash_cache.set(
+                        model_id=request.model,
+                        system_prompt=request.system,
+                        messages=request.messages,
+                        tools=request.tools,
+                        temperature=request.temperature,
+                        content=content,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        cost_usd=cost_usd,
+                        execution_time_ms=execution_time_ms,
+                        request_id=request.request_id or str(uuid4()),
+                    )
+                if not request.bypass_cache:
+                    record_ai_cache_size(self.flash_cache.size)
 
                 return LLMResponse(
                     content=content,
                     model=request.model,
-                    input_tokens=raw_response.usage.input_tokens,
-                    output_tokens=raw_response.usage.output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
                     cost_usd=cost_usd,
                     request_id=request.request_id or str(uuid4()),
                     execution_time_ms=round(execution_time_ms, 2),
                     retries=attempt,
                     raw_response=raw_response,
+                    continuations=continuation_count,
                 )
 
             except Exception as e:
                 last_error = e
                 error_type = self._classify_error(e)
+
+                if isinstance(e, LLMPartialGenerationError):
+                    # A completed partial provider turn is billable even if
+                    # the final JSON is unusable. Never report zero usage.
+                    self.total_cost_usd += e.cost_usd
+                    logger.error(
+                        "llm_full_document_partial_billed",
+                        request_id=request.request_id,
+                        model=e.model,
+                        input_tokens=e.input_tokens,
+                        output_tokens=e.output_tokens,
+                        cost_usd=e.cost_usd,
+                    )
 
                 logger.warning(
                     "llm_request_attempt_failed",
@@ -500,6 +547,13 @@ class LLMClient:
                 # Check if we should retry
                 if attempt >= self.max_retries:
                     break  # No more retries
+
+                # A full-source provider call may already have billed work even
+                # if its stream disconnects. Never replay it automatically.
+                if (request.metadata or {}).get("full_source_analysis"):
+                    break
+                if isinstance(e, LLMPartialGenerationError):
+                    break
 
                 if not self._should_retry(error_type, e):
                     logger.error(
@@ -566,12 +620,158 @@ class LLMClient:
     # HELPER METHODS
     # ===========================================
 
+    def _provider_message(self, api_kwargs: dict[str, Any]) -> Message:
+        """Use SSE for high-capacity generations (SDK HTTP timeout requirement)."""
+        if int(api_kwargs["max_tokens"]) > 20_000:
+            with self.client.messages.stream(**api_kwargs) as stream:
+                return stream.get_final_message()
+        return self.client.messages.create(**api_kwargs)
+
+    def _partial_generation_error(
+        self,
+        request: LLMRequest,
+        reason: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> LLMPartialGenerationError:
+        return LLMPartialGenerationError(
+            reason,
+            model=request.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=self._calculate_cost(
+                model=request.model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            ),
+        )
+
+    def _complete_provider_generation(
+        self,
+        api_kwargs: dict[str, Any],
+        request: LLMRequest,
+    ) -> tuple[Message, str, int, int, int]:
+        """Continue a full-document response without dropping prior output.
+
+        Continuations are provider-bound, not an arbitrary contract-content cap.
+        All fragments are parsed together only after an explicit end_turn.
+        When the provider cannot finish, the caller fails closed and never caches
+        or stores a partial extraction as a successful one.
+        """
+        full_source = bool((request.metadata or {}).get("full_source_analysis"))
+        original_messages = list(api_kwargs["messages"])
+        fragments: list[str] = []
+        input_tokens = 0
+        output_tokens = 0
+        continuations = 0
+
+        while True:
+            try:
+                response = self._provider_message(api_kwargs)
+            except Exception as exc:
+                if input_tokens or output_tokens:
+                    raise self._partial_generation_error(
+                        request,
+                        "LLM continuation failed after billable response",
+                        input_tokens,
+                        output_tokens,
+                    ) from exc
+                raise
+            stop = getattr(response, "stop_reason", None)
+            if stop == "max_tokens" and not full_source:
+                raise ValueError("LLM output incomplete: stop_reason=max_tokens")
+            if full_source and stop not in {"max_tokens", "end_turn"}:
+                if getattr(response, "usage", None):
+                    input_tokens += response.usage.input_tokens
+                    output_tokens += response.usage.output_tokens
+                raise self._partial_generation_error(
+                    request,
+                    f"Full-document generation incomplete: stop_reason={stop}",
+                    input_tokens,
+                    output_tokens,
+                )
+            if stop in {"max_tokens", "end_turn"}:
+                usage = response.usage
+                input_tokens += usage.input_tokens
+                output_tokens += usage.output_tokens
+                part = self._extract_content(response)
+            else:
+                # Non-exhaustive legacy tool calling still receives its original
+                # response; we never reinterpret tool-use or refusals as text.
+                return (
+                    response,
+                    self._extract_content(response),
+                    (response.usage.input_tokens),
+                    response.usage.output_tokens,
+                    0,
+                )
+
+            if stop == "end_turn":
+                return (
+                    response,
+                    "".join(fragments) + part,
+                    input_tokens,
+                    output_tokens,
+                    continuations,
+                )
+
+            if not part:
+                raise self._partial_generation_error(
+                    request,
+                    "LLM output incomplete: empty continuation fragment",
+                    input_tokens,
+                    output_tokens,
+                )
+            fragments.append(part)
+            continuations += 1
+
+            # True provider capacity, not a keyword/paragraph/content cap.
+            # If the conversation cannot accommodate the completed generation,
+            # report the incomplete result instead of silently accepting it.
+            from src.core.ai.model_capabilities import full_document_capacity
+
+            context_cap, _ = full_document_capacity(request.model)
+            if response.usage.input_tokens + response.usage.output_tokens >= context_cap:
+                raise self._partial_generation_error(
+                    request,
+                    "LLM output incomplete: provider context exhausted",
+                    input_tokens,
+                    output_tokens,
+                )
+
+            assembled = "".join(fragments)
+            api_kwargs = {
+                **api_kwargs,
+                "messages": [
+                    *original_messages,
+                    {"role": "assistant", "content": assembled},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Continue exactly from the final character of your previous "
+                            "JSON response. Do not restart, repeat, omit, or add Markdown. "
+                            "Finish the same JSON object containing every required item."
+                        ),
+                    },
+                ],
+            }
+            logger.warning(
+                "llm_full_document_continuation",
+                request_id=request.request_id,
+                model=request.model,
+                continuation=continuations,
+                generated_output_tokens=output_tokens,
+                # Estimated billed usage; no source text is logged.
+                estimated_cost_usd=self._calculate_cost(
+                    model=request.model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                ),
+            )
+
     def _extract_content(self, message: Message) -> str:
         """Extrae contenido de texto de la respuesta."""
-        for block in message.content:
-            if hasattr(block, "text"):
-                return block.text
-        return ""
+        return "".join(block.text for block in message.content if hasattr(block, "text"))
 
     @staticmethod
     def _error_chain(error: Exception) -> list[Exception]:

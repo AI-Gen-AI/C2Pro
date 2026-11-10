@@ -1,4 +1,4 @@
-"""Unit tests for the risk_extraction filter — multilingual + tunable.
+"""N4 regression tests: whole-document source must reach the model intact.
 
 Refers to Suite ID: TS-UA-ANA-GRAPH-001.
 
@@ -118,13 +118,13 @@ class TestExtractInputAppliesFilter:
     document. This test ensures that mistake cannot return silently.
     """
 
-    def test_filter_runs_before_llm(self, tool: RiskExtractionTool) -> None:
+    def test_whole_document_reaches_llm(self, tool: RiskExtractionTool) -> None:
         en_text = "\n\n".join(_EPC_EN_PARAGRAPHS)
         state = {"document_text": en_text}
         input_data = tool.extract_input_from_state(state)  # type: ignore[arg-type]
 
-        # BOM paragraph must have been stripped — confirms filter actually ran.
-        assert "Bill of Materials" not in input_data.document_text
+        # Tabular and narrative text must both be available to the model.
+        assert "Bill of Materials" in input_data.document_text
         # LEGAL paragraph must survive.
         assert "default or breach" in input_data.document_text
 
@@ -165,11 +165,11 @@ class TestFilterEnglish:
         assert "Effective Date" in out
         assert "warranty certificate" in out
 
-    def test_english_bom_paragraph_excluded(self, tool: RiskExtractionTool) -> None:
+    def test_english_bom_paragraph_preserved(self, tool: RiskExtractionTool) -> None:
         text = "\n\n".join(_EPC_EN_PARAGRAPHS)
         out = tool._filter_relevant_text(text)
         # Excluded by "bill of materials"
-        assert "Bill of Materials" not in out
+        assert "Bill of Materials" in out
 
     def test_english_filter_does_not_fall_through(
         self, tool: RiskExtractionTool, caplog: pytest.LogCaptureFixture
@@ -195,12 +195,12 @@ class TestFilterSpanish:
         assert "garantia y multa" in out
         assert "ruta critica" in out
 
-    def test_spanish_price_table_excluded(
+    def test_spanish_price_table_preserved(
         self, tool: RiskExtractionTool
     ) -> None:
         text = "\n\n".join(_EPC_ES_PARAGRAPHS)
         out = tool._filter_relevant_text(text)
-        assert "Tabla de precios" not in out
+        assert "Tabla de precios" in out
 
 
 # ---------------------------------------------------------------------------
@@ -209,14 +209,14 @@ class TestFilterSpanish:
 
 
 class TestFilterFallthroughObservability:
-    def test_fallthrough_emits_structured_log(
+    def test_no_fallthrough_log_for_unfiltered_input(
         self, tool: RiskExtractionTool, caplog: pytest.LogCaptureFixture
     ) -> None:
         text = "\n\nIrrelevant boilerplate paragraph one.\n\nIrrelevant boilerplate paragraph two.\n\n"
         with caplog.at_level("INFO"):
             tool._filter_relevant_text(text)
         events = [r for r in caplog.records if r.message == "risk_extraction_filter_fellthrough"]
-        assert len(events) == 1
+        assert len(events) == 0
 
     def test_fallthrough_still_returns_text(
         self, tool: RiskExtractionTool
@@ -266,7 +266,7 @@ class TestMaxCharsResolution:
 
 
 class TestTruncationBehavior:
-    """The new default 40k cap should keep modest contracts intact."""
+    """Legacy cap settings cannot truncate source data before the LLM."""
 
     def test_24k_contract_not_truncated_at_default(
         self,
@@ -289,7 +289,7 @@ class TestTruncationBehavior:
         # No truncation should have occurred at the 40k default.
         assert len(out) >= len(text) - 10  # allow tiny join overhead
 
-    def test_env_var_can_cap_smaller(
+    def test_env_var_cannot_cap_source(
         self,
         tool: RiskExtractionTool,
         monkeypatch: pytest.MonkeyPatch,
@@ -299,7 +299,7 @@ class TestTruncationBehavior:
         paragraphs = [body + f" Paragraph {i}." for i in range(10)]
         text = "\n\n".join(paragraphs)
         out = tool._filter_relevant_text(text)
-        assert len(out) <= 5_000
+        assert out == text
 
 
 # ---------------------------------------------------------------------------
@@ -382,10 +382,10 @@ def test_n4_does_not_treat_a_penalty_table_line_as_an_operative_contract_clause(
         "document_text": table + "\n\n" + obligation
     })  # type: ignore[arg-type]
     assert obligation in result.document_text
-    assert table not in result.document_text
+    assert table in result.document_text
 
 
-def test_n4_still_excludes_pure_price_tables_even_with_schedule_labels(
+def test_n4_includes_price_tables_with_schedule_labels(
     tool: RiskExtractionTool,
 ) -> None:
     table_es = "Tabla de precios unitarios del presupuesto: línea 2 cableado 17,50 EUR."
@@ -398,8 +398,8 @@ def test_n4_still_excludes_pure_price_tables_even_with_schedule_labels(
         "document_text": "\n\n".join((table_es, table_en, risk))
     })  # type: ignore[arg-type]
     assert risk in result.document_text
-    assert table_es not in result.document_text
-    assert table_en not in result.document_text
+    assert table_es in result.document_text
+    assert table_en in result.document_text
 
 
 @pytest.mark.parametrize(
@@ -429,7 +429,7 @@ def test_n4_spanish_accented_obligations_are_not_lost_before_ai(
     assert other in result.document_text
 
 
-def test_n4_spanish_accented_measurement_and_payment_table_stays_excluded(
+def test_n4_spanish_accented_measurement_and_payment_table_is_read(
     tool: RiskExtractionTool,
 ) -> None:
     table = "Medición y pago: tabla de calidad y cronograma de mediciones."
@@ -438,4 +438,4 @@ def test_n4_spanish_accented_measurement_and_payment_table_stays_excluded(
         "document_text": table + "\n\n" + risk,
     })  # type: ignore[arg-type]
     assert risk in result.document_text
-    assert table not in result.document_text
+    assert table in result.document_text

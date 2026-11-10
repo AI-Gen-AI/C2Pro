@@ -216,10 +216,10 @@ class TestFilterRelevantText:
         result = _filter_relevant_text(text)
         assert "condiciones particulares" in result
 
-    def test_excludes_price_table(self) -> None:
+    def test_preserves_price_table(self) -> None:
         text = "tabla de precios unitarios\n\ncondiciones especiales del contrato"
         result = _filter_relevant_text(text)
-        assert "tabla de precios" not in result
+        assert "tabla de precios" in result
         assert "condiciones especiales" in result
 
     def test_no_relevant_returns_all(self) -> None:

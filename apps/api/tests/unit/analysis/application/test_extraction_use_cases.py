@@ -371,13 +371,13 @@ async def test_critique_receives_original_clause_source_before_asserting_corrupt
     prompt, content = ai.calls[0]
     assert "do not claim source text is corrupted" in prompt.lower()
     assert "Contractor's cost within fourteen (14) days" in content
-    assert "INPUT NOT CLIPPED BY N12" in content
+    assert "SOURCE PROVIDED IN FULL" in content
     assert "Extraction results" in content
 
 
 @pytest.mark.asyncio
-async def test_critique_absent_or_truncated_source_is_explicitly_unverified() -> None:
-    """An excerpt is never evidence that a missing clause does not exist."""
+async def test_critique_absent_or_unattested_source_is_explicitly_unverified() -> None:
+    """Complete N12 input still cannot prove upstream parsing completeness."""
     ai = _FakeAI(payload={"status": "RETRY", "notes": "source incomplete"})
     uc = CritiqueExtractionUseCase(ai=ai)
     common = {
@@ -397,8 +397,9 @@ async def test_critique_absent_or_truncated_source_is_explicitly_unverified() ->
             source_text=("Clause 1.1 ordinary contract text. " * 600) + "END_SENTINEL",
         )
     )
-    assert "PARTIAL EXCERPT" in ai.calls[1][1]
-    assert "END_SENTINEL" not in ai.calls[1][1]
+    assert "SOURCE PROVIDED IN FULL" in ai.calls[1][1]
+    assert "NOT VERIFIED" in ai.calls[1][1]
+    assert "END_SENTINEL" in ai.calls[1][1]
 
 
 # ACC-01: source-backed semantic contradictions are quality blockers, not a

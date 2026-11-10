@@ -145,6 +145,7 @@ class AIResponse:
 
     # Raw response (opcional)
     raw_response: Any | None = None
+    continuations: int = 0
 
     @property
     def usage(self) -> dict[str, int]:
@@ -322,9 +323,22 @@ class AnthropicWrapper:
             force_tier=request.force_model_tier,
         )
 
-        max_tokens = request.max_tokens or model_config.max_tokens
-        if self.max_tokens_limit is not None:
-            max_tokens = min(max_tokens, self.max_tokens_limit)
+        full_source = bool(request.metadata.get("full_source_analysis"))
+        if full_source:
+            from src.core.ai.model_capabilities import full_document_capacity
+
+            context_cap, max_tokens = full_document_capacity(model_config.name)
+            logger.info(
+                "full_document_capacity_selected",
+                request_id=request.request_id,
+                model=model_config.name,
+                context_tokens=context_cap,
+                output_tokens=max_tokens,
+            )
+        else:
+            max_tokens = request.max_tokens or model_config.max_tokens
+            if self.max_tokens_limit is not None:
+                max_tokens = min(max_tokens, self.max_tokens_limit)
 
         logger.info(
             "model_selected",
@@ -341,9 +355,7 @@ class AnthropicWrapper:
 
         cache_key = None
         cache_allowed = (
-            request.use_cache
-            and self.cache_service is not None
-            and request.tenant_id is not None
+            request.use_cache and self.cache_service is not None and request.tenant_id is not None
         )
         if request.use_cache and self.cache_service is not None and request.tenant_id is None:
             logger.warning(
@@ -409,6 +421,7 @@ class AnthropicWrapper:
             tenant_id=request.tenant_id,
             task_type=request.task_type.value,  # type: ignore[union-attr]
             metadata=request.metadata,
+            bypass_cache=full_source or not request.use_cache,
         )
 
         try:
@@ -486,6 +499,7 @@ class AnthropicWrapper:
             request_id=request.request_id,
             task_type=request.task_type.value,  # type: ignore[union-attr]
             raw_response=llm_response.raw_response,
+            continuations=llm_response.continuations,
         )
 
     async def generate_structured(self, request: AIRequest, schema: type[_T]) -> _T:
