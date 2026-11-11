@@ -112,9 +112,12 @@ jobs:
           exit 1
       - name: Setup web environment
         uses: ./.github/actions/setup-node-web
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium (without apt mirror refresh)
         working-directory: apps/web
-        run: ./node_modules/.bin/playwright install --with-deps chromium
+        # ubuntu-latest already includes the Chromium runtime libraries; installing
+        # additional optional fonts via apt can fail on transient Ubuntu mirror DNS.
+        # The actual browser launch in the next step still verifies runtime deps.
+        run: ./node_modules/.bin/playwright install chromium
       - name: Run REAL Clerk sign-out + NEW context + sign-in
         id: clerk_journey
         working-directory: apps/web
