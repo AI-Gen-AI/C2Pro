@@ -9,6 +9,12 @@ on:
       - .github/workflows/acc01-s7-clerk-uat.yml
       - apps/web/src/tests/e2e/s7-clerk-relogin.spec.ts
   workflow_dispatch:
+    inputs:
+      pilot_readonly_auth:
+        description: 'G1 only: Clerk Development A/B authenticated GETs to Railway PILOT, no mutation'
+        required: false
+        type: boolean
+        default: false
 concurrency:
   group: acc01-s7-clerk-uat-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +22,7 @@ permissions:
   contents: read
 jobs:
   s7-clerk:
+    if: github.event_name != 'workflow_dispatch' || inputs.pilot_readonly_auth != true
     name: Real Clerk re-login + PostgreSQL S7 triple link (synthetic source seed)
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -156,3 +163,47 @@ jobs:
         run: |
           if test -f "$RUNNER_TEMP/s7-worker.pid"; then kill "$(cat "$RUNNER_TEMP/s7-worker.pid")" || true; fi
           docker compose -f docker-compose.test.yml down -v
+
+  pilot-clerk-readonly:
+    # Manual opt-in only. No PostgreSQL, Redis, seeds, approval writes, AI, or CI artifacts.
+    if: github.event_name == 'workflow_dispatch' && inputs.pilot_readonly_auth == true
+    name: Railway PILOT - Clerk A/B authenticated GET-only smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact test SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup Node and web dependencies without Clerk secrets
+        uses: ./.github/actions/setup-node-web
+      - name: Install Chromium without apt mirror dependency
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install chromium
+      - name: Authenticated GET-only probe against pinned Railway PILOT
+        working-directory: apps/web
+        env:
+          C2PRO_PILOT_READONLY_PROBE: '1'
+          PILOT_API_URL: https://projectgraph-api-pilot.up.railway.app
+          PLAYWRIGHT_BASE_URL: http://localhost:3100
+          # Local Next.js is for Clerk login ONLY: any automatic app calls are loopback.
+          BACKEND_URL: http://127.0.0.1:9
+          NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:9
+          NEXT_PUBLIC_API_URL: /api
+          ENVIRONMENT: test
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+          INTEGRAL_CLERK_DEV_B_EMAIL: ${{ secrets.INTEGRAL_CLERK_DEV_B_EMAIL || vars.INTEGRAL_CLERK_DEV_B_EMAIL }}
+          E2E_CLERK_USER_EMAIL: ${{ secrets.E2E_CLERK_USER_EMAIL || vars.E2E_CLERK_USER_EMAIL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$PILOT_API_URL" = "https://projectgraph-api-pilot.up.railway.app"
+          [[ "$CLERK_SECRET_KEY" == sk_test_* ]] || { echo '::error::Clerk DEVELOPMENT key required'; exit 2; }
+          [[ "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" == pk_test_* ]] || { echo '::error::Clerk DEVELOPMENT publishable key required'; exit 2; }
+          test -n "$INTEGRAL_CLERK_DEV_B_EMAIL" || { echo '::error::Clerk DEV B identity missing'; exit 2; }
+          ./node_modules/.bin/playwright test --project=pilot-clerk-readonly --workers=1 --reporter=list

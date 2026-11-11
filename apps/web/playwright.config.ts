@@ -66,6 +66,8 @@ export default defineConfig({
         // Opt-in real-AI vertical (own project, manual job only: it spends a provider budget).
         /(^|[\\/])real-ai-hitl-vertical\.spec\.ts$/,
         /(^|[\\/])owner-session-plumbing\.spec\.ts$/,
+        // Pilot probe is opt-in and must never run in the default authenticated suite.
+        /(^|[\\/])pilot-clerk-readonly\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -162,6 +164,15 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], actionTimeout: 90_000, navigationTimeout: 120_000 },
       dependencies: ["global-setup"],
       metadata: { suite: "TS-E2E-OWNER-SESSION-PLUMBING-001", type: "e2e", priority: "p1" },
+    },
+    {
+      // G1 PILOT: read-only Clerk A/B against a deployed Railway API, no HITL writes.
+      // It is NOT part of an ordinary UI suite, isolated S7 fixture, or UAT sign-off.
+      name: "pilot-clerk-readonly",
+      testMatch: [/(^|[\\/])pilot-clerk-readonly\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"], trace: "off", screenshot: "off", video: "off" },
+      dependencies: ["global-setup"],
+      metadata: { suite: "C2PRO-G1-PILOT-READONLY", type: "integration-probe" },
     },
     {
       // Self-test of the integral runner's findings-panel wait: static pages only (no Clerk, no backend). Explicit-only.
