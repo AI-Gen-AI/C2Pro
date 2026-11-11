@@ -239,7 +239,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   const readyForFinalApproval = Boolean(
     !query.isFetching &&
     !record.isPending &&
-    query.data?.findings.length &&
+    query.data &&
     query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
   );
   useEffect(() => {
