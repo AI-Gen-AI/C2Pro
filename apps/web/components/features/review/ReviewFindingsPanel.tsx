@@ -11,7 +11,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +28,8 @@ import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDe
 import { reviewFindingsKey } from "./useReviewCapabilities";
 
 const ACTION_LABEL: Record<FindingDecisionAction, string> = {
-  CONFIRMED: "Confirm",
-  DISMISSED: "Dismiss",
+  CONFIRMED: "Approve finding",
+  DISMISSED: "Reject finding",
   NEEDS_INFO: "Needs info",
   CORRECTION_PROPOSED: "Propose correction",
 };
@@ -134,7 +134,7 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
   );
 }
 
-export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
+export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { reviewRowId: string; onReadinessChange?: (ready: boolean) => void }) {
   const { orgId, userId, isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const queryKey = reviewFindingsKey(orgId, userId, reviewRowId);
@@ -201,8 +201,28 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
     },
   });
 
-  if (query.isLoading) return null;
-  if (query.isError || !query.data) return null; // not a candidate-bound analysis review: nothing to decide here
+  // Fail closed while loading, refreshing, or when a finding has no CONFIRMED decision.
+  // The backend independently reconciles the exact ledger before any final promotion.
+  const readyForFinalApproval = Boolean(
+    !query.isFetching &&
+    query.data?.findings.length &&
+    query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
+  );
+  useEffect(() => {
+    onReadinessChange?.(readyForFinalApproval);
+  }, [readyForFinalApproval, onReadinessChange]);
+
+  if (!isLoaded || !userId || query.isLoading) {
+    return <p className="mt-3 text-sm text-muted-foreground" role="status" data-testid={`review-findings-loading-${reviewRowId}`}>Loading individual findings before final approval…</p>;
+  }
+  if (query.isError || !query.data) {
+    return (
+      <div className="mt-3 rounded border border-destructive/40 p-3 text-sm" role="alert" data-testid={`review-findings-error-${reviewRowId}`}>
+        <p>Individual findings could not be loaded for this review. Final approval is unavailable until they can be checked.</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={() => void query.refetch()}>Retry loading findings</Button>
+      </div>
+    );
+  }
   const view = query.data;
   // A DISMISSED / CORRECTION_PROPOSED decision cannot be approved "as is": it calls for the derived candidate Vn+1.
   const needsDerivation = view.findings.some(
@@ -219,8 +239,12 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
         {view.findings.length} finding{view.findings.length === 1 ? "" : "s"} in this analysis
       </p>
       <p className="mt-1 text-xs text-muted-foreground" data-testid={`review-findings-scope-${reviewRowId}`}>
-        Decisions here are provisional notes by you. They do not approve, reject or trust the analysis: that remains the
-        separate Approve / Reject decision.
+        Review every risk separately. Decisions here are provisional notes by you. They do not approve, reject or trust the analysis: that remains the
+        separate final Approve all / Reject decision at the bottom. Approving a finding does not mean accepting the project risk.
+      </p>
+      <p className="mt-2 text-xs font-medium" role="status" data-testid={`review-findings-progress-${reviewRowId}`}>
+        {view.findings.filter((finding) => finding.current?.action === "CONFIRMED").length}/{view.findings.length} findings approved individually.
+        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked until every finding is confirmed; rejected findings require a corrected candidate."}
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
@@ -275,7 +299,7 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
               <p className="mt-2 text-sm" data-testid={`finding-action-summary-${finding.ordinal}`}>
                 <span className="font-medium">Suggested action: </span>
                 {typeof suggestion === "string"
-                  ? suggestion
+                  ? shortAnalysis(suggestion)
                   : "No specific mitigation supplied. Verify the contractual basis before deciding."}
               </p>
               {conflict ? (
@@ -291,6 +315,11 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                   <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
                     <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
                     {String(finding.risk.description)}
+                  </p>
+                ) : null}
+                {typeof suggestion === "string" && shortAnalysis(suggestion) !== suggestion.trim() ? (
+                  <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-action-detail-${finding.ordinal}`}>
+                    <span className="font-medium">Full suggested action: </span>{suggestion}
                   </p>
                 ) : null}
                 <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
