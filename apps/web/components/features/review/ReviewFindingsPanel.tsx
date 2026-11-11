@@ -11,7 +11,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +28,8 @@ import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDe
 import { reviewFindingsKey } from "./useReviewCapabilities";
 
 const ACTION_LABEL: Record<FindingDecisionAction, string> = {
-  CONFIRMED: "Confirm",
-  DISMISSED: "Dismiss",
+  CONFIRMED: "Approve finding",
+  DISMISSED: "Reject finding",
   NEEDS_INFO: "Needs info",
   CORRECTION_PROPOSED: "Propose correction",
 };
@@ -100,6 +100,11 @@ function newKey(): string {
 }
 
 type Draft = { action: FindingDecisionAction; reason: string; proposedText: string; key: string };
+type PendingSubmission = {
+  view: ReviewFindingsResponse;
+  finding: ReviewFindingResponse;
+  draft: Draft;
+};
 
 /**
  * Where in the contract a finding comes from, kept apart from the generated description above it: the clause label the analysis
@@ -134,7 +139,7 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
   );
 }
 
-export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
+export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { reviewRowId: string; onReadinessChange?: (ready: boolean) => void }) {
   const { orgId, userId, isLoaded } = useAuth();
   const queryClient = useQueryClient();
   const queryKey = reviewFindingsKey(orgId, userId, reviewRowId);
@@ -148,6 +153,16 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
   // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
   const mayReview = query.data?.capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
+  // Unknown outcomes must be retried with the exact same body (including CAS pins).
+  // A definitive conflict, identity switch, or explicit action change starts a new operation.
+  const pendingConfirmations = useRef<Record<number, PendingSubmission | undefined>>({});
+  const pendingDraftSubmissions = useRef<Record<number, PendingSubmission | undefined>>({});
+  useEffect(() => {
+    pendingConfirmations.current = {};
+    pendingDraftSubmissions.current = {};
+    setDrafts({});
+    setRefusal(null);
+  }, [reviewRowId, orgId, userId]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmingDerive, setConfirmingDerive] = useState(false);
   const [derived, setDerived] = useState<DerivedCandidateResponse | null>(null);
@@ -191,18 +206,61 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
         proposed_text: draft.action === "CORRECTION_PROPOSED" ? draft.proposedText.trim() : null,
       }),
     onSuccess: (_receipt, { finding }) => {
+      delete pendingConfirmations.current[finding.ordinal];
+      delete pendingDraftSubmissions.current[finding.ordinal];
       setRefusal(null);
       setDrafts((current) => ({ ...current, [finding.ordinal]: undefined }));
       void queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error) => {
+    onError: (error, { finding }) => {
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { detail?: { code?: string } } | undefined)?.detail
+        : undefined;
+      // These explicit server rejections establish that the old candidate/CAS cannot be
+      // replayed. An ambiguous timeout must retain its original request for safe retry.
+      if (detail?.code && [
+        "stale_ledger_revision", "stale_or_unbound_candidate",
+        "idempotency_conflict", "ledger_guard_refused",
+      ].includes(detail.code)) {
+        delete pendingConfirmations.current[finding.ordinal];
+        delete pendingDraftSubmissions.current[finding.ordinal];
+        setDrafts((current) => {
+          const previous = current[finding.ordinal];
+          return previous ? { ...current, [finding.ordinal]: { ...previous, key: newKey() } } : current;
+        });
+      }
       setRefusal(refusalFrom(error));
       void queryClient.invalidateQueries({ queryKey });
     },
   });
 
-  if (query.isLoading) return null;
-  if (query.isError || !query.data) return null; // not a candidate-bound analysis review: nothing to decide here
+  // Fail closed while loading, refreshing, or when a finding has no CONFIRMED decision.
+  // The backend independently reconciles the exact ledger before any final promotion.
+  const readyForFinalApproval = Boolean(
+    isLoaded &&
+    userId &&
+    query.isSuccess &&
+    !query.isError &&
+    !query.isFetching &&
+    !record.isPending &&
+    query.data &&
+    query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
+  );
+  useEffect(() => {
+    onReadinessChange?.(readyForFinalApproval);
+  }, [readyForFinalApproval, onReadinessChange]);
+
+  if (!isLoaded || !userId || query.isLoading) {
+    return <p className="mt-3 text-sm text-muted-foreground" role="status" data-testid={`review-findings-loading-${reviewRowId}`}>Loading individual findings before final approval…</p>;
+  }
+  if (query.isError || !query.data) {
+    return (
+      <div className="mt-3 rounded border border-destructive/40 p-3 text-sm" role="alert" data-testid={`review-findings-error-${reviewRowId}`}>
+        <p>Individual findings could not be loaded for this review. Final approval is unavailable until they can be checked.</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={() => void query.refetch()}>Retry loading findings</Button>
+      </div>
+    );
+  }
   const view = query.data;
   // A DISMISSED / CORRECTION_PROPOSED decision cannot be approved "as is": it calls for the derived candidate Vn+1.
   const needsDerivation = view.findings.some(
@@ -219,8 +277,12 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
         {view.findings.length} finding{view.findings.length === 1 ? "" : "s"} in this analysis
       </p>
       <p className="mt-1 text-xs text-muted-foreground" data-testid={`review-findings-scope-${reviewRowId}`}>
-        Decisions here are provisional notes by you. They do not approve, reject or trust the analysis: that remains the
-        separate Approve / Reject decision.
+        Review every risk separately. Decisions here are provisional notes by you. They do not approve, reject or trust the analysis: that remains the
+        separate final Approve all / Reject decision at the bottom. Approving a finding does not mean accepting the project risk.
+      </p>
+      <p className="mt-2 text-xs font-medium" role="status" data-testid={`review-findings-progress-${reviewRowId}`}>
+        {view.findings.filter((finding) => finding.current?.action === "CONFIRMED").length}/{view.findings.length} findings approved individually.
+        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked until every finding is confirmed; rejected findings require a corrected candidate."}
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
@@ -275,7 +337,7 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
               <p className="mt-2 text-sm" data-testid={`finding-action-summary-${finding.ordinal}`}>
                 <span className="font-medium">Suggested action: </span>
                 {typeof suggestion === "string"
-                  ? suggestion
+                  ? shortAnalysis(suggestion)
                   : "No specific mitigation supplied. Verify the contractual basis before deciding."}
               </p>
               {conflict ? (
@@ -291,6 +353,11 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                   <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
                     <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
                     {String(finding.risk.description)}
+                  </p>
+                ) : null}
+                {typeof suggestion === "string" && shortAnalysis(suggestion) !== suggestion.trim() ? (
+                  <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-action-detail-${finding.ordinal}`}>
+                    <span className="font-medium">Full suggested action: </span>{suggestion}
                   </p>
                 ) : null}
                 <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
@@ -318,12 +385,23 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
-                        record.mutate({
-                          view,
-                          finding,
-                          draft: { action, reason: "", proposedText: "", key: newKey() },
-                        });
+                        const previous = pendingConfirmations.current[finding.ordinal];
+                        // The same revision may have been refreshed after a lost response.
+                        // Replay the exact original request; clear only on success or a
+                        // definitive conflict response from the server.
+                        const attempt: { view: ReviewFindingsResponse; finding: ReviewFindingResponse; draft: Draft } = previous &&
+                          previous.view.review_row_id === reviewRowId &&
+                          previous.view.artifact_id === view.artifact_id &&
+                          previous.view.artifact_version === view.artifact_version &&
+                          previous.view.artifact_hash === view.artifact_hash &&
+                          previous.view.document_revision_id === view.document_revision_id
+                          ? previous
+                          : { view, finding, draft: { action, reason: "", proposedText: "", key: newKey() } };
+                        pendingConfirmations.current[finding.ordinal] = attempt;
+                        record.mutate(attempt);
                       } else {
+                        delete pendingConfirmations.current[finding.ordinal];
+                        delete pendingDraftSubmissions.current[finding.ordinal];
                         setDrafts((current) => ({
                           ...current,
                           [finding.ordinal]: { action, reason: "", proposedText: "", key: newKey() },
@@ -346,9 +424,19 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                     className="w-full rounded border bg-background p-2"
                     rows={2}
                     value={draft.reason}
-                    onChange={(event) =>
-                      setDrafts((current) => ({ ...current, [finding.ordinal]: { ...draft, reason: event.target.value } }))
-                    }
+                    disabled={record.isPending}
+                    onChange={(event) => {
+                      const wasPending = Boolean(pendingDraftSubmissions.current[finding.ordinal]);
+                      delete pendingDraftSubmissions.current[finding.ordinal];
+                      setDrafts((current) => ({
+                        ...current,
+                        [finding.ordinal]: {
+                          ...draft,
+                          reason: event.target.value,
+                          key: wasPending ? newKey() : draft.key,
+                        },
+                      }));
+                    }}
                   />
                   {draft.action === "CORRECTION_PROPOSED" ? (
                     <>
@@ -361,12 +449,19 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                         className="w-full rounded border bg-background p-2"
                         rows={2}
                         value={draft.proposedText}
-                        onChange={(event) =>
+                        disabled={record.isPending}
+                        onChange={(event) => {
+                          const wasPending = Boolean(pendingDraftSubmissions.current[finding.ordinal]);
+                          delete pendingDraftSubmissions.current[finding.ordinal];
                           setDrafts((current) => ({
                             ...current,
-                            [finding.ordinal]: { ...draft, proposedText: event.target.value },
-                          }))
-                        }
+                            [finding.ordinal]: {
+                              ...draft,
+                              proposedText: event.target.value,
+                              key: wasPending ? newKey() : draft.key,
+                            },
+                          }));
+                        }}
                       />
                     </>
                   ) : null}
@@ -374,7 +469,20 @@ export function ReviewFindingsPanel({ reviewRowId }: { reviewRowId: string }) {
                     size="sm"
                     disabled={!valid || record.isPending}
                     data-testid={`finding-submit-${finding.ordinal}`}
-                    onClick={() => record.mutate({ view, finding, draft })}
+                    onClick={() => {
+                      // A background refetch may have advanced the visible ledger after an
+                      // ambiguous response. Replaying with new CAS but old key is invalid.
+                      const previous = pendingDraftSubmissions.current[finding.ordinal];
+                      const attempt: PendingSubmission = previous &&
+                        previous.view.review_row_id === reviewRowId &&
+                        previous.draft.key === draft.key &&
+                        previous.draft.action === draft.action &&
+                        previous.draft.reason === draft.reason &&
+                        previous.draft.proposedText === draft.proposedText
+                        ? previous : { view, finding, draft };
+                      pendingDraftSubmissions.current[finding.ordinal] = attempt;
+                      record.mutate(attempt);
+                    }}
                   >
                     Record provisional decision
                   </Button>

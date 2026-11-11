@@ -223,6 +223,20 @@ describe('ReviewPage', () => {
     expect(screen.getByTestId('stat-rejected')).toHaveTextContent('1');
   });
 
+  it('blocks final Approve all when individual contract findings have not loaded', () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: true, item_data: { critique_notes: 'Contract risk requires review', document_filename: 'contract.pdf' } }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+    expect(screen.getByTestId('findings-panel-row-1')).toBeInTheDocument();
+    expect(screen.getByTestId('approve-item-1')).toHaveTextContent('Approve all');
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(screen.getByTestId('reject-item-1')).toBeEnabled();
+  });
+
   it('shows approve/reject buttons for pending items only', () => {
     setupMock();
     render(<ReviewPage />);
@@ -363,17 +377,17 @@ describe('ReviewPage', () => {
     expect(mockRefetch).not.toHaveBeenCalled();
   });
 
-  it('falls back to the Axios message when response detail is not a nonempty string', async () => {
+  it('explains structured API approval refusal codes without treating failure as success', async () => {
     setupMock();
-    const malformed = Object.assign(new Error('Request failed with status code 400'), {
+    const refusal = Object.assign(new Error('Request failed with status code 400'), {
       response: { status: 400, data: { detail: { code: 'INVALID' } } },
     });
-    mockApproveMutate.mockRejectedValue(malformed);
+    mockApproveMutate.mockRejectedValue(refusal);
     render(<ReviewPage />);
 
     await userEvent.click(screen.getByTestId('approve-item-1'));
     await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Request failed with status code 400');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Approval refused: INVALID');
     expect(mockApproveMutate).toHaveBeenCalledTimes(1);
     expect(mockRefetch).not.toHaveBeenCalled();
   });

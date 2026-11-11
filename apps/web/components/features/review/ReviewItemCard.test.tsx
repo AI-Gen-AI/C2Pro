@@ -178,6 +178,23 @@ describe('ReviewItemCard - graph-gated HITL review', () => {
 });
 
 
+describe('ReviewItemCard - final decision after individual risks', () => {
+  it('keeps Approve all at the foot of the analysis and blocks it until findings are confirmed', () => {
+    const onApprove = vi.fn();
+    const renderFindings = () => <div data-testid="findings-slot">Individual risks listed first</div>;
+    const props = { item: graphGatedItem, projectId: 'project-1', reviewerIdentityReady: true, onApprove, onReject: vi.fn(), renderFindings };
+    const { rerender } = render(<ReviewItemCard {...props} finalApprovalReady={false} />);
+    const button = screen.getByTestId('approve-doc-456');
+    expect(button).toHaveTextContent('Approve all');
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId('review-final-blocked-doc-456')).toHaveTextContent(/Review all individual findings/i);
+    const cardText = screen.getByTestId('review-item-doc-456').textContent ?? '';
+    expect(cardText.indexOf('Individual risks listed first')).toBeLessThan(cardText.indexOf('Approve all'));
+    rerender(<ReviewItemCard {...props} finalApprovalReady />);
+    expect(button).toBeEnabled();
+  });
+});
+
 describe('ReviewItemCard - progressive disclosure of unverified AI critique', () => {
   it('groups numbered critique notes without inventing proof or individual approval', async () => {
     const notes = [
@@ -201,7 +218,7 @@ describe('ReviewItemCard - progressive disclosure of unverified AI critique', ()
     expect(screen.getByText(/MISSING CLAUSE REFERENCES/i)).toBeInTheDocument();
     expect(screen.getByText(/DEFECT RECTIFICATION/i)).toBeInTheDocument();
     expect(screen.queryByText(/^Verified findings$/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Approve full analysis/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Approve all$/i)).toBeInTheDocument();
     expect(screen.getByText(/original source evidence/i)).toBeInTheDocument();
   });
 });

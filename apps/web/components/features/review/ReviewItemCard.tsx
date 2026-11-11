@@ -33,6 +33,8 @@ type ReviewItemCardProps = {
    * offered (the server refuses them anyway; this is not the security boundary).
    */
   finalDecisionNotGranted?: boolean;
+  /** UI gate only; the API revalidates the ledger before final approval. */
+  finalApprovalReady?: boolean;
   onApprove: (item: ReviewItemResponse) => void;
   onReject: (item: ReviewItemResponse) => void;
   /** S5: the per-finding decision surface of a pending analysis review (provided by the page). */
@@ -195,6 +197,7 @@ export function ReviewItemCard({
   reviewerIdentityReady,
   actionsLocked = false,
   finalDecisionNotGranted = false,
+  finalApprovalReady,
   onApprove,
   onReject,
   renderFindings,
@@ -227,6 +230,8 @@ export function ReviewItemCard({
   const modelConclusion = getString(item.item_data, 'critique_notes');
   const critiqueObservations = modelConclusion ? parseCritiqueObservations(modelConclusion) : null;
   const structuredSource = item.trust_kind === 'structured_source';
+  const isAnalysisReview = Boolean(item.resumable && !structuredSource && (modelConclusion || item.candidate_binding));
+  const finalApprovalBlocked = isAnalysisReview && finalApprovalReady === false;
   // G1: pre-HITL evidence is a textual match, NOT semantic source approval.
   const wbsEvidence = readWbsEvidence(item.item_data);
   const wbsEvidenceSupplied = typeof item.item_data?.['wbs_source_evidence_passed'] === 'boolean';
@@ -290,8 +295,8 @@ export function ReviewItemCard({
 
   return (
     <div className="rounded-lg border bg-card" data-testid={`review-item-${item.item_id}`}>
-      {/* Phones: icon + content on top, the actions in their own wrapped row below; sm+: side by side. */}
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:gap-4">
+      {/* Findings come first; final actions follow the complete analysis, also on desktop. */}
+      <div className="flex flex-col gap-3 p-4">
         <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
         <StatusIcon status={item.current_status} />
 
@@ -445,19 +450,19 @@ export function ReviewItemCard({
         </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap" data-testid={`review-actions-${item.item_id}`}>
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 border-t pt-3" data-testid={`review-actions-${item.item_id}`}>
           {isPending ? (
             <>
               <Button
                 size="sm"
                 variant="outline"
                 className="text-green-600 hover:bg-green-50"
-                disabled={actionsDisabled || wbsApprovalBlocked}
-                title={wbsApprovalBlocked ? 'WBS source-text evidence incomplete; approval blocked' : actionsTitle}
+                disabled={actionsDisabled || wbsApprovalBlocked || finalApprovalBlocked}
+                title={finalApprovalBlocked ? 'Review and confirm every individual finding first. If findings cannot load, retry before final approval.' : wbsApprovalBlocked ? 'WBS source-text evidence incomplete; approval blocked' : actionsTitle}
                 onClick={() => onApprove(item)}
                 data-testid={`approve-${item.item_id}`}
               >
-                {modelConclusion && item.resumable ? 'Approve full analysis' : 'Approve'}
+                {isAnalysisReview ? 'Approve all' : 'Approve'}
               </Button>
               <Button
                 size="sm"
@@ -470,6 +475,11 @@ export function ReviewItemCard({
               >
                 Reject
               </Button>
+              {finalApprovalBlocked ? (
+                <p className="w-full text-xs text-amber-700" role="status" data-testid={`review-final-blocked-${item.item_id}`}>
+                  Review all individual findings above before approving this analysis. An unavailable findings panel never means there are no risks.
+                </p>
+              ) : null}
               {candidatePending ? (
                 <span
                   className="text-xs text-muted-foreground"

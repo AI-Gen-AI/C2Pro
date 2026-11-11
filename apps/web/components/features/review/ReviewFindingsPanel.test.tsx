@@ -45,11 +45,11 @@ const view = (over: object = {}) => ({
   ...over,
 });
 
-function renderPanel() {
+function renderPanel(onReadinessChange?: (ready: boolean) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ReviewFindingsPanel reviewRowId={ROW} />
+      <ReviewFindingsPanel reviewRowId={ROW} onReadinessChange={onReadinessChange} />
     </QueryClientProvider>,
   );
 }
@@ -59,6 +59,32 @@ describe("ReviewFindingsPanel", () => {
     vi.clearAllMocks();
     list.mockResolvedValue(view());
     record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
+  });
+
+  it("blocks final approval until every risk is individually confirmed and reports readiness", async () => {
+    const onReady = vi.fn();
+    const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
+    list.mockResolvedValue(view({ findings: [finding(0, { current: confirmed }), finding(1)] }));
+    renderPanel(onReady);
+    expect(await screen.findByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("1/2");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/final approval remains blocked/i);
+  });
+
+  it("does not silently hide the findings when their API request fails", async () => {
+    list.mockRejectedValue(new Error("Not found"));
+    renderPanel(vi.fn());
+    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toHaveTextContent(/could not be loaded/i);
+    expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
+  });
+
+  it("reports readiness only for an entirely confirmed candidate", async () => {
+    const onReady = vi.fn();
+    const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
+    list.mockResolvedValue(view({ findings: [finding(0, { current: confirmed }), finding(1, { current: confirmed })] }));
+    renderPanel(onReady);
+    await screen.findByTestId("finding-0");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
   });
 
   it("S5-02: a reader without REVIEW_FINDING sees the findings but cannot record decisions, and is told why", async () => {
@@ -214,6 +240,106 @@ describe("ReviewFindingsPanel", () => {
     expect(Object.keys(body)).not.toContain("tenant_id");
   });
 
+  it("replays an uncertain CONFIRMED with the same idempotency key and exact original CAS pins", async () => {
+    // Simulate a response lost AFTER the server may have committed: the GET then
+    // returns a newer ledger head. Repeating the POST must still replay the original.
+    list.mockResolvedValueOnce(view()).mockResolvedValue(view({ ledger_revision: 3 }));
+    record.mockRejectedValueOnce(new Error("Response lost after server commit"));
+    renderPanel();
+
+    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const first = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
+
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    const retried = record.mock.calls[1][1];
+    expect(retried).toEqual(first);
+    expect(retried.expected_ledger_revision).toBe(0);
+    expect(retried.idempotency_key).toBe(first.idempotency_key);
+  });
+
+  it("starts a new CONFIRMED request only after an explicit stale-ledger 409 and refreshed server view", async () => {
+    const stale = new AxiosError("Conflict", "ERR_BAD_REQUEST", undefined, undefined, {
+      status: 409, data: { detail: { code: "stale_ledger_revision" } },
+    } as never);
+    list.mockResolvedValueOnce(view()).mockResolvedValue(view({ ledger_revision: 3 }));
+    record.mockRejectedValueOnce(stale);
+    renderPanel();
+
+    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const first = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toHaveTextContent(/Another decision was recorded/);
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
+
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    expect(record.mock.calls[1][1].idempotency_key).not.toBe(first.idempotency_key);
+    expect(record.mock.calls[1][1].expected_ledger_revision).toBe(3);
+  });
+
+  it("replays an uncertain DISMISSED with original body after ledger refresh", async () => {
+    list.mockResolvedValueOnce(view()).mockResolvedValue(view({ ledger_revision: 3 }));
+    record.mockRejectedValueOnce(new Error("Response lost after server commit"));
+    renderPanel();
+    await userEvent.click(await screen.findByTestId("finding-action-0-DISMISSED"));
+    await userEvent.type(screen.getByTestId("finding-reason-0"), "No verified obligation");
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const first = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    expect(record.mock.calls[1][1]).toEqual(first);
+    expect(record.mock.calls[1][1].expected_ledger_revision).toBe(0);
+  });
+
+  it("re-bases a DISMISSED decision with a new key after definite stale-ledger 409", async () => {
+    list.mockResolvedValueOnce(view()).mockResolvedValue(view({ ledger_revision: 4 }));
+    record.mockRejectedValueOnce(new AxiosError("Conflict", "ERR_BAD_REQUEST", undefined, undefined, {
+      status: 409, data: { detail: { code: "stale_ledger_revision" } },
+    } as never));
+    renderPanel();
+    await userEvent.click(await screen.findByTestId("finding-action-0-DISMISSED"));
+    await userEvent.type(screen.getByTestId("finding-reason-0"), "Document superseded");
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const old = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toHaveTextContent(/Another decision was recorded/);
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    const rebased = record.mock.calls[1][1];
+    expect(rebased.idempotency_key).not.toBe(old.idempotency_key);
+    expect(rebased.expected_ledger_revision).toBe(4);
+  });
+
+  it("never replays a CONFIRMED request into a different reviewRowId on the same artifact", async () => {
+    list.mockImplementation((rowId: string) => Promise.resolve(view({ review_row_id: rowId })));
+    record.mockRejectedValueOnce(new Error("Lost response"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (rowId: string) => (
+      <QueryClientProvider client={client}>
+        <ReviewFindingsPanel reviewRowId={rowId} />
+      </QueryClientProvider>
+    );
+    const rendered = render(ui(ROW));
+    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const first = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
+    rendered.rerender(ui("row-2"));
+    await waitFor(() => expect(list).toHaveBeenCalledWith("row-2", expect.anything()));
+    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    expect(record.mock.calls[1][0]).toBe("row-2");
+    expect(record.mock.calls[1][1].idempotency_key).not.toBe(first.idempotency_key);
+  });
+
   it("will not submit a dismissal or a correction without the reason (and text) the API requires", async () => {
     renderPanel();
     await userEvent.click(await screen.findByTestId("finding-action-1-DISMISSED"));
@@ -253,6 +379,21 @@ describe("ReviewFindingsPanel", () => {
     expect(screen.getByTestId("finding-0")).toHaveTextContent("2 decisions recorded; the latest stands.");
   });
 
+  it("fails closed when a background findings read errors despite stale cached empty results", async () => {
+    const onReady = vi.fn();
+    list.mockResolvedValueOnce(view({ findings: [] })).mockRejectedValueOnce(new Error("Network outage"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ReviewFindingsPanel reviewRowId={ROW} onReadinessChange={onReady} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    await client.invalidateQueries({ queryKey: reviewFindingsKey(auth.orgId, auth.userId, ROW) });
+    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toBeInTheDocument();
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+  });
+
   it("says plainly what a refusal means and refreshes instead of guessing", async () => {
     const refusal = new AxiosError("conflict", "409", undefined, undefined, {
       status: 409,
@@ -265,17 +406,22 @@ describe("ReviewFindingsPanel", () => {
     await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
   });
 
-  it("renders nothing for a review that is not a candidate-bound analysis (the API answers 404)", async () => {
+  it("shows a blocking error and retry when the individual findings API returns 404", async () => {
     list.mockRejectedValue(new AxiosError("nf", "404", undefined, undefined, { status: 404, data: {} } as never));
-    const { container } = renderPanel();
-    await waitFor(() => expect(list).toHaveBeenCalled());
-    await waitFor(() => expect(container).toBeEmptyDOMElement());
+    renderPanel();
+    const error = await screen.findByTestId(`review-findings-error-${ROW}`);
+    expect(error).toHaveTextContent(/individual findings could not be loaded/i);
+    expect(error).toHaveTextContent(/final approval is unavailable/i);
+    expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
   });
 
-  it("states honestly when the candidate lists no individual findings", async () => {
+  it("allows a separate final human approval for an authoritative empty findings read", async () => {
+    const onReady = vi.fn();
     list.mockResolvedValue(view({ findings: [] }));
-    renderPanel();
+    renderPanel(onReady);
     expect(await screen.findByTestId(`review-findings-empty-${ROW}`)).toHaveTextContent(/lists no individual findings/i);
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/ready for separate final approval/i);
   });
 
   it("S5 runner race: a card mounted before the candidate was replaced first paints the CACHED empty read, then the fresh findings", async () => {

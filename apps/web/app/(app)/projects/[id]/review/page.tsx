@@ -85,6 +85,16 @@ function errorMessage(error: unknown, fallback: string): string {
     if (data && typeof data === 'object' && 'detail' in data) {
       const detail = (data as { detail?: unknown }).detail;
       if (typeof detail === 'string' && detail.trim()) return detail;
+      if (detail && typeof detail === 'object') {
+        const responseDetail = detail as { message?: unknown; code?: unknown; blockers?: unknown };
+        if (typeof responseDetail.message === 'string' && responseDetail.message.trim()) {
+          const blockers = Array.isArray(responseDetail.blockers) && responseDetail.blockers.length
+            ? ` Blocked by: ${responseDetail.blockers.map(String).join(', ')}.`
+            : '';
+          return `${responseDetail.message}${blockers}`;
+        }
+        if (typeof responseDetail.code === 'string') return `Approval refused: ${responseDetail.code}`;
+      }
     }
   }
   return error instanceof Error && error.message.trim().length > 0
@@ -106,7 +116,25 @@ function outcomeMayAlreadyBeRecorded(error: unknown): boolean {
 /** S5-02: asks the server what the caller may do on THIS review's project, and stops offering what would be refused. */
 function ReviewItemWithCapabilities(props: ComponentProps<typeof ReviewItemCard>) {
   const capabilities = useReviewCapabilities(props.item.row_id);
-  return <ReviewItemCard {...props} finalDecisionNotGranted={capabilities?.approve_candidate === false} />;
+  const [findingsReady, setFindingsReady] = useState(false);
+  const critiqueNotes = props.item.item_data?.['critique_notes'];
+  const requiresFindingReview = Boolean(
+    props.item.resumable &&
+    props.item.trust_kind !== 'structured_source' &&
+    (props.item.candidate_binding || (typeof critiqueNotes === 'string' && critiqueNotes.trim().length > 0)),
+  );
+  return (
+    <ReviewItemCard
+      {...props}
+      finalDecisionNotGranted={capabilities?.approve_candidate === false}
+      finalApprovalReady={!requiresFindingReview || findingsReady}
+      renderFindings={requiresFindingReview
+        ? (item) => item.row_id
+          ? <ReviewFindingsPanel reviewRowId={item.row_id} onReadinessChange={setFindingsReady} />
+          : null
+        : props.renderFindings}
+    />
+  );
 }
 
 /** Document + version a review row is about, for receipts (never invented: falls back to the item type). */
@@ -580,9 +608,6 @@ export default function ReviewPage() {
               projectId={projectId}
               reviewerIdentityReady={reviewerIdentityReady}
               actionsLocked={decidedKeys.has(decisionKey(item))}
-              renderFindings={(reviewItem) =>
-                reviewItem.row_id ? <ReviewFindingsPanel reviewRowId={reviewItem.row_id} /> : null
-              }
               onApprove={(reviewItem) => {
                 setActionError(null);
                 setModal({ kind: 'approve', item: reviewItem });
@@ -614,11 +639,13 @@ export default function ReviewPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Approve Review Item</DialogTitle>
+            <DialogTitle>
+               {modal.kind === 'approve' && modal.item.resumable ? 'Approve all reviewed findings' : 'Approve Review Item'}
+             </DialogTitle>
             <DialogDescription>
               Confirm approval for this {modal.kind === 'approve' ? modal.item.item_type : ''} item.
               {modal.kind === 'approve' && modal.item.resumable
-                ? ' This will resume the analysis workflow with an approved state.'
+                ? ' This will resume the analysis workflow with an approved state. Each finding must already have an individual decision. This does not mean accepting the underlying project risks.'
                 : ' This will mark the item as approved.'}
             </DialogDescription>
           </DialogHeader>
