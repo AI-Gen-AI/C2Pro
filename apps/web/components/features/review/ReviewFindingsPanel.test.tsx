@@ -379,6 +379,21 @@ describe("ReviewFindingsPanel", () => {
     expect(screen.getByTestId("finding-0")).toHaveTextContent("2 decisions recorded; the latest stands.");
   });
 
+  it("fails closed when a background findings read errors despite stale cached empty results", async () => {
+    const onReady = vi.fn();
+    list.mockResolvedValueOnce(view({ findings: [] })).mockRejectedValueOnce(new Error("Network outage"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ReviewFindingsPanel reviewRowId={ROW} onReadinessChange={onReady} />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    await client.invalidateQueries({ queryKey: reviewFindingsKey(auth.orgId, auth.userId, ROW) });
+    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toBeInTheDocument();
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+  });
+
   it("says plainly what a refusal means and refreshes instead of guessing", async () => {
     const refusal = new AxiosError("conflict", "409", undefined, undefined, {
       status: 409,
