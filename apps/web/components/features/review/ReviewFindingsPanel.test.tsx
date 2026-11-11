@@ -281,6 +281,65 @@ describe("ReviewFindingsPanel", () => {
     expect(record.mock.calls[1][1].expected_ledger_revision).toBe(3);
   });
 
+  it("replays an uncertain DISMISSED with original body after ledger refresh", async () => {
+    list.mockResolvedValueOnce(view()).mockResolvedValue(view({ ledger_revision: 3 }));
+    record.mockRejectedValueOnce(new Error("Response lost after server commit"));
+    renderPanel();
+    await userEvent.click(await screen.findByTestId("finding-action-0-DISMISSED"));
+    await userEvent.type(screen.getByTestId("finding-reason-0"), "No verified obligation");
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const first = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    expect(record.mock.calls[1][1]).toEqual(first);
+    expect(record.mock.calls[1][1].expected_ledger_revision).toBe(0);
+  });
+
+  it("re-bases a DISMISSED decision with a new key after definite stale-ledger 409", async () => {
+    list.mockResolvedValueOnce(view()).mockResolvedValue(view({ ledger_revision: 4 }));
+    record.mockRejectedValueOnce(new AxiosError("Conflict", "ERR_BAD_REQUEST", undefined, undefined, {
+      status: 409, data: { detail: { code: "stale_ledger_revision" } },
+    } as never));
+    renderPanel();
+    await userEvent.click(await screen.findByTestId("finding-action-0-DISMISSED"));
+    await userEvent.type(screen.getByTestId("finding-reason-0"), "Document superseded");
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const old = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toHaveTextContent(/Another decision was recorded/);
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    const rebased = record.mock.calls[1][1];
+    expect(rebased.idempotency_key).not.toBe(old.idempotency_key);
+    expect(rebased.expected_ledger_revision).toBe(4);
+  });
+
+  it("never replays a CONFIRMED request into a different reviewRowId on the same artifact", async () => {
+    list.mockImplementation((rowId: string) => Promise.resolve(view({ review_row_id: rowId })));
+    record.mockRejectedValueOnce(new Error("Lost response"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (rowId: string) => (
+      <QueryClientProvider client={client}>
+        <ReviewFindingsPanel reviewRowId={rowId} />
+      </QueryClientProvider>
+    );
+    const rendered = render(ui(ROW));
+    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const first = record.mock.calls[0][1];
+    expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
+    rendered.rerender(ui("row-2"));
+    await waitFor(() => expect(list).toHaveBeenCalledWith("row-2", expect.anything()));
+    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    expect(record.mock.calls[1][0]).toBe("row-2");
+    expect(record.mock.calls[1][1].idempotency_key).not.toBe(first.idempotency_key);
+  });
+
   it("will not submit a dismissal or a correction without the reason (and text) the API requires", async () => {
     renderPanel();
     await userEvent.click(await screen.findByTestId("finding-action-1-DISMISSED"));
