@@ -253,7 +253,7 @@ async function produceRealHealth(page: Page): Promise<void> {
   const card = page.getByTestId(`review-item-${item}`);
   await expect(card).toBeVisible({ timeout: 30_000 });
   await card.getByTestId(`approve-${item}`).click();
-  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  const dialog = page.getByRole("dialog", { name: /approve (all reviewed findings|review item)/i });
   await expect(dialog).toBeVisible();
   const confirm = dialog.getByRole("button", { name: /confirm approve/i });
   await approveWithHttpResponse({
