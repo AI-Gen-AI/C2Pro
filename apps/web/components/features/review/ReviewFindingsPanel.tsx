@@ -237,6 +237,10 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   // Fail closed while loading, refreshing, or when a finding has no CONFIRMED decision.
   // The backend independently reconciles the exact ledger before any final promotion.
   const readyForFinalApproval = Boolean(
+    isLoaded &&
+    userId &&
+    query.isSuccess &&
+    !query.isError &&
     !query.isFetching &&
     !record.isPending &&
     query.data &&
