@@ -65,11 +65,10 @@ describe("ReviewFindingsPanel", () => {
     const onReady = vi.fn();
     const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
     list.mockResolvedValue(view({ findings: [finding(0, { current: confirmed }), finding(1)] }));
-    const { rerender } = renderPanel(onReady);
+    renderPanel(onReady);
     expect(await screen.findByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("1/2");
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/final approval remains blocked/i);
-    rerender(<></>);
   });
 
   it("does not silently hide the findings when their API request fails", async () => {
