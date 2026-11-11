@@ -84,6 +84,10 @@ def score_risk_dimension(
         band=band_for_score(score),
         confidence=confidence,
         evidence=_risk_evidence(risks),
+        missing_data=(
+            [f"{withheld_risks} risk proposal(s) withheld: evidence not verified"]
+            if withheld_risks > 0 else []
+        ),
     ), critique_assessed)
 
 
