@@ -105,3 +105,23 @@ def test_a_legacy_persisted_verified_provenance_shows_no_evidence_label() -> Non
     alert.alert_metadata = {"source_provenance": {
         "verification_status": "NOT_VERIFIED", "source_references": []}}
     assert AlertMapper.to_response(alert, TENANT).evidence_status is None
+
+def test_c_mixed_trusted_and_withheld_risks_disclose_incomplete_coverage() -> None:
+    """Keep the validated risk score, but never conceal unverified proposals."""
+    base = score_risk_dimension([_risk()], assessment_ran=True, extraction_quality=0.9)
+    mixed = score_risk_dimension(
+        [_risk()], assessment_ran=True, extraction_quality=0.9, withheld_risks=3
+    )
+    assert mixed.score == base.score
+    assert mixed.evidence
+    assert "3 risk proposal(s) withheld: evidence not verified" in mixed.missing_data
+
+
+def test_c_mixed_withheld_and_unassessed_critique_preserves_both_gaps() -> None:
+    mixed = score_risk_dimension(
+        [_risk()], assessment_ran=True, withheld_risks=2, critique_assessed=False
+    )
+    assert mixed.score is not None
+    assert "2 risk proposal(s) withheld: evidence not verified" in mixed.missing_data
+    assert "critique not assessed" in mixed.missing_data
+    assert mixed.confidence <= 0.3
