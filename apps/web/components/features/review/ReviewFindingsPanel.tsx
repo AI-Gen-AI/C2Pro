@@ -11,7 +11,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,6 +148,13 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
   const mayReview = query.data?.capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
+  // Preserve the exact CONFIRMED request after an unknown network outcome. A retry must
+  // replay its original idempotency key AND candidate/CAS pins, not construct a new decision.
+  const pendingConfirmations = useRef<Record<number, {
+    view: ReviewFindingsResponse;
+    finding: ReviewFindingResponse;
+    draft: Draft;
+  } | undefined>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmingDerive, setConfirmingDerive] = useState(false);
   const [derived, setDerived] = useState<DerivedCandidateResponse | null>(null);
@@ -191,11 +198,23 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         proposed_text: draft.action === "CORRECTION_PROPOSED" ? draft.proposedText.trim() : null,
       }),
     onSuccess: (_receipt, { finding }) => {
+      delete pendingConfirmations.current[finding.ordinal];
       setRefusal(null);
       setDrafts((current) => ({ ...current, [finding.ordinal]: undefined }));
       void queryClient.invalidateQueries({ queryKey });
     },
-    onError: (error) => {
+    onError: (error, { finding }) => {
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { detail?: { code?: string } } | undefined)?.detail
+        : undefined;
+      // These explicit server rejections establish that the old candidate/CAS cannot be
+      // replayed. An ambiguous timeout must retain its original request for safe retry.
+      if (detail?.code && [
+        "stale_ledger_revision", "stale_or_unbound_candidate",
+        "idempotency_conflict", "ledger_guard_refused",
+      ].includes(detail.code)) {
+        delete pendingConfirmations.current[finding.ordinal];
+      }
       setRefusal(refusalFrom(error));
       void queryClient.invalidateQueries({ queryKey });
     },
@@ -347,12 +366,21 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
-                        record.mutate({
-                          view,
-                          finding,
-                          draft: { action, reason: "", proposedText: "", key: newKey() },
-                        });
+                        const previous = pendingConfirmations.current[finding.ordinal];
+                        // The same revision may have been refreshed after a lost response.
+                        // Replay the exact original request; clear only on success or a
+                        // definitive conflict response from the server.
+                        const attempt = previous &&
+                          previous.view.artifact_id === view.artifact_id &&
+                          previous.view.artifact_version === view.artifact_version &&
+                          previous.view.artifact_hash === view.artifact_hash &&
+                          previous.view.document_revision_id === view.document_revision_id
+                          ? previous
+                          : { view, finding, draft: { action, reason: "", proposedText: "", key: newKey() } };
+                        pendingConfirmations.current[finding.ordinal] = attempt;
+                        record.mutate(attempt);
                       } else {
+                        delete pendingConfirmations.current[finding.ordinal];
                         setDrafts((current) => ({
                           ...current,
                           [finding.ordinal]: { action, reason: "", proposedText: "", key: newKey() },
