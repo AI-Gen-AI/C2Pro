@@ -8,7 +8,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 
 const PILOT_API = "https://projectgraph-api-pilot.up.railway.app";
-const A_EMAIL = (process.env.E2E_CLERK_USER_EMAIL ?? "testuser@c2pro.com").trim();
+const A_EMAIL = process.env.E2E_CLERK_USER_EMAIL?.trim() || "testuser@c2pro.com";
 const B_EMAIL = (process.env.INTEGRAL_CLERK_DEV_B_EMAIL ?? "").trim();
 
 interface AuthContext {
