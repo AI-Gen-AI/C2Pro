@@ -100,6 +100,11 @@ function newKey(): string {
 }
 
 type Draft = { action: FindingDecisionAction; reason: string; proposedText: string; key: string };
+type PendingSubmission = {
+  view: ReviewFindingsResponse;
+  finding: ReviewFindingResponse;
+  draft: Draft;
+};
 
 /**
  * Where in the contract a finding comes from, kept apart from the generated description above it: the clause label the analysis
@@ -148,13 +153,16 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
   const mayReview = query.data?.capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
-  // Preserve the exact CONFIRMED request after an unknown network outcome. A retry must
-  // replay its original idempotency key AND candidate/CAS pins, not construct a new decision.
-  const pendingConfirmations = useRef<Record<number, {
-    view: ReviewFindingsResponse;
-    finding: ReviewFindingResponse;
-    draft: Draft;
-  } | undefined>>({});
+  // Unknown outcomes must be retried with the exact same body (including CAS pins).
+  // A definitive conflict, identity switch, or explicit action change starts a new operation.
+  const pendingConfirmations = useRef<Record<number, PendingSubmission | undefined>>({});
+  const pendingDraftSubmissions = useRef<Record<number, PendingSubmission | undefined>>({});
+  useEffect(() => {
+    pendingConfirmations.current = {};
+    pendingDraftSubmissions.current = {};
+    setDrafts({});
+    setRefusal(null);
+  }, [reviewRowId, orgId, userId]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmingDerive, setConfirmingDerive] = useState(false);
   const [derived, setDerived] = useState<DerivedCandidateResponse | null>(null);
@@ -199,6 +207,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
       }),
     onSuccess: (_receipt, { finding }) => {
       delete pendingConfirmations.current[finding.ordinal];
+      delete pendingDraftSubmissions.current[finding.ordinal];
       setRefusal(null);
       setDrafts((current) => ({ ...current, [finding.ordinal]: undefined }));
       void queryClient.invalidateQueries({ queryKey });
@@ -214,6 +223,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         "idempotency_conflict", "ledger_guard_refused",
       ].includes(detail.code)) {
         delete pendingConfirmations.current[finding.ordinal];
+        delete pendingDraftSubmissions.current[finding.ordinal];
+        setDrafts((current) => {
+          const previous = current[finding.ordinal];
+          return previous ? { ...current, [finding.ordinal]: { ...previous, key: newKey() } } : current;
+        });
       }
       setRefusal(refusalFrom(error));
       void queryClient.invalidateQueries({ queryKey });
@@ -224,6 +238,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   // The backend independently reconciles the exact ledger before any final promotion.
   const readyForFinalApproval = Boolean(
     !query.isFetching &&
+    !record.isPending &&
     query.data?.findings.length &&
     query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
   );
@@ -371,6 +386,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         // Replay the exact original request; clear only on success or a
                         // definitive conflict response from the server.
                         const attempt: { view: ReviewFindingsResponse; finding: ReviewFindingResponse; draft: Draft } = previous &&
+                          previous.view.review_row_id === reviewRowId &&
                           previous.view.artifact_id === view.artifact_id &&
                           previous.view.artifact_version === view.artifact_version &&
                           previous.view.artifact_hash === view.artifact_hash &&
@@ -381,6 +397,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         record.mutate(attempt);
                       } else {
                         delete pendingConfirmations.current[finding.ordinal];
+                        delete pendingDraftSubmissions.current[finding.ordinal];
                         setDrafts((current) => ({
                           ...current,
                           [finding.ordinal]: { action, reason: "", proposedText: "", key: newKey() },
@@ -403,9 +420,19 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     className="w-full rounded border bg-background p-2"
                     rows={2}
                     value={draft.reason}
-                    onChange={(event) =>
-                      setDrafts((current) => ({ ...current, [finding.ordinal]: { ...draft, reason: event.target.value } }))
-                    }
+                    disabled={record.isPending}
+                    onChange={(event) => {
+                      const wasPending = Boolean(pendingDraftSubmissions.current[finding.ordinal]);
+                      delete pendingDraftSubmissions.current[finding.ordinal];
+                      setDrafts((current) => ({
+                        ...current,
+                        [finding.ordinal]: {
+                          ...draft,
+                          reason: event.target.value,
+                          key: wasPending ? newKey() : draft.key,
+                        },
+                      }));
+                    }}
                   />
                   {draft.action === "CORRECTION_PROPOSED" ? (
                     <>
@@ -418,12 +445,19 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         className="w-full rounded border bg-background p-2"
                         rows={2}
                         value={draft.proposedText}
-                        onChange={(event) =>
+                        disabled={record.isPending}
+                        onChange={(event) => {
+                          const wasPending = Boolean(pendingDraftSubmissions.current[finding.ordinal]);
+                          delete pendingDraftSubmissions.current[finding.ordinal];
                           setDrafts((current) => ({
                             ...current,
-                            [finding.ordinal]: { ...draft, proposedText: event.target.value },
-                          }))
-                        }
+                            [finding.ordinal]: {
+                              ...draft,
+                              proposedText: event.target.value,
+                              key: wasPending ? newKey() : draft.key,
+                            },
+                          }));
+                        }}
                       />
                     </>
                   ) : null}
@@ -431,7 +465,20 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     size="sm"
                     disabled={!valid || record.isPending}
                     data-testid={`finding-submit-${finding.ordinal}`}
-                    onClick={() => record.mutate({ view, finding, draft })}
+                    onClick={() => {
+                      // A background refetch may have advanced the visible ledger after an
+                      // ambiguous response. Replaying with new CAS but old key is invalid.
+                      const previous = pendingDraftSubmissions.current[finding.ordinal];
+                      const attempt: PendingSubmission = previous &&
+                        previous.view.review_row_id === reviewRowId &&
+                        previous.draft.key === draft.key &&
+                        previous.draft.action === draft.action &&
+                        previous.draft.reason === draft.reason &&
+                        previous.draft.proposedText === draft.proposedText
+                        ? previous : { view, finding, draft };
+                      pendingDraftSubmissions.current[finding.ordinal] = attempt;
+                      record.mutate(attempt);
+                    }}
                   >
                     Record provisional decision
                   </Button>
