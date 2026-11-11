@@ -45,11 +45,11 @@ const view = (over: object = {}) => ({
   ...over,
 });
 
-function renderPanel() {
+function renderPanel(onReadinessChange?: (ready: boolean) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <ReviewFindingsPanel reviewRowId={ROW} />
+      <ReviewFindingsPanel reviewRowId={ROW} onReadinessChange={onReadinessChange} />
     </QueryClientProvider>,
   );
 }
@@ -59,6 +59,33 @@ describe("ReviewFindingsPanel", () => {
     vi.clearAllMocks();
     list.mockResolvedValue(view());
     record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
+  });
+
+  it("blocks final approval until every risk is individually confirmed and reports readiness", async () => {
+    const onReady = vi.fn();
+    const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
+    list.mockResolvedValue(view({ findings: [finding(0, { current: confirmed }), finding(1)] }));
+    const { rerender } = renderPanel(onReady);
+    expect(await screen.findByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("1/2");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/final approval remains blocked/i);
+    rerender(<></>);
+  });
+
+  it("does not silently hide the findings when their API request fails", async () => {
+    list.mockRejectedValue(new Error("Not found"));
+    renderPanel(vi.fn());
+    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toHaveTextContent(/could not be loaded/i);
+    expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
+  });
+
+  it("reports readiness only for an entirely confirmed candidate", async () => {
+    const onReady = vi.fn();
+    const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
+    list.mockResolvedValue(view({ findings: [finding(0, { current: confirmed }), finding(1, { current: confirmed })] }));
+    renderPanel(onReady);
+    await screen.findByTestId("finding-0");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
   });
 
   it("S5-02: a reader without REVIEW_FINDING sees the findings but cannot record decisions, and is told why", async () => {
