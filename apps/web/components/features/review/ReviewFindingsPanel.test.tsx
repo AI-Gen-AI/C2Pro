@@ -400,10 +400,13 @@ describe("ReviewFindingsPanel", () => {
     expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
   });
 
-  it("states honestly when the candidate lists no individual findings", async () => {
+  it("allows a separate final human approval for an authoritative empty findings read", async () => {
+    const onReady = vi.fn();
     list.mockResolvedValue(view({ findings: [] }));
-    renderPanel();
+    renderPanel(onReady);
     expect(await screen.findByTestId(`review-findings-empty-${ROW}`)).toHaveTextContent(/lists no individual findings/i);
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/ready for separate final approval/i);
   });
 
   it("S5 runner race: a card mounted before the candidate was replaced first paints the CACHED empty read, then the fresh findings", async () => {
