@@ -370,7 +370,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         // The same revision may have been refreshed after a lost response.
                         // Replay the exact original request; clear only on success or a
                         // definitive conflict response from the server.
-                        const attempt = previous &&
+                        const attempt: { view: ReviewFindingsResponse; finding: ReviewFindingResponse; draft: Draft } = previous &&
                           previous.view.artifact_id === view.artifact_id &&
                           previous.view.artifact_version === view.artifact_version &&
                           previous.view.artifact_hash === view.artifact_hash &&
