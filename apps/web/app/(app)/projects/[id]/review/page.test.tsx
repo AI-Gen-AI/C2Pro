@@ -377,17 +377,17 @@ describe('ReviewPage', () => {
     expect(mockRefetch).not.toHaveBeenCalled();
   });
 
-  it('falls back to the Axios message when response detail is not a nonempty string', async () => {
+  it('explains structured API approval refusal codes without treating failure as success', async () => {
     setupMock();
-    const malformed = Object.assign(new Error('Request failed with status code 400'), {
+    const refusal = Object.assign(new Error('Request failed with status code 400'), {
       response: { status: 400, data: { detail: { code: 'INVALID' } } },
     });
-    mockApproveMutate.mockRejectedValue(malformed);
+    mockApproveMutate.mockRejectedValue(refusal);
     render(<ReviewPage />);
 
     await userEvent.click(screen.getByTestId('approve-item-1'));
     await userEvent.click(screen.getByRole('button', { name: /confirm approve/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Request failed with status code 400');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Approval refused: INVALID');
     expect(mockApproveMutate).toHaveBeenCalledTimes(1);
     expect(mockRefetch).not.toHaveBeenCalled();
   });
