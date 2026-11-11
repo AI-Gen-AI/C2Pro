@@ -223,6 +223,20 @@ describe('ReviewPage', () => {
     expect(screen.getByTestId('stat-rejected')).toHaveTextContent('1');
   });
 
+  it('blocks final Approve all when individual contract findings have not loaded', () => {
+    setupMock({
+      data: {
+        items: [{ ...MOCK_ITEMS[0], resumable: true, item_data: { critique_notes: 'Contract risk requires review', document_filename: 'contract.pdf' } }],
+        total: 1,
+      },
+    });
+    render(<ReviewPage />);
+    expect(screen.getByTestId('findings-panel-row-1')).toBeInTheDocument();
+    expect(screen.getByTestId('approve-item-1')).toHaveTextContent('Approve all');
+    expect(screen.getByTestId('approve-item-1')).toBeDisabled();
+    expect(screen.getByTestId('reject-item-1')).toBeEnabled();
+  });
+
   it('shows approve/reject buttons for pending items only', () => {
     setupMock();
     render(<ReviewPage />);
