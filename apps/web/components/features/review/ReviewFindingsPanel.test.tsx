@@ -291,11 +291,13 @@ describe("ReviewFindingsPanel", () => {
     await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
   });
 
-  it("renders nothing for a review that is not a candidate-bound analysis (the API answers 404)", async () => {
+  it("shows a blocking error and retry when the individual findings API returns 404", async () => {
     list.mockRejectedValue(new AxiosError("nf", "404", undefined, undefined, { status: 404, data: {} } as never));
-    const { container } = renderPanel();
-    await waitFor(() => expect(list).toHaveBeenCalled());
-    await waitFor(() => expect(container).toBeEmptyDOMElement());
+    renderPanel();
+    const error = await screen.findByTestId(`review-findings-error-${ROW}`);
+    expect(error).toHaveTextContent(/individual findings could not be loaded/i);
+    expect(error).toHaveTextContent(/final approval is unavailable/i);
+    expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
   });
 
   it("states honestly when the candidate lists no individual findings", async () => {
