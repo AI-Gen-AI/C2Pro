@@ -150,12 +150,16 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
     expect(reviewsA.status, "Clerk A must access own tenant HITL queue").toBe(200);
     expect(reviewsB.status, "Clerk B must access own tenant HITL queue").toBe(200);
 
+    // item_id is a BUSINESS key, not a globally unique row identifier. Only
+    // test IDs absent from the opposite tenant's COMPLETE queue to avoid
+    // treating a legitimate local collision as a cross-tenant data leak.
     let checkedReviewIsolation = 0;
-    for (const [bearer, foreignId] of [
-      [b.token, reviewsA.ids[0]],
-      [a.token, reviewsB.ids[0]],
+    for (const [bearer, foreignId, ownQueue] of [
+      [b.token, reviewsA.ids[0], reviewsB],
+      [a.token, reviewsB.ids[0], reviewsA],
     ] as const) {
-      if (!foreignId) continue;
+      if (!foreignId || ownQueue.total !== ownQueue.ids.length ||
+          ownQueue.ids.includes(foreignId)) continue;
       const response = await request.get(PILOT_API + "/api/v1/hitl/queue/" +
         encodeURIComponent(foreignId), {
         failOnStatusCode: false,
@@ -164,9 +168,11 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
       expect([401, 403, 404], "foreign tenant review must not be visible").toContain(response.status());
       checkedReviewIsolation += 1;
     }
-    console.log("PILOT_HITL_CROSS_TENANT=" +
-      (checkedReviewIsolation === 2 ? "PASS" : "PARTIAL_EMPTY_QUEUE") +
-      " checked=" + checkedReviewIsolation);
+    // An empty queue, partial pagination, or only colliding business IDs is
+    // NOT evidence of tenant isolation: fail rather than claim a green pass.
+    expect(checkedReviewIsolation, "HITL isolation requires a non-colliding foreign item in a complete queue")
+      .toBeGreaterThan(0);
+    console.log("PILOT_HITL_CROSS_TENANT=PASS checked=" + checkedReviewIsolation);
 
     if (!projectsA.ids.length || !projectsB.ids.length) {
       console.log("PILOT_G1_CROSS_TENANT=PARTIAL: no pre-existing project in at least one test tenant; no seed created");
