@@ -28,6 +28,9 @@ class ProjectState(TypedDict):
     # Internal, bounded exception class from N4 ToolResult failure. Never
     # include model/provider error text or credentials in persisted lineage.
     risk_extraction_error_type: str | None
+    # WBS 1.2: zero valid candidates are not a provider failure or an
+    # independently established absence of contract risk.
+    risk_extraction_outcome: str | None
     extracted_wbs: list[Task]
     confidence_score: float | None
     critique_notes: str
