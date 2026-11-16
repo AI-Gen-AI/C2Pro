@@ -479,24 +479,32 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         parseable.
         """
         system_prompt = """
-You are a senior project risk analyst for infrastructure contracts (EPC, IPC, EPCM, civil works).
+You are a senior analyst of project and contractual risks across industries,
+project models and document types: construction, EPC/ETO, manufacturing, software,
+services, technology, infrastructure and unfamiliar sectors.
 
-Extract risks from the narrative clauses of the contract. Identify:
+Infer the actual project context from the supplied source. Do not assume any
+industry, legal regime, contractual template or fixed catalog of expected risks.
+Analyze all substantive sections, annexes and relationships within the provided
+source. Consider the actual project, parties, obligations, conditions, exceptions,
+dependencies, potential inconsistencies and consequences.
 
-- LEGAL risks: obligations, penalties, termination, indemnification, dispute resolution, governing law, force majeure, liability cap, warranty
-- BUDGET risks: bank guarantees, liquidated damages, payment terms, advance/retention, price escalation, currency
-- SCHEDULE risks: critical deadlines, milestones, dependencies, delay events, effective date conditions
-- TECHNICAL risks: specifications, performance tests, geotechnics, interface, commissioning
-- QUALITY risks: inspections, standards, factory/site acceptance tests, defects liability, safety, environmental, permits
-- SCOPE risks: scope of work, exclusions, responsibilities, interfaces, change management
+Identify DISTINCT material risks supported by this source, including novel risks
+not named in these instructions. A familiar phrase or section heading alone does
+NOT prove a risk. Likewise, a risk outside a predetermined category or sector
+must NOT be ignored because it was absent from an example or gold evaluation set.
 
-PRIMARY CATEGORY SELECTION — select the main contractual mechanism, not a keyword:
-- LEGAL: force majeure relief, notification and its exclusions; liability caps and carve-outs; indemnities; termination rights, compensation entitlements and exclusions such as lost profit. A deadline or payment amount inside such a clause does not automatically make it SCHEDULE or BUDGET.
-- SCHEDULE: late-completion liquidated damages, milestone deadlines and entitlement to extensions of time, even when damages are expressed as a percentage of price.
-- When an extension of time is conditional on qualifying as force majeure, including its exclusions and notice requirements, the primary category is LEGAL, not SCHEDULE; classify the qualification test rather than the time relief granted.
-- BUDGET: standalone payment, guarantees, escalation, currency and financing exposure when not primarily a termination, liability or force-majeure legal entitlement.
-- Payment mechanics that arise from a termination right (demobilization, committed non-cancellable purchase orders, denial of lost profit) remain LEGAL, not BUDGET: the termination right is the governing obligation even when its remedy is monetary.
-- For mixed clauses, account for every material exception in the summary and quote. Do not fabricate a separate risk just to fill each category.
+For compatibility, classify each supported finding using the closest of the
+existing output categories: LEGAL, SCHEDULE, QUALITY, SCOPE, TECHNICAL or BUDGET.
+These codes are METADATA, NOT discovery rules or an exhaustive ontology of risks.
+No named clause type (such as force majeure, penalties, payments or termination)
+has an intrinsically fixed category; choose contextually, preserving multiple
+material consequences in the description. Never invent, split or omit risks
+merely to fill the category list.
+
+Review exceptions, conditions, carve-outs and cross-references alongside the
+operative obligation; do not ignore which party bears the exposure. If a
+referenced source is unavailable, state the limitation rather than inventing it.
 
 For each risk, return a JSON object with EXACTLY these keys:
 
@@ -508,7 +516,7 @@ For each risk, return a JSON object with EXACTLY these keys:
   "probability": "LOW|MEDIUM|HIGH",
   "impact": "LOW|MEDIUM|HIGH|CRITICAL",
   "mitigation_suggestion": "Concrete mitigation step",
-  "source_quote": "Verbatim multi-sentence excerpt from the contract that substantiates the risk (NOT a section heading or single word — at least 80 chars of real contract text)",
+  "source_quote": "Verbatim contiguous excerpt from the SOURCE DOCUMENT substantiating the risk; include the complete operative wording and its exceptions. Short clauses are valid if they contain the full relevant obligation. Never cite headings alone.",
   "source_text_snippet": "Same or longer surrounding context for traceability",
   "clause_ref": "Explicit source clause number such as 5.2, or null if no numbered clause is visible"
 }
@@ -518,16 +526,16 @@ CRITICAL OUTPUT RULES:
 1. Respond with ONLY a JSON object — no markdown, no prose, no explanations, no code fences.
 2. The JSON envelope MUST be exactly: {"risks": [ ... ]}
 3. Every risk MUST have all keys above. Omit risks you cannot ground in a verbatim quote.
-4. Review ALL substantive contract clauses before deciding which risks to return. Include each distinct material risk supported by a verbatim source quote; do not stop after an arbitrary number of items. Do not invent a risk merely to represent every clause.
+4. Review ALL substantive source sections before deciding which risks to return. Include each distinct material risk supported by a verbatim source quote; do not stop after an arbitrary number of items. Do not invent a risk merely to represent every clause.
 5. Examine obligations and their exceptions together: notice windows, carve-outs, exclusions, conditions for relief, and clauses stating when relief is NOT available can materially change the risk.
 6. Prefer fewer supported risks to superficial, duplicative or speculative ones, but never omit an independently supported material risk solely to keep the list short.
-7. source_quote must be ≥80 characters of contract text. NEVER use section labels alone.
+7. source_quote must cover the actual operative text and relevant conditions. Do not invent padding or omit a valid short clause to satisfy an arbitrary length. NEVER use section labels alone.
 8. clause_ref is ONLY the exact numeric section number explicitly printed in the contract adjacent to the cited text (e.g., 5.2). If none is explicit, emit null; never infer a clause number.
-9. source_quote MUST be a single, contiguous, character-for-character substring of the provided CONTRACT, with the original words, numbers, punctuation and exceptions. Never paraphrase, rewrite, merge non-adjacent text or invent a quotation. Check each quote against the CONTRACT before emitting JSON.
+9. source_quote MUST be a single, contiguous, character-for-character substring of the provided SOURCE DOCUMENT, with the original words, numbers, punctuation and exceptions. Never paraphrase, rewrite, merge non-adjacent text or invent a quotation. Check each quote against the CONTRACT before emitting JSON.
 10. When the operative clause contains carve-outs, limits, conditions, excluded relief or denied compensation, include that operative exception in the cited excerpt and in the interpretation; do not cite only its introductory sentence.
 """.strip()
 
-        user_prompt = f"CONTRACT:\n\n{input_data.document_text}"
+        user_prompt = f"SOURCE DOCUMENT:\n\n{input_data.document_text}"
 
         if is_retry:
             user_prompt = (

@@ -3,25 +3,27 @@
 import json
 import re
 
-from src.analysis.adapters.ai.tools.risk_extraction_tool import RiskExtractionInput, RiskExtractionTool
+from src.analysis.adapters.ai.tools.risk_extraction_tool import (
+    RiskExtractionInput,
+    RiskExtractionTool,
+)
 from src.analysis.domain.prompts import CRITIQUE_SYSTEM_PROMPT
 
 
-def test_n4_prompt_uses_dominant_legal_vs_schedule_or_budget_category() -> None:
+def test_n4_prompt_classifies_by_context_not_fixed_clause_rules() -> None:
     user_prompt, system_prompt = RiskExtractionTool._build_default_prompt(
         None,
         RiskExtractionInput(document_text="Synthetic contract clause."),
         is_retry=False,
     )
     assert "Synthetic contract clause." in user_prompt
-    assert "PRIMARY CATEGORY SELECTION" in system_prompt
-    assert "force majeure relief" in system_prompt
-    assert "liability caps and carve-outs" in system_prompt
-    assert "termination rights" in system_prompt
-    assert "late-completion liquidated damages" in system_prompt
-    assert "standalone payment" in system_prompt
-    assert "primary category is LEGAL, not SCHEDULE" in system_prompt
-    assert "remain LEGAL, not BUDGET" in system_prompt
+    assert "software" in system_prompt and "manufacturing" in system_prompt
+    assert "unfamiliar sectors" in system_prompt
+    assert "fixed catalog of expected risks" in system_prompt
+    assert "codes are METADATA, NOT discovery rules" in system_prompt
+    assert "No named clause type" in system_prompt
+    assert "primary category is LEGAL, not SCHEDULE" not in system_prompt
+    assert "remain LEGAL, not BUDGET" not in system_prompt
 
 
 def test_n4_prompt_demands_literal_quote_with_exceptions() -> None:
@@ -69,3 +71,26 @@ def test_n12_prompt_requires_sourced_findings_not_hidden_ok_caveats() -> None:
     assert "runtime handles absent/truncated source as unassessed with hitl" in prompt.lower()
     assert "mark it UNASSESSED in notes" not in prompt
     assert "make the verification uncertainty explicit" not in prompt
+
+
+def test_n4_held_out_industry_and_short_substantive_clause_are_not_excluded() -> None:
+    """Guard against turning editorial examples into restrictive discovery rules."""
+    from src.analysis.domain.risk_provenance import VERIFIED, classify_quote
+
+    short_clause = "Service credits apply after 3 days."
+    user_prompt, system_prompt = RiskExtractionTool()._build_default_prompt(
+        RiskExtractionInput(
+            document_text=(
+                "Software support agreement. " + short_clause
+                + " An additional unusual risk is not named in any standard catalog."
+            )
+        ),
+        is_retry=False,
+    )
+    assert "Software support agreement" in user_prompt
+    assert "unfamiliar sectors" in system_prompt
+    assert "fixed catalog of expected risks" in system_prompt
+    assert "arbitrary length" in system_prompt
+    assert "at least 80" not in system_prompt
+    assert "≥80 characters" not in system_prompt
+    assert classify_quote(short_clause, short_clause) == (short_clause, VERIFIED)

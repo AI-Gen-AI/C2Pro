@@ -22,12 +22,12 @@ def test_n4_prompt_requires_whole_contract_review_without_eight_item_ceiling() -
     )
     assert user_prompt is not None and source in user_prompt
     assert system_prompt is not None
-    assert "Review ALL substantive contract clauses" in system_prompt
+    assert "Review ALL substantive source sections" in system_prompt
     assert "do not stop after an arbitrary number of items" in system_prompt
     assert "never omit an independently supported material risk" in system_prompt
     assert "do not invent a risk merely to represent every clause" in system_prompt.lower()
     assert "3-8" not in system_prompt
-    assert "source_quote must be ≥80 characters" in system_prompt
+    assert "Do not invent padding or omit a valid short clause" in system_prompt
     assert "ONLY a JSON object" in system_prompt
 
 
