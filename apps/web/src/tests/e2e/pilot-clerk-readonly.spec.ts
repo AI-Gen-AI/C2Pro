@@ -74,6 +74,8 @@ interface ReviewQueueRead {
   total: number | null;
   ids: string[];
   reviewRows: string[];
+  types: string[];
+  statuses: string[];
 }
 
 async function readReviewQueue(
@@ -85,7 +87,7 @@ async function readReviewQueue(
     headers: { Authorization: "Bearer " + bearer },
   });
   const status = response.status();
-  if (status !== 200) return { status, total: null, ids: [], reviewRows: [] };
+  if (status !== 200) return { status, total: null, ids: [], reviewRows: [], types: [], statuses: [] };
   const parsed: unknown = await response.json();
   expect(parsed && typeof parsed === "object" && !Array.isArray(parsed),
     "HITL queue must return a structured read model").toBeTruthy();
@@ -101,7 +103,15 @@ async function readReviewQueue(
     item && typeof item === "object" && "row_id" in item &&
     typeof item.row_id === "string" ? item.row_id : "",
   ).filter(Boolean);
-  return { status, total: body.total as number, ids, reviewRows };
+  const types = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "item_type" in item &&
+    typeof item.item_type === "string" ? item.item_type : "UNKNOWN",
+  );
+  const statuses = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "current_status" in item &&
+    typeof item.current_status === "string" ? item.current_status : "UNKNOWN",
+  );
+  return { status, total: body.total as number, ids, reviewRows, types, statuses };
 }
 
 test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project reads", async ({ browser, request }) => {
@@ -186,6 +196,8 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
     let readableFindings = 0;
     let crossTenantRowsDenied = 0;
     let reviewCanApprove = 0;
+    let denied403 = 0;
+    let notFound404 = 0;
     for (const [owner, outsider, rows] of [
       [a, b, reviewsA.reviewRows],
       [b, a, reviewsB.reviewRows],
@@ -199,6 +211,8 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
         });
         expect([200, 403, 404], "HITL review read must not fail with server error")
           .toContain(own.status());
+        if (own.status() === 403) denied403 += 1;
+        if (own.status() === 404) notFound404 += 1;
         if (own.status() !== 200) continue;
         const body: unknown = await own.json();
         expect(body && typeof body === "object" && !Array.isArray(body)).toBeTruthy();
@@ -226,7 +240,17 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
       " readable=" + readableFindings +
       " approval_capable=" + reviewCanApprove +
       " foreign_denied=" + crossTenantRowsDenied +
+      " denied403=" + denied403 + " not_found404=" + notFound404 +
+      " A_types=" + [...new Set(reviewsA.types)].join(",") +
+      " B_types=" + [...new Set(reviewsB.types)].join(",") +
+      " A_statuses=" + [...new Set(reviewsA.statuses)].join(",") +
+      " B_statuses=" + [...new Set(reviewsB.statuses)].join(",") +
       " UAT=NOT_TESTED");
+    // This is a separate readiness gate: a green queue GET is insufficient.
+    expect(readableFindings, "PILOT_HITL_MODEL_UNAVAILABLE: zero actionable per-finding reviews")
+      .toBeGreaterThan(0);
+    expect(crossTenantRowsDenied, "HITL findings isolation was not exercised")
+      .toBeGreaterThan(0);
 
     if (!projectsA.ids.length || !projectsB.ids.length) {
       console.log("PILOT_G1_CROSS_TENANT=PARTIAL: no pre-existing project in at least one test tenant; no seed created");
