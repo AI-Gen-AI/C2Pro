@@ -170,7 +170,7 @@ async def test_n4_continued_malformed_json_is_rejected_without_salvage() -> None
 
 
 @pytest.mark.asyncio
-async def test_wrapper_full_source_bypasses_8192_limit_and_legacy_cache() -> None:
+async def test_wrapper_full_source_respects_per_call_limit_and_bypasses_legacy_cache() -> None:
     wrapper = object.__new__(AnthropicWrapper)
     wrapper.total_requests = 0
     wrapper.total_cost_usd = 0
@@ -213,9 +213,32 @@ async def test_wrapper_full_source_bypasses_8192_limit_and_legacy_cache() -> Non
         )
     )
     sent = wrapper.llm_client.generate.await_args.args[0]
-    assert sent.max_tokens == 128_000
+    assert sent.max_tokens == 8192
     assert sent.bypass_cache is True
+    assert sent.messages[0]["content"] == "All source content"
     assert result.content == '{"risks": []}'
+
+
+
+def test_bounded_full_source_uses_sdk_create_while_unbounded_requires_stream() -> None:
+    """An output cap prevents forbidden SSE; the full prompt is unchanged."""
+    messages = SimpleNamespace(
+        create=MagicMock(return_value=_msg("end_turn", "Complete answer")),
+        stream=MagicMock(side_effect=RuntimeError("GOVERNOR_STREAMING_NOT_PART_OF_THE_EXPERIMENT")),
+    )
+    client = _client(messages)
+    kwargs = _api_kwargs()
+    kwargs["max_tokens"] = 8192
+    answer = client._provider_message(kwargs)
+    assert answer.stop_reason == "end_turn"
+    messages.create.assert_called_once()
+    messages.stream.assert_not_called()
+    assert kwargs["messages"][0]["content"] == "The full EPC contract"
+
+    kwargs["max_tokens"] = 128_000
+    with pytest.raises(RuntimeError, match="GOVERNOR_STREAMING_NOT_PART_OF_THE_EXPERIMENT"):
+        client._provider_message(kwargs)
+    messages.stream.assert_called_once()
 
 
 @pytest.mark.asyncio
