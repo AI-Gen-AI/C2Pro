@@ -328,8 +328,8 @@ jobs:
       C2PRO_EMBEDDINGS_MOCK: "1"
       C2PRO_SKIP_HITL: "0"
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
-      # One output ceiling for every call, below the product default of 8192.
-      AI_MAX_TOKENS_OUTPUT: "4096"
+      # Use the product per-call output ceiling; retain full source and safe continuations.
+      AI_MAX_TOKENS_OUTPUT: "8192"
       C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/web/playwright-report/real-ai-governor-ledger.jsonl
       C2PRO_AI_GOVERNOR_MAX_CALLS: ${{ inputs.governor_max_calls }}
       C2PRO_AI_GOVERNOR_MAX_USD: ${{ inputs.governor_max_usd }}
