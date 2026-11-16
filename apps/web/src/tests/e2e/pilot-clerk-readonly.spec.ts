@@ -69,6 +69,36 @@ async function readProjects(request: import("@playwright/test").APIRequestContex
   return { status, ids };
 }
 
+interface ReviewQueueRead {
+  status: number;
+  total: number | null;
+  ids: string[];
+}
+
+async function readReviewQueue(
+  request: import("@playwright/test").APIRequestContext,
+  bearer: string,
+): Promise<ReviewQueueRead> {
+  const response = await request.get(PILOT_API + "/api/v1/hitl/queue?limit=5", {
+    failOnStatusCode: false,
+    headers: { Authorization: "Bearer " + bearer },
+  });
+  const status = response.status();
+  if (status !== 200) return { status, total: null, ids: [] };
+  const parsed: unknown = await response.json();
+  expect(parsed && typeof parsed === "object" && !Array.isArray(parsed),
+    "HITL queue must return a structured read model").toBeTruthy();
+  const body = parsed as { items?: unknown; total?: unknown };
+  expect(Array.isArray(body.items), "HITL queue items must be an array").toBe(true);
+  expect(typeof body.total, "HITL queue total must be numeric").toBe("number");
+  const ids = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "item_id" in item &&
+    typeof item.item_id === "string" ? item.item_id : "",
+  ).filter(Boolean);
+  expect(ids.length, "HITL queue items require canonical item_id").toBe((body.items as unknown[]).length);
+  return { status, total: body.total as number, ids };
+}
+
 test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project reads", async ({ browser, request }) => {
   test.skip(process.env.C2PRO_PILOT_READONLY_PROBE !== "1", "Manual read-only PILOT G1 probe only");
   expect(process.env.PILOT_API_URL).toBe(PILOT_API);
@@ -106,6 +136,38 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
       });
       expect([401, 403, 404], "cross-tenant project read must be denied").toContain(response.status());
     }
+    // G1 extension: the real PILOT HITL queue is read-only and tenant-scoped.
+    // No finding decision, approval, rejection, fixture seed or Railway write.
+    const anonymousReviews = await request.get(PILOT_API + "/api/v1/hitl/queue?limit=1", {
+      failOnStatusCode: false,
+    });
+    expect([401, 403], "anonymous HITL queue must be denied").toContain(anonymousReviews.status());
+    const reviewsA = await readReviewQueue(request, a.token);
+    const reviewsB = await readReviewQueue(request, b.token);
+    console.log("PILOT_HITL_READONLY auth_A_status=" + reviewsA.status +
+      " auth_B_status=" + reviewsB.status +
+      " A_total=" + reviewsA.total + " B_total=" + reviewsB.total);
+    expect(reviewsA.status, "Clerk A must access own tenant HITL queue").toBe(200);
+    expect(reviewsB.status, "Clerk B must access own tenant HITL queue").toBe(200);
+
+    let checkedReviewIsolation = 0;
+    for (const [bearer, foreignId] of [
+      [b.token, reviewsA.ids[0]],
+      [a.token, reviewsB.ids[0]],
+    ] as const) {
+      if (!foreignId) continue;
+      const response = await request.get(PILOT_API + "/api/v1/hitl/queue/" +
+        encodeURIComponent(foreignId), {
+        failOnStatusCode: false,
+        headers: { Authorization: "Bearer " + bearer },
+      });
+      expect([401, 403, 404], "foreign tenant review must not be visible").toContain(response.status());
+      checkedReviewIsolation += 1;
+    }
+    console.log("PILOT_HITL_CROSS_TENANT=" +
+      (checkedReviewIsolation === 2 ? "PASS" : "PARTIAL_EMPTY_QUEUE") +
+      " checked=" + checkedReviewIsolation);
+
     if (!projectsA.ids.length || !projectsB.ids.length) {
       console.log("PILOT_G1_CROSS_TENANT=PARTIAL: no pre-existing project in at least one test tenant; no seed created");
     } else {
