@@ -31,6 +31,10 @@ class ProjectState(TypedDict):
     # WBS 1.2: zero valid candidates are not a provider failure or an
     # independently established absence of contract risk.
     risk_extraction_outcome: str | None
+    # Pre-HITL literal source matching in the N2 analysis projection, not
+    # original PDF authenticity or legal-semantic validation.
+    risk_pre_hitl_evidence_passed: bool | None
+    risk_pre_hitl_evidence_rows: list[dict[str, Any]]
     extracted_wbs: list[Task]
     confidence_score: float | None
     critique_notes: str
