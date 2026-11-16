@@ -69,3 +69,20 @@
 - **Compatibilidad**: no hay modificación en esta decisión de modelos PG, ledger, migraciones, SourceUnit del Frente B ni UAT de #1229. Las revisiones a WBS 0.4/1.7 deben citar este checkpoint como cambio de criterio, no suplantar autoridad de coordinadores sobre otras ramas.
 
 Este documento especifica fronteras y condiciones comprobables; no autoaprueba el sprint.
+
+## 6. Auditoría de ejecución de política «sin semántica determinista» (17/11/2026)
+
+Se detectó que la política aprobada en #1049 **no estaba plenamente reflejada en la HEAD candidata G1**:
+- **N12 `src/analysis/application/critique_extraction_use_case.py`** contenía `_source_consistency_issues`, con expresiones regulares de `Defective work/5.2`, cure period, Client payment y un `RETRY` impuesto por interpretación **contractual**. No es mero cotejo de cita o seguridad. **Corrección propuesta:** PR [#1247](https://github.com/AI-Gen-AI/C2Pro/pull/1247), SHA `4974f2101975a4a48c01ff5e6f2a0d2604769259`, elimina esas reglas semánticas y exige HITL para cada ejecución con riesgos contractuales propuestos, aunque N12 devuelva OK; fuentes/citas y abstención siguen protegidas.
+- **N3 `src/analysis/domain/ai_extraction.py`** `_fallback_doc_type` escogía por keywords `contract/budget/schedule/technical_spec` cuando fallaba la clasificación por IA; podía mandar contratos mixtos al especialista equivocado. #1247 sustituye ese acierto presunto por `classification_unassessed`; el grafo conduce a ruta terminal diferenciada, sin N4/N5/N9, riesgos falsos, aprobación simulada o DONE.
+- **N4 `src/analysis/adapters/ai/tools/risk_extraction_tool.py`**: las listas `_INCLUDE_KEYWORDS`/`_EXCLUDE_KEYWORDS` son legado de compatibilidad pero **`extract_input_from_state` preserva el texto N2 íntegro**, `filter_relevant=False`, y no aplica top-20 (hint deprecated). Se verificó con texto contractual fuera del léxico EPC. La taxonomía enum rígidos del prompt todavía puede sesgar clasificación: revisar experimentalmente sin convertirlo en hardcode de descubrimiento de riesgos.
+- **Pendiente fuera de Frente A**: `src/analysis/domain/document_classification.py` `DocumentCategoryClassifier` asigna categorías de coherencia N1 por palabras clave; **no interviene en N3 clasificador de extracción**, pero puede sesgar N8/score. El equipo del score/Coherence (S4) debe analizar eliminar/aislar este *fallback*, con pruebas de distintos tipos de proyecto y sin inferir materialidad de las etiquetas.
+- **Sin cambio a S2/Frente B ni piloto**: N4 ledger/migraciones siguen propiedad B y #1229 propiedad Tándem CORE.
+
+**Evidencia de calidad de PR #1247:**
+- RED antes de corrección: cinco pruebas de regresión contra conjeturas por palabras clave y `RETRY` de cláusula específica.
+- GREEN local Python3.11: **385/385** en regresión amplia de N3, N4, N12, grafo y HITL, con un único test `test_cross_doc_coherence_aggregates_signals_and_returns_typed_summary` deseleccionado **porque falla idénticamente en SHA base #1241**, sin modificar su criterio de procedencia.
+- GREEN en infraestructura AI-GEN Ops, PR #1247 SHA exacto: **180/180** pruebas, PostgreSQL aislado, job `94475154bbde457b919b1c9b`, log SHA256 `a0c3bbd733e1639c21940cca6ce80cc9723e6b9180a8f6b70bd60d4be7ea8f77`. CI Install Drift Guard/Secret Scan SUCCESS.
+- **Calidad probada sólo para código/suites mencionadas**: no hay nuevo contrato completo de proveedor vivo ni revisión experta independiente. #1247 es una PR DRAFT apilada sobre #1241, no está en CORE; **G1 permanece sin cerrar**.
+
+**Consecuencia del contrato G0:** la auditoría materializa la regla ya aprobada: seguridad y origen de datos sí tienen validación determinista; semántica del contrato y familias de documentos no. La evidencia de código anterior a la fusión es una propuesta verificable, no una promoción o UAT.
