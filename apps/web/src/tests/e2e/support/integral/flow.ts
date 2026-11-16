@@ -333,8 +333,21 @@ export async function decideFindingsThroughUi(
     if (findings > 3) await typed(3, "CORRECTION_PROPOSED", FINDING_TEXTS.correctionReason, FINDING_TEXTS.correctionText);
   }
 
-  // A finding decision never decides the review: the final Approve / Reject stay available and untouched.
-  const reviewStillPending = await card.getByTestId(`approve-${itemId}`).isEnabled({ timeout: 30_000 }).catch(() => false);
+  // A finding decision never decides the review. The final Approve
+  // button may legitimately be DISABLED until every finding has been reviewed,
+  // so its enabled state does not prove whether the review is still pending.
+  // Observe the server-authoritative review status instead (GET only).
+  const queue = await callApi(page, `/api/v1/hitl/queue?project_id=${options.projectId}&limit=200`);
+  expect(queue.status, "the authentic review queue remains readable").toBe(200);
+  const rows = itemsOf(queue.data).filter(
+    (entry) => str(entry.item_id) === itemId && str(entry.row_id) === reviewRowId,
+  );
+  expect(rows.length, "the exact review row remains in the review queue").toBe(1);
+  const reviewStillPending = new Set([
+    "PENDING_REVIEW_REQUIRED",
+    "PENDING_REVIEW_CONDITIONAL",
+    "ESCALATED",
+  ]).has(str(rows[0]?.current_status).toUpperCase());
 
   // Persistence: a full reload shows the very same decisions (they live in the ledger, not in client state).
   await page.reload();

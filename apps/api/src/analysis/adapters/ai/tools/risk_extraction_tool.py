@@ -435,10 +435,15 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         state["extracted_risks"] = [self._risk_item_to_dict(risk) for risk in risks]
 
         if not result.success:
+            # Preserve the exception CLASS (never provider error text) for N4's
+            # ADR-013 evidence event. The node must not turn a failed ToolResult
+            # into an unexplained, source-free empty extraction.
+            state["risk_extraction_error_type"] = result.error_type or "ToolFailure"
             state["critique_notes"] = result.error or "Risk extraction failed"
             state["confidence_score"] = 0.0
             return state
 
+        state["risk_extraction_error_type"] = None
         # Report only assessed per-risk confidence. The tool-wide confidence
         # metadata and absent fields are not measurements of individual risks.
         # Existing RiskExtractionCandidate has no per-item confidence, so

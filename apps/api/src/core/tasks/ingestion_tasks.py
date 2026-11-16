@@ -1228,7 +1228,7 @@ def decide_document_status(
     """
     if not requires_text_analysis:
         return DocumentStatus.ANALYZED
-    if rag_chunk_count > 0 and graph_analysis_id:
+    if graph_analysis_id:
         return DocumentStatus.ANALYZED
     return DocumentStatus.PARSED_PENDING_ANALYSIS
 
@@ -1392,17 +1392,14 @@ async def _analyze_owned(
         revision_id=grant.revision_id,
     )
 
-    # The N1-N17 text-analysis graph only applies to free-text documents that
-    # have RAG chunks. Structured documents (schedule/budget) carry no free
-    # text, and text documents whose embeddings are unavailable (e.g. no
-    # OPENAI_API_KEY -> zero chunks) cannot run it either. In both cases the
-    # document is still ANALYZED via the structured extraction (clauses /
-    # schedule rows / budget lines) done during parsing — the graph is a best-effort enrichment, never
-    # a hard gate. This is what previously stranded documents in
-    # parsed_pending_analysis and the DLQ ("parsed_text not available" /
-    # "RAG chunks were not committed").
+    # N4/N12 are full-source extraction and critique, NOT retrieval. Requiring
+    # committed RAG/embeddings chunks before the document graph silently
+    # prevents contractual risk analysis whenever embeddings are unavailable.
+    # Structured source types stay outside the text graph; for free-text
+    # sources N2's parsed text is the input, regardless of RAG chunk count.
+    # The chunk count remains a separate Health/retrieval-coverage signal.
     human_approval_required = False
-    if parsed_text and chunk_count > 0:
+    if requires_text_analysis(document.document_type, parsed_text):
         # Repository read is tenant-scoped and bound to this processing grant.
         # Missing revision or mismatched identity yields NO coverage assertion.
         # A repository error is not downgraded to an untrusted positive grant.
@@ -1430,7 +1427,7 @@ async def _analyze_owned(
             extra={
                 "document_id": str(document_id),
                 "tenant_id": str(tenant_id),
-                "reason": "no_parsed_text" if not parsed_text else "no_rag_chunks",
+                "reason": "no_parsed_text" if not parsed_text else "structured_document_type",
             },
         )
 
@@ -1522,7 +1519,7 @@ async def _analyze_owned(
             extra={
                 "document_id": str(document_id),
                 "tenant_id": str(tenant_id),
-                "reason": "no_rag_chunks" if chunk_count == 0 else "graph_did_not_persist",
+                "reason": "graph_did_not_persist",
                 "rag_outcome": rag_outcome,
                 "will_retry": retry,
             },

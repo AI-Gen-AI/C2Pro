@@ -1080,6 +1080,43 @@ class TestExtractorAIToolDelegation:
         assert node_result.error is not None
 
     @pytest.mark.asyncio
+    async def test_n4_failed_tool_result_persists_sanitized_failure_class(
+        self, monkeypatch
+    ) -> None:
+        """A failed ToolResult must not disappear as an untraceable empty N4."""
+        from src.analysis.adapters.graph import nodes
+        import sys
+        import types
+
+        monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+        persisted: list[NodeResult] = []
+
+        async def _fake_tool(state):
+            state["extracted_risks"] = []
+            state["risk_extraction_error_type"] = "ToolValidationError"
+            return state
+
+        fake = types.ModuleType("src.core.ai.tools")
+        fake.get_tool = lambda name, *, version: _fake_tool
+        monkeypatch.setitem(sys.modules, "src.core.ai.tools", fake)
+        monkeypatch.setattr(
+            nodes, "_persist_node_error",
+            lambda _state, record: persisted.append(record),
+        )
+
+        result = await nodes.risk_extractor_node(
+            _make_state(document_text="The contractor must pay a penalty.")
+        )
+        failure = result["node_results"][-1]
+        assert failure.status is NodeStatus.FAILED
+        assert failure.error is not None
+        assert failure.error.error_type == "ToolValidationError"
+        assert failure.error.message == "N4 extraction failed or returned no risk items"
+        assert persisted == [failure]
+        assert result["extracted_risks"] == []
+        assert result["confidence_score"] is None
+
+    @pytest.mark.asyncio
     async def test_risk_extractor_tool_exception_emits_failed_node_result(
         self, monkeypatch
     ) -> None:

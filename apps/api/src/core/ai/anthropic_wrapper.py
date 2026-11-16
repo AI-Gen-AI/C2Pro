@@ -327,7 +327,17 @@ class AnthropicWrapper:
         if full_source:
             from src.core.ai.model_capabilities import full_document_capacity
 
-            context_cap, max_tokens = full_document_capacity(model_config.name)
+            context_cap, provider_output_cap = full_document_capacity(model_config.name)
+            # Keep the provider-verified context capacity and ALL source text.
+            # A configured per-call output limit is not a document truncation:
+            # LLMClient continues a max_tokens response until end_turn and
+            # rejects partial/failed continuations instead of accepting them.
+            # Without this bound, the client uses SSE (>20k output tokens);
+            # controlled test governors intentionally refuse streaming.
+            max_tokens = min(
+                provider_output_cap,
+                self.max_tokens_limit if self.max_tokens_limit is not None else provider_output_cap,
+            )
             logger.info(
                 "full_document_capacity_selected",
                 request_id=request.request_id,
