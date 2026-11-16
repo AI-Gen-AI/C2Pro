@@ -327,6 +327,29 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         _append_risk_extraction_summary(state)
         return state
 
+    if (
+        not updated_state.get("extracted_risks")
+        and updated_state.get("risk_extraction_outcome") == "NO_FINDINGS_UNASSESSED"
+    ):
+        # Tool and JSON parsing succeeded. No gold-set or section-level
+        # coverage has certified "risk free"; review remains mandatory.
+        updated_state["confidence_score"] = None
+        updated_state["human_approval_required"] = True
+        updated_state["critique_notes"] = (
+            "N4 returned zero candidates; completeness and semantic recall "
+            "are unassessed and require independent review."
+        )
+        updated_state["node_results"] = [
+            *updated_state.get("node_results", []),
+            NodeResult(
+                node="risk_extractor",
+                status=NodeStatus.DEGRADED,
+                degradation_reason="zero_findings_unassessed",
+            ),
+        ]
+        _append_risk_extraction_summary(updated_state)
+        return updated_state
+
     if not updated_state.get("extracted_risks"):
         # The Tool adapter returns a FAILED ToolResult instead of raising for
         # many pre-provider errors (configuration, validation, quota, etc.).
@@ -573,6 +596,16 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    if state.get("risk_extraction_outcome") == "NO_FINDINGS_UNASSESSED":
+        # N12 cannot turn zero unverified N4 candidates into proof of no risk
+        # by returning a high aggregate confidence or an empty critique.
+        state["confidence_score"] = None
+        state["retry_count"] = 0
+        state["human_approval_required"] = True
+        state["critique_notes"] = (
+            "N4 zero findings remain unassessed: independent coverage/recall "
+            "has not been established."
+        )
     await _apply_temporal_review_gate(state)
     if state.get("doc_type") == "technical_spec" and state.get("citation_validation_passed") is not True:
         # An N12 confidence estimate never substitutes for N5 source evidence.
