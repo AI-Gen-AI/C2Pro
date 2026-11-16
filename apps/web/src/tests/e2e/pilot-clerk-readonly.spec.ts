@@ -73,6 +73,7 @@ interface ReviewQueueRead {
   status: number;
   total: number | null;
   ids: string[];
+  reviewRows: string[];
 }
 
 async function readReviewQueue(
@@ -84,7 +85,7 @@ async function readReviewQueue(
     headers: { Authorization: "Bearer " + bearer },
   });
   const status = response.status();
-  if (status !== 200) return { status, total: null, ids: [] };
+  if (status !== 200) return { status, total: null, ids: [], reviewRows: [] };
   const parsed: unknown = await response.json();
   expect(parsed && typeof parsed === "object" && !Array.isArray(parsed),
     "HITL queue must return a structured read model").toBeTruthy();
@@ -96,7 +97,11 @@ async function readReviewQueue(
     typeof item.item_id === "string" ? item.item_id : "",
   ).filter(Boolean);
   expect(ids.length, "HITL queue items require canonical item_id").toBe((body.items as unknown[]).length);
-  return { status, total: body.total as number, ids };
+  const reviewRows = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "row_id" in item &&
+    typeof item.row_id === "string" ? item.row_id : "",
+  ).filter(Boolean);
+  return { status, total: body.total as number, ids, reviewRows };
 }
 
 test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project reads", async ({ browser, request }) => {
@@ -173,6 +178,55 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
     expect(checkedReviewIsolation, "HITL isolation requires a non-colliding foreign item in a complete queue")
       .toBeGreaterThan(0);
     console.log("PILOT_HITL_CROSS_TENANT=PASS checked=" + checkedReviewIsolation);
+
+    // Read a REAL pending graph review's per-finding model when it exists.
+    // This does not create, approve or dismiss any finding. Absence/403/404 is
+    // reported as non-UAT rather than mistaken for an approved workflow.
+    let foundActionable = 0;
+    let readableFindings = 0;
+    let crossTenantRowsDenied = 0;
+    let reviewCanApprove = 0;
+    for (const [owner, outsider, rows] of [
+      [a, b, reviewsA.reviewRows],
+      [b, a, reviewsB.reviewRows],
+    ] as const) {
+      for (const rowId of rows) {
+        foundActionable += 1;
+        const url = PILOT_API + "/api/v1/hitl/reviews/" + encodeURIComponent(rowId) + "/findings";
+        const own = await request.get(url, {
+          failOnStatusCode: false,
+          headers: { Authorization: "Bearer " + owner.token },
+        });
+        expect([200, 403, 404], "HITL review read must not fail with server error")
+          .toContain(own.status());
+        if (own.status() !== 200) continue;
+        const body: unknown = await own.json();
+        expect(body && typeof body === "object" && !Array.isArray(body)).toBeTruthy();
+        const data = body as {
+          findings?: unknown;
+          decision_scope?: unknown;
+          final_approval?: unknown;
+          capabilities?: { approve_candidate?: unknown } | null;
+        };
+        expect(Array.isArray(data.findings), "individual HITL findings must be an array").toBe(true);
+        expect(data.decision_scope).toBe("PROVISIONAL_REVIEWER_INTENT");
+        expect(data.final_approval).toBe("SEPARATE_ACT");
+        readableFindings += 1;
+        if (data.capabilities?.approve_candidate === true) reviewCanApprove += 1;
+        const foreign = await request.get(url, {
+          failOnStatusCode: false,
+          headers: { Authorization: "Bearer " + outsider.token },
+        });
+        expect([401, 403, 404], "foreign tenant must not read review findings")
+          .toContain(foreign.status());
+        crossTenantRowsDenied += 1;
+      }
+    }
+    console.log("PILOT_HITL_FINDINGS_READONLY rows=" + foundActionable +
+      " readable=" + readableFindings +
+      " approval_capable=" + reviewCanApprove +
+      " foreign_denied=" + crossTenantRowsDenied +
+      " UAT=NOT_TESTED");
 
     if (!projectsA.ids.length || !projectsB.ids.length) {
       console.log("PILOT_G1_CROSS_TENANT=PARTIAL: no pre-existing project in at least one test tenant; no seed created");
