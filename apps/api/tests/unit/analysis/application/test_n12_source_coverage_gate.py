@@ -41,21 +41,22 @@ async def test_n12_ok_without_source_cannot_waive_hitl() -> None:
 
 
 @pytest.mark.asyncio
-async def test_n12_ok_from_truncated_excerpt_cannot_claim_full_coverage() -> None:
+async def test_n12_full_source_is_not_clipped_by_legacy_excerpt_limit() -> None:
     full_source = ("EPC-01: Scope and technical description. " * 550) + (
         "EPC-05: Contractor shall pay 1% liquidated damages for each week of delay."
     )
     reviewer = FakeReview({"status": "OK", "notes": "no omitted risks", "findings": []})
     result = await CritiqueExtractionUseCase(ai=reviewer).execute(command(full_source))
-    assert "PARTIAL EXCERPT" in reviewer.calls[0]
-    assert "EPC-05:" not in reviewer.calls[0]
+    assert "SOURCE PROVIDED IN FULL" in reviewer.calls[0]
+    assert full_source in reviewer.calls[0]
+    assert "PARTIAL EXCERPT" not in reviewer.calls[0]
     assert result.status == "UNASSESSED"
     assert result.human_approval_required is True
     assert result.confidence is None
 
 
 @pytest.mark.asyncio
-async def test_n12_quote_in_unseen_tail_does_not_become_source_cited() -> None:
+async def test_n12_quote_in_full_source_is_cited_but_requires_hitl() -> None:
     tail = "EPC-05: Contractor shall pay 1% liquidated damages per week of delay."
     full_source = ("EPC-01: Neutral background text;\n" * 600) + tail
     reviewer = FakeReview({
@@ -68,11 +69,12 @@ async def test_n12_quote_in_unseen_tail_does_not_become_source_cited() -> None:
         }],
     })
     result = await CritiqueExtractionUseCase(ai=reviewer).execute(command(full_source))
-    assert tail not in reviewer.calls[0]
+    assert full_source in reviewer.calls[0]
+    assert "PARTIAL EXCERPT" not in reviewer.calls[0]
     assert result.status == "UNASSESSED"
     assert result.confidence is None
     assert result.human_approval_required is True
-    assert "Source-cited" not in result.critique_notes
+    assert "Source-cited" in result.critique_notes
 
 
 @pytest.mark.asyncio
