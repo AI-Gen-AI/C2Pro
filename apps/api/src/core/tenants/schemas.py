@@ -79,4 +79,7 @@ class BudgetStatusResponse(BaseModel):
 class AiSpendUpdate(BaseModel):
     """Schema for updating AI spend."""
 
-    amount: float = Field(..., description="Amount to add to current spend")
+    amount: float = Field(
+        ..., ge=0, allow_inf_nan=False,
+        description="Nonnegative, finite charge to add to current spend",
+    )

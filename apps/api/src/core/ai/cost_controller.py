@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -39,6 +40,8 @@ class CostControllerService:
         """
         Checks if a tenant has enough budget for an operation.
         """
+        if not math.isfinite(estimated_cost) or estimated_cost < 0:
+            raise BudgetExceededException("Invalid nonnegative AI cost estimate")
         tenant = await get_tenant_by_id(self.db, tenant_id, lock_for_update=True)
         if not tenant:
             raise BudgetExceededException(
@@ -110,6 +113,10 @@ class CostControllerService:
 
     async def track_usage(self, tenant_id: UUID, actual_cost: float) -> None:
         """Track legacy usage under a tenant-row lock to prevent lost updates."""
+        if not math.isfinite(actual_cost) or actual_cost < 0:
+            raise BudgetExceededException(
+                "Invalid AI usage amount; refunds require a separate audited adjustment"
+            )
         tenant = await get_tenant_by_id(
             self.db, tenant_id, lock_for_update=True,
         )

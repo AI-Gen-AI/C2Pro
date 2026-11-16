@@ -6,6 +6,7 @@ Refers to TASK-REV-009 and Test Suite ID: TS-E2E-SEC-TNT-001.
 """
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -104,6 +105,8 @@ class TenantService:
         Returns:
             Updated tenant or None if not found
         """
+        if not math.isfinite(amount) or amount < 0:
+            raise ValueError("AI usage adjustment must be finite and nonnegative")
         tenant = await get_tenant_by_id(
             self.db, tenant_id, lock_for_update=True,
         )
