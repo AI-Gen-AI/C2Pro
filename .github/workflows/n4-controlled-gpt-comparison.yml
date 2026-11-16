@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 20
     env:
       ENVIRONMENT: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       JWT_SECRET_KEY: n4-multimodel-trial-only-minimum-32-characters
       C2PRO_N4_PROVIDER: openai
       C2PRO_N4_EXTERNAL_PROVIDER_ENABLED: "1"
