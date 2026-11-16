@@ -262,6 +262,21 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
         initial_delay_ms=1000,
     )
 
+    def __init__(
+        self,
+        anthropic_wrapper: Any | None = None,
+        prompt_manager: Any | None = None,
+    ) -> None:
+        # Existing N4 remains Anthropic unless explicitly opted in.
+        if anthropic_wrapper is None and os.getenv("C2PRO_N4_PROVIDER", "anthropic").strip().lower() != "anthropic":
+            from src.analysis.adapters.ai.tools.n4_external_provider import get_n4_external_provider
+
+            anthropic_wrapper = get_n4_external_provider()
+        super().__init__(
+            anthropic_wrapper=anthropic_wrapper,
+            prompt_manager=prompt_manager,
+        )
+
     async def execute(
         self,
         input_data: RiskExtractionInput,
