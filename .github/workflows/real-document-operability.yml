@@ -550,6 +550,43 @@ jobs:
                     ",".join(f"{k}:{v}" for k,v in sorted(errors.items())))
           PY
 
+      - name: Diagnose persisted N4 node failure types in private PostgreSQL
+        if: ${{ always() && inputs.infrastructure_check_only != true }}
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import collections
+          import os
+          import psycopg
+
+          allow_nodes = {"risk_extractor", "critique", "wbs_extractor",
+                         "pii_anonymizer", "document_ingestion", "router"}
+          allow_errors = {"ToolNotFoundError", "ToolValidationError", "ToolExecutionError",
+                          "ValidationError", "ValueError", "TypeError", "KeyError",
+                          "RuntimeError", "TimeoutError", "PermissionError",
+                          "AuthenticationError", "APIConnectionError", "APIStatusError",
+                          "RateLimitError", "AnthropicError", "LLMPartialGenerationError",
+                          "JSONDecodeError", "ProviderError", "OpenAIError"}
+          counts = collections.Counter()
+          try:
+              with psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=5) as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute("""
+                          SELECT payload_trace -> 'node_result' ->> 'node' AS node,
+                                 payload_trace -> 'node_result' -> 'error' ->> 'error_type' AS error_type
+                          FROM public.evidence_extraction_events
+                          WHERE event_type = 'processing_error'
+                          LIMIT 100
+                      """)
+                      for node, error in cursor.fetchall():
+                          if node in allow_nodes and error in allow_errors:
+                              counts[(node, error)] += 1
+              print("DIAG_PG_NODE_ERRORS=" +
+                    ",".join(f"{node}:{error}:{count}" for (node,error), count in sorted(counts.items())))
+          except Exception as exc:
+              print("DIAG_PG_QUERY_FAILURE=" + type(exc).__name__[:40])
+          PY
+
       - name: Summarize verdict and consumption
         if: always()
         run: |
