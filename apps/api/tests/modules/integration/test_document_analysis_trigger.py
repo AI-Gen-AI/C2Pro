@@ -668,14 +668,14 @@ class TestDocumentAnalysisTask:
         assert result["will_retry"] is False
         inst.update_status.assert_called_once_with(tenant_id, document_id, DocumentStatus.ANALYZED)
     @pytest.mark.asyncio
-    async def test_run_document_analysis_holds_contract_pending_when_no_rag_chunks(self):
-        """Zero RAG chunks on a CONTRACT -> pending + retry, never ANALYZED.
+    @pytest.mark.parametrize("graph_succeeds", [True, False])
+    async def test_contract_without_rag_chunks_runs_source_graph_but_requires_completion(
+        self, graph_succeeds: bool
+    ):
+        """No RAG chunks may block retrieval, not full-source N4/N12 analysis.
 
-        This test previously asserted ANALYZED. That was the production defect:
-        document ab813007 reached upload_status=analyzed with 25 clauses, zero
-        chunks, zero analyses and zero snapshots, and this test certified it.
-        The assertion is inverted rather than deleted so the regression stays
-        pinned from the exact angle that missed it.
+        ANALYZED still requires graph success. If the graph fails, retain
+        PARSED_PENDING_ANALYSIS rather than falsely calling a contract clean.
         """
         from src.core.tasks.ingestion_tasks import _run_document_analysis
 
@@ -686,9 +686,8 @@ class TestDocumentAnalysisTask:
         document.tenant_id = tenant_id
         document.upload_status = DocumentStatus.PARSED_PENDING_ANALYSIS
         document.document_metadata = {"parsed_text": "some contract text"}
-
         session = _make_session()
-        session.execute.return_value.scalar_one.return_value = 0  # no chunks committed
+        session.execute.return_value.scalar_one.return_value = 0  # no RAG
 
         class Orchestrator:
             def __init__(self) -> None:
@@ -696,10 +695,9 @@ class TestDocumentAnalysisTask:
 
             async def run(self, initial_state: dict, thread_id: str) -> dict:
                 self.called = True
-                return {"analysis_id": "should-not-run"}
+                return {"analysis_id": "source-analyzed"} if graph_succeeds else {}
 
         orchestrator = Orchestrator()
-
         with ExitStack() as stack:
             stack.enter_context(patch("src.core.tasks.ingestion_tasks.init_db", new=AsyncMock()))
             stack.enter_context(
@@ -713,13 +711,20 @@ class TestDocumentAnalysisTask:
             inst.update_status = AsyncMock()
             inst.update_metadata = AsyncMock()
 
-            with pytest.raises(AnalysisIncompleteRetryableError):
-                await _run_document_analysis(
+            if graph_succeeds:
+                result = await _run_document_analysis(
                     tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
                 )
+                assert result["persisted"] is True
+                assert result["will_retry"] is False
+            else:
+                with pytest.raises(AnalysisIncompleteRetryableError):
+                    await _run_document_analysis(
+                        tenant_id=tenant_id, document_id=document_id, orchestrator=orchestrator
+                    )
 
-        assert orchestrator.called is False
-        # Persisted BEFORE the raise: honest even if every retry is exhausted.
+        assert orchestrator.called is True
         inst.update_status.assert_called_once_with(
-            tenant_id, document_id, DocumentStatus.PARSED_PENDING_ANALYSIS
+            tenant_id, document_id,
+            DocumentStatus.ANALYZED if graph_succeeds else DocumentStatus.PARSED_PENDING_ANALYSIS
         )
