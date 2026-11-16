@@ -69,6 +69,7 @@ class BudgetStatusResponse(BaseModel):
     tenant_id: str
     monthly_budget: float
     current_spend: float
+    reserved: float = 0.0
     remaining: float
     usage_percentage: float
     is_over_budget: bool

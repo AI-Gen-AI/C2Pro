@@ -7,6 +7,7 @@ Refers to Test Suite IDs: TS-E2E-SEC-TNT-001, TS-AUTH-CORE-001.
 
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Numeric,
     String,
     event,
     text,
@@ -93,6 +95,11 @@ class Tenant(Base):
     # AI Budget Control
     ai_budget_monthly: Mapped[float] = mapped_column(Float, default=50.0, nullable=False)
     ai_spend_current: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    # N4's unsettled provider liabilities. Updated atomically with N4 ledger;
+    # legacy CostController includes this in its budget availability check.
+    ai_spend_reserved_usd: Mapped[Decimal] = mapped_column(
+        Numeric(16, 6), default=Decimal("0"), nullable=False,
+    )
     ai_spend_last_reset: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Usage limits (basados en plan)

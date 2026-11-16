@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import structlog
@@ -38,7 +39,7 @@ class CostControllerService:
         """
         Checks if a tenant has enough budget for an operation.
         """
-        tenant = await get_tenant_by_id(self.db, tenant_id)
+        tenant = await get_tenant_by_id(self.db, tenant_id, lock_for_update=True)
         if not tenant:
             raise BudgetExceededException(
                 f"Tenant {tenant_id} not found or has no budget configured."
@@ -54,11 +55,24 @@ class CostControllerService:
             tenant.ai_spend_last_reset = now
             logger.info("ai_budget_reset", tenant_id=str(tenant_id))
 
-        if tenant.ai_spend_current + estimated_cost > tenant.ai_budget_monthly:
+        # Pending N4 reservations are also liabilities. Without this check,
+        # legacy calls could pass preflight by ignoring N4's in-flight spend.
+        # Legacy callers still need their own atomic reservation protocol;
+        # this check alone does not guarantee two legacy workers cannot race.
+        raw_reserved = getattr(tenant, "ai_spend_reserved_usd", 0)
+        reserved = (
+            float(raw_reserved)
+            if isinstance(raw_reserved, (int, float, Decimal))
+            else 0.0
+        )
+        if reserved < 0:
+            raise BudgetExceededException("Invalid tenant pending usage")
+        if tenant.ai_spend_current + reserved + estimated_cost > tenant.ai_budget_monthly:
             logger.critical(
                 "ai_budget_exceeded",
                 tenant_id=str(tenant_id),
                 current_spend=tenant.ai_spend_current,
+                reserved_spend=reserved,
                 estimated_cost=estimated_cost,
                 budget=tenant.ai_budget_monthly,
             )
@@ -68,7 +82,10 @@ class CostControllerService:
                 f"Current spend: ${tenant.ai_spend_current:.4f}."
             )
 
-        usage_percent = (tenant.ai_spend_current / tenant.ai_budget_monthly) * 100
+        usage_percent = (
+            (tenant.ai_spend_current + reserved) / tenant.ai_budget_monthly * 100
+            if tenant.ai_budget_monthly > 0 else 100.0
+        )
         if usage_percent >= 90:
             logger.critical(
                 "ai_budget_alert",
@@ -92,21 +109,24 @@ class CostControllerService:
             )
 
     async def track_usage(self, tenant_id: UUID, actual_cost: float) -> None:
-        """
-        Updates the tenant's current AI spend.
-        """
-        tenant = await get_tenant_by_id(self.db, tenant_id)
+        """Track legacy usage under a tenant-row lock to prevent lost updates."""
+        tenant = await get_tenant_by_id(
+            self.db, tenant_id, lock_for_update=True,
+        )
         if not tenant:
             logger.error("track_usage_failed_tenant_not_found", tenant_id=str(tenant_id))
             return
 
         tenant.ai_spend_current += actual_cost
+        # AsyncSession defaults to expire_on_commit; accessing ORM attributes
+        # afterward may trigger an implicit async fetch (MissingGreenlet).
+        new_total_spend = tenant.ai_spend_current
         await self.db.commit()
         logger.info(
             "ai_usage_tracked",
             tenant_id=str(tenant_id),
             cost_added=actual_cost,
-            new_total_spend=tenant.ai_spend_current,
+            new_total_spend=new_total_spend,
         )
 
     def calculate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
