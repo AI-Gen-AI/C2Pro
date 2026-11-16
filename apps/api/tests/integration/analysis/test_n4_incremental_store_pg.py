@@ -201,12 +201,20 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                     )
                 assert await account_call(
                     session, authority=a, reservation_id=first.reservation_id,
-                    billed_usd="0.30",
+                    billed_usd="0.30", input_tokens=100, output_tokens=40,
+                    provider_request_id="receipt-n4-test-001",
                 ) == "SETTLED"
                 assert await account_call(
                     session, authority=a, reservation_id=first.reservation_id,
-                    billed_usd="0.30",
+                    billed_usd="0.30", input_tokens=100, output_tokens=40,
+                    provider_request_id="receipt-n4-test-001",
                 ) == "SETTLED"
+                with pytest.raises(N4LedgerError, match="receipt differs"):
+                    await account_call(
+                        session, authority=a, reservation_id=first.reservation_id,
+                        billed_usd="0.30", input_tokens=101, output_tokens=40,
+                        provider_request_id="receipt-n4-test-001",
+                    )
                 with pytest.raises(N4LedgerError, match="differs"):
                     await account_call(
                         session, authority=a, reservation_id=first.reservation_id,

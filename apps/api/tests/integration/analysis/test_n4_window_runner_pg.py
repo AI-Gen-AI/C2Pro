@@ -142,6 +142,17 @@ async def test_successful_multiwindow_resume_never_calls_provider_twice():
         assert Decimal(balance["spent_usd"]) == (
             Decimal("0.02") * first.total_windows
         )
+        conn = await asyncpg.connect(_DSN)
+        try:
+            usage = await conn.fetchrow("""
+                SELECT sum(input_tokens) AS inputs, sum(output_tokens) AS outputs
+                  FROM public.n4_usage_reservations
+                 WHERE tenant_id=$1 AND run_id=$2 AND status='SETTLED'
+            """, a.tenant_id, first.run_id)
+            assert usage["inputs"] == 100 * first.total_windows
+            assert usage["outputs"] == 90 * first.total_windows
+        finally:
+            await conn.close()
         second = await runner.run(
             authority=a, project_id=project,
             model_safe_text=_source(), n2_projection_attested=True,

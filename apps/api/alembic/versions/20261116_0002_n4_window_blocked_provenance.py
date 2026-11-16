@@ -26,9 +26,29 @@ UPGRADE_STATEMENTS: tuple[str, ...] = (
     "ALTER TABLE public.n4_extraction_windows "
     "ADD CONSTRAINT ck_n4_windows_refs "
     "CHECK (jsonb_typeof(unresolved_refs) = 'array')",
+    "ALTER TABLE public.n4_usage_reservations "
+    "ADD COLUMN input_tokens bigint",
+    "ALTER TABLE public.n4_usage_reservations "
+    "ADD COLUMN output_tokens bigint",
+    "ALTER TABLE public.n4_usage_reservations "
+    "ADD COLUMN provider_request_id varchar(128)",
+    "ALTER TABLE public.n4_usage_reservations "
+    "ADD CONSTRAINT ck_n4_usage_token_nonnegative CHECK "
+    "((input_tokens IS NULL OR input_tokens >= 0) "
+    "AND (output_tokens IS NULL OR output_tokens >= 0))",
 )
 
 DOWNGRADE_STATEMENTS: tuple[str, ...] = (
+    """DO $do$ BEGIN
+        PERFORM set_config('row_security', 'off', true);
+        IF EXISTS (
+            SELECT 1 FROM public.n4_usage_reservations
+             WHERE input_tokens IS NOT NULL OR output_tokens IS NOT NULL
+                OR provider_request_id IS NOT NULL LIMIT 1
+        ) THEN
+            RAISE EXCEPTION 'Cannot downgrade N4 provider usage provenance';
+        END IF;
+    END $do$""",
     """DO $do$ BEGIN
         PERFORM set_config('row_security', 'off', true);
         IF EXISTS (
@@ -40,6 +60,11 @@ DOWNGRADE_STATEMENTS: tuple[str, ...] = (
             RAISE EXCEPTION 'Cannot downgrade N4 blocked provenance with stored evidence';
         END IF;
     END $do$""",
+    "ALTER TABLE public.n4_usage_reservations "
+    "DROP CONSTRAINT ck_n4_usage_token_nonnegative",
+    "ALTER TABLE public.n4_usage_reservations DROP COLUMN provider_request_id",
+    "ALTER TABLE public.n4_usage_reservations DROP COLUMN output_tokens",
+    "ALTER TABLE public.n4_usage_reservations DROP COLUMN input_tokens",
     "ALTER TABLE public.n4_extraction_windows DROP CONSTRAINT ck_n4_windows_refs",
     "ALTER TABLE public.n4_extraction_windows DROP COLUMN blocked_reason",
     "ALTER TABLE public.n4_extraction_windows DROP COLUMN unresolved_refs",

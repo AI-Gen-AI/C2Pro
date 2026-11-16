@@ -397,12 +397,22 @@ async def reserve_call(
 async def account_call(
     session: AsyncSession, *, authority: ProcessingAuthority,
     reservation_id: UUID, billed_usd: Decimal | str | int | None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    provider_request_id: str | None = None,
 ) -> str:
     """Reconcile provider receipt once, or retain reserve if price unknown.
 
     The observed charge may exceed the preflight reservation. It remains an
     actual liability; do not silently cap or replace actual billed use with 0.
     """
+    for count in (input_tokens, output_tokens):
+        if count is not None and (type(count) is not int or count < 0):
+            raise N4LedgerError("provider token count must be nonnegative integer")
+    if provider_request_id is not None and (
+        not provider_request_id or len(provider_request_id) > 128
+    ):
+        raise N4LedgerError("invalid provider request reference")
     await _verify(session, authority)
     # Read the run ID without a lock; then obey the global lock order:
     # processing authority -> run -> scopes -> reservation. A changed
@@ -423,7 +433,8 @@ async def account_call(
     )
     reservation = (await session.execute(text("""
         SELECT reservation_id, run_id, status, reserved_usd,
-               spent_usd, bucket_scopes
+               spent_usd, bucket_scopes, input_tokens, output_tokens,
+               provider_request_id
           FROM public.n4_usage_reservations
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND reservation_id = CAST(:reservation AS uuid)
@@ -439,17 +450,29 @@ async def account_call(
         if status == "CANCELED":
             raise N4LedgerError("cannot reopen canceled reservation")
         await session.execute(text("""
-            UPDATE public.n4_usage_reservations SET status = 'UNKNOWN'
+            UPDATE public.n4_usage_reservations
+               SET status = 'UNKNOWN', input_tokens = COALESCE(:in_tokens, input_tokens),
+                   output_tokens = COALESCE(:out_tokens, output_tokens),
+                   provider_request_id = COALESCE(:provider_req, provider_request_id)
              WHERE tenant_id = CAST(:tenant AS uuid)
                AND reservation_id = CAST(:reservation AS uuid)
         """), {
             "tenant": _uuid(authority.tenant_id), "reservation": str(reservation_id),
+            "in_tokens": input_tokens, "out_tokens": output_tokens,
+            "provider_req": provider_request_id,
         })
         return "UNKNOWN"
     actual = _amount(billed_usd)
     if status == "SETTLED":
-        if Decimal(reservation["spent_usd"]) != actual:
-            raise N4LedgerError("replayed usage receipt differs from committed cost")
+        if Decimal(reservation["spent_usd"]) != actual or any(
+            provided is not None and provided != reservation[name]
+            for name, provided in (
+                ("input_tokens", input_tokens),
+                ("output_tokens", output_tokens),
+                ("provider_request_id", provider_request_id),
+            )
+        ):
+            raise N4LedgerError("replayed usage receipt differs from committed cost or usage")
         return "SETTLED"
     if status == "CANCELED":
         raise N4LedgerError("cannot settle canceled reservation")
@@ -491,12 +514,17 @@ async def account_call(
     await session.execute(text("""
         UPDATE public.n4_usage_reservations
            SET status = 'SETTLED', spent_usd = :actual,
+               input_tokens = COALESCE(:in_tokens, input_tokens),
+               output_tokens = COALESCE(:out_tokens, output_tokens),
+               provider_request_id = COALESCE(:provider_req, provider_request_id),
                settled_at = clock_timestamp()
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND reservation_id = CAST(:reservation AS uuid)
     """), {
         "actual": actual, "tenant": _uuid(authority.tenant_id),
         "reservation": str(reservation_id),
+        "in_tokens": input_tokens, "out_tokens": output_tokens,
+        "provider_req": provider_request_id,
     })
     return "SETTLED"
 

@@ -49,6 +49,7 @@ class N4ProviderReceipt:
     reported_cost_usd: str | Decimal | None
     input_tokens: int
     output_tokens: int
+    provider_request_id: str | None = None
 
 
 class N4WindowProvider(Protocol):
@@ -300,6 +301,9 @@ class N4IncrementalRunner:
                 await account_call(
                     session, authority=authority,
                     reservation_id=reserved.reservation_id, billed_usd=cost,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
+                    provider_request_id=response.provider_request_id,
                 )
                 await commit_window(
                     session, authority=authority, run_id=run_id,

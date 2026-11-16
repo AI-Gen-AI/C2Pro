@@ -51,6 +51,7 @@ async def test_window_provider_disables_retry_cache_and_full_source_continuation
     assert provider.model_name == response.model_used == "unit-model"
     assert response.reported_cost_usd == "0.012345"
     assert response.input_tokens == 107
+    assert response.provider_request_id == "reservation-id"
     assert req.use_cache is False
     assert req.bypass_anonymization is True
     assert req.task_type is AITaskType.CONTRACT_EXTRACTION

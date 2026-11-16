@@ -90,6 +90,7 @@ class AnthropicN4WindowProvider:
                 reported_cost_usd=str(response.cost_usd),
                 input_tokens=response.input_tokens,
                 output_tokens=response.output_tokens,
+                provider_request_id=getattr(response, "request_id", None) or request_id,
             )
         return N4ProviderReceipt(
             content=response.content,
@@ -97,4 +98,5 @@ class AnthropicN4WindowProvider:
             reported_cost_usd=str(Decimal(str(response.cost_usd))),
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
+            provider_request_id=getattr(response, "request_id", None) or request_id,
         )
