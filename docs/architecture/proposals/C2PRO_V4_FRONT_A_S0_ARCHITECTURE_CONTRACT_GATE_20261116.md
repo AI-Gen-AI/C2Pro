@@ -54,9 +54,18 @@
 ## 4. Decisión G0 en términos del WBS
 - **0.2 mapa/contratos**: entregado como inventario con puntos reales, requiere challenger independiente.
 - **0.3 observabilidad**: instrumentación existente identificada (`src/core/ai/llm_client.py`, `src/core/ai/usage_logger.py`, `src/core/ai/cost_controller.py`); **NO HAY** base real y comparable de p50/p95, tokens reasoning, coste por nodo/proveedor. No inventar.
-- **0.4 gold**: semilla y protocolo en fichero independiente; cobertura y materialidad experta NO CERTIFICADAS; full SolarMax 94 páginas vs SEC 8 KB no son equivalentes.
+- **0.4 evaluación abierta («gold» no determinista)**: protocolo y casos ilustrativos de regresión en fichero independiente, **NO motor de reglas ni taxonomía de negocio**. G0 exige metodología de evaluación y diseño de held-out multivertical, **no certificación experta previa de catálogo**. Materialidad y capacidad de generalización aún NO CERTIFICADAS; full SolarMax 94 páginas vs SEC 8 KB no son equivalentes.
 - **0.5 SDD**: contrato firmado en coordinación en términos de autoridad, diseño de datos aún sujeto a Frente B y QA de RLS/CAS. No implica migraciones.
 - **0.6 piloto**: propietario único Tándem CORE #1229.
-- **Criterio de emisión**: G0 `PASS_CONDICIONADO` sólo si equipo/propietario acepta explícitamente diferir métricas no bloqueantes; si baseline, gold o garantía de original se consideran esenciales, **NO-GO**. G1 nunca PASS con PR DRAFT sin HEAD CORE ni evidencias de integración+revisión.
+- **Criterio de emisión revisado (decisión owner 17/11/2026)**: G0 puede ser `PASS_CONDICIONADO` con procedimiento de evaluación versionado, casos de regresión ilustrativos, diseño de pruebas held-out y responsables, **sin un gold exhaustivo certificado**. El diferimiento de mediciones no críticas requiere constancia expresa; los controles de seguridad, trazabilidad, contratos y fallos reales siguen siendo obligatorios. **No confundir G0 diseño aprobado con capacidad N4 validada**. G1 nunca PASS con PR DRAFT sin HEAD CORE, pruebas de integración y revisión fiable; desempeño semántico y generalización necesitan benchmark posterior.
+
+
+## 5. Decisión de arquitectura de evaluación, aprobada 17/11/2026
+
+- **Prohibido** usar listas «gold» de cláusulas, palabras clave, importes, tipos de proyecto, severidades esperadas o ejemplos de SolarMax como reglas de generación de riesgos en N4/N12/N15; ninguna categoría futura se debe filtrar por pertenecer o no al benchmark. Tampoco entrenar prompts para superar casos conocidos.
+- **Permitido** usar aserciones deterministas **técnicas**: seguridad y aislamiento tenant/PII, control de costes, idempotencia, cobertura de fuente medible, validación de cita literal, estados de error/parcialidad, trazabilidad y HITL. Una cita correcta es condición técnica de evidencia; **no** adjudica por sí sola materialidad.
+- **Evaluación diferenciada**: (a) regresión de ejemplos ya conocidos; (b) held-out nuevo, heterogéneo por EPC/ETO y otras verticales; (c) adversarial técnico de errores y evidencia. El juicio experto se aplica a **anotaciones de evaluación**, no a decisiones productivas a codificar.
+- **Gate G0**: aprobar metodología, dueños, alcance, separación de muestras y contrato, no «12 de 12 riesgos localizados». **Gate G1 y posteriores**: comprobar fiabilidad operacional y resultados reales, sin inventar recall universal ni bloquear diseño hasta disponer de expertos para todos los contratos.
+- **Compatibilidad**: no hay modificación en esta decisión de modelos PG, ledger, migraciones, SourceUnit del Frente B ni UAT de #1229. Las revisiones a WBS 0.4/1.7 deben citar este checkpoint como cambio de criterio, no suplantar autoridad de coordinadores sobre otras ramas.
 
 Este documento especifica fronteras y condiciones comprobables; no autoaprueba el sprint.
