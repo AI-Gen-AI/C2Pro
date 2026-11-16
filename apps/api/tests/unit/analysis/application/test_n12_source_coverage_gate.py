@@ -48,7 +48,8 @@ async def test_n12_full_source_is_not_clipped_by_legacy_excerpt_limit() -> None:
     reviewer = FakeReview({"status": "OK", "notes": "no omitted risks", "findings": []})
     result = await CritiqueExtractionUseCase(ai=reviewer).execute(command(full_source))
     assert "SOURCE PROVIDED IN FULL" in reviewer.calls[0]
-    assert "EPC-05:" in reviewer.calls[0]
+    assert full_source in reviewer.calls[0]
+    assert "PARTIAL EXCERPT" not in reviewer.calls[0]
     assert result.status == "UNASSESSED"
     assert result.human_approval_required is True
     assert result.confidence is None
@@ -68,7 +69,8 @@ async def test_n12_quote_in_full_source_is_cited_but_requires_hitl() -> None:
         }],
     })
     result = await CritiqueExtractionUseCase(ai=reviewer).execute(command(full_source))
-    assert tail in reviewer.calls[0]
+    assert full_source in reviewer.calls[0]
+    assert "PARTIAL EXCERPT" not in reviewer.calls[0]
     assert result.status == "UNASSESSED"
     assert result.confidence is None
     assert result.human_approval_required is True
