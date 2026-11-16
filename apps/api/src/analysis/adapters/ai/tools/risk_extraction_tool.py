@@ -345,6 +345,11 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
 
         # Extract risk items. A non-dict model item cannot disappear when
         # converting the JSON array to typed candidates.
+        if input_data.strict_completeness and (
+            not isinstance(payload, dict)
+            or not isinstance(payload.get("risks"), list)
+        ):
+            raise ValueError("N4 strict completeness requires an explicit risks array")
         items = self._extract_items(payload)
         if input_data.strict_completeness and isinstance(payload, dict):
             raw = payload.get("risks")
@@ -439,11 +444,18 @@ class RiskExtractionTool(BaseTool[RiskExtractionInput, list[RiskExtractionCandid
             # ADR-013 evidence event. The node must not turn a failed ToolResult
             # into an unexplained, source-free empty extraction.
             state["risk_extraction_error_type"] = result.error_type or "ToolFailure"
+            state["risk_extraction_outcome"] = "FAILED"
             state["critique_notes"] = result.error or "Risk extraction failed"
             state["confidence_score"] = 0.0
             return state
 
         state["risk_extraction_error_type"] = None
+        # A valid JSON envelope with zero items is not a provider failure.
+        # Equally, it does NOT prove the entire document has no risks:
+        # no independent completeness/semantic-recall check is available yet.
+        state["risk_extraction_outcome"] = (
+            "FINDINGS_PROPOSED" if risks else "NO_FINDINGS_UNASSESSED"
+        )
         # Report only assessed per-risk confidence. The tool-wide confidence
         # metadata and absent fields are not measurements of individual risks.
         # Existing RiskExtractionCandidate has no per-item confidence, so

@@ -327,6 +327,29 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         _append_risk_extraction_summary(state)
         return state
 
+    if (
+        not updated_state.get("extracted_risks")
+        and updated_state.get("risk_extraction_outcome") == "NO_FINDINGS_UNASSESSED"
+    ):
+        # Tool and JSON parsing succeeded. No gold-set or section-level
+        # coverage has certified "risk free"; review remains mandatory.
+        updated_state["confidence_score"] = None
+        updated_state["human_approval_required"] = True
+        updated_state["critique_notes"] = (
+            "N4 returned zero candidates; completeness and semantic recall "
+            "are unassessed and require independent review."
+        )
+        updated_state["node_results"] = [
+            *updated_state.get("node_results", []),
+            NodeResult(
+                node="risk_extractor",
+                status=NodeStatus.DEGRADED,
+                degradation_reason="zero_findings_unassessed",
+            ),
+        ]
+        _append_risk_extraction_summary(updated_state)
+        return updated_state
+
     if not updated_state.get("extracted_risks"):
         # The Tool adapter returns a FAILED ToolResult instead of raising for
         # many pre-provider errors (configuration, validation, quota, etc.).
@@ -381,6 +404,73 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         )
     )
     return updated_state
+
+
+def _stamp_pre_hitl_contract_risk_evidence(state: ProjectState) -> None:
+    """Check contract candidates BEFORE HITL without a second model call.
+
+    The match proves a verbatim span in N2's analysis projection, not a
+    cryptographically authenticated quote from the original PDF. A proposed
+    risk with missing/invalid evidence remains reviewable but not verified.
+    """
+    if state.get("doc_type") != "contract":
+        return
+    from src.analysis.domain.risk_provenance import VERIFIED
+
+    source = llm_document_text(state)
+    candidates = state.get("extracted_risks")
+    items = candidates if isinstance(candidates, list) else []
+    rows: list[dict[str, Any]] = []
+    citations: list[dict[str, Any]] = []
+    for i, risk in enumerate(items):
+        if not isinstance(risk, dict):
+            rows.append({
+                "index": i, "title": "", "clause_ref": "",
+                "found_in_analysis_text": False, "source_quote": None,
+            })
+            continue
+        quote = risk.get("source_quote")
+        allowed = risk.get("source_quote_status") in (None, VERIFIED)
+        normalized, status = classify_quote(quote, source)
+        found = bool(allowed and status == VERIFIED and normalized)
+        title = risk.get("title") or risk.get("summary") or ""
+        rows.append({
+            "index": i,
+            "title": str(title)[:200],
+            "clause_ref": str(risk.get("clause_ref") or "")[:80],
+            "found_in_analysis_text": found,
+            "source_quote": normalized if found else None,
+        })
+        citations.append({
+            "type": "risk", "item": str(title),
+            "quote": normalized if found else "",
+            "found_in_source": found,
+        })
+    passed = bool(rows and len(rows) == len(items)
+                  and all(r["found_in_analysis_text"] for r in rows))
+    state["risk_pre_hitl_evidence_passed"] = passed
+    state["risk_pre_hitl_evidence_rows"] = rows
+    state["citations"] = citations
+    state["citation_validation_passed"] = passed
+
+
+def _contract_risk_review_summary(state: ProjectState) -> dict[str, Any]:
+    """HITL payload, never expose a rejected/model-invented source quote."""
+    if state.get("doc_type") != "contract":
+        return {}
+    rows = state.get("risk_pre_hitl_evidence_rows")
+    entries = rows if isinstance(rows, list) else []
+    verified = sum(1 for r in entries if r.get("found_in_analysis_text") is True)
+    return {
+        "risk_source_evidence": entries,
+        "risk_source_evidence_total": len(entries),
+        "risk_source_evidence_verified": verified,
+        "risk_source_evidence_passed": bool(
+            entries and verified == len(entries)
+            and state.get("risk_pre_hitl_evidence_passed") is True
+        ),
+        "risk_evidence_scope": "N2 analysis text, not original-file attestation",
+    }
 
 
 def _stamp_pre_hitl_technical_wbs_evidence(state: ProjectState) -> None:
@@ -514,6 +604,9 @@ async def _apply_temporal_review_gate(state: ProjectState) -> None:
 
 async def critique_node(state: ProjectState) -> ProjectState:
     """N12 — Delegates critique + evaluation to CritiqueExtractionUseCase."""
+    # N15's general branch executes after HITL; certify source spans before
+    # routing an analysis candidate to N13, without invoking any more AI.
+    _stamp_pre_hitl_contract_risk_evidence(state)
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         # Mock output is not a measured assessment and must not bypass HITL.
         state["confidence_score"] = None
@@ -573,6 +666,32 @@ async def critique_node(state: ProjectState) -> ProjectState:
     state["retry_count"] = result.retry_count
     state["critique_notes"] = result.critique_notes
     state["human_approval_required"] = result.human_approval_required
+    if state.get("risk_extraction_outcome") == "NO_FINDINGS_UNASSESSED":
+        # Zero candidates can be a valid JSON parse but still lack proof of
+        # source completeness, so never let a high N12 score bypass review.
+        state["confidence_score"] = None
+        state["retry_count"] = 0
+        state["human_approval_required"] = True
+        state["critique_notes"] = (
+            "N4 zero findings remain unassessed: independent coverage/recall "
+            "has not been established."
+        )
+    if (
+        state.get("doc_type") == "contract"
+        and state.get("risk_pre_hitl_evidence_passed") is not True
+    ):
+        state["human_approval_required"] = True
+        state["confidence_score"] = None
+        state["retry_count"] = 0
+        warning = (
+            "N4 contract source evidence incomplete or unverified; "
+            "review required before accepting this candidate."
+        )
+        # Preserve N12's original evidence-based clause references.
+        existing_notes = state.get("critique_notes") or ""
+        state["critique_notes"] = (
+            f"{existing_notes}\n{warning}" if existing_notes else warning
+        )
     await _apply_temporal_review_gate(state)
     if state.get("doc_type") == "technical_spec" and state.get("citation_validation_passed") is not True:
         # An N12 confidence estimate never substitutes for N5 source evidence.
@@ -831,6 +950,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                         "critique_notes": state.get("critique_notes", ""),
                         "source_references": source_references,
                         **_technical_wbs_review_summary(state),
+                        **_contract_risk_review_summary(state),
                         "thread_id": state.get("thread_id"),
                         **(
                             {"candidate_binding": dict(candidate_binding)}
