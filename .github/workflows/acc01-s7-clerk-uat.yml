@@ -15,6 +15,19 @@ on:
         required: false
         type: boolean
         default: false
+      pilot_sec_real_upload:
+        description: 'REAL PILOT: official SEC contract via Clerk DEV, creates project and genuine document'
+        required: false
+        type: boolean
+        default: false
+      owner_authorization:
+        description: 'Exact OWNER-AUTHORIZED-REAL-PILOT for one actual mutation'
+        required: false
+        type: string
+      confirmed_sha:
+        description: 'Pin exact 40-character workflow SHA'
+        required: false
+        type: string
 concurrency:
   group: acc01-s7-clerk-uat-${{ github.ref }}
   cancel-in-progress: true
@@ -22,7 +35,7 @@ permissions:
   contents: read
 jobs:
   s7-clerk:
-    if: github.event_name != 'workflow_dispatch' || inputs.pilot_readonly_auth != true
+    if: github.event_name != 'workflow_dispatch' || (inputs.pilot_readonly_auth != true && inputs.pilot_sec_real_upload != true)
     name: Real Clerk re-login + PostgreSQL S7 triple link (synthetic source seed)
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -207,3 +220,55 @@ jobs:
           [[ "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" == pk_test_* ]] || { echo '::error::Clerk DEVELOPMENT publishable key required'; exit 2; }
           test -n "$INTEGRAL_CLERK_DEV_B_EMAIL" || { echo '::error::Clerk DEV B identity missing'; exit 2; }
           ./node_modules/.bin/playwright test --project=pilot-clerk-readonly --workers=1 --reporter=list
+
+  real-sec-pilot:
+    if: github.event_name == 'workflow_dispatch' && inputs.pilot_sec_real_upload == true && inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-PILOT' && inputs.confirmed_sha == github.sha
+    name: REAL PILOT - SEC EPC source -> Railway project and source-bound findings
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      C2PRO_REAL_PILOT_SEC_UPLOAD: OWNER-AUTHORIZED-REAL-PILOT
+      PILOT_API_URL: https://projectgraph-api-pilot.up.railway.app
+      ENVIRONMENT: test
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      NEXT_PUBLIC_API_URL: /api
+      BACKEND_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+      E2E_CLERK_USER_EMAIL: ${{ secrets.E2E_CLERK_USER_EMAIL || vars.E2E_CLERK_USER_EMAIL }}
+    steps:
+      - name: Checkout exact approved revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Real pilot mutation authorization and DEV Clerk guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.owner_authorization }}" = "OWNER-AUTHORIZED-REAL-PILOT"
+          test "${{ inputs.confirmed_sha }}" = "$GITHUB_SHA"
+          test "$PILOT_API_URL" = "https://projectgraph-api-pilot.up.railway.app"
+          [[ "$CLERK_SECRET_KEY" == sk_test_* ]] || { echo '::error::DEV Clerk only'; exit 2; }
+          [[ "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" == pk_test_* ]] || exit 2
+          test -n "$E2E_CLERK_USER_EMAIL" || exit 2
+      - name: Setup Node and web
+        uses: ./.github/actions/setup-node-web
+      - name: Install Chromium
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install chromium
+      - name: One real SEC source into deployed Railway through Clerk
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright test --project=pilot-sec-real-upload --workers=1 --reporter=list
+      - name: Retain operational receipt (no JWT, prompts, source excerpts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2pro-real-sec-pilot-operational-receipt
+          path: apps/web/playwright-report/pilot-solarmax-sec-real-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
