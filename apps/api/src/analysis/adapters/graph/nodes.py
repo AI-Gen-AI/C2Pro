@@ -282,6 +282,19 @@ async def router_node(state: ProjectState) -> ProjectState:
         ClassifyDocumentCommand(text=source_text)
     )
     state["doc_type"] = doc_type
+    if doc_type == "classification_unassessed":
+        state["node_results"] = [
+            *state.get("node_results", []),
+            NodeResult(
+                node="router",
+                status=NodeStatus.DEGRADED,
+                degradation_reason="classification_unassessed",
+            ),
+        ]
+        state["messages"].append(
+            AIMessage(content="N3 classification unassessed; manual retry required")
+        )
+        return state
     state["node_results"] = [
         *state.get("node_results", []),
         _ok_node_result("router", {"doc_type": doc_type}),
