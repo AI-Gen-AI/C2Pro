@@ -533,7 +533,7 @@ export async function approveThroughUi(
   const approve = card.getByTestId(`approve-${itemId}`);
   await expect(approve).toBeEnabled({ timeout: 120_000 });
   await approve.click();
-  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  const dialog = page.getByRole("dialog", { name: /approve (?:review item|all reviewed findings)/i });
   await expect(dialog).toBeVisible();
   const approved = page.waitForResponse(
     (response: Response) =>
