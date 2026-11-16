@@ -68,6 +68,7 @@ export default defineConfig({
         /(^|[\\/])owner-session-plumbing\.spec\.ts$/,
         // Pilot probe is opt-in and must never run in the default authenticated suite.
         /(^|[\\/])pilot-clerk-readonly\.spec\.ts$/,
+        /(^|[\\/])pilot-sec-real-upload\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
         /pq-hitl-03\.1-revision-readonly\.spec\.ts$/,
         ...redBacklogSpecs,
@@ -173,6 +174,20 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], trace: "off", screenshot: "off", video: "off" },
       dependencies: ["global-setup"],
       metadata: { suite: "C2PRO-G1-PILOT-READONLY", type: "integration-probe" },
+    },
+    {
+      // Explicit owner-authorized real PILOT mutation only. Uses SEC public
+      // contract and genuine Clerk + Railway APIs; never a default test.
+      name: "pilot-sec-real-upload",
+      testMatch: [/(^|[\\/])pilot-sec-real-upload\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"], trace: "off", screenshot: "off", video: "off" },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "C2PRO-PILOT-REAL-SEC-INGEST",
+        type: "real-pilot-operation",
+        manualOnly: true,
+        description: "Real public SEC EPC contract -> PILOT Railway -> genuine source-bound review",
+      },
     },
     {
       // Self-test of the integral runner's findings-panel wait: static pages only (no Clerk, no backend). Explicit-only.
