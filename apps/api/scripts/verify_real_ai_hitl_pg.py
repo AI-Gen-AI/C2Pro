@@ -256,13 +256,18 @@ async def _run() -> dict[str, Any]:
     return judge(manifest, db, _ledger_summary(), limits)
 
 
+def acceptance_exit_code(verdict: str) -> int:
+    """Only a complete PASS is an acceptance success; PARTIAL is NO-GO."""
+    return 0 if verdict == "PASS" else 1
+
+
 def main() -> int:
     result = asyncio.run(_run())
     VERDICT_PATH.parent.mkdir(parents=True, exist_ok=True)
     VERDICT_PATH.write_text(json.dumps(result, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
     print(json.dumps({k: result[k] for k in ("verdict", "blocker", "failed_checks", "gaps")}, indent=2, default=str))
     print(json.dumps({"ledger": _ledger_summary(), "quality": result["quality_measurements"]}, indent=2, default=str))
-    return 1 if result["verdict"] == "FAIL" else 0
+    return acceptance_exit_code(result["verdict"])
 
 
 if __name__ == "__main__":
