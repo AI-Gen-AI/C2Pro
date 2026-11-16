@@ -20,6 +20,11 @@ on:
         required: false
         type: boolean
         default: false
+      pilot_sec_recovery:
+        description: 'REAL PILOT: inspect existing exact SEC project; reprocess only if product reports retryable'
+        required: false
+        type: boolean
+        default: false
       owner_authorization:
         description: 'Exact OWNER-AUTHORIZED-REAL-PILOT for one actual mutation'
         required: false
@@ -35,7 +40,7 @@ permissions:
   contents: read
 jobs:
   s7-clerk:
-    if: github.event_name != 'workflow_dispatch' || (inputs.pilot_readonly_auth != true && inputs.pilot_sec_real_upload != true)
+    if: github.event_name != 'workflow_dispatch' || (inputs.pilot_readonly_auth != true && inputs.pilot_sec_real_upload != true && inputs.pilot_sec_recovery != true)
     name: Real Clerk re-login + PostgreSQL S7 triple link (synthetic source seed)
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -222,7 +227,7 @@ jobs:
           ./node_modules/.bin/playwright test --project=pilot-clerk-readonly --workers=1 --reporter=list
 
   real-sec-pilot:
-    if: github.event_name == 'workflow_dispatch' && inputs.pilot_sec_real_upload == true && inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-PILOT' && inputs.confirmed_sha == github.sha
+    if: github.event_name == 'workflow_dispatch' && (inputs.pilot_sec_real_upload == true || inputs.pilot_sec_recovery == true) && inputs.owner_authorization == 'OWNER-AUTHORIZED-REAL-PILOT' && inputs.confirmed_sha == github.sha
     name: REAL PILOT - SEC EPC source -> Railway project and source-bound findings
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -230,6 +235,7 @@ jobs:
       contents: read
     env:
       C2PRO_REAL_PILOT_SEC_UPLOAD: OWNER-AUTHORIZED-REAL-PILOT
+      C2PRO_PILOT_RECOVERY_MODE: ${{ inputs.pilot_sec_recovery == true && '1' || '0' }}
       PILOT_API_URL: https://projectgraph-api-pilot.up.railway.app
       ENVIRONMENT: test
       PLAYWRIGHT_BASE_URL: http://localhost:3100
@@ -269,6 +275,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: c2pro-real-sec-pilot-operational-receipt
-          path: apps/web/playwright-report/pilot-solarmax-sec-real-receipt.json
+          path: |
+            apps/web/playwright-report/pilot-solarmax-sec-real-receipt.json
+            apps/web/playwright-report/pilot-sec-existing-recovery.json
           if-no-files-found: warn
           retention-days: 14
