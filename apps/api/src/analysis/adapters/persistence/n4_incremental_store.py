@@ -76,6 +76,56 @@ async def _verify(session: AsyncSession, authority: ProcessingAuthority) -> None
     await verify_in_transaction(session, authority)
 
 
+async def _locked_tenant_budget(
+    session: AsyncSession, *, tenant_id: UUID, for_settlement: bool = False,
+) -> Decimal:
+    """Tenant-row escrow shared with the legacy spend counter.
+
+    N4 reservations increment tenants.ai_spend_reserved_usd and settlement
+    transfers the charge to tenants.ai_spend_current. Both are protected by
+    this row lock and by the SAME transaction as the N4 usage receipt. Legacy
+    check_budget_availability sees N4 pending use, but legacy preflight itself
+    is not an atomic reservation and remains a separately scoped gap.
+    """
+    row = (await session.execute(text("""
+        SELECT ai_budget_monthly, ai_spend_current, ai_spend_reserved_usd,
+               ai_spend_last_reset, is_active
+          FROM public.tenants WHERE id = CAST(:tenant AS uuid)
+         FOR UPDATE
+    """), {"tenant": _uuid(tenant_id)})).mappings().one_or_none()
+    if row is None:
+        raise N4BudgetNotConfigured("tenant budget record not found")
+    cap = Decimal(str(row["ai_budget_monthly"]))
+    spent = Decimal(str(row["ai_spend_current"]))
+    reserved = Decimal(str(row["ai_spend_reserved_usd"]))
+    if any(not x.is_finite() for x in (cap, spent, reserved)) or spent < 0 or reserved < 0:
+        raise N4BudgetNotConfigured("tenant budget is missing or invalid")
+    if not for_settlement and (row["is_active"] is not True or cap <= 0):
+        raise N4BudgetError("inactive tenant or unavailable global budget")
+    if not for_settlement:
+        db_time = await session.scalar(text(
+            "SELECT clock_timestamp() AT TIME ZONE 'UTC'"
+        ))
+        last_reset = row["ai_spend_last_reset"]
+        if last_reset is None or (
+            last_reset.year, last_reset.month
+        ) != (db_time.year, db_time.month):
+            # The legacy month reset is performed BEFORE committing a new
+            # N4 reservation. Pending liabilities remain reserved across
+            # a month change; neither an UNKNOWN charge nor an old hold is
+            # silently forgiven. Future legacy checks see current reset.
+            await session.execute(text("""
+                UPDATE public.tenants
+                   SET ai_spend_current = 0,
+                       ai_spend_last_reset = :reset_at
+                 WHERE id = CAST(:tenant AS uuid)
+            """), {
+                "tenant": _uuid(tenant_id), "reset_at": db_time,
+            })
+            spent = Decimal("0")
+    return cap - spent - reserved
+
+
 async def _locked_run(
     session: AsyncSession, *, tenant_id: UUID, run_id: UUID,
     authority: ProcessingAuthority,
@@ -297,6 +347,9 @@ async def reserve_call(
     ))
     if period_key != str(db_month):
         raise N4BudgetError("N4 reservation period must equal current DB UTC month")
+    global_remaining = await _locked_tenant_budget(
+        session, tenant_id=authority.tenant_id,
+    )
     run = await _locked_run(
         session, tenant_id=authority.tenant_id,
         run_id=run_id, authority=authority,
@@ -353,6 +406,10 @@ async def reserve_call(
     )
     if Decimal(run["budget_cap_usd"]) < amount:
         raise N4BudgetExceeded("single call exceeds N4 run cap")
+    if global_remaining < amount:
+        raise N4BudgetExceeded(
+            "global tenant budget includes all confirmed and N4 reserved AI use"
+        )
     for bucket in buckets:
         available = (
             Decimal(bucket["cap_usd"]) -
@@ -374,6 +431,16 @@ async def reserve_call(
             "amount": amount, "tenant": _uuid(authority.tenant_id),
             "kind": kind, "scope": scope_id, "period": period,
         })
+    global_hold = (await session.execute(text("""
+        UPDATE public.tenants SET
+            ai_spend_reserved_usd = ai_spend_reserved_usd + :amount
+         WHERE id = CAST(:tenant AS uuid)
+         RETURNING id
+    """), {
+        "amount": amount, "tenant": _uuid(authority.tenant_id),
+    })).scalar_one_or_none()
+    if global_hold is None:
+        raise N4LedgerError("unable to reserve global tenant balance")
     reservation_id = uuid4()
     await session.execute(text("""
         INSERT INTO public.n4_usage_reservations
@@ -414,8 +481,13 @@ async def account_call(
     ):
         raise N4LedgerError("invalid provider request reference")
     await _verify(session, authority)
+    # Global tenant lock must be taken before the run lock, matching
+    # reserve_call order: authority -> tenant -> run -> reservation -> buckets.
+    await _locked_tenant_budget(
+        session, tenant_id=authority.tenant_id, for_settlement=True,
+    )
     # Read the run ID without a lock; then obey the global lock order:
-    # processing authority -> run -> scopes -> reservation. A changed
+    # processing authority -> tenant -> run -> reservation -> scopes. A changed
     # reservation is re-read once locked, never trusted from the first read.
     initial = (await session.execute(text("""
         SELECT run_id FROM public.n4_usage_reservations
@@ -511,6 +583,22 @@ async def account_call(
             "tenant": _uuid(authority.tenant_id), "kind": kind,
             "scope": scope_id, "period": period,
         })
+    # Transfer the liability once: the ledger and the legacy global counter
+    # cannot disagree after this transaction commits. Overages are actual
+    # charges and must be recorded, not silently clipped to reservation.
+    global_settlement = (await session.execute(text("""
+        UPDATE public.tenants
+           SET ai_spend_reserved_usd = ai_spend_reserved_usd - :reserved,
+               ai_spend_current = ai_spend_current + CAST(:actual AS double precision)
+         WHERE id = CAST(:tenant AS uuid)
+           AND ai_spend_reserved_usd >= :reserved
+         RETURNING id
+    """), {
+        "reserved": Decimal(reservation["reserved_usd"]),
+        "actual": actual, "tenant": _uuid(authority.tenant_id),
+    })).scalar_one_or_none()
+    if global_settlement is None:
+        raise N4LedgerError("tenant global reservation missing or already settled")
     await session.execute(text("""
         UPDATE public.n4_usage_reservations
            SET status = 'SETTLED', spent_usd = :actual,

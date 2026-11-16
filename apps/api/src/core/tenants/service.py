@@ -6,7 +6,9 @@ Refers to TASK-REV-009 and Test Suite ID: TS-E2E-SEC-TNT-001.
 """
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import structlog
@@ -24,13 +26,15 @@ def _utcnow_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-async def get_tenant_by_id(db: AsyncSession, tenant_id: UUID) -> Tenant | None:
-    """
-    Obtiene un tenant por ID.
-    """
-    result = await db.execute(
-        select(Tenant).where(Tenant.id == tenant_id)
-    )
+async def get_tenant_by_id(
+    db: AsyncSession, tenant_id: UUID, *,
+    lock_for_update: bool = False,
+) -> Tenant | None:
+    """Fetch tenant, optionally locking its budget row until transaction ends."""
+    statement = select(Tenant).where(Tenant.id == tenant_id)
+    if lock_for_update:
+        statement = statement.with_for_update()
+    result = await db.execute(statement)
     return result.scalar_one_or_none()
 
 
@@ -101,7 +105,11 @@ class TenantService:
         Returns:
             Updated tenant or None if not found
         """
-        tenant = await self.get_tenant(tenant_id)
+        if not math.isfinite(amount) or amount < 0:
+            raise ValueError("AI usage adjustment must be finite and nonnegative")
+        tenant = await get_tenant_by_id(
+            self.db, tenant_id, lock_for_update=True,
+        )
         if not tenant:
             return None
 
@@ -157,12 +165,17 @@ class TenantService:
         if not tenant:
             return None
 
+        raw_reserved = getattr(tenant, "ai_spend_reserved_usd", 0)
+        reserved = float(raw_reserved) if isinstance(raw_reserved, (int, float, Decimal)) else 0.0
+        total = tenant.ai_spend_current + reserved
+        cap = tenant.ai_budget_monthly
         return BudgetStatusResponse(
             tenant_id=str(tenant.id),
-            monthly_budget=tenant.ai_budget_monthly,
+            monthly_budget=cap,
             current_spend=tenant.ai_spend_current,
-            remaining=max(0, tenant.ai_budget_monthly - tenant.ai_spend_current),
-            usage_percentage=tenant.budget_usage_percentage,
-            is_over_budget=tenant.is_over_budget,
+            reserved=reserved,
+            remaining=max(0, cap - total),
+            usage_percentage=(total / cap * 100 if cap > 0 else 100.0),
+            is_over_budget=total >= cap,
             last_reset=tenant.ai_spend_last_reset.isoformat() if tenant.ai_spend_last_reset else None,
         )

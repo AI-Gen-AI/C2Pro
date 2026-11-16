@@ -69,6 +69,7 @@ class BudgetStatusResponse(BaseModel):
     tenant_id: str
     monthly_budget: float
     current_spend: float
+    reserved: float = 0.0
     remaining: float
     usage_percentage: float
     is_over_budget: bool
@@ -78,4 +79,7 @@ class BudgetStatusResponse(BaseModel):
 class AiSpendUpdate(BaseModel):
     """Schema for updating AI spend."""
 
-    amount: float = Field(..., description="Amount to add to current spend")
+    amount: float = Field(
+        ..., ge=0, allow_inf_nan=False,
+        description="Nonnegative, finite charge to add to current spend",
+    )
