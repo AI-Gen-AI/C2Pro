@@ -55,7 +55,7 @@ import {
   approveStructuredLink,
   approveTechnicalLink,
   approveThroughUi,
-  attemptApproveThroughUi,
+  probeBlockedApproveGate,
   confirmFindingThroughUi,
   decideFindingsThroughUi,
   reviewRowIdOf,
@@ -358,7 +358,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
           });
           ledger.check("the review card offers the per-finding surface", findingOutcome.surfaced);
           ledger.check("the surface states that its decisions are provisional and do not approve", findingOutcome.scopeStatesProvisional);
-          ledger.check("per-finding decisions leave the final Approve available (nothing was approved)", findingOutcome.reviewStillPending);
+          ledger.check("provisional decisions keep the review PENDING without final approval", findingOutcome.reviewStillPending);
           let prematureApproval: ApprovalAttempt | undefined;
           let finalActions: Array<string | null> = [];
           if (seeded) {
@@ -393,7 +393,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             ledger.check("the other tenant cannot record a decision on it", foreignWrite.status === 404, `HTTP ${foreignWrite.status}`);
 
             // S5-04: one finding is still undecided, so the gate refuses the approval -- a business 409, not a defect.
-            prematureApproval = await attemptApproveThroughUi(pageA, recorder, { projectId, documentId: contractId });
+            prematureApproval = await probeBlockedApproveGate(pageA, recorder, { projectId, documentId: contractId });
             ledger.check(
               "approving with one finding undecided is refused (409 reconciliation_blocks_approval, UNDECIDED_FINDING only)",
               prematureApproval.status === 409 && prematureApproval.code === "reconciliation_blocks_approval" && prematureApproval.blockers.join(",") === "UNDECIDED_FINDING" && prematureApproval.derivations.length === 0,
@@ -576,7 +576,7 @@ test.describe("TS-E2E-INTEGRAL-S1S8-001: one project from login to relogin", () 
             });
             ledger.check("the negative route took the four actions through the UI", negative.decided.map((d) => d.action).join(",") === "CONFIRMED,DISMISSED,NEEDS_INFO,CORRECTION_PROPOSED", negative.decided.map((d) => d.action).join(","));
             ledger.check("the negative route's decisions are still shown after a full reload", negative.persistedAfterReload);
-            const approvalAttempt = await attemptApproveThroughUi(pageA, recorder, { projectId, documentId: rejectedId });
+            const approvalAttempt = await probeBlockedApproveGate(pageA, recorder, { projectId, documentId: rejectedId });
             ledger.check(
               "approving a candidate with parked, dismissed and corrected findings is refused (409 reconciliation_blocks_approval)",
               approvalAttempt.status === 409 && approvalAttempt.code === "reconciliation_blocks_approval" && [...approvalAttempt.blockers].sort().join(",") === "NEEDS_INFO,UNDECIDED_FINDING" && [...approvalAttempt.derivations].sort().join(",") === "CORRECTION_PROPOSED,DISMISSED_EXCLUSION",

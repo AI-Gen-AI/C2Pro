@@ -333,8 +333,13 @@ export async function decideFindingsThroughUi(
     if (findings > 3) await typed(3, "CORRECTION_PROPOSED", FINDING_TEXTS.correctionReason, FINDING_TEXTS.correctionText);
   }
 
-  // A finding decision never decides the review: the final Approve / Reject stay available and untouched.
-  const reviewStillPending = await card.getByTestId(`approve-${itemId}`).isEnabled({ timeout: 30_000 }).catch(() => false);
+  // A provisional decision must NOT approve the review. The final button is
+  // deliberately disabled until every finding is resolved; read the actual
+  // backend review status instead of conflating "pending" with button enabled.
+  const reviewResponse = await callApi(page, `/api/v1/hitl/queue/${itemId}`);
+  const reviewStatus = str((reviewResponse.data as Json).current_status);
+  const reviewStillPending = reviewResponse.status === 200 &&
+    ["PENDING_REVIEW_REQUIRED", "PENDING_REVIEW_CONDITIONAL", "ESCALATED"].includes(reviewStatus);
 
   // Persistence: a full reload shows the very same decisions (they live in the ledger, not in client state).
   await page.reload();
@@ -472,32 +477,29 @@ export interface ApprovalAttempt {
 }
 
 /**
- * Press Approve (and confirm) on a review and report what the gate answered WITHOUT requiring success: used to
- * show that a candidate with unresolved or dismissed findings is refused, and that the refusal is a business 409.
+ * S5-04 NEGATIVE GATE. The UI must DISABLE final Approve while findings are
+ * unresolved. Independently query the same authenticated backend route to
+ * prove its fail-closed 409, without impersonating a human approval or causing
+ * a trusted promotion. The final positive approval remains a separate UI act.
  */
-export async function attemptApproveThroughUi(
+export async function probeBlockedApproveGate(
   page: Page,
   recorder: Pj01RunRecorder,
   options: { projectId: string; documentId: string },
 ): Promise<ApprovalAttempt> {
   const { itemId, card } = await openReviewCard(page, recorder, options.projectId, options.documentId);
   const approve = card.getByTestId(`approve-${itemId}`);
-  await expect(approve).toBeEnabled({ timeout: 120_000 });
-  await approve.click();
-  const dialog = page.getByRole("dialog", { name: /approve review item/i });
-  await expect(dialog).toBeVisible();
-  const answered = page.waitForResponse(
-    (response: Response) =>
-      response.request().method() === "POST" && /\/hitl\/queue\/[^/]+\/approve/.test(new URL(response.url()).pathname),
-    { timeout: 120_000 },
-  );
-  await dialog.getByRole("button", { name: /confirm approve/i }).click();
-  const response = await answered;
-  const body = (await response.json().catch(() => ({}))) as Json;
+  await expect(approve, "final Approve must be disabled while reconciliation has blockers")
+    .toBeDisabled({ timeout: 30_000 });
+
+  const reviewRowId = await reviewRowIdOf(page, options.projectId, options.documentId);
+  const response = await callApi(page, `/api/v1/hitl/queue/${itemId}/approve`, "POST", {
+    row_id: reviewRowId,
+  });
+  const body = response.data as Json;
   const detail = (body.detail && typeof body.detail === "object" ? body.detail : {}) as Json;
   const list = (value: unknown): string[] => (Array.isArray(value) ? value.map((v) => str(v)) : []);
-  if (await dialog.isVisible().catch(() => false)) await page.keyboard.press("Escape");
-  return { status: response.status(), code: str(detail.code), blockers: list(detail.blockers), derivations: list(detail.derivations) };
+  return { status: response.status, code: str(detail.code), blockers: list(detail.blockers), derivations: list(detail.derivations) };
 }
 
 /** CONFIRM one more finding of the pending review through its card (UI only), waiting for the ledger write. */
@@ -531,7 +533,7 @@ export async function approveThroughUi(
   const approve = card.getByTestId(`approve-${itemId}`);
   await expect(approve).toBeEnabled({ timeout: 120_000 });
   await approve.click();
-  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  const dialog = page.getByRole("dialog", { name: /approve (?:review item|all reviewed findings)/i });
   await expect(dialog).toBeVisible();
   const approved = page.waitForResponse(
     (response: Response) =>
