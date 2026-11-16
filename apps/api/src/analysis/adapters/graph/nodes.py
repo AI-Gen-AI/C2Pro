@@ -54,7 +54,7 @@ from src.analysis.domain.ai_extraction import (
 from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.domain.contracts import RiskItem, WbsActivity
 from src.analysis.domain.n12_source_attestation import is_n12_source_attestation_valid
-from src.analysis.domain.node_result import NodeResult, NodeStatus
+from src.analysis.domain.node_result import ErrorRecord, NodeResult, NodeStatus
 from src.analysis.domain.prompts import DOC_TYPES
 from src.analysis.domain.risk_provenance import classify_quote
 from src.core.database import get_session_with_tenant
@@ -328,16 +328,41 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         return state
 
     if not updated_state.get("extracted_risks"):
+        # The Tool adapter returns a FAILED ToolResult instead of raising for
+        # many pre-provider errors (configuration, validation, quota, etc.).
+        # The previous branch replaced its error with a generic RuntimeError
+        # and never persisted an ADR-013 processing_error event.
+        # Preserve ONLY a bounded exception-class identifier: no model text,
+        # provider messages, source excerpts or secrets in evidence.
+        allowed = {
+            "ToolValidationError", "ToolExecutionError",
+            "LLMPartialGenerationError", "ValidationError", "ValueError",
+            "TypeError", "KeyError", "RuntimeError", "TimeoutError",
+            "RateLimitError", "AuthenticationError", "APIConnectionError",
+            "APIStatusError", "AnthropicError", "OpenAIError",
+            "ProviderError", "ToolNotFoundError",
+        }
+        reported = updated_state.get("risk_extraction_error_type")
+        cause = reported if reported in allowed else (
+            "EmptyRiskExtractionResult" if not reported else "ToolFailure"
+        )
+        node_result = NodeResult(
+            node="risk_extractor",
+            status=NodeStatus.FAILED,
+            error=ErrorRecord(
+                node="risk_extractor",
+                error_type=cause,
+                message="N4 extraction failed or returned no risk items",
+            ),
+        )
+        await _maybe_await(_persist_node_error(updated_state, node_result))
         _mark_risk_extraction_honest_failure(
             updated_state,
             reason="AI risk extraction failed/empty — no risks extracted",
         )
         updated_state["node_results"] = [
             *updated_state.get("node_results", []),
-            _failed_node_result(
-                "risk_extractor",
-                RuntimeError("AI risk extraction returned no risk items"),
-            ),
+            node_result,
         ]
         _append_risk_extraction_summary(updated_state)
         return updated_state
