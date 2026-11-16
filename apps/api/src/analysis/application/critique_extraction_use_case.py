@@ -107,6 +107,65 @@ def _source_consistency_issues(
     return issues
 
 
+# A second N12 pass must not resend the whole N2 projection. Select only
+# verbatim N4 quotations with nearby context; never treat this as full coverage.
+_N12_FOCAL_CONTEXT_CHARS = 300
+_N12_FOCAL_MAX_CHARS = 8_000
+_N12_FOCAL_MAX_ITEMS = 12
+
+
+def _n12_focal_source(
+    source_text: str | None, items: list[dict[str, Any]]
+) -> str:
+    source = source_text or ""
+    if not source:
+        return ""
+    ranges: list[tuple[int, int]] = []
+    for item in items[:_N12_FOCAL_MAX_ITEMS]:
+        if not isinstance(item, dict):
+            continue
+        # A rejected quote cannot become a source pointer through N12.
+        if item.get("source_quote_status") in (
+            "NOT_FOUND_IN_DOCUMENT", "NOT_FOUND", "MISSING_QUOTE",
+            "SOURCE_UNAVAILABLE",
+        ):
+            continue
+        quote = item.get("source_quote")
+        if not isinstance(quote, str) or not 24 <= len(quote) <= 2_000:
+            continue
+        offset = source.find(quote)
+        if offset == -1:
+            continue
+        ranges.append((
+            max(0, offset - _N12_FOCAL_CONTEXT_CHARS),
+            min(len(source), offset + len(quote) + _N12_FOCAL_CONTEXT_CHARS),
+        ))
+    if not ranges:
+        return ""
+    merged: list[list[int]] = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(end, merged[-1][1])
+        else:
+            merged.append([start, end])
+    chunks: list[str] = []
+    remaining = _N12_FOCAL_MAX_CHARS
+    for start, end in merged:
+        # Do not silently truncate a clause. The omitted span stays unassessed.
+        span = source[start:end]
+        if len(span) > remaining:
+            break
+        chunks.append(f"[source offset {start}:{end}]\n{span}")
+        remaining -= len(span) + 70
+        if remaining <= 0:
+            break
+    excerpt = "\n\n".join(chunks)
+    # A small document has no economical focal review; direct to human instead.
+    if not excerpt or len(excerpt) >= len(source) * 0.8:
+        return ""
+    return excerpt
+
+
 @dataclass(frozen=True)
 class CritiqueExtractionCommand:
     extracted_risks: list[dict[str, Any]]
@@ -142,6 +201,44 @@ class CritiqueExtractionUseCase:
     async def execute(self, cmd: CritiqueExtractionCommand) -> CritiqueExtractionResult:
         items = cmd.extracted_risks if cmd.extracted_risks else cmd.extracted_wbs
         confidence = self.evaluation_service.calculate_confidence(items)
+
+        if cmd.retry_count > 0:
+            # WBS 1.4: a repeat critique is never another whole-document call.
+            # Re-evaluate only source-backed candidate spans. A focal pass
+            # cannot certify omitted obligations outside those spans.
+            focused = _n12_focal_source(cmd.source_text, items)
+            if not focused:
+                return CritiqueExtractionResult(
+                    status="UNASSESSED", notes_raw="", confidence=None,
+                    retry_count=cmd.retry_count, human_approval_required=True,
+                    critique_notes=(
+                        "N12_FOCAL_NOT_AVAILABLE: no bounded source-backed "
+                        "target; repeat whole-source call skipped. "
+                        "Human review required."
+                    ),
+                )
+            focal = await self.extraction_service.extract(
+                items=items,
+                doc_type=cmd.doc_type or "unknown",
+                ai=self.ai,
+                source_text=focused,
+                source_complete=False,
+                review_scope="focal",
+            )
+            return CritiqueExtractionResult(
+                status="UNASSESSED",
+                notes_raw=focal.notes,
+                confidence=None,
+                retry_count=cmd.retry_count,
+                human_approval_required=True,
+                critique_notes=(
+                    "N12_FOCAL_ONLY: bounded source-backed recheck, "
+                    f"{len(focused)}/{len(cmd.source_text or '')} source chars "
+                    "submitted; document-wide recall NOT assessed. "
+                    "Human review required. "
+                    + focal.notes[:2400]
+                ),
+            )
 
         critique = await self.extraction_service.extract(
             items=items,
