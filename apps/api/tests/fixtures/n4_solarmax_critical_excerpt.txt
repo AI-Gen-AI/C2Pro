@@ -1,0 +1,94 @@
+SOLARMAX SEC EX-99.1: contract excerpt for provider parity, NOT the complete contract.
+Source: https://www.sec.gov/Archives/edgar/data/1519472/000164033426000032/solarmax_ex991.htm
+
+2.5.5 Liquidated Damages for Delay. If all required EPC Equipment (excluding the Substation and any Owner-
+or Utility-provided facilities, equipment, works or upgrades) has arrived on site, and Contractor fails to achieve
+the Completions by the respective Guaranteed Completion Dates set forth in Table C-1 of Exhibit C, other
+than as a result of delays attributable to the Substation or any Owner or Utility responsibility, Contractor shall
+pay to Owner, as liquidated damages and not as a penalty, the following:
+(i) for Mechanical Completion: liquidated damages in an amount equal to five thousand Dollars ($5,000) per
+Day.
+(ii) for Substantial Completion: liquidated damages in an amount equal to ten thousand Dollars ($10,000) per
+Day.
+(iii) for Final Completion: liquidated damages in an amount equal to twenty thousand Dollars ($20,000) per
+Day.
+The total amount of liquidated damages Contractor shall be liable for as a result of delays in achieving the
+Guaranteed Completion Dates shall not exceed [5] percent ([5] %) of the Contract Price.
+28
+If Contractor fails to achieve Mechanical Completion on time, liquidated damages shall accrue daily at the rate
+specified above until the earlier of the Mechanical Completion Date or the Guaranteed Substantial Completion
+Date. If Contractor fails to achieve Substantial Completion on time, liquidated damages shall accrue daily at
+the rate specified above until the earlier of the Substantial Completion Date or the Guaranteed Final
+Completion Date. If Contractor fails to achieve Final Completion on time, liquidated damages shall accrue
+daily at the rate specified above until the earlier of the Final Completion Date or the date when the delay
+triggers an Event of Default pursuant to Section 9.1.13.
+If Contractor (a) fails to achieve Mechanical Completion and/or Substantial Completion on time and as a result
+pays liquidated damages to Owner and (b) achieves Final Completion on time, Owner shall return promptly to
+
+Contractor the total amount paid in liquidated damages.
+
+--- CLAUSE BOUNDARY ---
+
+4.3.1 Outside NTP Date. Owner shall issue the Notice to Proceed no later than [ten (10)] Days after the
+Effective Date (the “Outside NTP Date”). If Owner has not issued the Notice to Proceed by the Outside NTP
+Date, then:
+this Agreement shall terminate and neither Party shall have further liability under this Agreement except that
+Owner shall pay to Contractor as liquidated damages (and not as a penalty) an amount equal to five percent
+(5%) of the Contract Price. The Parties acknowledge and agree that the liquidated damages set forth herein
+constitute a reasonable estimate of actual damages that would be difficult to ascertain with certainty, and are
+intended as compensation and not as a penalty.
+
+--- CLAUSE BOUNDARY ---
+
+9.6 Owner’s Termination for Convenience. Owner may terminate this Agreement at any time upon fifteen (15)
+Days written notice to Contractor, without further liability except as provided herein. If Owner exercises its
+termination right under this Section 9.6, as Contractor’s sole remedy for payment of the Work for such
+termination, Owner shall pay to Contractor (i) the corresponding value of the full Contract Price for all Work
+
+satisfactorily completed and accepted and all partial Work in progress accepted in accordance with this
+Agreement prior to the effective date of termination (determined in accordance with the Capital Cost
+Breakdown in Exhibit D), (ii) if Owner is not cancelling the Project but instead self-completing or hiring a
+substitute contractor, the amount equal to ten percent (5%) of the total Contract Price less the amounts paid
+to Contractor under this Agreement as of the termination date (excluding amounts paid pursuant to this
+Sections 9.6, Contractor’s demobilization costs and associated labor time), and (iii) any reasonable,
+documented third party costs incurred by Contractor in connection with Contractor’s performance under this
+Agreement, including cancellation fees associated with cancelling and terminating Subcontractors; provided
+that such demobilization costs shall not exceed two percent (2%) of the Contract Price in the aggregate, (iv)
+the reasonable, documented direct costs actually incurred by Contractor for Materials properly ordered and
+delivered prior to the termination notice and not reasonably usable on other projects (net of any salvage or
+resale value). Upon such termination, Owner may, at its option, upon payment to Contractor for all amounts
+for all Work and Materials procured or performed as of the effective date of termination, take possession of
+the Project and any or all Work and all such Materials (whether at the Site or otherwise). If Owner makes such
+election, Contractor shall assign and transfer to Owner all of Contractor’s right, title in and interest to
+Contractor’s contracts with its Subcontractors (including all of the warranties and guarantees (and all claims
+there under, except to the extent a claim relates to a liability of Contractor that is not being released)) with
+respect to the Materials or any other part of the Project. Any amounts paid shall not include any costs incurred
+by Contractor after the effective date of termination that Contractor reasonably could have mitigated. In no
+event shall the aggregate payments under this Section 9.6 exceed the unpaid balance of the Contract Price
+plus [3]% of the Contract Price for items (iii) and (iv) combined.
+
+--- CLAUSE BOUNDARY ---
+
+14.14.2 Duty to Maintain Confidentiality. From the Effective Date until the first anniversary of the Commercial
+Operation Date, Contractor and Owner shall not (i) disclose Confidential Information received from the other
+to anyone (other than Contractor’s and Owner’s Affiliates, counsel, consultants, purchasers, prospective
+purchasers, investors, prospective investors, contractors constructing or providing services to the Project
+(including but not limited to Subcontractors), employees, officers and directors who need to know and agree
+to be bound by the provisions of this Section 14.15), without the deliverer’s prior written consent and (ii) use
+Confidential Information of the other Party for any reason other than in performance of its obligations under
+this Agreement. Confidential Information will retain its character as Confidential Information but may be
+disclosed by the recipient if and to the extent such disclosure is required (a) to be made to Utility pursuant to
+the Interconnection Agreement(s), to Utility pursuant to the tariff under which Utility operates and other
+Utility rules under which Owner or the Project is bound, or to Governmental Authorities by any requirements
+of Law, (b) pursuant to an order of a court or (c) in order to enforce this Agreement. With the exception of the
+terms of this Agreement and Contractor’s (and its Subcontractors’) Invoices and supporting material, the
+originator or generator of Confidential Information may use such information for its own uses and purposes,
+including the public disclosure of such information at its own discretion. In the event a recipient is required by
+Law or by a court or regulatory agency to disclose Confidential Information, the recipient will, to the extent
+possible, give the disclosing Party prompt notice of such request so that the disclosing Party may seek an
+appropriate protective order. If, in the absence of a protective order, the receiving Party is nonetheless
+advised by counsel that disclosure of the Confidential Information is finally required (after, if advance notice
+to the disclosing Party is permitted by Law, exhausting any appeal requested by the disclosing Party at the
+disclosing Party’s expense), the receiving Party may disclose only such Confidential Information that is
+required to be disclosed to satisfy the disclosure requirement.
+70
