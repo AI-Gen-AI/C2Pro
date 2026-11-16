@@ -76,6 +76,8 @@ interface ReviewQueueRead {
   reviewRows: string[];
   types: string[];
   statuses: string[];
+  resumableCount: number;
+  decisionReadyCount: number;
 }
 
 async function readReviewQueue(
@@ -87,7 +89,8 @@ async function readReviewQueue(
     headers: { Authorization: "Bearer " + bearer },
   });
   const status = response.status();
-  if (status !== 200) return { status, total: null, ids: [], reviewRows: [], types: [], statuses: [] };
+  if (status !== 200) return { status, total: null, ids: [], reviewRows: [], types: [], statuses: [],
+    resumableCount: 0, decisionReadyCount: 0 };
   const parsed: unknown = await response.json();
   expect(parsed && typeof parsed === "object" && !Array.isArray(parsed),
     "HITL queue must return a structured read model").toBeTruthy();
@@ -111,7 +114,14 @@ async function readReviewQueue(
     item && typeof item === "object" && "current_status" in item &&
     typeof item.current_status === "string" ? item.current_status : "UNKNOWN",
   );
-  return { status, total: body.total as number, ids, reviewRows, types, statuses };
+  const resumableCount = (body.items as unknown[]).filter(item =>
+    item && typeof item === "object" && "resumable" in item &&
+    item.resumable === true).length;
+  const decisionReadyCount = (body.items as unknown[]).filter(item =>
+    item && typeof item === "object" && "decision_ready" in item &&
+    item.decision_ready === true).length;
+  return { status, total: body.total as number, ids, reviewRows, types, statuses,
+    resumableCount, decisionReadyCount };
 }
 
 test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project reads", async ({ browser, request }) => {
@@ -245,6 +255,10 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
       " B_types=" + [...new Set(reviewsB.types)].join(",") +
       " A_statuses=" + [...new Set(reviewsA.statuses)].join(",") +
       " B_statuses=" + [...new Set(reviewsB.statuses)].join(",") +
+      " A_resumable=" + reviewsA.resumableCount +
+      " B_resumable=" + reviewsB.resumableCount +
+      " A_decision_ready=" + reviewsA.decisionReadyCount +
+      " B_decision_ready=" + reviewsB.decisionReadyCount +
       " UAT=NOT_TESTED");
     // This is a separate readiness gate: a green queue GET is insufficient.
     expect(readableFindings, "PILOT_HITL_MODEL_UNAVAILABLE: zero actionable per-finding reviews")
