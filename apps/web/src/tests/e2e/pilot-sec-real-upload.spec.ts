@@ -36,6 +36,7 @@ async function getJson(request: APIRequestContext, page: Page, url: string) {
 }
 
 test("SEC SolarMax real contract -> Railway pilot -> genuine finding candidate, no final approval", async ({ browser, request }) => {
+  test.skip(process.env.C2PRO_PILOT_RECOVERY_MODE === "1", "Recovery mode never creates another project or uploads another PDF");
   test.setTimeout(1_200_000);
   expect(process.env.C2PRO_REAL_PILOT_SEC_UPLOAD).toBe("OWNER-AUTHORIZED-REAL-PILOT");
   expect(process.env.PILOT_API_URL).toBe(API);
@@ -199,5 +200,88 @@ test("SEC SolarMax real contract -> Railway pilot -> genuine finding candidate, 
   } finally {
     if (auth) await auth.close();
     record();
+  }
+});
+
+
+/**
+ * REAL existing-project recovery, no re-upload, no new project, no human approvals.
+ * Only the product's own authenticated reprocess endpoint is allowed, and
+ * only if GET reports retryable=true for the exact document.
+ */
+test("Existing SEC document in real Railway: inspect status and recover only if retryable", async ({ browser, request }) => {
+  test.skip(process.env.C2PRO_PILOT_RECOVERY_MODE !== "1", "manual existing-document recovery only");
+  test.setTimeout(210_000);
+  expect(process.env.C2PRO_REAL_PILOT_SEC_UPLOAD).toBe("OWNER-AUTHORIZED-REAL-PILOT");
+  const projectId = "17cc731c-d0b9-417c-8bff-6b028083a9c9";
+  const documentId = "84d25466-aab4-431b-9995-918f8142eb80";
+  const receipt: ObjectRow = {
+    evidence_class: "LIVE_RAILWAY_PILOT_EXISTING_DOCUMENT_STATUS",
+    project_id: projectId, document_id: documentId,
+    new_projects: 0, new_uploads: 0, human_decisions: 0,
+    recovery_requested: false,
+  };
+  const output = path.resolve("playwright-report/pilot-sec-existing-recovery.json");
+  const save = () => { mkdirSync(path.dirname(output), {recursive:true}); writeFileSync(output, JSON.stringify(receipt,null,2)+"\n"); };
+  const context = await browser.newContext({baseURL:"http://localhost:3100", storageState:{cookies:[],origins:[]}});
+  try {
+    const page = await context.newPage();
+    await setupClerkTestingToken({page});
+    await page.goto("/");
+    await clerk.loaded({page});
+    await clerk.signIn({page,emailAddress:E2E_USER});
+    await page.waitForFunction(() => Boolean(window.Clerk?.session && window.Clerk?.organization), undefined, {timeout:60000});
+    const projects = await getJson(request,page,"/api/v1/projects");
+    expect(projects.status).toBe(200);
+    let doc: ObjectRow = {};
+    for (let i=0; i<3; i++) {
+      const answer = await getJson(request,page,"/api/v1/projects/"+projectId+"/documents?limit=100");
+      expect(answer.status,"existing project and tenant authorized").toBe(200);
+      doc = arr(obj(answer.data).items || obj(answer.data).documents || answer.data)
+        .find(x => value(x.id)===documentId) || {};
+      expect(doc.id,"pre-existing document must not be replaced").toBe(documentId);
+      receipt.lifecycle = value(doc.lifecycle_status);
+      receipt.upload_status = value(doc.upload_status);
+      receipt.retryable = doc.retryable === true;
+      receipt.review_count = doc.review_count;
+      receipt.has_review_item_id = Boolean(doc.review_item_id);
+      save();
+      if (receipt.retryable || receipt.has_review_item_id) break;
+      if (i<2) await page.waitForTimeout(10000);
+    }
+    if (doc.review_item_id) {
+      const queue = await getJson(request,page,"/api/v1/hitl/queue?project_id="+projectId+"&limit=200");
+      expect(queue.status).toBe(200);
+      const match = arr(obj(queue.data).items).find(x=>value(x.item_id)===value(doc.review_item_id));
+      receipt.review_status = value(match?.current_status);
+      if (match?.row_id) {
+        const findings=await getJson(request,page,"/api/v1/hitl/reviews/"+match.row_id+"/findings");
+        receipt.findings_http_status=findings.status;
+        receipt.findings_count=findings.status===200?arr(obj(findings.data).findings).length:null;
+      }
+      save();
+      return;
+    }
+    if (doc.retryable === true) {
+      const answer = await request.post(API+"/api/v1/projects/"+projectId+"/documents/"+documentId+"/reprocess",{
+        headers:{Authorization:"Bearer "+await tokenOf(page)},failOnStatusCode:false,timeout:60000
+      });
+      receipt.reprocess_http_status=answer.status();
+      if(answer.status()===202){
+        const parsed=obj(await answer.json());
+        receipt.recovery_requested=true;
+        receipt.task_enqueued=Boolean(parsed.task_id);
+      }
+      save();
+      expect(answer.status(),"authorized product retry endpoint only").toBe(202);
+      return;
+    }
+    receipt.blocker="DOCUMENT_NOT_RETRYABLE_AND_NO_REVIEW";
+    save();
+    // Do not change server status or invent a recovery. A stale task must be
+    // reconciled by the application's own scheduler, not a fake DB update.
+  } finally {
+    await context.close();
+    save();
   }
 });
