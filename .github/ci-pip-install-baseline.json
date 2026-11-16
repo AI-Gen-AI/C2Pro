@@ -271,6 +271,48 @@
     {
       "behavior": {
         "env": {},
+        "run": "python -m pip install --disable-pip-version-check -r requirements.txt\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/n4-controlled-gpt-comparison.yml::jobs.gpt-actual-contract::name:Install dependencies",
+      "file": ".github/workflows/n4-controlled-gpt-comparison.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Manual-only N4 provider comparison needs Python 3.11 API dependencies from reviewed apps/api/requirements.txt; no version upgrade, workflow gated by explicit operator confirmation, read-only GitHub token.",
+      "remediation_issue": "#1049",
+      "sha256": "ea13d3e8d634c97138a6f07e57fb8436458bfbc69ed85afd359a98819961f2e0"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "PYTHONPATH=. python -m pytest -q tests/unit/analysis/test_n4_external_providers.py",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/n4-controlled-gpt-comparison.yml::jobs.gpt-actual-contract::name:Offline adapter tests",
+      "file": ".github/workflows/n4-controlled-gpt-comparison.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Manual-only N4 diagnostic runs local fake-transport provider tests before the paid one-call stage; does not install software or invoke provider despite broad drift-guard matching.",
+      "remediation_issue": "#1049",
+      "sha256": "02f5a24172d2a06d44a96afde16c1c5dadfc4aab8be9cde4d7aa268cdf868ac9"
+    },
+    {
+      "behavior": {
+        "env": {},
+        "run": "if [ -z \"$OPENAI_API_KEY\" ]; then\n  echo \"OpenAI API secret missing; no call made\" >&2\n  exit 1\nfi\nPYTHONPATH=. python scripts/n4_multimodel_trial.py --source tests/fixtures/n4_solarmax_critical_excerpt.txt --receipt /tmp/n4-gpt-real-receipt.json\n",
+        "shell": null,
+        "working_directory": "apps/api"
+      },
+      "context": ".github/workflows/n4-controlled-gpt-comparison.yml::jobs.gpt-actual-contract::name:One real GPT call",
+      "file": ".github/workflows/n4-controlled-gpt-comparison.yml",
+      "owner": "@AI-Gen-AI",
+      "reason": "Manual-only, explicit operator-gated single N4 API call to SEC excerpt using scoped GitHub secret, per-request budget cap $0.20; receipt excludes source and credentials; no auto-push paid trigger.",
+      "remediation_issue": "#1049",
+      "sha256": "3c0bdff0098d7bd389389a6ea5d82dd26f83cceb26dc305b4e3daf0f4c2cbb0d"
+    },
+    {
+      "behavior": {
+        "env": {},
         "run": "python -m pip install --upgrade pip\npip install -r requirements.txt\npip install pyyaml\n",
         "shell": null,
         "working_directory": "apps/api"

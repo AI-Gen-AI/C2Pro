@@ -1,18 +1,20 @@
 name: N4 Controlled GPT Comparison
 
 on:
-  push:
-    branches:
-      - feat/n4-multiprovider-gemini-openai-20261116
   workflow_dispatch:
+    inputs:
+      confirm_paid_trial:
+        description: "Type RUN-ONE-N4-TRIAL to authorize one bounded paid model call"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   gpt-actual-contract:
-    # Only the owner's one-time explicit marker triggers paid work on push.
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[n4-real-compare]') || contains(github.event.head_commit.message, '[n4-real-diagnostic]')
+    # No paid call from a push or unapproved commit marker.
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_paid_trial == 'RUN-ONE-N4-TRIAL'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -43,8 +45,7 @@ jobs:
       - name: Install dependencies
         working-directory: apps/api
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install --disable-pip-version-check -r requirements.txt
       - name: Offline adapter tests
         working-directory: apps/api
         run: PYTHONPATH=. python -m pytest -q tests/unit/analysis/test_n4_external_providers.py
