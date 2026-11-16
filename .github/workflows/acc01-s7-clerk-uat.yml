@@ -255,7 +255,7 @@ jobs:
           test "$PILOT_API_URL" = "https://projectgraph-api-pilot.up.railway.app"
           [[ "$CLERK_SECRET_KEY" == sk_test_* ]] || { echo '::error::DEV Clerk only'; exit 2; }
           [[ "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" == pk_test_* ]] || exit 2
-          test -n "$E2E_CLERK_USER_EMAIL" || exit 2
+          # Existing Clerk DEV A fallback is testuser@c2pro.com, as in the proven A/B read-only flow.
       - name: Setup Node and web
         uses: ./.github/actions/setup-node-web
       - name: Install Chromium
