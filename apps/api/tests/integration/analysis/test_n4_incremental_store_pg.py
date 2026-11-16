@@ -5,6 +5,7 @@ Never creates, modifies or drops a production DB, and never calls providers.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from decimal import Decimal
 from hashlib import sha256
@@ -51,7 +52,10 @@ def _new_authority(tenant: UUID, document: UUID, revision: UUID) -> ProcessingAu
     )
 
 
-async def _seed_identity(conn, *, authority: ProcessingAuthority, project: UUID) -> None:
+async def _seed_identity(
+    conn, *, authority: ProcessingAuthority, project: UUID,
+    create_tenant: bool = True,
+) -> None:
     t = authority.tenant_id
     doc = authority.document_id
     rev = authority.revision_id
@@ -60,10 +64,11 @@ async def _seed_identity(conn, *, authority: ProcessingAuthority, project: UUID)
     await conn.execute(
         "SELECT set_config('app.current_tenant', $1, false)", str(t)
     )
-    await conn.execute("""
-        INSERT INTO public.tenants (id, name, slug, subscription_plan)
-        VALUES ($1, 'N4 scratch tenant', $2, 'free')
-    """, t, f"n4-test-{t.hex}")
+    if create_tenant:
+        await conn.execute("""
+            INSERT INTO public.tenants (id, name, slug, subscription_plan)
+            VALUES ($1, 'N4 scratch tenant', $2, 'free')
+        """, t, f"n4-test-{t.hex}")
     await conn.execute("""
         INSERT INTO public.projects
           (id, tenant_id, name, project_type, status)
@@ -331,6 +336,94 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                         await conn.execute(
                             "DELETE FROM public.n4_candidate_findings"
                         )
+        finally:
+            await conn.close()
+    finally:
+        await engine.dispose()
+
+
+
+async def test_parallel_runs_cannot_oversubscribe_shared_tenant_budget():
+    """Two independent project workers may spend at most the shared cap."""
+    dsn = _DSN
+    engine = create_async_engine(
+        dsn.replace("postgresql://", "postgresql+asyncpg://", 1),
+        pool_pre_ping=True,
+    )
+    tenant = uuid4()
+    authority_a = _new_authority(tenant, uuid4(), uuid4())
+    authority_b = _new_authority(tenant, uuid4(), uuid4())
+    project_a, project_b = uuid4(), uuid4()
+    conn = await asyncpg.connect(dsn)
+    try:
+        await _seed_identity(conn, authority=authority_a, project=project_a)
+        await _seed_identity(
+            conn, authority=authority_b, project=project_b, create_tenant=False,
+        )
+        await _seed_caps(
+            conn, tenant, project_a, authority_a.document_id, "1.000000",
+        )
+        await conn.execute("""
+            INSERT INTO public.n4_budget_buckets
+               (tenant_id, scope_kind, scope_id, period_key, cap_usd)
+            VALUES ($1, 'PROJECT', $2, '2026-11', 1),
+                   ($1, 'DOCUMENT', $3, '2026-11', 1)
+        """, tenant, project_b, authority_b.document_id)
+    finally:
+        await conn.close()
+
+    async def new_run(a: ProcessingAuthority, project: UUID) -> UUID:
+        source = ("N4 concurrent source shall be complete and valid. " * 20)
+        windows = plan_n4_source_windows(
+            source, revision_id=str(a.revision_id),
+            max_context_chars=600, overlap_chars=50,
+        )
+        async with AsyncSession(engine) as session:
+            async with session.begin():
+                await session.execute(text(
+                    "SELECT set_config('app.current_tenant', :tenant, true)"
+                ), {"tenant": str(tenant)})
+                return await create_run(
+                    session, authority=a, project_id=project,
+                    config_sha256="a" * 64, windows=windows,
+                    budget_cap_usd="1",
+                )
+
+    async def take_budget(a: ProcessingAuthority, run: UUID, key: str):
+        async with AsyncSession(engine) as session:
+            async with session.begin():
+                await session.execute(text(
+                    "SELECT set_config('app.current_tenant', :tenant, true)"
+                ), {"tenant": str(tenant)})
+                try:
+                    reservation = await reserve_call(
+                        session, authority=a, run_id=run,
+                        window_ordinal=0, idempotency_key=key,
+                        provider_model="test-only", estimated_max_usd="0.75",
+                        period_key="2026-11",
+                    )
+                except N4BudgetExceeded:
+                    return "DENIED"
+                return reservation.status
+
+    try:
+        run_a, run_b = await asyncio.gather(
+            new_run(authority_a, project_a), new_run(authority_b, project_b),
+        )
+        results = await asyncio.wait_for(asyncio.gather(
+            take_budget(authority_a, run_a, "parallel-run-A-001"),
+            take_budget(authority_b, run_b, "parallel-run-B-001"),
+        ), timeout=8)
+        assert sorted(results) == ["DENIED", "RESERVED"]
+        conn = await asyncpg.connect(dsn)
+        try:
+            row = await conn.fetchrow("""
+                SELECT reserved_usd, spent_usd FROM public.n4_budget_buckets
+                 WHERE tenant_id=$1 AND scope_kind='TENANT'
+                   AND scope_id=$1 AND period_key='2026-11'
+            """, tenant)
+            assert Decimal(row["reserved_usd"]) == Decimal("0.75")
+            assert Decimal(row["spent_usd"]) == 0
         finally:
             await conn.close()
     finally:
