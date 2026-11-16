@@ -86,6 +86,7 @@ async def test_n4_public_failure_preserves_usage_without_promoting_json(monkeypa
     updated = tool.inject_output_into_state(state, result)
     assert updated["extracted_risks"] == []
     assert updated["confidence_score"] == 0.0
+    assert updated["risk_extraction_error_type"] == "LLMPartialGenerationError"
     assert "continuation failed" in updated["critique_notes"]
 
 
