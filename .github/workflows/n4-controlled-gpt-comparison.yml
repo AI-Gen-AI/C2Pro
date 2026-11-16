@@ -12,7 +12,7 @@ permissions:
 jobs:
   gpt-actual-contract:
     # Only the owner's one-time explicit marker triggers paid work on push.
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[n4-real-compare]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[n4-real-compare]') || contains(github.event.head_commit.message, '[n4-real-diagnostic]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -23,6 +23,7 @@ jobs:
       C2PRO_N4_PROVIDER: openai
       C2PRO_N4_EXTERNAL_PROVIDER_ENABLED: "1"
       C2PRO_N4_OPENAI_MODEL: gpt-6-sol
+      C2PRO_N4_TRIAL_STYLE: concise
       C2PRO_N4_OUTPUT_MAX_TOKENS: "6000"
       C2PRO_N4_MAX_REQUEST_USD: "0.20"
       C2PRO_N4_INPUT_USD_PER_M: "2.0"

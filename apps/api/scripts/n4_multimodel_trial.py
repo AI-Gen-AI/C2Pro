@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from src.analysis.adapters.ai.tools.n4_external_provider import get_n4_external_provider
@@ -13,6 +14,23 @@ from src.analysis.adapters.ai.tools.risk_extraction_tool import (
     RiskExtractionInput,
     RiskExtractionTool,
 )
+
+
+class _ConcisePromptRiskTool(RiskExtractionTool):
+    def _build_default_prompt(self, input_data, is_retry=False):
+        _ = is_retry
+        system = (
+            "You are an experienced EPC contract reviewer. Examine all provided clauses, "
+            "including exceptions, cross-references, contradictory numbers and conditional remedies. "
+            "Identify every distinct material risk grounded in the source. "
+            "Return JSON with a risks array. Each object has category LEGAL/SCHEDULE/QUALITY/SCOPE/TECHNICAL/BUDGET, "
+            "title, summary, description, probability LOW/MEDIUM/HIGH, impact LOW/MEDIUM/HIGH/CRITICAL, "
+            "mitigation_suggestion, source_quote, source_text_snippet, clause_ref. "
+            "Cite an exact contiguous source_quote of 80 or more characters per risk; include the operative exception. "
+            "source_text_snippet must preserve the surrounding original evidence. No invented quotes or generic risks. "
+            "Do not claim to have examined any annex that is not supplied."
+        )
+        return "CONTRACT:\n\n" + input_data.document_text, system
 
 
 async def main():
@@ -31,9 +49,14 @@ async def main():
         "source_chars": len(source),
         "scope": "Four authentic SolarMax excerpts, NOT full contract",
         "status": "FAIL",
+        "trial_style": os.getenv("C2PRO_N4_TRIAL_STYLE", "full"),
     }
     try:
-        tool = RiskExtractionTool(anthropic_wrapper=provider, prompt_manager=object())
+        style = os.getenv("C2PRO_N4_TRIAL_STYLE", "full")
+        if style not in {"full", "concise"}:
+            raise ValueError("UNSUPPORTED_N4_TRIAL_STYLE")
+        tool_class = _ConcisePromptRiskTool if style == "concise" else RiskExtractionTool
+        tool = tool_class(anthropic_wrapper=provider, prompt_manager=object())
         result = await tool.execute(
             RiskExtractionInput(document_text=source, strict_completeness=True)
         )

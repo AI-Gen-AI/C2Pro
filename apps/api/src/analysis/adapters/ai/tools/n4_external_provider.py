@@ -175,6 +175,7 @@ class N4ExternalProvider:
             candidates = body.get("candidates") or []
             candidate = candidates[0] if candidates else {}
             stop = candidate.get("finishReason")
+            reasoning_tokens = int(usage.get("thoughtsTokenCount") or 0)
             text = "".join(
                 part.get("text", "")
                 for part in (candidate.get("content") or {}).get("parts", [])
@@ -186,6 +187,9 @@ class N4ExternalProvider:
             input_tokens = int(usage.get("input_tokens") or 0)
             output_tokens = int(usage.get("output_tokens") or 0)
             stop = body.get("status")
+            reasoning_tokens = int(
+                (usage.get("output_tokens_details") or {}).get("reasoning_tokens") or 0
+            )
             text = "".join(
                 item.get("text", "")
                 for item in body.get("output", [])
@@ -205,6 +209,8 @@ class N4ExternalProvider:
             request_id=request.request_id,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            visible_output_chars=len(text),
             estimated_cost_usd=round(cost, 7),
             reserved_usd=round(reserved, 7),
             completed=completed,
