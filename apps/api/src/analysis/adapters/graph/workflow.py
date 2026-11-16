@@ -38,6 +38,7 @@ from src.analysis.adapters.graph.nodes_extended import (
 )
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
+from src.analysis.domain.node_result import NodeResult, NodeStatus
 
 if TYPE_CHECKING:
     from psycopg import AsyncConnection
@@ -170,6 +171,31 @@ def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
     return {}
 
 
+def unextractable_document_node(_state: ProjectState) -> dict[str, Any]:
+    """End an unreadable document without fabricated AI findings or approval.
+
+    N1 and N3 have already recorded the missing extractable text. This is a
+    blocked/precondition-failed path: it must not call an extractor, N12, or
+    HITL without evidence, nor silently count as a completed analysis.
+    The document processing layer remains responsible for OCR/retry status.
+    """
+    return {
+        "workflow_terminated": True,
+        "termination_reason": "insufficient_extractable_text",
+        "human_approval_required": False,
+        "confidence_score": None,
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "node_results": [
+            NodeResult(
+                node="unextractable_document",
+                status=NodeStatus.SKIPPED,
+                degradation_reason="insufficient_extractable_text",
+            )
+        ],
+    }
+
+
 # ── Graph builder ────────────────────────────────────────────────────────────
 
 
@@ -240,6 +266,7 @@ def build_workflow() -> ProjectWorkflow:
 
     # Classification & extraction
     workflow.add_node("router", router_node)                                # N3
+    workflow.add_node("unextractable_document", unextractable_document_node)
     workflow.add_node("risk_extractor", risk_extractor_node)                # N4
     workflow.add_node("wbs_extractor", wbs_extractor_node)                  # N5
     workflow.add_node("budget_parser", budget_parser_node)                  # N9
@@ -287,8 +314,12 @@ def build_workflow() -> ProjectWorkflow:
             "specification": "wbs_extractor",
             "drawing": "wbs_extractor",
             "other": "risk_extractor",
+            "insufficient_extractable_text": "unextractable_document",
         },
     )
+
+    # Missing readable content is not a successful empty extraction.
+    workflow.add_edge("unextractable_document", END)
 
     # ── Extraction → Critique (N12) ─────────────────────────────────────
     workflow.add_edge("risk_extractor", "critique")
