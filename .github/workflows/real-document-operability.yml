@@ -501,7 +501,32 @@ jobs:
           import pathlib
           import re
 
-          safe_token = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.:-]{0,63}$")
+          allowed_events = frozenset((
+              "tool_execution_started", "tool_execution_completed",
+              "tool_execution_failed", "risk_extraction_input_prepared",
+              "risk_extraction_parse_diagnostics", "risk_extraction_max_chars_invalid",
+              "n4_partial_billable_usage_recorded", "n4_partial_billable_usage_unattributed",
+              "n4_partial_billable_usage_persistence_failed",
+              "analysis_failed", "analysis_completed", "analysis_started",
+              "risk_extractor_failed", "risk_extraction_failed",
+          ))
+          allowed_error_types = frozenset((
+              "ToolNotFoundError", "ToolValidationError", "ToolExecutionError",
+              "ValidationError", "ValueError", "TypeError", "KeyError",
+              "RuntimeError", "TimeoutError", "PermissionError",
+              "AuthenticationError", "APIConnectionError", "APIStatusError",
+              "RateLimitError", "AnthropicError", "LLMPartialGenerationError",
+              "JSONDecodeError", "ProviderError", "OpenAIError",
+          ))
+          token = r"([A-Za-z][A-Za-z0-9_.:-]{0,63})"
+          event_patterns = (
+              re.compile(r"\bevent=" + token),
+              re.compile(r'"event"\s*:\s*"' + token + r'"'),
+          )
+          error_patterns = (
+              re.compile(r"\berror_type=" + token),
+              re.compile(r'"error_type"\s*:\s*"' + token + r'"'),
+          )
           log_root = pathlib.Path(os.environ["RUNNER_TEMP"])
           for process in ("worker", "api"):
               file = log_root / f"c2pro-real-ai-{process}.log"
@@ -511,22 +536,18 @@ jobs:
               events = collections.Counter()
               errors = collections.Counter()
               for line in file.read_text(errors="replace").splitlines():
-                  for pattern, target in (
-                      (r'(?:\\bevent=|[\\"]event[\\"]:\\s*[\\"])([a-zA-Z][a-zA-Z0-9_.:-]{0,63})', events),
-                      (r'(?:\\berror_type=|[\\"]error_type[\\"]:\\s*[\\"])([a-zA-Z][a-zA-Z0-9_.:-]{0,63})', errors),
-                  ):
-                      match = re.search(pattern, line)
-                      if match and safe_token.fullmatch(match.group(1)):
-                          target[match.group(1)] += 1
-              selected = {k:v for k,v in events.items() if any(
-                  word in k.lower() for word in (
-                      "risk", "extraction", "analysis", "provider", "tool", "ai_", "critique"
-                  )
-              )}
+                  event = next((m.group(1) for p in event_patterns
+                                if (m := p.search(line))), None)
+                  error = next((m.group(1) for p in error_patterns
+                                if (m := p.search(line))), None)
+                  if event in allowed_events:
+                      events[event] += 1
+                  if error in allowed_error_types:
+                      errors[error] += 1
               print(f"DIAG_{process.upper()} events=" +
-                    ",".join(f"{k}:{v}" for k,v in sorted(selected.items())[:30]))
+                    ",".join(f"{k}:{v}" for k,v in sorted(events.items())))
               print(f"DIAG_{process.upper()} error_types=" +
-                    ",".join(f"{k}:{v}" for k,v in sorted(errors.items())[:20]))
+                    ",".join(f"{k}:{v}" for k,v in sorted(errors.items())))
           PY
 
       - name: Summarize verdict and consumption
