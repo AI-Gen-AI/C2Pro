@@ -146,6 +146,13 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                     budget_cap_usd=Decimal("1.000000"),
                 )
                 assert replay == run_id
+                with pytest.raises(N4BudgetError, match="period"):
+                    await reserve_call(
+                        session, authority=a, run_id=run_id,
+                        window_ordinal=0, idempotency_key="stale-month-00001",
+                        provider_model="test-only", estimated_max_usd="0.05",
+                        period_key="2025-11",
+                    )
                 first = await reserve_call(
                     session, authority=a, run_id=run_id,
                     window_ordinal=0, idempotency_key="n4-call-0000001",

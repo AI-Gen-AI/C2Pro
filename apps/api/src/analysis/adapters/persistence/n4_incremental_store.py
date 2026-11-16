@@ -290,6 +290,13 @@ async def reserve_call(
     if amount <= 0:
         raise ValueError("a reservation must be positive")
     await _verify(session, authority)
+    # The caller cannot select a stale monthly bucket with unused credit.
+    # The PostgreSQL clock is the financial authority, not the worker clock.
+    db_month = await session.scalar(text(
+        "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM')"
+    ))
+    if period_key != str(db_month):
+        raise N4BudgetError("N4 reservation period must equal current DB UTC month")
     run = await _locked_run(
         session, tenant_id=authority.tenant_id,
         run_id=run_id, authority=authority,
@@ -507,6 +514,8 @@ async def _project_for_run(
 async def commit_window(
     session: AsyncSession, *, authority: ProcessingAuthority, run_id: UUID,
     window_ordinal: int, findings: list[dict[str, Any]],
+    unresolved_refs: tuple[str, ...] = (),
+    incomplete_reason: str | None = None,
 ) -> str:
     """Atomically commit one successfully billed window and proposed findings.
 
@@ -536,10 +545,10 @@ async def commit_window(
             sort_keys=True, ensure_ascii=False, separators=(",", ":"),
         ).encode("utf-8")
     ).hexdigest()
-    if win["status"] == "EXAMINED":
+    if win["status"] in ("EXAMINED", "BLOCKED"):
         if win["findings_sha256"] != digest:
             raise N4LedgerError("replayed N4 window has a different findings payload")
-        return "ALREADY_EXAMINED"
+        return "ALREADY_EXAMINED" if win["status"] == "EXAMINED" else "ALREADY_BLOCKED"
     receipt = (await session.execute(text("""
         SELECT 1 FROM public.n4_usage_reservations
          WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
@@ -582,24 +591,35 @@ async def commit_window(
             "run": str(run_id), "ordinal": window_ordinal,
             "key": key, "refs": json.dumps(refs), "claim": json.dumps(claim),
         })
+    blocked = bool(unresolved_refs or incomplete_reason)
+    next_window_status = "BLOCKED" if blocked else "EXAMINED"
     await session.execute(text("""
         UPDATE public.n4_extraction_windows
-           SET status = 'EXAMINED', findings_sha256 = :digest,
+           SET status = :status, findings_sha256 = :digest,
+               unresolved_refs = CAST(:refs AS jsonb), blocked_reason = :reason,
                committed_at = clock_timestamp()
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND run_id = CAST(:run AS uuid) AND ordinal = :ordinal
     """), {
-        "tenant": _uuid(authority.tenant_id),
-        "run": str(run_id), "ordinal": window_ordinal, "digest": digest,
+        "tenant": _uuid(authority.tenant_id), "run": str(run_id),
+        "ordinal": window_ordinal, "digest": digest,
+        "status": next_window_status, "refs": json.dumps(unresolved_refs),
+        "reason": incomplete_reason or ("REFERENCES_UNRESOLVED" if unresolved_refs else None),
     })
-    incomplete = (await session.execute(text("""
-        SELECT count(*) FROM public.n4_extraction_windows
+    status_totals = (await session.execute(text("""
+        SELECT
+          count(*) FILTER (WHERE status != 'EXAMINED') AS incomplete,
+          count(*) FILTER (WHERE status = 'BLOCKED') AS blocked
+          FROM public.n4_extraction_windows
          WHERE tenant_id = CAST(:tenant AS uuid)
-           AND run_id = CAST(:run AS uuid) AND status != 'EXAMINED'
+           AND run_id = CAST(:run AS uuid)
     """), {
         "tenant": _uuid(authority.tenant_id), "run": str(run_id),
-    })).scalar_one()
-    next_status = "COMPLETE" if int(incomplete) == 0 else "RUNNING"
+    })).mappings().one()
+    next_status = (
+        "PARTIAL" if status_totals["blocked"] else
+        "COMPLETE" if int(status_totals["incomplete"]) == 0 else "RUNNING"
+    )
     await session.execute(text("""
         UPDATE public.n4_extraction_runs SET status = :status,
                 updated_at = clock_timestamp()
@@ -632,3 +652,54 @@ async def progress(
         "total_windows": int(row["total_windows"]),
         "examined_windows": int(row["examined"]),
     }
+
+
+async def window_statuses(
+    session: AsyncSession, *, tenant_id: UUID, run_id: UUID,
+) -> dict[int, str]:
+    """Read tenant-visible window progress. No unexamined call is replayed."""
+    rows = (await session.execute(text("""
+        SELECT ordinal, status FROM public.n4_extraction_windows
+         WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+         ORDER BY ordinal
+    """), {"tenant": _uuid(tenant_id), "run": str(run_id)})).all()
+    return {int(ordinal): str(status) for ordinal, status in rows}
+
+
+async def block_window(
+    session: AsyncSession, *, authority: ProcessingAuthority,
+    run_id: UUID, window_ordinal: int, reason: str,
+) -> None:
+    """Persist UNKNOWN or invalid output as blocked without claiming analysis."""
+    if not reason or len(reason) > 80:
+        raise ValueError("bounded non-sensitive failure kind required")
+    await _verify(session, authority)
+    run = await _locked_run(
+        session, tenant_id=authority.tenant_id, run_id=run_id, authority=authority,
+    )
+    if run["status"] in ("COMPLETE", "FAILED"):
+        raise N4LedgerError("terminal run cannot be blocked")
+    status = (await session.execute(text("""
+        SELECT status FROM public.n4_extraction_windows
+         WHERE tenant_id = CAST(:tenant AS uuid)
+           AND run_id = CAST(:run AS uuid) AND ordinal = :ordinal FOR UPDATE
+    """), {
+        "tenant": _uuid(authority.tenant_id), "run": str(run_id),
+        "ordinal": window_ordinal,
+    })).scalar_one_or_none()
+    if status is None or status == "EXAMINED":
+        raise N4LedgerError("missing or previously examined source window")
+    await session.execute(text("""
+        UPDATE public.n4_extraction_windows
+           SET status = 'BLOCKED', blocked_reason = :reason
+         WHERE tenant_id = CAST(:tenant AS uuid)
+           AND run_id = CAST(:run AS uuid) AND ordinal = :ordinal
+    """), {
+        "tenant": _uuid(authority.tenant_id), "run": str(run_id),
+        "ordinal": window_ordinal, "reason": reason,
+    })
+    await session.execute(text("""
+        UPDATE public.n4_extraction_runs
+           SET status = 'PARTIAL', updated_at = clock_timestamp()
+         WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+    """), {"tenant": _uuid(authority.tenant_id), "run": str(run_id)})

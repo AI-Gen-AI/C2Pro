@@ -1,0 +1,79 @@
+"""N4 Anthropic adapter contract: no real provider called in unit tests."""
+from __future__ import annotations
+
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+
+from src.analysis.adapters.ai.n4_anthropic_window_provider import (
+    AnthropicN4WindowProvider,
+)
+from src.analysis.domain.n4_source_windows import plan_n4_source_windows
+from src.core.ai.model_router import AITaskType, ModelTier
+
+
+class _FakeWrapper:
+    def __init__(self, *, retries=0, cache=False):
+        self.llm_client = SimpleNamespace(max_retries=retries)
+        self.enable_cache = cache
+        self.cache_service = object() if cache else None
+        self.model_router = SimpleNamespace(
+            configs={ModelTier.STANDARD: SimpleNamespace(name="unit-model")}
+        )
+        self.calls = []
+
+    async def generate(self, request):
+        self.calls.append(request)
+        return SimpleNamespace(
+            content='{"window_examined":true,"findings":[],'
+                    '"outstanding_references":[]}',
+            model_used="unit-model",
+            cost_usd=0.012345, input_tokens=107, output_tokens=61,
+        )
+
+
+@pytest.mark.asyncio
+async def test_window_provider_disables_retry_cache_and_full_source_continuation():
+    wrapper = _FakeWrapper()
+    provider = AnthropicN4WindowProvider(
+        wrapper=wrapper, tier=ModelTier.STANDARD,
+        max_output_tokens=1024,
+    )
+    w = plan_n4_source_windows(
+        "Contract Clause 9.6 shall apply to all deliverables.",
+        revision_id=str(uuid4()),
+    )[0]
+    response = await provider.generate(
+        window=w, tenant_id=uuid4(), request_id="reservation-id",
+    )
+    req = wrapper.calls[0]
+    assert provider.model_name == response.model_used == "unit-model"
+    assert response.reported_cost_usd == "0.012345"
+    assert response.input_tokens == 107
+    assert req.use_cache is False
+    assert req.bypass_anonymization is True
+    assert req.task_type is AITaskType.CONTRACT_EXTRACTION
+    assert req.force_model_tier is ModelTier.STANDARD
+    assert req.request_id == "reservation-id"
+    assert req.max_tokens == 1024
+    assert req.metadata["n4_incremental_window"] is True
+    assert req.metadata.get("full_source_analysis") is not True
+    assert "Contract Clause 9.6" in req.prompt
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"retries": 1},
+    {"cache": True},
+])
+def test_adapter_refuses_hidden_retries_or_caches(kwargs):
+    with pytest.raises(ValueError):
+        AnthropicN4WindowProvider(wrapper=_FakeWrapper(**kwargs))
+
+
+@pytest.mark.parametrize("max_output", [1, 255, 4097, 10000])
+def test_excessive_or_inadequate_output_caps_rejected(max_output):
+    with pytest.raises(ValueError):
+        AnthropicN4WindowProvider(
+            wrapper=_FakeWrapper(), max_output_tokens=max_output,
+        )
