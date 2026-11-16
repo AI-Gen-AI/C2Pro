@@ -489,6 +489,128 @@ jobs:
         working-directory: apps/api
         run: python scripts/verify_real_ai_hitl_pg.py
 
+      # Diagnostic-only: report event/error TYPE counts, never freeform log messages,
+      # document source, identifiers, prompts, completions, JWT or credentials.
+      # This runs even after a failed independent PG gate and has zero provider calls.
+      - name: Classify API and worker failures without exposing payloads
+        if: ${{ always() && inputs.infrastructure_check_only != true }}
+        run: |
+          python3 - <<'PY'
+          import collections
+          import os
+          import pathlib
+          import re
+
+          allowed_events = frozenset((
+              "tool_execution_started", "tool_execution_completed",
+              "tool_execution_failed", "risk_extraction_input_prepared",
+              "risk_extraction_parse_diagnostics", "risk_extraction_max_chars_invalid",
+              "n4_partial_billable_usage_recorded", "n4_partial_billable_usage_unattributed",
+              "n4_partial_billable_usage_persistence_failed",
+              "analysis_failed", "analysis_completed", "analysis_started",
+              "risk_extractor_failed", "risk_extraction_failed",
+          ))
+          allowed_error_types = frozenset((
+              "ToolNotFoundError", "ToolValidationError", "ToolExecutionError",
+              "ValidationError", "ValueError", "TypeError", "KeyError",
+              "RuntimeError", "TimeoutError", "PermissionError",
+              "AuthenticationError", "APIConnectionError", "APIStatusError",
+              "RateLimitError", "AnthropicError", "LLMPartialGenerationError",
+              "JSONDecodeError", "ProviderError", "OpenAIError",
+          ))
+          token = r"([A-Za-z][A-Za-z0-9_.:-]{0,63})"
+          event_patterns = (
+              re.compile(r"\bevent=" + token),
+              re.compile(r'"event"\s*:\s*"' + token + r'"'),
+          )
+          error_patterns = (
+              re.compile(r"\berror_type=" + token),
+              re.compile(r'"error_type"\s*:\s*"' + token + r'"'),
+          )
+          log_root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for process in ("worker", "api"):
+              file = log_root / f"c2pro-real-ai-{process}.log"
+              if not file.is_file():
+                  print(f"DIAG_{process.upper()}: log_absent")
+                  continue
+              events = collections.Counter()
+              errors = collections.Counter()
+              for line in file.read_text(errors="replace").splitlines():
+                  event = next((m.group(1) for p in event_patterns
+                                if (m := p.search(line))), None)
+                  error = next((m.group(1) for p in error_patterns
+                                if (m := p.search(line))), None)
+                  if event in allowed_events:
+                      events[event] += 1
+                  if error in allowed_error_types:
+                      errors[error] += 1
+              print(f"DIAG_{process.upper()} events=" +
+                    ",".join(f"{k}:{v}" for k,v in sorted(events.items())))
+              print(f"DIAG_{process.upper()} error_types=" +
+                    ",".join(f"{k}:{v}" for k,v in sorted(errors.items())))
+          PY
+
+      - name: Count fixed pipeline markers without reading provider contents
+        if: ${{ always() && inputs.infrastructure_check_only != true }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          marks = (
+              "document_analysis_graph_skipped",
+              "document_analysis_waiting_for_review",
+              "risk_extraction_input_prepared",
+              "risk_extraction_honest_failure",
+              "risk_extraction_parse_diagnostics",
+              "tool_execution_started",
+              "tool_execution_failed",
+              "n4_partial_billable_usage_recorded",
+          )
+          root = Path(os.environ["RUNNER_TEMP"])
+          for component in ("worker", "api"):
+              p = root / f"c2pro-real-ai-{component}.log"
+              content = p.read_text(errors="replace") if p.is_file() else ""
+              counts = [f"{mark}:{content.count(mark)}" for mark in marks]
+              print("DIAG_MARKERS_" + component.upper() + "=" + ",".join(counts))
+          PY
+
+      - name: Diagnose persisted N4 node failure types in private PostgreSQL
+        if: ${{ always() && inputs.infrastructure_check_only != true }}
+        working-directory: apps/api
+        run: |
+          python - <<'PY'
+          import collections
+          import os
+          import psycopg
+
+          allow_nodes = {"risk_extractor", "critique", "wbs_extractor",
+                         "pii_anonymizer", "document_ingestion", "router"}
+          allow_errors = {"ToolNotFoundError", "ToolValidationError", "ToolExecutionError",
+                          "ValidationError", "ValueError", "TypeError", "KeyError",
+                          "RuntimeError", "TimeoutError", "PermissionError",
+                          "AuthenticationError", "APIConnectionError", "APIStatusError",
+                          "RateLimitError", "AnthropicError", "LLMPartialGenerationError",
+                          "JSONDecodeError", "ProviderError", "OpenAIError"}
+          counts = collections.Counter()
+          try:
+              with psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=5) as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute("""
+                          SELECT payload_trace -> 'node_result' ->> 'node' AS node,
+                                 payload_trace -> 'node_result' -> 'error' ->> 'error_type' AS error_type
+                          FROM public.evidence_extraction_events
+                          WHERE event_type = 'processing_error'
+                          LIMIT 100
+                      """)
+                      for node, error in cursor.fetchall():
+                          if node in allow_nodes and error in allow_errors:
+                              counts[(node, error)] += 1
+              print("DIAG_PG_NODE_ERRORS=" +
+                    ",".join(f"{node}:{error}:{count}" for (node,error), count in sorted(counts.items())))
+          except Exception as exc:
+              print("DIAG_PG_QUERY_FAILURE=" + type(exc).__name__[:40])
+          PY
+
       - name: Summarize verdict and consumption
         if: always()
         run: |
