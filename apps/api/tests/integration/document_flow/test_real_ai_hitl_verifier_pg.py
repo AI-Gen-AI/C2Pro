@@ -57,6 +57,17 @@ LEDGER_OK = {
 }
 LIMITS = {"max_calls": 12, "max_usd": 1.0}
 
+@pytest.mark.parametrize(
+    ("verdict", "expected"),
+    [("PASS", 0), ("PARTIAL", 1), ("FAIL", 1), ("UNKNOWN", 1)],
+)
+async def test_real_ai_acceptance_cli_only_succeeds_on_pass(
+    verdict: str, expected: int
+) -> None:
+    """A missing capability may be named PARTIAL, but must never yield green CI."""
+    assert verifier.acceptance_exit_code(verdict) == expected
+
+
 
 def manifest_for(w: Any, **over: Any) -> dict[str, Any]:
     base = {
