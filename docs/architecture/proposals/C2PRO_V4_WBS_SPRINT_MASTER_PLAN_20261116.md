@@ -1,7 +1,22 @@
 # C2Pro V4 — Plan Director WBS y Sprints (versión de aprobación)
 **Fecha base:** lunes 16/11/2026 (Europa/Madrid)
-**Estado:** PLAN — documentación únicamente. Sin autorizar implementación, PR de código, cambio de piloto ni gasto operativo.
+**Estado:** GO AUTORIZADO para ejecución S0–S5 (16/11/2026); PRs y despliegues sujetos a gates, revisión de CI/QA y seguridad.
 **Fuente:** propuesta V4, dictamen Claude Sonnet, contraste técnico propio, ADR-014/017 y checkpoints #1049/#1229/#1234.
+
+## 0. Replanificación ejecutiva FAST-TRACK V4.1 — **vigente desde 16/11/2026 22:27 CET**
+**DECISIÓN DEL PROPIETARIO:** acelerar radicalmente plazos aprovechando agentes/modelos y trabajo paralelo, sin confundir tareas de desarrollo con UAT real. Esta sección **sustituye el calendario S0–S5 de diciembre-febrero que figure más abajo**. Las 40 tareas WBS, dependencias técnicas y controles de calidad siguen vigentes; sus rangos de jTE son referencia de esfuerzo humano convencional, **NO plazos de ejecución por agentes**. Estado: GO de ejecución ya iniciado (#1235 y #1236), no implica merge/deploy automático.
+- **Objetivo primario:** Complete Journey V4 demostrable el **27/11/2026** (10 jornadas laborables desde 16/11); contingencia explícita **30/11–04/12**, solo por impedimentos reales medidos. Plazo agresivo/condicionado, no garantía de éxito ni justificación para falsear aceptación.
+- **17/11 (S0, 1 día):** mapa código+contratos+baseline inicial, gold set mínimo anotable, priorización y tres PR paralelas pequeñas. S0 podrá cerrarse condicionado con puntos de medición aún pendientes si no bloquean los siguientes trabajos.
+- **17–18/11 (S1, 2 días solapados):** N3 fail closed (#1235 revisión), N4 estados/no-risks/error, citas pre-HITL y N12 rediseño de retry, adapters comparables. Gate G1 **18/11**.
+- **18–20/11 (S2, 3 días):** N4 ventanas+ledger mínimo, checkpoints, presupuesto/coste, prueba completa con modelo real. Gate G2 **20/11**, si los modelos/cuotas/acceso son operativos.
+- **20–24/11 (S3, 3 jornadas hábiles parcialmente paralelas):** N5 cronograma, N9 XLSX/presupuesto, requisitos, fuentes y gold multifuente. Gate G3 **24/11**.
+- **23–26/11 (S4, solapado 4 jornadas):** ProjectGraph relaciones versionadas, Coherence dos estados, N11, HITL candidato genuino, límites de tenant, y #1229 (equipo CORE separado). Gate G4 **26/11**.
+- **25–27/11 (S5, solapado):** tres modalidades de ejecución (Rápido preliminar, Completo default, Auditoría), panel, pruebas reales S1–S8, release go/no-go. Gate G5 **27/11**.
+- **Capacidad operativa:** un único dueño de arquitectura/merge; carriles paralelos A: N4/IA (Alejandro, Codex o Sonnet), B: evidencias/QA y gold (Elena, Gemini/Sol), C: interfaz/HITL (UX), D: Ops/CI/observabilidad, E: Atlas revisión antagonista. Adriana coordina bloqueos; no poner varias personas/agentes a escribir simultáneamente el mismo fichero/branch.
+- **Días y checkpoints:** entregar SHA/PR+pruebas al cierre de cada día, no declarar DONE por respuesta de modelo. Escalar bloqueo de >2h a Adriana y reajustar sprint, con workstream alternativo, sin gastar en reintentos ilimitados.
+- **Qué NO se acelera por decreto:** aprobación humana final, benchmarking contra gold independiente, evidencia literal, cobertura de fuente, migraciones seguras, RLS, gestión de errores/rollback, pipeline de proveedor real y #1229. Se pueden paralelizar, no eliminar.
+- **Controles de inversión:** coste medido por run/documento/tenant y preflight transaccional; las cuotas de CLI y OpenRouter no equivalen a coste nulo. Prohibido repetir >N veces una llamada solo por intentar satisfacer fecha; pausas con PARTIAL y checkpoint.
+- **Criterio de alcance:** si el 27/11 la extracción N4 real es fiable pero falla ProjectGraph/HITL, entregar MVP N4 + NO-GO de Journey y reporte de causa/contingencia. Nunca afirmar que el producto completo está aceptado por cumplir una fecha.
 
 ## 1. Objetivo y restricciones
 Construir inteligencia de proyectos multivertical con: ingesta segura y fuente íntegra; extractores especializados N4/N5/N9/requisitos; evidencia/versiones; N12/N15; ProjectState y ProjectGraph; Coherence/Health validado vs provisional; decisiones HITL individuales y finales; dashboard y tres modalidades **Rápido (preliminar), Completo (default), Auditoría (reforzado)**.
@@ -11,13 +26,13 @@ Construir inteligencia de proyectos multivertical con: ingesta segura y fuente �
 **No imponer WBS/BOQ a software u otras verticales.** Núcleo mínimo de proyecto+entidades+evidencia+versiones+riesgos+revisión+eventos, especialistas desacoplados.
 
 ## 2. Plazos objetivo y capacidades
-- S0 17–20 nov 2026: diagnóstico + diseño y baseline.
-- S1 23 nov–4 dic: robustez N3/N4/N12/N15; evaluación multiproveedor.
-- S2 7–18 dic: N4 V2 ventanas/ledger/checkpoint/budget con feature flag en OFF; 8 dic festivo, capacidad reducida.
-- S3 21 dic–8 ene: N12 crítico, N5/N9 y requisitos; Navidad y 1/6 ene reducen capacidad, no planificar producción crítica esas fechas.
-- S4 11–22 ene 2027: vínculos cross-doc, ProjectGraph, Coherence/Health y HITL.
-- S5 25 ene–5 feb: modos, panel, rendimiento y UAT; gate de aceptación final.
-**Objetivos internos condicionados:** 18/12 MVP N4 probado aisladamente; 22/01 inteligencia multi-doc candidata; 05/02 UAT real. No compromiso de entrega. Esfuerzo preliminar 65–95 jornadas técnicas equivalentes en varias líneas paralelas; revisar a cierre de S0. La aprobación final de un humano autorizado y un posible bloqueo del piloto son dependencias externas.
+- S0 FAST-TRACK 17 nov 2026: diagnóstico + diseño y baseline mínimo; tareas continuarán en paralelo.
+- S1 FAST-TRACK 17–18 nov: robustez N3/N4/N12/N15; evaluación multiproveedor.
+- S2 FAST-TRACK 18–20 nov: N4 V2 ventanas/ledger/checkpoint/budget con feature flag OFF por defecto.
+- S3 FAST-TRACK 20–24 nov: N12 crítico, N5/N9 y requisitos; trabajo paralelo sin omitir gold.
+- S4 FAST-TRACK 23–26 nov: vínculos cross-doc, ProjectGraph, Coherence/Health y HITL.
+- S5 FAST-TRACK 25–27 nov: modos, panel, rendimiento y UAT; gate 27/11; contingencia 30/11–4/12.
+**Objetivos internos condicionados V4.1:** 20/11 MVP N4 probado aisladamente; 24/11 inteligencia multi-doc candidata; 27/11 UAT real; contingencia 04/12. No compromiso de entrega. Esfuerzo preliminar 65–95 jornadas técnicas equivalentes en varias líneas paralelas; revisar a cierre de S0. La aprobación final de un humano autorizado y un posible bloqueo del piloto son dependencias externas.
 **Capacidad supuesta para planificación:** Backend IA 1 línea principal, QA 1 línea independiente, Ops 0,3–0,5 capacidad, UX desde S4/S5, coordinación ligera. Los modelos son ejecutores auxiliares, no multiplicadores lineales de capacidad; algunas tareas no se paralelizan por migraciones/estados/PR.
 
 ## 3. Diccionario de responsables y modelos (PROPUESTO; verificar disponibilidad)
@@ -34,7 +49,7 @@ Política: el modelo que escribió una implementación no puede ser su único re
 ## 4. WBS por sprint
 **Unidad de esfuerzo:** jornadas técnicas equivalentes (jTE) agregadas por tarea, rango de estimación; no son tiempo de CPU de agente ni días calendario. Cada tarea termina con enlace a commit/PR, tests y resultados — solo cuando se autorice ejecutar.
 
-### S0 — diagnóstico, diseño y baseline (6 tareas; 7–11 jTE aprox.)
+### S0 FAST-TRACK — 17/11; diagnóstico, diseño y baseline (6 tareas; esfuerzo histórico estimado 7–11 jTE, NO duración IA)
 | ID | Paquete | Esfuerzo jTE | Dep. | Responsable/modelo | DoD — evidencia de cierre |
 |---|---|---:|---|---|---|
 | 0.1 | Alcance, límites y coordinación #1049/#1229 | 0,5–1 | — | Adriana / Sonnet | Plano de responsabilidades, veto a duplicidades, riesgos abiertos |
@@ -44,7 +59,7 @@ Política: el modelo que escribió una implementación no puede ser su único re
 | 0.5 | SDD/ADR: ledger, estados, API, N12/HITL y rollback | 1,5–2,5 | 0.2,0.4 | Adriana + Alejandro / Sonnet+Atlas | Diseño con CAS/RLS, migración y compatibilidad aceptable |
 | 0.6 | Dependencia de aceptación piloto #1229, sin duplicar | 0,5–0,5 | 0.1 | Tándem CORE / sin LLM | Owner único de UAT y secuencia de aprobación humana |
 
-### S1 — corregir defectos y normalizar proveedores (7 tareas; 10–16 jTE)
+### S1 FAST-TRACK — 17–18/11; corregir defectos y normalizar proveedores (7 tareas; esfuerzo de referencia 10–16 jTE)
 | ID | Paquete | Esfuerzo jTE | Dep. | Responsable/modelo | DoD — evidencia de cierre |
 |---|---|---:|---|---|---|
 | 1.1 | N3 `insufficient_extractable_text`, OCR pendiente, ruta válida | 1–1,5 | 0.2 | Alejandro / Codex | Repro test rojo→verde, sin caída de LangGraph |
@@ -55,7 +70,7 @@ Política: el modelo que escribió una implementación no puede ser su único re
 | 1.6 | Pruebas seguridad PII, RLS, errores parciales, rollback | 1–1,5 | 1.2,1.3 | Ops+Elena / Codex+Gemini | Cero regresiones tenant, priv. y controles |
 | 1.7 | Benchmark comparable real sobre mismas cláusulas y fuente | 1–2 | 1.5,0.4 | Elena / Gemini+Sonnet/Sol | Recall/precisión preliminar y factura/coste identificable |
 
-### S2 — N4 incremental (8 tareas; 15–23,5 jTE)
+### S2 FAST-TRACK — 18–20/11; N4 incremental (8 tareas; esfuerzo de referencia 15–23,5 jTE)
 | ID | Paquete | Esfuerzo jTE | Dep. | Responsable/modelo | DoD — evidencia de cierre |
 |---|---|---:|---|---|---|
 | 2.1 | Inventario por sección, página, span y cobertura | 1,5–2,5 | 1.1,0.5 | Alejandro / Sonnet+Codex | 100% de unidades con estado y hash fuente |
@@ -67,7 +82,7 @@ Política: el modelo que escribió una implementación no puede ser su único re
 | 2.7 | N4 V2 integrado bajo feature flag OFF por defecto | 1,5–2,5 | 2.3–2.6 | Alejandro / Codex+Sonnet | Ruta piloto intacta con flag off, rollback probado |
 | 2.8 | Ensayos contrato real completo, repeatability y gate | 1,5–2,5 | 2.7,0.4 | Elena+Ops / Gemini | 3 runs comparables y dictamen calidad/coste |
 
-### S3 — calidad y especialidades documental (6 tareas; 10,5–16,5 jTE)
+### S3 FAST-TRACK — 20–24/11; calidad y especialidades documental (6 tareas; esfuerzo de referencia 10,5–16,5 jTE)
 | ID | Paquete | Esfuerzo jTE | Dep. | Responsable/modelo | DoD — evidencia de cierre |
 |---|---|---:|---|---|---|
 | 3.1 | N12 crítica semántica focal, gold extendido | 2–3 | 2.8 | Elena+Alejandro / Gemini+Sonnet | Diagnóstico de falsos negativos y materialidad |
@@ -77,7 +92,7 @@ Política: el modelo que escribió una implementación no puede ser su único re
 | 3.5 | Documento/artefacto multi-formato con revisión y referencias | 1,5–2,5 | 3.2–3.4 | Alejandro+Ops / Codex | Entidades tipadas sin ruptura de lineage |
 | 3.6 | Benchmark 4 documentos y casos adversariales | 1,5–2,5 | 3.1,3.5 | Elena / Gemini+Atlas Sol | Matriz multi-doc reproducible y NO-ASSESS donde aplique |
 
-### S4 — inteligencia global, coherencia y HITL (7 tareas; 11,5–18,5 jTE)
+### S4 FAST-TRACK — 23–26/11; inteligencia global, coherencia y HITL (7 tareas; esfuerzo de referencia 11,5–18,5 jTE)
 | ID | Paquete | Esfuerzo jTE | Dep. | Responsable/modelo | DoD — evidencia de cierre |
 |---|---|---:|---|---|---|
 | 4.1 | N3 multidisciplina, fan-out/join correcto por elemento | 2–3 | 3.5 | Alejandro / Codex | N12 único tras fan-in, sin efectos duplicados |
@@ -88,7 +103,7 @@ Política: el modelo que escribió una implementación no puede ser su único re
 | 4.6 | HITL real por hallazgo y final separado, integración #1229 | 1,5–2,5 | 4.3,1.3,#1229 | UX+Alejandro+Elena / Codex | GET 200, ledger y final act de humano real |
 | 4.7 | QA Tier-1/Tier-2/Clerk/PG/alertas y rendimiento | 1,5–2,5 | 4.4–4.6 | Elena+Ops / Gemini+Sol | E2E candidato, aislamiento, trazas |
 
-### S5 — 3 modalidades, panel y UAT (6 tareas; 9–14 jTE)
+### S5 FAST-TRACK — 25–27/11; 3 modalidades, panel y UAT (6 tareas; esfuerzo de referencia 9–14 jTE)
 | ID | Paquete | Esfuerzo jTE | Dep. | Responsable/modelo | DoD — evidencia de cierre |
 |---|---|---:|---|---|---|
 | 5.1 | Back-end Rápido/Completo/Auditoría con semántica de cobertura | 1,5–2,5 | 3.1,4.7 | Alejandro+Elena / Sonnet+Gemini | Rápido nunca equivale a exhaustivo |
