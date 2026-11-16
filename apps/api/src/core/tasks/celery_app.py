@@ -128,23 +128,35 @@ celery_app.conf.update(
 )
 
 
-# Opt-in PILOT scheduler scope. The default production schedule stays unchanged.
-# A dedicated pilot Beat must not dispatch unrelated HITL, recovery, retention
-# or budget jobs merely to test ProjectGraph durable re-enqueue (#714).
+# Opt-in PILOT scheduler scope: default production remains unchanged.
+# The narrow pilot normally dispatches ProjectGraph recovery only. Allow the
+# already-existing lease/fence-guarded abandoned-document recovery as a SECOND
+# explicitly enabled task, without enabling HITL, retention or budget jobs.
 def select_beat_schedule(
-    schedule: dict[str, dict[str, object]], *, project_graph_only: bool
+    schedule: dict[str, dict[str, object]],
+    *,
+    project_graph_only: bool,
+    document_recovery: bool = False,
 ) -> dict[str, dict[str, object]]:
     if not project_graph_only:
         return schedule
-    key = "project-graph-trusted-projection-reconcile"
-    if key not in schedule:
+    graph_key = "project-graph-trusted-projection-reconcile"
+    if graph_key not in schedule:
         raise RuntimeError("PROJECT_GRAPH_BEAT_ENTRY_MISSING")
-    return {key: schedule[key]}
+    selected = {graph_key: schedule[graph_key]}
+    if document_recovery:
+        recovery_key = "document-processing-reconcile"
+        if recovery_key not in schedule:
+            raise RuntimeError("DOCUMENT_RECOVERY_BEAT_ENTRY_MISSING")
+        selected[recovery_key] = schedule[recovery_key]
+    return selected
 
 
 celery_app.conf.beat_schedule = select_beat_schedule(
     dict(celery_app.conf.beat_schedule),
     project_graph_only=os.getenv("C2PRO_BEAT_PROJECTGRAPH_ONLY", "").strip().lower()
+    in {"1", "true", "yes"},
+    document_recovery=os.getenv("C2PRO_BEAT_ENABLE_DOCUMENT_RECOVERY", "").strip().lower()
     in {"1", "true", "yes"},
 )
 
