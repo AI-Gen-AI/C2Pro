@@ -66,3 +66,36 @@ Los componentes de observabilidad detectados son `apps/api/src/core/ai/llm_clien
 - No manipular #1229 ni reproducir aprobación humana. El owner del gate decide PASS/NO-GO con pruebas adjuntas.
 
 **Trazabilidad:** SHA de fuente EXCERPT confirmado localmente en VPS, sin convertir el resultado en declaración de fidelidad del PDF SEC ni del piloto 94p.
+## 5. Evidencia adicional recuperada (16/11/2026, GitHub Actions reales)
+
+**Se recuperaron dos recibos del proveedor GPT-6 Sol** desde artefactos de ejecuciones de GitHub Actions, con el mismo `source_sha256` de la fixture `5386e0518b932813e25e29484d69095e502942167fd83e8218f5fac6b06190ee`, `source_chars=8012`. No se realizó una nueva llamada pagada.
+
+| SHA / run / job | Estilo | API input/output tokens | Razonamiento | Latencia medida en tool | Precio *estimado* configuración | Estado |
+|---|---|---|---|---|---|---|
+| `5b88de6cfb591930734a3eadcdcf893246473225`, GHA `43925573080` / job `133503978162` | full | **2746 / 4626** | No disponible en recibo/log | **33.473,44 ms** | **0,051752 USD** | HTTP/model completado, `ToolResult.success=True`, pero **0 riesgos**, benchmark FAIL |
+| `f04b1b2ab49c9613af11f4a5d46bbb969182f333`, GHA `43926549679` / job `133507445919` | concise | **1940 / 6000** | **727** reportados en provider log | **47.185,21 ms** | **0,063880 USD** | `LLMPartialGenerationError` / output incompleto, **0 riesgos**, benchmark FAIL |
+
+**Suma estimada de ambos intentos:** `0.115632 USD` sobre configuración `input=2 USD/M`, `output=10 USD/M`; NO es importe facturado verificado, ni baseline por documento finalizado. Intentos heterogéneos (prompt full/concise, SHA distintos), **no calcular p50/p95 comparables**. Una salida vacía con 4626 tokens se interpreta como falla de cobertura/calidad, no «contrato sin riesgos»; salida truncada a 6000 tokens es fallo consumible y no evidencia de contrato analizado. No hay métricas reales de Gemini ni de Claude comparables.
+
+**Fuente de prueba y trazabilidad:** repositorio privado GHA artefacto `n4-gpt-real-receipt` para runs `43925573080` y `43926549679`, SHA fuente exacto; logs de jobs señalados arriba registran el token usage y la latencia. Los recibos deliberadamente excluyen texto del contrato y credenciales. La clave OpenAI estaba disponible para esas llamadas en GitHub Actions (no en el VPS), sin necesidad de exponerla. Ninguna nueva invocación se autorizó desde este acto.
+
+**Resultado WBS 0.3:** de `NO MEDIDO` absoluto a `BASELINE REAL PARCIAL / NO-GO`: se conoce consumo/latencia de **dos intentos fallidos**, no coste por caso útil, p95, recall ni facturación. Este dato no justifica G0 PASS.
+
+## 6. Contraste de la fuente pública original (sin mezclar contratos)
+
+La fixture usada enlaza al contrato oficial de <https://www.sec.gov/Archives/edgar/data/1519472/000164033426000032/solarmax_ex991.htm>, **Naguabo BESS, 31/12/2025**, no al otro SolarMax SEC de julio 2025 ni al contrato de 94 páginas del piloto #1229. La página oficial consultada confirma:
+- §2.5.5: responsabilidades/condiciones para liquidated damages de cumplimiento, excepciones Owner/Utility/Substation;
+- §4.3.1: Outside NTP y compensación condicionada del Owner;
+- §9.6: aparición textual **`ten percent (5%)`** en compensación por terminación para conveniencia, contradicción numérico-palabra genuina presente en SEC;
+- §14.14.2: obligación de confidencialidad que remite a §14.15, mientras §14.15 se titula `Negotiated Terms`. **Candidato de referencia cruzada cuestionable**, no «error jurídico» certificado; requiere lectura íntegra y revisor experto.
+
+**Límite técnico comprobado:** consulta web de la SEC accesible, pero la descarga HTTP directa desde VPS respondió 403; por tanto **no se dispone del SHA256 de los bytes HTML originales** en este frente. La fixture sí está hasheada y es reproducible. No elevar `original_file_verified` a true. Añadir al gold estas referencias públicas es una anotación documental, **no** la validación jurídica o materialidad que G0 exige.
+
+## 7. CI seguridad diferencial — PR #1244
+
+- PR apilada sobre #1234, SHA `4f2c9c8f01031b98f1b9645a96c173cf03e895f9`, cambios sólo en `.github/workflows/n4-controlled-gpt-comparison.yml` y `.github/ci-pip-install-baseline.json`.
+- Instalación no drift y baseline revisado: local **28 bloques reconocidos, 88/88 tests de guard PASS**. GitHub Actions **Install Drift Guard #43973615890 SUCCESS** y **Secret Scan #43973615418 SUCCESS**.
+- Ya no se activa llamada pagada por push. Solo workflow_dispatch con entrada manual literal; **no hay garantía de poder disparar antes de que el workflow figure en la rama default**, ni la reparación cambia el status de la rama original #1234 sin integrar #1244.
+- QA independiente Gemini de #1244 se ejecutó pero su dictamen mezcló controles válidos con una exigencia incorrecta (reclamar entradas de manifest en el YAML en vez del JSON); **no elevar a certificación completa**. Revisar riesgo branch/ref y autoridad GitHub antes de activar un workflow pagado.
+
+**Dictamen actualizado:** G0 **NO-GO**, G1 **NO-GO** hasta fuente/gold experto, QA completa, benchmark útil, y promoción autorizada de las PR tras consenso en #1049. Nunca atribuir la falta de éxito únicamente a la conexión del proveedor.
