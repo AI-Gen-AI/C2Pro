@@ -489,6 +489,46 @@ jobs:
         working-directory: apps/api
         run: python scripts/verify_real_ai_hitl_pg.py
 
+      # Diagnostic-only: report event/error TYPE counts, never freeform log messages,
+      # document source, identifiers, prompts, completions, JWT or credentials.
+      # This runs even after a failed independent PG gate and has zero provider calls.
+      - name: Classify API and worker failures without exposing payloads
+        if: ${{ always() && inputs.infrastructure_check_only != true }}
+        run: |
+          python3 - <<'PY'
+          import collections
+          import os
+          import pathlib
+          import re
+
+          safe_token = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.:-]{0,63}$")
+          log_root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for process in ("worker", "api"):
+              file = log_root / f"c2pro-real-ai-{process}.log"
+              if not file.is_file():
+                  print(f"DIAG_{process.upper()}: log_absent")
+                  continue
+              events = collections.Counter()
+              errors = collections.Counter()
+              for line in file.read_text(errors="replace").splitlines():
+                  for pattern, target in (
+                      (r'(?:\\bevent=|[\\"]event[\\"]:\\s*[\\"])([a-zA-Z][a-zA-Z0-9_.:-]{0,63})', events),
+                      (r'(?:\\berror_type=|[\\"]error_type[\\"]:\\s*[\\"])([a-zA-Z][a-zA-Z0-9_.:-]{0,63})', errors),
+                  ):
+                      match = re.search(pattern, line)
+                      if match and safe_token.fullmatch(match.group(1)):
+                          target[match.group(1)] += 1
+              selected = {k:v for k,v in events.items() if any(
+                  word in k.lower() for word in (
+                      "risk", "extraction", "analysis", "provider", "tool", "ai_", "critique"
+                  )
+              )}
+              print(f"DIAG_{process.upper()} events=" +
+                    ",".join(f"{k}:{v}" for k,v in sorted(selected.items())[:30]))
+              print(f"DIAG_{process.upper()} error_types=" +
+                    ",".join(f"{k}:{v}" for k,v in sorted(errors.items())[:20]))
+          PY
+
       - name: Summarize verdict and consumption
         if: always()
         run: |
