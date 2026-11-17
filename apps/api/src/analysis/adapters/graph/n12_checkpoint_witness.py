@@ -45,8 +45,14 @@ async def verify_n12_durable_predecessor(
         _reject("RUNTIME_THREAD_MISSING")
     if thread != state.get("thread_id"):
         _reject("RUNTIME_THREAD_DRIFT")
-    if not isinstance(runtime_checkpoint, str) or not runtime_checkpoint.strip():
-        _reject("RUNTIME_CHECKPOINT_ID_MISSING")
+    # LangGraph can omit checkpoint_id in the injected N12 config even when
+    # its Postgres saver has durably committed the preceding N4/N5 node. The
+    # authoritative ID is always read FROM PostgreSQL below; a runtime ID,
+    # if supplied, is an additional exact-match constraint (not a prerequisite).
+    if runtime_checkpoint is not None and (
+        not isinstance(runtime_checkpoint, str) or not runtime_checkpoint.strip()
+    ):
+        _reject("RUNTIME_CHECKPOINT_ID_INVALID")
     if not isinstance(namespace, str):
         _reject("RUNTIME_NAMESPACE_INVALID")
 
@@ -62,7 +68,6 @@ async def verify_n12_durable_predecessor(
         snapshot = await graph.aget_state({
             "configurable": {
                 "thread_id": thread, "checkpoint_ns": namespace,
-                "checkpoint_id": runtime_checkpoint,
             },
         })
     except Exception as exc:
@@ -76,7 +81,12 @@ async def verify_n12_durable_predecessor(
     pending = getattr(snapshot, "next", ())
     if (
         not isinstance(saved_cfg, Mapping)
-        or saved_cfg.get("checkpoint_id") != runtime_checkpoint
+        or not isinstance(saved_cfg.get("checkpoint_id"), str)
+        or not saved_cfg["checkpoint_id"].strip()
+        or (
+            runtime_checkpoint is not None
+            and saved_cfg["checkpoint_id"] != runtime_checkpoint
+        )
         or saved_cfg.get("thread_id") != thread
         or saved_cfg.get("checkpoint_ns", "") != namespace
         or not isinstance(persisted, Mapping)

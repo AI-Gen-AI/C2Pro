@@ -47,7 +47,10 @@ class StoredGraph:
         self.invocations += 1
         c = config["configurable"]
         return SimpleNamespace(
-            config={"configurable": dict(c)},
+            config={"configurable": {
+                **dict(c),
+                "checkpoint_id": "checkpoint-001",
+            }},
             values=deepcopy(self.state),
             next=self.pending,
         )
@@ -75,8 +78,21 @@ async def test_matching_postgres_checkpoint_snapshot_allows_idempotency_binding(
 
 
 @pytest.mark.asyncio
+async def test_backend_saved_checkpoint_is_authoritative_when_runtime_omits_id(monkeypatch):
+    state = _state()
+    graph = StoredGraph(state)
+    monkeypatch.setattr(workflow, "get_graph_app", lambda: graph)
+    config = _config(state)
+    config["configurable"].pop("checkpoint_id")
+    await verify_n12_durable_predecessor(
+        state=state, model_safe_source=SOURCE, config=config,
+    )
+    assert graph.invocations == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", [
-    "missing_config", "missing_runtime_id", "wrong_thread", "memory_only",
+    "missing_config", "wrong_thread", "memory_only",
     "missing_n12_route", "tenant_changed", "revision_changed",
     "risk_changed", "source_changed", "missing_revision", "wrong_checkpoint_ns",
 ])
@@ -87,8 +103,6 @@ async def test_budget_witness_fails_closed_on_missing_or_stale_state(monkeypatch
     config = _config(state)
     if mutation == "missing_config":
         config = None
-    elif mutation == "missing_runtime_id":
-        config["configurable"]["checkpoint_id"] = None
     elif mutation == "wrong_thread":
         config["configurable"]["thread_id"] = str(uuid4())
     elif mutation == "missing_n12_route":
