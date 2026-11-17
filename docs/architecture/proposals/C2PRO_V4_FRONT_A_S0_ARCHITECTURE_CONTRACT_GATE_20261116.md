@@ -112,3 +112,22 @@ Se detectó que la política aprobada en #1049 **no estaba plenamente reflejada 
 5. **No existe benchmark exitoso con proveedor real en esta HEAD**, ni UAT del documento piloto #1229. G0 diseño de evaluación puede considerarse candidatado para aceptación condicionada conforme owner, pero **no aprobado automáticamente**; G1 **NO-GO** para promoción de código hasta QA y evidencia de proveedor/Complete Journey.
 
 **Límites:** nada de modelos/migraciones/ledger WBS2.2/2.5/2.6, ni trabajos del piloto #1229. El presente checkpoint documenta avances del Frente A; no cambia autorizaciones de merge.
+
+
+## 8. Auditoría agentica y corrección de generalización N4 — 17/11/2026
+
+**PR código:** [#1247](https://github.com/AI-Gen-AI/C2Pro/pull/1247) DRAFT, HEAD `1c6128e084f40a625bbfc68d57611a07ac4d5021`, aún no fusionada.
+
+**Hallazgos RED / reparación implementada:**
+- N3 en LangGraph real: si IA de clasificación falla, `classification_unassessed` termina antes de extraction/N12/HITL/N17. Nueva prueba real del grafo versionada `test_n3_unclassified_route_v4.py`.
+- **P1 HITL multivertical:** `doc_type=other` (ruta N4) podía quedar autorizado si N12 decía OK y había confianza 0.99, porque `CritiqueExtractionUseCase` exigía revisión solo a `contract`. Reproducido test RED; corregido a **HITL para cualquier propuesta de riesgo N4**, incluso con override `C2PRO_SKIP_HITL=1`.
+- **P1 procedencia multivertical:** N4 para `other` omitía el sello literal de citas pre-HITL y su resumen de evidencias. Dos tests RED; extensión del control técnico `_stamp_pre_hitl_contract_risk_evidence` y del summary/gate N12 a ambos tipos encaminados a N4: `contract`, `other`. Una cita **no encontrada** no se presenta como evidencia verificada. **Esta comprobación es literal del texto N2**, no semántica y no autentica el PDF original. La ruta `technical_spec` conserva su validación WBS diferenciada.
+- Persistencia terminal ADR-017 (en §7): continúa prohibido cualquier artefacto TRUSTED o encolado de ProjectGraph si `workflow_terminated=True`.
+
+**QA y revisión independiente:**
+- **234 pytest PASS con PostgreSQL aislado en SHA `1c6128e084f40a625bbfc68d57611a07ac4d5021`**: job `468a0a1e6bd04659ab5c7050`; log SHA256 `12e1dd87e8ed8b4d4e70e7ad0733874d8448ec65935c91f01ef1c20c766ac7e5`. CI exact-SHA Drift Guard `43991348217` + Secret Scan `43991348224` PASS.
+- **PostgreSQL real integración HITL/candidatos**: 47 PASS en SHA `a57f8aba9` job `14009847a216456fb467577e`, log `3b436e4b781bd88f44f75bd4cb0fa282db57596b07fbbf2a751043ad758f7e36`. Re-ejecución en HEAD actual job `0b89bd6f66db45f3b7c6d12f` pendiente al actualizar este documento.
+- **Agentes**: Codex job `16607dee05df3f1a3b208654e2583e62` FAILED exit -25 (proceso de scan excesivo), OpenCode `051c54f6927ee532ebb1987cfaf6f620` FAILED por captura excesiva: **SIN dictamen independiente**. Antigravity `e9fd2d7645f3b4e3f88e77941e2db1de` PASS limitado en trust boundary, SHA `e6866afa4`; `aae2b7e9068f36756d29d36a4e11bd5b` PASS limitado N3. Revisión N4 citas `other` HEAD `1c6128e08` job `a6279f54d38ef3817938f054d86d3251` pendiente. Nunca atribuir PASS global si no existe.
+- G0 metodología de evaluación abierta permanece candidata a aceptación formal; G1 **NO-GO**: pendiente QA global, modelo/proveedor vivo con fuente contractual, pilot UAT, integración con otros frentes. Nada de reglas por cláusula Gold en código productivo. No fusionar ni desplegar sin gates.
+
+**Coordinación:** #1049, Frentes B/CORE sin tocar. Para QA de rendimiento/recall se requieren contratos held-out e interpretación experta por muestra, no un catálogo de condiciones codificadas.
