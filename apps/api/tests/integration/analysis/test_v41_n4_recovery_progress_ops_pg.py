@@ -16,10 +16,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from src.analysis.application.n4_incremental_runner import N4IncrementalRunner
+from src.documents.adapters.persistence.models import DocumentORM
+from src.projects.adapters.persistence.models import ProjectORM
 from tests.integration.analysis.test_n4_incremental_store_pg import (
     _new_authority,
     _seed_caps,
-    _seed_identity,
 )
 from tests.integration.analysis.test_n4_window_runner_pg import StubProvider, _source
 
@@ -54,18 +55,48 @@ async def _apply_scratch_migrations(engine):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure_kind", ("missing_reference", "malformed_output"))
 async def test_n4_progress_is_not_equivalent_to_billable_receipts(
-    test_engine, test_tenant, failure_kind,
+    test_engine, test_tenant, db, failure_kind,
 ):
     await _apply_scratch_migrations(test_engine)
     authority = _new_authority(test_tenant.id, uuid4(), uuid4())
     project_id = uuid4()
+    # ORM bootstrapped by Ops imposes application-level defaults (currency,
+    # timestamps, document status), unlike Alembic-minimal fixtures.
+    db.add(ProjectORM(
+        id=project_id, tenant_id=test_tenant.id, name="N4 QA",
+        project_type="construction", status="active",
+    ))
+    await db.commit()
+    db.add(DocumentORM(
+        id=authority.document_id, tenant_id=test_tenant.id,
+        project_id=project_id, filename="qa-source.pdf",
+        document_type="contract",
+    ))
+    await db.commit()
     dsn = test_engine.url.render_as_string(hide_password=False)
     dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
     conn = await asyncpg.connect(dsn)
     try:
-        await _seed_identity(
-            conn, authority=authority, project=project_id, create_tenant=False,
+        await conn.execute(
+            "SELECT set_config('app.current_tenant', $1, false)",
+            str(authority.tenant_id),
         )
+        await conn.execute("""
+            INSERT INTO public.document_revisions
+              (revision_id, document_id, project_id, tenant_id, rev_no,
+               blob_hash, blob_key, valid_from)
+            VALUES ($1, $2, $3, $4, 1, $5,
+                    'ops-owned/qa-source', clock_timestamp())
+        """, authority.revision_id, authority.document_id, project_id,
+            authority.tenant_id, "a" * 64)
+        await conn.execute("""
+            INSERT INTO public.document_processing_operations
+              (document_id, tenant_id, revision_id, generation, stage, phase,
+               attempt_id, owner_token, fencing_token, lease_expires_at)
+            VALUES ($1, $2, $3, 1, 'ANALYSIS', 'RUNNING',
+                    $4, $5, 1, clock_timestamp() + interval '1 hour')
+        """, authority.document_id, authority.tenant_id, authority.revision_id,
+            authority.attempt_id, authority.owner_token)
         await _seed_caps(
             conn, authority.tenant_id, project_id,
             authority.document_id, "1.000000",
