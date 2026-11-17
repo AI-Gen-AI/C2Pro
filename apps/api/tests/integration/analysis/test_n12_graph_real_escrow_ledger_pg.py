@@ -58,6 +58,8 @@ async def test_n12_graph_real_pg_escrow_settles_or_retains_unknown(
     state = _state()
     state["tenant_id"] = str(test_tenant.id)
     monkeypatch.setenv("C2PRO_N12_CHECKPOINT_ESCROW", "1")
+    # Cross-front test: B's per-N12 latch also rejects missing escrow IDs.
+    monkeypatch.setenv("C2PRO_N12_REQUIRE_ESCROW", "1")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD", "0.35")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS", "2048")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS", "2")
@@ -131,3 +133,35 @@ async def test_n12_graph_real_pg_escrow_settles_or_retains_unknown(
         after, remaining = await _ledger_snapshot(test_engine, test_tenant.id)
         assert len(after) == 1 and after[0]["status"] == rows[0]["status"]
         assert remaining["ai_spend_reserved_usd"] == balance["ai_spend_reserved_usd"]
+
+
+async def test_n12_strict_latch_refuses_unbudgeted_graph_call(monkeypatch):
+    """Even with a working graph, N12 may never call provider without an ID."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    state = _state()
+    provider = N12ResponseStub()
+    service = AIService(wrapper=provider, tenant_id=state["tenant_id"])
+    monkeypatch.setenv("C2PRO_N12_REQUIRE_ESCROW", "1")
+    monkeypatch.setenv("C2PRO_N12_CHECKPOINT_ESCROW", "0")
+    monkeypatch.delenv("C2PRO_LEGACY_AI_ESCROW", raising=False)
+    monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+    monkeypatch.setattr(nodes, "get_ai_service", lambda _: service)
+    monkeypatch.setattr(nodes, "_apply_temporal_review_gate", _no_temporal_gate)
+
+    async def no_error_db_write(_state, _node_result):
+        return None
+
+    monkeypatch.setattr(nodes, "_persist_node_error", no_error_db_write)
+    graph = _graph_with_checkpointer(MemorySaver())
+    monkeypatch.setattr(workflow, "get_graph_app", lambda: graph)
+    result = await graph.ainvoke(
+        state,
+        {"configurable": {"thread_id": state["thread_id"]}},
+        durability="sync",
+    )
+    assert provider.calls == []
+    assert result["human_approval_required"] is True
+    assert result["confidence_score"] is None
+    assert any(n.node == "critique" and n.status.value == "failed"
+               for n in result["node_results"])
