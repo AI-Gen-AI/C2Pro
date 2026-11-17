@@ -95,12 +95,33 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
             return await original_witness(**kwargs)
         except Exception as err:
             cause = err.__cause__
-            checkpoint_errors.append({
+            technical = {
                 "error": type(err).__name__,
                 "error_reason": str(err)[:160],
                 "cause_type": type(cause).__name__ if cause else None,
                 "cause": str(cause)[:350] if cause else None,
-            })
+            }
+            cfg = (kwargs.get("config") or {}).get("configurable", {})
+            parent = (cfg.get("checkpoint_map") or {}).get("")
+            if parent:
+                try:
+                    stored = await workflow.get_graph_app().aget_state({
+                        "configurable": {
+                            "thread_id": cfg.get("thread_id"),
+                            "checkpoint_ns": "", "checkpoint_id": parent,
+                        },
+                    })
+                    persisted = stored.values or {}
+                    technical.update({
+                        "saved_next": list(stored.next or ()),
+                        "saved_step": (stored.metadata or {}).get("step"),
+                        "saved_has_risks": bool(persisted.get("extracted_risks")),
+                        "saved_has_revision": bool(persisted.get("document_revision_id")),
+                        "saved_node_results": len(persisted.get("node_results") or []),
+                    })
+                except Exception as read_error:
+                    technical["debug_read_error"] = type(read_error).__name__
+            checkpoint_errors.append(technical)
             raise
 
     monkeypatch.setattr(
