@@ -43,6 +43,22 @@ describe("uploadDocument", () => {
     fetchMock.mockReset();
     mockedHandleAuthErrorStatus.mockReset();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("uses the absolute UAT API base directly, without a missing same-origin URL lookup", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://c2pro-integrated-uat-api-pilot.up.railway.app/api/v1");
+    const { uploadDocument } = await import("./index");
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ id: "doc-uat", task_id: "task-uat" }),
+    });
+    await uploadDocument("p-uat", new File(["PDF"], "contract.pdf", { type: "application/pdf" }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://c2pro-integrated-uat-api-pilot.up.railway.app/api/v1/projects/p-uat/documents",
+      expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+    );
   });
 
   it("uploads directly to the backend (bypassing the Vercel proxy) when an absolute backend URL is available", async () => {

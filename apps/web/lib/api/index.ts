@@ -218,6 +218,13 @@ export async function getProjectDocuments(
  * back to the same-origin proxy, where the size limit does not apply locally.
  */
 async function resolveUploadBaseUrl(): Promise<string> {
+  // In UAT/production with a configured absolute API base, the backend URL is
+  // already known. Avoid the optional same-origin runtime lookup, which is not
+  // mounted on some Vercel preview deployments and otherwise creates a 404.
+  if (/^https?:\/\//i.test(env.API_BASE_URL)) {
+    return env.API_BASE_URL;
+  }
+
   try {
     const res = await fetch("/api/runtime/backend-url", { cache: "no-store" });
     if (res.ok) {
