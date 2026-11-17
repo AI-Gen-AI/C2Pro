@@ -1,0 +1,67 @@
+name: C2Pro V4.1 Real Contract QA (isolated)
+on:
+  workflow_dispatch:
+    inputs:
+      exact_sha:
+        description: "Full SHA of this isolated candidate"
+        type: string
+        required: true
+concurrency:
+  group: c2pro-v41-contract-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  source-preflight-only:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_name == 'qa/c2pro-v4-ab-n12-latch-integration-20261117' &&
+      github.event.inputs.exact_sha == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      TEST_DATABASE_URL: postgresql://postgres:postgres$localhost:5433/c2pro_preflight_test
+      JWT_SECRET_KEY: c2pro-v41-preflight-only-secret-xxxxxxxx
+      C2PRO_SOURCE_PDF_SHA256: 2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout$3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fail closed before any source work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = 'qa/c2pro-v4-ab-n12-latch-integration-20261117'
+          test "${GITHUB_SHA}" = "${{ github.event.inputs.exact_sha }}"
+          test "${C2PRO_SOURCE_PDF_SHA256}" = '2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06'
+          echo "Exact-SHA test-only preflight; NO provider credential injected."
+      - uses: ./.github/actions/setup-python-backend
+      - name: Fetch fixed public SEC filing PDF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/c2pro-v41-source"
+          curl --fail --proto '=https' --proto-redir '=https' -L --retry 2 --max-time 90 \
+            -A 'AI-GEN Public Regulatory Contract QA' \
+            -o "$RUNNER_TEMP/c2pro-v41-source/sec_8k.pdf" \
+            'https://s3.amazonaws.com/sec.irpass.cc/2934/0001640334-26-000032.pdf'
+          printf '%s  %s\n' "$C2PRO_SOURCE_PDF_SHA256" \
+            "$RUNNER_TEMP/c2pro-v41-source/sec_8k.pdf" | sha256sum --check --status
+      - name: Parse PDF N1 and anonymize N2 before planning all N4 windows
+        shell: bash
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api
+        run: |
+          python scripts/v41_contract_source_preflight.py \
+            --sec-pdf "$RUNNER_TEMP/c2pro-v41-source/sec_8k.pdf" \
+            --out-dir "$RUNNER_TEMP/c2pro-v41-source"
+      - name: Attach sanitized source coverage
+        if: always()
+        uses: actions/upload-artifact$ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: c2pro-v41-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/c2pro-v41-source/preflight_sanitized.json
+          if-no-files-found: warn
+          retention-days: 7
