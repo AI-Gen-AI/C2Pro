@@ -97,6 +97,7 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
             cause = err.__cause__
             checkpoint_errors.append({
                 "error": type(err).__name__,
+                "error_reason": str(err)[:160],
                 "cause_type": type(cause).__name__ if cause else None,
                 "cause": str(cause)[:350] if cause else None,
             })
