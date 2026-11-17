@@ -61,6 +61,12 @@ Devuelve solo un pequeño JSON de códigos y sumas sin texto documental,
 identificadores confidenciales ni transcripción. **Nunca `invoice_verified`
 true**. Si falta el artefacto o la contabilidad, el resultado es
 `NOT_AUDITABLE`; si hay UNKNOWN, `PENDING_PROVIDER_RECONCILIATION`.
+También bloquea explícitamente un análisis N4 parcial, sin el número de
+recibos correspondiente a sus ventanas, o con reservas aún `RESERVED`.
+Por tanto, un saldo contable aritméticamente correcto no hace que un
+journey parcial sea aceptable. Solo sale código 0 cuando el ledger interno
+está equilibrado y no quedan holds ni sobrecostes, **aunque la factura
+del proveedor siempre permanece sin verificar**.
 
 Hipótesis necesaria: la base del piloto es desechable y su tenant contiene
 solo las operaciones de ese run. Para tenants de producción con actividad

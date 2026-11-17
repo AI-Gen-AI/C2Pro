@@ -144,6 +144,24 @@ def test_cap_overrun_preserves_true_charge():
     assert "GLOBAL_MONTHLY_CAP_EXCEEDED" in result.findings
 
 
+def test_balanced_partial_pilot_is_not_misreported_as_complete():
+    e = _evidence()
+    e["n4"]["status"] = "PARTIAL"
+    result = audit_v41_financial_evidence(e)
+    assert result.internal_ledger_consistent
+    assert result.status == "PARTIAL_PILOT_NO_GO"
+    assert "N4_ANALYSIS_NOT_COMPLETE" in result.findings
+
+
+def test_n4_complete_requires_one_receipt_per_window():
+    e = _evidence()
+    e["n4"]["receipts"].pop()
+    e["tenant_balance"]["ai_spend_current"] = "0.20"
+    result = audit_v41_financial_evidence(e)
+    assert result.status == "INTERNAL_LEDGER_INCONSISTENT"
+    assert "N4_RECEIPT_COVERAGE_INCOMPLETE" in result.findings
+
+
 def test_missing_partial_report_is_not_a_free_run():
     result = audit_v41_financial_evidence({
         "validation": "NO_GO_PARTIAL_REAL_AI",

@@ -162,10 +162,20 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
         and src.get("n4_windows_planned") != n4.get("total_windows")
     ):
         issues.append("SOURCE_WINDOW_INVENTORY_MISMATCH")
-    if n4.get("status") == "COMPLETE" and (
+    if n4.get("status") != "COMPLETE":
+        issues.append("N4_ANALYSIS_NOT_COMPLETE")
+    elif (
         n4.get("examined_windows") != n4.get("total_windows")
+        or type(n4.get("total_windows")) is not int
+        or n4.get("total_windows") <= 0
     ):
         issues.append("WINDOW_COVERAGE_INCOMPLETE")
+    if (
+        n4.get("status") == "COMPLETE"
+        and type(n4.get("total_windows")) is int
+        and len(n4_rows) != n4["total_windows"]
+    ):
+        issues.append("N4_RECEIPT_COVERAGE_INCOMPLETE")
 
     consistency_faults = {
         code for code in issues if code.endswith((
@@ -180,6 +190,8 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
         consistent = False
     elif not consistent:
         status = "INTERNAL_LEDGER_INCONSISTENT"
+    elif "N4_ANALYSIS_NOT_COMPLETE" in issues:
+        status = "PARTIAL_PILOT_NO_GO"
     elif any("UNKNOWN_PROVIDER_USAGE" in code for code in issues):
         status = "PENDING_PROVIDER_RECONCILIATION"
     elif "GLOBAL_MONTHLY_CAP_EXCEEDED" in issues or any(
