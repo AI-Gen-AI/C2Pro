@@ -16,6 +16,7 @@ import pytest
 
 from scripts.reconcile_v41_n4_real_artifact import (
     N4ArtifactRecoveryError,
+    attest_original_sec_filing_pages,
     inspect_real_n4,
     prepare_offline_hitl_packet,
 )
@@ -182,3 +183,59 @@ def test_real_billed_review_cli_packet_is_private_and_never_overwritten(
     original = packet_path.read_bytes()
     assert main() == 2
     assert packet_path.read_bytes() == original
+
+
+def test_real_sec_filing_page_attestation_uses_original_bytes(authentic_sample):
+    source_pdf = os.environ.get("C2PRO_V41_REAL_SEC_PDF")
+    if not source_pdf:
+        pytest.skip("Pinned original SEC PDF not mounted")
+    document, text = authentic_sample
+    packet = prepare_offline_hitl_packet(
+        document, text, expected_run_sha=RUN_SHA,
+        expected_source_sha256=SOURCE_SHA,
+    )
+    result = attest_original_sec_filing_pages(
+        packet, text, sec_pdf_bytes=Path(source_pdf).read_bytes(),
+        expected_filing_sha256=document["source"]["source_filing_sha256"],
+    )
+    counts = result["sec_original_filing_evidence_summary"]
+    assert counts == {
+        "PDF_EXACT_REPEATED_ON_PAGE": 1,
+        "PDF_EXACT_UNIQUE": 4,
+        "PDF_WHITESPACE_NORMALIZED_UNIQUE": 45,
+    }
+    assert result["sec_filing_page_count"] == 224
+    assert result["sec_exhibit_page_count"] == 73
+    assert result["user_94_page_pdf_attested"] is False
+    verified = [
+        x for x in result["findings"]
+        if x["source_provenance"]["quote_status"] == "VERIFIED_IN_N2"
+    ]
+    unverified = [
+        x for x in result["findings"]
+        if x["source_provenance"]["quote_status"] == "NOT_VERIFIED_IN_N2"
+    ]
+    assert len(verified) == 50 and len(unverified) == 92
+    assert all(
+        1 <= x["source_provenance"]["sec_exhibit_page"] <= 73
+        and 4 <= x["source_provenance"]["sec_filing_page"] <= 76
+        for x in verified
+    )
+    assert all(x["source_provenance"]["sec_filing_page"] is None for x in unverified)
+
+
+def test_sec_filing_tamper_refused_even_if_pdf_is_parseable(authentic_sample):
+    pdf_name = os.environ.get("C2PRO_V41_REAL_SEC_PDF")
+    if not pdf_name:
+        pytest.skip("Pinned original SEC PDF not mounted")
+    document, text = authentic_sample
+    packet = prepare_offline_hitl_packet(
+        document, text, expected_run_sha=RUN_SHA,
+        expected_source_sha256=SOURCE_SHA,
+    )
+    corrupted = Path(pdf_name).read_bytes() + b"not-original-source"
+    with pytest.raises(N4ArtifactRecoveryError, match="SEC_PDF_OR_N2_SOURCE_SHA256_MISMATCH"):
+        attest_original_sec_filing_pages(
+            packet, text, sec_pdf_bytes=corrupted,
+            expected_filing_sha256=document["source"]["source_filing_sha256"],
+        )

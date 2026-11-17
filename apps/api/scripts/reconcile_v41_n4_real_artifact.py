@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+from bisect import bisect_right
 from collections import Counter
 from hashlib import sha256
 from pathlib import Path
@@ -272,10 +274,93 @@ def prepare_offline_hitl_packet(
             "N12_REAL_PROVIDER_NOT_EXECUTED",
             "NO_IMMUTABLE_CANDIDATE_ARTIFACT_OR_AUTHENTICATED_REVIEW",
             "NO_HUMAN_DECISIONS",
-            "PDF_ORIGINAL_PAGE_ATTESTATION_NOT_ESTABLISHED",
+            "USER_94_PAGE_PDF_NOT_ATTESTED",
         ],
         "findings": findings,
     }
+
+
+def attest_original_sec_filing_pages(
+    packet: dict, protected_text: str, *, sec_pdf_bytes: bytes,
+    expected_filing_sha256: str,
+) -> dict:
+    """Verify source quotes against ORIGINAL SEC filing page text, offline.
+
+    This is *not* attestation against the user's separate 94-page PDF.
+    Whitespace-normalized matches preserve source words but not PDF layout;
+    repeated quotes are explicitly marked ambiguous within the cited page.
+    """
+    import fitz
+
+    if (len(sec_pdf_bytes) > 25_000_000
+        or _digest(sec_pdf_bytes) != expected_filing_sha256
+        or _digest(protected_text.encode("utf8")) != packet["source_sha256"]):
+        raise N4ArtifactRecoveryError("SEC_PDF_OR_N2_SOURCE_SHA256_MISMATCH")
+    markers = list(re.finditer(
+        r"\[\[PDF_PAGE_(\d{3}) SEC_8K_PAGE_(\d{3})\]\]", protected_text,
+    ))
+    if (len(markers) != 73
+        or any(
+            int(m.group(1)) != i + 1 or int(m.group(2)) != i + 4
+            for i, m in enumerate(markers)
+        )):
+        raise N4ArtifactRecoveryError("SEC_N2_PAGE_MARKER_CHAIN_NOT_VERIFIABLE")
+    starts = [m.start() for m in markers]
+    classifications: Counter[str] = Counter()
+    with fitz.open(stream=sec_pdf_bytes, filetype="pdf") as pdf:
+        if pdf.page_count != 224:
+            raise N4ArtifactRecoveryError("ORIGINAL_SEC_PDF_PAGE_COUNT_CHANGED")
+        texts = {
+            page_number: pdf[page_number - 1].get_text("text")
+            for page_number in range(4, 77)
+        }
+        for candidate in packet["findings"]:
+            trace = candidate["source_provenance"]
+            trace["sec_exhibit_page"] = None
+            trace["sec_filing_page"] = None
+            trace["sec_pdf_quote_match"] = "NO_VERIFIABLE_N2_QUOTE"
+            trace["sec_pdf_quote_occurrences_on_page"] = None
+            if trace["quote_status"] != "VERIFIED_IN_N2":
+                continue
+            span = trace["analysis_span_n2"]
+            i = bisect_right(starts, span[0]) - 1
+            if (i < 0 or span[0] < markers[i].end()
+                or (i + 1 < len(markers)
+                    and span[1] > markers[i + 1].start())):
+                raise N4ArtifactRecoveryError("N2_QUOTE_CROSSES_PDF_PAGE_MARKER")
+            sec_page = int(markers[i].group(2))
+            page_text = texts[sec_page]
+            quote = trace["quote_text"]
+            exact_count = page_text.count(quote)
+            if exact_count:
+                how = ("PDF_EXACT_UNIQUE" if exact_count == 1
+                       else "PDF_EXACT_REPEATED_ON_PAGE")
+                matches = exact_count
+            else:
+                # Changes line-breaks and whitespace only; never approximates
+                # wording, punctuation, numbers or contractual meaning.
+                compact_page = " ".join(page_text.split())
+                compact_quote = " ".join(quote.split())
+                matches = compact_page.count(compact_quote)
+                how = (
+                    "PDF_WHITESPACE_NORMALIZED_UNIQUE"
+                    if matches == 1 else
+                    "PDF_WHITESPACE_NORMALIZED_REPEATED_ON_PAGE"
+                    if matches > 1 else "PDF_TEXT_NOT_FOUND_ON_REFERENCED_PAGE"
+                )
+            if not matches:
+                raise N4ArtifactRecoveryError("N2_QUOTE_NOT_AT_SEC_SOURCE_PAGE")
+            trace["sec_exhibit_page"] = int(markers[i].group(1))
+            trace["sec_filing_page"] = sec_page
+            trace["sec_pdf_quote_match"] = how
+            trace["sec_pdf_quote_occurrences_on_page"] = matches
+            classifications[how] += 1
+    packet["sec_original_filing_sha256_verified"] = expected_filing_sha256
+    packet["sec_filing_page_count"] = 224
+    packet["sec_exhibit_page_count"] = 73
+    packet["sec_original_filing_evidence_summary"] = dict(sorted(classifications.items()))
+    packet["user_94_page_pdf_attested"] = False
+    return packet
 
 
 def main() -> int:
@@ -287,6 +372,7 @@ def main() -> int:
     parser.add_argument("--expected-run-sha", required=True)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--review-packet-out", type=Path)
+    parser.add_argument("--original-sec-pdf", type=Path)
     args = parser.parse_args()
     try:
         raw = args.evidence.read_bytes()
@@ -299,6 +385,8 @@ def main() -> int:
             expected_run_sha=args.expected_run_sha,
             expected_source_sha256=args.expected_source_sha256,
         )
+        if args.original_sec_pdf and not args.review_packet_out:
+            raise N4ArtifactRecoveryError("SEC_PDF_REQUIRES_OFFLINE_REVIEW_PACKET")
         review_packet = (
             prepare_offline_hitl_packet(
                 original_evidence, source_text,
@@ -306,6 +394,19 @@ def main() -> int:
                 expected_source_sha256=args.expected_source_sha256,
             ) if args.review_packet_out else None
         )
+        if review_packet is not None and args.original_sec_pdf:
+            filing_sha = (original_evidence.get("source") or {}).get(
+                "source_filing_sha256",
+            )
+            if not isinstance(filing_sha, str) or len(filing_sha) != 64:
+                raise N4ArtifactRecoveryError("SEC_ORIGINAL_FILING_SHA_UNPINNED")
+            if args.original_sec_pdf.stat().st_size > 25_000_000:
+                raise N4ArtifactRecoveryError("SEC_ORIGINAL_FILING_UNBOUNDED")
+            attest_original_sec_filing_pages(
+                review_packet, source_text,
+                sec_pdf_bytes=args.original_sec_pdf.read_bytes(),
+                expected_filing_sha256=filing_sha,
+            )
     except (OSError, ValueError, UnicodeError, KeyError, TypeError) as exc:
         print(json.dumps({"status": "BLOCKED", "reason": str(exc)[:120]}))
         return 2
