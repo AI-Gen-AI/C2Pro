@@ -271,6 +271,9 @@ async def pilot(sec_pdf: Path, out: Path):
             "run_id": str(outcome.run_id),
             "examined_windows": outcome.examined_windows,
             "total_windows": outcome.total_windows,
+            "settled_receipt_windows": outcome.settled_receipt_windows,
+            "persisted_result_windows": outcome.persisted_result_windows,
+            "blocked_result_windows": outcome.blocked_result_windows,
             "finding_count": len(findings),
             "candidates": findings,  # all, never top-N.
             "receipts": n4_finance,
@@ -278,8 +281,14 @@ async def pilot(sec_pdf: Path, out: Path):
         report["shared_ledger"] = n3_finance
         report["tenant_balance"] = balances
         _save(report,out)
-        print("N4_REAL_STATUS", outcome.status, outcome.examined_windows,
-              "/", outcome.total_windows, "candidates=",len(findings),flush=True)
+        print(
+            "N4_REAL_STATUS", outcome.status,
+            "clean", outcome.examined_windows, "/", outcome.total_windows,
+            "settled", outcome.settled_receipt_windows,
+            "durably_parsed", outcome.persisted_result_windows,
+            "blocked_with_results", outcome.blocked_result_windows,
+            "candidates", len(findings), flush=True,
+        )
         if outcome.status != "COMPLETE" or outcome.examined_windows != outcome.total_windows:
             raise RuntimeError("N4_REAL_PARTIAL_REQUIRES_RECONCILIATION")
 
