@@ -37,22 +37,17 @@ async def _apply_scratch_migrations(engine):
              WHERE table_schema='public' AND table_name='tenants'
                AND column_name='ai_spend_reserved_usd'
         """))).scalar_one_or_none())
-        existing_reserved_constraint = bool((await conn.execute(text("""
-            SELECT 1 FROM pg_constraint
-             WHERE conname='ck_tenants_ai_reserved_nonnegative'
-               AND conrelid='public.tenants'::regclass
-        """))).scalar_one_or_none())
+        if not existing_reserved_column:
+            raise AssertionError("Ops scratch tenant reserve column is absent")
         for migration_name in migration_names:
+            # The Ops test bootstrap owns the tenants schema and holds a
+            # seeded tenant session open. N4 progress needs its already-present
+            # reserve column but must not ALTER tenants under that lock.
+            if migration_name.startswith("20261117_0001"):
+                continue
             migration = api_dir / "alembic/versions" / migration_name
             stmts = runpy.run_path(str(migration))["UPGRADE_STATEMENTS"]
             for statement in stmts:
-                # Fixture bootstrap already has this column; only skip
-                # precisely the additive DDL when proven present.
-                if migration_name.startswith("20261117_0001"):
-                    if "ADD COLUMN ai_spend_reserved_usd" in statement and existing_reserved_column:
-                        continue
-                    if "ADD CONSTRAINT ck_tenants_ai_reserved_nonnegative" in statement and existing_reserved_constraint:
-                        continue
                 await conn.execute(text(statement))
 
 
