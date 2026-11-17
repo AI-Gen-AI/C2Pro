@@ -72,7 +72,7 @@ async def verify_n12_durable_predecessor(
         })
     except Exception as exc:
         raise N12CheckpointIdentityError(
-            "N12 persistent checkpoint read failed"
+            f"N12_CHECKPOINT_READ_FAILED:{type(exc).__name__}"
         ) from exc
 
     saved_config = getattr(snapshot, "config", None)
