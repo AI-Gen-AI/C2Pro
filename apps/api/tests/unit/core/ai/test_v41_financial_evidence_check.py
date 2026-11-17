@@ -192,3 +192,43 @@ def test_missing_partial_report_is_not_a_free_run():
     assert not result.invoice_verified
     assert result.confirmed_spend_usd == 0
     assert result.reported_tenant_spend_usd is None
+
+def test_real_pilot_float_serialization_noise_is_not_financial_mismatch():
+    e = _evidence()
+    e["shared_ledger"][1].update({
+        "status": "SETTLED", "billed_usd": "0.05",
+        "input_tokens": 45, "output_tokens": 10,
+    })
+    e["tenant_balance"]["ai_spend_current"] = 0.33999999999999997
+    e["tenant_balance"]["ai_spend_reserved_usd"] = 0.0
+    e["n4"]["status"] = "PARTIAL"
+    result = audit_v41_financial_evidence(e)
+    assert result.status == "PARTIAL_PILOT_NO_GO"
+    assert result.internal_ledger_consistent
+    assert "TENANT_CONFIRMED_SPEND_MISMATCH" not in result.findings
+    assert result.invoice_verified is False
+
+
+@pytest.mark.parametrize("reported", [
+    0.33999899999999997, "0.33999999999999997",
+])
+def test_real_financial_variance_and_precise_strings_remain_strict(reported):
+    e = _evidence()
+    e["shared_ledger"][1].update({
+        "status": "SETTLED", "billed_usd": "0.05",
+        "input_tokens": 45, "output_tokens": 10,
+    })
+    e["tenant_balance"]["ai_spend_reserved_usd"] = "0"
+    e["tenant_balance"]["ai_spend_current"] = reported
+    result = audit_v41_financial_evidence(e)
+    assert result.status == "INTERNAL_LEDGER_INCONSISTENT"
+    assert "TENANT_CONFIRMED_SPEND_MISMATCH" in result.findings
+
+
+def test_hold_float_serialization_noise_allowed_but_not_ledger_bypass():
+    e = _evidence()
+    e["tenant_balance"]["ai_spend_reserved_usd"] = 0.35000000000000003
+    result = audit_v41_financial_evidence(e)
+    assert result.internal_ledger_consistent
+    assert result.status == "PENDING_INFLIGHT_RESERVATIONS"
+    assert result.pending_hold_usd == Decimal("0.35")

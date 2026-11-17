@@ -162,9 +162,22 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
     if spend_reported is None or reserved_reported is None or cap_reported is None:
         issues.append("TENANT_COUNTERS_INVALID")
     else:
-        if spend_reported != spend:
+        # The pilot JSON encoder can serialize numeric tenant counters as IEEE-754
+        # floats, while receipt amounts are exact PostgreSQL NUMERIC strings.
+        # Only tolerate sub-picodollar float noise; keep string/Decimal inputs
+        # exact and never forgive a real micro-USD discrepancy.
+        tenant_spend_raw = balance.get("ai_spend_current")
+        tenant_hold_raw = balance.get("ai_spend_reserved_usd")
+        float_serialization_noise = Decimal("0.000000000001")
+        if spend_reported != spend and not (
+            type(tenant_spend_raw) is float
+            and abs(spend_reported - spend) <= float_serialization_noise
+        ):
             issues.append("TENANT_CONFIRMED_SPEND_MISMATCH")
-        if reserved_reported != holds:
+        if reserved_reported != holds and not (
+            type(tenant_hold_raw) is float
+            and abs(reserved_reported - holds) <= float_serialization_noise
+        ):
             issues.append("TENANT_RESERVED_SPEND_MISMATCH")
         if spend_reported + reserved_reported > cap_reported:
             issues.append("GLOBAL_MONTHLY_CAP_EXCEEDED")
