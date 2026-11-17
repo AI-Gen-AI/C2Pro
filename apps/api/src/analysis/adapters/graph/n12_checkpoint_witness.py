@@ -41,14 +41,14 @@ async def verify_n12_durable_predecessor(
     thread = cfg.get("thread_id")
     runtime_checkpoint = cfg.get("checkpoint_id")
     namespace = cfg.get("checkpoint_ns", "")
-    if (
-        not isinstance(thread, str) or not thread.strip()
-        or thread != state.get("thread_id")
-        or not isinstance(runtime_checkpoint, str)
-        or not runtime_checkpoint.strip()
-        or not isinstance(namespace, str)
-    ):
-        _reject("RUNTIME_IDENTITY_MISSING")
+    if not isinstance(thread, str) or not thread.strip():
+        _reject("RUNTIME_THREAD_MISSING")
+    if thread != state.get("thread_id"):
+        _reject("RUNTIME_THREAD_DRIFT")
+    if not isinstance(runtime_checkpoint, str) or not runtime_checkpoint.strip():
+        _reject("RUNTIME_CHECKPOINT_ID_MISSING")
+    if not isinstance(namespace, str):
+        _reject("RUNTIME_NAMESPACE_INVALID")
 
     # Lazy import avoids the graph/nodes circular import at module load.
     from src.analysis.adapters.graph.workflow import get_graph_app
