@@ -8,6 +8,10 @@ the disposed PostgreSQL window status rows or unavailable raw model outputs.
 """
 from __future__ import annotations
 
+from scripts.v41_private_cli_paths import (
+    authorize_private_input, authorize_private_output,
+)
+
 import argparse
 import json
 import os
@@ -375,6 +379,19 @@ def main() -> int:
     parser.add_argument("--original-sec-pdf", type=Path)
     args = parser.parse_args()
     try:
+        args.evidence = authorize_private_input(
+            args.evidence, filename="real_analysis_evidence.json",
+        )
+        args.n2_source = authorize_private_input(
+            args.n2_source, filename="source_n2_protected.txt",
+        )
+        if args.original_sec_pdf is not None:
+            args.original_sec_pdf = authorize_private_input(
+                args.original_sec_pdf, filename="sec_8k.pdf",
+            )
+        args.out = authorize_private_output(args.out)
+        if args.review_packet_out is not None:
+            args.review_packet_out = authorize_private_output(args.review_packet_out)
         raw = args.evidence.read_bytes()
         if len(raw) > 25_000_000 or _digest(raw) != args.expected_evidence_sha256:
             raise N4ArtifactRecoveryError("REAL_ARTIFACT_DIGEST_MISMATCH")
@@ -414,7 +431,7 @@ def main() -> int:
         if review_packet is not None:
             assert args.review_packet_out is not None
             path = args.review_packet_out
-            path.parent.mkdir(parents=True, exist_ok=True)
+            # Output root must exist and is independently authorized.
             # Full model suggestions are sensitive analysis material. Never
             # overwrite an existing packet or follow a symlink.
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
@@ -422,8 +439,11 @@ def main() -> int:
             with os.fdopen(fd, "w", encoding="utf8") as output:
                 json.dump(review_packet, output, indent=2, ensure_ascii=False)
                 output.write("\n")
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+        # Reject existing symlinks and avoid following newly swapped links.
+        out_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        out_fd = os.open(args.out, out_flags, 0o600)
+        with os.fdopen(out_fd, "w", encoding="utf8") as output:
+            output.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
     except OSError as exc:
         print(json.dumps({"status": "BLOCKED", "reason": type(exc).__name__}))
         return 2
