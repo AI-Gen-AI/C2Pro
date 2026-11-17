@@ -17,6 +17,7 @@ from uuid import UUID
 
 import structlog
 from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 from src.analysis.adapters.graph.dependencies import (
@@ -620,8 +621,10 @@ async def _apply_temporal_review_gate(state: ProjectState) -> None:
         state["human_approval_required"] = True
 
 
-async def critique_node(state: ProjectState) -> ProjectState:
-    """N12 — Delegates critique + evaluation to CritiqueExtractionUseCase."""
+async def critique_node(
+    state: ProjectState, config: RunnableConfig | None = None
+) -> ProjectState:
+    """N12 — critique; optional budgeted calls require a verified checkpoint."""
     # N15's general branch executes after HITL; certify source spans before
     # routing an analysis candidate to N13, without invoking any more AI.
     _stamp_pre_hitl_contract_risk_evidence(state)
@@ -649,7 +652,6 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state["messages"].append(AIMessage(content="Critique mock mode: not assessed; human review required."))
         return state
 
-    use_case = CritiqueExtractionUseCase(ai=get_ai_service(state.get("tenant_id")))
     source_text = llm_document_text(state)
     # N2 can redact or replace source text. An attestation of the *original*
     # does not certify a transformed projection, even with a matching revision.
@@ -657,6 +659,27 @@ async def critique_node(state: ProjectState) -> ProjectState:
         state, source_text=source_text,
     )
     try:
+        service = get_ai_service(state.get("tenant_id"))
+        if os.getenv("C2PRO_N12_CHECKPOINT_ESCROW") == "1":
+            from src.analysis.adapters.ai.n12_checkpoint_escrow_port import (
+                bind_n12_checkpoint_escrow,
+            )
+            from src.analysis.adapters.graph.n12_checkpoint_witness import (
+                verify_n12_durable_predecessor,
+            )
+
+            # Never pass checkpoint_persisted=True without an authenticated
+            # PostgreSQL predecessor snapshot for this *exact* node input.
+            await verify_n12_durable_predecessor(
+                state=state, model_safe_source=source_text, config=config,
+            )
+            service = bind_n12_checkpoint_escrow(
+                state=state,
+                model_safe_source=source_text,
+                service=service,
+                checkpoint_persisted=True,
+            )
+        use_case = CritiqueExtractionUseCase(ai=service)
         result = await use_case.execute(
             CritiqueExtractionCommand(
                 extracted_risks=state["extracted_risks"],
