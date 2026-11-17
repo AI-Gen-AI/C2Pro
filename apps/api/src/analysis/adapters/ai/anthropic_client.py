@@ -113,6 +113,18 @@ class AIService:
         governed_request_id: str | None = None,
     ) -> Any:
         """N12 full source; optional budget key minted from a saved checkpoint."""
+        # Staged N12-only rollout: when enabled, the *absence* of a saved
+        # billable operation identity must NEVER enter legacy preflight/LLM.
+        # This applies in mock mode as well: mocks cannot certify escrow.
+        # Other graph model calls are unaffected by this N12-specific flag.
+        if (
+            os.getenv("C2PRO_N12_REQUIRE_ESCROW") == "1"
+            and governed_request_id is None
+        ):
+            raise AIServiceError(
+                "N12 escrow required: no durable checkpoint request ID; "
+                "provider call refused before incurring cost"
+            )
         if governed_request_id is None:
             return await self.run_extraction(
                 system_prompt, user_content, full_source_analysis=True,

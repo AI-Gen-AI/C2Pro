@@ -88,6 +88,7 @@ async def test_n12_port_shared_escrow_replay_never_reissues_provider(
         # Critical: a supplied escrow ID authorizes the governed *single*
         # N12 call even while unrelated legacy graph calls remain unchanged.
         monkeypatch.delenv("C2PRO_LEGACY_AI_ESCROW", raising=False)
+    monkeypatch.setenv("C2PRO_N12_REQUIRE_ESCROW", "1")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD", "0.35")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS", "2048")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS", "2")
