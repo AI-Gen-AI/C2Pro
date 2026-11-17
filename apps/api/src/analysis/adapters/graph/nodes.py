@@ -420,13 +420,14 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
 
 
 def _stamp_pre_hitl_contract_risk_evidence(state: ProjectState) -> None:
-    """Check contract candidates BEFORE HITL without a second model call.
+    """Check N4 risk candidates BEFORE HITL, regardless of project industry.
 
-    The match proves a verbatim span in N2's analysis projection, not a
-    cryptographically authenticated quote from the original PDF. A proposed
-    risk with missing/invalid evidence remains reviewable but not verified.
+    N3 routes both 'contract' and 'other' documents into N4. A quote match
+    proves only a verbatim span in N2's analysis projection, not an authenticated
+    PDF excerpt or the correctness/materiality of the model's interpretation.
+    Missing/invalid evidence remains reviewable but NEVER verified.
     """
-    if state.get("doc_type") != "contract":
+    if state.get("doc_type") not in ("contract", "other"):
         return
     from src.analysis.domain.risk_provenance import VERIFIED
 
@@ -468,8 +469,12 @@ def _stamp_pre_hitl_contract_risk_evidence(state: ProjectState) -> None:
 
 
 def _contract_risk_review_summary(state: ProjectState) -> dict[str, Any]:
-    """HITL payload, never expose a rejected/model-invented source quote."""
-    if state.get("doc_type") != "contract":
+    """HITL risk evidence payload for all N4-routed document types.
+
+    Kept under the existing name for API/test compatibility. No category
+    or sector has a different right to unverified citation claims.
+    """
+    if state.get("doc_type") not in ("contract", "other"):
         return {}
     rows = state.get("risk_pre_hitl_evidence_rows")
     entries = rows if isinstance(rows, list) else []
@@ -690,14 +695,14 @@ async def critique_node(state: ProjectState) -> ProjectState:
             "has not been established."
         )
     if (
-        state.get("doc_type") == "contract"
+        state.get("doc_type") in ("contract", "other")
         and state.get("risk_pre_hitl_evidence_passed") is not True
     ):
         state["human_approval_required"] = True
         state["confidence_score"] = None
         state["retry_count"] = 0
         warning = (
-            "N4 contract source evidence incomplete or unverified; "
+            "N4 risk source evidence incomplete or unverified; "
             "review required before accepting this candidate."
         )
         # Preserve N12's original evidence-based clause references.
