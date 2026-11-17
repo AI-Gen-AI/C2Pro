@@ -16,8 +16,15 @@ from langgraph.graph import END, StateGraph
 from psycopg_pool import AsyncConnectionPool
 
 from src.analysis.adapters.graph import nodes, workflow
+from src.config import settings
+from tests.support.seeded_identity_guard import assert_ops_database_binding
 
-_DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN", "")
+# Accept a dedicated scratch DSN, or ONLY the job-scoped database that
+# AI-GEN Ops has already bound and authorized. Never use a default live DSN.
+_OPS_ID = os.environ.get("C2PRO_OPS_JOB_ID")
+_DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN") or (
+    settings.database_url if _OPS_ID else ""
+)
 pytestmark = [
     pytest.mark.asyncio,
     pytest.mark.skipif(not _DSN, reason="requires isolated scratch Postgres DSN"),
@@ -121,8 +128,12 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
         )
 
     if real_postgres:
-        # Scratch PG only. Setup verifies durable schema and does not touch
-        # any live tenant, Railway or Supabase production database.
+        # This is a scratch DB. In Ops, verify the assigned database binding
+        # BEFORE opening any connection or creating checkpoint tables.
+        if _OPS_ID:
+            assert_ops_database_binding(
+                _DSN, _OPS_ID, os.environ.get("C2PRO_OPS_EVIDENCE_DIR")
+            )
         async with AsyncConnectionPool(
             conninfo=_DSN.replace("postgresql+asyncpg://", "postgresql://"),
             min_size=0, max_size=3, kwargs={"autocommit": True},
