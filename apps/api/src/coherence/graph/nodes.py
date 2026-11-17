@@ -1490,6 +1490,12 @@ def _provisional_deviation_alert(item: Any, clauses: list[Clause]) -> Alert:
     )
 
 
+def _economic_impact_key(signal: FindingSignal) -> str | None:
+    from src.coherence.economic_signal_dedup import economic_discrepancy_key
+
+    return economic_discrepancy_key(signal)
+
+
 def _signal_to_alert(signal: FindingSignal) -> Alert:
     """Convert a FindingSignal to a legacy Alert object."""
     # Map coherence category to alert category
@@ -1511,6 +1517,7 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
         message=signal.evidence_summary,
         evidence=Evidence(
             source_clause_id=signal.clause_id,
+            economic_discrepancy_key=_economic_impact_key(signal),
             claim=signal.evidence_summary,
             quote=signal.quote or "",
             structured_sources=structured_source_refs(

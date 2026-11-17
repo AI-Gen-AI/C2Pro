@@ -29,6 +29,16 @@ taxonomy as the other** without an explicit versioned mapping. The
 single-document coverage has six categories; this is not automatically
 six complete project Health dimensions.
 
+**Additional read-only alert fields** on the same `AlertResponse` (no new route):
+`economic_discrepancy_key: string|null`,
+`economic_impact_accounting: string|null`,
+`related_rule_codes: string[]`,
+`severity_qualification: string|null`,
+`original_row_binding: string|null`. They let UX group two related rules
+without hiding either alert; `CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED`
+means a current source row/hash was confirmed, **not** a human-approved clause.
+The typed frontend API client may need regeneration by Backend/UX before UI work.
+
 ## 2. Required UI decisions / fail-honest semantics
 
 1. **Unknown is not healthy:** a null score is displayed as unknown/not assessed

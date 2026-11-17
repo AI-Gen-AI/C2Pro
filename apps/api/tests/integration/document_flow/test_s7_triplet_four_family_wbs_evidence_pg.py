@@ -11,13 +11,20 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from uuid import UUID
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.coherence.scoring import ScoringService
+from src.coherence.structured_source_binding import resolve_alert_original_rows
 from src.documents.domain.models import DocumentType
+from src.wbs.adapters.persistence.link_authority import (
+    WBSNotApprovedError,
+    require_linkable_wbs_nodes,
+)
 from tests.integration.document_flow.test_852_schedule_wbs_governance_guard import (
     _canonical,
     _human_wbs,
@@ -99,6 +106,33 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
     assert alerts.keys() >= RULES
     assert RULE not in alerts, "submitted schedule is NOT an approved baseline"
     assert "DET-CRS-WBSBUD" not in alerts, "WBS has no sourced approved cost baseline"
+    # Both economic alert codes are preserved, but their one common delta
+    # contributes just once to scoring once sufficient coverage is obtained.
+    economic = [
+        s
+        for s in result.finding_signals
+        if s.rule_id
+        in {
+            "DET-CRS-CONBUD",
+            "DET-CRS-NEGMARGIN",
+        }
+    ]
+    assert {s.rule_id for s in economic} == {"DET-CRS-CONBUD", "DET-CRS-NEGMARGIN"}
+    calculator = ScoringService()
+    observed = calculator.calculate_detailed(
+        economic,
+        num_clauses=5,
+        coverage_map=dict.fromkeys(calculator._ALL_CATEGORIES, True),
+    )
+    strongest = max(economic, key=calculator._compute_signal_contribution)
+    reference = calculator.calculate_detailed(
+        [strongest],
+        num_clauses=5,
+        coverage_map=dict.fromkeys(calculator._ALL_CATEGORIES, True),
+    )
+    assert observed.total_findings == 1
+    assert observed.raw_penalty_sum == reference.raw_penalty_sum
+    assert observed.category_contributions == reference.category_contributions
     assert result.overall_score is None, "partial cross-family evidence cannot be green"
     assert "Plan!4" in alerts[PROVISIONAL_RULE].evidence.claim
     assert str(schedule_rev.revision_id) in alerts[PROVISIONAL_RULE].evidence.claim
@@ -194,6 +228,17 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
             for row in persisted
         )
         assert all(row["rule_id"] != RULE for row in persisted)
+        schedule_alert = next(row for row in persisted if row["rule_id"] == PROVISIONAL_RULE)
+        assert schedule_alert["source_clause_id"] is None  # no invented trusted contract clause
+        schedule_refs = schedule_alert["alert_metadata"]["detection_evidence"]["structured_sources"]
+        assert len(schedule_refs) == 1
+        assert schedule_refs[0]["document_id"] == str(schedule_doc.id)
+        assert schedule_refs[0]["revision_id"] == str(schedule_rev.revision_id)
+        assert schedule_refs[0]["source_locator"] == "Plan!4"
+        assert schedule_refs[0]["blob_sha256"] == manifest["sha256"]["triplet-schedule.xlsx"]
+        assert schedule_alert["alert_metadata"]["original_row_binding"] == (
+            "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED"
+        )
         financial = [
             r
             for r in persisted
@@ -204,6 +249,21 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
             }
         ]
         assert len(financial) == 2
+        group_keys = {row["alert_metadata"].get("economic_discrepancy_key") for row in financial}
+        assert len(group_keys) == 1 and next(iter(group_keys)).startswith("CONTRACT_BUDGET:")
+        assert all(
+            row["alert_metadata"]["economic_impact_accounting"] == "ONE_DELTA_TWO_RELATED_ALERTS"
+            for row in financial
+        )
+        assert all(
+            row["alert_metadata"]["related_rule_codes"] == ["DET-CRS-CONBUD", "DET-CRS-NEGMARGIN"]
+            for row in financial
+        )
+        assert all(
+            row["alert_metadata"]["severity_qualification"]
+            == "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS"
+            for row in financial
+        )
         for finding in financial:
             refs = (
                 finding["alert_metadata"]
@@ -273,6 +333,50 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
     # observations into WBS edits or into canonical positive Coherence.
     assert await _canonical(db, project) == before
 
+    # This legacy project tree is NOT an approved WBS baseline. No source
+    # mapping may be fabricated or promoted from the four uploaded files.
+    with pytest.raises(WBSNotApprovedError):
+        await require_linkable_wbs_nodes(
+            db,
+            tenant_id=test_user.tenant_id,
+            project_id=project,
+            node_ids=[wbs["child"]],
+        )
+
+    # A valid source can acquire a navigable SHA (still NOT HITL-approved).
+    # Stale/fabricated revisions, foreign tenants, wrong row and tampered
+    # expected hashes all fail closed without a manufactured source binding.
+    reference = {
+        "family": "schedule",
+        "document_id": str(schedule_doc.id),
+        "revision_id": str(schedule_rev.revision_id),
+        "source_locator": "Plan!4",
+    }
+    for changes, tenant, expected in (
+        ({}, test_user.tenant_id, True),
+        ({"revision_id": str(uuid4())}, test_user.tenant_id, False),
+        ({"source_locator": "Plan!777"}, test_user.tenant_id, False),
+        ({"blob_sha256": "f" * 64}, test_user.tenant_id, False),
+        ({}, uuid4(), False),
+    ):
+        row = {**reference, **changes}
+        payload = SimpleNamespace(
+            alert_metadata={
+                "detection_evidence": {"structured_sources": [row]},
+            }
+        )
+        await resolve_alert_original_rows(
+            db,
+            tenant_id=tenant,
+            project_id=project,
+            payloads=[payload],
+        )
+        resolved_ref = payload.alert_metadata["detection_evidence"]["structured_sources"][0]
+        assert (resolved_ref.get("blob_sha256") == schedule_rev.blob_hash) is expected
+        assert payload.alert_metadata["original_row_binding"] == (
+            "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED" if expected else "NOT_VERIFIED"
+        )
+
     # Optional evidence-only JSON, directly from read-back PostgreSQL rows.
     # All UUIDs are from a disposable synthetic DB, never from a real tenant.
     if os.environ.get("C2PRO_S7_EMIT_EVIDENCE") == "1":
@@ -293,11 +397,29 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
                         for row in sorted(revisions, key=lambda item: item["filename"])
                     ],
                     "alert_rules": sorted(row["rule_id"] for row in persisted),
+                    "economic_alert_count": len(financial),
+                    "economic_unique_discrepancy_count": len(group_keys),
+                    "economic_single_impact_raw_penalty": observed.raw_penalty_sum,
                     "source_row_locators": located,
                     "alert_evidence_bindings": [
                         {
                             "rule_id": row["rule_id"],
                             "severity": row["severity"],
+                            "economic_discrepancy_key": row["alert_metadata"].get(
+                                "economic_discrepancy_key"
+                            ),
+                            "economic_impact_accounting": row["alert_metadata"].get(
+                                "economic_impact_accounting"
+                            ),
+                            "severity_qualification": row["alert_metadata"].get(
+                                "severity_qualification"
+                            ),
+                            "original_row_binding": row["alert_metadata"].get(
+                                "original_row_binding"
+                            ),
+                            "related_rule_codes": row["alert_metadata"].get(
+                                "related_rule_codes", []
+                            ),
                             "source_clause_id": str(row["source_clause_id"])
                             if row["source_clause_id"]
                             else None,

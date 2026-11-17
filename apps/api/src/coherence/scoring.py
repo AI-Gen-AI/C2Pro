@@ -50,6 +50,7 @@ from src.coherence.domain.v2_constants import (  # noqa: E402
     DEFAULT_CATEGORY_WEIGHTS,
     MIN_ACTIVE_WEIGHT,
 )
+from src.coherence.economic_signal_dedup import distinct_economic_impacts  # noqa: E402
 from src.coherence.models import (  # noqa: E402
     Alert,
     AlertCategory,
@@ -245,6 +246,9 @@ class ScoringService:
             self._normalized_weights = self.config.get_normalized_weights()
         return self._normalized_weights
 
+    def _distinct_economic_impacts(self, signals: list[FindingSignal]) -> list[FindingSignal]:
+        return distinct_economic_impacts(signals, self._compute_signal_contribution)
+
     # =========================================================================
     # V0.3 API — FindingSignal-based scoring
     # =========================================================================
@@ -272,6 +276,7 @@ class ScoringService:
             ScoringResult: score contract with nullable score on insufficient evidence.
         """
         _ = num_rules
+        signals = self._distinct_economic_impacts(signals)
         if not signals or poor_extraction_quality:
             return ScoringResult(
                 score=None,
@@ -327,6 +332,7 @@ class ScoringService:
             ScoringDiagnostics with score and breakdown
         """
         _ = num_rules
+        signals = self._distinct_economic_impacts(signals)
         if coverage_map is not None:
             return self._calculate_detailed_with_coverage(
                 signals, num_clauses, coverage_map, poor_extraction_quality

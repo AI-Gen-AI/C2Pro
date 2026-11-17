@@ -140,6 +140,11 @@ class AlertResponse(BaseModel):
     detection_evidence: DetectionEvidenceResponse | None = None
     # Additive: "VERIFIED" | "NOT_VERIFIED" for detector-origin risk alerts; None when unknown.
     evidence_status: Literal["VERIFIED", "NOT_VERIFIED"] | None = None
+    economic_discrepancy_key: str | None = None
+    economic_impact_accounting: str | None = None
+    related_rule_codes: list[str] = Field(default_factory=list)
+    severity_qualification: str | None = None
+    original_row_binding: str | None = None
     reviewed_by: UUID | None = None
     reviewed_at: datetime | None = None
     root_cause: str | None = None
