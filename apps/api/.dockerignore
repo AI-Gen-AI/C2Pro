@@ -114,3 +114,6 @@ scripts/*
 !scripts/run_worker.sh
 !scripts/run_scheduler.sh
 !scripts/wait_for_schema.py
+!scripts/run_uat_api.sh
+!scripts/admin_ops_bootstrap.py
+!scripts/checkpoint_bootstrap.py
