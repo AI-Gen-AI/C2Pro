@@ -437,10 +437,19 @@ class AnthropicWrapper:
         try:
             llm_response = await self.llm_client.generate(llm_request)
         except Exception as e:
-            logger.error(
-                "anthropic_wrapper_api_call_failed", request_id=request.request_id, error=str(e)
+            logger.warning(
+                "anthropic_wrapper_primary_failed",
+                request_id=request.request_id,
+                error_type=type(e).__name__,
             )
-            raise
+            # Existing PII, prompt and tenant boundaries stay authoritative.
+            # Fall back only after an explicit unbilled failure and only within
+            # an already persisted escrow; the transport owns no new budget.
+            from src.core.ai.direct_provider_fallback import fallback_after_unbilled_rejection
+
+            llm_response = await fallback_after_unbilled_rejection(llm_request, e)
+
+        fallback_used = llm_response.model != model_config.name
 
         # ===========================================
         # STEP 5: De-anonymize (Rehydrate) Response
@@ -456,14 +465,20 @@ class AnthropicWrapper:
         # STEP 6: Calculate Cost & Save to Cache
         # ===========================================
 
-        cost_usd = self.model_router.estimate_cost(
-            model=model_config,
-            input_tokens=llm_response.input_tokens,
-            output_tokens=llm_response.output_tokens,
+        cost_usd = (
+            llm_response.cost_usd
+            if fallback_used
+            else self.model_router.estimate_cost(
+                model=model_config,
+                input_tokens=llm_response.input_tokens,
+                output_tokens=llm_response.output_tokens,
+            )
         )
         self.total_cost_usd += cost_usd
 
-        if cache_allowed and cache_key:
+        # Never cache a fallback result under the primary Anthropic model key:
+        # a later cache hit must not silently misattribute provider/cost.
+        if cache_allowed and cache_key and not fallback_used:
             # IMPORTANT: Cache the ANONYMIZED content, not the rehydrated content.
             # Only positive per-request TTLs are valid. Non-positive overrides
             # fall back to the bounded task policy rather than becoming
@@ -499,7 +514,7 @@ class AnthropicWrapper:
 
         return AIResponse(
             content=rehydrated_content,  # Return the rehydrated content
-            model_used=model_config.name,
+            model_used=llm_response.model,
             input_tokens=llm_response.input_tokens,
             output_tokens=llm_response.output_tokens,
             cost_usd=cost_usd,

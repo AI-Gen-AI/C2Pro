@@ -398,6 +398,9 @@ class AIService:
                     "budgeted_legacy": True,
                     "full_source_analysis": full_source_analysis,
                     "max_provider_segments": segment_limit,
+                    # Same committed escrow covers at most one explicitly
+                    # rejected primary and a bounded alternate direct call.
+                    "fallback_reserved_usd": str(max_charge),
                 },
             ))
 
