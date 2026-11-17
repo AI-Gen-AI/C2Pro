@@ -49,10 +49,14 @@ ledger (FORCE RLS, shared `tenants.ai_spend_reserved_usd`):
    `use_cache=False` and PII-safe request flags. Reconcile its metered
    receipt in a new DB transaction; valid positive and **valid negative**
    (no finding) model responses are billable.
-4. Timeout, provider error, missing receipt or usage > reserve leaves
-   `UNKNOWN` with the hold retained. No automatic release and no
-   second attempt under the same ID. Financial reconciliation of
-   UNKNOWN requires a separate authorized process and provider evidence.
+4. Timeout, provider error or **unverifiable** bill leaves `UNKNOWN`
+   with the hold retained, never an invented zero. **A finite measured
+   charge above the reserved estimate instead becomes `SETTLED` at the
+   full metered amount** (even if over monthly cap), with a separately
+   flagged overage and rejected semantic result. Do not hide a known
+   expense by keeping it UNKNOWN. No automatic release and no second
+   provider attempt under the same key. UNKNOWN requires authorized
+   provider statement reconciliation.
 5. If the cost was settled but the JSON is malformed, reject the result
    as **UNASSESSED**; do not erase the legitimate cost.
 
@@ -64,10 +68,12 @@ No migrations added, no secrets touched, no remote provider invoked.
 - This code is an **adapter plus isolated test evidence**, not proof
   that the live Coherence graph supplies an authenticated
   source/revision/run. Production wiring is deliberately excluded.
-- Reserve USD is not an absolute provider tariff guarantee. A rogue
-  model endpoint may exceed the cap despite `max_tokens` or return a
-  delayed invoice. Such receipts remain UNKNOWN for operator
-  reconciliation; this branch cannot prevent already-incurred cost.
+- Reserve USD is not an absolute provider tariff guarantee. The
+  provider may exceed the estimate despite `max_tokens`. A finite
+  measured overage is recorded as `SETTLED` and flagged for review;
+  a genuinely missing/invalid receipt stays `UNKNOWN`. Delayed
+  invoices require a separate audited reconciliation. This bridge
+  cannot undo already-incurred provider cost.
 - A single project can aggregate multiple document revisions. A single
   revision must not be fabricated to represent cross-document inputs.
   Upstream must pin all required revisions (or define a separate
