@@ -17,6 +17,7 @@ import pytest
 from scripts.reconcile_v41_n4_real_artifact import (
     N4ArtifactRecoveryError,
     inspect_real_n4,
+    prepare_offline_hitl_packet,
 )
 
 ARTIFACT_SHA = "549ca20b14549e7d74aee1452a33e43f8aa526036fb57a5d07cc83be55f61cad"
@@ -77,7 +78,12 @@ def test_real_billed_artifact_rejects_forged_literal_quote_offset(authentic_samp
         if c["claim"]["source_evidence_status"] == "EXACT_MODEL_SAFE_MATCH"
     )
     verified["source_refs"][0]["analysis_span"][0] += 1
-    with pytest.raises(N4ArtifactRecoveryError, match="N4_LITERAL_QUOTE_AND_WINDOW_MISMATCH"):
+    # The canonical finding identity also embeds the source offset; either
+    # guard may reject first, and both correctly refuse the forged anchor.
+    with pytest.raises(
+        N4ArtifactRecoveryError,
+        match="N4_(FINDING_IDENTITY_MISMATCH|LITERAL_QUOTE_AND_WINDOW_MISMATCH)",
+    ):
         _inspect(changed, text)
 
 
@@ -87,3 +93,92 @@ def test_real_billed_artifact_rejects_false_human_approval(authentic_sample):
     changed["n4"]["candidates"][0]["claim"]["review_status"] = "APPROVED"
     with pytest.raises(N4ArtifactRecoveryError, match="N4_CANDIDATE_MISSING_OR_DUPLICATE"):
         _inspect(changed, text)
+
+
+def test_real_billed_artifact_rejects_claim_fingerprint_tampering(authentic_sample):
+    document, text = authentic_sample
+    changed = copy.deepcopy(document)
+    changed["n4"]["candidates"][0]["claim"]["category"] = "fabricated_category"
+    with pytest.raises(N4ArtifactRecoveryError, match="N4_FINDING_IDENTITY_MISMATCH"):
+        _inspect(changed, text)
+
+
+def test_real_billed_artifact_rejects_provenance_digest_tampering(authentic_sample):
+    document, text = authentic_sample
+    changed = copy.deepcopy(document)
+    item = next(
+        row for row in changed["n4"]["candidates"]
+        if row["claim"]["source_evidence_status"] == "EXACT_MODEL_SAFE_MATCH"
+    )
+    item["source_refs"][0]["quote_sha256"] = "0" * 64
+    with pytest.raises(N4ArtifactRecoveryError, match="N4_LITERAL_QUOTE_AND_WINDOW_MISMATCH"):
+        _inspect(changed, text)
+
+
+def test_real_billed_candidate_review_packet_preserves_142_unapproved_items(authentic_sample):
+    document, text = authentic_sample
+    packet = prepare_offline_hitl_packet(
+        document, text, expected_run_sha=RUN_SHA,
+        expected_source_sha256=SOURCE_SHA,
+    )
+    assert packet["packet_kind"] == "OFFLINE_N4_REVIEW_PREPARATION_NOT_HITL"
+    assert packet["candidate_count"] == len(packet["findings"]) == 142
+    assert packet["n4_status"] == "PARTIAL"
+    assert packet["n12_status"] == "NOT_STARTED"
+    assert packet["review_recording_enabled"] is False
+    assert packet["review_row_id"] is None
+    assert packet["trusted_artifact_id"] is None
+    assert packet["n12_checkpoint_id"] is None
+    assert packet["projectgraph_projection_enabled"] is False
+    assert packet["coherence_score_change"] is None
+    assert all(f["review_decision"] is None for f in packet["findings"])
+    assert len({f["n4_finding_key"] for f in packet["findings"]}) == 142
+
+    verified = [
+        f for f in packet["findings"]
+        if f["source_provenance"]["quote_status"] == "VERIFIED_IN_N2"
+    ]
+    unverified = [
+        f for f in packet["findings"]
+        if f["source_provenance"]["quote_status"] == "NOT_VERIFIED_IN_N2"
+    ]
+    assert len(verified) == 50
+    assert len(unverified) == 92
+    assert all(
+        text[f["source_provenance"]["analysis_span_n2"][0]:f["source_provenance"]["analysis_span_n2"][1]]
+        == f["source_provenance"]["quote_text"]
+        for f in verified
+    )
+    assert all(
+        f["source_provenance"]["quote_text"] is None
+        and f["source_provenance"]["analysis_span_n2"] is None
+        and not f["source_provenance"]["original_pdf_page_verified"]
+        for f in unverified
+    )
+
+
+def test_real_billed_review_cli_packet_is_private_and_never_overwritten(
+    authentic_sample, tmp_path, monkeypatch,
+):
+    from scripts.reconcile_v41_n4_real_artifact import main
+
+    evidence_path = Path(os.environ["C2PRO_V41_REAL_EVIDENCE_JSON"])
+    source_path = Path(os.environ["C2PRO_V41_REAL_N2_SOURCE"])
+    packet_path = tmp_path / "review-packet.json"
+    summary_path = tmp_path / "recovery-summary.json"
+    monkeypatch.setattr("sys.argv", [
+        "reconcile_v41_n4_real_artifact.py",
+        "--evidence", str(evidence_path),
+        "--n2-source", str(source_path),
+        "--expected-evidence-sha256", ARTIFACT_SHA,
+        "--expected-source-sha256", SOURCE_SHA,
+        "--expected-run-sha", RUN_SHA,
+        "--out", str(summary_path),
+        "--review-packet-out", str(packet_path),
+    ])
+    assert main() == 0
+    assert packet_path.stat().st_mode & 0o777 == 0o600
+    assert json.loads(packet_path.read_text())["candidate_count"] == 142
+    original = packet_path.read_bytes()
+    assert main() == 2
+    assert packet_path.read_bytes() == original

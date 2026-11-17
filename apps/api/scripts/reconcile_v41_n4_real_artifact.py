@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from hashlib import sha256
 from pathlib import Path
@@ -114,6 +115,30 @@ def inspect_real_n4(
         per_window[ordinal] += 1
         ref = refs[0]
         status = ref.get("evidence_status")
+        # Rebuild the N4 application's ORIGINAL immutable identity scheme.
+        # A syntactically unique SHA is insufficient: an altered category,
+        # locator or window must not be laundered by an authentic receipt.
+        anchor = (
+            ref["analysis_span"][0]
+            if isinstance(ref.get("analysis_span"), list)
+            and ref["analysis_span"]
+            else None
+        )
+        key_material = {
+            "source_sha256": ref.get("source_sha256"),
+            "revision": ref.get("document_revision_id"),
+            "category": claim.get("category"),
+            "title": claim.get("title"),
+            "quote_anchor": anchor,
+            "clause": claim.get("clause_ref") if anchor is None else None,
+            "window": ordinal if anchor is None else None,
+        }
+        calculated_key = _digest(json.dumps(
+            key_material, sort_keys=True, ensure_ascii=False,
+            separators=(",", ":"), allow_nan=False,
+        ).encode("utf8"))
+        if calculated_key != key:
+            raise N4ArtifactRecoveryError("N4_FINDING_IDENTITY_MISMATCH")
         if (ref.get("source_sha256") != safe_digest
             or ref.get("document_revision_id") != revision_id
             or ref.get("source_kind") != "MODEL_SAFE_PROJECTION"
@@ -128,7 +153,9 @@ def inspect_real_n4(
                 or any(type(i) is not int for i in span)
                 or not window.context_start <= span[0] < span[1] <= window.context_end
                 or protected_text[span[0]:span[1]] != quote
-                or window.context_text.count(quote) != 1):
+                or window.context_text.count(quote) != 1
+                or ("quote_sha256" in ref
+                    and ref["quote_sha256"] != _digest(quote.encode("utf8")))):
                 raise N4ArtifactRecoveryError("N4_LITERAL_QUOTE_AND_WINDOW_MISMATCH")
             counts["EXACT_N2_SOURCE"] += 1
         else:
@@ -172,6 +199,85 @@ def inspect_real_n4(
     }
 
 
+def prepare_offline_hitl_packet(
+    evidence: dict, protected_text: str, *,
+    expected_run_sha: str, expected_source_sha256: str,
+) -> dict:
+    """Prepare exactly the recovered candidates for later authenticated review.
+
+    This is NOT a persisted HITL review, immutable artifact, N12 checkpoint or
+    ProjectGraph input. A real API must issue and re-verify those authorities.
+    The source quote is displayed ONLY when verified verbatim against N2.
+    """
+    report = inspect_real_n4(
+        evidence, protected_text,
+        expected_run_sha=expected_run_sha,
+        expected_source_sha256=expected_source_sha256,
+    )
+    ordered = sorted(
+        evidence["n4"]["candidates"],
+        key=lambda item: (item["window_ordinal"], item["finding_key"]),
+    )
+    findings = []
+    for index, item in enumerate(ordered):
+        claim = item["claim"]
+        ref = item["source_refs"][0]
+        verified = ref["evidence_status"] == "EXACT_MODEL_SAFE_MATCH"
+        findings.append({
+            "offline_ordinal": index,
+            "n4_finding_key": item["finding_key"],
+            "n4_run_id": report["run_id"],
+            "source_revision_id": ref["document_revision_id"],
+            "n4_window_ordinal": item["window_ordinal"],
+            "title": claim["title"],
+            "category_model_proposed": claim["category"],
+            "model_interpretation": claim["risk_reason"],
+            "model_impact": claim.get("impact"),
+            "model_reported_clause_ref_unverified": claim.get("clause_ref"),
+            "source_provenance": {
+                "type": "N2_MODEL_SAFE_PROJECTION",
+                "sha256": ref["source_sha256"],
+                "quote_status": (
+                    "VERIFIED_IN_N2" if verified else "NOT_VERIFIED_IN_N2"
+                ),
+                "quote_text": claim.get("source_quote") if verified else None,
+                "analysis_span_n2": ref["analysis_span"] if verified else None,
+                "original_pdf_page_verified": False,
+                "unverified_reason": (
+                    None if verified else ref["evidence_status"]
+                ),
+            },
+            "review_decision": None,
+            "reviewer_identity": None,
+        })
+    return {
+        "packet_kind": "OFFLINE_N4_REVIEW_PREPARATION_NOT_HITL",
+        "producer_run_sha": expected_run_sha,
+        "source_sha256": expected_source_sha256,
+        "run_id": report["run_id"],
+        "candidate_count": len(findings),
+        "n4_status": report["legacy_n4_status"],
+        "n12_status": report["n12_status"],
+        "candidate_review_actions_available_only_via_authenticated_api": [
+            "CONFIRMED", "DISMISSED", "NEEDS_INFO", "CORRECTION_PROPOSED",
+        ],
+        "review_recording_enabled": False,
+        "review_row_id": None,
+        "trusted_artifact_id": None,
+        "n12_checkpoint_id": None,
+        "projectgraph_projection_enabled": False,
+        "coherence_score_change": None,
+        "blockers": [
+            "N4_PARTIAL_SOURCE_COVERAGE",
+            "N12_REAL_PROVIDER_NOT_EXECUTED",
+            "NO_IMMUTABLE_CANDIDATE_ARTIFACT_OR_AUTHENTICATED_REVIEW",
+            "NO_HUMAN_DECISIONS",
+            "PDF_ORIGINAL_PAGE_ATTESTATION_NOT_ESTABLISHED",
+        ],
+        "findings": findings,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evidence", required=True, type=Path)
@@ -180,22 +286,46 @@ def main() -> int:
     parser.add_argument("--expected-source-sha256", required=True)
     parser.add_argument("--expected-run-sha", required=True)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--review-packet-out", type=Path)
     args = parser.parse_args()
     try:
         raw = args.evidence.read_bytes()
         if len(raw) > 25_000_000 or _digest(raw) != args.expected_evidence_sha256:
             raise N4ArtifactRecoveryError("REAL_ARTIFACT_DIGEST_MISMATCH")
+        source_text = args.n2_source.read_text(encoding="utf8")
+        original_evidence = json.loads(raw)
         report = inspect_real_n4(
-            json.loads(raw),
-            args.n2_source.read_text(encoding="utf8"),
+            original_evidence, source_text,
             expected_run_sha=args.expected_run_sha,
             expected_source_sha256=args.expected_source_sha256,
+        )
+        review_packet = (
+            prepare_offline_hitl_packet(
+                original_evidence, source_text,
+                expected_run_sha=args.expected_run_sha,
+                expected_source_sha256=args.expected_source_sha256,
+            ) if args.review_packet_out else None
         )
     except (OSError, ValueError, UnicodeError, KeyError, TypeError) as exc:
         print(json.dumps({"status": "BLOCKED", "reason": str(exc)[:120]}))
         return 2
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    try:
+        if review_packet is not None:
+            assert args.review_packet_out is not None
+            path = args.review_packet_out
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Full model suggestions are sensitive analysis material. Never
+            # overwrite an existing packet or follow a symlink.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            fd = os.open(path, flags, 0o600)
+            with os.fdopen(fd, "w", encoding="utf8") as output:
+                json.dump(review_packet, output, indent=2, ensure_ascii=False)
+                output.write("\n")
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    except OSError as exc:
+        print(json.dumps({"status": "BLOCKED", "reason": type(exc).__name__}))
+        return 2
     print(json.dumps(report, sort_keys=True))
     return 0
 
