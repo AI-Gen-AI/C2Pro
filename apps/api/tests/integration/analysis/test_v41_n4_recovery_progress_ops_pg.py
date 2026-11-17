@@ -84,9 +84,10 @@ async def test_n4_progress_is_not_equivalent_to_billable_receipts(
         await conn.execute("""
             INSERT INTO public.document_revisions
               (revision_id, document_id, project_id, tenant_id, rev_no,
-               blob_hash, blob_key, valid_from)
+               blob_hash, blob_key, valid_from, created_at, updated_at)
             VALUES ($1, $2, $3, $4, 1, $5,
-                    'ops-owned/qa-source', clock_timestamp())
+                    'ops-owned/qa-source', clock_timestamp(),
+                    clock_timestamp(), clock_timestamp())
         """, authority.revision_id, authority.document_id, project_id,
             authority.tenant_id, "a" * 64)
         await conn.execute("""
