@@ -12,8 +12,19 @@ function normalizeApiBaseUrl(rawValue: string | undefined): string {
     return DEFAULT_API_BASE_URL;
   }
 
-  // If provided as "/", also use the default proxy endpoint
-  return value === "/" ? DEFAULT_API_BASE_URL : trimTrailingSlash(value);
+  // If provided as "/", also use the default proxy endpoint.
+  if (value === "/") return DEFAULT_API_BASE_URL;
+
+  const normalized = trimTrailingSlash(value);
+  // External backend URLs must include the API prefix. Without it, Orval and
+  // hand-written Axios callers generate /projects, /alerts/tenant, etc. at
+  // the origin root and get 404 in the integrated UAT deployment.
+  if (/^https?:\/\//i.test(normalized)) {
+    const path = new URL(normalized).pathname;
+    if (path === "/") return `${normalized}/api/v1`;
+    if (path === "/api") return `${normalized}/v1`;
+  }
+  return normalized;
 }
 
 const API_BASE_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);

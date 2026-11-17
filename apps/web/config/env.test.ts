@@ -16,6 +16,22 @@ describe("web API environment config", () => {
     expect(env.COHERENCE_BASE_URL).toBe("/coherence");
   });
 
+  it("recovers a misconfigured bare Railway origin for document uploads and projects", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://c2pro-integrated-uat-api-pilot.up.railway.app/");
+
+    const { env } = await import("./env");
+
+    expect(env.API_BASE_URL).toBe(
+      "https://c2pro-integrated-uat-api-pilot.up.railway.app/api/v1",
+    );
+  });
+
+  it("expands a bare /api prefix once without doubling v1", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com/api");
+    const { env } = await import("./env");
+    expect(env.API_BASE_URL).toBe("https://api.example.com/api/v1");
+  });
+
   it("keeps relative API base urls aligned for browser-side direct calls", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "/api/v1");
 
