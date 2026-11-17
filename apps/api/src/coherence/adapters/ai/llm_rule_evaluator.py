@@ -130,6 +130,18 @@ class LLMRuleEvaluatorAdapter:
             confidence = result.confidence
             severity = impact_to_severity(impact_score)
 
+            # A valid "no violation" is still a billable provider response.
+            # Prior code omitted cost and tokens from negative evaluations,
+            # causing downstream CoherenceLlmGate to report a fictitious $0.
+            # The payload contains metadata only (no source text or secrets).
+            receipt_metadata = {
+                "model_used": response.model_used,
+                "cached": response.cached,
+                "cost_usd": response.cost_usd,
+                "input_tokens": response.input_tokens,
+                "output_tokens": response.output_tokens,
+            }
+
             if impact_score < 0.05:
                 logger.debug(
                     "llm_rule_no_violation",
@@ -146,7 +158,7 @@ class LLMRuleEvaluatorAdapter:
                     category=coherence_category,
                     evidence_summary="No violation detected",
                     quote=None,
-                    raw_data={"model_used": response.model_used, "cached": response.cached},
+                    raw_data=receipt_metadata,
                 )
 
             return LLMRuleResult(
@@ -160,9 +172,7 @@ class LLMRuleEvaluatorAdapter:
                 quote=result.evidence.quote,
                 raw_data={
                     "recommendation": result.recommendation,
-                    "model_used": response.model_used,
-                    "cached": response.cached,
-                    "cost_usd": response.cost_usd,
+                    **receipt_metadata,
                 },
             )
 
