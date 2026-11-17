@@ -85,22 +85,25 @@ async def verify_n12_durable_predecessor(
     saved_cfg = saved_config.get("configurable") if isinstance(saved_config, dict) else None
     persisted = getattr(snapshot, "values", None)
     pending = getattr(snapshot, "next", ())
+    if not isinstance(saved_cfg, Mapping):
+        _reject("SAVED_CONFIG_MISSING")
+    if not isinstance(saved_cfg.get("checkpoint_id"), str) or not saved_cfg["checkpoint_id"].strip():
+        _reject("SAVED_CHECKPOINT_ID_MISSING")
     if (
-        not isinstance(saved_cfg, Mapping)
-        or not isinstance(saved_cfg.get("checkpoint_id"), str)
-        or not saved_cfg["checkpoint_id"].strip()
-        or (
-            runtime_checkpoint is not None
-            and namespace == root_namespace
-            and saved_cfg["checkpoint_id"] != runtime_checkpoint
-        )
-        or saved_cfg.get("thread_id") != thread
-        or saved_cfg.get("checkpoint_ns", "") != root_namespace
-        or not isinstance(persisted, Mapping)
-        or not isinstance(pending, (tuple, list))
-        or "critique" not in pending
+        runtime_checkpoint is not None and namespace == root_namespace
+        and saved_cfg["checkpoint_id"] != runtime_checkpoint
     ):
-        _reject("PERSISTED_SNAPSHOT_INVALID")
+        _reject("RUNTIME_SAVED_ID_MISMATCH")
+    if saved_cfg.get("thread_id") != thread:
+        _reject("SAVED_THREAD_DRIFT")
+    if saved_cfg.get("checkpoint_ns", "") != root_namespace:
+        _reject("SAVED_NAMESPACE_DRIFT")
+    if not isinstance(persisted, Mapping):
+        _reject("SAVED_STATE_MISSING")
+    if not isinstance(pending, (tuple, list)):
+        _reject("NEXT_NODES_MALFORMED")
+    if "critique" not in pending:
+        _reject("N12_NOT_PENDING")
 
     for key in (
         "tenant_id", "project_id", "document_id", "document_revision_id",
