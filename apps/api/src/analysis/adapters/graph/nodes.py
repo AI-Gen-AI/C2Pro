@@ -622,7 +622,7 @@ async def _apply_temporal_review_gate(state: ProjectState) -> None:
 
 
 async def critique_node(
-    state: ProjectState, config: RunnableConfig | None = None
+    state: ProjectState, config: RunnableConfig = None  # type: ignore[assignment]
 ) -> ProjectState:
     """N12 — critique; optional budgeted calls require a verified checkpoint."""
     # N15's general branch executes after HITL; certify source spans before

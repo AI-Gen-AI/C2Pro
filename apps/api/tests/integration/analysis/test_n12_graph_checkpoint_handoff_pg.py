@@ -89,6 +89,11 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
     monkeypatch.setattr(nodes, "get_ai_service", lambda _tenant: service)
     monkeypatch.setattr(nodes, "_apply_temporal_review_gate", _no_temporal_gate)
 
+    async def _no_error_db_writes(_state, _node_result):
+        return None
+
+    monkeypatch.setattr(nodes, "_persist_node_error", _no_error_db_writes)
+
     async def _invoke(saver):
         app = _graph_with_checkpointer(saver)
         monkeypatch.setattr(workflow, "get_graph_app", lambda: app)
