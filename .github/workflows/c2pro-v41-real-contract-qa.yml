@@ -100,7 +100,7 @@ jobs:
       C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS: "2"
       C2PRO_AI_GOVERNOR_MAX_CALLS: "30"
       C2PRO_AI_GOVERNOR_MAX_USD: "5.0"
-      C2PRO_AI_GOVERNOR_LEDGER: ${{ runner.temp }}/c2pro-v41-real-ai-governor.jsonl
+      C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/api/c2pro-v41-real-ai-governor.jsonl
       C2PRO_V41_REAL_AI_CONFIRM_SHA: ${{ github.event.inputs.exact_sha }}
       ANTHROPIC_API_KEY: ${{ secrets.S2_E2E_ANTHROPIC_API_KEY }}
     steps:
@@ -174,7 +174,7 @@ jobs:
           path: |
             ${{ runner.temp }}/c2pro-v41-real/preflight_sanitized.json
             ${{ runner.temp }}/c2pro-v41-real/real_analysis_evidence.json
-            ${{ runner.temp }}/c2pro-v41-real-ai-governor.jsonl
+            ${{ github.workspace }}/apps/api/c2pro-v41-real-ai-governor.jsonl
           if-no-files-found: warn
           retention-days: 7
       - name: Dispose isolated infrastructure
