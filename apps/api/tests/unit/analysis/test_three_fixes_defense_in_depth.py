@@ -41,8 +41,8 @@ class TestPromptEnglish:
         )
         assert system is not None
         # Hallmarks of the new English prompt
-        assert "senior project risk analyst" in system
-        assert "EPC" in system
+        assert "senior analyst of project and contractual risks" in system
+        assert "EPC/ETO" in system and "software" in system
         # Must NOT contain the old Spanish first line
         assert "analista senior" not in system
 
@@ -53,8 +53,8 @@ class TestPromptEnglish:
         )
         assert "CRITICAL OUTPUT RULES" in (system or "")
         assert '{"risks": [' in (system or "")
-        # ≥80 char source_quote requirement is part of the prompt
-        assert "80 char" in (system or "")
+        # Short complete operative clauses must not be excluded by prompt length.
+        assert "valid short clause" in (system or "")
 
     def test_prompt_uses_canonical_six_categories_only(self) -> None:
         """TS-UA-ANA-GRAPH-001: N4 prompt must not ask Claude for legacy categories."""

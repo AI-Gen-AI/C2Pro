@@ -36,6 +36,10 @@ def _requires_human_approval(final_state: Mapping[str, Any]) -> bool:
 
 
 async def _persist_artifact(final_state: Mapping[str, Any]) -> None:
+    # A graph that terminated before the canonical completion boundary has
+    # produced no approvable artifact, regardless of a False HITL flag.
+    if final_state.get("workflow_terminated") is True:
+        return
     project_id = UUID(str(final_state["project_id"]))
     tenant_id = require_tenant_id(str(final_state["tenant_id"]))
     artifact = build_document_artifact(final_state)
@@ -81,6 +85,16 @@ async def _persist_artifact(final_state: Mapping[str, Any]) -> None:
 
 async def persist_artifact_and_enqueue_project_graph(final_state: Mapping[str, Any]) -> None:
     """Persist the Tier-1 artifact and enqueue Tier-2 without breaking Tier-1."""
+
+    # Termination is NOT the same as successful completion. In particular,
+    # N3 classification errors, unreadable sources and rejected HITL reviews
+    # may set human_approval_required=False; that MUST NOT make them TRUSTED.
+    if final_state.get("workflow_terminated") is True:
+        logger.info(
+            "document_artifact_completion_skipped_terminated",
+            extra={"reason": str(final_state.get("termination_reason") or "terminated")[:100]},
+        )
+        return
 
     try:
         if not final_state.get("project_id") or not final_state.get("tenant_id"):
