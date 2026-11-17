@@ -180,12 +180,13 @@ class CritiqueExtractionUseCase:
             notes_raw=critique.notes,
             confidence=assessed_confidence,
             retry_count=evaluation.retry_count,
-            # A model self-report of OK, or a high candidate confidence,
-            # is not a human acceptance of contractual risks. An explicit
-            # reviewer remains mandatory for newly PROPOSED contract items.
+            # A model self-report of OK, or high candidate confidence, is
+            # never human acceptance. N3 routes both "contract" and "other"
+            # into N4, and newly proposed risks from ANY document family
+            # must reach HITL. Do not restrict this gate to EPC/contracts.
             human_approval_required=(
                 evaluation.human_approval_required
-                or (cmd.doc_type == "contract" and bool(cmd.extracted_risks))
+                or bool(cmd.extracted_risks)
             ),
             critique_notes=evaluation.critique_notes,
         )

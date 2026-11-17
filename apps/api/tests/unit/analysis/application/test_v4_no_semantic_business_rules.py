@@ -157,3 +157,42 @@ def test_n4_keeps_non_epc_contract_text_without_keyword_filter():
     assert source in prepared.document_text
     assert "Original PII must not be sent" not in prepared.document_text
     assert prepared.strict_completeness is True
+
+
+@pytest.mark.asyncio
+async def test_n12_other_document_type_risks_are_never_approved_automatically(monkeypatch):
+    """The N3 'other' route enters N4: all proposed risks need HITL."""
+    ai = FakeAI(response={"status": "OK", "notes": "", "findings": []})
+    source = (
+        "Software operations: The supplier shall deliver the daily incident "
+        "report to the client in the agreed portal by 08:00 on workdays."
+    )
+    result = await CritiqueExtractionUseCase(ai=ai).execute(
+        CritiqueExtractionCommand(
+            extracted_risks=[{
+                "title": "Unusual reporting duty",
+                "description": "The exact daily reporting condition may create an exposure.",
+                "confidence": 0.99,
+            }],
+            extracted_wbs=[],
+            doc_type="other",
+            retry_count=0,
+            source_text=source,
+            source_complete=True,
+        )
+    )
+    assert result.status == "OK"
+    assert result.confidence == 0.99
+    assert result.human_approval_required is True
+    assert result.retry_count == 0
+
+    from src.analysis.adapters.graph.workflow import _next_after_critique_v2
+
+    monkeypatch.setenv("C2PRO_SKIP_HITL", "1")
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    assert _next_after_critique_v2({
+        "human_approval_required": result.human_approval_required,
+        "critique_notes": result.critique_notes,
+        "retry_count": result.retry_count,
+        "doc_type": "other",
+    }) == "human_interrupt"
