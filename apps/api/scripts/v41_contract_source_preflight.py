@@ -10,6 +10,8 @@ import argparse
 import asyncio
 import hashlib
 import json
+
+from scripts.v41_private_cli_paths import authorize_runner_sec_paths
 from pathlib import Path
 
 import fitz
@@ -30,7 +32,8 @@ def sha256(path: Path) -> str:
 async def preflight(sec_pdf: Path, out_dir: Path) -> dict:
     if sha256(sec_pdf) != EXPECTED_SEC_PDF_SHA256:
         raise RuntimeError("SEC_PDF_SHA256_MISMATCH")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not out_dir.is_dir() or out_dir.is_symlink():
+        raise RuntimeError("PINNED_SEC_OUTPUT_DIR_NOT_AVAILABLE")
     with fitz.open(sec_pdf) as filing:
         if filing.page_count != 224:
             raise RuntimeError("SEC_PDF_PAGE_COUNT_CHANGED")
@@ -121,7 +124,10 @@ if __name__ == "__main__":
     parser.add_argument("--sec-pdf", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
-    answer = asyncio.run(preflight(args.sec_pdf, args.out_dir))
+    locked_pdf, locked_out = authorize_runner_sec_paths(
+        args.sec_pdf, args.out_dir, stage="source",
+    )
+    answer = asyncio.run(preflight(locked_pdf, locked_out))
     print(json.dumps(
         {k: v for k, v in answer.items() if k != "n4_window_core_sha256"},
         indent=2,
