@@ -88,7 +88,7 @@ class TestClassifyDocumentUseCase:
 
 class TestCritiqueExtractionUseCase:
     @pytest.mark.asyncio
-    async def test_ok_high_confidence_no_hitl(self) -> None:
+    async def test_ok_high_confidence_contract_still_requires_human_signoff(self) -> None:
         ai = _FakeAI(payload={"status": "OK", "notes": ""})
         uc = CritiqueExtractionUseCase(ai=ai)
         res = await uc.execute(
@@ -102,10 +102,10 @@ class TestCritiqueExtractionUseCase:
             )
         )
         assert res.status == "OK"
-        assert res.human_approval_required is False
+        assert res.human_approval_required is True
         assert res.retry_count == 0
         assert res.critique_notes == ""
-        assert res.confidence == pytest.approx(0.925)
+        assert res.confidence == pytest.approx(0.925)  # proposed, not validated
 
     @pytest.mark.asyncio
     async def test_missing_all_risk_confidence_is_not_fabricated_as_90_percent(self) -> None:
@@ -168,7 +168,7 @@ class TestCritiqueExtractionUseCase:
         assert res.human_approval_required is True
 
     @pytest.mark.asyncio
-    async def test_deterministic_source_contradiction_keeps_manual_retry_signal(self) -> None:
+    async def test_contract_needs_human_not_a_clause_specific_regex(self) -> None:
         source = (
             "EPC-04: Defective work shall be rectified within fourteen (14) "
             "days of written notice."
@@ -184,11 +184,11 @@ class TestCritiqueExtractionUseCase:
                 source_text=source, source_complete=True,
             )
         )
-        assert res.status == "RETRY"
-        assert res.retry_count == 1
+        assert res.status == "OK"  # semantic claim not certified by a regex
+        assert res.retry_count == 0
         assert res.human_approval_required is True
-        assert res.confidence is None
-        assert "source specifies a deadline" in res.critique_notes
+        assert res.confidence == pytest.approx(0.95)
+        assert not res.critique_notes
 
     @pytest.mark.asyncio
     async def test_unsupported_critique_stays_unassessed_without_consuming_retry(self) -> None:
@@ -402,10 +402,10 @@ async def test_critique_absent_or_unattested_source_is_explicitly_unverified() -
     assert "END_SENTINEL" in ai.calls[1][1]
 
 
-# ACC-01: source-backed semantic contradictions are quality blockers, not a
-# "verified" risk, and never cause a human approval automatically.
+# Contract interpretation is model-assisted, never decided by hard-coded
+# clause-specific regexes. Unverified semantic concerns require human review.
 @pytest.mark.asyncio
-async def test_critique_flags_false_missing_rectification_period_against_source() -> None:
+async def test_critique_preserves_unverified_llm_notes_without_cure_regex() -> None:
     source = (
         "5.2 Defective work identified during inspection shall be rectified "
         "at the Contractor's cost within fourteen (14) days of written notice."
@@ -425,16 +425,16 @@ async def test_critique_flags_false_missing_rectification_period_against_source(
             source_complete=True,
         )
     )
-    assert result.status == "RETRY"
+    assert result.status == "UNASSESSED"
     assert result.human_approval_required is True
     assert result.confidence is None
-    assert "source specifies a deadline" in result.critique_notes
-    assert "unsupported truncation" in result.critique_notes
-    assert "Original AI critique (unverified)" in result.critique_notes
+    assert result.retry_count == 0
+    assert "unverified reviewer notes" in result.critique_notes
+    assert "source specifies a deadline" not in result.critique_notes
 
 
 @pytest.mark.asyncio
-async def test_critique_flags_false_missing_cure_period_and_wrong_payment_actor() -> None:
+async def test_contract_payer_and_cure_claims_go_to_human_not_regex() -> None:
     source = (
         "2.2 The Client shall pay monthly progress invoices within thirty (30) days of certification. "
         "6.3 Either party may terminate for material breach not remedied within thirty (30) "
@@ -460,10 +460,12 @@ async def test_critique_flags_false_missing_cure_period_and_wrong_payment_actor(
             source_complete=True,
         )
     )
+    assert result.status == "OK"
     assert result.human_approval_required is True
-    assert result.confidence is None
-    assert "source states a cure period" in result.critique_notes
-    assert "Client owes progress payments" in result.critique_notes
+    assert result.retry_count == 0
+    assert result.confidence == pytest.approx(0.9)  # unvalidated proposed risks
+    assert "source states a cure period" not in result.critique_notes
+    assert "Client owes progress payments" not in result.critique_notes
 
 
 @pytest.mark.asyncio
@@ -489,5 +491,5 @@ async def test_critique_does_not_invent_contradictions_without_source_or_in_othe
             )
         )
         assert result.status == ("OK" if text else "UNASSESSED")
-        assert result.human_approval_required is (not bool(text))
+        assert result.human_approval_required is True
         assert result.critique_notes == ("" if text else "N12_UNASSESSED: source unavailable for verification.")

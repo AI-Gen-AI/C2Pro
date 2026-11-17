@@ -44,14 +44,14 @@ class TestFallbackDocType:
     @pytest.mark.parametrize(
         "text,expected",
         [
-            ("This contract has clauses and obligaciones", "contract"),
-            ("Capex breakdown and budget", "budget"),
-            ("Cronograma with hito milestones and gantt", "schedule"),
-            ("pure material spec sheet", "technical_spec"),
+            ("This contract has clauses and obligaciones", "classification_unassessed"),
+            ("Capex breakdown and budget", "classification_unassessed"),
+            ("Cronograma with hito milestones and gantt", "classification_unassessed"),
+            ("pure material spec sheet", "classification_unassessed"),
             ("", "insufficient_extractable_text"),
         ],
     )
-    def test_keyword_buckets(self, text: str, expected: str) -> None:
+    def test_no_keyword_buckets_when_model_cannot_classify(self, text: str, expected: str) -> None:
         assert _fallback_doc_type(text) == expected
 
 
@@ -70,19 +70,19 @@ class TestDocumentTypeClassificationService:
     async def test_unknown_ai_value_falls_back(self) -> None:
         svc = DocumentTypeClassificationService()
         ai = _FakeAI(payload={"doc_type": "no-such"})
-        assert await svc.classify(text="contract clauses", ai=ai) == "contract"
+        assert await svc.classify(text="contract clauses", ai=ai) == "classification_unassessed"
 
     @pytest.mark.asyncio
     async def test_non_dict_payload_falls_back(self) -> None:
         svc = DocumentTypeClassificationService()
         ai = _FakeAI(payload=["not", "a", "dict"])
-        assert await svc.classify(text="gantt schedule plazo", ai=ai) == "schedule"
+        assert await svc.classify(text="gantt schedule plazo", ai=ai) == "classification_unassessed"
 
     @pytest.mark.asyncio
     async def test_ai_exception_falls_back(self) -> None:
         svc = DocumentTypeClassificationService()
         ai = _FakeAI(raises=RuntimeError("boom"))
-        assert await svc.classify(text="capex total", ai=ai) == "budget"
+        assert await svc.classify(text="capex total", ai=ai) == "classification_unassessed"
 
 
 # ── CritiqueExtractionService ────────────────────────────────────────────────

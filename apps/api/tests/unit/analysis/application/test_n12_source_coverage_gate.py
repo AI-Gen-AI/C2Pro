@@ -1,9 +1,13 @@
 """N12 P0 guardrails: only LLM-visible source can justify review coverage."""
 from __future__ import annotations
+
 from typing import Any
+
 import pytest
+
 from src.analysis.application.critique_extraction_use_case import (
-    CritiqueExtractionCommand, CritiqueExtractionUseCase,
+    CritiqueExtractionCommand,
+    CritiqueExtractionUseCase,
 )
 
 
@@ -161,7 +165,7 @@ async def test_n12_neutral_ok_still_permitted_with_full_received_input() -> None
     ).execute(command(source))
     assert result.status == "OK"
     assert result.confidence == 0.99
-    assert result.human_approval_required is False
+    assert result.human_approval_required is True  # contractual review always pending HITL
 
 
 @pytest.mark.asyncio
