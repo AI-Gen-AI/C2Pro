@@ -6,12 +6,14 @@ Returns a `ConflictReport` consumed by the category aggregator.
 
 Refers to Suite ID: TS-UA-COH-V2-CONFLICT-001.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from src.coherence.economic_signal_dedup import distinct_economic_impacts
 from src.coherence.models import FindingSignal
 from src.coherence.services.v2.evidence_service import EvidenceBundle
 
@@ -74,6 +76,12 @@ _CONTRADICTION_VALUE_KEYS: dict[str, tuple[str, str]] = {
 def build_conflict_candidates(signals: Iterable[FindingSignal]) -> list[ConflictCandidate]:
     """Project true deterministic cross-value findings into a safe conflict ledger."""
     candidates: list[ConflictCandidate] = []
+    # Avoid treating two rule codes for the exact same budget row and amounts
+    # as independent hard conflicts in v2. Leave unrelated revisions intact.
+    signals = distinct_economic_impacts(
+        list(signals),
+        lambda s: s.impact_score * s.confidence,
+    )
     for signal in signals:
         value_keys = _CONTRADICTION_VALUE_KEYS.get(signal.rule_id)
         if signal.source != "deterministic" or value_keys is None:
@@ -134,7 +142,9 @@ class ConflictService:
         candidates: list[ConflictCandidate],
     ) -> ConflictReport:
         del evidence
-        category_candidates = [candidate for candidate in candidates if candidate.category == category]
+        category_candidates = [
+            candidate for candidate in candidates if candidate.category == category
+        ]
         confirmed_candidates = [
             candidate
             for candidate in category_candidates

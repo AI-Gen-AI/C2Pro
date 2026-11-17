@@ -377,6 +377,38 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
             "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED" if expected else "NOT_VERIFIED"
         )
 
+    # Genuine retired revision: an unchanged SHA is *not* sufficient to make
+    # the old locator current. The savepoint keeps the original fixture state.
+    retired = await db.begin_nested()
+    try:
+        await db.execute(
+            text(
+                "UPDATE document_revisions SET valid_to=clock_timestamp() "
+                "WHERE revision_id=:r AND tenant_id=:t"
+            ),
+            {"r": schedule_rev.revision_id, "t": test_user.tenant_id},
+        )
+        retired_payload = SimpleNamespace(
+            alert_metadata={
+                "detection_evidence": {"structured_sources": [reference]},
+            }
+        )
+        await resolve_alert_original_rows(
+            db,
+            tenant_id=test_user.tenant_id,
+            project_id=project,
+            payloads=[retired_payload],
+        )
+        assert retired_payload.alert_metadata["original_row_binding"] == "NOT_VERIFIED"
+        assert (
+            retired_payload.alert_metadata["detection_evidence"]["structured_sources"][0].get(
+                "blob_sha256"
+            )
+            is None
+        )
+    finally:
+        await retired.rollback()
+
     # Optional evidence-only JSON, directly from read-back PostgreSQL rows.
     # All UUIDs are from a disposable synthetic DB, never from a real tenant.
     if os.environ.get("C2PRO_S7_EMIT_EVIDENCE") == "1":

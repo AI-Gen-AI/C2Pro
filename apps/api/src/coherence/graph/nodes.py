@@ -1573,6 +1573,9 @@ def _build_category_breakdown(
     set is upgraded to ``budget_throttled`` instead — surfacing the distinction
     between "no document / no evidence" and "your analysis budget cap was hit".
     """
+    # Canaries see one independent impact for two related rule alerts.
+    # format_output retains both original alerts for human review.
+    signals = ScoringService()._distinct_economic_impacts(signals)
     breakdown: list[CategoryBreakdown] = []
     # CROSS-category signals are not bucketed into the 6 canonical categories
     # but still count toward total_impact (the impact_percentage denominator).

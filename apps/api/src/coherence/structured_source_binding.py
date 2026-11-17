@@ -28,6 +28,9 @@ SELECT r.blob_hash
    AND r.valid_to IS NULL
    AND u.family=:family AND u.source_locator=:locator
  LIMIT 2
+ -- Protect current-revision and row provenance until alert-ledger COMMIT.
+ -- A concurrent retirement/update must wait; read-only binds are not HITL.
+ FOR SHARE OF r, u
 """)
 
 

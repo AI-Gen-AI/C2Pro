@@ -508,9 +508,7 @@ class ScoringService:
         # Weighted mean over assessed categories only (no coverage_ratio multiplier).
         # Every assessed category was scored in the loop above, so filter the
         # Optional dict down to the proven-non-None entries.
-        assessed_scores = {
-            c: score for c in assessed if (score := category_scores[c]) is not None
-        }
+        assessed_scores = {c: score for c in assessed if (score := category_scores[c]) is not None}
         assessed_weight_sum = sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed)
         global_score = round(
             sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * s for c, s in assessed_scores.items())
@@ -958,6 +956,14 @@ def calculate_v2_from_signals(
         build_conflict_candidates,
     )
     from src.coherence.services.v2.evidence_service import EvidenceBundle  # noqa: PLC0415
+
+    # v2 uses rule-signal averages AND hard-conflict independent_count;
+    # deduplicate only the same source-bound economic delta for this scorer.
+    # The v1 Alert ledger retains both related rule codes unchanged.
+    if signals and all(isinstance(s, FindingSignal) for s in signals):
+        signals = distinct_economic_impacts(
+            signals, lambda signal: signal.impact_score * signal.confidence
+        )
 
     cat_agg = CategoryAggregator(CategoryStateMachine())
     global_agg = GlobalAggregatorV2()
