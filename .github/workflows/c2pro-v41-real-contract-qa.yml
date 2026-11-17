@@ -89,7 +89,7 @@ jobs:
       C2PRO_EMBEDDINGS_MOCK: "1"
       DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
-      REDIS_URL: redis://localhost:6379/0
+      REDIS_URL: redis://localhost:6380/0
       JWT_SECRET_KEY: c2pro-v41-isolated-only-secret-xxxxxxxx
       C2PRO_N12_CHECKPOINT_ESCROW: "1"
       C2PRO_N12_REQUIRE_ESCROW: "1"
@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py \
+          C2PRO_REDIS_TEST_PORT=6380 python apps/api/scripts/bootstrap_test_infra.py \
             --start-services --require-redis --recreate-db
       - name: Fetch authentic SEC filing, verify pinned SHA256
         shell: bash
