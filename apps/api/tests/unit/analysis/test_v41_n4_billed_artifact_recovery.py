@@ -167,6 +167,9 @@ def test_real_billed_review_cli_packet_is_private_and_never_overwritten(
     source_path = Path(os.environ["C2PRO_V41_REAL_N2_SOURCE"])
     packet_path = tmp_path / "review-packet.json"
     summary_path = tmp_path / "recovery-summary.json"
+    # An operator must grant independent source and output roots to the CLI.
+    monkeypatch.setenv("C2PRO_V41_PRIVATE_EVIDENCE_ROOT", str(evidence_path.parent))
+    monkeypatch.setenv("C2PRO_V41_PRIVATE_OUTPUT_ROOT", str(tmp_path))
     monkeypatch.setattr("sys.argv", [
         "reconcile_v41_n4_real_artifact.py",
         "--evidence", str(evidence_path),
