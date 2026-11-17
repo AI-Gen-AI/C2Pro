@@ -66,6 +66,7 @@ class AIService:
             self.wrapper = wrapper or get_anthropic_wrapper()
         self.tenant_id = tenant_id
         self.db = db
+        self._injected_wrapper = wrapper is not None
         self._cost_controller_class, self._budget_exception = _get_cost_controller()
         if self.db and self._cost_controller_class:
             self.cost_controller = self._cost_controller_class(self.db)
@@ -117,6 +118,7 @@ class AIService:
         user_content: str,
         *,
         full_source_analysis: bool = False,
+        governed_request_id: str | None = None,
     ) -> Any:
         """
         Runs an extraction with retries, robust JSON parsing, and usage logging.
@@ -134,6 +136,13 @@ class AIService:
                 latency_ms=round(latency_ms, 2),
             )
             return parsed
+
+        if os.getenv("C2PRO_LEGACY_AI_ESCROW") == "1":
+            return await self._run_extraction_governed(
+                system_prompt, user_content,
+                full_source_analysis=full_source_analysis,
+                governed_request_id=governed_request_id,
+            )
 
         if not self.tenant_id:
             logger.error("Tenant ID missing, cannot proceed with AI call.")
@@ -278,6 +287,105 @@ class AIService:
         )
 
         return parsed
+
+    async def _run_extraction_governed(
+        self, system_prompt: str, user_content: str, *,
+        full_source_analysis: bool, governed_request_id: str | None,
+    ) -> Any:
+        """Opt-in legacy pathway; calls are charged once via persisted escrow.
+
+        This path intentionally does not use the @retry _call_wrapper and
+        requires a stable per-call id from the orchestration checkpoint.
+        It cannot silently change the production graph or N12 behavior.
+        """
+        if not governed_request_id or not 8 <= len(governed_request_id) <= 128:
+            raise AIServiceError(
+                "Governed AI requires a persisted stable call id to block paid replay"
+            )
+        tenant_id = self._tenant_uuid()
+        if tenant_id is None:
+            raise AIServiceError("Governed AI requires an explicit tenant identity")
+
+        from src.core.ai.legacy_ai_governed_call import execute_budgeted_legacy_call
+
+        reserve_setting = (
+            "C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD"
+            if full_source_analysis else "C2PRO_LEGACY_AI_RESERVE_USD"
+        )
+        output_setting = (
+            "C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS"
+            if full_source_analysis else "C2PRO_LEGACY_AI_MAX_OUTPUT_TOKENS"
+        )
+        raw_cap, raw_output = os.getenv(reserve_setting), os.getenv(output_setting)
+        if not raw_cap or not raw_output:
+            raise AIServiceError(
+                f"Governed AI requires explicit {reserve_setting} and {output_setting}"
+            )
+        try:
+            from decimal import Decimal
+
+            max_charge = Decimal(raw_cap)
+            output_limit = int(raw_output)
+            if (
+                not max_charge.is_finite() or max_charge <= 0
+                or not 256 <= output_limit <= 128_000
+            ):
+                raise ValueError("nonpositive call limits")
+        except (ValueError, ArithmeticError):
+            raise AIServiceError("Governed AI cost/output caps are invalid") from None
+
+        wrapper = self.wrapper
+        if not self._injected_wrapper:
+            wrapper = AnthropicWrapper(
+                enable_cache=False,
+                enable_retry=False,
+                max_tokens_limit=output_limit,
+            )
+        if (
+            wrapper is None
+            or getattr(wrapper, "enable_cache", True)
+            or getattr(wrapper, "cache_service", object()) is not None
+            or getattr(getattr(wrapper, "llm_client", None), "max_retries", -1) != 0
+        ):
+            raise AIServiceError(
+                "Governed AI requires a non-retrying, non-caching provider wrapper"
+            )
+
+        async def invoke(receipt_id: str) -> Any:
+            return await wrapper.generate(WrapperRequest(
+                prompt=user_content,
+                system_prompt=system_prompt,
+                task_type=AITaskType.COMPLEX_EXTRACTION,
+                tenant_id=tenant_id,
+                request_id=receipt_id,
+                max_tokens=output_limit,
+                use_cache=False,
+                bypass_anonymization=False,
+                metadata={
+                    "budgeted_legacy": True,
+                    "full_source_analysis": full_source_analysis,
+                },
+            ))
+
+        try:
+            response = await execute_budgeted_legacy_call(
+                tenant_id=tenant_id, idempotency_key=governed_request_id,
+                source="N12_FULL_SOURCE" if full_source_analysis else "LEGACY_EXTRACTION",
+                max_charge_usd=max_charge, invoke=invoke,
+            )
+        except Exception as exc:
+            raise AIServiceError(
+                "Budgeted AI call did not complete; reservation reconciled "
+                "or held pending provider usage verification"
+            ) from exc
+        # No JSON repair, salvage, or partial-record acceptance on this path.
+        # Charging the provider is independent from semantic acceptance.
+        try:
+            return json.loads(response.content)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise AIServiceError(
+                "Budgeted provider output was not a complete JSON document"
+            ) from exc
 
     def _parse_json_response(self, raw: str) -> Any:
         raw = raw.strip()
