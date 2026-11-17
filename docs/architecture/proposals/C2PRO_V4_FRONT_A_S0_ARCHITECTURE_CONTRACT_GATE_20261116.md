@@ -86,3 +86,29 @@ Se detectó que la política aprobada en #1049 **no estaba plenamente reflejada 
 - **Calidad probada sólo para código/suites mencionadas**: no hay nuevo contrato completo de proveedor vivo ni revisión experta independiente. #1247 es una PR DRAFT apilada sobre #1241, no está en CORE; **G1 permanece sin cerrar**.
 
 **Consecuencia del contrato G0:** la auditoría materializa la regla ya aprobada: seguridad y origen de datos sí tienen validación determinista; semántica del contrato y familias de documentos no. La evidencia de código anterior a la fusión es una propuesta verificable, no una promoción o UAT.
+
+
+## 7. Checkpoint diferencial de implementación 17/11/2026 — N4 multivertical, N3/N12 y artefactos terminales
+
+**PR:** [#1247](https://github.com/AI-Gen-AI/C2Pro/pull/1247) DRAFT, apilada sobre #1241, HEAD exacta **`e6866afa4183c96f3b2c84036e495d08e1ee7a8f`**. No merge/deploy.
+
+**Correcciones adicionales a lo ya descrito en §6:**
+- **N4** `apps/api/src/analysis/adapters/ai/tools/risk_extraction_tool.py`: prompt previo exclusivamente EPC/infraestructura y clasificación prescriptiva de force majeure/termination/LD; ahora inferencia contextual de riesgos en ingeniería, fabricación, servicios, software y proyectos no anticipados. Los códigos `LEGAL/SCHEDULE/QUALITY/SCOPE/TECHNICAL/BUDGET` son **etiquetas de API**, no motor de descubrimiento ni taxonomía exhaustiva de oportunidades de riesgo. No se codifican patrones del Gold. Eliminada restricción **≥80 caracteres** del prompt que podía hacer omitir cláusulas operativas cortas; el cotejo técnico de cita literal real permanece en el verificador de procedencia (`MIN_QUOTE_CHARS=12` como defensa de citas triviales). Identificadores de cita **pueden ser expresos alfanuméricos** como `SLA-A`/`Annex B`, además de numéricos; prohibido inventarlos.
+- **N3**: no llamar a N4 por palabras clave ante respuesta desconocida del clasificador; ruta terminal `classification_unassessed` con distinta identidad del caso OCR ilegible.
+- **N12**: sin regex de interpretación contractual; no consume retries automáticos con afirmaciones semánticas no probadas y presenta riesgos contractuales propuestos a HITL, incluso si el modelo afirma OK.
+- **Frontera de persistencia ADR-017:** se descubrió que el hook `persist_artifact_and_enqueue_project_graph` podría tratar un grafo `workflow_terminated=True` y `human_approval_required=False` como artefacto `TRUSTED`. **Tres tests adversariales RED** antes de parche (clasificación no evaluada, fuente ilegible, rechazo). Corrección en `apps/api/src/analysis/application/document_artifact_completion.py`: tanto hook público como persistencia privada rechazan guardar/encolar estados terminales; validación positiva de candidato no terminal conservada. **31 pruebas focales GREEN**.
+
+**Evidencia exacta:**
+- N4 prompt y localizador, 45/45 pytest focales PASS, Ruff y `git diff --check` PASS antes del commit terminal.
+- **244/244 pytest PASS** en Python 3.11.16, PostgreSQL privado, **HEAD exacta `e6866afa4183c96f3b2c84036e495d08e1ee7a8f`**, job AI-GEN Ops `0e3fa5a36faa4949aa6576c0`, log SHA256 **`5018447f0e7d7ba59380494842b7868ef91b29392e8875ebf59090b4a671634e`**. Suite N3/N4/N12/prompts/HITL/citas/artifact/ProjectGraph, sin proveedor de pago.
+- CI same HEAD: **Secret Scan `43984676758` PASS**, **Install Drift Guard `43984676607` PASS**, **SonarCloud Quality Gate OK** (consulta real).
+- Una regresión de `cross_doc_coherence` de **SHA base #1241** permanece fallando también sin el parche: espera ≥4 señales, sólo 2 con evidencia prudente. No modificar Coherence en Frente A.
+
+**Dependencias que deben permanecer visibles en #1049 sin ampliar el alcance:**
+1. El sistema N1 `src/analysis/domain/document_classification.py` conserva clasificador por frecuencias de palabras clave para **categorías de Coherence**. Revisión corresponde a S4/N8, no N3; prevenir materialidad basada en etiquetas sin prueba.
+2. La ingesta heredada `src/core/tasks/ingestion_tasks.py::_extract_contract_clauses` salta segmentos menores de 40 caracteres y recorta los mayores a 4.000 al crear **Clause** para persistencia, y les asigna `extraction_model=deterministic-contract-ingestion`. Aunque N4 sobre N2-safe conserva su texto fuente y esto **no demuestra truncamiento del prompt N4**, podría limitar relaciones/cobertura de ProjectGraph y merece evaluación por S2/S4 sin cambiar ese módulo desde Frente A.
+3. `_run_document_analysis` dispone ya de estado `PARSED_PENDING_ANALYSIS` si falta `analysis_id`, pero nunca sustituye el bloqueo de persistencia de artefactos terminales, corregido aquí.
+4. Revisión independiente externa de #1247 sigue **sin dictamen PASS**: Gemini lectura-only acabó por timeout en SHA anterior `4974f210...`; no repetir indefinidamente sin sesión operativa.
+5. **No existe benchmark exitoso con proveedor real en esta HEAD**, ni UAT del documento piloto #1229. G0 diseño de evaluación puede considerarse candidatado para aceptación condicionada conforme owner, pero **no aprobado automáticamente**; G1 **NO-GO** para promoción de código hasta QA y evidencia de proveedor/Complete Journey.
+
+**Límites:** nada de modelos/migraciones/ledger WBS2.2/2.5/2.6, ni trabajos del piloto #1229. El presente checkpoint documenta avances del Frente A; no cambia autorizaciones de merge.
