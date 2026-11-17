@@ -108,9 +108,19 @@ class AIService:
             return None
         return UUID(str(self.tenant_id))
 
-    async def run_full_source_review(self, system_prompt: str, user_content: str) -> Any:
-        """N12: review the entire N2-safe source with provider-native capacity."""
-        return await self.run_extraction(system_prompt, user_content, full_source_analysis=True)
+    async def run_full_source_review(
+        self, system_prompt: str, user_content: str, *,
+        governed_request_id: str | None = None,
+    ) -> Any:
+        """N12 full source; optional budget key minted from a saved checkpoint."""
+        if governed_request_id is None:
+            return await self.run_extraction(
+                system_prompt, user_content, full_source_analysis=True,
+            )
+        return await self.run_extraction(
+            system_prompt, user_content, full_source_analysis=True,
+            governed_request_id=governed_request_id,
+        )
 
     async def run_extraction(
         self,
@@ -137,7 +147,11 @@ class AIService:
             )
             return parsed
 
-        if os.getenv("C2PRO_LEGACY_AI_ESCROW") == "1":
+        # Explicit per-call escrow opt-in must NEVER be ignored merely because
+        # the global migration flag remains OFF for unrelated graph nodes.
+        # Existing no-key calls keep their old route while the flag is OFF;
+        # with the flag ON they fail closed until given a saved request ID.
+        if governed_request_id is not None or os.getenv("C2PRO_LEGACY_AI_ESCROW") == "1":
             return await self._run_extraction_governed(
                 system_prompt, user_content,
                 full_source_analysis=full_source_analysis,
