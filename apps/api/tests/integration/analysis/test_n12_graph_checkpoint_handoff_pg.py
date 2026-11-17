@@ -112,7 +112,14 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
             saver = AsyncPostgresSaver(conn=pool)
             await saver.setup()
             result = await _invoke(saver)
-        assert len(service.governed_ids) == 1
+        assert len(service.governed_ids) == 1, [
+            {
+                "node": str(getattr(n, "node", "")),
+                "error_type": str(getattr(getattr(n, "error", None), "error_type", "")),
+                "error_message": str(getattr(getattr(n, "error", None), "message", ""))[:160],
+            }
+            for n in result.get("node_results", [])
+        ]
         assert service.governed_ids[0].startswith("n12c-")
         assert result["human_approval_required"] is True
         assert result["risk_pre_hitl_evidence_passed"] is True
