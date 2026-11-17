@@ -17,7 +17,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from src.analysis.adapters.graph import nodes, workflow
 from src.config import settings
-from tests.support.seeded_identity_guard import assert_ops_database_binding
+from tests.support.test_database_guard import assert_ops_database_binding
 
 # Accept a dedicated scratch DSN, or ONLY the job-scoped database that
 # AI-GEN Ops has already bound and authorized. Never use a default live DSN.
