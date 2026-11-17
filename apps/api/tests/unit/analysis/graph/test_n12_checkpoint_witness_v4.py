@@ -62,6 +62,7 @@ def _config(s, *, checkpoint="checkpoint-001"):
             "thread_id": s["thread_id"],
             "checkpoint_ns": "",
             "checkpoint_id": checkpoint,
+            "checkpoint_map": {"": checkpoint},
         }
     }
 
@@ -106,7 +107,7 @@ async def test_n12_task_namespace_uses_persisted_root_predecessor(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", [
-    "missing_config", "wrong_thread", "memory_only",
+    "missing_config", "missing_parent_map", "wrong_parent_id", "wrong_thread", "memory_only",
     "missing_n12_route", "tenant_changed", "revision_changed",
     "risk_changed", "source_changed", "missing_revision", "wrong_checkpoint_ns",
 ])
@@ -117,6 +118,10 @@ async def test_budget_witness_fails_closed_on_missing_or_stale_state(monkeypatch
     config = _config(state)
     if mutation == "missing_config":
         config = None
+    elif mutation == "missing_parent_map":
+        config["configurable"].pop("checkpoint_map")
+    elif mutation == "wrong_parent_id":
+        config["configurable"]["checkpoint_map"][""] = "not-the-saved-id"
     elif mutation == "wrong_thread":
         config["configurable"]["thread_id"] = str(uuid4())
     elif mutation == "missing_n12_route":
