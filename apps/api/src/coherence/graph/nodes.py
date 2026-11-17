@@ -1518,6 +1518,10 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
         evidence=Evidence(
             source_clause_id=signal.clause_id,
             economic_discrepancy_key=_economic_impact_key(signal),
+            contract_source=(
+                (signal.raw_data.get("evidence") or {}).get("contract_source")
+                if isinstance(signal.raw_data.get("evidence"), dict) else None
+            ),
             claim=signal.evidence_summary,
             quote=signal.quote or "",
             structured_sources=structured_source_refs(

@@ -206,6 +206,7 @@ class Evidence(BaseModel):
     # S4: original Budget rows / Schedule activities the finding rests on (empty for clause-only evidence).
     structured_sources: list[StructuredSourceRef] = Field(default_factory=list)
     economic_discrepancy_key: str | None = None
+    contract_source: dict[str, str] | None = None
     # Additional fields can be added here in future iterations, e.g., confidence, page_number.
 
 

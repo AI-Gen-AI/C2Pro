@@ -735,6 +735,11 @@ def _coherence_alert_to_create(
         ]
         if pointers:
             detection_evidence["structured_sources"] = pointers
+        # The contract side is separately sourced. Original identity is
+        # checked against canonical current clause+revision before COMMIT.
+        contract_source = getattr(evidence, "contract_source", None)
+        if isinstance(contract_source, dict):
+            detection_evidence["contract_source"] = dict(contract_source)
     affected_entities: dict[str, Any] = {}
     if verified_document_ids:
         affected_entities["documents"] = verified_document_ids

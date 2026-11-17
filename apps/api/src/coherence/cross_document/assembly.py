@@ -10,6 +10,7 @@ per-clause pipeline without waiting for it.
 
 Refers to Suite ID: TS-UA-COH-XDOC-ASSEMBLY-001.
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,9 +39,7 @@ def _currency(value: object) -> str | None:
     return _CURRENCY_SYMBOLS.get(code, code.upper())
 
 
-def _side_currencies(
-    data: Mapping[str, object], key: str, clause_currency: str | None
-) -> set[str]:
+def _side_currencies(data: Mapping[str, object], key: str, clause_currency: str | None) -> set[str]:
     """One side's denominations: its own key (a clause carrying both totals,
     like the budget reconciliation clause) or else the clause's currency."""
     stated = data.get(key)
@@ -141,6 +140,7 @@ def assemble_cross_doc_inputs(
     simply do not fire — no false positives on missing data.
     """
     contract_totals: list[float] = []
+    contract_total_sources: list[tuple[float, Mapping[str, str]]] = []
     budget_totals: list[float] = []
     budget_total_sources: list[tuple[float, Mapping[str, str]]] = []
     leaf_sum = 0.0
@@ -163,6 +163,27 @@ def assemble_cross_doc_inputs(
             contract_total = _num(data.get("total_amount"))
         if contract_total is not None:
             contract_totals.append(contract_total)
+            declared_contract = data.get("contract_total_source")
+            if (
+                isinstance(declared_contract, Mapping)
+                and all(
+                    isinstance(declared_contract.get(k), str) and declared_contract.get(k)
+                    for k in (
+                        "family",
+                        "document_id",
+                        "revision_id",
+                        "blob_sha256",
+                        "source_locator",
+                    )
+                )
+                and declared_contract.get("family") == "contract"
+            ):
+                contract_total_sources.append(
+                    (
+                        contract_total,
+                        {k: str(v) for k, v in declared_contract.items() if isinstance(v, str)},
+                    )
+                )
             contract_currencies |= _side_currencies(data, "contract_currencies", clause_currency)
 
         stated_total = _num(data.get("stated_total"))
@@ -174,7 +195,10 @@ def assemble_cross_doc_inputs(
                 for k in ("family", "document_id", "revision_id", "source_locator")
             ):
                 budget_total_sources.append(
-                    (stated_total, {k: str(v) for k, v in declared_source.items() if isinstance(v, str)})
+                    (
+                        stated_total,
+                        {k: str(v) for k, v in declared_source.items() if isinstance(v, str)},
+                    )
                 )
             budget_currencies |= _side_currencies(data, "budget_currencies", clause_currency)
 
@@ -193,8 +217,25 @@ def assemble_cross_doc_inputs(
         if currency is None and isinstance(data.get("currency"), str):
             currency = data["currency"]
 
+    max_contract = max(contract_totals) if contract_totals else None
+    # A single bound contract source must be proven for the selected total.
+    # Two distinct contract revisions of the same value are AMBIGUOUS, not
+    # interchangeable economic facts.
+    matching_contract_sources = [
+        item for amount, item in contract_total_sources if amount == max_contract
+    ]
+    contract_identities = {
+        (item["document_id"], item["revision_id"], item["blob_sha256"])
+        for item in matching_contract_sources
+    }
+    selected_contract_source = (
+        min(matching_contract_sources, key=lambda item: item["source_locator"])
+        if len(contract_identities) == 1
+        else None
+    )
     return ProjectCrossDocInputs(
-        contract_total=max(contract_totals) if contract_totals else None,
+        contract_total=max_contract,
+        contract_total_source=selected_contract_source,
         budget_total=max(budget_totals) if budget_totals else None,
         # The source row belongs to the SAME clause whose figure is the maximum used by the comparators.
         budget_total_source=(
@@ -230,7 +271,9 @@ def cross_document_assessment(
     for skipped in assessment.not_assessed:
         logger.info(
             "cross-document %s NOT_ASSESSED (%s): %s",
-            skipped.rule_id, skipped.reason, skipped.detail,
+            skipped.rule_id,
+            skipped.reason,
+            skipped.detail,
         )
     return assessment
 
@@ -241,9 +284,7 @@ def cross_document_signals(
     schedule_planned_finish: Mapping[str, object] | None = None,
 ) -> list[FindingSignal]:
     """Scoring signals of the confirmed cross-document findings (provisional ones are not signals)."""
-    assessment = cross_document_assessment(
-        clauses, schedule_planned_finish=schedule_planned_finish
-    )
+    assessment = cross_document_assessment(clauses, schedule_planned_finish=schedule_planned_finish)
     return [to_finding_signal(finding) for finding in assessment.findings]
 
 

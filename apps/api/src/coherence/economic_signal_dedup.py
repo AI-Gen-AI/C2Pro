@@ -1,7 +1,8 @@
 """Treat related contract/budget detectors as one financial score impact.
 
-The event/alert ledger retains two rule codes. Only the numeric penalty
-collapses when the same original budget source row and both totals match.
+The event/alert ledger retains two rule codes. Only the numeric penalty collapses when BOTH original contract and budget
+source revisions, original SHA and same totals match. Unbound sources fail
+closed (do not deduplicate).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from src.coherence.models import FindingSignal
 _RULES = frozenset({"DET-CRS-CONBUD", "DET-CRS-NEGMARGIN"})
 
 
-def _key(s: FindingSignal) -> tuple[float, float, str, str, str] | None:
+def _key(s: FindingSignal) -> tuple[float, float, str, str, str, str, str, str, str] | None:
     if s.rule_id not in _RULES:
         return None
     data = s.raw_data
@@ -33,10 +34,33 @@ def _key(s: FindingSignal) -> tuple[float, float, str, str, str] | None:
     ref = refs[0]
     if not isinstance(ref, dict) or ref.get("family") != "budget":
         return None
-    parts = [ref.get(name) for name in ("document_id", "revision_id", "source_locator")]
-    if not all(isinstance(v, str) and v.strip() for v in parts):
+    contract = evidence.get("contract_source") if isinstance(evidence, dict) else None
+    if not isinstance(contract, dict) or contract.get("family") != "contract":
         return None
-    return (float(a), float(b), parts[0], parts[1], parts[2])
+    parts = [
+        ref.get(name)
+        for name in (
+            "document_id",
+            "revision_id",
+            "blob_sha256",
+            "source_locator",
+        )
+    ]
+    contract_parts = [
+        contract.get(name)
+        for name in (
+            "document_id",
+            "revision_id",
+            "blob_sha256",
+        )
+    ]
+    if not all(isinstance(v, str) and v.strip() for v in (*parts, *contract_parts)):
+        return None
+    if not all(
+        isinstance(digest, str) and len(digest) == 64 for digest in (parts[2], contract_parts[2])
+    ):
+        return None
+    return (float(a), float(b), *parts, *contract_parts)
 
 
 def economic_discrepancy_key(signal: FindingSignal) -> str | None:
@@ -53,7 +77,7 @@ def distinct_economic_impacts(
     contribution: Callable[[FindingSignal], float],
 ) -> list[FindingSignal]:
     """Suppress one penalty per matching rule pair, never hide the two alerts."""
-    groups: dict[tuple[float, float, str, str, str], dict[str, list[int]]] = {}
+    groups: dict[tuple[float, float, str, str, str, str, str, str, str], dict[str, list[int]]] = {}
     for i, signal in enumerate(signals):
         key = _key(signal)
         if key is not None:

@@ -118,6 +118,15 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
         }
     ]
     assert {s.rule_id for s in economic} == {"DET-CRS-CONBUD", "DET-CRS-NEGMARGIN"}
+    # The real fixture produces the contract identity from canonical SQL,
+    # not from a synthetic ID attached in the test.
+    contract_doc, contract_rev = sources["triplet-contract.docx"]
+    for signal in economic:
+        source = signal.raw_data["evidence"]["contract_source"]
+        assert source["document_id"] == str(contract_doc.id)
+        assert source["revision_id"] == str(contract_rev.revision_id)
+        assert source["blob_sha256"] == manifest["sha256"]["triplet-contract.docx"]
+        assert source["family"] == "contract"
     calculator = ScoringService()
     observed = calculator.calculate_detailed(
         economic,
@@ -249,6 +258,14 @@ async def test_four_official_sources_preserve_wbs_and_persist_discrepancies(
             }
         ]
         assert len(financial) == 2
+        for finding in financial:
+            contract_source = finding["alert_metadata"]["detection_evidence"]["contract_source"]
+            assert contract_source["document_id"] == str(contract_doc.id)
+            assert contract_source["revision_id"] == str(contract_rev.revision_id)
+            assert contract_source["blob_sha256"] == manifest["sha256"]["triplet-contract.docx"]
+            assert finding["alert_metadata"]["original_row_binding"] == (
+                "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED"
+            )
         group_keys = {row["alert_metadata"].get("economic_discrepancy_key") for row in financial}
         assert len(group_keys) == 1 and next(iter(group_keys)).startswith("CONTRACT_BUDGET:")
         assert all(

@@ -28,8 +28,16 @@ def _signal(
                         "document_id": "doc-1",
                         "revision_id": source,
                         "source_locator": "Presupuesto!5",
+                        "blob_sha256": "a" * 64,
                     }
-                ]
+                ],
+                "contract_source": {
+                    "family": "contract",
+                    "document_id": "contract-doc",
+                    "revision_id": "contract-r1",
+                    "blob_sha256": "b" * 64,
+                    "source_locator": "Clause-1",
+                },
             },
         },
     )

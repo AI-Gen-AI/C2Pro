@@ -67,6 +67,7 @@ from src.alerts.application.use_cases.update_alert_workspace_settings_use_case i
 )
 from src.alerts.domain.models import Alert
 from src.coherence.application.disposition_review import CoherenceReviewRescoreUnavailable
+from src.coherence.structured_source_binding import revalidate_listed_alert_source_bindings
 from src.core.database import get_session
 from src.core.security import CurrentTenantId, CurrentUserId, security_scheme
 from src.projects.adapters.persistence.models import ProjectORM
@@ -100,6 +101,7 @@ def get_alert_repository(
     session: AsyncSession = Depends(get_session),
 ) -> IAlertRepository:
     from src.alerts.adapters.persistence.alert_repository import SqlAlchemyAlertRepository
+
     return SqlAlchemyAlertRepository(session=session)
 
 
@@ -107,6 +109,7 @@ def get_tenant_repository(
     session: AsyncSession = Depends(get_session),
 ) -> ITenantRepository:
     from src.alerts.adapters.persistence.tenant_repository import SqlAlchemyTenantRepository
+
     return SqlAlchemyTenantRepository(session=session)
 
 
@@ -263,14 +266,22 @@ async def list_project_alerts(
     category: str | None = None,
     severity: str | None = None,
     _project: None = Depends(require_project_in_tenant),
+    session: AsyncSession = Depends(get_session),
 ) -> AlertListResponse:
-    return await list_use_case.execute_for_project(
+    response = await list_use_case.execute_for_project(
         project_id=project_id,
         tenant_id=tenant_id,
         status=status_filter,
         category=category,
         severity=severity,
     )
+    await revalidate_listed_alert_source_bindings(
+        session,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        alerts=response.items,
+    )
+    return response
 
 
 @project_alerts_router.get(
@@ -286,6 +297,7 @@ async def list_project_alerts_compatibility(
     category: str | None = None,
     severity: str | None = None,
     _project: None = Depends(require_project_in_tenant),
+    session: AsyncSession = Depends(get_session),
 ) -> AlertListResponse:
     return await list_project_alerts(
         project_id=project_id,
@@ -294,6 +306,7 @@ async def list_project_alerts_compatibility(
         status_filter=status_filter,
         category=category,
         severity=severity,
+        session=session,
     )
 
 
@@ -310,8 +323,9 @@ async def list_tenant_alerts(
     status_filter: str | None = None,
     category: str | None = None,
     severity: str | None = None,
+    session: AsyncSession = Depends(get_session),
 ) -> AlertListResponse:
-    return await list_use_case.execute_for_tenant(
+    result = await list_use_case.execute_for_tenant(
         tenant_id=tenant_id,
         project_id=project_id,
         document_id=document_id,
@@ -319,6 +333,14 @@ async def list_tenant_alerts(
         category=category,
         severity=severity,
     )
+    # Tenant-level dashboards must not keep a historical source flagged as
+    # CURRENT after a new document revision supersedes it.
+    for own_project in {alert.project_id for alert in result.items}:
+        await revalidate_listed_alert_source_bindings(
+            session, tenant_id=tenant_id, project_id=own_project,
+            alerts=[a for a in result.items if a.project_id == own_project],
+        )
+    return result
 
 
 @router.post(

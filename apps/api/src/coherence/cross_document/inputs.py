@@ -8,6 +8,7 @@ comparators depend only on this typed struct, which keeps them pure and testable
 
 Refers to Suite ID: TS-UD-COH-XDOC-INPUTS-001.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -48,6 +49,9 @@ class ProjectCrossDocInputs:
     """Cross-document numeric aggregates (each None when its source doc is missing)."""
 
     contract_total: float | None = None  # contractual price (from the contract)
+    # Trusted current source of the same selected contract total, or None on
+    # unresolved/multiple-contract authority (never infer from price alone).
+    contract_total_source: Mapping[str, str] | None = None
     budget_total: float | None = None  # stated total (from the budget)
     # S4: the exact original row the stated total was read from (family, document, revision, SHA-256, ``Sheet!row``).
     budget_total_source: Mapping[str, str] | None = None

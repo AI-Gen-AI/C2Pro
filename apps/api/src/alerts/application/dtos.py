@@ -124,6 +124,7 @@ class DetectionEvidenceResponse(BaseModel):
     claim: str = ""
     quote: str = ""
     structured_sources: list[StructuredSourceReference] = Field(default_factory=list)
+    contract_source: dict[str, str] | None = None
 
 
 class AlertResponse(BaseModel):
