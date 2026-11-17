@@ -11,7 +11,7 @@ import os
 import re
 from pathlib import Path
 
-_PRIVATE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\\.json\\Z")
+_PRIVATE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.json\Z")
 
 
 class V41PathAuthorityError(ValueError):
