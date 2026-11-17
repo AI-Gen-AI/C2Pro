@@ -108,9 +108,19 @@ class AIService:
             return None
         return UUID(str(self.tenant_id))
 
-    async def run_full_source_review(self, system_prompt: str, user_content: str) -> Any:
-        """N12: review the entire N2-safe source with provider-native capacity."""
-        return await self.run_extraction(system_prompt, user_content, full_source_analysis=True)
+    async def run_full_source_review(
+        self, system_prompt: str, user_content: str, *,
+        governed_request_id: str | None = None,
+    ) -> Any:
+        """N12 full source; optional budget key minted from a saved checkpoint."""
+        if governed_request_id is None:
+            return await self.run_extraction(
+                system_prompt, user_content, full_source_analysis=True,
+            )
+        return await self.run_extraction(
+            system_prompt, user_content, full_source_analysis=True,
+            governed_request_id=governed_request_id,
+        )
 
     async def run_extraction(
         self,
@@ -137,7 +147,11 @@ class AIService:
             )
             return parsed
 
-        if os.getenv("C2PRO_LEGACY_AI_ESCROW") == "1":
+        # Explicit per-call escrow opt-in must NEVER be ignored merely because
+        # the global migration flag remains OFF for unrelated graph nodes.
+        # Existing no-key calls keep their old route while the flag is OFF;
+        # with the flag ON they fail closed until given a saved request ID.
+        if governed_request_id is not None or os.getenv("C2PRO_LEGACY_AI_ESCROW") == "1":
             return await self._run_extraction_governed(
                 system_prompt, user_content,
                 full_source_analysis=full_source_analysis,
@@ -316,8 +330,13 @@ class AIService:
             "C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS"
             if full_source_analysis else "C2PRO_LEGACY_AI_MAX_OUTPUT_TOKENS"
         )
+        segment_setting = (
+            "C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS"
+            if full_source_analysis else None
+        )
         raw_cap, raw_output = os.getenv(reserve_setting), os.getenv(output_setting)
-        if not raw_cap or not raw_output:
+        raw_segments = os.getenv(segment_setting) if segment_setting else "1"
+        if not raw_cap or not raw_output or not raw_segments:
             raise AIServiceError(
                 f"Governed AI requires explicit {reserve_setting} and {output_setting}"
             )
@@ -326,9 +345,11 @@ class AIService:
 
             max_charge = Decimal(raw_cap)
             output_limit = int(raw_output)
+            segment_limit = int(raw_segments)
             if (
                 not max_charge.is_finite() or max_charge <= 0
                 or not 256 <= output_limit <= 128_000
+                or not 1 <= segment_limit <= 8
             ):
                 raise ValueError("nonpositive call limits")
         except (ValueError, ArithmeticError):
@@ -364,6 +385,7 @@ class AIService:
                 metadata={
                     "budgeted_legacy": True,
                     "full_source_analysis": full_source_analysis,
+                    "max_provider_segments": segment_limit,
                 },
             ))
 
