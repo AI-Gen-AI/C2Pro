@@ -28,6 +28,10 @@ require_complete_project_inventory=True)` obliga a:
 - Calcular el digest canónico incluyendo el modo de cobertura; las
   identidades seleccionadas y las verificadas como «inventario completo»
   no se confunden ni comparten el mismo digest.
+- `bind_clause_source` exige por defecto `complete_project_inventory_verified`
+  para emitir una identidad gobernada. El modo de **evaluación parcial de
+  documento** requiere `require_complete_project_inventory=False`
+  expresamente y no constituye aceptación de Coherence a nivel proyecto.
 - Mantener un puerto separado que rechace cláusulas cuya procedencia
   combina dos o más revisiones: **no crear un revision_id artificial**.
 
@@ -58,8 +62,12 @@ No hace llamadas a modelos, PostgreSQL ni API externa. Valida por
 reserva/SETTLED/UNKNOWN, saldo de tenant, límite mensual, costes conocidos
 por encima de la reserva, ventanas N4 y anomalías de tokens/costes.
 Devuelve solo un pequeño JSON de códigos y sumas sin texto documental,
-identificadores confidenciales ni transcripción. **Nunca `invoice_verified`
-true**. Si falta el artefacto o la contabilidad, el resultado es
+identificadores confidenciales ni transcripción. Un recibo duplicado
+queda marcado como inconsistente y **se excluye de las sumas** para no
+inflar artificialmente el coste. Si ambos ledgers aportan identificadores
+de solicitud del proveedor comparables, detecta su reutilización entre
+rutas; cuando la fuente no los aporta, el control NO puede certificar
+ausencia de duplicados inter-lane. **Nunca `invoice_verified` true**. Si falta el artefacto o la contabilidad, el resultado es
 `NOT_AUDITABLE`; si hay UNKNOWN, `PENDING_PROVIDER_RECONCILIATION`.
 También bloquea explícitamente un análisis N4 parcial, sin el número de
 recibos correspondiente a sus ventanas, o con reservas aún `RESERVED`.
@@ -86,6 +94,15 @@ SQLAlchemy rechazó una URL malformada; no se produjo el artefacto
 a un fichero inexistente, no inferir gasto real ni resultados semánticos.
 El responsable Frente A ha publicado versiones posteriores a esa SHA; la
 corrección y el nuevo ensayo pertenecen a Frente A/CORE.
+
+**Revisión independiente:** Codex evaluó la SHA `9072d7e1c...`
+mediante job `167bb4f5b9489129f8d0ebdc87d065ee` y emitió
+`CHANGES_REQUIRED` acotado al código real. Hallazgos: sumas infladas
+por recibos duplicados, falta de obligatoriedad por defecto del
+inventario completo y test adversarial de duplicación entre rutas.
+Se han incorporado los dos cambios de comportamiento y casos
+adversariales; **debe repetirse la revisión en la nueva SHA**. La
+comprobación del proveedor externo sigue fuera del alcance.
 
 ## 4. QA y limitaciones
 

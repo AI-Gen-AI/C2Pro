@@ -55,13 +55,22 @@ class CoherenceVerifiedProjectManifest:
     def bind_clause_source(
         self, *, document_id: UUID, revision_id: UUID,
         attempt_index: int = 0,
+        require_complete_project_inventory: bool = True,
     ) -> CoherenceCallIdentity:
-        """Return a single-revision authority only when its identity is pinned.
+        """Bind only a real revision; require full project inventory by default.
 
-        A synthesized merged clause with more than one origin MUST NOT be
-        passed to this method: an aggregate cannot pretend to originate
-        from one document. Caller still must attest clause/source alignment.
+        A single-document, intentionally partial assessment may explicitly
+        opt out, but is NOT evidence that the whole project was analyzed.
+        A synthesized merged clause cannot pretend to originate from one
+        document; caller must also attest clause/source alignment.
         """
+        if (
+            require_complete_project_inventory
+            and not self.complete_project_inventory_verified
+        ):
+            raise CoherenceEscrowIdentityError(
+                "complete project inventory required for governed binding"
+            )
         match = [
             member for member in self.members
             if member.document_id == document_id

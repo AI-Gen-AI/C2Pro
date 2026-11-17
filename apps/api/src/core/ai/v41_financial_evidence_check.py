@@ -90,6 +90,7 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
     spend = _ZERO
     holds = _ZERO
     keys: set[tuple[str, object]] = set()
+    provider_requests: dict[str, str] = {}
     for lane, rows, spent_field, key_field in (
         ("N4", n4_rows, "spent_usd", "window_ordinal"),
         ("LEGACY", legacy_rows, "billed_usd", "idempotency_key"),
@@ -101,10 +102,22 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
             key = item.get(key_field)
             if key is None or (lane == "LEGACY" and not str(key).strip()):
                 issues.append(lane + "_KEY_MISSING")
-            elif (lane, str(key)) in keys:
+                continue
+            if (lane, str(key)) in keys:
                 issues.append(lane + "_DUPLICATE_RECEIPT_KEY")
-            else:
-                keys.add((lane, str(key)))
+                continue
+            keys.add((lane, str(key)))
+            provider_id = item.get("provider_request_id")
+            if isinstance(provider_id, str) and provider_id.strip():
+                previous_lane = provider_requests.get(provider_id)
+                if previous_lane is not None:
+                    issues.append(
+                        "CROSS_LANE_PROVIDER_REQUEST_DUPLICATE"
+                        if previous_lane != lane
+                        else lane + "_PROVIDER_REQUEST_DUPLICATE"
+                    )
+                    continue
+                provider_requests[provider_id] = lane
             status = item.get("status")
             reserved = _d(item.get("reserved_usd"))
             billed = _d(item.get(spent_field))
@@ -182,6 +195,7 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
             "_MISMATCH", "_INVALID", "_WITHOUT_BILL",
             "_KEY_MISSING", "_DUPLICATE_RECEIPT_KEY", "_MISSING",
             "_HAS_BILL", "_WITH_TOKENS", "_INCOMPLETE",
+            "_DUPLICATE",
         )) or code in ("REPORT_NOT_OBJECT", "TENANT_BALANCE_MISSING")
     }
     consistent = not consistency_faults

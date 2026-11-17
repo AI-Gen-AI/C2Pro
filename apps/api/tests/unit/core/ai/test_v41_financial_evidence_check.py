@@ -120,6 +120,27 @@ def test_malformed_financial_evidence_is_detected(mutation, signal):
     assert result.status != "INTERNALLY_CONSISTENT_NOT_INVOICE_VERIFIED"
 
 
+def test_duplicate_receipts_are_excluded_from_reported_amounts():
+    e = _evidence()
+    e["n4"]["receipts"][1]["window_ordinal"] = 0
+    result = audit_v41_financial_evidence(e)
+    assert "N4_DUPLICATE_RECEIPT_KEY" in result.findings
+    assert result.status == "INTERNAL_LEDGER_INCONSISTENT"
+    assert result.confirmed_spend_usd == Decimal("0.20")
+    assert "TENANT_CONFIRMED_SPEND_MISMATCH" in result.findings
+
+
+def test_cross_lane_duplicate_provider_id_requires_comparable_identifiers():
+    e = _evidence()
+    e["n4"]["receipts"][0]["provider_request_id"] = "provider-call-1"
+    e["shared_ledger"][0]["provider_request_id"] = "provider-call-1"
+    result = audit_v41_financial_evidence(e)
+    assert "CROSS_LANE_PROVIDER_REQUEST_DUPLICATE" in result.findings
+    assert result.status == "INTERNAL_LEDGER_INCONSISTENT"
+    assert result.confirmed_spend_usd == Decimal("0.17")
+    assert "provider-call-1" not in str(result.sanitized_summary())
+
+
 def test_known_overage_is_not_unknown():
     e = _evidence()
     e["shared_ledger"][1].update({

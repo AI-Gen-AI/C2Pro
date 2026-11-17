@@ -98,10 +98,18 @@ async def test_two_real_revisions_are_pinned_and_bound_separately():
         )
         assert m1.manifest_sha256 == m2.manifest_sha256
         assert len(m1.members) == 2
+        with pytest.raises(CoherenceEscrowIdentityError, match="complete project"):
+            m1.bind_clause_source(
+                document_id=a.document_id, revision_id=a.revision_id,
+            )
         first = m1.bind_clause_source(
             document_id=a.document_id, revision_id=a.revision_id,
+            require_complete_project_inventory=False,
         )
-        second = m1.bind_clause_source(document_id=doc2,revision_id=rev2)
+        second = m1.bind_clause_source(
+            document_id=doc2, revision_id=rev2,
+            require_complete_project_inventory=False,
+        )
         assert first.source_sha256 == "a" * 64
         assert second.source_sha256 == "c" * 64
         assert first.document_id != second.document_id
@@ -112,7 +120,10 @@ async def test_two_real_revisions_are_pinned_and_bound_separately():
         with pytest.raises(CoherenceEscrowIdentityError, match="cross-document"):
             m1.refuse_multi_source_clause(sources=(r1, r2))
         with pytest.raises(CoherenceEscrowIdentityError, match="not in"):
-            m1.bind_clause_source(document_id=uuid4(),revision_id=uuid4())
+            m1.bind_clause_source(
+                document_id=uuid4(), revision_id=uuid4(),
+                require_complete_project_inventory=False,
+            )
     finally:
         await engine.dispose()
 
