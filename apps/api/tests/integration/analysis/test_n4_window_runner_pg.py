@@ -135,6 +135,9 @@ async def test_successful_multiwindow_resume_never_calls_provider_twice():
         )
         assert first.status == "COMPLETE"
         assert first.examined_windows == first.total_windows
+        assert first.settled_receipt_windows == first.total_windows
+        assert first.persisted_result_windows == first.total_windows
+        assert first.blocked_result_windows == 0
         assert first.total_windows > 1
         assert provider.calls == list(range(first.total_windows))
         balance = await _balances(a.tenant_id)
@@ -175,6 +178,9 @@ async def test_provider_timeout_preserves_unknown_charge_without_recall():
         assert partial.status == "PARTIAL"
         assert partial.examined_windows == 1
         assert partial.stopped_reason == "PROVIDER_RESULT_UNCERTAIN"
+        assert partial.settled_receipt_windows == 1
+        assert partial.persisted_result_windows == 1
+        assert partial.blocked_result_windows == 0
         assert provider.calls == [0, 1]
         balance = await _balances(a.tenant_id)
         assert Decimal(balance["spent_usd"]) == Decimal("0.020000")
@@ -205,6 +211,9 @@ async def test_malformed_output_is_charged_but_not_accepted_as_no_risk():
         assert partial.status == "PARTIAL"
         assert partial.examined_windows == 0
         assert partial.stopped_reason == "INVALID_PROVIDER_ENVELOPE"
+        assert partial.settled_receipt_windows == 1
+        assert partial.persisted_result_windows == 0
+        assert partial.blocked_result_windows == 0
         assert provider.calls == [0]
         balance = await _balances(a.tenant_id)
         assert Decimal(balance["spent_usd"]) == Decimal("0.020000")
@@ -224,6 +233,9 @@ async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
         )
         assert partial.status == "PARTIAL"
         assert partial.examined_windows == partial.total_windows - 1
+        assert partial.settled_receipt_windows == partial.total_windows
+        assert partial.persisted_result_windows == partial.total_windows
+        assert partial.blocked_result_windows == 1
         conn = await asyncpg.connect(_DSN)
         try:
             row = await conn.fetchrow("""

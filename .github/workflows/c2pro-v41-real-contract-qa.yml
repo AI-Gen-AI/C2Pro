@@ -1,0 +1,193 @@
+name: C2Pro V4.1 Real Contract QA (isolated)
+on:
+  workflow_dispatch:
+    inputs:
+      exact_sha:
+        description: "Full SHA of this isolated candidate"
+        type: string
+        required: true
+      stage:
+        description: "Offline real-source preflight only. Paid runs require new CORE authorization."
+        type: choice
+        required: true
+        options:
+          - preflight
+        default: preflight
+concurrency:
+  group: c2pro-v41-contract-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  source-preflight-only:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_name == 'qa/c2pro-v4-ab-n12-latch-integration-20261117' &&
+      github.event.inputs.stage == 'preflight' &&
+      github.event.inputs.exact_sha == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_preflight_test
+      JWT_SECRET_KEY: c2pro-v41-preflight-only-secret-xxxxxxxx
+      C2PRO_SOURCE_PDF_SHA256: 2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fail closed before any source work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = 'qa/c2pro-v4-ab-n12-latch-integration-20261117'
+          test "${GITHUB_SHA}" = "${{ github.event.inputs.exact_sha }}"
+          test "${C2PRO_SOURCE_PDF_SHA256}" = '2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06'
+          echo "Exact-SHA test-only preflight; NO provider credential injected."
+      - uses: ./.github/actions/setup-python-backend
+      - name: Fetch fixed public SEC filing PDF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/c2pro-v41-source"
+          curl --fail --proto '=https' --proto-redir '=https' -L --retry 2 --max-time 90 \
+            -A 'AI-GEN Public Regulatory Contract QA' \
+            -o "$RUNNER_TEMP/c2pro-v41-source/sec_8k.pdf" \
+            'https://s3.amazonaws.com/sec.irpass.cc/2934/0001640334-26-000032.pdf'
+          printf '%s  %s\n' "$C2PRO_SOURCE_PDF_SHA256" \
+            "$RUNNER_TEMP/c2pro-v41-source/sec_8k.pdf" | sha256sum --check --status
+      - name: Parse PDF N1 and anonymize N2 before planning all N4 windows
+        shell: bash
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api
+        run: |
+          python scripts/v41_contract_source_preflight.py \
+            --sec-pdf "$RUNNER_TEMP/c2pro-v41-source/sec_8k.pdf" \
+            --out-dir "$RUNNER_TEMP/c2pro-v41-source"
+      - name: Attach sanitized source coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: c2pro-v41-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/c2pro-v41-source/preflight_sanitized.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  n3-n4-n12-real-ai-budgeted:
+    # Explicitly disabled after the single paid pilot. CORE must re-authorize
+    # a new paid run and its exact SHA/budget in a separate reviewed change.
+    if: >-
+      false &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref_name == 'qa/c2pro-v4-ab-n12-latch-integration-20261117' &&
+      github.event.inputs.stage == 'real_ai_openai' &&
+      github.event.inputs.exact_sha == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ENVIRONMENT: test
+      C2PRO_AI_MOCK: "0"
+      C2PRO_EMBEDDINGS_MOCK: "1"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6380/0
+      JWT_SECRET_KEY: c2pro-v41-isolated-only-secret-xxxxxxxx
+      C2PRO_N12_CHECKPOINT_ESCROW: "1"
+      C2PRO_N12_REQUIRE_ESCROW: "1"
+      C2PRO_LEGACY_AI_RESERVE_USD: "0.50"
+      C2PRO_LEGACY_AI_MAX_OUTPUT_TOKENS: "1024"
+      C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD: "1.20"
+      C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS: "4096"
+      C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS: "2"
+      C2PRO_AI_GOVERNOR_MAX_CALLS: "30"
+      C2PRO_AI_GOVERNOR_MAX_USD: "5.0"
+      C2PRO_V41_PROVIDER: openai
+      C2PRO_V41_OPENAI_MAX_CALLS: "30"
+      C2PRO_V41_OPENAI_MAX_USD: "5.0"
+      C2PRO_AI_GOVERNOR_LEDGER: ${{ github.workspace }}/apps/api/c2pro-v41-real-ai-governor.jsonl
+      C2PRO_V41_REAL_AI_CONFIRM_SHA: ${{ github.event.inputs.exact_sha }}
+      OPENAI_API_KEY: ${{ secrets.S2_E2E_OPENAI_API_KEY }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Financial and SHA authorization before setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'qa/c2pro-v4-ab-n12-latch-integration-20261117'
+          test "$GITHUB_SHA" = "$C2PRO_V41_REAL_AI_CONFIRM_SHA"
+          test "${{ github.event.inputs.stage }}" = 'real_ai_openai'
+          test "$C2PRO_AI_MOCK" = "0"
+          test "$C2PRO_N12_CHECKPOINT_ESCROW" = "1"
+          test "$C2PRO_N12_REQUIRE_ESCROW" = "1"
+          test "$C2PRO_AI_GOVERNOR_MAX_CALLS" = "30"
+          test "$C2PRO_AI_GOVERNOR_MAX_USD" = "5.0"
+          test -n "$OPENAI_API_KEY" || { echo "::error::Dedicated S2 OpenAI key absent"; exit 2; }
+          test -f apps/api/scripts/real_ai_governor/sitecustomize.py
+          test "$C2PRO_V41_PROVIDER" = "openai"
+          test "$C2PRO_V41_OPENAI_MAX_CALLS" = "30"
+          test "$C2PRO_V41_OPENAI_MAX_USD" = "5.0"
+          echo "Exact SHA, dedicated OpenAI test key, 30-call / 5-USD governor ready."
+      - uses: ./.github/actions/setup-python-backend
+      - name: Bootstrap disposable PG/Redis with canonical migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          C2PRO_REDIS_TEST_PORT=6380 python apps/api/scripts/bootstrap_test_infra.py \
+            --start-services --require-redis --recreate-db
+      - name: Fetch authentic SEC filing, verify pinned SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/c2pro-v41-real"
+          curl --fail --proto '=https' --proto-redir '=https' -L --retry 2 --max-time 90 \
+            -A 'AI-GEN Public Regulatory Contract QA' \
+            -o "$RUNNER_TEMP/c2pro-v41-real/sec_8k.pdf" \
+            'https://s3.amazonaws.com/sec.irpass.cc/2934/0001640334-26-000032.pdf'
+          printf '%s  %s\n' \
+            '2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06' \
+            "$RUNNER_TEMP/c2pro-v41-real/sec_8k.pdf" | sha256sum --check --status
+      - name: Verify SDK hard spend/call governor active (no paid call)
+        shell: bash
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api:${{ github.workspace }}/apps/api/scripts:${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          set -euo pipefail
+          python - <<'PY2'
+          import os
+          from v41_openai_budgeted_adapter import (
+              OpenAIBudgetedTransport, MAX_CALLS, MAX_USD, MODEL,
+          )
+          assert MAX_CALLS == 30 and float(MAX_USD) == 5.0
+          provider = OpenAIBudgetedTransport(os.environ["OPENAI_API_KEY"])
+          assert provider.model_name == MODEL
+          assert provider.ledger.is_relative_to(os.environ["GITHUB_WORKSPACE"])
+          print("OPENAI_ONE_POST_GLOBAL_GOVERNOR_READY; no model call")
+          PY2
+      - name: N1/N2 genuine PDF plus governed real N3, 24 N4 windows and N12
+        shell: bash
+        working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api:${{ github.workspace }}/apps/api/scripts:${{ github.workspace }}/apps/api/scripts/real_ai_governor
+        run: |
+          set -euo pipefail
+          python scripts/v41_contract_real_ai_pilot.py \
+            --sec-pdf "$RUNNER_TEMP/c2pro-v41-real/sec_8k.pdf" \
+            --out-dir "$RUNNER_TEMP/c2pro-v41-real"
+      - name: Upload source, risk and financial evidence (sanitized)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: c2pro-v41-real-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/c2pro-v41-real/preflight_sanitized.json
+            ${{ runner.temp }}/c2pro-v41-real/real_analysis_evidence.json
+            ${{ github.workspace }}/apps/api/c2pro-v41-openai-governor.jsonl
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Dispose isolated infrastructure
+        if: always()
+        shell: bash
+        run: docker compose -f docker-compose.test.yml down -v || true

@@ -152,14 +152,16 @@ class TestRouterNodeThinDelegation:
         assert len(ai.calls) == 1
 
     @pytest.mark.asyncio
-    async def test_falls_back_via_use_case(self, monkeypatch) -> None:
+    async def test_model_failure_must_not_guess_contract_by_keywords(self, monkeypatch) -> None:
         from src.analysis.adapters.graph import nodes
 
         ai = _FakeAI(raises=RuntimeError())
         monkeypatch.setattr(nodes, "get_ai_service", lambda tenant_id: ai, raising=False)
 
         result = await nodes.router_node(_make_state(document_text="contract clauses"))
-        assert result["doc_type"] == "contract"
+        assert result["doc_type"] == "classification_unassessed"
+        assert result["node_results"][-1].status is NodeStatus.DEGRADED
+        assert result["node_results"][-1].degradation_reason == "classification_unassessed"
 
 
 # ── N12 critique_node ───────────────────────────────────────────────────────
@@ -1084,9 +1086,10 @@ class TestExtractorAIToolDelegation:
         self, monkeypatch
     ) -> None:
         """A failed ToolResult must not disappear as an untraceable empty N4."""
-        from src.analysis.adapters.graph import nodes
         import sys
         import types
+
+        from src.analysis.adapters.graph import nodes
 
         monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
         persisted: list[NodeResult] = []

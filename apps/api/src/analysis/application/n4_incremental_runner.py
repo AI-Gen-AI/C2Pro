@@ -67,6 +67,10 @@ class N4RunOutcome:
     examined_windows: int
     total_windows: int
     stopped_reason: str | None = None
+    # Financially settled is not the same as fully examined or HITL approved.
+    settled_receipt_windows: int = 0
+    persisted_result_windows: int = 0
+    blocked_result_windows: int = 0
 
 
 class N4IncrementalRunner:
@@ -119,11 +123,46 @@ class N4IncrementalRunner:
             current = await progress(
                 session, tenant_id=authority.tenant_id, run_id=run_id,
             )
+            # BLOCKED can represent a parsed, settled result awaiting
+            # external references. It can also represent failed parsing
+            # without a persisted result. Neither implies clean coverage.
+            evidence = (await session.execute(text("""
+                SELECT
+                  count(*) FILTER (WHERE settled) AS settled_windows,
+                  count(*) FILTER (
+                    WHERE settled AND committed_at IS NOT NULL
+                      AND findings_sha256 IS NOT NULL
+                  ) AS persisted_windows,
+                  count(*) FILTER (
+                    WHERE status='BLOCKED' AND settled
+                      AND committed_at IS NOT NULL
+                      AND findings_sha256 IS NOT NULL
+                  ) AS blocked_results
+                FROM (
+                  SELECT w.status, w.committed_at, w.findings_sha256,
+                         EXISTS (
+                           SELECT 1 FROM public.n4_usage_reservations r
+                           WHERE r.tenant_id = w.tenant_id
+                             AND r.run_id = w.run_id
+                             AND r.window_ordinal = w.ordinal
+                             AND r.status = 'SETTLED'
+                         ) AS settled
+                  FROM public.n4_extraction_windows w
+                  WHERE w.tenant_id = CAST(:tenant AS uuid)
+                    AND w.run_id = CAST(:run AS uuid)
+                ) AS window_receipts
+            """), {
+                "tenant": str(authority.tenant_id),
+                "run": str(run_id),
+            })).mappings().one()
             return N4RunOutcome(
                 run_id=run_id, status=str(current["status"]),
                 examined_windows=int(current["examined_windows"]),
                 total_windows=int(current["total_windows"]),
                 stopped_reason=stopped_reason,
+                settled_receipt_windows=int(evidence["settled_windows"]),
+                persisted_result_windows=int(evidence["persisted_windows"]),
+                blocked_result_windows=int(evidence["blocked_results"]),
             )
 
     async def _account_and_block(
