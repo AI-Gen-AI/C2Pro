@@ -5,7 +5,6 @@ synthesized. The AI response is a stub; never claim real-model performance.
 """
 from __future__ import annotations
 
-from typing import Any, TypedDict
 from uuid import uuid4
 
 import pytest
@@ -15,6 +14,7 @@ from langgraph.graph import END, StateGraph
 from psycopg_pool import AsyncConnectionPool
 
 from src.analysis.adapters.graph import nodes, workflow
+from src.analysis.adapters.graph.schema import ProjectState
 
 # The built-in test_engine fixture is bound to the isolated Ops job database,
 # including the project's canonical test-database ownership guard. No external
@@ -27,28 +27,6 @@ SOURCE = (
 )
 
 
-class N12State(TypedDict, total=False):
-    document_text: str
-    anonymized_text: str
-    tenant_id: str
-    project_id: str
-    document_id: str
-    document_revision_id: str
-    thread_id: str
-    retry_count: int
-    doc_type: str
-    extracted_risks: list[dict[str, Any]]
-    extracted_wbs: list[dict[str, Any]]
-    messages: list[Any]
-    node_results: list[Any]
-    confidence_score: float | None
-    human_approval_required: bool
-    critique_notes: str
-    stage: str
-    citations: list[dict[str, Any]]
-    citation_validation_passed: bool | None
-    risk_pre_hitl_evidence_passed: bool | None
-    risk_pre_hitl_evidence_rows: list[dict[str, Any]]
 
 
 def _state():
@@ -87,10 +65,10 @@ async def _no_temporal_gate(_state):
 
 
 def _graph_with_checkpointer(checkpointer):
-    g = StateGraph(N12State)
+    g = StateGraph(ProjectState)
 
-    async def _previous(s):
-        return {"stage": "n4_finished"}
+    async def _previous(s: ProjectState):
+        return {"doc_type": s["doc_type"]}
 
     g.add_node("extractor", _previous)
     g.add_node("critique", nodes.critique_node)
