@@ -157,6 +157,9 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
             saver = AsyncPostgresSaver(conn=pool)
             await saver.setup()
             result = await _invoke(saver)
+        if not service.governed_ids:
+            # Only technical booleans/step and node labels from synthetic test.
+            print("N12_CHECKPOINT_TEST_SNAPSHOT", checkpoint_errors)
         assert len(service.governed_ids) == 1, checkpoint_errors or [
             {
                 "node": str(getattr(n, "node", "")),
