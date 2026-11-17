@@ -59,16 +59,18 @@ async def _apply_scratch_migrations(engine):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure_kind", ("missing_reference", "malformed_output"))
 async def test_n4_progress_is_not_equivalent_to_billable_receipts(
-    test_engine, failure_kind,
+    test_engine, test_tenant, failure_kind,
 ):
     await _apply_scratch_migrations(test_engine)
-    authority = _new_authority(uuid4(), uuid4(), uuid4())
+    authority = _new_authority(test_tenant.id, uuid4(), uuid4())
     project_id = uuid4()
     dsn = test_engine.url.render_as_string(hide_password=False)
     dsn = dsn.replace("postgresql+asyncpg://", "postgresql://", 1)
     conn = await asyncpg.connect(dsn)
     try:
-        await _seed_identity(conn, authority=authority, project=project_id)
+        await _seed_identity(
+            conn, authority=authority, project=project_id, create_tenant=False,
+        )
         await _seed_caps(
             conn, authority.tenant_id, project_id,
             authority.document_id, "1.000000",
