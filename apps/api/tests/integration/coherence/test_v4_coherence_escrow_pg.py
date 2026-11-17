@@ -15,11 +15,13 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.coherence.adapters.ai.coherence_governed_wrapper import CoherenceCallIdentity
 from src.coherence.adapters.ai.coherence_llm_gate import CoherenceLlmGate
 from src.coherence.models import Clause
+from src.core.ai.budget_escrow_audit import audit_tenant_escrow
 from tests.integration.analysis.test_legacy_ai_service_escrow_pg import _patch_sessions
 from tests.integration.analysis.test_legacy_shared_reservations_pg import _seed
 
@@ -140,7 +142,7 @@ def _flags(monkeypatch):
     ("error", False, "UNKNOWN"),
     ("unknown", False, "UNKNOWN"),
     ("zero", False, "UNKNOWN"),
-    ("over_cap", False, "UNKNOWN"),
+    ("over_cap", False, "SETTLED"),
     ("malformed", False, "SETTLED"),
 ])
 async def test_coherence_escrow_real_postgres_before_call_and_replay(
@@ -178,12 +180,26 @@ async def test_coherence_escrow_real_postgres_before_call_and_replay(
         assert rows[0]["call_source"] == "COHERENCE_RULE"
         assert rows[0]["status"] == status
         if status == "SETTLED":
-            assert Decimal(rows[0]["billed_usd"]) == Decimal("0.12")
+            expected = Decimal("0.48") if mode == "over_cap" else Decimal("0.12")
+            assert Decimal(rows[0]["billed_usd"]) == expected
             assert rows[0]["input_tokens"] == 100
             assert rows[0]["output_tokens"] == 55
-            assert balances["ai_spend_current"] == pytest.approx(0.12)
+            assert balances["ai_spend_current"] == pytest.approx(float(expected))
             assert balances["ai_spend_reserved_usd"] == 0
-        else:
+        if mode == "over_cap":
+            async with AsyncSession(engine) as session, session.begin():
+                await session.execute(
+                    text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                    {"tenant": tenant},
+                )
+                report = await audit_tenant_escrow(
+                    session, tenant_id=authority.tenant_id,
+                )
+                assert report.financial_reconciliation_passed
+                assert "PROVIDER_CHARGE_EXCEEDED_RESERVATION" in report.findings
+                assert report.legacy.settled_overage_count == 1
+                assert report.legacy.settled_overage_usd == Decimal("0.18")
+        if status != "SETTLED":
             assert rows[0]["billed_usd"] is None
             assert Decimal(balances["ai_spend_reserved_usd"]) == Decimal("0.30")
             assert balances["ai_spend_current"] == 0
@@ -217,3 +233,91 @@ async def test_coherence_context_wrong_tenant_refuses_before_reservation(
     assert provider.requests == []
     rows, _ = await _ledger(authority)
     assert rows == []
+
+
+
+async def test_n4_n12_and_coherence_compete_for_same_tenant_cap(
+    monkeypatch,
+):
+    """N4 and N12 holds deny Coherence until real receipt releases credit."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.coherence.adapters.ai.coherence_source_manifest import (
+        CoherenceRevisionRef,
+        verify_coherence_project_manifest,
+    )
+    from src.core.ai.budget_escrow_audit import audit_tenant_escrow
+    from tests.integration.analysis.test_budget_escrow_audit_pg import _n4_hold
+    from tests.integration.analysis.test_legacy_shared_reservations_pg import (
+        _hold,
+        _settle,
+    )
+
+    authority, project = await _seed(budget=0.55)
+    engine = create_async_engine(
+        _DSN.replace("postgresql://", "postgresql+asyncpg://", 1),
+    )
+    _patch_sessions(monkeypatch, engine)
+    _flags(monkeypatch)
+    monkeypatch.setenv("C2PRO_COHERENCE_RESERVE_USD", "0.20")
+    provider = StubProvider(mode="negative")
+    try:
+        await _n4_hold(engine, authority, project, key="combined-n4-budget-001")
+        n12 = await _hold(
+            engine, authority.tenant_id, "combined-n12-budget-001", "0.20",
+        )
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :t, true)"),
+                {"t": str(authority.tenant_id)},
+            )
+            manifest = await verify_coherence_project_manifest(
+                session, tenant_id=authority.tenant_id,
+                project_id=project, run_id=uuid4(),
+                revisions=(CoherenceRevisionRef(
+                    authority.document_id, authority.revision_id,
+                ),),
+            )
+        scoped_identity = manifest.bind_clause_source(
+            document_id=authority.document_id,
+            revision_id=authority.revision_id,
+        )
+        assert scoped_identity.source_sha256 == "a" * 64
+        gate = _gate(scoped_identity, provider)
+        with pytest.raises(RuntimeError, match="usage unverified"):
+            await gate.evaluate_rule(
+                str(authority.tenant_id), "R-SCOPE-CLARITY-01", _clause(),
+            )
+        assert provider.requests == []
+        rows, budget_before = await _ledger(authority)
+        assert len(rows) == 1
+        assert budget_before["ai_spend_reserved_usd"] == Decimal("0.45")
+        assert await _settle(
+            engine, authority.tenant_id, n12.reservation_id, "0.08",
+        ) == "SETTLED"
+        decision = await gate.evaluate_rule(
+            str(authority.tenant_id), "R-SCOPE-CLARITY-01", _clause(),
+        )
+        assert decision.state == "evaluated"
+        assert decision.finding is None
+        assert decision.cost_charged_usd == pytest.approx(0.12)
+        assert len(provider.requests) == 1
+        rows, balance = await _ledger(authority)
+        assert len(rows) == 2
+        assert balance["ai_spend_reserved_usd"] == Decimal("0.25")
+        assert balance["ai_spend_current"] == pytest.approx(0.20)
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                text("SELECT set_config('app.current_tenant',:t,true)"),
+                {"t": str(authority.tenant_id)},
+            )
+            snapshot = await audit_tenant_escrow(
+                session, tenant_id=authority.tenant_id,
+            )
+            assert snapshot.financial_reconciliation_passed
+            assert snapshot.confirmed_spend_usd == Decimal("0.20")
+            assert snapshot.n4.reserved_usd == Decimal("0.25")
+            assert snapshot.legacy.reserved_usd == 0
+    finally:
+        await engine.dispose()

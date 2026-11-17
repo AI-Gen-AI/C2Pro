@@ -137,21 +137,23 @@ class BudgetedCoherenceWrapper:
             tokens_in = getattr(response, "input_tokens", None)
             tokens_out = getattr(response, "output_tokens", None)
             model = getattr(response, "model_used", None)
-            # Provider exceeded the approved reservation or emitted native
-            # continuations: preserve UNKNOWN and refuse semantic results.
+            # UNKNOWN is for unverifiable bills, never for a KNOWN overage.
+            # Return a finite, metered response to the shared ledger first:
+            # it will transfer the exact bill to confirmed tenant spend,
+            # even when that exceeds the estimated reserve. Semantic
+            # acceptance is separately checked after the settlement.
             try:
                 charged = Decimal(str(response.cost_usd))
-                over_cap = not charged.is_finite() or charged > self.cap or charged < 0
+                unverified = not charged.is_finite() or charged < 0
             except (ValueError, TypeError, InvalidOperation, AttributeError):
-                over_cap = True
-            if over_cap or getattr(response, "continuations", 0):
+                unverified = True
+            if unverified:
                 err = CoherenceUnverifiedResponse(
-                    "Coherence usage exceeded reserved cap or segments"
+                    "Coherence provider amount cannot be verified"
                 )
                 err.input_tokens = tokens_in
                 err.output_tokens = tokens_out
                 err.model = model
-                # intentionally no cost_usd: keep reservation UNKNOWN
                 raise err
             return response
 
@@ -160,6 +162,17 @@ class BudgetedCoherenceWrapper:
             source="COHERENCE_RULE",
             max_charge_usd=self.cap, invoke=invoke,
         )
+        # The actual known cost has already been reconciled in PostgreSQL,
+        # including if it is above the estimated reservation. Reject a
+        # noncompliant provider response *after* the bill is booked. No paid
+        # replay can be issued to hide the overage.
+        if (
+            Decimal(str(response.cost_usd)) > self.cap
+            or getattr(response, "continuations", 0)
+        ):
+            raise CoherenceUnverifiedResponse(
+                "Coherence billed above reserved cap or exceeded segment policy"
+            )
         # Escrow was reconciled, but malformed JSON must NOT count as an
         # evaluated rule. The upstream adapter catches and converts errors;
         # strict-mode Gate checks its UNKNOWN receipt and fails closed.

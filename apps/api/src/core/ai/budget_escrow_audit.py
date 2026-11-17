@@ -31,6 +31,8 @@ class PendingLedger:
     stale_reserved_count: int
     stale_unknown_count: int
     oldest_held_at: str | None
+    settled_overage_count: int
+    settled_overage_usd: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +64,8 @@ class TenantBudgetAudit:
             self.n4.unknown_count > 0 or self.legacy.unknown_count > 0
             or self.n4.stale_reserved_count > 0
             or self.legacy.stale_reserved_count > 0
+            or self.n4.settled_overage_count > 0
+            or self.legacy.settled_overage_count > 0
         )
 
 
@@ -80,6 +84,12 @@ async def _pending(
         raise ValueError("only the two audited usage ledgers are supported")
     # The actual hold is fixed and must remain funded even after an UNKNOWN
     # provider result. Settled rows have already transferred into spend.
+    # Compare settled known usage to the original estimate independently
+    # of tenant's monthly cap: a $0.48 charge vs $0.30 hold must be visible
+    # even if the tenant still has credit available.
+    actual_column = (
+        "spent_usd" if table == "n4_usage_reservations" else "billed_usd"
+    )
     row = (await session.execute(text(f"""
         SELECT
           COALESCE(sum(reserved_usd)
@@ -98,7 +108,15 @@ async def _pending(
           ) AS stale_unknown,
           min(created_at) FILTER (
               WHERE status IN ('RESERVED','UNKNOWN')
-          ) AS oldest_held
+          ) AS oldest_held,
+          count(*) FILTER (
+              WHERE status='SETTLED'
+                AND {actual_column} > reserved_usd
+          ) AS overage_count,
+          COALESCE(sum({actual_column} - reserved_usd) FILTER (
+              WHERE status='SETTLED'
+                AND {actual_column} > reserved_usd
+          ), 0) AS overage_usd
         FROM public.{table}
         WHERE tenant_id = CAST(:tenant AS uuid)
     """), {"tenant": str(tenant), "age": stale_after_hours})).mappings().one()
@@ -112,6 +130,8 @@ async def _pending(
         oldest_held_at=(
             row["oldest_held"].isoformat() if row["oldest_held"] else None
         ),
+        settled_overage_count=int(row["overage_count"]),
+        settled_overage_usd=_decimal(row["overage_usd"]),
     )
 
 
@@ -171,6 +191,8 @@ async def audit_tenant_escrow(
     if actual + spent > cap:
         # Overage may be an authentic provider charge, not corruption.
         findings.append("CAP_EXCEEDED_REQUIRES_REVIEW")
+    if n4.settled_overage_count or legacy.settled_overage_count:
+        findings.append("PROVIDER_CHARGE_EXCEEDED_RESERVATION")
     if n4.unknown_count or legacy.unknown_count:
         findings.append("UNRECONCILED_PROVIDER_USAGE")
     if n4.stale_reserved_count or legacy.stale_reserved_count:
