@@ -59,6 +59,14 @@ def score_risk_dimension(
             confidence=confidence,
             missing_data=[f"{withheld_risks} risk proposal(s) withheld: evidence not verified"],
         )
+    if not risks and not critique_assessed:
+        # A zero-risk *clean* assessment requires completed critique (N12).
+        # Keep established risks scored in other branches; an unfinished
+        # critique cannot manufacture VERIFIED clean evidence.
+        return _unknown_signal(
+            confidence=min(confidence, _UNASSESSED_CRITIQUE_CONFIDENCE_CAP),
+            missing_data=["critique not assessed", "clean risk assessment not established"],
+        )
     if not risks:
         score = _CLEAN_ASSESSMENT_SCORE
         return _qualify(HealthSignal(

@@ -1,0 +1,154 @@
+{
+  "_provenance": {
+    "origin": "single-real-postgresql16-scratch-run",
+    "pg_dataset": "disposable-c2pro_front_b_s7_triplet_20261117_test",
+    "provider": "stub-no-external-AI",
+    "report_type": "non-production-QA-evidence",
+    "test": "apps/api/tests/integration/document_flow/test_s7_triplet_four_family_wbs_evidence_pg.py"
+  },
+  "alert_evidence_bindings": [
+    {
+      "economic_discrepancy_key": null,
+      "economic_impact_accounting": null,
+      "original_row_binding": "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED",
+      "related_rule_codes": [],
+      "rule_id": "ADV-SCHDEAD-PROVISIONAL",
+      "severity": "medium",
+      "severity_qualification": null,
+      "source_clause_id": null,
+      "structured_sources": [
+        {
+          "blob_sha256": "7b05eb8c4c86e040ffea4010ffa8bfbdab7a43d011b04aaea6dc815d0ce37fee",
+          "document_id": "bade3a00-4b56-4382-ab2d-f454e8158abd",
+          "family": "schedule",
+          "revision_id": "b7aef94f-6cfa-4d42-97f2-1f79fe6ca538",
+          "source_locator": "Plan!4"
+        }
+      ]
+    },
+    {
+      "economic_discrepancy_key": null,
+      "economic_impact_accounting": null,
+      "original_row_binding": null,
+      "related_rule_codes": [],
+      "rule_id": "AUDIT_INCOMPLETE",
+      "severity": "medium",
+      "severity_qualification": null,
+      "source_clause_id": null,
+      "structured_sources": []
+    },
+    {
+      "economic_discrepancy_key": "CONTRACT_BUDGET:5b7a9f26c110ce87853b1e5e08d115c0aae56ce38a2b6c31926cd4d1f7fe364d",
+      "economic_impact_accounting": "ONE_DELTA_TWO_RELATED_ALERTS",
+      "original_row_binding": "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED",
+      "related_rule_codes": [
+        "DET-CRS-CONBUD",
+        "DET-CRS-NEGMARGIN"
+      ],
+      "rule_id": "DET-CRS-CONBUD",
+      "severity": "critical",
+      "severity_qualification": "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS",
+      "source_clause_id": null,
+      "structured_sources": [
+        {
+          "blob_sha256": "aabcbf422887f5eaae0a4846019403d6f90cdf451e0fdc649487f9cba08847ac",
+          "document_id": "6a73c0af-e3e4-4050-b0da-be47f84dc299",
+          "family": "budget",
+          "revision_id": "e1d5b5be-9f25-40d3-b9cf-303588f128ac",
+          "source_locator": "Presupuesto!5"
+        }
+      ]
+    },
+    {
+      "economic_discrepancy_key": "CONTRACT_BUDGET:5b7a9f26c110ce87853b1e5e08d115c0aae56ce38a2b6c31926cd4d1f7fe364d",
+      "economic_impact_accounting": "ONE_DELTA_TWO_RELATED_ALERTS",
+      "original_row_binding": "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED",
+      "related_rule_codes": [
+        "DET-CRS-CONBUD",
+        "DET-CRS-NEGMARGIN"
+      ],
+      "rule_id": "DET-CRS-NEGMARGIN",
+      "severity": "critical",
+      "severity_qualification": "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS",
+      "source_clause_id": null,
+      "structured_sources": [
+        {
+          "blob_sha256": "aabcbf422887f5eaae0a4846019403d6f90cdf451e0fdc649487f9cba08847ac",
+          "document_id": "6a73c0af-e3e4-4050-b0da-be47f84dc299",
+          "family": "budget",
+          "revision_id": "e1d5b5be-9f25-40d3-b9cf-303588f128ac",
+          "source_locator": "Presupuesto!5"
+        }
+      ]
+    }
+  ],
+  "alert_rules": [
+    "ADV-SCHDEAD-PROVISIONAL",
+    "AUDIT_INCOMPLETE",
+    "DET-CRS-CONBUD",
+    "DET-CRS-NEGMARGIN"
+  ],
+  "coherence_score": null,
+  "documents": [
+    {
+      "document_id": "6a73c0af-e3e4-4050-b0da-be47f84dc299",
+      "filename": "triplet-budget.xlsx",
+      "revision_id": "e1d5b5be-9f25-40d3-b9cf-303588f128ac",
+      "sha256": "aabcbf422887f5eaae0a4846019403d6f90cdf451e0fdc649487f9cba08847ac"
+    },
+    {
+      "document_id": "6f84d9e0-1b6a-4cc2-b54d-d31b2ba674c7",
+      "filename": "triplet-contract.docx",
+      "revision_id": "a4fb1014-f255-475c-84fc-9c1055e5aec1",
+      "sha256": "5d85acdfc54601e174383361acbb5ef4126a9d1a0b181d3bebeeb82371ff7c4a"
+    },
+    {
+      "document_id": "bade3a00-4b56-4382-ab2d-f454e8158abd",
+      "filename": "triplet-schedule.xlsx",
+      "revision_id": "b7aef94f-6cfa-4d42-97f2-1f79fe6ca538",
+      "sha256": "7b05eb8c4c86e040ffea4010ffa8bfbdab7a43d011b04aaea6dc815d0ce37fee"
+    },
+    {
+      "document_id": "ea08243a-edf3-491e-8d2c-1fa1a7410e3c",
+      "filename": "triplet-specification.docx",
+      "revision_id": "9bc975d4-2813-49c8-9528-78ea474df40b",
+      "sha256": "41120f87b1e7e1710396f1388e6ecff78f0eb64582de802077ccb27196dc11a0"
+    }
+  ],
+  "economic_alert_count": 2,
+  "economic_single_impact_raw_penalty": 1.0,
+  "economic_unique_discrepancy_count": 1,
+  "project_id": "6a968c3e-35ae-4f44-8f27-19e0a060bb9f",
+  "risk_advisory_provisional": true,
+  "scope": "disposable-postgresql-real-parser-stub-provider",
+  "source_row_locators": {
+    "budget": [
+      "Presupuesto!2",
+      "Presupuesto!3",
+      "Presupuesto!4",
+      "Presupuesto!5"
+    ],
+    "schedule": [
+      "Plan!2",
+      "Plan!3",
+      "Plan!4"
+    ]
+  },
+  "technical_coverage": "NOT_ASSESSED",
+  "technical_sources": [
+    {
+      "clause_code": "4.1.2",
+      "revision_id": "9bc975d4-2813-49c8-9528-78ea474df40b",
+      "verification_status": "unverified"
+    },
+    {
+      "clause_code": "4.2",
+      "revision_id": "9bc975d4-2813-49c8-9528-78ea474df40b",
+      "verification_status": "unverified"
+    }
+  ],
+  "tenant_id": "43801999-9f29-44ab-b5d4-bcdc184d66dc",
+  "wbs_canonical_nodes": 2,
+  "wbs_links_approved": "NOT_ATTESTED",
+  "wbs_unchanged": true
+}

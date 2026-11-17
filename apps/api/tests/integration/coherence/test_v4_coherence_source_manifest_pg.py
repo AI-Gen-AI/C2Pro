@@ -60,9 +60,13 @@ def _engine():
 
 async def _manifest(
     engine, *, tenant, project, run_id, revisions,
-    current=True, scoped=True,
+    current=True, scoped=True, strict=False, stable_snapshot=True,
 ):
     async with AsyncSession(engine) as session, session.begin():
+        if strict and stable_snapshot:
+            await session.execute(text(
+                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+            ))
         if scoped:
             await session.execute(
                 text("SELECT set_config('app.current_tenant',:t,true)"),
@@ -72,6 +76,7 @@ async def _manifest(
             session, tenant_id=tenant, project_id=project,
             run_id=run_id, revisions=tuple(revisions),
             require_current=current,
+            require_complete_project_inventory=strict,
         )
 
 
@@ -93,10 +98,18 @@ async def test_two_real_revisions_are_pinned_and_bound_separately():
         )
         assert m1.manifest_sha256 == m2.manifest_sha256
         assert len(m1.members) == 2
+        with pytest.raises(CoherenceEscrowIdentityError, match="complete project"):
+            m1.bind_clause_source(
+                document_id=a.document_id, revision_id=a.revision_id,
+            )
         first = m1.bind_clause_source(
             document_id=a.document_id, revision_id=a.revision_id,
+            require_complete_project_inventory=False,
         )
-        second = m1.bind_clause_source(document_id=doc2,revision_id=rev2)
+        second = m1.bind_clause_source(
+            document_id=doc2, revision_id=rev2,
+            require_complete_project_inventory=False,
+        )
         assert first.source_sha256 == "a" * 64
         assert second.source_sha256 == "c" * 64
         assert first.document_id != second.document_id
@@ -107,7 +120,10 @@ async def test_two_real_revisions_are_pinned_and_bound_separately():
         with pytest.raises(CoherenceEscrowIdentityError, match="cross-document"):
             m1.refuse_multi_source_clause(sources=(r1, r2))
         with pytest.raises(CoherenceEscrowIdentityError, match="not in"):
-            m1.bind_clause_source(document_id=uuid4(),revision_id=uuid4())
+            m1.bind_clause_source(
+                document_id=uuid4(), revision_id=uuid4(),
+                require_complete_project_inventory=False,
+            )
     finally:
         await engine.dispose()
 
@@ -188,6 +204,81 @@ async def test_empty_or_duplicate_manifest_refused(bad):
             await _manifest(
                 engine,tenant=a.tenant_id,project=project,
                 run_id=uuid4(),revisions=bad,
+            )
+    finally:
+        await engine.dispose()
+
+
+
+async def test_strict_project_inventory_passes_only_full_current_snapshot():
+    a, project = await _seed()
+    doc2, rev2 = await _seed_second_doc(a, project)
+    engine = _engine()
+    first = CoherenceRevisionRef(a.document_id, a.revision_id)
+    second = CoherenceRevisionRef(doc2, rev2)
+    try:
+        selected = await _manifest(
+            engine, tenant=a.tenant_id, project=project,
+            run_id=uuid4(), revisions=(first,), strict=False,
+        )
+        assert selected.complete_project_inventory_verified is False
+        with pytest.raises(CoherenceEscrowIdentityError, match="do not cover"):
+            await _manifest(
+                engine, tenant=a.tenant_id, project=project,
+                run_id=uuid4(), revisions=(first,), strict=True,
+            )
+        complete = await _manifest(
+            engine, tenant=a.tenant_id, project=project,
+            run_id=selected.run_id, revisions=(second, first), strict=True,
+        )
+        assert complete.complete_project_inventory_verified is True
+        assert complete.manifest_sha256 != selected.manifest_sha256
+        assert len(complete.members) == 2
+    finally:
+        await engine.dispose()
+
+
+async def test_strict_project_inventory_rejects_document_without_revision():
+    a, project = await _seed()
+    missing_doc = uuid4()
+    conn = await asyncpg.connect(_DSN)
+    try:
+        await conn.execute(
+            "SELECT set_config('app.current_tenant',$1,false)",
+            str(a.tenant_id),
+        )
+        await conn.execute("""
+            INSERT INTO public.documents
+              (id,project_id,tenant_id,filename,document_type)
+            VALUES ($1,$2,$3,'missing-revision.pdf','contract')
+        """, missing_doc, project, a.tenant_id)
+    finally:
+        await conn.close()
+    engine = _engine()
+    try:
+        with pytest.raises(CoherenceEscrowIdentityError, match="do not cover"):
+            await _manifest(
+                engine, tenant=a.tenant_id, project=project,
+                run_id=uuid4(), strict=True,
+                revisions=(CoherenceRevisionRef(
+                    a.document_id, a.revision_id,
+                ),),
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_strict_inventory_rejects_read_committed_snapshot():
+    a, project = await _seed()
+    engine = _engine()
+    try:
+        with pytest.raises(CoherenceEscrowIdentityError, match="stable snapshot"):
+            await _manifest(
+                engine, tenant=a.tenant_id, project=project,
+                run_id=uuid4(), strict=True, stable_snapshot=False,
+                revisions=(CoherenceRevisionRef(
+                    a.document_id, a.revision_id,
+                ),),
             )
     finally:
         await engine.dispose()

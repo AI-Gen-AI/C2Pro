@@ -41,6 +41,10 @@ from src.coherence.feature_flags import (
 from src.coherence.graph.nodes import v1_unassessed_reasons
 from src.coherence.models import structured_source_refs
 from src.coherence.services.alerts.generator import AlertGeneratorService
+from src.coherence.structured_source_binding import (
+    annotate_related_economic_alerts,
+    resolve_alert_original_rows,
+)
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.database import get_session
@@ -731,6 +735,11 @@ def _coherence_alert_to_create(
         ]
         if pointers:
             detection_evidence["structured_sources"] = pointers
+        # The contract side is separately sourced. Original identity is
+        # checked against canonical current clause+revision before COMMIT.
+        contract_source = getattr(evidence, "contract_source", None)
+        if isinstance(contract_source, dict):
+            detection_evidence["contract_source"] = dict(contract_source)
     affected_entities: dict[str, Any] = {}
     if verified_document_ids:
         affected_entities["documents"] = verified_document_ids
@@ -758,6 +767,9 @@ def _coherence_alert_to_create(
         alert_metadata={
             "source": "coherence_evaluate",
             "detection_evidence": detection_evidence,
+            **({"economic_discrepancy_key": evidence.economic_discrepancy_key,
+                "severity_qualification": "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS"}
+               if evidence is not None and evidence.economic_discrepancy_key else {}),
         },
     )
 
@@ -969,6 +981,12 @@ async def _mirror_coherence_alerts_to_alerts_table(
         )
         for alert in alerts
     ]
+    # Resolve original XLSX rows against CURRENT tenant-scoped revisions.
+    # This is source navigation only: never grants clause/HITL approval.
+    await resolve_alert_original_rows(
+        db, tenant_id=tenant_id, project_id=project_id, payloads=payloads,
+    )
+    annotate_related_economic_alerts(payloads)
     service = AlertGeneratorService(SqlAlchemyAlertRepository(db))
     records = await service.process_violations(
         project_id=project_id,

@@ -1490,6 +1490,12 @@ def _provisional_deviation_alert(item: Any, clauses: list[Clause]) -> Alert:
     )
 
 
+def _economic_impact_key(signal: FindingSignal) -> str | None:
+    from src.coherence.economic_signal_dedup import economic_discrepancy_key
+
+    return economic_discrepancy_key(signal)
+
+
 def _signal_to_alert(signal: FindingSignal) -> Alert:
     """Convert a FindingSignal to a legacy Alert object."""
     # Map coherence category to alert category
@@ -1511,6 +1517,11 @@ def _signal_to_alert(signal: FindingSignal) -> Alert:
         message=signal.evidence_summary,
         evidence=Evidence(
             source_clause_id=signal.clause_id,
+            economic_discrepancy_key=_economic_impact_key(signal),
+            contract_source=(
+                (signal.raw_data.get("evidence") or {}).get("contract_source")
+                if isinstance(signal.raw_data.get("evidence"), dict) else None
+            ),
             claim=signal.evidence_summary,
             quote=signal.quote or "",
             structured_sources=structured_source_refs(
@@ -1566,6 +1577,9 @@ def _build_category_breakdown(
     set is upgraded to ``budget_throttled`` instead — surfacing the distinction
     between "no document / no evidence" and "your analysis budget cap was hit".
     """
+    # Canaries see one independent impact for two related rule alerts.
+    # format_output retains both original alerts for human review.
+    signals = ScoringService()._distinct_economic_impacts(signals)
     breakdown: list[CategoryBreakdown] = []
     # CROSS-category signals are not bucketed into the 6 canonical categories
     # but still count toward total_impact (the impact_percentage denominator).

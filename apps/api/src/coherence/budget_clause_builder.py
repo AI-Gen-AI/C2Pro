@@ -44,6 +44,74 @@ _CONTRACT_TOTAL_SQL = text(f"""
 """)
 
 
+# Resolve the original contract side of the SAME selected amount. Do not use
+# an arbitrary UUID when two distinct canonical contracts share that value.
+# In that situation keep the numerical discrepancy but disable deduplication.
+_CONTRACT_TOTAL_SOURCE_SQL = text(f"""
+    SELECT c.document_id::text AS document_id,
+           cur.revision_id::text AS revision_id,
+           r.blob_hash AS blob_sha256, c.id::text AS source_locator
+    FROM clauses c
+    JOIN documents d ON c.document_id = d.id
+    JOIN projects p ON d.project_id = p.id
+    CROSS JOIN LATERAL {current_revision_lateral("c.document_id", "c.tenant_id")} AS cur
+    JOIN document_revisions r
+      ON r.revision_id=cur.revision_id AND r.document_id=c.document_id
+     AND r.tenant_id=c.tenant_id AND r.project_id=d.project_id
+    WHERE d.project_id = CAST(:project_id AS uuid)
+      AND p.tenant_id = CAST(:tenant_id AS uuid)
+      AND d.document_type::text = 'contract'
+      AND c.extracted_entities ? 'total_amount'
+      AND (c.extracted_entities->>'total_amount')::numeric = CAST(:amount AS numeric)
+      AND {canonical_clause_in_current_scope("c", "cur")}
+      AND r.valid_to IS NULL
+    ORDER BY c.document_id, cur.revision_id, c.id
+    LIMIT 65
+""")
+
+
+async def load_contract_total_source(
+    db: AsyncSession,
+    project_id: UUID,
+    tenant_id: UUID,
+    contract_total: float,
+) -> dict[str, str] | None:
+    """One authentic contract document+revision+SHA, never inferred from price.
+
+    65+ matching clauses or multiple distinct contract documents/revisions
+    are ambiguous. No dedup is authorized in these cases.
+    """
+    rows = (
+        (
+            await db.execute(
+                _CONTRACT_TOTAL_SOURCE_SQL,
+                {
+                    "project_id": str(project_id),
+                    "tenant_id": str(tenant_id),
+                    "amount": contract_total,
+                },
+            )
+        )
+        .mappings()
+        .all()
+    )
+    if not rows or len(rows) >= 65:
+        return None
+    identities = {(row["document_id"], row["revision_id"], row["blob_sha256"]) for row in rows}
+    if len(identities) != 1:
+        return None
+    document_id, revision_id, sha = next(iter(identities))
+    if not (document_id and revision_id and isinstance(sha, str) and len(sha) == 64):
+        return None
+    return {
+        "family": "contract",
+        "document_id": str(document_id),
+        "revision_id": str(revision_id),
+        "blob_sha256": sha,
+        "source_locator": str(rows[0]["source_locator"]),
+    }
+
+
 async def load_contract_total(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> float | None:
     """The largest stated contract total among the project's current contract clauses."""
     result = await db.execute(
@@ -156,6 +224,11 @@ async def build_budget_clauses(
     contract_total = await load_contract_total(db, project_id, tenant_id)
     if contract_total is not None:
         data["contract_total"] = contract_total
+        authenticated_source = await load_contract_total_source(
+            db, project_id, tenant_id, contract_total
+        )
+        if authenticated_source is not None:
+            data["contract_total_source"] = authenticated_source
         # Each side keeps its own denomination: one shared "currency" key on this
         # single clause could never reveal a EUR contract vs a USD budget.
         budget_currencies = _currency_list(declaration[1] if declaration is not None else None)

@@ -279,9 +279,12 @@ async def test_n4_n12_and_coherence_compete_for_same_tenant_cap(
                     authority.document_id, authority.revision_id,
                 ),),
             )
+        # This test only asserts finance under an explicitly selected
+        # document, not project-wide source completeness.
         scoped_identity = manifest.bind_clause_source(
             document_id=authority.document_id,
             revision_id=authority.revision_id,
+            require_complete_project_inventory=False,
         )
         assert scoped_identity.source_sha256 == "a" * 64
         gate = _gate(scoped_identity, provider)

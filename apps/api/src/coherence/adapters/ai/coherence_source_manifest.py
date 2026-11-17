@@ -50,17 +50,27 @@ class CoherenceVerifiedProjectManifest:
     run_id: UUID
     members: tuple[CoherenceManifestMember, ...]
     manifest_sha256: str
+    complete_project_inventory_verified: bool = False
 
     def bind_clause_source(
         self, *, document_id: UUID, revision_id: UUID,
         attempt_index: int = 0,
+        require_complete_project_inventory: bool = True,
     ) -> CoherenceCallIdentity:
-        """Return a single-revision authority only when its identity is pinned.
+        """Bind only a real revision; require full project inventory by default.
 
-        A synthesized merged clause with more than one origin MUST NOT be
-        passed to this method: an aggregate cannot pretend to originate
-        from one document. Caller still must attest clause/source alignment.
+        A single-document, intentionally partial assessment may explicitly
+        opt out, but is NOT evidence that the whole project was analyzed.
+        A synthesized merged clause cannot pretend to originate from one
+        document; caller must also attest clause/source alignment.
         """
+        if (
+            require_complete_project_inventory
+            and not self.complete_project_inventory_verified
+        ):
+            raise CoherenceEscrowIdentityError(
+                "complete project inventory required for governed binding"
+            )
         match = [
             member for member in self.members
             if member.document_id == document_id
@@ -100,6 +110,7 @@ async def verify_coherence_project_manifest(
     *, tenant_id: UUID, project_id: UUID, run_id: UUID,
     revisions: tuple[CoherenceRevisionRef, ...],
     require_current: bool = True,
+    require_complete_project_inventory: bool = False,
 ) -> CoherenceVerifiedProjectManifest:
     """Read every required lineage record under the tenant-scoped transaction.
 
@@ -131,6 +142,46 @@ async def verify_coherence_project_manifest(
         raise CoherenceEscrowIdentityError(
             "tenant must be explicitly pinned before source verification"
         )
+
+    if require_complete_project_inventory:
+        # A complete-project declaration requires one stable database
+        # snapshot. Under READ COMMITTED, a new document could appear
+        # halfway through this inventory read, creating a false PASS.
+        isolation = await session.scalar(text(
+            "SELECT current_setting('transaction_isolation')"
+        ))
+        if isolation not in ("repeatable read", "serializable"):
+            raise CoherenceEscrowIdentityError(
+                "complete project inventory requires stable snapshot isolation"
+            )
+        # Check the entire project document inventory, including uploads
+        # without any revision. An INNER JOIN would silently omit those
+        # documents and falsely certify project completeness.
+        active_rows = (await session.execute(text("""
+            SELECT d.id AS document_id, r.revision_id
+              FROM public.documents AS d
+              LEFT JOIN public.document_revisions AS r
+                ON r.document_id=d.id
+               AND r.tenant_id=d.tenant_id
+               AND r.project_id=d.project_id
+               AND r.valid_to IS NULL
+             WHERE d.tenant_id=CAST(:tenant AS uuid)
+               AND d.project_id=CAST(:project AS uuid)
+             ORDER BY d.id, r.revision_id
+             FOR SHARE OF d
+        """), {
+            "tenant": str(tenant_id), "project": str(project_id),
+        })).mappings().all()
+        expected = {(r.document_id, r.revision_id) for r in revisions}
+        actual = [(r["document_id"], r["revision_id"]) for r in active_rows]
+        if (
+            len(actual) != len(expected)
+            or any(revision is None for _doc, revision in actual)
+            or set(actual) != expected
+        ):
+            raise CoherenceEscrowIdentityError(
+                "selected revisions do not cover current project documents"
+            )
 
     members: list[CoherenceManifestMember] = []
     for expected in sorted(
@@ -172,6 +223,7 @@ async def verify_coherence_project_manifest(
 
     payload = {
         "version": "coherence-pinned-revisions-v1",
+        "complete_project_inventory_verified": require_complete_project_inventory,
         "tenant": str(tenant_id), "project": str(project_id),
         "run": str(run_id),
         "revisions": [
@@ -189,4 +241,5 @@ async def verify_coherence_project_manifest(
     return CoherenceVerifiedProjectManifest(
         tenant_id=tenant_id, project_id=project_id, run_id=run_id,
         members=tuple(members), manifest_sha256=manifest_sha,
+        complete_project_inventory_verified=require_complete_project_inventory,
     )

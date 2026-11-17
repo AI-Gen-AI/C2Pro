@@ -9,6 +9,7 @@ comparators intentionally do NOT hard-code severity.
 
 Refers to Suite ID: TS-UD-COH-XDOC-COMPARATORS-001.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -43,7 +44,9 @@ RULE_WBS_VS_BUDGET = "DET-CRS-WBSBUD"  # WBS package sum ↔ budget total
 RULE_BOM_VS_BUDGET = "DET-CRS-BOMBUD"  # BOM line sum ↔ budget total
 RULE_BUDGET_EXCEEDS_CONTRACT = "DET-CRS-NEGMARGIN"  # budget total ABOVE contract = negative margin
 RULE_RISK_EXCEEDS_CONTINGENCY = "DET-CRS-RISKCONT"  # identified risk exposure > contingency fund
-RULE_SCHEDULE_OVERRUNS_DEADLINE = "DET-CRS-SCHDEAD"  # schedule end AFTER the contractual deadline (TIME)
+RULE_SCHEDULE_OVERRUNS_DEADLINE = (
+    "DET-CRS-SCHDEAD"  # schedule end AFTER the contractual deadline (TIME)
+)
 
 # A budget more than this fraction above the contract is a real overrun, not rounding.
 # Directional and margin-threshold-independent: a budget BELOW contract is a normal
@@ -86,7 +89,10 @@ def _budget_sources_evidence(inputs: ProjectCrossDocInputs) -> dict[str, Any]:
     source = inputs.budget_total_source
     if not source:
         return {}
-    return {"sources": [dict(source)]}
+    evidence: dict[str, Any] = {"sources": [dict(source)]}
+    if inputs.contract_total_source is not None:
+        evidence["contract_source"] = dict(inputs.contract_total_source)
+    return evidence
 
 
 def compare_values(

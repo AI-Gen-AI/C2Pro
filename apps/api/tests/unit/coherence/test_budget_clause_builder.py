@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.coherence.budget_clause_builder import build_budget_clauses
+from src.coherence.budget_clause_builder import _CONTRACT_TOTAL_SOURCE_SQL, build_budget_clauses
 from src.coherence.domain.budget_line_availability import STRUCTURED_BUDGET_SOURCE_UNAVAILABLE
 from src.coherence.rules_engine.base import ApplicabilityState
 from src.coherence.rules_engine.deterministic import (
@@ -33,6 +33,12 @@ class _Result:
     def first(self) -> object | None:
         return self._rows[0] if self._rows else None
 
+    def mappings(self):
+        return self
+
+    def all(self) -> list[object]:
+        return self._rows
+
 
 class _Session:
     """Answers, in order: the budget declaration (total, currencies) of the trusted-current
@@ -44,6 +50,9 @@ class _Session:
 
     async def execute(self, _stmt: object, params: dict[str, object]) -> _Result:
         self.params.append(params)
+        # Original unit doubles do not have authentic contract source IDs.
+        if _stmt is _CONTRACT_TOTAL_SOURCE_SQL:
+            return _Result([])
         return self._results.pop(0) if self._results else _Result([])
 
 
