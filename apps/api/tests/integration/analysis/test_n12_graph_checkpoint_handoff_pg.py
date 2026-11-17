@@ -5,7 +5,6 @@ synthesized. The AI response is a stub; never claim real-model performance.
 """
 from __future__ import annotations
 
-import os
 from typing import Any, TypedDict
 from uuid import uuid4
 
@@ -16,19 +15,11 @@ from langgraph.graph import END, StateGraph
 from psycopg_pool import AsyncConnectionPool
 
 from src.analysis.adapters.graph import nodes, workflow
-from src.config import settings
-from tests.support.test_database_guard import assert_ops_database_binding
 
-# Accept a dedicated scratch DSN, or ONLY the job-scoped database that
-# AI-GEN Ops has already bound and authorized. Never use a default live DSN.
-_OPS_ID = os.environ.get("C2PRO_OPS_JOB_ID")
-_DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN") or (
-    settings.database_url if _OPS_ID else ""
-)
-pytestmark = [
-    pytest.mark.asyncio,
-    pytest.mark.skipif(not _DSN, reason="requires isolated scratch Postgres DSN"),
-]
+# The built-in test_engine fixture is bound to the isolated Ops job database,
+# including the project's canonical test-database ownership guard. No external
+# DSN, production fallback, or optional skip path is allowed.
+pytestmark = pytest.mark.asyncio
 
 SOURCE = (
     "SLA-A. Provider shall make service status reports available on the "
@@ -111,7 +102,7 @@ def _graph_with_checkpointer(checkpointer):
 
 @pytest.mark.parametrize("real_postgres", [True, False])
 async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
-    monkeypatch, real_postgres,
+    monkeypatch, real_postgres, test_engine,
 ):
     state = _state()
     service = RecordingBudgetReview(state["tenant_id"])
@@ -128,14 +119,11 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
         )
 
     if real_postgres:
-        # This is a scratch DB. In Ops, verify the assigned database binding
-        # BEFORE opening any connection or creating checkpoint tables.
-        if _OPS_ID:
-            assert_ops_database_binding(
-                _DSN, _OPS_ID, os.environ.get("C2PRO_OPS_EVIDENCE_DIR")
-            )
+        # test_engine has already verified and initialized the authorized
+        # scratch database. Reuse *that exact connection target* for saver.
+        test_database_url = test_engine.url.render_as_string(hide_password=False)
         async with AsyncConnectionPool(
-            conninfo=_DSN.replace("postgresql+asyncpg://", "postgresql://"),
+            conninfo=test_database_url.replace("postgresql+asyncpg://", "postgresql://"),
             min_size=0, max_size=3, kwargs={"autocommit": True},
         ) as pool:
             saver = AsyncPostgresSaver(conn=pool)
