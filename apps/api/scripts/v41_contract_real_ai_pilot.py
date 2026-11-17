@@ -58,17 +58,26 @@ def _gate():
         raise RuntimeError("V41_N12_DURABLE_ESCROW_NOT_ENABLED")
     if os.environ.get("C2PRO_N12_REQUIRE_ESCROW") != "1":
         raise RuntimeError("V41_N12_LATCH_NOT_ENABLED")
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("V41_DEDICATED_PROVIDER_SECRET_MISSING")
-    from real_ai_governor import _limits
-    _path, calls, cap = _limits()
-    if calls != MAX_CALLS or Decimal(str(cap)) != MAX_USD:
-        raise RuntimeError("V41_SDK_GOVERNOR_LIMITS_MISMATCH")
-    from anthropic.resources.messages import AsyncMessages, Messages
-    if not getattr(AsyncMessages.create, "_c2pro_governed", False):
-        raise RuntimeError("V41_ASYNC_PROVIDER_NOT_GOVERNED")
-    if not getattr(Messages.create, "_c2pro_governed", False):
-        raise RuntimeError("V41_SYNC_PROVIDER_NOT_GOVERNED")
+    provider = os.environ.get("C2PRO_V41_PROVIDER", "anthropic")
+    if provider == "anthropic":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise RuntimeError("V41_DEDICATED_ANTHROPIC_KEY_MISSING")
+        from real_ai_governor import _limits
+        _path, calls, cap = _limits()
+        if calls != MAX_CALLS or Decimal(str(cap)) != MAX_USD:
+            raise RuntimeError("V41_SDK_GOVERNOR_LIMITS_MISMATCH")
+        from anthropic.resources.messages import AsyncMessages, Messages
+        if not getattr(AsyncMessages.create, "_c2pro_governed", False):
+            raise RuntimeError("V41_ASYNC_PROVIDER_NOT_GOVERNED")
+        if not getattr(Messages.create, "_c2pro_governed", False):
+            raise RuntimeError("V41_SYNC_PROVIDER_NOT_GOVERNED")
+    elif provider == "openai":
+        if not os.environ.get("OPENAI_API_KEY"):
+            raise RuntimeError("V41_DEDICATED_OPENAI_KEY_MISSING")
+        if os.getenv("C2PRO_V41_OPENAI_MAX_CALLS") != "30" or os.getenv("C2PRO_V41_OPENAI_MAX_USD") != "5.0":
+            raise RuntimeError("V41_OPENAI_GOVERNOR_MISCONFIGURED")
+    else:
+        raise RuntimeError("V41_PROVIDER_NOT_ALLOWED")
     dsn = os.environ.get("DATABASE_URL", "")
     if not dsn.startswith("postgresql://") or not dsn.endswith("/c2pro_test"):
         raise RuntimeError("V41_DB_MUST_BE_DISPOSABLE_TEST_DATABASE")
@@ -138,6 +147,8 @@ async def pilot(sec_pdf: Path, out: Path):
           flush=True)
     report = {
         "run_sha": os.environ["GITHUB_SHA"],
+        "provider": os.environ.get("C2PRO_V41_PROVIDER", "anthropic"),
+        "billing_note": "Estimated pricing from metered tokens; NOT verified against provider invoice",
         "data_source": "SEC EX-99.1 authentic public EPC via 73-page filing PDF rendition",
         "source": source_report,
         "governor_max_usd": str(MAX_USD),
@@ -188,10 +199,20 @@ async def pilot(sec_pdf: Path, out: Path):
     legacy_ai_governed_call.get_session_with_tenant = budget_session
 
     try:
-        n3_wrapper = AnthropicWrapper(
-            enable_cache=False, enable_retry=False,
-            max_tokens_limit=512, timeout_seconds=90,
-        )
+        configured_provider = os.environ.get("C2PRO_V41_PROVIDER", "anthropic")
+        transport = None
+        if configured_provider == "openai":
+            from v41_openai_budgeted_adapter import (
+                OpenAIBudgetedTransport,
+                OpenAICompatWrapper,
+            )
+            transport = OpenAIBudgetedTransport(os.environ["OPENAI_API_KEY"])
+            n3_wrapper = OpenAICompatWrapper(transport)
+        else:
+            n3_wrapper = AnthropicWrapper(
+                enable_cache=False, enable_retry=False,
+                max_tokens_limit=512, timeout_seconds=90,
+            )
         n3 = AIService(wrapper=n3_wrapper, tenant_id=authority.tenant_id)
         # Classification is a header-level task only, not a filter on N4.
         n3_text = safe[:6000]
@@ -214,9 +235,14 @@ async def pilot(sec_pdf: Path, out: Path):
         if doc_type not in ("contract", "other"):
             raise RuntimeError("N3_NOT_ROUTABLE_TO_N4")
 
-        provider = AnthropicN4WindowProvider.from_configured_account(
-            tier=ModelTier.STANDARD, max_output_tokens=4096,
-        )
+        if configured_provider == "openai":
+            from v41_openai_budgeted_adapter import OpenAIWindowProvider
+            assert transport is not None
+            provider = OpenAIWindowProvider(transport)
+        else:
+            provider = AnthropicN4WindowProvider.from_configured_account(
+                tier=ModelTier.STANDARD, max_output_tokens=4096,
+            )
         report["model"] = provider.model_name
         runner = N4IncrementalRunner(
             session_factory=factory,
@@ -278,10 +304,15 @@ async def pilot(sec_pdf: Path, out: Path):
                 "risk_status": "PROPOSED",
             })
 
-        n12_wrapper = AnthropicWrapper(
-            enable_cache=False, enable_retry=False,
-            max_tokens_limit=4096, timeout_seconds=90,
-        )
+        if configured_provider == "openai":
+            from v41_openai_budgeted_adapter import OpenAICompatWrapper
+            assert transport is not None
+            n12_wrapper = OpenAICompatWrapper(transport)
+        else:
+            n12_wrapper = AnthropicWrapper(
+                enable_cache=False, enable_retry=False,
+                max_tokens_limit=4096, timeout_seconds=90,
+            )
         n12_service = AIService(
             wrapper=n12_wrapper, tenant_id=authority.tenant_id,
         )
