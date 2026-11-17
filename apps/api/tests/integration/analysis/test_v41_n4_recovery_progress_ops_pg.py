@@ -32,10 +32,27 @@ async def _apply_scratch_migrations(engine):
         "20261117_0001_n4_shared_tenant_reserved_budget.py",
     )
     async with engine.begin() as conn:
+        existing_reserved_column = bool((await conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='tenants'
+               AND column_name='ai_spend_reserved_usd'
+        """))).scalar_one_or_none())
+        existing_reserved_constraint = bool((await conn.execute(text("""
+            SELECT 1 FROM pg_constraint
+             WHERE conname='ck_tenants_ai_reserved_nonnegative'
+               AND conrelid='public.tenants'::regclass
+        """))).scalar_one_or_none())
         for migration_name in migration_names:
             migration = api_dir / "alembic/versions" / migration_name
             stmts = runpy.run_path(str(migration))["UPGRADE_STATEMENTS"]
             for statement in stmts:
+                # Fixture bootstrap already has this column; only skip
+                # precisely the additive DDL when proven present.
+                if migration_name.startswith("20261117_0001"):
+                    if "ADD COLUMN ai_spend_reserved_usd" in statement and existing_reserved_column:
+                        continue
+                    if "ADD CONSTRAINT ck_tenants_ai_reserved_nonnegative" in statement and existing_reserved_constraint:
+                        continue
                 await conn.execute(text(statement))
 
 
