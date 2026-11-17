@@ -5,6 +5,7 @@ risk categories. A missing or mismatched checkpoint fails closed.
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 
@@ -70,16 +71,36 @@ async def verify_n12_durable_predecessor(
         # MemorySaver, Null, or arbitrary in-memory fixtures are NOT durable
         # financial authorization, even though they may return a snapshot.
         _reject("NOT_POSTGRES_SAVER")
-    try:
-        snapshot = await graph.aget_state({
-            "configurable": {
-                "thread_id": thread, "checkpoint_ns": root_namespace,
-            },
-        })
-    except Exception as exc:
-        raise N12CheckpointIdentityError(
-            f"N12_CHECKPOINT_READ_FAILED:{type(exc).__name__}"
-        ) from exc
+    # LangGraph writes superstep checkpoints asynchronously. Entering N12
+    # does NOT attest that the predecessor was durably committed; initial
+    # observations can still show "__start__". Poll only the real Postgres
+    # snapshot for a short, bounded interval, never inventing an ID.
+    prior_nodes = frozenset({
+        "__start__", "document_ingestion", "pii_anonymizer", "router",
+        "risk_extractor", "wbs_extractor", "budget_parser",
+    })
+    for attempt in range(9):
+        try:
+            snapshot = await graph.aget_state({
+                "configurable": {
+                    "thread_id": thread, "checkpoint_ns": root_namespace,
+                },
+            })
+        except Exception as exc:
+            raise N12CheckpointIdentityError(
+                f"N12_CHECKPOINT_READ_FAILED:{type(exc).__name__}"
+            ) from exc
+        observed = getattr(snapshot, "next", ())
+        if isinstance(observed, (tuple, list)) and "critique" in observed:
+            break
+        if not isinstance(observed, (tuple, list)):
+            _reject("NEXT_NODES_MALFORMED")
+        if not observed or not set(observed).issubset(prior_nodes):
+            names = ",".join(str(name)[:24] for name in observed[:3])
+            _reject("N12_NOT_PENDING:" + (names or "EMPTY"))
+        if attempt == 8:
+            _reject("N12_PREDECESSOR_NOT_DURABLE")
+        await asyncio.sleep(min(0.035 * (2 ** attempt), 0.35))
 
     saved_config = getattr(snapshot, "config", None)
     saved_cfg = saved_config.get("configurable") if isinstance(saved_config, dict) else None
