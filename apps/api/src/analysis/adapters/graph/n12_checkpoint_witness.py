@@ -103,7 +103,10 @@ async def verify_n12_durable_predecessor(
     if not isinstance(pending, (tuple, list)):
         _reject("NEXT_NODES_MALFORMED")
     if "critique" not in pending:
-        _reject("N12_NOT_PENDING")
+        # Node names only, bounded for safe diagnosis; never expose source,
+        # checkpoint identifiers, tenant names or provider output.
+        pending_names = ",".join(str(name)[:24] for name in pending[:3])
+        _reject("N12_NOT_PENDING:" + (pending_names or "EMPTY"))
 
     for key in (
         "tenant_id", "project_id", "document_id", "document_revision_id",
