@@ -13,11 +13,13 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Any, cast
 
 import structlog
 
+from src.coherence.adapters.ai.coherence_governed_wrapper import CoherenceCallIdentity
 from src.coherence.domain.ports.coherence_llm_gate_port import GateDecision
 from src.coherence.models import Clause, FindingSignal
 from src.coherence.rules_engine.config import DEFAULT_CONFIG
@@ -95,6 +97,10 @@ class CoherenceLlmGate:
     """
 
     db: Any | None = None  # AsyncSession; injected by node at request time (Task 10)
+    # This must come from trusted upstream orchestration; never Clause.data.
+    governed_context: CoherenceCallIdentity | None = None
+    # Explicit fake injection for isolated tests; production creates a no-retry wrapper.
+    governed_provider_wrapper: Any | None = field(default=None, repr=False)
 
     _cache: Any | None = field(default=None, init=False, repr=False)
     _cost: Any | None = field(default=None, init=False, repr=False)
@@ -144,8 +150,13 @@ class CoherenceLlmGate:
     ) -> GateDecision:
         # Step 1: content-hash cache check (before budget / rollout / LLM).
         cache_key = _rule_cache_key(rule_id, clause.text)
-        cache = self._get_cache()
-        cached = await cache.get(cache_key)
+        # The legacy cache is keyed by rule/text, not tenant/revision. Until
+        # trusted per-revision cache lineage exists, governed calls must not
+        # read or write that shared cache across document boundaries.
+        governed_requested = os.getenv("C2PRO_COHERENCE_ESCROW") == "1"
+        cached = None
+        if not governed_requested:
+            cached = await self._get_cache().get(cache_key)
         if cached is not None:
             finding = None if _below_calibrated_threshold(cached) else cached
             logger.debug(
@@ -201,27 +212,44 @@ class CoherenceLlmGate:
                 cost_charged_usd=0.0,
             )
 
-        cost = self._get_cost()
-        try:
-            await cost.check_budget_availability(tenant_uuid, ESTIMATED_HAIKU_COST_USD)
-        except BudgetExceededException:
-            logger.info(
-                "coherence_llm_gate.budget_exhausted",
-                tenant_id=tenant_id, rule_id=rule_id,
-            )
-            return GateDecision(
-                state="budget_exhausted",
-                finding=None,
-                reason="tenant_budget_exhausted",
-                reset_date=_next_month_first(),
-                cache_key=cache_key,
-                cost_charged_usd=0.0,
-            )
+        governed = governed_requested
+        if governed:
+            # An approved stable execution/revision identity must be pinned by
+            # the caller. Neither input text nor Clause.data are an authority.
+            if (
+                not isinstance(self.governed_context, CoherenceCallIdentity)
+                or self.governed_context.tenant_id != tenant_uuid
+            ):
+                raise RuntimeError(
+                    "Coherence escrow requires trusted run and source revision"
+                )
+            # The shared legacy ledger performs an atomic tenant-row reserve.
+            # Do NOT run the unreserved preflight or count it as authorization.
+        else:
+            cost = self._get_cost()
+            try:
+                await cost.check_budget_availability(tenant_uuid, ESTIMATED_HAIKU_COST_USD)
+            except BudgetExceededException:
+                logger.info(
+                    "coherence_llm_gate.budget_exhausted",
+                    tenant_id=tenant_id, rule_id=rule_id,
+                )
+                return GateDecision(
+                    state="budget_exhausted",
+                    finding=None,
+                    reason="tenant_budget_exhausted",
+                    reset_date=_next_month_first(),
+                    cache_key=cache_key,
+                    cost_charged_usd=0.0,
+                )
 
         # Step 4: LLM call (via v1 registry per-rule evaluator; Haiku-routed).
         try:
             finding, in_tok, out_tok, actual_cost, latency_ms, model = \
-                await self._call_rule_via_llm(rule_id, clause, tenant_id=tenant_id)
+                await self._call_rule_via_llm(
+                    rule_id, clause, tenant_id=tenant_id,
+                    **({"governed_context": self.governed_context} if governed else {}),
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "coherence_llm_gate.llm_error",
@@ -243,7 +271,7 @@ class CoherenceLlmGate:
             finding = None
 
         # Step 5a: cache write (only on non-None finding; cache is best-effort).
-        if finding is not None:
+        if finding is not None and not governed:
             try:
                 await self._get_cache().set(cache_key, finding)
             except Exception as exc:  # noqa: BLE001
@@ -286,6 +314,7 @@ class CoherenceLlmGate:
         clause: Clause,
         *,
         tenant_id: str | None = None,
+        governed_context: CoherenceCallIdentity | None = None,
     ) -> tuple[FindingSignal | None, int, int, float, float, str]:
         """
         Resolve the per-rule LLM evaluator from the v1 registry, run it for the
@@ -307,12 +336,37 @@ class CoherenceLlmGate:
 
         from src.coherence.rules_engine.registry import get_v1_evaluator
 
+        llm_port = None
+        if governed_context is not None:
+            from src.coherence.adapters.ai.coherence_governed_wrapper import (
+                BudgetedCoherenceWrapper,
+            )
+            from src.coherence.adapters.ai.llm_rule_evaluator import (
+                LLMRuleEvaluatorAdapter,
+            )
+
+            escrow_wrapper = BudgetedCoherenceWrapper(
+                identity=governed_context,
+                governed_request_id=governed_context.request_key(
+                    rule_id=rule_id, clause_id=clause.id,
+                    clause_text=clause.text,
+                    rule_input_hash=_rule_cache_key(rule_id, clause.text),
+                ),
+                max_charge_usd=os.getenv("C2PRO_COHERENCE_RESERVE_USD", ""),
+                max_output_tokens=int(os.getenv("C2PRO_COHERENCE_MAX_OUTPUT_TOKENS", "0")),
+                underlying=self.governed_provider_wrapper,
+            )
+            llm_port = LLMRuleEvaluatorAdapter(wrapper=escrow_wrapper)
+
         tenant_uuid: UUID | None = None
         if tenant_id:
             with contextlib.suppress(ValueError, AttributeError):
                 tenant_uuid = UUID(tenant_id)
 
-        evaluator = get_v1_evaluator(rule_id, low_budget_mode=False, tenant_id=tenant_uuid)
+        evaluator = get_v1_evaluator(
+            rule_id, low_budget_mode=False, tenant_id=tenant_uuid,
+            **({"llm_port": llm_port} if llm_port is not None else {}),
+        )
         cost_before = float(getattr(evaluator, "total_cost_usd", 0.0))
         t0 = time.perf_counter()
         signal = await cast(Any, evaluator).evaluate_v3_async(clause)
@@ -323,9 +377,33 @@ class CoherenceLlmGate:
         # Token counts: best-effort. The v1 evaluator does not currently
         # expose per-call token counts — default to 0 + Haiku constant.
         last_call = getattr(evaluator, "_last_call_metrics", None) or {}
-        input_tokens = int(last_call.get("input_tokens", 0))
-        output_tokens = int(last_call.get("output_tokens", 0))
-        model = str(last_call.get("model", "claude-3-haiku-20240307"))
+        input_tokens = int(last_call.get("input_tokens") or 0)
+        output_tokens = int(last_call.get("output_tokens") or 0)
+        model = str(last_call.get("model") or "claude-3-haiku-20240307")
+
+        # Staged NO-GO latch. The former v1 path can report $0 on an actual
+        # provider call with no finding or a swallowed provider exception.
+        # Never mark that attempt as a free, evaluated rule when strict
+        # financial accounting is explicitly required for this tenant/lane.
+        if (
+            governed_context is not None
+            or os.getenv("C2PRO_COHERENCE_STRICT_METERING") == "1"
+        ):
+            from math import isfinite
+
+            billed = (
+                last_call.get("billing_status") == "METERED"
+                and isfinite(actual_cost)
+                and actual_cost >= 0
+            )
+            cached = last_call.get("cached") is True
+            if not billed or (
+                not cached and (actual_cost <= 0 or input_tokens + output_tokens <= 0)
+            ):
+                raise RuntimeError(
+                    "Coherence provider usage unverified; deny trusted "
+                    "evaluation until metered escrow is available"
+                )
 
         return signal, input_tokens, output_tokens, actual_cost, latency_ms, model
 

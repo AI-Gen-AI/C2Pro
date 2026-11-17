@@ -50,6 +50,7 @@ from src.coherence.domain.v2_constants import (  # noqa: E402
     DEFAULT_CATEGORY_WEIGHTS,
     MIN_ACTIVE_WEIGHT,
 )
+from src.coherence.economic_signal_dedup import distinct_economic_impacts  # noqa: E402
 from src.coherence.models import (  # noqa: E402
     Alert,
     AlertCategory,
@@ -245,6 +246,9 @@ class ScoringService:
             self._normalized_weights = self.config.get_normalized_weights()
         return self._normalized_weights
 
+    def _distinct_economic_impacts(self, signals: list[FindingSignal]) -> list[FindingSignal]:
+        return distinct_economic_impacts(signals, self._compute_signal_contribution)
+
     # =========================================================================
     # V0.3 API — FindingSignal-based scoring
     # =========================================================================
@@ -272,6 +276,7 @@ class ScoringService:
             ScoringResult: score contract with nullable score on insufficient evidence.
         """
         _ = num_rules
+        signals = self._distinct_economic_impacts(signals)
         if not signals or poor_extraction_quality:
             return ScoringResult(
                 score=None,
@@ -327,6 +332,7 @@ class ScoringService:
             ScoringDiagnostics with score and breakdown
         """
         _ = num_rules
+        signals = self._distinct_economic_impacts(signals)
         if coverage_map is not None:
             return self._calculate_detailed_with_coverage(
                 signals, num_clauses, coverage_map, poor_extraction_quality
@@ -502,9 +508,7 @@ class ScoringService:
         # Weighted mean over assessed categories only (no coverage_ratio multiplier).
         # Every assessed category was scored in the loop above, so filter the
         # Optional dict down to the proven-non-None entries.
-        assessed_scores = {
-            c: score for c in assessed if (score := category_scores[c]) is not None
-        }
+        assessed_scores = {c: score for c in assessed if (score := category_scores[c]) is not None}
         assessed_weight_sum = sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) for c in assessed)
         global_score = round(
             sum(DEFAULT_CATEGORY_WEIGHTS.get(c, 0.0) * s for c, s in assessed_scores.items())
@@ -952,6 +956,14 @@ def calculate_v2_from_signals(
         build_conflict_candidates,
     )
     from src.coherence.services.v2.evidence_service import EvidenceBundle  # noqa: PLC0415
+
+    # v2 uses rule-signal averages AND hard-conflict independent_count;
+    # deduplicate only the same source-bound economic delta for this scorer.
+    # The v1 Alert ledger retains both related rule codes unchanged.
+    if signals and all(isinstance(s, FindingSignal) for s in signals):
+        signals = distinct_economic_impacts(
+            signals, lambda signal: signal.impact_score * signal.confidence
+        )
 
     cat_agg = CategoryAggregator(CategoryStateMachine())
     global_agg = GlobalAggregatorV2()

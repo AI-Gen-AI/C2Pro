@@ -108,6 +108,11 @@ class AlertMapper:
                     metadata, alert.source_clause_id
                 ),
                 "evidence_status": AlertMapper._evidence_status(metadata),
+                "economic_discrepancy_key": metadata.get("economic_discrepancy_key"),
+                "economic_impact_accounting": metadata.get("economic_impact_accounting"),
+                "related_rule_codes": metadata.get("related_rule_codes", []),
+                "severity_qualification": metadata.get("severity_qualification"),
+                "original_row_binding": metadata.get("original_row_binding"),
                 "reviewed_by": alert.reviewed_by,
                 "reviewed_at": alert.reviewed_at,
                 "root_cause": metadata.get("root_cause"),

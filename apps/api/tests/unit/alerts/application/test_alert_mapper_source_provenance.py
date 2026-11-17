@@ -123,3 +123,35 @@ def test_risk_alert_mapper_exposes_no_navigation_for_foreign_tenant_source() -> 
 
     assert created.source_clause_id is None
     assert response.detection_evidence is None
+
+
+def test_related_economic_alert_group_is_exposed_without_fake_hitl_approval():
+    project, tenant, document, revision = (uuid4() for _ in range(4))
+    [created] = AlertGenerator(project_id=project).generate_risk_alerts([{
+        "title": "Contract vs budget difference",
+        "description": "Two related numeric rules, one economic delta",
+        "impact_level": "high",
+    }])
+    created.alert_metadata = {
+        "detection_evidence": {
+            "structured_sources": [{
+                "family": "budget", "document_id": str(document),
+                "revision_id": str(revision), "source_locator": "Presupuesto!5",
+                "blob_sha256": "a" * 64,
+            }],
+        },
+        "economic_discrepancy_key": "CONTRACT_BUDGET:" + "b" * 64,
+        "economic_impact_accounting": "ONE_DELTA_TWO_RELATED_ALERTS",
+        "related_rule_codes": ["DET-CRS-CONBUD", "DET-CRS-NEGMARGIN"],
+        "severity_qualification": "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS",
+        "original_row_binding": "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED",
+    }
+    response = AlertMapper.to_response(_domain_alert(created), tenant)
+    assert response.economic_discrepancy_key == "CONTRACT_BUDGET:" + "b" * 64
+    assert response.economic_impact_accounting == "ONE_DELTA_TWO_RELATED_ALERTS"
+    assert response.related_rule_codes == ["DET-CRS-CONBUD", "DET-CRS-NEGMARGIN"]
+    assert response.severity_qualification == "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS"
+    assert response.original_row_binding == "CURRENT_SOURCE_ROW_RESOLVED_NOT_HITL_APPROVED"
+    assert response.source_clause_id is None
+    assert response.evidence_status is None
+    assert response.detection_evidence.structured_sources[0].blob_sha256 == "a" * 64

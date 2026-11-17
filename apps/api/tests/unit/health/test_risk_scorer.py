@@ -91,3 +91,30 @@ def test_poor_extraction_quality_is_unknown_not_clean() -> None:
     assert signal.band is HealthBand.UNKNOWN
     assert signal.null_reason is HealthNullReason.INSUFFICIENT_EVIDENCE
     assert "poor extraction quality" in signal.missing_data
+
+
+def test_no_trusted_risks_with_unassessed_critique_is_unknown_not_clean():
+    """An unfinished N12 cannot certify a green, zero-risk assessment."""
+    signal = score_risk_dimension(
+        [], assessment_ran=True, extraction_quality=0.95,
+        critique_assessed=False,
+    )
+    assert signal.score is None
+    assert signal.band is HealthBand.UNKNOWN
+    assert signal.null_reason is HealthNullReason.INSUFFICIENT_EVIDENCE
+    assert "critique not assessed" in signal.missing_data
+    assert not signal.evidence
+
+
+def test_verified_risk_is_retained_when_critique_pending():
+    """Do not discard confirmed evidence merely because critique is pending."""
+    signal = score_risk_dimension(
+        [_risk(Severity.HIGH, "risk-confirmed")],
+        assessment_ran=True, extraction_quality=0.95,
+        critique_assessed=False,
+    )
+    assert signal.score == 70
+    assert signal.band is HealthBand.WATCH
+    assert signal.confidence <= 0.3
+    assert "critique not assessed" in signal.missing_data
+    assert signal.evidence[0].ref_id == "risk-confirmed"

@@ -296,3 +296,36 @@ async def test_snapshot_tenant_lock_serializes_with_concurrent_new_reserve():
         if holder is not None and not holder.done():
             await holder
         await engine.dispose()
+
+
+
+async def test_n4_known_overage_reported_without_falsifying_unknown_usage():
+    """N4 too: a known charge over its hold is SETTLED and auditable."""
+    from src.analysis.adapters.persistence.n4_incremental_store import account_call
+
+    a, project = await _seed(budget=1.0)
+    engine = _engine()
+    try:
+        hold = await _n4_hold(
+            engine, a, project, key="audit-n4-known-overage-001",
+        )
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(a.tenant_id)},
+            )
+            await account_call(
+                session, authority=a, reservation_id=hold.reservation_id,
+                billed_usd="0.40",
+            )
+        report = await _audit(engine, a.tenant_id)
+        assert report.financial_reconciliation_passed
+        assert report.recorded_escrow_usd == 0
+        assert report.confirmed_spend_usd == Decimal("0.40")
+        assert report.n4.settled_overage_count == 1
+        assert report.n4.settled_overage_usd == Decimal("0.15")
+        assert "PROVIDER_CHARGE_EXCEEDED_RESERVATION" in report.findings
+        assert report.needs_provider_followup
+        assert report.n4.unknown_count == 0
+    finally:
+        await engine.dispose()
