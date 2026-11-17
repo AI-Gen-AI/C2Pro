@@ -32,11 +32,12 @@ The idempotency key is a SHA256 digest of authenticated tenant, project, documen
 ## Activation sequencing
 
 1. Keep global `C2PRO_LEGACY_AI_ESCROW` **OFF**.
-2. Ensure migration chain #1239→#1242→#1245→#1246→#1248→#1249 has passed security and is available; provision caps on tenant.
-3. Set N12 explicit caps `C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD`, `C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS` and **`C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS` (integer 1–8)** after verifying provider/model pricing. A provider segment ceiling prevents unbounded billable continuations; a model that needs more segments fails as partial rather than silently clipping contract source.
-4. Front A wires one `bind_n12_checkpoint_escrow` call at N12's saved-checkpoint boundary, **not** an implicit flag affecting N3, N4, N5 or N9.
-5. Repeat actual-provider N12 with contract source, inspect exact billed tokens/cost, JSON and response status, HITL/pending→projected and resilience after crashes. If a response was already billed, re-entry must return `UNASSESSED` pending reconciliation rather than rerun a paid model call.
-6. After N12 passes, migrate other legacy call sites similarly, preserving their own saved attempt identity; no global flag promotion earlier.
+2. Enable `C2PRO_N12_REQUIRE_ESCROW=1` only in the staged N12 pilot: without a durable `governed_request_id`, `AIService.run_full_source_review` fails before contacting the model; unrelated N3/N4/N5 routes retain their own controls. This is an explicit NO-GO latch until Frente A wires the checkpoint identity.
+3. Ensure migration chain #1239→#1242→#1245→#1246→#1248→#1249 has passed security and is available; provision caps on tenant.
+4. Set N12 explicit caps `C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD`, `C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS` and **`C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS` (integer 1–8)** after verifying provider/model pricing. A provider segment ceiling prevents unbounded billable continuations; a model that needs more segments fails as partial rather than silently clipping contract source.
+5. Front A wires one `bind_n12_checkpoint_escrow` call at N12's saved-checkpoint boundary, **not** an implicit flag affecting N3, N4, N5 or N9.
+6. Repeat actual-provider N12 with contract source, inspect exact billed tokens/cost, JSON and response status, HITL/pending→projected and resilience after crashes. If a response was already billed, re-entry must return `UNASSESSED` pending reconciliation rather than rerun a paid model call.
+7. After N12 passes, migrate other legacy call sites similarly, preserving their own saved attempt identity; no global flag promotion earlier.
 
 ## Evidence boundary
 
