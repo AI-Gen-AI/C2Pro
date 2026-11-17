@@ -131,3 +131,10 @@ Se detectó que la política aprobada en #1049 **no estaba plenamente reflejada 
 - G0 metodología de evaluación abierta permanece candidata a aceptación formal; G1 **NO-GO**: pendiente QA global, modelo/proveedor vivo con fuente contractual, pilot UAT, integración con otros frentes. Nada de reglas por cláusula Gold en código productivo. No fusionar ni desplegar sin gates.
 
 **Coordinación:** #1049, Frentes B/CORE sin tocar. Para QA de rendimiento/recall se requieren contratos held-out e interpretación experta por muestra, no un catálogo de condiciones codificadas.
+
+
+### Adenda de cierre de QA sobre SHA exacta 1c6128e... (17/11/2026)
+
+La re-ejecución posterior a los cambios de procedencia `other` ha finalizado: **47 pruebas de integración PostgreSQL/HITL/LangGraph PASS**, job `0b89bd6f66db45f3b7c6d12f`, exit 0, 191.95 segundos; log SHA256 `85b91661fe195012f4db60b3922f48db62d1e877443bea04d82f2818be519959`. Se suma a **234 PASS** de unitarias/contratos N4/N12/Graph en job `468a0a1e6bd04659ab5c7050`, log SHA256 `12e1dd87e8ed8b4d4e70e7ad0733874d8448ec65935c91f01ef1c20c766ac7e5`, **misma HEAD `1c6128e084f40a625bbfc68d57611a07ac4d5021`**. SonarCloud Quality Gate OK y secret/drift scan PASS.
+
+Antigravity lectura-only job `a6279f54d38ef3817938f054d86d3251`, HEAD exacta, emitió **PASS LIMITED** al cotejo pre-HITL para `contract` y `other` y preservación de `technical_spec`; **no** evaluación end-to-end ni proveedor real. Evidencia registrada en [#1049 comentario 6934355484](https://github.com/AI-Gen-AI/C2Pro/issues/1049#issuecomment-6934355484). **No autoriza G1 PASS ni merge/despliegue**.
