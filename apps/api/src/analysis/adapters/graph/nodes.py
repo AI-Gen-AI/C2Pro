@@ -106,6 +106,11 @@ def _mark_risk_extraction_honest_failure(
     # value left by an earlier attempt or by the tool describes zero risks.
     state["confidence_score"] = None
     state["extracted_risks"] = []
+    # A failed provider is not a reviewable risk candidate. Stop before N12
+    # and the human interrupt so no phantom HITL item can be presented.
+    state["workflow_terminated"] = True
+    state["termination_reason"] = "risk_extraction_unassessed"
+    state["human_approval_required"] = False
     error_type = type(exc).__name__ if exc is not None else None
     error_detail = _tool_error_detail(exc) if exc is not None else None
     message = reason
