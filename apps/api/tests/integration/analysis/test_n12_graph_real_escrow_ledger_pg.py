@@ -163,5 +163,8 @@ async def test_n12_strict_latch_refuses_unbudgeted_graph_call(monkeypatch):
     assert provider.calls == []
     assert result["human_approval_required"] is True
     assert result["confidence_score"] is None
-    assert any(n.node == "critique" and n.status.value == "failed"
-               for n in result["node_results"])
+    # The N12 domain can normalize a refused provider operation to
+    # UNASSESSED (a recorded critique node), rather than raising. Both paths
+    # require HITL, and neither authorizes an unbudgeted provider call.
+    assert any(n.node == "critique" for n in result["node_results"])
+    assert "UNASSESSED" in str(result.get("critique_notes", "")).upper()
