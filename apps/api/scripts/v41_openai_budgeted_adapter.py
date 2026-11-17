@@ -105,7 +105,18 @@ class OpenAIBudgetedTransport:
                     headers={"Authorization":f"Bearer {self.api_key}"},
                     json=body,
                 )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                try:
+                    error=(resp.json() or {}).get("error") or {}
+                except (ValueError, TypeError):
+                    error={}
+                # Status/type/code/param only; never log provider echo of input.
+                raise OpenAIProviderFailure(
+                    f"OPENAI_HTTP_{resp.status_code}:"
+                    f"{str(error.get('type') or 'unknown')[:50]}:"
+                    f"{str(error.get('code') or 'unknown')[:50]}:"
+                    f"{str(error.get('param') or 'none')[:50]}"
+                )
             payload=resp.json()
             usage=payload.get("usage") or {}
             it=usage.get("input_tokens")
@@ -167,7 +178,8 @@ class OpenAICompatWrapper:
     async def generate(self, request):
         return await self.transport.request(
             system=str(request.system_prompt or "")+"\nReply using valid JSON.",
-            prompt=str(request.prompt),
+            # Responses JSON mode validates the USER input, not only instructions.
+            prompt="Return a valid JSON object.\n\n"+str(request.prompt),
             max_tokens=int(getattr(request,"max_tokens",None) or 1024),
             schema=None,request_id=str(request.request_id),
         )
