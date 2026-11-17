@@ -2,7 +2,8 @@
 """Read-only, credential-free audit of a C2Pro V4.1 pilot JSON artifact.
 
 Usage:
-  PYTHONPATH=apps/api python apps/api/scripts/audit_v41_finance_evidence.py     path/to/real_analysis_evidence.json
+  # Run from the trusted artifact extraction directory:
+  PYTHONPATH=/repo/apps/api python /repo/apps/api/scripts/audit_v41_finance_evidence.py _temp/c2pro-v41-real/real_analysis_evidence.json
 
 Outputs only sanitized financial totals and flags. Never prints clauses,
 source text, IDs or environment secrets. Exit 0 only on internally balanced
@@ -20,13 +21,22 @@ from src.core.ai.v41_financial_evidence_check import audit_v41_financial_evidenc
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     if len(args) != 1:
-        print("usage: audit_v41_finance_evidence.py <real_analysis_evidence.json>",
+        print("usage: audit_v41_finance_evidence.py <relative-path/real_analysis_evidence.json>",
               file=sys.stderr)
         return 2
-    path = Path(args[0])
     try:
-        if path.stat().st_size > 25_000_000:
-            raise ValueError("pilot summary too large")
+        # Trust the operator's working directory, not an arbitrary user-supplied
+        # absolute path. Resolve links and enforce the extraction-root boundary
+        # before reading any bytes (SonarCloud pythonsecurity:S8707).
+        root = Path.cwd().resolve()
+        relative = Path(args[0])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("file path must stay under the evidence root")
+        path = (root / relative).resolve(strict=True)
+        if not path.is_relative_to(root) or path.name != "real_analysis_evidence.json":
+            raise ValueError("invalid evidence path")
+        if not path.is_file() or path.stat().st_size > 25_000_000:
+            raise ValueError("pilot summary missing or too large")
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeError):
         print(json.dumps({"status": "NOT_AUDITABLE", "findings": [

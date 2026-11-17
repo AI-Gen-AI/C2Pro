@@ -72,3 +72,21 @@ de la SHA final y factura cuando proceda.
 Pruebas focales locales ejecutadas con `pytest --noconftest` para
 evitar dependencias globales de un entorno VPS no aislado; el resultado
 no sustituye el job CI ni la regresión PostgreSQL en DB desechable.
+
+
+## Endurecimiento posterior de la CLI (SonarCloud S8707)
+
+La auditoría offline lee exclusivamente un
+`real_analysis_evidence.json` localizado dentro del directorio de
+extracción elegido como **directorio actual** del operador. Rechaza
+rutas absolutas, `..`, enlaces simbólicos que escapen de la raíz y
+nombres de fichero no coincidentes. El cambio exige invocar desde la
+carpeta de extracción en lugar de suministrar una ruta absoluta.
+
+Ejemplo (el código puede estar fuera de la carpeta de evidencias):
+
+```bash
+cd /ruta/segura/extraida
+PYTHONPATH=/ruta/repo/apps/api python /ruta/repo/apps/api/scripts/audit_v41_finance_evidence.py \
+  _temp/c2pro-v41-real/real_analysis_evidence.json
+```
