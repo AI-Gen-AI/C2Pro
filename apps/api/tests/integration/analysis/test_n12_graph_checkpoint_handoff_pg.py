@@ -84,51 +84,6 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
 ):
     state = _state()
     service = RecordingBudgetReview(state["tenant_id"])
-    # Test-only diagnostics: synthetic document and tenant IDs, no production
-    # exception payload or provider call is ever logged.
-    checkpoint_errors = []
-    from src.analysis.adapters.graph import n12_checkpoint_witness
-    original_witness = n12_checkpoint_witness.verify_n12_durable_predecessor
-
-    async def witness_with_test_diagnostics(**kwargs):
-        try:
-            return await original_witness(**kwargs)
-        except Exception as err:
-            cause = err.__cause__
-            technical = {
-                "error": type(err).__name__,
-                "error_reason": str(err)[:160],
-                "cause_type": type(cause).__name__ if cause else None,
-                "cause": str(cause)[:350] if cause else None,
-            }
-            cfg = (kwargs.get("config") or {}).get("configurable", {})
-            parent = (cfg.get("checkpoint_map") or {}).get("")
-            if parent:
-                try:
-                    stored = await workflow.get_graph_app().aget_state({
-                        "configurable": {
-                            "thread_id": cfg.get("thread_id"),
-                            "checkpoint_ns": "", "checkpoint_id": parent,
-                        },
-                    })
-                    persisted = stored.values or {}
-                    technical.update({
-                        "saved_next": list(stored.next or ()),
-                        "saved_step": (stored.metadata or {}).get("step"),
-                        "saved_has_risks": bool(persisted.get("extracted_risks")),
-                        "saved_has_revision": bool(persisted.get("document_revision_id")),
-                        "saved_node_results": len(persisted.get("node_results") or []),
-                    })
-                except Exception as read_error:
-                    technical["debug_read_error"] = type(read_error).__name__
-            checkpoint_errors.append(technical)
-            raise
-
-    monkeypatch.setattr(
-        n12_checkpoint_witness,
-        "verify_n12_durable_predecessor",
-        witness_with_test_diagnostics,
-    )
     monkeypatch.setenv("C2PRO_N12_CHECKPOINT_ESCROW", "1")
     monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
     monkeypatch.setattr(nodes, "get_ai_service", lambda _tenant: service)
@@ -158,10 +113,9 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
             saver = AsyncPostgresSaver(conn=pool)
             await saver.setup()
             result = await _invoke(saver)
-        if not service.governed_ids:
-            # Only technical booleans/step and node labels from synthetic test.
-            print("N12_CHECKPOINT_TEST_SNAPSHOT", checkpoint_errors)
-        assert len(service.governed_ids) == 1, checkpoint_errors or [
+        # A failed witness exposes only technical classification, never
+        # provider data or the source document.
+        assert len(service.governed_ids) == 1, [
             {
                 "node": str(getattr(n, "node", "")),
                 "error_type": str(getattr(getattr(n, "error", None), "error_type", "")),
