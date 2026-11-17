@@ -7,13 +7,11 @@ on:
         type: string
         required: true
       stage:
-        description: "preflight (no-cost) or real_ai (paid, strict 30 calls / USD 5)"
+        description: "Offline real-source preflight only. Paid runs require new CORE authorization."
         type: choice
         required: true
         options:
           - preflight
-          - real_ai
-          - real_ai_openai
         default: preflight
 concurrency:
   group: c2pro-v41-contract-${{ github.ref }}
@@ -77,7 +75,10 @@ jobs:
           retention-days: 7
 
   n3-n4-n12-real-ai-budgeted:
+    # Explicitly disabled after the single paid pilot. CORE must re-authorize
+    # a new paid run and its exact SHA/budget in a separate reviewed change.
     if: >-
+      false &&
       github.event_name == 'workflow_dispatch' &&
       github.ref_name == 'qa/c2pro-v4-ab-n12-latch-integration-20261117' &&
       github.event.inputs.stage == 'real_ai_openai' &&
