@@ -38,21 +38,20 @@ class AIExtractionPort(Protocol):
 
 
 def _fallback_doc_type(text: str) -> str:
+    """Fail closed when the model cannot classify, without lexical guessing.
+
+    A text containing 'contract', 'budget', or 'schedule' can have any real
+    document type; choosing the extractor from these words loses evidence.
+    Missing text and unknown classification are distinct failure states.
+    """
     if len("".join((text or "").split())) < 8:
         return "insufficient_extractable_text"
-    low = text.lower()
-    if any(k in low for k in ("contrato", "clausula", "contract", "clause", "obligaciones")):
-        return "contract"
-    if any(k in low for k in ("presupuesto", "capex", "opex", "budget", "cost")):
-        return "budget"
-    if any(k in low for k in ("cronograma", "plazo", "hito", "schedule", "milestone", "gantt")):
-        return "schedule"
-    return "technical_spec"
+    return "classification_unassessed"
 
 
 @dataclass(frozen=True)
 class DocumentTypeClassificationService:
-    """Classify a document into one of `DOC_TYPES` via AI with keyword fallback."""
+    """Classify via AI, or return an explicit unassessed state."""
 
     async def classify(self, *, text: str, ai: AIExtractionPort) -> str:
         try:

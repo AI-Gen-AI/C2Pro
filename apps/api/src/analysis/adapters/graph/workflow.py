@@ -171,6 +171,29 @@ def enrichment_dispatch_node(_state: ProjectState) -> dict[str, Any]:
     return {}
 
 
+def unclassified_document_node(_state: ProjectState) -> dict[str, Any]:
+    """Stop when N3 has no reliable type; do not guess an extractor by keywords.
+
+    The caller may retry classification after a provider recovery or review,
+    but this run cannot be recorded as an analyzed/approved document.
+    """
+    return {
+        "workflow_terminated": True,
+        "termination_reason": "classification_unassessed",
+        "human_approval_required": False,
+        "confidence_score": None,
+        "extracted_risks": [],
+        "extracted_wbs": [],
+        "node_results": [
+            NodeResult(
+                node="unclassified_document",
+                status=NodeStatus.DEGRADED,
+                degradation_reason="classification_unassessed",
+            )
+        ],
+    }
+
+
 def unextractable_document_node(_state: ProjectState) -> dict[str, Any]:
     """End an unreadable document without fabricated AI findings or approval.
 
@@ -267,6 +290,7 @@ def build_workflow() -> ProjectWorkflow:
     # Classification & extraction
     workflow.add_node("router", router_node)                                # N3
     workflow.add_node("unextractable_document", unextractable_document_node)
+    workflow.add_node("unclassified_document", unclassified_document_node)
     workflow.add_node("risk_extractor", risk_extractor_node)                # N4
     workflow.add_node("wbs_extractor", wbs_extractor_node)                  # N5
     workflow.add_node("budget_parser", budget_parser_node)                  # N9
@@ -315,11 +339,13 @@ def build_workflow() -> ProjectWorkflow:
             "drawing": "wbs_extractor",
             "other": "risk_extractor",
             "insufficient_extractable_text": "unextractable_document",
+            "classification_unassessed": "unclassified_document",
         },
     )
 
     # Missing readable content is not a successful empty extraction.
     workflow.add_edge("unextractable_document", END)
+    workflow.add_edge("unclassified_document", END)
 
     # ── Extraction → Critique (N12) ─────────────────────────────────────
     workflow.add_edge("risk_extractor", "critique")

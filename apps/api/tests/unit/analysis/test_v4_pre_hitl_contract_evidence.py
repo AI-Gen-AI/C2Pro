@@ -109,3 +109,42 @@ async def test_critique_cannot_waive_contract_evidence_gate(monkeypatch):
     assert out["confidence_score"] is None
     assert out["retry_count"] == 0
     assert nodes._contract_risk_review_summary(out)["risk_source_evidence_verified"] == 0
+
+
+def test_other_type_risks_get_the_same_literal_quote_provenance_check():
+    """N3 routes 'other' to N4; its source evidence must not be skipped."""
+    state = _state([_risk()], doc_type="other")
+    nodes._stamp_pre_hitl_contract_risk_evidence(state)
+    assert state["risk_pre_hitl_evidence_passed"] is True
+    assert state["citation_validation_passed"] is True
+    summary = nodes._contract_risk_review_summary(state)
+    assert summary["risk_source_evidence_total"] == 1
+    assert summary["risk_source_evidence_verified"] == 1
+    assert summary["risk_source_evidence"][0]["source_quote"] == QUOTE
+
+
+@pytest.mark.asyncio
+async def test_other_type_invented_quote_never_passes_pre_hitl_gate(monkeypatch):
+    class FakeCritique:
+        def __init__(self, **kwargs): pass
+
+        async def execute(self, cmd):
+            return SimpleNamespace(
+                confidence=0.99, retry_count=0, critique_notes="",
+                human_approval_required=False, status="OK",
+            )
+
+    monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+    monkeypatch.setattr(nodes, "get_ai_service", lambda _tenant: object())
+    monkeypatch.setattr(nodes, "CritiqueExtractionUseCase", FakeCritique)
+
+    state = _state([_risk("Invented SLA obligation not in the source.")], doc_type="other")
+    out = await nodes.critique_node(state)
+    assert out["risk_pre_hitl_evidence_passed"] is False
+    assert out["citation_validation_passed"] is False
+    assert out["human_approval_required"] is True
+    assert out["confidence_score"] is None
+    summary = nodes._contract_risk_review_summary(out)
+    assert summary["risk_source_evidence_total"] == 1
+    assert summary["risk_source_evidence_verified"] == 0
+    assert summary["risk_source_evidence"][0]["source_quote"] is None
