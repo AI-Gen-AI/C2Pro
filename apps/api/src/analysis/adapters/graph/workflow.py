@@ -908,7 +908,15 @@ async def run_orchestration(initial_state: dict[str, Any], thread_id: str) -> di
     }
 
     # Invoke the graph with the initial state
-    result = await app.ainvoke(cast(ProjectState, initial_state), config)
+    # A budgeted N12 call is permitted only if its predecessor checkpoint
+    # has been COMMITTED before N12 executes. LangGraph's async durability
+    # mode can otherwise leave the N12 parent state not yet visible in PG.
+    if os.getenv("C2PRO_N12_CHECKPOINT_ESCROW") == "1":
+        result = await app.ainvoke(
+            cast(ProjectState, initial_state), config, durability="sync"
+        )
+    else:
+        result = await app.ainvoke(cast(ProjectState, initial_state), config)
 
     logger.info(
         "orchestration_completed",

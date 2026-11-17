@@ -143,7 +143,8 @@ async def test_n12_request_uses_saved_postgres_checkpoint_or_calls_no_provider(
         app = _graph_with_checkpointer(saver)
         monkeypatch.setattr(workflow, "get_graph_app", lambda: app)
         return await app.ainvoke(
-            state, {"configurable": {"thread_id": state["thread_id"]}}
+            state, {"configurable": {"thread_id": state["thread_id"]}},
+            durability="sync",
         )
 
     if real_postgres:
