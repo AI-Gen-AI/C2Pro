@@ -94,3 +94,27 @@ def test_n4_held_out_industry_and_short_substantive_clause_are_not_excluded() ->
     assert "at least 80" not in system_prompt
     assert "≥80 characters" not in system_prompt
     assert classify_quote(short_clause, short_clause) == (short_clause, VERIFIED)
+
+
+def test_n4_supports_exact_alphanumeric_source_locator_without_inference() -> None:
+    source = "SLA-A: Provider will deliver incident reports within four hours."
+    _, instructions = RiskExtractionTool()._build_default_prompt(
+        RiskExtractionInput(document_text=source),
+        is_retry=False,
+    )
+    assert "numeric or alphanumeric" in instructions
+    assert "SLA-A" in instructions
+    assert "never infer a clause number or invent any locator" in instructions
+
+    candidate = RiskExtractionTool()._coerce_risk({
+        "title": "Service reporting exposure",
+        "category": "SCHEDULE",
+        "summary": "A four-hour response window may be operationally demanding.",
+        "description": "The provider must report incidents within the agreed time.",
+        "probability": "MEDIUM",
+        "impact": "HIGH",
+        "source_quote": source,
+        "clause_ref": "SLA-A",
+    })
+    assert candidate is not None
+    assert candidate.clause_ref == "SLA-A"

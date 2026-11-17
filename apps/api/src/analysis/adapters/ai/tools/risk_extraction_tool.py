@@ -518,7 +518,7 @@ For each risk, return a JSON object with EXACTLY these keys:
   "mitigation_suggestion": "Concrete mitigation step",
   "source_quote": "Verbatim contiguous excerpt from the SOURCE DOCUMENT substantiating the risk; include the complete operative wording and its exceptions. Short clauses are valid if they contain the full relevant obligation. Never cite headings alone.",
   "source_text_snippet": "Same or longer surrounding context for traceability",
-  "clause_ref": "Explicit source clause number such as 5.2, or null if no numbered clause is visible"
+  "clause_ref": "Exact printed source locator, numeric or alphanumeric, such as 5.2, SLA-A or Annex B; null if no identifier is visible"
 }
 
 CRITICAL OUTPUT RULES:
@@ -530,7 +530,7 @@ CRITICAL OUTPUT RULES:
 5. Examine obligations and their exceptions together: notice windows, carve-outs, exclusions, conditions for relief, and clauses stating when relief is NOT available can materially change the risk.
 6. Prefer fewer supported risks to superficial, duplicative or speculative ones, but never omit an independently supported material risk solely to keep the list short.
 7. source_quote must cover the actual operative text and relevant conditions. Do not invent padding or omit a valid short clause to satisfy an arbitrary length. NEVER use section labels alone.
-8. clause_ref is ONLY the exact numeric section number explicitly printed in the contract adjacent to the cited text (e.g., 5.2). If none is explicit, emit null; never infer a clause number.
+8. clause_ref is the exact section, schedule, annex or clause identifier printed in the supplied source near the cited text; it may be numeric, alphanumeric or named (e.g. 5.2, SLA-A, Annex B). never infer a clause number or invent any locator; emit null when none is explicit.
 9. source_quote MUST be a single, contiguous, character-for-character substring of the provided SOURCE DOCUMENT, with the original words, numbers, punctuation and exceptions. Never paraphrase, rewrite, merge non-adjacent text or invent a quotation. Check each quote against the CONTRACT before emitting JSON.
 10. When the operative clause contains carve-outs, limits, conditions, excluded relief or denied compensation, include that operative exception in the cited excerpt and in the interpretation; do not cite only its introductory sentence.
 """.strip()
