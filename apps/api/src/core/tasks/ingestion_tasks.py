@@ -1132,6 +1132,17 @@ async def _run_analysis_graph_best_effort(
             extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
         )
         return {"analysis_id": None, "human_approval_required": False}
+    # A provider failure terminated the graph before N12 and the HITL gate.
+    # A pre-existing analysis_id must not make the document appear ANALYZED.
+    if result.get("workflow_terminated") is True:
+        logger.warning(
+            "document_analysis_terminated_unassessed",
+            extra={
+                "document_id": str(document_id),
+                "reason": str(result.get("termination_reason") or "unassessed")[:100],
+            },
+        )
+        return {"analysis_id": None, "human_approval_required": False, "terminal_unassessed": True}
     analysis_id = result.get("analysis_id")
     human_approval_required = bool(result.get("human_approval_required", False))
     return {
@@ -1399,6 +1410,7 @@ async def _analyze_owned(
     # sources N2's parsed text is the input, regardless of RAG chunk count.
     # The chunk count remains a separate Health/retrieval-coverage signal.
     human_approval_required = False
+    graph_terminal_unassessed = False
     if requires_text_analysis(document.document_type, parsed_text):
         # Repository read is tenant-scoped and bound to this processing grant.
         # Missing revision or mismatched identity yields NO coverage assertion.
@@ -1420,6 +1432,7 @@ async def _analyze_owned(
         )
         analysis_id = graph_result["analysis_id"]
         human_approval_required = graph_result["human_approval_required"]
+        graph_terminal_unassessed = bool(graph_result.get("terminal_unassessed"))
     else:
         analysis_id = None
         logger.info(
@@ -1455,6 +1468,7 @@ async def _analyze_owned(
     retry = (
         should_retry_analysis(status=status, rag_outcome=rag_outcome)
         and not human_approval_required
+        and not graph_terminal_unassessed
     )
 
     # #712 truthfulness contract:

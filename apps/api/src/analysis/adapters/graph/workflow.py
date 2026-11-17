@@ -66,6 +66,12 @@ _graph_app: ProjectGraph | None = None
 _critique_evaluator = CritiqueEvaluationService()
 
 
+# Do not enter N12/HITL with a FAILED N4 provider. An empty successful
+# extraction (NO_FINDINGS_UNASSESSED) is different: it remains reviewable.
+def route_after_risk_extraction(state: ProjectState) -> Literal["terminated", "critique"]:
+    return "terminated" if state.get("workflow_terminated") is True else "critique"
+
+
 # ── Conditional edge: route after critique ──────────────────────────────────
 #
 # Returns the *logical* routing decision string. The physical destination may
@@ -348,7 +354,11 @@ def build_workflow() -> ProjectWorkflow:
     workflow.add_edge("unclassified_document", END)
 
     # ── Extraction → Critique (N12) ─────────────────────────────────────
-    workflow.add_edge("risk_extractor", "critique")
+    workflow.add_conditional_edges(
+        "risk_extractor",
+        route_after_risk_extraction,
+        {"terminated": END, "critique": "critique"},
+    )
     workflow.add_edge("wbs_extractor", "critique")
     workflow.add_edge("budget_parser", "critique")
 
