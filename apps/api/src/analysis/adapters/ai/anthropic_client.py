@@ -330,8 +330,13 @@ class AIService:
             "C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS"
             if full_source_analysis else "C2PRO_LEGACY_AI_MAX_OUTPUT_TOKENS"
         )
+        segment_setting = (
+            "C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS"
+            if full_source_analysis else None
+        )
         raw_cap, raw_output = os.getenv(reserve_setting), os.getenv(output_setting)
-        if not raw_cap or not raw_output:
+        raw_segments = os.getenv(segment_setting) if segment_setting else "1"
+        if not raw_cap or not raw_output or not raw_segments:
             raise AIServiceError(
                 f"Governed AI requires explicit {reserve_setting} and {output_setting}"
             )
@@ -340,9 +345,11 @@ class AIService:
 
             max_charge = Decimal(raw_cap)
             output_limit = int(raw_output)
+            segment_limit = int(raw_segments)
             if (
                 not max_charge.is_finite() or max_charge <= 0
                 or not 256 <= output_limit <= 128_000
+                or not 1 <= segment_limit <= 8
             ):
                 raise ValueError("nonpositive call limits")
         except (ValueError, ArithmeticError):
@@ -378,6 +385,7 @@ class AIService:
                 metadata={
                     "budgeted_legacy": True,
                     "full_source_analysis": full_source_analysis,
+                    "max_provider_segments": segment_limit,
                 },
             ))
 

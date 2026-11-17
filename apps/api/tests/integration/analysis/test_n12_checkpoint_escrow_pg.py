@@ -90,6 +90,7 @@ async def test_n12_port_shared_escrow_replay_never_reissues_provider(
         monkeypatch.delenv("C2PRO_LEGACY_AI_ESCROW", raising=False)
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD", "0.35")
     monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_MAX_OUTPUT_TOKENS", "2048")
+    monkeypatch.setenv("C2PRO_LEGACY_AI_FULLSOURCE_MAX_SEGMENTS", "2")
 
     provider = N12ResponseStub(invalid_json=invalid_json)
     service = AIService(wrapper=provider, tenant_id=authority.tenant_id)
@@ -111,6 +112,7 @@ async def test_n12_port_shared_escrow_replay_never_reissues_provider(
         assert first.status == ("UNASSESSED" if invalid_json else "OK")
         assert len(provider.calls) == 1
         assert provider.calls[0].metadata["full_source_analysis"] is True
+        assert provider.calls[0].metadata["max_provider_segments"] == 2
         assert provider.calls[0].request_id
 
         row, tenant = await _receipt(authority.tenant_id)

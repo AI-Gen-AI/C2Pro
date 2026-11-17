@@ -658,7 +658,16 @@ class LLMClient:
         When the provider cannot finish, the caller fails closed and never caches
         or stores a partial extraction as a successful one.
         """
-        full_source = bool((request.metadata or {}).get("full_source_analysis"))
+        metadata = request.metadata or {}
+        full_source = bool(metadata.get("full_source_analysis"))
+        # Optional FINANCIAL guard for caller-authorized provider segments.
+        # Ordinary full-source review retains historical continuation behavior;
+        # governed escrow calls must explicitly set max_provider_segments.
+        max_segments = metadata.get("max_provider_segments")
+        if max_segments is not None and (
+            type(max_segments) is not int or not 1 <= max_segments <= 8
+        ):
+            raise ValueError("max_provider_segments must be an integer from 1 to 8")
         original_messages = list(api_kwargs["messages"])
         fragments: list[str] = []
         input_tokens = 0
@@ -724,6 +733,16 @@ class LLMClient:
                 )
             fragments.append(part)
             continuations += 1
+            if max_segments is not None and continuations >= max_segments:
+                # This segment was billable; record its real token usage.
+                # Never place another paid provider call outside the escrow
+                # segment policy. No partial JSON may be presented as success.
+                raise self._partial_generation_error(
+                    request,
+                    "Governed AI output incomplete: provider segment budget exhausted",
+                    input_tokens,
+                    output_tokens,
+                )
 
             # True provider capacity, not a keyword/paragraph/content cap.
             # If the conversation cannot accommodate the completed generation,
