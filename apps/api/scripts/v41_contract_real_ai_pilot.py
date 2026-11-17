@@ -8,6 +8,8 @@ SDK call governor and a disposable PostgreSQL database.
 """
 from __future__ import annotations
 
+from scripts.v41_private_cli_paths import authorize_runner_sec_paths
+
 import asyncio
 import hashlib
 import json
@@ -85,7 +87,8 @@ def _gate():
 
 
 def _save(report: dict, out: Path):
-    out.mkdir(parents=True, exist_ok=True)
+    if not out.is_dir() or out.is_symlink():
+        raise RuntimeError("PINNED_REAL_OUTPUT_DIR_NOT_AVAILABLE")
     (out / "real_analysis_evidence.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False, default=str), encoding="utf8",
     )
@@ -430,4 +433,7 @@ if __name__ == "__main__":
     parser.add_argument("--sec-pdf",required=True,type=Path)
     parser.add_argument("--out-dir",required=True,type=Path)
     args=parser.parse_args()
-    asyncio.run(pilot(args.sec_pdf,args.out_dir))
+    locked_pdf, locked_out = authorize_runner_sec_paths(
+        args.sec_pdf, args.out_dir, stage="real",
+    )
+    asyncio.run(pilot(locked_pdf, locked_out))
