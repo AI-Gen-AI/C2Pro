@@ -323,9 +323,31 @@ class CoherenceLlmGate:
         # Token counts: best-effort. The v1 evaluator does not currently
         # expose per-call token counts — default to 0 + Haiku constant.
         last_call = getattr(evaluator, "_last_call_metrics", None) or {}
-        input_tokens = int(last_call.get("input_tokens", 0))
-        output_tokens = int(last_call.get("output_tokens", 0))
-        model = str(last_call.get("model", "claude-3-haiku-20240307"))
+        input_tokens = int(last_call.get("input_tokens") or 0)
+        output_tokens = int(last_call.get("output_tokens") or 0)
+        model = str(last_call.get("model") or "claude-3-haiku-20240307")
+
+        # Staged NO-GO latch. The former v1 path can report $0 on an actual
+        # provider call with no finding or a swallowed provider exception.
+        # Never mark that attempt as a free, evaluated rule when strict
+        # financial accounting is explicitly required for this tenant/lane.
+        import os
+        if os.getenv("C2PRO_COHERENCE_STRICT_METERING") == "1":
+            from math import isfinite
+
+            billed = (
+                last_call.get("billing_status") == "METERED"
+                and isfinite(actual_cost)
+                and actual_cost >= 0
+            )
+            cached = last_call.get("cached") is True
+            if not billed or (
+                not cached and (actual_cost <= 0 or input_tokens + output_tokens <= 0)
+            ):
+                raise RuntimeError(
+                    "Coherence provider usage unverified; deny trusted "
+                    "evaluation until metered escrow is available"
+                )
 
         return signal, input_tokens, output_tokens, actual_cost, latency_ms, model
 

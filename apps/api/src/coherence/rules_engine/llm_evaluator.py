@@ -322,6 +322,9 @@ class LlmRuleEvaluator(RuleEvaluator):
         )
 
         port = self._llm_port
+        # Never carry a previous evaluation's token/cost receipt into a
+        # new provider attempt if this attempt fails before returning usage.
+        self._last_call_metrics = {"billing_status": "UNKNOWN"}
 
         try:
             result = await port.evaluate(
@@ -340,6 +343,31 @@ class LlmRuleEvaluator(RuleEvaluator):
             confidence = result.confidence
 
             raw_data = result.raw_data or {}
+            # A valid negative evaluation may still consume tokens. Capture
+            # its billable receipt. Do not copy missing attributes as None:
+            # the legacy gate's numeric fallback uses int(value).
+            self._last_call_metrics = {
+                **{
+                    key: raw_data[original]
+                    for key, original in (
+                        ("model", "model_used"),
+                        ("input_tokens", "input_tokens"),
+                        ("output_tokens", "output_tokens"),
+                        ("cost_usd", "cost_usd"),
+                        ("cached", "cached"),
+                    )
+                    if raw_data.get(original) is not None
+                },
+                "billing_status": (
+                    "UNKNOWN"
+                    if raw_data.get("error")
+                    or (
+                        raw_data.get("cost_usd") is None
+                        and not raw_data.get("cached")
+                    )
+                    else "METERED"
+                ),
+            }
 
             self.metrics.record_evaluation(
                 cost=raw_data.get("cost_usd", 0.0),
