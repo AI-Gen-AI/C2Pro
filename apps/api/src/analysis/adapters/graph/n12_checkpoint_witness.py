@@ -17,9 +17,9 @@ from src.analysis.adapters.ai.n12_checkpoint_escrow_port import (
 from src.analysis.domain.ai_source_text import llm_document_text
 
 
-def _reject() -> None:
-    # No confidential tenant, document or source contents in error messages.
-    raise N12CheckpointIdentityError("N12 durable predecessor checkpoint not verified")
+def _reject(reason: str) -> None:
+    # Fixed technical reason only: never include source contents or identities.
+    raise N12CheckpointIdentityError(f"N12_CHECKPOINT_UNVERIFIED:{reason}")
 
 
 async def verify_n12_durable_predecessor(
@@ -37,7 +37,7 @@ async def verify_n12_durable_predecessor(
     """
     cfg = config.get("configurable") if isinstance(config, dict) else None
     if not isinstance(cfg, Mapping):
-        _reject()
+        _reject("CONFIG_MISSING")
     thread = cfg.get("thread_id")
     runtime_checkpoint = cfg.get("checkpoint_id")
     namespace = cfg.get("checkpoint_ns", "")
@@ -48,7 +48,7 @@ async def verify_n12_durable_predecessor(
         or not runtime_checkpoint.strip()
         or not isinstance(namespace, str)
     ):
-        _reject()
+        _reject("RUNTIME_IDENTITY_MISSING")
 
     # Lazy import avoids the graph/nodes circular import at module load.
     from src.analysis.adapters.graph.workflow import get_graph_app
@@ -57,7 +57,7 @@ async def verify_n12_durable_predecessor(
     if not isinstance(getattr(graph, "checkpointer", None), AsyncPostgresSaver):
         # MemorySaver, Null, or arbitrary in-memory fixtures are NOT durable
         # financial authorization, even though they may return a snapshot.
-        _reject()
+        _reject("NOT_POSTGRES_SAVER")
     try:
         snapshot = await graph.aget_state({
             "configurable": {
@@ -83,7 +83,7 @@ async def verify_n12_durable_predecessor(
         or not isinstance(pending, (tuple, list))
         or "critique" not in pending
     ):
-        _reject()
+        _reject("PERSISTED_SNAPSHOT_INVALID")
 
     for key in (
         "tenant_id", "project_id", "document_id", "document_revision_id",
@@ -91,17 +91,17 @@ async def verify_n12_durable_predecessor(
         "resume_provenance",
     ):
         if persisted.get(key) != state.get(key):
-            _reject()
+            _reject("CHECKPOINT_INPUT_DRIFT")
 
     for required in (
         "tenant_id", "project_id", "document_id", "document_revision_id", "thread_id"
     ):
         if not isinstance(state.get(required), str) or not state[required].strip():
-            _reject()
+            _reject("REQUIRED_ID_MISSING")
     if (
         not isinstance(model_safe_source, str)
         or not model_safe_source.strip()
         or llm_document_text(persisted) != model_safe_source
         or llm_document_text(state) != model_safe_source
     ):
-        _reject()
+        _reject("SOURCE_PROJECTION_DRIFT")
