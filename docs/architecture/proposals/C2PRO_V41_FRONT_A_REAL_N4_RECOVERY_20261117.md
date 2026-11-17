@@ -48,3 +48,27 @@ El CLI admite `--original-sec-pdf` al producir el paquete offline. Verifica **SH
 Sobre el filing 8-K auténtico SHA256 `2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06`, las **50/50** citas ya confirmadas en N2 también aparecen en su página de la SEC: **4 exactas únicas, 45 únicas tras normalizar espacios y 1 exacta repetida en la misma página**. Esa última recibe etiqueta de ambigüedad, no localización única. Las otras 92 propuestas siguen sin cita verificable. La paginación y la literalidad del archivo separado de biblioteca de 94 páginas **no han sido verificadas**.
 
 El paquete de 142 fichas con trazabilidad de página se mantiene únicamente en el VPS privado, con modo `0600` y SHA256 `7bf753a485a92b7fc096763f7fbf623a9a1c3de878c8efa0df84030041931b43`. Su contenido es preliminar, no tiene `review_row_id`, credenciales de aprobación, sesión N12 ni permisos de promoción; no se publica en GitHub. Las dos pruebas nuevas de PDF original elevan a **10/10 las pruebas positivas y adversariales sobre las fuentes reales**, sin facturación. No confundir este control documental con N12, una factura auditada o UAT S1–S8.
+
+
+## Guardia S8707 y ejecución privada de los CLI (checkpoint CORE 17/11)
+
+La rama A introduce `scripts/v41_private_cli_paths.py` para impedir el uso de entradas/salidas arbitrarias: los comandos de preflight/ensayo solo admiten `$RUNNER_TEMP/c2pro-v41-{source,real}/sec_8k.pdf` y su directorio respectivo **en GitHub Actions**. El trabajo facturable permanece desactivado por workflow; esta restricción no abre llamadas al proveedor.
+
+La recuperación privada de evidencia requiere **autorización de rutas independiente de los argumentos** de la CLI:
+
+```bash
+export C2PRO_V41_PRIVATE_EVIDENCE_ROOT="/directorio/privado/evidencia"
+export C2PRO_V41_PRIVATE_OUTPUT_ROOT="/directorio/privado/salida"
+# El directorio de evidencia debe contener estos nombres exactos:
+# real_analysis_evidence.json, source_n2_protected.txt y, si se contrasta,
+# sec_8k.pdf (filing original con SHA comprobado).
+# El directorio de salida debe existir previamente; no usar producción.
+```
+
+El recuperador rechaza rutas fuera de esas raíces, nombres no autorizados, `..`, enlaces simbólicos de destino y sobrescrituras de resultados. La salida solo puede ser un JSON nuevo con permisos `0600`. No se imprimen ni publican los textos de la fuente o el contenido sensible de los 142 candidatos. Los dos directorios han de ser locales, privados y preparados por el operador; no conceder permisos de escritura al CLI sobre directorios del repositorio o producción.
+
+**Evidencia de seguridad:** Quality Gate SonarCloud de PR #1255 pasó de Rating C a A tras corregir 5 incidencias `pythonsecurity:S8707` en recuperador, preflight y piloto. Existió además un aviso posterior de fallo de ejecución de un nuevo análisis Sonar, cuya causa no está disponible sin el registro de la tarea; no afirmar que el intento posterior terminó con PASS. Drift Guard y Secret Scan sobre código corregido `cfaf570a85c27543f1ef1ba913472caab39ce2a1` PASS.
+
+**QA exacta del código corregido:** job Ops `b95cce0fb3ab4a67a382a5f1`, PostgreSQL temporal, `44 PASS / 19 SKIPPED`; 19 SKIP corresponden exclusivamente a fixtures privados (proyección N2 y paquete N4) que no se han vuelto a montar, no a fallos de pruebas. Log SHA256 `9e4b984cae766e002f5f09b1c52c1d3770a70c4f9d7d9e41486affb521ee4144`. No repetir las 24 llamadas N4 para remediar esa ausencia.
+
+**N12:** estimación condicional GPT-4.1 ~0,17–0,41 USD para 80k–183k tokens de entrada y 1k–4.096 salida con tarifa interna conservadora 2 USD/1M entrada y 10 USD/1M salida. La configuración actual mantiene reserva de full source `C2PRO_LEGACY_AI_FULLSOURCE_RESERVE_USD=1.20` USD, separada del gasto efectivo. Solicitar a CORE autorización específica de **máximo una llamada y reserva tope 1,20 USD**, después de verificar prompt/tokens, cobertura real N4 y checkpoint, y coordinar idempotencia/coste con B. Ninguna autorización queda implícita en este documento.
