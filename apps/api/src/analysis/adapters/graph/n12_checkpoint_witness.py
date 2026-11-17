@@ -55,6 +55,12 @@ async def verify_n12_durable_predecessor(
         _reject("RUNTIME_CHECKPOINT_ID_INVALID")
     if not isinstance(namespace, str):
         _reject("RUNTIME_NAMESPACE_INVALID")
+    # LangGraph injects the *current task* namespace "critique:<uuid>"
+    # inside a node. That is NOT a subgraph. The predecessor checkpoint
+    # is durably written at the ROOT namespace, empty string.
+    if namespace and not namespace.startswith("critique:"):
+        _reject("RUNTIME_NAMESPACE_UNEXPECTED")
+    root_namespace = ""
 
     # Lazy import avoids the graph/nodes circular import at module load.
     from src.analysis.adapters.graph.workflow import get_graph_app
@@ -67,7 +73,7 @@ async def verify_n12_durable_predecessor(
     try:
         snapshot = await graph.aget_state({
             "configurable": {
-                "thread_id": thread, "checkpoint_ns": namespace,
+                "thread_id": thread, "checkpoint_ns": root_namespace,
             },
         })
     except Exception as exc:
@@ -85,10 +91,11 @@ async def verify_n12_durable_predecessor(
         or not saved_cfg["checkpoint_id"].strip()
         or (
             runtime_checkpoint is not None
+            and namespace == root_namespace
             and saved_cfg["checkpoint_id"] != runtime_checkpoint
         )
         or saved_cfg.get("thread_id") != thread
-        or saved_cfg.get("checkpoint_ns", "") != namespace
+        or saved_cfg.get("checkpoint_ns", "") != root_namespace
         or not isinstance(persisted, Mapping)
         or not isinstance(pending, (tuple, list))
         or "critique" not in pending

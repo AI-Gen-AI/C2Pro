@@ -91,6 +91,20 @@ async def test_backend_saved_checkpoint_is_authoritative_when_runtime_omits_id(m
 
 
 @pytest.mark.asyncio
+async def test_n12_task_namespace_uses_persisted_root_predecessor(monkeypatch):
+    state = _state()
+    graph = StoredGraph(state)
+    monkeypatch.setattr(workflow, "get_graph_app", lambda: graph)
+    config = _config(state)
+    config["configurable"]["checkpoint_ns"] = "critique:" + str(uuid4())
+    config["configurable"].pop("checkpoint_id", None)
+    await verify_n12_durable_predecessor(
+        state=state, model_safe_source=SOURCE, config=config,
+    )
+    assert graph.invocations == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", [
     "missing_config", "wrong_thread", "memory_only",
     "missing_n12_route", "tenant_changed", "revision_changed",
