@@ -27,7 +27,7 @@ jobs:
       C2PRO_SOURCE_PDF_SHA256: 2370812124b5f42713153122fc45f1e5716dd85385d881bdd339bd87b9dced06
     steps:
       - name: Checkout exact QA candidate
-        uses: actions/checkout$3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Fail closed before any source work
         shell: bash
         run: |
@@ -59,7 +59,7 @@ jobs:
             --out-dir "$RUNNER_TEMP/c2pro-v41-source"
       - name: Attach sanitized source coverage
         if: always()
-        uses: actions/upload-artifact$ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: c2pro-v41-preflight-${{ github.sha }}
           path: ${{ runner.temp }}/c2pro-v41-source/preflight_sanitized.json
