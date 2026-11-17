@@ -52,10 +52,15 @@ Uso una vez que CORE publique el artefacto *sanitizado* del mismo run y
 SHA autorizados:
 
 ```bash
-cd apps/api
-PYTHONPATH=. python scripts/audit_v41_finance_evidence.py \
-    /ruta/segura/real_analysis_evidence.json
+# Desde el directorio de extracción fiable (no desde apps/api):
+cd /ruta/segura/extraida
+PYTHONPATH=/ruta/repo/apps/api python /ruta/repo/apps/api/scripts/audit_v41_finance_evidence.py \
+    _temp/c2pro-v41-real/real_analysis_evidence.json
 ```
+
+Por seguridad, la CLI solo admite rutas relativas contenidas dentro del
+directorio actual; rechaza rutas absolutas, `..`, symlinks que escapen de
+la raíz y nombres diferentes de `real_analysis_evidence.json`.
 
 No hace llamadas a modelos, PostgreSQL ni API externa. Valida por
 `Decimal` totales de N4 y ledger legado N3/N12, cuenta claves repetidas,
