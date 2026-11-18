@@ -772,6 +772,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     ["review_row_id mismatch", { review_row_id: "unrelated-review" }],
     ["artifact_id empty", { artifact_id: "" }],
     ["artifact_version null", { artifact_version: null }],
+    ["artifact_version zero", { artifact_version: 0 }],
   ])("keeps every existing CONFIRMED but refuses final readiness with %s", async (_case, badPin) => {
     const onReady = vi.fn();
     list.mockResolvedValue(complete(badPin));
