@@ -25,6 +25,7 @@ from src.core.ai.model_router import AITaskType, ModelTier
 
 class AnthropicN4WindowProvider:
     """Request bounded JSON, with NO full-source continuation or retry."""
+    provider_name = "anthropic"
 
     def __init__(
         self, *, wrapper: AnthropicWrapper,

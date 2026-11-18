@@ -187,3 +187,80 @@ async def test_unknown_billable_model_keeps_ledger_unknown_instead_of_fabricatin
             await conn.close()
     finally:
         await engine.dispose()
+
+
+async def test_n4_direct_openai_primary_settles_openai_not_anthropic():
+    """Direct provider is primary, not a fallback from Anthropic."""
+    class OpenAIPrimary(StubProvider):
+        model_name = "gpt-4.1"
+        provider_name = "openai"
+
+    a, project, engine = await _prepare()
+    provider = OpenAIPrimary()
+    runner = _runner(engine, provider)
+    try:
+        result = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert result.status == "COMPLETE"
+        conn = await asyncpg.connect(_DSN)
+        try:
+            await conn.execute("SELECT set_config('app.current_tenant',$1,false)", str(a.tenant_id))
+            rows = await conn.fetch("""
+                SELECT model_name,actual_model_name,actual_provider,spent_usd
+                FROM public.n4_usage_reservations
+                WHERE tenant_id=$1 ORDER BY window_ordinal
+            """,a.tenant_id)
+            assert len(rows) == result.total_windows
+            assert all(r["model_name"]=="gpt-4.1" for r in rows)
+            assert all(r["actual_model_name"]=="gpt-4.1" for r in rows)
+            assert all(r["actual_provider"]=="openai" for r in rows)
+            assert all(r["spent_usd"]==Decimal("0.020000") for r in rows)
+        finally:
+            await conn.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_n4_direct_openai_billable_partial_retains_actual_provider():
+    from src.core.ai.llm_client import LLMPartialGenerationError
+
+    class OpenAIPrimaryPartial(StubProvider):
+        model_name = "gpt-4.1"
+        provider_name = "openai"
+
+        async def generate(self, *, window, tenant_id, request_id):
+            self.calls.append(window.ordinal)
+            raise LLMPartialGenerationError(
+                "output incomplete, already billed",
+                model="gpt-4.1",input_tokens=114,output_tokens=7,
+                cost_usd=0.000284,
+            )
+    a, project, engine = await _prepare()
+    runner=_runner(engine,OpenAIPrimaryPartial())
+    try:
+        result=await runner.run(
+            authority=a,project_id=project,
+            model_safe_text=_source(),n2_projection_attested=True,
+        )
+        assert result.stopped_reason=="PROVIDER_RESULT_UNCERTAIN"
+        assert result.persisted_result_windows==0
+        conn=await asyncpg.connect(_DSN)
+        try:
+            await conn.execute("SELECT set_config('app.current_tenant',$1,false)",str(a.tenant_id))
+            row=await conn.fetchrow("""
+                SELECT status,spent_usd,actual_model_name,actual_provider,
+                       input_tokens,output_tokens
+                FROM public.n4_usage_reservations WHERE tenant_id=$1
+            """,a.tenant_id)
+            assert row["status"]=="SETTLED"
+            assert row["actual_model_name"]=="gpt-4.1"
+            assert row["actual_provider"]=="openai"
+            assert row["input_tokens"]==114
+            assert row["output_tokens"]==7
+            assert row["spent_usd"]==Decimal("0.000284")
+        finally:
+            await conn.close()
+    finally:
+        await engine.dispose()

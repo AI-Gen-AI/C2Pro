@@ -294,7 +294,8 @@ class N4IncrementalRunner:
                     cost = None
                 billable_model = getattr(exc, "model", None)
                 billable_provider = (
-                    "anthropic" if billable_model == self.provider.model_name
+                    getattr(self.provider, "provider_name", "anthropic")
+                    if billable_model == self.provider.model_name
                     else next(
                         (
                             route.provider
@@ -352,7 +353,7 @@ class N4IncrementalRunner:
                     authority, run_id, "PROVIDER_MODEL_MISMATCH",
                 )
             actual_provider = (
-                "anthropic"
+                getattr(self.provider, "provider_name", "anthropic")
                 if response.model_used == self.provider.model_name
                 else next(
                     (
@@ -381,6 +382,10 @@ class N4IncrementalRunner:
                     ordinal=window.ordinal,
                     reservation_id=reserved.reservation_id,
                     cost=cost, reason="INVALID_PROVIDER_ENVELOPE",
+                    actual_model_name=response.model_used,
+                    actual_provider=actual_provider,
+                    input_tokens=response.input_tokens,
+                    output_tokens=response.output_tokens,
                 )
                 return await self._outcome(
                     authority, run_id, "INVALID_PROVIDER_ENVELOPE",
