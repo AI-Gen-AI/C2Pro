@@ -153,6 +153,10 @@ async def _budget_read_connection() -> AsyncIterator[AsyncConnection]:
                              AS writable_tenants,
                            has_table_privilege(current_user, 'public.n4_budget_buckets', 'INSERT,UPDATE,DELETE')
                              AS writable_buckets,
+                           has_any_column_privilege(current_user, 'public.tenants', 'INSERT,UPDATE')
+                             AS writable_tenant_columns,
+                           has_any_column_privilege(current_user, 'public.n4_budget_buckets', 'INSERT,UPDATE')
+                             AS writable_bucket_columns,
                            has_column_privilege(current_user, 'public.tenants', 'id', 'SELECT')
                              AS select_tenants,
                            has_column_privilege(current_user, 'public.n4_budget_buckets', 'cap_usd', 'SELECT')
@@ -165,7 +169,8 @@ async def _budget_read_connection() -> AsyncIterator[AsyncConnection]:
                     not checks["has_cap"] or checks["extra_roles"] or
                     checks["owns_tables"] or checks["create_db"] or
                     checks["create_schema"] or checks["writable_tenants"] or
-                    checks["writable_buckets"] or not checks["select_tenants"] or
+                    checks["writable_buckets"] or checks["writable_tenant_columns"] or
+                    checks["writable_bucket_columns"] or not checks["select_tenants"] or
                     not checks["select_buckets"]):
                     raise RuntimeError("budget database capability check failed")
                 yield conn

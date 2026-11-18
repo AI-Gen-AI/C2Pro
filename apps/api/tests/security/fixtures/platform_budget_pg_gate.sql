@@ -59,6 +59,16 @@ GRANT SELECT (id,name,slug) ON public.tenants TO c2pro_customer_fixture_login;
 GRANT SELECT (tenant_id,scope_kind,scope_id,period_key,cap_usd)
  ON public.n4_budget_buckets TO c2pro_customer_fixture_login;
 
+-- Test a hostile column-only UPDATE grant; revoke before operating as reader.
+GRANT UPDATE (cap_usd) ON public.n4_budget_buckets TO c2pro_platform_budget_reader;
+DO $
+BEGIN
+  IF NOT has_any_column_privilege('c2pro_budget_fixture_login','public.n4_budget_buckets','UPDATE')
+  THEN RAISE EXCEPTION 'FAIL column-level UPDATE grant not detected'; END IF;
+  RAISE NOTICE 'PG_NEGATIVE_PRIVILEGE_INJECTION_PASS: column-only UPDATE detectable';
+END $;
+REVOKE UPDATE (cap_usd) ON public.n4_budget_buckets FROM c2pro_platform_budget_reader;
+
 \connect - c2pro_budget_fixture_login
 DO $$
 DECLARE n integer; denied boolean; p record;
@@ -74,6 +84,8 @@ BEGIN
      OR has_database_privilege(current_user,current_database(),'CREATE')
      OR has_table_privilege(current_user,'public.tenants','INSERT,UPDATE,DELETE')
      OR has_table_privilege(current_user,'public.n4_budget_buckets','INSERT,UPDATE,DELETE')
+     OR has_any_column_privilege(current_user,'public.tenants','INSERT,UPDATE')
+     OR has_any_column_privilege(current_user,'public.n4_budget_buckets','INSERT,UPDATE')
   THEN RAISE EXCEPTION 'FAIL role has write/create'; END IF;
   IF NOT has_column_privilege(current_user,'public.tenants','ai_budget_monthly','SELECT')
      OR NOT has_column_privilege(current_user,'public.n4_budget_buckets','cap_usd','SELECT')
