@@ -3640,6 +3640,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/platform/budgets/limit:
+    patch:
+      tags:
+      - Platform budgets
+      summary: Update Platform Budget Limit Disabled
+      description: 'Explicitly registered owner-only endpoint, HARD OFF until security
+        GO.
+
+
+        This handler NEVER obtains a database session or calls the unmounted
+
+        transaction reference implementation. Configuration cannot enable writes.
+
+        Any future activation requires a reviewed code change and new security QA.'
+      operationId: update_platform_budget_limit_disabled_api_v1_platform_budgets_limit_patch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetLimitEditInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/compliance/cookies/consent:
     post:
       tags:
@@ -5788,6 +5823,51 @@ components:
       - notes
       - items
       title: BudgetData
+    BudgetLimitEditInput:
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        period_key:
+          type: string
+          pattern: ^20\d\d-(0[1-9]|1[0-2])$
+          title: Period Key
+        expected_cap_usd:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: string
+          title: Expected Cap Usd
+        new_cap_usd:
+          anyOf:
+          - type: number
+            exclusiveMinimum: 0.0
+          - type: string
+          title: New Cap Usd
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 10
+          title: Reason
+        request_id:
+          type: string
+          format: uuid
+          title: Request Id
+        confirmed:
+          type: boolean
+          const: true
+          title: Confirmed
+      type: object
+      required:
+      - tenant_id
+      - period_key
+      - expected_cap_usd
+      - new_cap_usd
+      - reason
+      - request_id
+      - confirmed
+      title: BudgetLimitEditInput
     BudgetLineItem:
       properties:
         id:
