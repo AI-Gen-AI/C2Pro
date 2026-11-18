@@ -16,8 +16,8 @@ import asyncpg
 from celery import Celery
 
 REVIEW_ID = UUID("490deaaf-548f-40c7-97be-979f308c1006")
-SOURCE_SHA = "1b4bae3850ce160a825b0459ac6e9a3fec6f2a58"
-INTENT_EVENT = "analysis.uat_dispatch_intent"
+SOURCE_SHA = "4af6421981a5b5d72ca58d86fb632e020f0d6982"
+INTENT_EVENT = "analysis.uat_dispatch_after_parser_gate_fix"
 
 
 async def _verify_and_mark_intent() -> tuple[str, str, int]:
