@@ -117,3 +117,6 @@ scripts/*
 !scripts/run_uat_api.sh
 !scripts/admin_ops_bootstrap.py
 !scripts/checkpoint_bootstrap.py
+
+# Explicitly authorized one-off UAT-only dispatch script (PR #1266)
+!scripts/uat_governed_dispatch_once.py
