@@ -28,12 +28,17 @@ from tests.integration.analysis.test_n4_incremental_store_pg import (
 )
 
 _DSN = os.getenv("C2PRO_N4_SCRATCH_DSN", "")
+_OPS_JOB = os.getenv("C2PRO_OPS_JOB_ID", "")
 if _DSN:
     assert urlparse(_DSN).path.rstrip("/").endswith("_test")
 
 pytestmark = [
     pytest.mark.asyncio,
-    pytest.mark.skipif(not _DSN, reason="requires disposable upgraded *_test PostgreSQL"),
+    pytest.mark.alembic_schema,
+    pytest.mark.skipif(
+        not (_DSN or _OPS_JOB),
+        reason="requires explicitly owned scratch PostgreSQL or private OPS job",
+    ),
 ]
 
 
@@ -44,7 +49,11 @@ async def _tenant_context(session: AsyncSession, tenant_id):
     )
 
 
-async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed():
+async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_engine):
+    # test_engine enforces the OPS-owned DB identity before any connection.
+    dsn = _DSN or test_engine.url.set(drivername="postgresql").render_as_string(
+        hide_password=False,
+    )
     authority = _new_authority(uuid4(), uuid4(), uuid4())
     project = uuid4()
     source = "The EPC contractor shall provide notices to the Employer. " * 13
@@ -52,7 +61,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed():
         source, revision_id=str(authority.revision_id),
         max_context_chars=600, overlap_chars=50,
     )
-    conn = await asyncpg.connect(_DSN)
+    conn = await asyncpg.connect(dsn)
     try:
         await _seed_identity(conn, authority=authority, project=project)
         await conn.execute(
@@ -73,7 +82,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed():
     finally:
         await conn.close()
     engine = create_async_engine(
-        _DSN.replace("postgresql://", "postgresql+asyncpg://", 1),
+        dsn.replace("postgresql://", "postgresql+asyncpg://", 1),
         pool_pre_ping=True,
     )
     try:
@@ -140,7 +149,11 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed():
         await engine.dispose()
 
 
-async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap():
+async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap(test_engine):
+    # test_engine enforces the OPS-owned DB identity before any connection.
+    dsn = _DSN or test_engine.url.set(drivername="postgresql").render_as_string(
+        hide_password=False,
+    )
     authority = _new_authority(uuid4(), uuid4(), uuid4())
     project = uuid4()
     windows = plan_n4_source_windows(
@@ -148,7 +161,7 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
         revision_id=str(authority.revision_id),
         max_context_chars=600, overlap_chars=50,
     )
-    conn = await asyncpg.connect(_DSN)
+    conn = await asyncpg.connect(dsn)
     try:
         await _seed_identity(conn, authority=authority, project=project)
         await conn.execute(
@@ -159,7 +172,7 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
     finally:
         await conn.close()
     engine = create_async_engine(
-        _DSN.replace("postgresql://", "postgresql+asyncpg://", 1),
+        dsn.replace("postgresql://", "postgresql+asyncpg://", 1),
         pool_pre_ping=True,
     )
     try:
@@ -181,7 +194,7 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
                     period_key="2026-11", inherit_approved_scopes=True,
                 )
 
-        conn = await asyncpg.connect(_DSN)
+        conn = await asyncpg.connect(dsn)
         try:
             await conn.execute(
                 """INSERT INTO public.n4_budget_buckets
