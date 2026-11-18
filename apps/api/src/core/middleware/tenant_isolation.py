@@ -40,6 +40,7 @@ PLATFORM_ROUTE_REGISTRY = frozenset(
     {
         ("GET", "/api/v1/admin/dlq"),
         ("GET", "/api/v1/platform/budgets"),
+        ("PATCH", "/api/v1/platform/budgets/limit"),
         ("POST", "/api/v1/admin/dlq/{dlq_id}/retry"),
     }
 )
@@ -98,7 +99,7 @@ def assert_platform_route_registry(app: Any) -> None:
             continue
         expected_module = (
             "src.admin.adapters.http.platform_budget_router"
-            if normalized_path == "/api/v1/platform/budgets"
+            if normalized_path in {"/api/v1/platform/budgets", "/api/v1/platform/budgets/limit"}
             else "src.admin.adapters.http.router"
         )
         if matches[0].endpoint.__module__ != expected_module:

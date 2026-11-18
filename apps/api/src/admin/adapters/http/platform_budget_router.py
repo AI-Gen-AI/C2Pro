@@ -17,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from src.admin.application.platform_budget_limit_service import BudgetLimitEditInput
 from src.config import settings
 from src.core.auth.platform_operator import PlatformOperator, require_platform_operator
 from src.core.security import security_scheme
@@ -215,3 +216,18 @@ async def list_platform_budgets(
         items=[_item(dict(r)) for r in rows],
         total=total, limit=limit, offset=offset, period_key=period,
     )
+
+
+@router.patch("/limit")
+async def update_platform_budget_limit_disabled(
+    payload: BudgetLimitEditInput,
+    operator: PlatformOperator = Depends(budget_owner_only),
+) -> None:
+    """Explicitly registered owner-only endpoint, HARD OFF until security GO.
+
+    This handler NEVER obtains a database session or calls the unmounted
+    transaction reference implementation. Configuration cannot enable writes.
+    Any future activation requires a reviewed code change and new security QA.
+    """
+    del payload, operator
+    raise HTTPException(status_code=503, detail="Budget editing disabled pending security approval")
