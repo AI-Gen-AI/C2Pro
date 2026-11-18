@@ -310,7 +310,8 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
           const brief = shortAnalysis(finding.risk.description);
           const consequence = [finding.risk.consequences, finding.risk.consequence].map(readable).find(Boolean);
-          const impact = [finding.risk.impact, finding.risk.financial_impact, finding.risk.schedule_impact].map(readable).find(Boolean);
+          // RiskItem.impact is a legacy severity label: do not report it as quantified business impact.
+          const impact = [finding.risk.financial_impact, finding.risk.schedule_impact].map(readable).find(Boolean);
           const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
             .find((value) => typeof value === "string" && value.trim().length > 0);
           const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
