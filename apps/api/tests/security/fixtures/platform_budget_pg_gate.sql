@@ -5,6 +5,10 @@ CREATE ROLE c2pro_platform_budget_reader NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREAT
 CREATE ROLE c2pro_budget_fixture_login LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 CREATE ROLE c2pro_customer_fixture_login LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
 GRANT c2pro_platform_budget_reader TO c2pro_budget_fixture_login;
+-- Disposable credentials, valid only while pg_virtualenv cluster exists.
+ALTER ROLE c2pro_budget_fixture_login PASSWORD 'fixture-only-1274-pg16';
+ALTER ROLE c2pro_customer_fixture_login PASSWORD 'fixture-only-1274-pg16';
+\setenv PGPASSWORD fixture-only-1274-pg16
 
 CREATE TABLE public.tenants (
   id uuid PRIMARY KEY, name text NOT NULL, slug text NOT NULL,
