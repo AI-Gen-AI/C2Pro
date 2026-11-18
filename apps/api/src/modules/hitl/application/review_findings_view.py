@@ -88,7 +88,7 @@ _RISK_FIELDS = (
     # These may be absent on older candidates. The UI must display unknown instead of inventing values.
     "consequence",
     "consequences",
-    "impact",
+    # RiskItem.impact is a legacy SEVERITY enum, not a financial/operational consequence.
     "financial_impact",
     "schedule_impact",
     "mitigation_suggestion",
