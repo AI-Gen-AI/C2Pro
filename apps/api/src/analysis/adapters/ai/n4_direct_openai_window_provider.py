@@ -25,6 +25,7 @@ from src.core.ai.llm_client import LLMRequest
 
 
 class DirectOpenAIN4WindowProvider:
+    provider_name = "openai"
     fallback_routes = ()
     approved_fallback_models = frozenset()
     fallback_reservation_usd = None
