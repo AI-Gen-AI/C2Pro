@@ -1,12 +1,10 @@
 """Disposable PostgreSQL test of inherited N4 sublimits; no model API calls.
 
-Requires C2PRO_N4_SCRATCH_DSN ending in *_test, with Alembic upgraded.
+Uses the guarded test_engine on a disposable PostgreSQL database; never production.
 """
 from __future__ import annotations
 
-import os
 from decimal import Decimal
-from urllib.parse import urlparse
 from uuid import uuid4
 
 import asyncpg
@@ -27,19 +25,19 @@ from tests.integration.analysis.test_n4_incremental_store_pg import (
     _seed_identity,
 )
 
-_DSN = os.getenv("C2PRO_N4_SCRATCH_DSN", "")
-_OPS_JOB = os.getenv("C2PRO_OPS_JOB_ID", "")
-if _DSN:
-    assert urlparse(_DSN).path.rstrip("/").endswith("_test")
+pytestmark = [pytest.mark.asyncio, pytest.mark.alembic_schema]
 
-pytestmark = [
-    pytest.mark.asyncio,
-    pytest.mark.alembic_schema,
-    pytest.mark.skipif(
-        not (_DSN or _OPS_JOB),
-        reason="requires explicitly owned scratch PostgreSQL or private OPS job",
-    ),
-]
+
+def _scratch_dsn(test_engine) -> str:
+    """test_engine runs its own OPS DB binding check before this function."""
+    url = test_engine.url
+    db_name = url.database or ""
+    # Do not risk an external, shared or production DB when running these tests.
+    if not (db_name.endswith("_test") or db_name.startswith("c2pro_ops_")):
+        raise RuntimeError("N4 PG test requires disposable database identity")
+    if url.host not in (None, "localhost", "127.0.0.1"):
+        raise RuntimeError("N4 PG test refuses remote database host")
+    return url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
 async def _tenant_context(session: AsyncSession, tenant_id):
@@ -50,10 +48,7 @@ async def _tenant_context(session: AsyncSession, tenant_id):
 
 
 async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_engine):
-    # test_engine enforces the OPS-owned DB identity before any connection.
-    dsn = _DSN or test_engine.url.set(drivername="postgresql").render_as_string(
-        hide_password=False,
-    )
+    dsn = _scratch_dsn(test_engine)
     authority = _new_authority(uuid4(), uuid4(), uuid4())
     project = uuid4()
     source = "The EPC contractor shall provide notices to the Employer. " * 13
@@ -150,10 +145,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_e
 
 
 async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap(test_engine):
-    # test_engine enforces the OPS-owned DB identity before any connection.
-    dsn = _DSN or test_engine.url.set(drivername="postgresql").render_as_string(
-        hide_password=False,
-    )
+    dsn = _scratch_dsn(test_engine)
     authority = _new_authority(uuid4(), uuid4(), uuid4())
     project = uuid4()
     windows = plan_n4_source_windows(
