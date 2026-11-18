@@ -650,8 +650,8 @@ describe("UX-REG-04 source comparison identity and stale responses", () => {
     expect(record).not.toHaveBeenCalled();
     respond?.(candidate({ fencing_token: 12 }));
     await refresh;
+    await waitFor(() => expect(screen.getByTestId("finding-source-reviewed-0")).not.toBeChecked());
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
-    expect(screen.getByTestId("finding-source-reviewed-0")).not.toBeChecked();
   });
 
   it("clears the comparison on error and requires fresh acknowledgement after retry of the same revision", async () => {
