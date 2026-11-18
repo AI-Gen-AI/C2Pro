@@ -19,7 +19,7 @@ from sqlalchemy import text
 from src.analysis.adapters.ai.n4_anthropic_window_provider import AnthropicN4WindowProvider
 from src.analysis.application.n4_incremental_runner import N4IncrementalRunner
 from src.analysis.domain.ai_source_text import llm_document_text
-from src.analysis.domain.n12_source_attestation import is_n12_source_attestation_valid
+from src.documents.application.n4_source_identity import is_n4_source_identity_valid
 from src.analysis.domain.risk_provenance import classify_quote
 from src.core.ai.anthropic_wrapper import AnthropicWrapper
 from src.core.ai.model_router import ModelTier
@@ -53,8 +53,8 @@ def _identity(state: Mapping[str, Any]) -> tuple[Any, UUID, str]:
     projection = state.get("anonymized_text")
     if not isinstance(original, str) or not isinstance(projection, str) or not projection.strip():
         raise N4GraphBridgeBlocked("N4 N2-safe source projection is missing")
-    if not is_n12_source_attestation_valid(state, source_text=original):
-        raise N4GraphBridgeBlocked("N4 pinned source parser/revision attestation unavailable")
+    if not is_n4_source_identity_valid(state, parsed_text=original):
+        raise N4GraphBridgeBlocked("N4 pinned revision parser-text provenance unavailable")
     if llm_document_text(state) != projection:
         raise N4GraphBridgeBlocked("N4 LLM-facing source is not the pinned N2 projection")
     # Only the exact input projection's coverage may be established; N2 may have

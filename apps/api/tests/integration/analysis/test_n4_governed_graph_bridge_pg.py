@@ -77,6 +77,18 @@ async def test_graph_bridge_persists_retrieves_exact_revision_candidates_without
         "document_text": original,
         "anonymized_text": original,
         "pii_anonymization_complete": True,
+        "n4_source_identity": {
+            "tenant_id": str(authority.tenant_id),
+            "project_id": str(project),
+            "document_id": str(authority.document_id),
+            "revision_id": str(authority.revision_id),
+            "parsed_text_sha256": sha256(original.encode("utf-8")).hexdigest(),
+            "blob_hash": "a" * 64,
+            "source_kind": "REVISION_PINNED_PARSER_TEXT",
+            "parser_coverage_status": "UNVERIFIED",
+            "parser_origin": "docx_file_parser",
+            "original_document_completeness_certified": False,
+        },
         "n12_source_attestation": {
             "tenant_id": str(authority.tenant_id),
             "project_id": str(project),

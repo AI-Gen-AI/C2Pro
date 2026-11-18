@@ -29,6 +29,16 @@ def _state():
         "document_text": original,
         "anonymized_text": original,
         "pii_anonymization_complete": True,
+        "n4_source_identity": {
+            "tenant_id": str(tenant), "project_id": str(project),
+            "document_id": str(document), "revision_id": str(revision),
+            "parsed_text_sha256": sha256(original.encode("utf-8")).hexdigest(),
+            "blob_hash": "a"*64,
+            "source_kind": "REVISION_PINNED_PARSER_TEXT",
+            "parser_coverage_status": "UNVERIFIED",
+            "parser_origin": "docx_file_parser",
+            "original_document_completeness_certified": False,
+        },
         "n12_source_attestation": {
             "tenant_id": str(tenant), "project_id": str(project),
             "document_id": str(document), "revision_id": str(revision),
@@ -58,8 +68,8 @@ def test_graph_ledger_refuses_unowned_documents_and_unattested_source():
         assert result_auth is auth
         assert str(project) == state["project_id"]
         assert projection == state["anonymized_text"]
-        state["n12_source_attestation"]["parsed_text_sha256"] = "0" * 64
-        with pytest.raises(bridge.N4GraphBridgeBlocked, match="attestation"):
+        state["n4_source_identity"]["parsed_text_sha256"] = "0" * 64
+        with pytest.raises(bridge.N4GraphBridgeBlocked, match="provenance"):
             bridge._identity(state)
 
 

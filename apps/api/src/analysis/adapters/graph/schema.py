@@ -61,6 +61,9 @@ class ProjectState(TypedDict):
     # Server-minted parser coverage and exact-text lineage for the pinned
     # revision; absent for previews, older ingestion, and unverified parsers.
     n12_source_attestation: dict[str, str] | None
+    # N4 can analyze revision-pinned stored parser text provisionally even
+    # when N12 full-original-source coverage is expressly UNVERIFIED.
+    n4_source_identity: dict[str, Any] | None
     # Why the temporal-review seam did or did not require approval (N12).
     temporal_review_reason: str
     human_approval_required: bool
