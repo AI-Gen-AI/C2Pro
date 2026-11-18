@@ -8,6 +8,10 @@ from decimal import Decimal
 from uuid import uuid4
 
 import asyncpg
+import asyncio
+import os
+import sys
+from pathlib import Path
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -40,6 +44,39 @@ def _scratch_dsn(test_engine) -> str:
     return url.set(drivername="postgresql").render_as_string(hide_password=False)
 
 
+async def _migrate_scratch(test_engine) -> str:
+    """Apply the actual schema migrations only to an attested disposable DB."""
+    dsn = _scratch_dsn(test_engine)
+    async with test_engine.connect() as connection:
+        before = await connection.scalar(text(
+            "SELECT to_regclass('public.n4_budget_buckets')"
+        ))
+    if before is not None:
+        return dsn
+    api_dir = Path(__file__).resolve().parents[3]
+    env = os.environ.copy()
+    env["DATABASE_URL"] = dsn
+    migration = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "heads",
+        cwd=str(api_dir), env=env,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await migration.communicate()
+    if migration.returncode != 0:
+        raise RuntimeError(
+            "Alembic scratch-only migration failed: "
+            + (stderr or stdout)[-3000:].decode(errors="replace")
+        )
+    await test_engine.dispose()  # drop cached metadata after external schema creation
+    async with test_engine.connect() as connection:
+        after = await connection.scalar(text(
+            "SELECT to_regclass('public.n4_budget_buckets')"
+        ))
+    if after is None:
+        raise RuntimeError("Alembic reported success but N4 ledger schema is absent")
+    return dsn
+
+
 async def _tenant_context(session: AsyncSession, tenant_id):
     await session.execute(
         text("SELECT set_config('app.current_tenant', :tenant, true)"),
@@ -48,7 +85,7 @@ async def _tenant_context(session: AsyncSession, tenant_id):
 
 
 async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_engine):
-    dsn = _scratch_dsn(test_engine)
+    dsn = await _migrate_scratch(test_engine)
     authority = _new_authority(uuid4(), uuid4(), uuid4())
     project = uuid4()
     source = "The EPC contractor shall provide notices to the Employer. " * 13
@@ -145,7 +182,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_e
 
 
 async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap(test_engine):
-    dsn = _scratch_dsn(test_engine)
+    dsn = await _migrate_scratch(test_engine)
     authority = _new_authority(uuid4(), uuid4(), uuid4())
     project = uuid4()
     windows = plan_n4_source_windows(
