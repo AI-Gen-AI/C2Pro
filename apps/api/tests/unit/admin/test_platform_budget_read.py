@@ -97,6 +97,7 @@ def test_exact_registry_only_read_route() -> None:
 @pytest.mark.asyncio
 async def test_customer_org_identity_does_not_cross_operator_boundary() -> None:
     from starlette.requests import Request
+
     from src.core.auth.platform_operator import PlatformIdentity, require_platform_operator
 
     request = Request({"type": "http", "method": "GET", "path": "/api/v1/platform/budgets"})
@@ -115,6 +116,7 @@ async def test_customer_org_identity_does_not_cross_operator_boundary() -> None:
 @pytest.mark.asyncio
 async def test_token_privilege_claim_does_not_grant_platform_access() -> None:
     from starlette.requests import Request
+
     from src.core.auth.platform_operator import PlatformIdentity, require_platform_operator
 
     request = Request({"type": "http", "method": "GET", "path": "/api/v1/platform/budgets"})

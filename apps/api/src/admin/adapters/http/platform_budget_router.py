@@ -86,6 +86,7 @@ def _item(row: dict[str, object]) -> PlatformBudgetItem:
     status = "NO_TENANT_BUCKET" if bucket_cap is None else (
         "COUNTERS_DIVERGED" if diverged else "RECONCILED"
     )
+    last_updated = row.get("updated_at")
     return PlatformBudgetItem(
         tenant_id=str(row["tenant_id"]),
         name=str(row["name"]),
@@ -97,9 +98,7 @@ def _item(row: dict[str, object]) -> PlatformBudgetItem:
         available_usd=available,
         utilisation_percent=percent,
         budget_status=status,
-        last_tenant_update=(
-            row["updated_at"] if isinstance(row.get("updated_at"), datetime) else None
-        ),
+        last_tenant_update=last_updated if isinstance(last_updated, datetime) else None,
     )
 
 

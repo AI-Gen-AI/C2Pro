@@ -125,6 +125,7 @@ def test_missing_and_divergent_buckets_are_disclosed_not_marked_reconciled() -> 
 
 def test_timestamp_is_typed_or_unset() -> None:
     from datetime import UTC, datetime
+
     from src.admin.adapters.http.platform_budget_router import _item
     row = _row("tenant-1", "Alpha")
     row["updated_at"] = "bad-timestamp"
