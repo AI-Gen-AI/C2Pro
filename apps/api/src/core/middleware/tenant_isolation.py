@@ -39,6 +39,7 @@ logger = structlog.get_logger()
 PLATFORM_ROUTE_REGISTRY = frozenset(
     {
         ("GET", "/api/v1/admin/dlq"),
+        ("GET", "/api/v1/platform/budgets"),
         ("POST", "/api/v1/admin/dlq/{dlq_id}/retry"),
     }
 )
@@ -95,7 +96,12 @@ def assert_platform_route_registry(app: Any) -> None:
                 f"found {len(matches)}"
             )
             continue
-        if matches[0].endpoint.__module__ != "src.admin.adapters.http.router":
+        expected_module = (
+            "src.admin.adapters.http.platform_budget_router"
+            if normalized_path == "/api/v1/platform/budgets"
+            else "src.admin.adapters.http.router"
+        )
+        if matches[0].endpoint.__module__ != expected_module:
             errors.append(
                 f"{method} {normalized_path} must resolve to the cross-tenant admin router"
             )
