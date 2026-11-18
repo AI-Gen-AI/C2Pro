@@ -81,6 +81,19 @@ def _limits() -> tuple[Decimal, Decimal, int, int]:
     return run, call, max_chars, overlap
 
 
+def _uat_inherited_scopes(tenant_id: UUID) -> bool:
+    """Require exact UAT environment + approved tenant; never opt in by key alone."""
+    if os.getenv("C2PRO_N4_UAT_INHERIT_SCOPES") != "1":
+        return False
+    environment = os.getenv("ENVIRONMENT", "").strip().lower()
+    approved = os.getenv("C2PRO_N4_UAT_APPROVED_TENANT_ID", "").strip()
+    if environment not in {"uat", "pilot"} or approved != str(tenant_id):
+        raise N4GraphBridgeBlocked(
+            "N4 child-budget inheritance requires named UAT and approved tenant"
+        )
+    return True
+
+
 def _candidate_payload(claim: Mapping[str, Any], refs: list, source: str) -> dict[str, Any]:
     if not isinstance(claim, dict) or not isinstance(refs, list) or not refs:
         raise N4GraphBridgeBlocked("N4 candidate lacks persisted claim and source reference")
@@ -155,6 +168,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         max_context_chars=chars,
         overlap_chars=overlap,
         enabled=True,
+        inherit_approved_scopes=_uat_inherited_scopes(authority.tenant_id),
     )
     outcome = await runner.run(
         authority=authority, project_id=project_id,
