@@ -323,6 +323,13 @@ async def get_session_with_tenant(tenant_id: UUID) -> AsyncGenerator[AsyncSessio
             logger.debug("RLS_tenant_reset", tenant_id=str(tenant_id))
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Return the existing initialized session factory for fenced operations."""
+    if _session_factory is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+    return _session_factory
+
+
 @asynccontextmanager
 async def get_raw_session() -> AsyncGenerator[AsyncSession, None]:
     """

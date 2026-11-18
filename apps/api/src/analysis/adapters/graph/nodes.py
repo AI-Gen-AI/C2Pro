@@ -314,6 +314,42 @@ async def router_node(state: ProjectState) -> ProjectState:
 
 async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
+    if os.getenv("C2PRO_N4_GRAPH_LEDGER_ENABLED") == "1":
+        from src.analysis.adapters.graph.n4_governed_bridge import (
+            run_governed_n4_in_graph,
+        )
+        try:
+            update = await run_governed_n4_in_graph(state)
+            state.update(update)
+            state["node_results"] = [
+                *state.get("node_results", []),
+                NodeResult(
+                    node="risk_extractor",
+                    status=(
+                        NodeStatus.OK if update["extracted_risks"]
+                        else NodeStatus.DEGRADED
+                    ),
+                    degradation_reason=(
+                        None if update["extracted_risks"]
+                        else "zero_findings_unassessed"
+                    ),
+                ),
+            ]
+            _append_risk_extraction_summary(state)
+            return state
+        except Exception as exc:  # noqa: BLE001
+            # No fallback to the old unbudgeted, potentially truncated tool:
+            # even an unavailable provider/budget is a material failed node.
+            failed = _failed_node_result("risk_extractor", exc)
+            await _maybe_await(_persist_node_error(state, failed))
+            _mark_risk_extraction_honest_failure(
+                state,
+                reason="N4 governed source-window analysis unavailable or incomplete",
+                exc=exc,
+            )
+            state["node_results"] = [*state.get("node_results", []), failed]
+            _append_risk_extraction_summary(state)
+            return state
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
         _mark_risk_extraction_honest_failure(
             state,
