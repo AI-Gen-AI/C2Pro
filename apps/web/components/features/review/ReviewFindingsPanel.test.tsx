@@ -125,7 +125,7 @@ describe("ReviewFindingsPanel", () => {
       expect(screen.getByTestId("finding-quote-0")).toHaveTextContent(QUOTE);
       expect(screen.getByTestId("finding-description-0")).toHaveTextContent("Analysis (AI-generated): A generated summary.");
       expect(screen.getByTestId("finding-description-0")).not.toHaveTextContent(QUOTE);
-      expect(screen.getByTestId("finding-trace-0")).toHaveTextContent(/found verbatim in the document/i);
+      expect(screen.getByTestId("finding-trace-0")).toHaveTextContent(/literal match in the analyzed text/i);
       expect(screen.queryByTestId("finding-quote-missing-0")).toBeNull();
     });
 
@@ -388,7 +388,7 @@ describe("ReviewFindingsPanel", () => {
         <ReviewFindingsPanel reviewRowId={ROW} onReadinessChange={onReady} />
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
     await client.invalidateQueries({ queryKey: reviewFindingsKey(auth.orgId, auth.userId, ROW) });
     expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toBeInTheDocument();
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
@@ -410,18 +410,18 @@ describe("ReviewFindingsPanel", () => {
     list.mockRejectedValue(new AxiosError("nf", "404", undefined, undefined, { status: 404, data: {} } as never));
     renderPanel();
     const error = await screen.findByTestId(`review-findings-error-${ROW}`);
-    expect(error).toHaveTextContent(/individual findings could not be loaded/i);
+    expect(error).toHaveTextContent(/findings are unavailable/i);
     expect(error).toHaveTextContent(/final approval is unavailable/i);
     expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
   });
 
-  it("allows a separate final human approval for an authoritative empty findings read", async () => {
+  it("blocks final approval for an empty findings list without verified analysis coverage", async () => {
     const onReady = vi.fn();
     list.mockResolvedValue(view({ findings: [] }));
     renderPanel(onReady);
     expect(await screen.findByTestId(`review-findings-empty-${ROW}`)).toHaveTextContent(/lists no individual findings/i);
-    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
-    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/ready for separate final approval/i);
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent(/final approval remains blocked/i);
   });
 
   it("S5 runner race: a card mounted before the candidate was replaced first paints the CACHED empty read, then the fresh findings", async () => {
@@ -448,7 +448,7 @@ describe("ReviewFindingsPanel", () => {
 });
 
 
-describe("ACC-01 compact findings and source contradiction", () => {
+describe("HITL-UX-01 concise, source-bounded risk review", () => {
   it("shows a short executive view and keeps the full AI analysis and literal evidence behind a disclosure", async () => {
     const full = "The contract exposes the client to additional costs through a fixed retention and an undefined certificate issuance date. ".repeat(7);
     list.mockResolvedValue(view({ findings: [finding(0, {
@@ -458,6 +458,9 @@ describe("ACC-01 compact findings and source contradiction", () => {
         severity: "HIGH",
         description: full,
         mitigation_suggestion: "Negotiate a release deadline and a partial release milestone.",
+        consequences: "Retention may stay outstanding until the certificate is issued.",
+        impact: "Working capital exposure; amount not quantified.",
+        source_locator: "Section 2.3",
         clause_ref: "2.3",
         source_quote: "A retention of 5% shall be withheld from each payment.",
         source_quote_status: "VERIFIED",
@@ -467,6 +470,9 @@ describe("ACC-01 compact findings and source contradiction", () => {
     const executive = await screen.findByTestId("finding-brief-0");
     expect(executive.textContent?.length).toBeLessThan(220);
     expect(screen.getByTestId("finding-action-summary-0")).toHaveTextContent("Negotiate a release deadline");
+    expect(screen.getByTestId("finding-consequences-0")).toHaveTextContent("Retention may stay outstanding");
+    expect(screen.getByTestId("finding-impact-0")).toHaveTextContent("amount not quantified");
+    expect(screen.getByTestId("finding-original-location-0")).toHaveTextContent("Suggested source location (not independently verified): Section 2.3");
     expect(screen.getByTestId("finding-evidence-0")).not.toHaveAttribute("open");
     await userEvent.click(screen.getByText("View evidence and full AI analysis"));
     expect(screen.getByTestId("finding-evidence-0")).toHaveAttribute("open");
@@ -474,7 +480,7 @@ describe("ACC-01 compact findings and source contradiction", () => {
     expect(screen.getByTestId("finding-quote-0")).toHaveTextContent("A retention of 5%");
   });
 
-  it("refuses a one-click confirmation when the verified 5.2 source provides a fourteen-day deadline", async () => {
+  it("does not make an automated semantic ruling from English deadline keywords", async () => {
     list.mockResolvedValue(view({ findings: [finding(0, {
       risk: {
         title: "Defect rectification",
@@ -485,9 +491,9 @@ describe("ACC-01 compact findings and source contradiction", () => {
       },
     })] }));
     renderPanel();
-    const warning = await screen.findByTestId("finding-source-conflict-0");
-    expect(warning).toHaveTextContent(/verified contract quotation/i);
-    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    await screen.findByTestId("finding-0");
+    expect(screen.queryByTestId("finding-source-conflict-0")).toBeNull();
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
     expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
     expect(record).not.toHaveBeenCalled();
   });
