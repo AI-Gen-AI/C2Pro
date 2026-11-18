@@ -100,7 +100,7 @@ export default function PlatformBudgetsPage() {
             <th scope="col" className="p-3">Tenant</th><th scope="col" className="p-3">Status</th>
             <th scope="col" className="p-3 text-right">Monthly cap</th><th scope="col" className="p-3 text-right">Spent</th>
             <th scope="col" className="p-3 text-right">Reserved</th><th scope="col" className="p-3 text-right">Available</th>
-            <th scope="col" className="p-3 text-right">Used</th><th scope="col" className="p-3">Reconciliation</th>
+            <th scope="col" className="p-3 text-right">Used</th><th scope="col" className="p-3">Reconciliation</th><th scope="col" className="p-3">Last tenant update</th>
           </tr></thead>
           <tbody>{page.items.map(row => <tr key={row.tenant_id} className="border-t">
             <td className="p-3"><div className="font-medium">{row.name}</div><div className="text-xs text-muted-foreground">{row.slug} · {row.tenant_id}</div></td>
@@ -111,6 +111,7 @@ export default function PlatformBudgetsPage() {
             <td className="p-3 text-right tabular-nums">{money(row.available_usd)}</td>
             <td className={"p-3 text-right tabular-nums " + statusColor(row.utilisation_percent)}>{row.utilisation_percent}%</td>
             <td className="p-3 text-xs">{row.budget_status === "RECONCILED" ? "Matched" : row.budget_status === "NO_TENANT_BUCKET" ? "Bucket missing" : "Counters differ"}</td>
+            <td className="p-3 text-xs">{row.last_tenant_update ? new Date(row.last_tenant_update).toLocaleString() : "—"}</td>
           </tr>)}</tbody>
         </table>
         {page.items.length === 0 && <p className="p-5 text-sm">No matching tenants.</p>}

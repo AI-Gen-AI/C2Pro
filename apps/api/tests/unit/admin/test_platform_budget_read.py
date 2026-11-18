@@ -59,3 +59,59 @@ def test_no_double_counting_of_tenant_and_bucket_counters() -> None:
     assert _item(row).budget_status == "COUNTERS_DIVERGED"
     row["bucket_cap"] = None
     assert _item(row).budget_status == "NO_TENANT_BUCKET"
+
+
+@pytest.mark.asyncio
+async def test_no_read_capability_fail_closed() -> None:
+    from src.admin.adapters.http.platform_budget_router import _budget_read_connection
+    with patch("src.admin.adapters.http.platform_budget_router.settings",
+               SimpleNamespace(platform_budget_read_database_url=None)):
+        with pytest.raises(HTTPException) as err:
+            async with _budget_read_connection():
+                pytest.fail("unconfigured capability yielded a database connection")
+        assert err.value.status_code == 503
+
+
+def test_exact_registry_only_read_route() -> None:
+    from src.core.middleware.tenant_isolation import is_platform_route
+    assert is_platform_route("GET", "/api/v1/platform/budgets")
+    for verb in ("POST", "PATCH", "PUT", "DELETE"):
+        assert not is_platform_route(verb, "/api/v1/platform/budgets")
+
+
+@pytest.mark.asyncio
+async def test_customer_org_identity_does_not_cross_operator_boundary() -> None:
+    from starlette.requests import Request
+    from src.core.auth.platform_operator import PlatformIdentity, require_platform_operator
+
+    request = Request({"type": "http", "method": "GET", "path": "/api/v1/platform/budgets"})
+    request.state.platform_identity = PlatformIdentity(
+        user_id="user_customer_admin", org_id="org_customer",
+        email="someone@example.invalid", email_verified=True,
+    )
+    with patch("src.core.auth.platform_operator.settings",
+               SimpleNamespace(platform_operator_org_id="org_platform",
+                               platform_operator_user_ids=["user_platform_owner"])):
+        with pytest.raises(HTTPException) as err:
+            await require_platform_operator(request)
+        assert err.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_token_privilege_claim_does_not_grant_platform_access() -> None:
+    from starlette.requests import Request
+    from src.core.auth.platform_operator import PlatformIdentity, require_platform_operator
+
+    request = Request({"type": "http", "method": "GET", "path": "/api/v1/platform/budgets"})
+    request.state.platform_identity = PlatformIdentity(
+        user_id="user_attacker", org_id="org_customer",
+        email="owner@example.invalid", email_verified=True,
+    )
+    # The verified identity does not include a client-declared platform flag;
+    # a forged role/email is not an input to the platform authorization gate.
+    with patch("src.core.auth.platform_operator.settings",
+               SimpleNamespace(platform_operator_org_id="org_platform",
+                               platform_operator_user_ids=["user_platform_owner"])):
+        with pytest.raises(HTTPException) as err:
+            await require_platform_operator(request)
+        assert err.value.status_code == 403
