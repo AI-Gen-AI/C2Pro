@@ -77,7 +77,7 @@ export default function PlatformBudgetsPage() {
     return () => { active = false; controller.abort(); };
   }, [getToken, isLoaded, isSignedIn, appliedSearch, offset]);
 
-  return <section className="mx-auto max-w-6xl space-y-5" aria-label="AI-GEN platform budgets">
+  return <main className="mx-auto max-w-6xl space-y-5 px-6 py-8" aria-label="AI-GEN platform budgets">
     <header>
       <h1 className="text-2xl font-semibold">AI-GEN · AI budgets</h1>
       <p className="text-sm text-muted-foreground">Private platform operator view · read-only · tenant monthly USD caps</p>
@@ -125,5 +125,5 @@ export default function PlatformBudgetsPage() {
         <span className="ml-auto text-xs text-muted-foreground">Editing locked pending SECURITY approval</span>
       </div>
     </div>}
-  </section>;
+  </main>;
 }
