@@ -145,3 +145,45 @@ async def test_n4_partial_billable_fallback_settles_actual_provider_but_not_find
             await conn.close()
     finally:
         await engine.dispose()
+
+
+async def test_unknown_billable_model_keeps_ledger_unknown_instead_of_fabricating_anthropic_charge():
+    from src.core.ai.llm_client import LLMPartialGenerationError
+
+    class UnknownModelProvider(FallbackResultProvider):
+        async def generate(self, *, window, tenant_id, request_id):
+            self.calls.append(window.ordinal)
+            raise LLMPartialGenerationError(
+                "unknown direct-provider output billed",
+                model="undocumented-provider-model",
+                input_tokens=100, output_tokens=25, cost_usd=0.012,
+            )
+
+    a, project, engine = await _prepare()
+    runner = _runner(engine, UnknownModelProvider())
+    try:
+        result = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert result.stopped_reason == "PROVIDER_RESULT_UNCERTAIN"
+        assert result.persisted_result_windows == 0
+        conn = await asyncpg.connect(_DSN)
+        try:
+            await conn.execute(
+                "SELECT set_config('app.current_tenant', $1, false)",
+                str(a.tenant_id),
+            )
+            row = await conn.fetchrow("""
+                SELECT status, spent_usd, actual_model_name, actual_provider
+                FROM public.n4_usage_reservations
+                WHERE tenant_id=$1
+            """, a.tenant_id)
+            assert row["status"] == "UNKNOWN"
+            assert row["spent_usd"] is None
+            assert row["actual_model_name"] is None
+            assert row["actual_provider"] is None
+        finally:
+            await conn.close()
+    finally:
+        await engine.dispose()
