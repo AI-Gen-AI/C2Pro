@@ -25,7 +25,11 @@ const finding = (ordinal: number, over: object = {}) => ({
   ordinal,
   source_item_id: `risk-sha256:${String(ordinal).repeat(64)}`,
   finding_id: `f${ordinal}`.padEnd(64, "0"),
-  risk: { title: `Risk ${ordinal}`, description: `Description ${ordinal}`, category: "TIME", severity: "high" },
+  risk: {
+    title: `Risk ${ordinal}`, description: `Description ${ordinal}`, category: "TIME", severity: "high",
+    source_quote_status: "VERIFIED",
+    source_quote: `Contract clause ${ordinal}: Contractor must comply with the agreed milestone.`,
+  },
   current: null,
   history: [],
   ...over,
@@ -44,6 +48,10 @@ const view = (over: object = {}) => ({
   final_approval: "SEPARATE_ACT",
   ...over,
 });
+
+async function acknowledgeQuote(ordinal = 0) {
+  await userEvent.click(await screen.findByTestId(`finding-source-reviewed-${ordinal}`));
+}
 
 function renderPanel(onReadinessChange?: (ready: boolean) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -101,6 +109,8 @@ describe("ReviewFindingsPanel", () => {
     list.mockResolvedValue(view({ capabilities: null }));
     renderPanel();
     await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    await acknowledgeQuote();
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
     expect(screen.queryByTestId(`review-findings-readonly-${ROW}`)).toBeNull();
   });
@@ -218,7 +228,8 @@ describe("ReviewFindingsPanel", () => {
 
   it("confirms a finding with the server's own pins and no actor field", async () => {
     renderPanel();
-    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await acknowledgeQuote();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
     const [rowId, body] = record.mock.calls[0];
     expect(rowId).toBe(ROW);
@@ -247,7 +258,8 @@ describe("ReviewFindingsPanel", () => {
     record.mockRejectedValueOnce(new Error("Response lost after server commit"));
     renderPanel();
 
-    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await acknowledgeQuote();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
     const first = record.mock.calls[0][1];
     expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
@@ -269,7 +281,8 @@ describe("ReviewFindingsPanel", () => {
     record.mockRejectedValueOnce(stale);
     renderPanel();
 
-    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await acknowledgeQuote();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
     const first = record.mock.calls[0][1];
     expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toHaveTextContent(/Another decision was recorded/);
@@ -328,13 +341,15 @@ describe("ReviewFindingsPanel", () => {
       </QueryClientProvider>
     );
     const rendered = render(ui(ROW));
-    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await acknowledgeQuote();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
     const first = record.mock.calls[0][1];
     expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toBeInTheDocument();
     rendered.rerender(ui("row-2"));
     await waitFor(() => expect(list).toHaveBeenCalledWith("row-2", expect.anything()));
-    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await acknowledgeQuote();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
     expect(record.mock.calls[1][0]).toBe("row-2");
     expect(record.mock.calls[1][1].idempotency_key).not.toBe(first.idempotency_key);
@@ -401,7 +416,8 @@ describe("ReviewFindingsPanel", () => {
     } as never);
     record.mockRejectedValue(refusal);
     renderPanel();
-    await userEvent.click(await screen.findByTestId("finding-action-0-CONFIRMED"));
+    await acknowledgeQuote();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     expect(await screen.findByTestId(`review-findings-refused-${ROW}`)).toHaveTextContent(/Another decision was recorded meanwhile/);
     await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(1));
   });
@@ -559,7 +575,10 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
     expect(screen.queryByTestId("finding-source-conflict-0")).toBeNull();
     expect(screen.queryByTestId("finding-quote-0")).toBeNull();
     expect(screen.getByTestId("finding-no-verified-source-0")).toHaveTextContent(/no server-verified literal quotation/i);
-    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-0-NEEDS_INFO")).toBeEnabled();
+    expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
+    expect(record).not.toHaveBeenCalled();
   });
 });
 
