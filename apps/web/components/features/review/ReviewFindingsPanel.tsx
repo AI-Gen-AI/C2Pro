@@ -83,14 +83,11 @@ function shortAnalysis(value: unknown): string {
   return `${normalized.slice(0, Math.max(100, lastSpace)).trimEnd()}…`;
 }
 
-/** Explicit source-backed deadline vs an AI claim that no deadline exists. Advisory, never auto-decides. */
-function contradictsVerifiedDeadline(risk: Record<string, unknown>): boolean {
-  if (risk.source_quote_status !== "VERIFIED" || typeof risk.source_quote !== "string") return false;
-  const quote = risk.source_quote;
-  const claim = `${String(risk.title ?? "")} ${String(risk.description ?? "")}`;
-  const deadline = /\bwithin\s+(?:(?:[a-z]+)\s+)?\(?\d{1,3}\)?\s+(?:calendar\s+)?days?\s+of\s+(?:written\s+)?notice\b/i;
-  const missing = /\b(?:no|without|lacks?|lacking)\s+(?:(?:an?|the|agreed|defined|specified|clear)\s+){0,4}(?:rectification\s+)?(?:time\s?frame|deadline|period|cure\s+period)\b/i;
-  return deadline.test(quote) && missing.test(claim);
+/** A presentation-only scalar. Unknown/structured estimates are never converted into fictional values. */
+function readable(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
 }
 
 function newKey(): string {
@@ -115,6 +112,8 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
   const clause = typeof risk.clause_ref === "string" ? risk.clause_ref.trim() : "";
   const quote = typeof risk.source_quote === "string" ? risk.source_quote.trim() : "";
   const status = typeof risk.source_quote_status === "string" ? risk.source_quote_status : "";
+  const proposedLocator = readable(risk.source_locator);
+  const proposedPage = readable(risk.page_number);
   const verified = status === "VERIFIED" && quote.length > 0;
   return (
     <div className="mt-2 rounded border border-dashed p-2 text-xs" data-testid={`finding-trace-${ordinal}`}>
@@ -126,7 +125,7 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
           <blockquote className="border-l-2 pl-2 italic" data-testid={`finding-quote-${ordinal}`}>
             {quote}
           </blockquote>
-          <figcaption className="mt-0.5 text-muted-foreground">Quoted from the contract (found verbatim in the document)</figcaption>
+          <figcaption className="mt-0.5 text-muted-foreground">Literal match in the analyzed text; original PDF/page provenance still requires verification.</figcaption>
         </figure>
       ) : (
         <p className="mt-1 text-muted-foreground" data-testid={`finding-quote-missing-${ordinal}`}>
@@ -135,6 +134,11 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
             : "No quote available for this finding."}
         </p>
       )}
+      <p className="mt-1 text-muted-foreground" data-testid={`finding-original-location-${ordinal}`}>
+        {proposedLocator || proposedPage
+          ? `Suggested source location (not independently verified): ${[proposedLocator, proposedPage ? `page ${proposedPage}` : null].filter(Boolean).join(", ")}`
+          : "Original page location not verified; check the source document and revision."}
+      </p>
     </div>
   );
 }
@@ -244,6 +248,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     !query.isFetching &&
     !record.isPending &&
     query.data &&
+    query.data.findings.length > 0 &&
     query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
   );
   useEffect(() => {
@@ -256,7 +261,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   if (query.isError || !query.data) {
     return (
       <div className="mt-3 rounded border border-destructive/40 p-3 text-sm" role="alert" data-testid={`review-findings-error-${reviewRowId}`}>
-        <p>Individual findings could not be loaded for this review. Final approval is unavailable until they can be checked.</p>
+        <p>Findings are unavailable for this review. It may have no eligible analysis candidate, have changed, or be outside your access. Final approval is unavailable; ask the project administrator to verify the source and candidate binding.</p>
         <Button size="sm" variant="outline" className="mt-2" onClick={() => void query.refetch()}>Retry loading findings</Button>
       </div>
     );
@@ -286,7 +291,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
-          This candidate lists no individual findings to decide.
+          This candidate lists no individual findings. Final approval is blocked until the candidate and its analysis coverage can be verified.
         </p>
       ) : null}
       {!mayReview ? (
@@ -304,9 +309,10 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
           const draft = drafts[finding.ordinal];
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
           const brief = shortAnalysis(finding.risk.description);
+          const consequence = [finding.risk.consequences, finding.risk.consequence].map(readable).find(Boolean);
+          const impact = [finding.risk.impact, finding.risk.financial_impact, finding.risk.schedule_impact].map(readable).find(Boolean);
           const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
             .find((value) => typeof value === "string" && value.trim().length > 0);
-          const conflict = contradictsVerifiedDeadline(finding.risk);
           const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
           const valid =
             draft !== undefined &&
@@ -333,20 +339,19 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   {brief}
                 </p>
               ) : null}
-              {clause ? <p className="mt-1 text-xs text-muted-foreground">Contract clause {clause}</p> : null}
+              {clause ? <p className="mt-1 text-xs text-muted-foreground">Contract clause {clause} (reference proposed by analysis)</p> : null}
+              <p className="mt-2 text-sm" data-testid={`finding-consequences-${finding.ordinal}`}>
+                <span className="font-medium">Consequences: </span>{consequence ?? "Not assessed in the candidate."}
+              </p>
+              <p className="mt-1 text-sm" data-testid={`finding-impact-${finding.ordinal}`}>
+                <span className="font-medium">Impact: </span>{impact ?? "Not quantified in the candidate."}
+              </p>
               <p className="mt-2 text-sm" data-testid={`finding-action-summary-${finding.ordinal}`}>
                 <span className="font-medium">Suggested action: </span>
                 {typeof suggestion === "string"
                   ? shortAnalysis(suggestion)
                   : "No specific mitigation supplied. Verify the contractual basis before deciding."}
               </p>
-              {conflict ? (
-                <p role="alert" className="mt-2 rounded border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900"
-                  data-testid={`finding-source-conflict-${finding.ordinal}`}>
-                  Possible contradiction: the verified contract quotation explicitly specifies a notice deadline,
-                  while the AI description claims no deadline. Do not confirm this finding without correcting it.
-                </p>
-              ) : null}
               <details className="mt-2 rounded border border-dashed p-2" data-testid={`finding-evidence-${finding.ordinal}`}>
                 <summary className="cursor-pointer text-sm font-medium">View evidence and full AI analysis</summary>
                 {finding.risk.description ? (
@@ -379,8 +384,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     key={action}
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
-                    disabled={record.isPending || !mayReview || (action === "CONFIRMED" && conflict)}
-                    title={action === "CONFIRMED" && conflict ? "The AI finding conflicts with the verified source. Propose a correction instead." : undefined}
+                    disabled={record.isPending || !mayReview}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);
