@@ -94,7 +94,7 @@ def safe_initial_fallback(error: Exception) -> bool:
     """Only explicit, non-billable provider rejection authorizes a new call."""
     import anthropic
 
-    if isinstance(error, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)):
+    if isinstance(error, anthropic.AuthenticationError):
         return True
     if isinstance(error, anthropic.APIStatusError) and error.status_code == 402:
         return True
@@ -124,7 +124,7 @@ def _estimate_max_charge(route: DirectRoute, request: LLMRequest) -> Decimal:
     # provider token accounting: add safety margin, refuse oversize input.
     input_characters = sum(len(str(m.get("content") or "")) for m in request.messages)
     input_characters += len(request.system or "")
-    estimated_input = max(1, input_characters // 3 + 1024)
+    estimated_input = max(1, input_characters * 4 + 2048)
     if estimated_input + request.max_tokens > route.context_tokens:
         raise FallbackUnavailable("Full source exceeds verified fallback context")
     if request.max_tokens > route.output_tokens:
@@ -287,10 +287,21 @@ async def fallback_after_unbilled_rejection(
     if os.getenv("C2PRO_DIRECT_FALLBACK_ENABLED") != "1":
         raise original_error
     metadata = request.metadata or {}
-    if not metadata.get("budgeted_legacy"):
-        raise FallbackUnavailable("Direct fallback requires existing persisted AI escrow")
+    legacy = metadata.get("budgeted_legacy") is True
+    n4 = (
+        metadata.get("n4_incremental_window") is True
+        and metadata.get("n4_reservation_committed") is True
+    )
+    if not (legacy ^ n4):
+        raise FallbackUnavailable("Exactly one persisted AI escrow authority required")
     if request.tenant_id is None:
         raise FallbackUnavailable("Tenant-scoped AI escrow identity required")
+    if n4:
+        from uuid import UUID
+        try:
+            UUID(str(request.request_id))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise FallbackUnavailable("N4 must use its committed reservation UUID") from exc
     if not safe_initial_fallback(original_error):
         raise original_error
     if routes is None:
@@ -298,7 +309,8 @@ async def fallback_after_unbilled_rejection(
     if not routes:
         raise FallbackUnavailable("No authorized direct provider routes configured")
     try:
-        remaining_budget = Decimal(str(metadata["fallback_reserved_usd"]))
+        reserve_key = "n4_reserved_usd" if n4 else "fallback_reserved_usd"
+        remaining_budget = Decimal(str(metadata[reserve_key]))
     except (KeyError, ValueError, TypeError) as exc:
         raise FallbackUnavailable("Persisted fallback escrow amount required") from exc
     if not remaining_budget.is_finite() or remaining_budget <= 0:

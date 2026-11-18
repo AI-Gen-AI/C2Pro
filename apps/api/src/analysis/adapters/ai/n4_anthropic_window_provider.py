@@ -8,6 +8,7 @@ not a reconciled external provider invoice.
 """
 from __future__ import annotations
 
+import os
 from decimal import Decimal
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from src.analysis.domain.n4_compact_window_response import (
 )
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
+from src.core.ai.direct_provider_fallback import approved_routes
 from src.core.ai.model_router import AITaskType, ModelTier
 
 
@@ -28,6 +30,7 @@ class AnthropicN4WindowProvider:
         self, *, wrapper: AnthropicWrapper,
         tier: ModelTier = ModelTier.STANDARD,
         max_output_tokens: int = 2048,
+        fallback_reservation_usd: Decimal | str | None = None,
     ) -> None:
         if max_output_tokens < 256 or max_output_tokens > 4096:
             raise ValueError("N4 window output cap outside safe range")
@@ -39,6 +42,24 @@ class AnthropicN4WindowProvider:
         self.tier = tier
         self.max_output_tokens = max_output_tokens
         self.model_name = wrapper.model_router.configs[tier].name
+        self.fallback_reservation_usd = (
+            Decimal(str(fallback_reservation_usd))
+            if fallback_reservation_usd is not None else None
+        )
+        if self.fallback_reservation_usd is not None and (
+            not self.fallback_reservation_usd.is_finite()
+            or self.fallback_reservation_usd <= 0
+        ):
+            raise ValueError("N4 direct fallback requires positive finite reservation")
+        self.fallback_routes = (
+            approved_routes(os.getenv("C2PRO_DIRECT_FALLBACK_ROUTES"))
+            if self.fallback_reservation_usd is not None else ()
+        )
+        if self.fallback_reservation_usd is not None and not self.fallback_routes:
+            raise ValueError("N4 direct fallback requires explicit approved routes")
+        self.approved_fallback_models = frozenset(
+            route.model for route in self.fallback_routes
+        )
 
     @classmethod
     def from_configured_account(
@@ -79,6 +100,13 @@ class AnthropicN4WindowProvider:
             metadata={
                 "n4_incremental_window": True,
                 "prompt_version": "n4-compact-window-v1",
+                **(
+                    {
+                        "n4_reservation_committed": True,
+                        "n4_reserved_usd": str(self.fallback_reservation_usd),
+                    }
+                    if self.fallback_reservation_usd is not None else {}
+                ),
             },
         ))
         if response.model_used != self.model_name:
