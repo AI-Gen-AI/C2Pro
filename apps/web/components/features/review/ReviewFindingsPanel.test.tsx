@@ -498,6 +498,17 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
     expect(record).not.toHaveBeenCalled();
   });
 
+  it("does not confuse legacy impact severity with quantified commercial impact", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0, {
+      risk: { title: "Delay risk", description: "Potential delay", severity: "HIGH", impact: "HIGH" },
+    })] }));
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-0")).toHaveTextContent("HIGH");
+    expect(screen.getByTestId("finding-impact-0")).toHaveTextContent("Not quantified in the candidate");
+    expect(screen.getByTestId("finding-consequences-0")).toHaveTextContent("Not assessed in the candidate");
+  });
+
   it("does not invent a source contradiction when the purported quote is unverified", async () => {
     list.mockResolvedValue(view({ findings: [finding(0, {
       risk: {
