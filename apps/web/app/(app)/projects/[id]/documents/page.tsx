@@ -798,7 +798,13 @@ export default function ProjectDocumentsPage() {
                           data-testid="document-status-badge"
                         >
                           <StatusIcon className="mr-1 h-3 w-3" />
-                          {LIFECYCLE_LABELS[doc.status]}
+                          {doc.status === 'failed_retryable' &&
+                          doc.statusDetail?.startsWith('AI budget authorization required:')
+                            ? 'Budget required'
+                            : doc.status === 'failed_retryable' &&
+                              doc.statusDetail?.startsWith('AI budget limit reached.')
+                              ? 'Budget limit reached'
+                              : LIFECYCLE_LABELS[doc.status]}
                         </Badge>
                         {doc.statusDetail ? (
                           <p className="mt-1 max-w-[220px] text-xs text-muted-foreground" data-testid="document-status-detail">

@@ -226,3 +226,31 @@ def test_needs_changes_is_retryable_and_stops_looking_like_processing(
 def test_escalated_review_still_requires_human_attention() -> None:
     """Escalation changes the reviewer/priority, not the need for a decision."""
     assert ReviewStatus.ESCALATED in _PENDING_REVIEW_STATUSES
+
+
+def test_missing_n4_budget_is_not_retryable_and_explains_action(app, project_id) -> None:
+    document = _document(project_id, DocumentStatus.PARSED_PENDING_ANALYSIS)
+    document.document_metadata = {
+        "analysis_last_attempt_incomplete": True,
+        "analysis_blocker_code": "N4_BUDGET_NOT_CONFIGURED",
+    }
+    app.dependency_overrides[get_list_documents_use_case] = lambda: _FakeListUseCaseWithContext(document)
+    response = TestClient(app).get(f"/projects/{project_id}/documents")
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["lifecycle_status"] == "failed_retryable"
+    assert item["retryable"] is False
+    assert "AI budget authorization required" in item["status_detail"]
+    assert "Retry will not work" in item["status_detail"]
+
+
+def test_exceeded_n4_budget_requires_cap_decision_before_retry(app, project_id) -> None:
+    document = _document(project_id, DocumentStatus.PARSED_PENDING_ANALYSIS)
+    document.document_metadata = {
+        "analysis_last_attempt_incomplete": True,
+        "analysis_blocker_code": "N4_BUDGET_EXCEEDED",
+    }
+    app.dependency_overrides[get_list_documents_use_case] = lambda: _FakeListUseCaseWithContext(document)
+    item = TestClient(app).get(f"/projects/{project_id}/documents").json()["items"][0]
+    assert item["retryable"] is False
+    assert "AI budget limit reached" in item["status_detail"]

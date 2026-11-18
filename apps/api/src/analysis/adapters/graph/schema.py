@@ -31,6 +31,7 @@ class ProjectState(TypedDict):
     # WBS 1.2: zero valid candidates are not a provider failure or an
     # independently established absence of contract risk.
     risk_extraction_outcome: str | None
+    analysis_blocker_code: str | None  # safe machine code, never raw model data
     # N4 V4 opt-in: input-window coverage and proposed source evidence, never
     # an original-PDF citation or semantic completeness certificate.
     n4_incremental_run_id: str | None

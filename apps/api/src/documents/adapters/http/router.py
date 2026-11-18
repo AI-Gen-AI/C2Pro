@@ -338,6 +338,7 @@ def _document_status_detail(
     status: DocumentStatus,
     lifecycle: DocumentLifecycleStatus,
     review_count: int | None,
+    analysis_blocker_code: str | None = None,
 ) -> str:
     """Context-aware status detail. Falls back to the polling-only text for
     every lifecycle state that isn't one of #712's new truthful states, so
@@ -351,6 +352,18 @@ def _document_status_detail(
             )
         return "Analysis completed and is waiting for a human review decision."
     if lifecycle == DocumentLifecycleStatus.FAILED_RETRYABLE:
+        if analysis_blocker_code == "N4_BUDGET_NOT_CONFIGURED":
+            return (
+                "AI budget authorization required: no approved N4 spending cap "
+                "is configured for this project/document. The document was "
+                "parsed, but contractual AI analysis has not run. "
+                "Retry will not work until the budget is configured."
+            )
+        if analysis_blocker_code == "N4_BUDGET_EXCEEDED":
+            return (
+                "AI budget limit reached. Contractual AI analysis is incomplete. "
+                "An authorized budget decision is required before retrying."
+            )
         return "Automatic analysis did not complete after several attempts. Retry to try again."
     if lifecycle == DocumentLifecycleStatus.NEEDS_CHANGES:
         return "A reviewer requested changes. Upload a corrected version to continue."
@@ -1060,6 +1073,13 @@ async def list_documents_for_project(
             has_pending_review=has_pending_review,
             analysis_attempt_failed=analysis_attempt_failed,
         )
+        blocker_code = (doc.document_metadata or {}).get("analysis_blocker_code")
+        # A missing cap is not a transient failure; blind Retry merely
+        # re-parses a full document without changing its budget permissions.
+        budget_blocked = (
+            blocker_code in ("N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED")
+            and lifecycle == DocumentLifecycleStatus.FAILED_RETRYABLE
+        )
         wbs_source = is_analysis_excluded(doc.document_type)
         items.append(
             DocumentListItem(
@@ -1071,9 +1091,10 @@ async def list_documents_for_project(
                     doc.upload_status,
                     lifecycle,
                     review_count if has_pending_review else None,
+                    blocker_code if budget_blocked else None,
                 ),
                 lifecycle_status=lifecycle,
-                retryable=not wbs_source and document_is_retryable(lifecycle),
+                retryable=not wbs_source and not budget_blocked and document_is_retryable(lifecycle),
                 review_count=review_count if has_pending_review else None,
                 review_item_id=review_item_id if has_pending_review else None,
                 error_message=doc.parsing_error if doc.upload_status == DocumentStatus.ERROR else None,

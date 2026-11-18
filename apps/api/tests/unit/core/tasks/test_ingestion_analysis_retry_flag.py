@@ -230,3 +230,41 @@ async def test_fresh_parse_pass_clears_a_stale_retryable_flag(monkeypatch: pytes
 
     final_metadata = repository.updated_metadata[-1]
     assert "analysis_last_attempt_incomplete" not in final_metadata
+
+
+@pytest.mark.asyncio
+async def test_n4_budget_missing_persists_actionable_blocker_without_auto_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _parsed_document()
+    repository = _install(monkeypatch, document)
+    orchestrator = _FakeOrchestrator(analysis_id=None, human_approval_required=False)
+    orchestrator._result.update({
+        "workflow_terminated": True,
+        "termination_reason": "risk_extraction_unassessed",
+        "analysis_blocker_code": "N4_BUDGET_NOT_CONFIGURED",
+    })
+    result = await ingestion_tasks._run_document_analysis(
+        tenant_id=document.tenant_id, document_id=document.id, orchestrator=orchestrator
+    )
+    assert result["status"] == "incomplete"
+    assert result["will_retry"] is False
+    assert repository.updated_metadata[-1]["analysis_last_attempt_incomplete"] is True
+    assert repository.updated_metadata[-1]["analysis_blocker_code"] == "N4_BUDGET_NOT_CONFIGURED"
+
+
+@pytest.mark.asyncio
+async def test_budget_blocker_clears_when_analysis_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _parsed_document(
+        analysis_last_attempt_incomplete=True,
+        analysis_blocker_code="N4_BUDGET_NOT_CONFIGURED",
+    )
+    repository = _install(monkeypatch, document)
+    orchestrator = _FakeOrchestrator(analysis_id="analysis-restored", human_approval_required=False)
+    result = await ingestion_tasks._run_document_analysis(
+        tenant_id=document.tenant_id, document_id=document.id, orchestrator=orchestrator
+    )
+    assert result["status"] == "completed"
+    assert "analysis_blocker_code" not in repository.updated_metadata[-1]

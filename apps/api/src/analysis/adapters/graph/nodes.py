@@ -338,6 +338,13 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             _append_risk_extraction_summary(state)
             return state
         except Exception as exc:  # noqa: BLE001
+            # Missing contractual AI budget is an operator action, NOT a
+            # retryable transient failure or a reason to fabricate zero risks.
+            state["analysis_blocker_code"] = (
+                "N4_BUDGET_NOT_CONFIGURED" if "N4BudgetNotConfigured" in str(exc)
+                else "N4_BUDGET_EXCEEDED" if "N4BudgetExceeded" in str(exc)
+                else None
+            )
             # No fallback to the old unbudgeted, potentially truncated tool:
             # even an unavailable provider/budget is a material failed node.
             failed = _failed_node_result("risk_extractor", exc)
