@@ -13,7 +13,7 @@ info:
     n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xF3n.\n\n     \
     \   1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
     \ /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization:\
-    \ Bearer <token>`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
+    \ ***        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
     \ 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n     \
     \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \U0001F4E7\
     \ Email: support@c2pro.app\n        - \U0001F4D6 Docs: https://docs.c2pro.app\n\
@@ -343,7 +343,7 @@ paths:
       summary: Get current user info
       description: "Returns information about the currently authenticated user.\n\n\
         \    Requires valid JWT access token in Authorization header:\n    ```\n \
-        \   Authorization: Bearer <access_token>\n    ```"
+        \   Authorization: ***    ```"
       operationId: get_me_api_v1_auth_me_get
       responses:
         '200':
@@ -3585,6 +3585,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DLQRetryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/platform/budgets:
+    get:
+      tags:
+      - Platform budgets
+      summary: List Platform Budgets
+      description: One page, all tenant budgets. Not a spending authorisation or edit
+        API.
+      operationId: list_platform_budgets_api_v1_platform_budgets_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: query
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 100
+          default: ''
+          title: Query
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 25
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformBudgetPage'
         '422':
           description: Validation Error
           content:
@@ -9363,7 +9412,7 @@ components:
           - type: string
           - type: 'null'
           title: Webhook Auth Token
-          description: Optional webhook authentication token (Bearer token)
+          description: Optional webhook authentication token (***
         custom_headers:
           anyOf:
           - additionalProperties:
@@ -9453,6 +9502,84 @@ components:
       - new_password
       title: PasswordChangeRequest
       description: "Request para cambio de contrase\xF1a."
+    PlatformBudgetItem:
+      properties:
+        tenant_id:
+          type: string
+          title: Tenant Id
+        name:
+          type: string
+          title: Name
+        slug:
+          type: string
+          title: Slug
+        is_active:
+          type: boolean
+          title: Is Active
+        monthly_cap_usd:
+          type: string
+          title: Monthly Cap Usd
+        spent_usd:
+          type: string
+          title: Spent Usd
+        reserved_usd:
+          type: string
+          title: Reserved Usd
+        available_usd:
+          type: string
+          title: Available Usd
+        utilisation_percent:
+          type: string
+          title: Utilisation Percent
+        budget_status:
+          type: string
+          title: Budget Status
+        last_tenant_update:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Tenant Update
+      type: object
+      required:
+      - tenant_id
+      - name
+      - slug
+      - is_active
+      - monthly_cap_usd
+      - spent_usd
+      - reserved_usd
+      - available_usd
+      - utilisation_percent
+      - budget_status
+      title: PlatformBudgetItem
+    PlatformBudgetPage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PlatformBudgetItem'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+        period_key:
+          type: string
+          title: Period Key
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      - period_key
+      title: PlatformBudgetPage
     PowerLevel:
       type: string
       enum:
