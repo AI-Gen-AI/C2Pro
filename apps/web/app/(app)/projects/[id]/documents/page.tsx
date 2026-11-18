@@ -801,10 +801,10 @@ export default function ProjectDocumentsPage() {
                           data-testid="document-status-badge"
                         >
                           <StatusIcon className="mr-1 h-3 w-3" />
-                          {doc.status === 'failed_retryable' &&
+                          {(doc.status === 'failed_retryable' || doc.status === 'error') &&
                           doc.statusDetail?.startsWith('AI budget authorization required:')
                             ? 'Budget required'
-                            : doc.status === 'failed_retryable' &&
+                            : (doc.status === 'failed_retryable' || doc.status === 'error') &&
                               doc.statusDetail?.startsWith('AI budget limit reached.')
                               ? 'Budget limit reached'
                               : LIFECYCLE_LABELS[doc.status]}

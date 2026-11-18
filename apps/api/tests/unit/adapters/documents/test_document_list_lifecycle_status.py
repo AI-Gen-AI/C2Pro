@@ -19,6 +19,7 @@ from src.documents.adapters.http.router import (
     _PENDING_REVIEW_STATUSES,
     get_list_documents_use_case,
     get_pending_review_document_ids,
+    get_missing_n4_cap_lookup,
 )
 from src.documents.adapters.http.router import router as documents_router
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
@@ -81,6 +82,9 @@ def app(project_id) -> FastAPI:
     # context-sensitive branch override this dependency themselves.
     app_obj.dependency_overrides[get_pending_review_document_ids] = lambda: (
         lambda tenant_id, document_ids: {}
+    )
+    app_obj.dependency_overrides[get_missing_n4_cap_lookup] = lambda: (
+        lambda tenant_id, project_id, document_ids: set()
     )
     return app_obj
 
@@ -254,3 +258,40 @@ def test_exceeded_n4_budget_requires_cap_decision_before_retry(app, project_id) 
     item = TestClient(app).get(f"/projects/{project_id}/documents").json()["items"][0]
     assert item["retryable"] is False
     assert "AI budget limit reached" in item["status_detail"]
+
+
+def test_legacy_budget_block_detected_by_readonly_lookup_without_metadata_write(
+    app, project_id,
+) -> None:
+    document = _document(project_id, DocumentStatus.PARSED_PENDING_ANALYSIS)
+    document.document_metadata = {"analysis_last_attempt_incomplete": True}
+    app.dependency_overrides[get_list_documents_use_case] = lambda: _FakeListUseCaseWithContext(document)
+    app.dependency_overrides[get_missing_n4_cap_lookup] = lambda: (
+        lambda tenant_id, p, ids: {document.id}
+    )
+    item = TestClient(app).get(f"/projects/{project_id}/documents").json()["items"][0]
+    assert item["lifecycle_status"] == "failed_retryable"
+    assert item["retryable"] is False
+    assert "AI budget authorization required" in item["status_detail"]
+
+
+def test_legacy_stored_error_budget_block_without_false_retry(app, project_id) -> None:
+    document = _document(project_id, DocumentStatus.ERROR)
+    document.document_metadata = {"analysis_last_attempt_incomplete": True}
+    app.dependency_overrides[get_list_documents_use_case] = lambda: _FakeListUseCaseWithContext(document)
+    app.dependency_overrides[get_missing_n4_cap_lookup] = lambda: (
+        lambda tenant_id, p, ids: {document.id}
+    )
+    item = TestClient(app).get(f"/projects/{project_id}/documents").json()["items"][0]
+    assert item["lifecycle_status"] == "error"
+    assert item["retryable"] is False
+    assert "AI budget authorization required" in item["status_detail"]
+
+
+def test_legacy_not_labeled_budget_when_caps_have_been_configured(app, project_id):
+    document = _document(project_id, DocumentStatus.ERROR)
+    document.document_metadata = {"analysis_last_attempt_incomplete": True}
+    app.dependency_overrides[get_list_documents_use_case] = lambda: _FakeListUseCaseWithContext(document)
+    item = TestClient(app).get(f"/projects/{project_id}/documents").json()["items"][0]
+    assert item["retryable"] is True
+    assert "AI budget" not in item["status_detail"]

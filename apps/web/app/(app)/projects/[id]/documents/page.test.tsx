@@ -486,6 +486,31 @@ describe("ProjectDocumentsPage", () => {
     expect(screen.queryByText("Analysis progress for proj_real_001")).not.toBeInTheDocument();
   });
 
+  it("labels legacy budget-blocked ERROR as Budget required, not generic Retry", () => {
+    useProjectDocumentsMock.mockReturnValue({
+      documents: [
+        {
+          id: "doc_error_budget",
+          name: "Contract-1.9MB.pdf",
+          type: "contract",
+          fileSize: 1945469,
+          uploadedAt: new Date("2026-11-18T11:38:00Z"),
+          status: "error",
+          lifecycleStatus: "error",
+          statusDetail: "AI budget authorization required: no approved N4 spending cap is configured for this project/document. Retry will not work until the budget is configured.",
+          retryable: false,
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    render(<ProjectDocumentsPage />);
+    expect(screen.getByTestId("document-row-doc_error_budget")).toHaveTextContent("Budget required");
+    expect(screen.getByLabelText("Errors")).toHaveTextContent("1");
+    expect(screen.queryByRole("button", { name: /retry processing contract-1\.9mb\.pdf/i })).not.toBeInTheDocument();
+  });
+
   it("shows an N4 budget block as Budget required without offering blind Retry", () => {
     useProjectDocumentsMock.mockReturnValue({
       documents: [

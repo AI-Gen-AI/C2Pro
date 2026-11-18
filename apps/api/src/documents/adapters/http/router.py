@@ -18,7 +18,7 @@ import structlog
 from anyio import open_file
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -298,6 +298,65 @@ _PENDING_REVIEW_STATUSES = (
 # (pending_review_count, exact_item_id_if_exactly_one_else_None) per document_id.
 PendingReviewLookup = Callable[[UUID, list[UUID]], Awaitable[dict[UUID, tuple[int, UUID | None]]]]
 
+# Read-only diagnosis for legacy failed attempts written before the durable
+# N4 machine-readable blocker was implemented. Never modify budget or data.
+N4MissingCapLookup = Callable[[UUID, UUID, list[UUID]], Awaitable[set[UUID]]]
+
+
+def get_missing_n4_cap_lookup(
+    db: AsyncSession = Depends(get_session),
+) -> N4MissingCapLookup:
+    async def _lookup(
+        tenant_id: UUID, project_id: UUID, document_ids: list[UUID],
+    ) -> set[UUID]:
+        if not document_ids:
+            return set()
+        absent: set[UUID] = set()
+        for document_id in document_ids:
+            # Only an actual N4 budget-denied run plus missing cap may be
+            # labeled "Budget required"; unrelated ERRORs remain unrelated.
+            result = await db.scalar(text("""
+                SELECT EXISTS(
+                    SELECT 1
+                      FROM public.n4_extraction_runs r
+                      JOIN public.n4_extraction_windows w
+                        ON w.run_id = r.run_id AND w.tenant_id = r.tenant_id
+                     WHERE r.tenant_id = CAST(:tenant AS uuid)
+                       AND r.project_id = CAST(:project AS uuid)
+                       AND r.document_id = CAST(:document AS uuid)
+                       AND w.status = 'BLOCKED'
+                       AND w.blocked_reason = 'BUDGET_OR_RESERVATION_UNAVAILABLE'
+                ) AND (
+                  NOT EXISTS (
+                    SELECT 1 FROM public.n4_budget_buckets b
+                    WHERE b.tenant_id = CAST(:tenant AS uuid)
+                      AND b.scope_kind = 'PROJECT'
+                      AND b.scope_id = CAST(:project AS uuid)
+                      AND b.period_key = to_char(
+                        clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM'
+                      )
+                  )
+                  OR NOT EXISTS (
+                    SELECT 1 FROM public.n4_budget_buckets b
+                    WHERE b.tenant_id = CAST(:tenant AS uuid)
+                      AND b.scope_kind = 'DOCUMENT'
+                      AND b.scope_id = CAST(:document AS uuid)
+                      AND b.period_key = to_char(
+                        clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM'
+                      )
+                  )
+                )
+            """), {
+                "tenant": str(tenant_id), "project": str(project_id),
+                "document": str(document_id),
+            })
+            if result is True:
+                absent.add(document_id)
+        return absent
+
+    return _lookup
+
+
 
 async def _fetch_pending_review_counts(
     tenant_id: UUID, document_ids: list[UUID], db: AsyncSession
@@ -344,6 +403,18 @@ def _document_status_detail(
     every lifecycle state that isn't one of #712's new truthful states, so
     existing copy for UPLOADED/PROCESSING/PARSED/ANALYSIS_PENDING/ANALYZED/
     ERROR is unchanged."""
+    if analysis_blocker_code == "N4_BUDGET_NOT_CONFIGURED":
+        return (
+            "AI budget authorization required: no approved N4 spending cap "
+            "is configured for this project/document. The document was "
+            "parsed, but contractual AI analysis has not run. "
+            "Retry will not work until the budget is configured."
+        )
+    if analysis_blocker_code == "N4_BUDGET_EXCEEDED":
+        return (
+            "AI budget limit reached. Contractual AI analysis is incomplete. "
+            "An authorized budget decision is required before retrying."
+        )
     if lifecycle == DocumentLifecycleStatus.REVIEW_REQUIRED:
         if review_count is not None and review_count > 1:
             return (
@@ -352,18 +423,6 @@ def _document_status_detail(
             )
         return "Analysis completed and is waiting for a human review decision."
     if lifecycle == DocumentLifecycleStatus.FAILED_RETRYABLE:
-        if analysis_blocker_code == "N4_BUDGET_NOT_CONFIGURED":
-            return (
-                "AI budget authorization required: no approved N4 spending cap "
-                "is configured for this project/document. The document was "
-                "parsed, but contractual AI analysis has not run. "
-                "Retry will not work until the budget is configured."
-            )
-        if analysis_blocker_code == "N4_BUDGET_EXCEEDED":
-            return (
-                "AI budget limit reached. Contractual AI analysis is incomplete. "
-                "An authorized budget decision is required before retrying."
-            )
         return "Automatic analysis did not complete after several attempts. Retry to try again."
     if lifecycle == DocumentLifecycleStatus.NEEDS_CHANGES:
         return "A reviewer requested changes. Upload a corrected version to continue."
@@ -1041,6 +1100,7 @@ async def list_documents_for_project(
     limit: int = Query(default=20, ge=1, le=100),
     list_use_case: ListProjectDocumentsUseCase = Depends(get_list_documents_use_case),
     pending_review_lookup: PendingReviewLookup = Depends(get_pending_review_document_ids),
+    missing_n4_cap_lookup: N4MissingCapLookup = Depends(get_missing_n4_cap_lookup),
 ) -> DocumentListResponse:
     documents, total_count = await list_use_case.execute(
         project_id=project_id,
@@ -1061,6 +1121,22 @@ async def list_documents_for_project(
             await lookup_result if inspect.isawaitable(lookup_result) else lookup_result
         )
 
+    # Legacy blocked documents (before #1269) have no persisted blocker
+    # code. A scoped read-only ledger/budget lookup diagnoses them without a
+    # blind reprocess, additional AI spending or mutation of metadata.
+    n4_candidates = [
+        doc.id for doc in documents
+        if (doc.document_metadata or {}).get("analysis_last_attempt_incomplete") is True
+        and not (doc.document_metadata or {}).get("analysis_blocker_code")
+        and doc.upload_status in (
+            DocumentStatus.PARSED_PENDING_ANALYSIS, DocumentStatus.ERROR,
+        )
+    ]
+    budget_missing: set[UUID] = set()
+    if n4_candidates:
+        pending = missing_n4_cap_lookup(tenant_id, project_id, n4_candidates)
+        budget_missing = await pending if inspect.isawaitable(pending) else pending
+
     items = []
     for doc in documents:
         review_count, review_item_id = pending_by_document.get(doc.id, (0, None))
@@ -1074,11 +1150,15 @@ async def list_documents_for_project(
             analysis_attempt_failed=analysis_attempt_failed,
         )
         blocker_code = (doc.document_metadata or {}).get("analysis_blocker_code")
+        if not blocker_code and doc.id in budget_missing:
+            blocker_code = "N4_BUDGET_NOT_CONFIGURED"
         # A missing cap is not a transient failure; blind Retry merely
         # re-parses a full document without changing its budget permissions.
         budget_blocked = (
             blocker_code in ("N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED")
-            and lifecycle == DocumentLifecycleStatus.FAILED_RETRYABLE
+            and lifecycle in (
+                DocumentLifecycleStatus.FAILED_RETRYABLE, DocumentLifecycleStatus.ERROR,
+            )
         )
         wbs_source = is_analysis_excluded(doc.document_type)
         items.append(
