@@ -32,7 +32,8 @@ async def _verify_and_mark_intent() -> tuple[str, str, int]:
                 SELECT r.tenant_id, r.project_id, r.document_id,
                        r.current_status::text AS review_state,
                        d.filename, d.upload_status::text AS doc_state,
-                       d.document_metadata, o.stage::text AS stage,
+                       d.document_metadata->>'analysis_last_attempt_incomplete' AS failure_marker,
+                       o.stage::text AS stage,
                        o.phase::text AS phase, o.generation, o.revision_id,
                        t.ai_budget_monthly, t.ai_spend_current,
                        t.ai_spend_reserved_usd
@@ -57,7 +58,7 @@ async def _verify_and_mark_intent() -> tuple[str, str, int]:
                 raise RuntimeError("Analysis processing authority is not available")
             if row["revision_id"] is None:
                 raise RuntimeError("Unpinned source revision")
-            if (row["document_metadata"] or {}).get("analysis_last_attempt_incomplete") is not True:
+            if row["failure_marker"] != "true":
                 raise RuntimeError("No operator-confirmed failed prior analysis")
             if (
                 float(row["ai_budget_monthly"]) != 5
