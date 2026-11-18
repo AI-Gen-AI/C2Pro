@@ -5,6 +5,7 @@ Uses the guarded test_engine on a disposable PostgreSQL database; never producti
 from __future__ import annotations
 
 from decimal import Decimal
+from dataclasses import replace
 from uuid import uuid4
 
 import asyncpg
@@ -20,7 +21,9 @@ from src.analysis.adapters.persistence.n4_incremental_store import (
     N4BudgetExceeded,
     N4BudgetNotConfigured,
     account_call,
+    block_window,
     create_run,
+    progress,
     reserve_call,
 )
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
@@ -244,5 +247,174 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
                     provider_model="test-model", estimated_max_usd="0.2",
                     period_key="2026-11", inherit_approved_scopes=True,
                 )
+    finally:
+        await engine.dispose()
+
+
+async def test_concurrent_inherited_reservations_share_one_tenant_cap(test_engine):
+    """Two workers cannot each reserve more than the same shared $5."""
+    dsn = await _migrate_scratch(test_engine)
+    authority = _new_authority(uuid4(), uuid4(), uuid4())
+    project = uuid4()
+    windows = plan_n4_source_windows(
+        "Contractor must notify the Employer. " * 50,
+        revision_id=str(authority.revision_id),
+        max_context_chars=600, overlap_chars=50,
+    )
+    assert len(windows) >= 2
+    conn = await asyncpg.connect(dsn)
+    try:
+        await _seed_identity(conn, authority=authority, project=project)
+        await conn.execute(
+            """UPDATE public.tenants SET ai_budget_monthly=5,
+                      ai_spend_current=0, ai_spend_reserved_usd=0,
+                      ai_spend_last_reset=clock_timestamp()
+                WHERE id=$1""", authority.tenant_id,
+        )
+        await conn.execute(
+            """INSERT INTO public.n4_budget_buckets
+                (tenant_id,scope_kind,scope_id,period_key,cap_usd)
+               VALUES ($1,'TENANT',$1,'2026-11',5)""", authority.tenant_id,
+        )
+    finally:
+        await conn.close()
+    engine = create_async_engine(
+        dsn.replace("postgresql://", "postgresql+asyncpg://", 1),
+        pool_pre_ping=True,
+    )
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            await _tenant_context(session, authority.tenant_id)
+            run_id = await create_run(
+                session, authority=authority, project_id=project,
+                windows=windows, config_sha256="e" * 64,
+                budget_cap_usd="5",
+            )
+
+        async def attempt(ordinal: int) -> str:
+            try:
+                async with AsyncSession(engine) as session, session.begin():
+                    await _tenant_context(session, authority.tenant_id)
+                    receipt = await reserve_call(
+                        session, authority=authority, run_id=run_id,
+                        window_ordinal=ordinal,
+                        idempotency_key=f"concurrent-budget-{ordinal:04d}",
+                        provider_model="test-model", estimated_max_usd="3",
+                        period_key="2026-11", inherit_approved_scopes=True,
+                    )
+                return receipt.status
+            except N4BudgetExceeded:
+                return "DENIED"
+
+        result = await asyncio.gather(attempt(0), attempt(1))
+        assert sorted(result) == ["DENIED", "RESERVED"]
+        async with AsyncSession(engine) as session, session.begin():
+            await _tenant_context(session, authority.tenant_id)
+            balances = (await session.execute(text("""
+                SELECT scope_kind,reserved_usd,spent_usd
+                  FROM public.n4_budget_buckets
+                 WHERE tenant_id=CAST(:tenant AS uuid)
+            """), {"tenant": str(authority.tenant_id)})).mappings().all()
+            assert len(balances) == 4
+            assert all(Decimal(r["reserved_usd"]) == Decimal("3") for r in balances)
+            assert all(Decimal(r["spent_usd"]) == 0 for r in balances)
+            actual = await session.scalar(text("""
+                SELECT ai_spend_reserved_usd FROM public.tenants
+                 WHERE id=CAST(:tenant AS uuid)
+            """), {"tenant": str(authority.tenant_id)})
+            assert Decimal(str(actual)) == Decimal("3")
+    finally:
+        await engine.dispose()
+
+
+async def test_budget_blocked_zero_receipt_recovery_uses_new_fenced_generation(test_engine):
+    """An entirely unpaid budget block permits a new generation, not replay billing."""
+    dsn = await _migrate_scratch(test_engine)
+    first_authority = _new_authority(uuid4(), uuid4(), uuid4())
+    project = uuid4()
+    windows = plan_n4_source_windows(
+        "The contractor shall deliver all milestones. " * 35,
+        revision_id=str(first_authority.revision_id),
+        max_context_chars=600, overlap_chars=50,
+    )
+    conn = await asyncpg.connect(dsn)
+    try:
+        await _seed_identity(conn, authority=first_authority, project=project)
+        await conn.execute(
+            """UPDATE public.tenants SET ai_budget_monthly=5,
+                      ai_spend_last_reset=clock_timestamp()
+                WHERE id=$1""", first_authority.tenant_id,
+        )
+        await conn.execute(
+            """INSERT INTO public.n4_budget_buckets
+                (tenant_id,scope_kind,scope_id,period_key,cap_usd)
+               VALUES ($1,'TENANT',$1,'2026-11',5)""",
+            first_authority.tenant_id,
+        )
+    finally:
+        await conn.close()
+    engine = create_async_engine(
+        dsn.replace("postgresql://", "postgresql+asyncpg://", 1),
+        pool_pre_ping=True,
+    )
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            await _tenant_context(session, first_authority.tenant_id)
+            old_run = await create_run(
+                session, authority=first_authority, project_id=project,
+                windows=windows, config_sha256="f" * 64, budget_cap_usd="5",
+            )
+            await block_window(
+                session, authority=first_authority, run_id=old_run,
+                window_ordinal=0, reason="BUDGET_OR_RESERVATION_UNAVAILABLE",
+            )
+            old_status = await progress(
+                session, tenant_id=first_authority.tenant_id, run_id=old_run,
+            )
+            assert old_status["examined_windows"] == 0
+
+        new_authority = replace(
+            first_authority, generation=2, fencing_token=2,
+            attempt_id=uuid4(), owner_token=uuid4(),
+        )
+        conn = await asyncpg.connect(dsn)
+        try:
+            await conn.execute(
+                """UPDATE public.document_processing_operations
+                   SET generation=2, fencing_token=2, phase='RUNNING',
+                       attempt_id=$2, owner_token=$3,
+                       lease_expires_at=clock_timestamp()+interval '1 hour'
+                 WHERE document_id=$1""",
+                first_authority.document_id,
+                new_authority.attempt_id, new_authority.owner_token,
+            )
+        finally:
+            await conn.close()
+
+        async with AsyncSession(engine) as session, session.begin():
+            await _tenant_context(session, new_authority.tenant_id)
+            new_run = await create_run(
+                session, authority=new_authority, project_id=project,
+                windows=windows, config_sha256="f" * 64, budget_cap_usd="5",
+            )
+            assert new_run != old_run
+            reserved = await reserve_call(
+                session, authority=new_authority, run_id=new_run,
+                window_ordinal=0, idempotency_key="recovered-new-generation-01",
+                provider_model="test-model", estimated_max_usd="0.2",
+                period_key="2026-11", inherit_approved_scopes=True,
+            )
+            assert reserved.status == "RESERVED"
+            old_receipts = await session.scalar(text("""
+                SELECT count(*) FROM public.n4_usage_reservations
+                 WHERE tenant_id=CAST(:tenant AS uuid)
+                   AND run_id=CAST(:old_run AS uuid)
+            """), {"tenant": str(new_authority.tenant_id), "old_run": str(old_run)})
+            assert old_receipts == 0
+            old_status = await progress(
+                session, tenant_id=new_authority.tenant_id, run_id=old_run,
+            )
+            assert old_status["status"] == "PARTIAL"
+            assert old_status["examined_windows"] == 0
     finally:
         await engine.dispose()
