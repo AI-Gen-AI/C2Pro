@@ -50,7 +50,9 @@ const view = (over: object = {}) => ({
 });
 
 async function acknowledgeQuote(ordinal = 0) {
-  await userEvent.click(await screen.findByTestId(`finding-source-reviewed-${ordinal}`));
+  const checkbox = await screen.findByTestId(`finding-source-reviewed-${ordinal}`);
+  await waitFor(() => expect(checkbox).toBeEnabled());
+  if (!("checked" in checkbox && checkbox.checked)) await userEvent.click(checkbox);
 }
 
 function renderPanel(onReadinessChange?: (ready: boolean) => void) {
@@ -731,6 +733,139 @@ describe("UX-REG-04 source comparison identity and stale responses", () => {
     auth.userId = "other-user";
     rerender();
     await waitFor(() => expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled());
+    expect(record).not.toHaveBeenCalled();
+  });
+});
+
+
+/** CORE #6993556886: terminal readiness is independent of a historical CONFIRMED label.
+ * Neither a missing source pin nor unverified text is evidence of a valid final signature.
+ * No test mutates persisted decisions: mocked read model remains the authoritative history.
+ */
+describe("CORE evidence policy — validated confirmation and final readiness", () => {
+  const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null, reviewer_id: "reviewer" };
+  const previouslyConfirmed = (ordinal: number, overrides: object = {}) =>
+    finding(ordinal, { current: confirmed, ...overrides });
+  const complete = (overrides: object = {}) =>
+    view({ findings: [previouslyConfirmed(0), previouslyConfirmed(1)], ...overrides });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    auth.orgId = "o";
+    auth.userId = "u";
+    auth.isLoaded = true;
+    record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
+    list.mockResolvedValue(complete());
+  });
+
+  it.each([
+    ["document_revision_id null", { document_revision_id: null }],
+    ["document_revision_id blank", { document_revision_id: "" }],
+    ["generation null", { generation: null }],
+    ["generation not numeric", { generation: "3" }],
+    ["generation fractional", { generation: 3.5 }],
+    ["generation negative", { generation: -1 }],
+    ["fencing_token null", { fencing_token: null }],
+    ["fencing_token missing", { fencing_token: undefined }],
+    ["fencing_token fractional", { fencing_token: 10.5 }],
+    ["fencing_token negative", { fencing_token: -1 }],
+    ["review_row_id mismatch", { review_row_id: "unrelated-review" }],
+    ["artifact_id empty", { artifact_id: "" }],
+    ["artifact_version null", { artifact_version: null }],
+  ])("keeps every existing CONFIRMED but refuses final readiness with %s", async (_case, badPin) => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(complete(badPin));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("rejects final readiness if only one of two historical CONFIRMED risks lacks a VERIFIED literal", async () => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(complete({
+      findings: [
+        previouslyConfirmed(0),
+        previouslyConfirmed(1, {
+          risk: { title: "Risk 1", description: "Claim from an unverified source",
+            source_quote: "Text that cannot be relied on", source_quote_status: "NOT_FOUND_IN_DOCUMENT" },
+        }),
+      ],
+    }));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
+    expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("allows readiness with nonempty VERIFIED quotations, complete pins and individually CONFIRMED findings", async () => {
+    const onReady = vi.fn();
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId("finding-quote-1")).toHaveTextContent("Contract clause 1");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no source status", { source_quote: "An unattributed quotation" }],
+    ["explicit unverified", { source_quote_status: "UNVERIFIED", source_quote: "Unverified text" }],
+    ["literal not found", { source_quote_status: "NOT_FOUND_IN_DOCUMENT", source_quote: "An invented clause" }],
+    ["VERIFIED without actual text", { source_quote_status: "VERIFIED", source_quote: "   " }],
+  ])("blocks new CONFIRMED when %s, while leaving NEEDS_INFO and correction available", async (_case, risk) => {
+    const onReady = vi.fn();
+    const base = { title: "Risk 0", description: "Needs a legal source", category: "TIME" };
+    list.mockResolvedValue(view({ findings: [finding(0, { risk: { ...base, ...risk } })] }));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-0")).toHaveTextContent("Risk 0");
+    const confirm = screen.getByTestId("finding-action-0-CONFIRMED");
+    expect(confirm).toBeDisabled();
+    expect(screen.queryByTestId("finding-source-reviewed-0")).toBeNull();
+    expect(screen.getByTestId("finding-no-verified-source-0")).toHaveTextContent(/confirmation is blocked/i);
+    expect(screen.getByTestId("finding-action-0-NEEDS_INFO")).toBeEnabled();
+    expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
+    await userEvent.click(confirm);
+    expect(record).not.toHaveBeenCalled();
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    await userEvent.click(screen.getByTestId("finding-action-0-NEEDS_INFO"));
+    await userEvent.type(screen.getByTestId("finding-reason-0"), "Please verify the original contract clause");
+    await userEvent.click(screen.getByTestId("finding-submit-0"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    expect(record.mock.calls[0][1]).toMatchObject({ action: "NEEDS_INFO", reason: "Please verify the original contract clause" });
+    expect(record.mock.calls[0][1].action).not.toBe("CONFIRMED");
+  });
+
+  it("a verified literal alone is insufficient to create CONFIRMED until human comparison is acknowledged", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0)] }));
+    renderPanel();
+    expect(await screen.findByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(record).not.toHaveBeenCalled();
+    await acknowledgeQuote();
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    expect(record.mock.calls[0][1]).toMatchObject({ action: "CONFIRMED" });
+  });
+
+  it("does not discard a valid historical decision because a different finding needs new evidence", async () => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(view({
+      findings: [previouslyConfirmed(0), finding(1, {
+        risk: { title: "Risk 1", description: "No source yet", source_quote_status: "NOT_FOUND_IN_DOCUMENT" },
+      })],
+    }));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("No decision yet");
+    expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-1-NEEDS_INFO")).toBeEnabled();
+    expect(screen.getByTestId("finding-action-1-CORRECTION_PROPOSED")).toBeEnabled();
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("1/2");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
     expect(record).not.toHaveBeenCalled();
   });
 });
