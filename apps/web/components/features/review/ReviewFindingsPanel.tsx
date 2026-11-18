@@ -83,11 +83,17 @@ function shortAnalysis(value: unknown): string {
   return `${normalized.slice(0, Math.max(100, lastSpace)).trimEnd()}…`;
 }
 
-/** A presentation-only scalar. Unknown/structured estimates are never converted into fictional values. */
+/** A presentation-only scalar. Never assume that an untyped number has units/currency. */
 function readable(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return null;
+}
+
+function proposedImpact(value: unknown): string {
+  const claim = readable(value);
+  if (claim === null) return "Not quantified in the candidate.";
+  return typeof value === "number" ? `${claim} (unit/currency not supplied)` : claim;
 }
 
 function newKey(): string {
@@ -157,6 +163,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
   const mayReview = query.data?.capabilities?.review_finding !== false;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
+  // A manual source-to-claim comparison is needed for quoted findings, keyed to the exact candidate.
+  // This checkbox does not certify a source or authorize a server decision.
+  const [sourceReviewed, setSourceReviewed] = useState<Record<string, boolean>>({});
   // Unknown outcomes must be retried with the exact same body (including CAS pins).
   // A definitive conflict, identity switch, or explicit action change starts a new operation.
   const pendingConfirmations = useRef<Record<number, PendingSubmission | undefined>>({});
@@ -165,6 +174,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     pendingConfirmations.current = {};
     pendingDraftSubmissions.current = {};
     setDrafts({});
+    setSourceReviewed({});
     setRefusal(null);
   }, [reviewRowId, orgId, userId]);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -209,7 +219,8 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         reason: needsReason(draft.action) ? draft.reason.trim() : null,
         proposed_text: draft.action === "CORRECTION_PROPOSED" ? draft.proposedText.trim() : null,
       }),
-    onSuccess: (_receipt, { finding }) => {
+    onSuccess: (_receipt, { view, finding }) => {
+      setSourceReviewed((current) => ({ ...current, [`${view.artifact_hash}:${finding.finding_id}`]: false }));
       delete pendingConfirmations.current[finding.ordinal];
       delete pendingDraftSubmissions.current[finding.ordinal];
       setRefusal(null);
@@ -311,7 +322,12 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
           const brief = shortAnalysis(finding.risk.description);
           const consequence = [finding.risk.consequences, finding.risk.consequence].map(readable).find(Boolean);
           // RiskItem.impact is a legacy severity label: do not report it as quantified business impact.
-          const impact = [finding.risk.financial_impact, finding.risk.schedule_impact].map(readable).find(Boolean);
+          const financialImpact = proposedImpact(finding.risk.financial_impact);
+          const scheduleImpact = proposedImpact(finding.risk.schedule_impact);
+          const sourceComparisonKey = `${view.artifact_hash}:${finding.finding_id}`;
+          const quotedSource = finding.risk.source_quote_status === "VERIFIED" &&
+            typeof finding.risk.source_quote === "string" && finding.risk.source_quote.trim().length > 0;
+          const sourceWasReviewed = sourceReviewed[sourceComparisonKey] === true;
           const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
             .find((value) => typeof value === "string" && value.trim().length > 0);
           const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
@@ -342,11 +358,16 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
               ) : null}
               {clause ? <p className="mt-1 text-xs text-muted-foreground">Contract clause {clause} (reference proposed by analysis)</p> : null}
               <p className="mt-2 text-sm" data-testid={`finding-consequences-${finding.ordinal}`}>
-                <span className="font-medium">Consequences: </span>{consequence ?? "Not assessed in the candidate."}
+                <span className="font-medium">Consequences (AI proposal, unverified): </span>{consequence ?? "Not assessed in the candidate."}
               </p>
-              <p className="mt-1 text-sm" data-testid={`finding-impact-${finding.ordinal}`}>
-                <span className="font-medium">Impact: </span>{impact ?? "Not quantified in the candidate."}
-              </p>
+              <div className="mt-1 space-y-1 text-sm" data-testid={`finding-impact-${finding.ordinal}`}>
+                <p data-testid={`finding-financial-impact-${finding.ordinal}`}>
+                  <span className="font-medium">Financial impact (AI claim, unverified): </span>{financialImpact}
+                </p>
+                <p data-testid={`finding-schedule-impact-${finding.ordinal}`}>
+                  <span className="font-medium">Schedule impact (AI claim, unverified): </span>{scheduleImpact}
+                </p>
+              </div>
               <p className="mt-2 text-sm" data-testid={`finding-action-summary-${finding.ordinal}`}>
                 <span className="font-medium">Suggested action: </span>
                 {typeof suggestion === "string"
@@ -366,8 +387,34 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     <span className="font-medium">Full suggested action: </span>{suggestion}
                   </p>
                 ) : null}
-                <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
               </details>
+              <div className="mt-2" data-testid={`finding-source-comparison-${finding.ordinal}`}>
+                <p className="text-xs font-medium">Compare the model interpretation with the source evidence before deciding.</p>
+                <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
+                {quotedSource ? (
+                  <div className="mt-2 space-y-2 rounded border border-amber-400 p-2 text-xs" data-testid={`finding-interpretation-warning-${finding.ordinal}`}>
+                    <p role="note">
+                      A literal match does not validate the AI interpretation. Check deadlines, exceptions, amounts and
+                      conditions against the full clause before confirming. If the model claim conflicts with its quotation,
+                      choose Propose correction or Needs info. This is not an automated legal determination.
+                    </p>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={sourceWasReviewed}
+                        onChange={(event) => setSourceReviewed((current) => ({ ...current, [sourceComparisonKey]: event.target.checked }))}
+                        data-testid={`finding-source-reviewed-${finding.ordinal}`}
+                      />
+                      I have compared the AI claim with the full visible quote for this candidate; confirmation records provisional intent only.
+                    </label>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid={`finding-no-verified-source-${finding.ordinal}`}>
+                    No server-verified literal quotation is available. Inspect the original document and consider Needs info or correction.
+                  </p>
+                )}
+              </div>
               {finding.current?.reason ? (
                 <p className="mt-1 text-xs">Reason: {finding.current.reason}</p>
               ) : null}
@@ -385,11 +432,13 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     key={action}
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
-                    disabled={record.isPending || !mayReview}
+                    disabled={record.isPending || !mayReview || (action === "CONFIRMED" && quotedSource && !sourceWasReviewed)}
+                    title={action === "CONFIRMED" && quotedSource && !sourceWasReviewed ? "Compare the full visible quote and acknowledge the review before confirming." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
+                        if (quotedSource && !sourceWasReviewed) return;
                         const previous = pendingConfirmations.current[finding.ordinal];
                         // The same revision may have been refreshed after a lost response.
                         // Replay the exact original request; clear only on success or a
