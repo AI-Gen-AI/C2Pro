@@ -34,6 +34,9 @@ const statusColor = (percent: string) => Number(percent) >= 100
 export default function PlatformBudgetsPage() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [search, setSearch] = useState("");
+  const [editing, setEditing] = useState<BudgetItem | null>(null);
+  const [newCap, setNewCap] = useState("");
+  const [reason, setReason] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState<Page | null>(null);
@@ -100,7 +103,7 @@ export default function PlatformBudgetsPage() {
             <th scope="col" className="p-3">Tenant</th><th scope="col" className="p-3">Status</th>
             <th scope="col" className="p-3 text-right">Monthly cap</th><th scope="col" className="p-3 text-right">Spent</th>
             <th scope="col" className="p-3 text-right">Reserved</th><th scope="col" className="p-3 text-right">Available</th>
-            <th scope="col" className="p-3 text-right">Used</th><th scope="col" className="p-3">Reconciliation</th><th scope="col" className="p-3">Last tenant update</th>
+            <th scope="col" className="p-3 text-right">Used</th><th scope="col" className="p-3">Reconciliation</th><th scope="col" className="p-3">Last tenant update</th><th scope="col" className="p-3">Action</th>
           </tr></thead>
           <tbody>{page.items.map(row => <tr key={row.tenant_id} className="border-t">
             <td className="p-3"><div className="font-medium">{row.name}</div><div className="text-xs text-muted-foreground">{row.slug} · {row.tenant_id}</div></td>
@@ -112,6 +115,9 @@ export default function PlatformBudgetsPage() {
             <td className={"p-3 text-right tabular-nums " + statusColor(row.utilisation_percent)}>{row.utilisation_percent}%</td>
             <td className="p-3 text-xs">{row.budget_status === "RECONCILED" ? "Matched" : row.budget_status === "NO_TENANT_BUCKET" ? "Bucket missing" : "Counters differ"}</td>
             <td className="p-3 text-xs">{row.last_tenant_update ? new Date(row.last_tenant_update).toLocaleString() : "—"}</td>
+            <td className="p-3"><button type="button" className="rounded-md border px-3 py-1 text-xs"
+              onClick={() => { setEditing(row); setNewCap(row.monthly_cap_usd); setReason(""); }}
+            >Edit {row.name}</button></td>
           </tr>)}</tbody>
         </table>
         {page.items.length === 0 && <p className="p-5 text-sm">No matching tenants.</p>}
@@ -123,6 +129,26 @@ export default function PlatformBudgetsPage() {
         <button type="button" className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
           disabled={offset + PAGE_SIZE >= page.total} onClick={() => setOffset(v => v + PAGE_SIZE)}>Next</button>
         <span className="ml-auto text-xs text-muted-foreground">Editing locked pending SECURITY approval</span>
+      </div>
+    </div>}
+    {editing && <div role="dialog" aria-modal="true" aria-label="Edit AI limit"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md space-y-4 rounded-lg bg-background p-6 shadow-lg">
+        <h2 className="text-lg font-semibold">Edit monthly AI limit</h2>
+        <p className="text-sm">{editing.name} · {editing.slug}</p>
+        <p className="text-sm">Current cap: {money(editing.monthly_cap_usd)} · Committed: {money(String(Number(editing.spent_usd) + Number(editing.reserved_usd)))}</p>
+        <label htmlFor="new-limit" className="block text-sm">New monthly limit (USD)</label>
+        <input id="new-limit" type="number" min="0.01" step="0.01"
+          className="w-full rounded-md border bg-background px-3 py-2"
+          value={newCap} onChange={e => setNewCap(e.target.value)} />
+        <label htmlFor="limit-reason" className="block text-sm">Audit reason</label>
+        <textarea id="limit-reason" className="w-full rounded-md border bg-background px-3 py-2"
+          value={reason} onChange={e => setReason(e.target.value)} maxLength={500} rows={2} />
+        <p className="text-sm text-amber-700">Security hold: limit changes cannot be saved until independent approval. No request will be sent.</p>
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={() => setEditing(null)} className="rounded-md border px-4 py-2 text-sm">Cancel</button>
+          <button type="button" disabled className="rounded-md border px-4 py-2 text-sm opacity-50">Save (locked)</button>
+        </div>
       </div>
     </div>}
   </main>;

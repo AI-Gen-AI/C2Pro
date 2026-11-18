@@ -83,13 +83,27 @@ describe("private AI-GEN platform budgets", () => {
     expect(await screen.findByText("Example EPC")).toBeInTheDocument();
     expect(screen.getByText("synthetic-tenant-01", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Read-only", { exact: false })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /edit|save|update limit/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Example EPC" })).toBeInTheDocument();
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain("/v1/platform/budgets?");
     expect(init.headers.Authorization).toBe("Bearer synthetic-clerk-token");
     expect(init.headers["X-Tenant-ID"]).toBeUndefined();
     expect(init.cache).toBe("no-store");
     expect(init.method).toBeUndefined(); // native GET only; no write request
+  });
+
+  it("opens the edit modal but refuses all writes under security hold", async () => {
+    render(<PlatformBudgetsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Example EPC" }));
+    expect(screen.getByRole("dialog", { name: "Edit AI limit" })).toBeInTheDocument();
+    expect(screen.getByLabelText("New monthly limit (USD)")).toHaveValue(5);
+    fireEvent.change(screen.getByLabelText("Audit reason"), {
+      target: { value: "Security hold should prevent real writes" },
+    });
+    expect(screen.getByRole("button", { name: "Save (locked)" })).toBeDisabled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("searches tenant name and changes server-side offset", async () => {
