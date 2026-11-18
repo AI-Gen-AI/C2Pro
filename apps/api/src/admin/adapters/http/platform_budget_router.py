@@ -5,10 +5,10 @@ PostgreSQL budget reader capability is installed. No budget mutation routes.
 """
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -97,7 +97,9 @@ def _item(row: dict[str, object]) -> PlatformBudgetItem:
         available_usd=available,
         utilisation_percent=percent,
         budget_status=status,
-        last_tenant_update=row.get("updated_at"),
+        last_tenant_update=(
+            row["updated_at"] if isinstance(row.get("updated_at"), datetime) else None
+        ),
     )
 
 
@@ -119,8 +121,7 @@ async def _budget_read_connection() -> AsyncIterator[AsyncConnection]:
             url, poolclass=NullPool, echo=False,
             connect_args={"statement_cache_size": 0},
         )
-        async with engine.connect() as conn:
-            async with conn.begin():
+        async with engine.connect() as conn, conn.begin():
                 await conn.execute(text("SET TRANSACTION READ ONLY"))
                 # The check is intentionally strict, and fails closed if the
                 # capability role/table does not exist or has broader grants.
@@ -187,13 +188,13 @@ async def list_platform_budgets(
 ) -> PlatformBudgetPage:
     """One page, all tenant budgets. Not a spending authorisation or edit API."""
     del operator  # authorization is checked before DB access
-    period = datetime.now(timezone.utc).strftime("%Y-%m")
+    period = datetime.now(UTC).strftime("%Y-%m")
     bind = {"period": period, "search": _safe_search(query.strip()), "limit": limit, "offset": offset}
     async with _budget_read_connection() as conn:
         # Search and pagination live on the server; no tenant identifiers accepted.
         total = (await conn.execute(text("""
             SELECT count(*) FROM public.tenants t
-             WHERE t.name ILIKE :search ESCAPE '\'
+             WHERE (t.name ILIKE :search ESCAPE '\' OR t.slug ILIKE :search ESCAPE '\')
         """), bind)).scalar_one()
         rows = (await conn.execute(text("""
             SELECT t.id AS tenant_id, t.name, t.slug, t.is_active, t.updated_at,
@@ -207,7 +208,7 @@ async def list_platform_budgets(
               LEFT JOIN public.n4_budget_buckets b
                 ON b.tenant_id = t.id AND b.scope_kind = 'TENANT'
                AND b.scope_id = t.id AND b.period_key = :period
-             WHERE t.name ILIKE :search ESCAPE '\'
+             WHERE (t.name ILIKE :search ESCAPE '\' OR t.slug ILIKE :search ESCAPE '\')
              ORDER BY t.name COLLATE "C", t.id
              LIMIT :limit OFFSET :offset
         """), bind)).mappings().all()
