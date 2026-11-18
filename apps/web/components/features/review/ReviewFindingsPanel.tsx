@@ -118,6 +118,13 @@ function sourceComparisonIdentity(
   return JSON.stringify([...ids, ...numbers, finding.risk.source_quote_status, finding.risk.source_quote]);
 }
 
+/** A verified literal in analyzed text is not certification of the original PDF. */
+function hasVerifiedLiteralSource(finding: ReviewFindingResponse): boolean {
+  return finding.risk.source_quote_status === "VERIFIED" &&
+    typeof finding.risk.source_quote === "string" &&
+    finding.risk.source_quote.trim().length > 0;
+}
+
 function newKey(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
@@ -280,8 +287,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     },
   });
 
-  // Fail closed while loading, refreshing, or when a finding has no CONFIRMED decision.
-  // The backend independently reconciles the exact ledger before any final promotion.
+  // Fail closed on every confirmed finding's source identity and literal evidence,
+  // even if the read model carries a historical CONFIRMED. Never rewrite the ledger.
+  // Backend reconciliation is a separate final-promotion guard.
   const readyForFinalApproval = Boolean(
     isLoaded &&
     userId &&
@@ -291,7 +299,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     !record.isPending &&
     query.data &&
     query.data.findings.length > 0 &&
-    query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
+    query.data.findings.every((finding) =>
+      finding.current?.action === "CONFIRMED" &&
+      sourceComparisonIdentity(query.data, finding, { orgId, userId, reviewRowId }) !== null &&
+      hasVerifiedLiteralSource(finding),
+    ),
   );
   useEffect(() => {
     onReadinessChange?.(readyForFinalApproval);
@@ -329,7 +341,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
       </p>
       <p className="mt-2 text-xs font-medium" role="status" data-testid={`review-findings-progress-${reviewRowId}`}>
         {view.findings.filter((finding) => finding.current?.action === "CONFIRMED").length}/{view.findings.length} findings approved individually.
-        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked until every finding is confirmed; rejected findings require a corrected candidate."}
+        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked: each finding must be confirmed with a complete source identity and a VERIFIED literal quotation; rejected findings require a corrected candidate."}
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
@@ -356,12 +368,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
           const financialImpact = proposedImpact(finding.risk.financial_impact);
           const scheduleImpact = proposedImpact(finding.risk.schedule_impact);
           const sourceComparisonKey = sourceComparisonIdentity(view, finding, { orgId, userId, reviewRowId });
-          const quotedSource = finding.risk.source_quote_status === "VERIFIED" &&
-            typeof finding.risk.source_quote === "string" && finding.risk.source_quote.trim().length > 0;
+          const quotedSource = hasVerifiedLiteralSource(finding);
           const sourceWasReviewed = sourceComparisonKey !== null && sourceReviewed[sourceComparisonKey] === true;
           // Never confirm from stale cached data during an in-flight refetch.
           const mayConfirmFinding = sourceComparisonKey !== null && !query.isFetching &&
-            (!quotedSource || sourceWasReviewed);
+            quotedSource && sourceWasReviewed;
           const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
             .find((value) => typeof value === "string" && value.trim().length > 0);
           const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
@@ -449,7 +460,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   </div>
                 ) : (
                   <p className="mt-1 text-xs text-muted-foreground" data-testid={`finding-no-verified-source-${finding.ordinal}`}>
-                    No server-verified literal quotation is available. Inspect the original document and consider Needs info or correction.
+                    No server-verified literal quotation is available. Confirmation is blocked until there is a VERIFIED literal quote and you compare it with the AI claim. Choose Needs info or Propose correction; never invent evidence.
                   </p>
                 )}
                 {!sourceComparisonKey ? (
@@ -476,7 +487,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
                     disabled={record.isPending || query.isFetching || !mayReview || (action === "CONFIRMED" && !mayConfirmFinding)}
-                    title={action === "CONFIRMED" && !mayConfirmFinding ? "Refresh the exact source identity and review its quotation before confirming." : undefined}
+                    title={action === "CONFIRMED" && !mayConfirmFinding ? "VERIFIED literal evidence, complete source identity and your comparison are required; otherwise choose Needs info or Propose correction." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);
