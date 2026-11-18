@@ -297,6 +297,58 @@ def _bucket_scopes(
     return sorted(scopes)
 
 
+async def _inherit_missing_subscopes(
+    session: AsyncSession, *, tenant_id: UUID, project_id: UUID,
+    document_id: UUID, period_key: str,
+) -> None:
+    """Derive missing child caps from an already-approved TENANT cap.
+
+    Only called with explicit UAT opt-in by reserve_call, after the global
+    tenant row is locked and the ANALYSIS authority/run have been verified.
+    Child buckets are NOT additional credit: every reservation also charges
+    the tenant bucket and the shared tenants.ai_spend_reserved_usd counter.
+    Existing explicit child caps are never overwritten or raised.
+    """
+    policy = (await session.execute(text("""
+        SELECT t.ai_budget_monthly AS global_cap, b.cap_usd AS tenant_cap
+          FROM public.tenants t
+          JOIN public.n4_budget_buckets b
+            ON b.tenant_id = t.id AND b.scope_kind = 'TENANT'
+           AND b.scope_id = t.id AND b.period_key = :period
+          JOIN public.documents d
+            ON d.tenant_id = t.id
+           AND d.id = CAST(:document AS uuid)
+           AND d.project_id = CAST(:project AS uuid)
+         WHERE t.id = CAST(:tenant AS uuid) AND t.is_active IS TRUE
+    """), {
+        "tenant": _uuid(tenant_id), "project": _uuid(project_id),
+        "document": _uuid(document_id), "period": period_key,
+    })).mappings().one_or_none()
+    if policy is None:
+        raise N4BudgetNotConfigured(
+            "approved TENANT budget or verified project-document identity missing"
+        )
+    try:
+        cap = min(_amount(policy["global_cap"]), _amount(policy["tenant_cap"]))
+    except (ValueError, TypeError) as exc:
+        raise N4BudgetNotConfigured("TENANT spending cap invalid") from exc
+    if cap <= 0:
+        raise N4BudgetNotConfigured("positive approved TENANT cap required")
+    for kind, scope_id in (
+        ("PROJECT", project_id), ("DOCUMENT", document_id),
+    ):
+        await session.execute(text("""
+            INSERT INTO public.n4_budget_buckets
+              (tenant_id, scope_kind, scope_id, period_key, cap_usd)
+            VALUES (CAST(:tenant AS uuid), :kind, CAST(:scope AS uuid),
+                    :period, :cap)
+            ON CONFLICT DO NOTHING
+        """), {
+            "tenant": _uuid(tenant_id), "kind": kind,
+            "scope": _uuid(scope_id), "period": period_key, "cap": cap,
+        })
+
+
 async def _lock_budget_scopes(
     session: AsyncSession, *, tenant_id: UUID,
     scopes: list[tuple[str, str, str]],
@@ -327,7 +379,7 @@ async def reserve_call(
     session: AsyncSession, *, authority: ProcessingAuthority,
     run_id: UUID, window_ordinal: int, idempotency_key: str,
     provider_model: str, estimated_max_usd: Decimal | str | int,
-    period_key: str,
+    period_key: str, inherit_approved_scopes: bool = False,
 ) -> N4Reservation:
     """One atomic reservation across tenant, project, document and run caps.
 
@@ -396,6 +448,12 @@ async def reserve_call(
     if open_attempt:
         raise N4BudgetError(
             "window has unsettled or unknown provider cost; reconcile before retry"
+        )
+    if inherit_approved_scopes:
+        await _inherit_missing_subscopes(
+            session, tenant_id=authority.tenant_id,
+            project_id=UUID(str(run["project_id"])),
+            document_id=authority.document_id, period_key=period_key,
         )
     scopes = _bucket_scopes(
         tenant_id=authority.tenant_id, project_id=UUID(str(run["project_id"])),
