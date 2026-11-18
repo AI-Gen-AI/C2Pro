@@ -125,16 +125,27 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         raise N4GraphBridgeBlocked("N4 governed graph refuses mock model mode")
     authority, project_id, source_text = _identity(state)
     run_cap, per_call, chars, overlap = _limits()
-    direct = os.getenv("C2PRO_DIRECT_FALLBACK_ENABLED") == "1"
-    provider = AnthropicN4WindowProvider(
-        wrapper=AnthropicWrapper(
-            enable_cache=False, enable_retry=False,
-            max_tokens_limit=2048, timeout_seconds=75,
-        ),
-        tier=ModelTier.STANDARD,
-        max_output_tokens=2048,
-        fallback_reservation_usd=per_call if direct else None,
-    )
+    primary = os.getenv("C2PRO_N4_GRAPH_PRIMARY_PROVIDER", "anthropic")
+    if primary == "openai":
+        from src.analysis.adapters.ai.n4_direct_openai_window_provider import (
+            DirectOpenAIN4WindowProvider,
+        )
+        provider = DirectOpenAIN4WindowProvider(
+            max_output_tokens=2048, reservation_usd=per_call,
+        )
+    elif primary == "anthropic":
+        direct = os.getenv("C2PRO_DIRECT_FALLBACK_ENABLED") == "1"
+        provider = AnthropicN4WindowProvider(
+            wrapper=AnthropicWrapper(
+                enable_cache=False, enable_retry=False,
+                max_tokens_limit=2048, timeout_seconds=75,
+            ),
+            tier=ModelTier.STANDARD,
+            max_output_tokens=2048,
+            fallback_reservation_usd=per_call if direct else None,
+        )
+    else:
+        raise N4GraphBridgeBlocked("Unapproved N4 primary provider")
     runner = N4IncrementalRunner(
         session_factory=get_session_factory(),
         provider=provider,
