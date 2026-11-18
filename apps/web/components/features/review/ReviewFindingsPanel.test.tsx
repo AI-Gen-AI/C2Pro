@@ -74,7 +74,7 @@ describe("ReviewFindingsPanel", () => {
   it("does not silently hide the findings when their API request fails", async () => {
     list.mockRejectedValue(new Error("Not found"));
     renderPanel(vi.fn());
-    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toHaveTextContent(/could not be loaded/i);
+    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toHaveTextContent(/findings are unavailable for this review/i);
     expect(screen.getByRole("button", { name: /retry loading findings/i })).toBeInTheDocument();
   });
 
@@ -478,9 +478,13 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
     expect(screen.getByTestId("finding-evidence-0")).toHaveAttribute("open");
     expect(screen.getByTestId("finding-description-0")).toHaveTextContent(full.trim());
     expect(screen.getByTestId("finding-quote-0")).toHaveTextContent("A retention of 5%");
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-interpretation-warning-0")).toHaveTextContent(/literal match does not validate/i);
+    await userEvent.click(screen.getByTestId("finding-source-reviewed-0"));
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
   });
 
-  it("does not make an automated semantic ruling from English deadline keywords", async () => {
+  it("§5.2: demands deliberate source comparison before a provisional confirmation of contradictory AI prose", async () => {
     list.mockResolvedValue(view({ findings: [finding(0, {
       risk: {
         title: "Defect rectification",
@@ -492,10 +496,42 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
     })] }));
     renderPanel();
     await screen.findByTestId("finding-0");
-    expect(screen.queryByTestId("finding-source-conflict-0")).toBeNull();
-    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+    expect(screen.getByTestId("finding-quote-0")).toHaveTextContent("within fourteen (14) days");
+    expect(screen.getByTestId("finding-brief-0")).toHaveTextContent("no agreed timeframe");
+    expect(screen.getByTestId("finding-interpretation-warning-0")).toHaveTextContent(/deadlines, exceptions, amounts/);
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
     expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
     expect(record).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId("finding-source-reviewed-0"));
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("does not invent a contradiction from linguistic keywords: manual comparison is required, not a legal verdict", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0, {
+      risk: { title: "Timely cure", description: "The Contractor has a defined cure period.",
+        source_quote: "Defects must be rectified within fourteen (14) days of written notice.",
+        source_quote_status: "VERIFIED" },
+    })] }));
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.queryByTestId("finding-source-conflict-0")).toBeNull();
+    expect(screen.getByTestId("finding-interpretation-warning-0")).toHaveTextContent(/not an automated legal determination/i);
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    await userEvent.click(screen.getByTestId("finding-source-reviewed-0"));
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+  });
+
+  it("shows both independent business impact axes without inferring missing currency units", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0, {
+      risk: { title: "Retention and delay", description: "Impacts projected by the model",
+        financial_impact: 120000, schedule_impact: "21 days, unverified" },
+    })] }));
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-financial-impact-0")).toHaveTextContent("120000 (unit/currency not supplied)");
+    expect(screen.getByTestId("finding-schedule-impact-0")).toHaveTextContent("21 days, unverified");
+    expect(screen.getByTestId("finding-impact-0")).toHaveTextContent(/AI claim, unverified/i);
   });
 
   it("does not confuse legacy impact severity with quantified commercial impact", async () => {
@@ -521,6 +557,8 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
     renderPanel();
     await screen.findByTestId("finding-0");
     expect(screen.queryByTestId("finding-source-conflict-0")).toBeNull();
+    expect(screen.queryByTestId("finding-quote-0")).toBeNull();
+    expect(screen.getByTestId("finding-no-verified-source-0")).toHaveTextContent(/no server-verified literal quotation/i);
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
   });
 });
