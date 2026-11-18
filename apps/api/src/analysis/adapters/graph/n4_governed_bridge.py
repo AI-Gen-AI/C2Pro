@@ -81,6 +81,34 @@ def _limits() -> tuple[Decimal, Decimal, int, int]:
     return run, call, max_chars, overlap
 
 
+def _uat_inherited_scopes(tenant_id: UUID) -> bool:
+    """Require exact UAT environment + approved tenant; never opt in by key alone."""
+    if os.getenv("C2PRO_N4_UAT_INHERIT_SCOPES") != "1":
+        return False
+    approved = os.getenv("C2PRO_N4_UAT_APPROVED_TENANT_ID", "").strip()
+    if approved != str(tenant_id):
+        raise N4GraphBridgeBlocked(
+            "N4 child-budget inheritance requires approved tenant"
+        )
+    railway_id = os.getenv("RAILWAY_ENVIRONMENT_ID", "").strip()
+    railway_name = os.getenv("RAILWAY_ENVIRONMENT_NAME", "").strip().lower()
+    if railway_id or railway_name:
+        # On Railway, deployment identity is stronger than an application
+        # ENVIRONMENT variable (which may legitimately be 'production' in UAT).
+        pinned_id = os.getenv(
+            "C2PRO_N4_UAT_APPROVED_RAILWAY_ENVIRONMENT_ID", ""
+        ).strip()
+        if railway_name != "pilot" or not pinned_id or railway_id != pinned_id:
+            raise N4GraphBridgeBlocked(
+                "N4 child-budget inheritance requires pinned UAT environment"
+            )
+    elif os.getenv("ENVIRONMENT", "").strip().lower() not in {"uat", "pilot"}:
+        raise N4GraphBridgeBlocked(
+            "N4 child-budget inheritance requires named UAT environment"
+        )
+    return True
+
+
 def _candidate_payload(claim: Mapping[str, Any], refs: list, source: str) -> dict[str, Any]:
     if not isinstance(claim, dict) or not isinstance(refs, list) or not refs:
         raise N4GraphBridgeBlocked("N4 candidate lacks persisted claim and source reference")
@@ -155,6 +183,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         max_context_chars=chars,
         overlap_chars=overlap,
         enabled=True,
+        inherit_approved_scopes=_uat_inherited_scopes(authority.tenant_id),
     )
     outcome = await runner.run(
         authority=authority, project_id=project_id,

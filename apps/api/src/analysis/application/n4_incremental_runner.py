@@ -87,6 +87,7 @@ class N4IncrementalRunner:
         per_window_reservation_usd: Decimal | str,
         period_key: str,
         enabled: bool = False,
+        inherit_approved_scopes: bool = False,
         max_context_chars: int = 12_000,
         overlap_chars: int = 400,
     ) -> None:
@@ -101,6 +102,7 @@ class N4IncrementalRunner:
             raise ValueError("N4 fallback escrow must equal the actual per-window reservation")
         self.period_key = period_key
         self.enabled = enabled
+        self.inherit_approved_scopes = inherit_approved_scopes
         self.context_limit = max_context_chars
         self.overlap = overlap_chars
         if (
@@ -253,6 +255,7 @@ class N4IncrementalRunner:
                         provider_model=self.provider.model_name,
                         estimated_max_usd=self.call_reservation,
                         period_key=self.period_key,
+                        inherit_approved_scopes=self.inherit_approved_scopes,
                     )
             except N4BudgetError as exc:
                 # The denied transaction rolls back before the BLOCKED state
