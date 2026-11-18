@@ -365,7 +365,10 @@ export default function ProjectDocumentsPage() {
   const inProgressCount = rows.filter(
     (row) => row.status === 'uploaded' || row.status === 'processing',
   ).length;
-  const errorCount = rows.filter((row) => row.status === 'error').length;
+  // Terminal failed analysis is an error/attention state even if parsing succeeded.
+  const errorCount = rows.filter(
+    (row) => row.status === 'error' || row.status === 'failed_retryable',
+  ).length;
   const hasBackendDocuments = rows.length > 0;
   const hasInFlightDocuments = documents.some((doc) =>
     isInFlightStatus(doc.status, doc.lifecycleStatus),
@@ -798,7 +801,13 @@ export default function ProjectDocumentsPage() {
                           data-testid="document-status-badge"
                         >
                           <StatusIcon className="mr-1 h-3 w-3" />
-                          {LIFECYCLE_LABELS[doc.status]}
+                          {(doc.status === 'failed_retryable' || doc.status === 'error') &&
+                          doc.statusDetail?.startsWith('AI budget authorization required:')
+                            ? 'Budget required'
+                            : (doc.status === 'failed_retryable' || doc.status === 'error') &&
+                              doc.statusDetail?.startsWith('AI budget limit reached.')
+                              ? 'Budget limit reached'
+                              : LIFECYCLE_LABELS[doc.status]}
                         </Badge>
                         {doc.statusDetail ? (
                           <p className="mt-1 max-w-[220px] text-xs text-muted-foreground" data-testid="document-status-detail">

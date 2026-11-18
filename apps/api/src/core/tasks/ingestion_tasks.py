@@ -1160,7 +1160,14 @@ async def _run_analysis_graph_best_effort(
                 "reason": str(result.get("termination_reason") or "unassessed")[:100],
             },
         )
-        return {"analysis_id": None, "human_approval_required": False, "terminal_unassessed": True}
+        blocker = result.get("analysis_blocker_code")
+        return {
+            "analysis_id": None, "human_approval_required": False,
+            "terminal_unassessed": True,
+            "analysis_blocker_code": blocker if blocker in (
+                "N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED",
+            ) else None,
+        }
     analysis_id = result.get("analysis_id")
     human_approval_required = bool(result.get("human_approval_required", False))
     return {
@@ -1429,6 +1436,7 @@ async def _analyze_owned(
     # The chunk count remains a separate Health/retrieval-coverage signal.
     human_approval_required = False
     graph_terminal_unassessed = False
+    graph_blocker_code: str | None = None
     if requires_text_analysis(document.document_type, parsed_text):
         # Repository read is tenant-scoped and bound to this processing grant.
         # Missing revision or mismatched identity yields NO coverage assertion.
@@ -1451,6 +1459,7 @@ async def _analyze_owned(
         analysis_id = graph_result["analysis_id"]
         human_approval_required = graph_result["human_approval_required"]
         graph_terminal_unassessed = bool(graph_result.get("terminal_unassessed"))
+        graph_blocker_code = graph_result.get("analysis_blocker_code")
     else:
         analysis_id = None
         logger.info(
@@ -1502,11 +1511,28 @@ async def _analyze_owned(
         and (not retry or not automatic_retry_available)
     )
     current_metadata = dict(document.document_metadata or {})
+    metadata_changed = False
     if current_metadata.get("analysis_last_attempt_incomplete") != terminal_incomplete:
         if terminal_incomplete:
             current_metadata["analysis_last_attempt_incomplete"] = True
         else:
             current_metadata.pop("analysis_last_attempt_incomplete", None)
+        metadata_changed = True
+    # Persist only a vetted code (never a provider exception, contract text,
+    # or sensitive tenant financial details) so polling can distinguish
+    # budget setup from a genuinely retryable processing failure.
+    valid_blocker = graph_blocker_code if (
+        terminal_incomplete and graph_blocker_code in (
+            "N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED",
+        )
+    ) else None
+    if current_metadata.get("analysis_blocker_code") != valid_blocker:
+        if valid_blocker:
+            current_metadata["analysis_blocker_code"] = valid_blocker
+        else:
+            current_metadata.pop("analysis_blocker_code", None)
+        metadata_changed = True
+    if metadata_changed:
         await repo.update_metadata(tenant_id, document_id, current_metadata)
     result_status = (
         "waiting_for_review"
@@ -1894,6 +1920,7 @@ async def _ingest_owned(
     # attempt recorded -- a stale "failed, retry me" flag must not
     # survive a genuine re-upload/reprocess.
     metadata.pop("analysis_last_attempt_incomplete", None)
+    metadata.pop("analysis_blocker_code", None)
     # Enum value only -- provider messages can carry credentials and
     # never belong in document metadata. Recorded so an operator (or a
     # retry) can tell "nothing to embed" from "provider misconfigured".

@@ -179,3 +179,21 @@ async def test_mock_ledger_cannot_call_provider(monkeypatch):
     with bound_authority(authority):
         with pytest.raises(bridge.N4GraphBridgeBlocked, match="mock"):
             await bridge.run_governed_n4_in_graph(state)
+
+
+@pytest.mark.asyncio
+async def test_n4_budget_not_configured_yields_machine_readable_blocker(monkeypatch):
+    state, _ = _state()
+    async def no_project_cap(_):
+        raise bridge.N4GraphBridgeBlocked(
+            "N4 durable source window run incomplete; reason=N4BudgetNotConfigured"
+        )
+    monkeypatch.setenv("C2PRO_N4_GRAPH_LEDGER_ENABLED", "1")
+    monkeypatch.setattr(bridge, "run_governed_n4_in_graph", no_project_cap)
+    from src.analysis.adapters.graph import nodes
+    monkeypatch.setattr(nodes, "_persist_node_error", AsyncMock())
+    out = await risk_extractor_node(state)
+    assert out["analysis_blocker_code"] == "N4_BUDGET_NOT_CONFIGURED"
+    assert out["workflow_terminated"] is True
+    assert out["human_approval_required"] is False
+    assert out["extracted_risks"] == []
