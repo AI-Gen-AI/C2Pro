@@ -413,7 +413,7 @@ async def test_the_approval_persists_its_receipt_and_authority_on_the_claimed_op
     assert stored["grant_id"], "the grant the approval was taken under is recorded"
     assert stored["receipt"]["digest"] == expected.digest, "the very reconciliation that was approved"
     assert (stored["receipt"]["ledger_revision"], stored["receipt"]["artifact_hash"]) == (5, w.artifact_hash)
-    assert stored["receipt"]["signable_as_is"] is True and stored["receipt"]["policy_version"] == "s5-03/v1"
+    assert stored["receipt"]["signable_as_is"] is True and stored["receipt"]["policy_version"] == "s5-03/v2"
 
 
 async def test_a_decision_taken_under_the_legacy_rule_records_an_explicit_null_not_an_inherited_authority(

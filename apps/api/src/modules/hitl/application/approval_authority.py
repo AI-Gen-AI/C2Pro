@@ -133,12 +133,17 @@ async def require_reconciled_approval(
     if not is_reconcilable(review_metadata):
         return None
     mode = await authorizer.mode(tenant_id)
-    if mode is AuthorizationMode.OFF:
-        return None
     service = FindingReconciliationService(authorizer.session, authorizer)
     result = await service.reconcile_for_member(
         tenant_id=tenant_id, user_id=user_id, review_row_id=review_row_id, capability=ProjectCapability.APPROVE_CANDIDATE
     )
+    # SEC-04: even the transitional OFF/AUDIT modes cannot treat an empty
+    # candidate as proof that its extraction covered the source. Keep their
+    # existing handling of nonempty/undecided candidates otherwise unchanged.
+    if not result.outcomes:
+        raise ReconciliationBlocksApproval(result)
+    if mode is AuthorizationMode.OFF:
+        return None
     if not result.signable_as_is:
         if mode is AuthorizationMode.AUDIT:
             logger.warning(
@@ -206,9 +211,13 @@ async def revalidate_at_promotion(
     receipt = _receipt_from_json(authority.receipt)
     try:
         # grant row FOR SHARE + member re-read + review row FOR SHARE + ledger re-reconciled: one consistent view
-        await FindingReconciliationService(session, authorizer).verify_current_for_member(
+        current = await FindingReconciliationService(session, authorizer).verify_current_for_member(
             receipt, tenant_id=tenant_id, user_id=UUID(authority.user_id), capability=ProjectCapability.APPROVE_CANDIDATE
         )
+        # Defense in depth: a matching digest alone is insufficient if the
+        # candidate is not currently eligible for a final human signature.
+        if not current.signable_as_is:
+            raise PromotionNotAuthorized("the current reconciliation is not eligible for TRUSTED promotion")
     except ProjectAuthorizationDenied as exc:
         raise PromotionNotAuthorized(f"the approver no longer holds {exc.capability.value} on the project: {exc}") from exc
     except ReconciliationStale as exc:
