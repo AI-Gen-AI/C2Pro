@@ -562,3 +562,156 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
   });
 });
+
+
+/** UX-REG-04 permanent adversarial cases: a checkbox is tied to a complete pinned source, not to a risk digest. */
+describe("UX-REG-04 source comparison identity and stale responses", () => {
+  const traced = (risk: object = {}) => finding(0, {
+    risk: {
+      title: "Milestone", description: "Analysis requiring a source comparison", category: "TIME",
+      source_quote: "Defects must be corrected within fourteen days.",
+      source_quote_status: "VERIFIED", ...risk,
+    },
+  });
+  const candidate = (changes: object = {}) => view({ findings: [traced()], ...changes });
+  const key = () => reviewFindingsKey(auth.orgId, auth.userId, ROW);
+
+  function mount() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const panel = () => (
+      <QueryClientProvider client={client}>
+        <ReviewFindingsPanel reviewRowId={ROW} />
+      </QueryClientProvider>
+    );
+    const rendered = render(panel());
+    return { client, rerender: () => rendered.rerender(panel()) };
+  }
+
+  async function acknowledge() {
+    await screen.findByTestId("finding-source-reviewed-0");
+    await userEvent.click(screen.getByTestId("finding-source-reviewed-0"));
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    auth.orgId = "o";
+    auth.userId = "u";
+    auth.isLoaded = true;
+    list.mockResolvedValue(candidate());
+    record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
+  });
+
+  it.each([
+    ["document revision", { document_revision_id: "rev-2" }],
+    ["generation", { generation: 4 }],
+    ["fencing token", { fencing_token: 11 }],
+    ["artifact version", { artifact_version: 3 }],
+    ["artifact identity", { artifact_id: "art-2" }],
+    ["artifact digest", { artifact_hash: "b".repeat(64) }],
+  ])("requires fresh comparison on %s even with unchanged risk ID and previous digest where applicable", async (_name, change) => {
+    list.mockResolvedValueOnce(candidate()).mockResolvedValueOnce(candidate(change));
+    const { client } = mount();
+    await acknowledge();
+    await client.invalidateQueries({ queryKey: key() });
+    await waitFor(() => expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled());
+    expect(screen.getByTestId("finding-source-reviewed-0")).not.toBeChecked();
+    expect(record).not.toHaveBeenCalled();
+    await acknowledge();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    expect(record.mock.calls[0][1]).toMatchObject(change);
+  });
+
+  it("does not reuse A's acknowledgement after candidate A -> B -> A", async () => {
+    list.mockResolvedValueOnce(candidate())
+      .mockResolvedValueOnce(candidate({ generation: 4 }))
+      .mockResolvedValueOnce(candidate());
+    const { client } = mount();
+    await acknowledge();
+    await client.invalidateQueries({ queryKey: key() });
+    await waitFor(() => expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled());
+    await client.invalidateQueries({ queryKey: key() });
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-source-reviewed-0")).not.toBeChecked();
+  });
+
+  it("disables confirmation during a pending refetch and rejects the old comparison after its response", async () => {
+    let respond: ((next: unknown) => void) | undefined;
+    list.mockResolvedValueOnce(candidate()).mockImplementationOnce(
+      () => new Promise((resolve) => { respond = resolve; }),
+    );
+    const { client } = mount();
+    await acknowledge();
+    const refresh = client.invalidateQueries({ queryKey: key() });
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-source-reviewed-0")).toBeDisabled();
+    expect(record).not.toHaveBeenCalled();
+    respond?.(candidate({ fencing_token: 12 }));
+    await refresh;
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-source-reviewed-0")).not.toBeChecked();
+  });
+
+  it("clears the comparison on error and requires fresh acknowledgement after retry of the same revision", async () => {
+    list.mockResolvedValueOnce(candidate())
+      .mockRejectedValueOnce(new Error("source temporarily unavailable"))
+      .mockResolvedValueOnce(candidate());
+    const { client } = mount();
+    await acknowledge();
+    await client.invalidateQueries({ queryKey: key() });
+    expect(await screen.findByTestId(`review-findings-error-${ROW}`)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /retry loading findings/i }));
+    await screen.findByTestId("finding-source-reviewed-0");
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["document revision", { document_revision_id: null }],
+    ["generation", { generation: undefined }],
+    ["fencing token", { fencing_token: null }],
+    ["artifact identifier", { artifact_id: "" }],
+    ["review id mismatch", { review_row_id: "different-row" }],
+  ])("fails closed when %s is unavailable or inconsistent", async (_name, change) => {
+    list.mockResolvedValue(candidate(change));
+    mount();
+    expect(await screen.findByTestId("finding-invalid-source-0")).toHaveTextContent(/identity is incomplete/i);
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-source-reviewed-0")).toBeDisabled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("does not replay an uncertain old CONFIRMED across new generation or fence", async () => {
+    const shifted = candidate({ generation: 5, fencing_token: 13 });
+    list.mockResolvedValueOnce(candidate()).mockResolvedValue(shifted);
+    record.mockRejectedValueOnce(new Error("response lost"));
+    const { client } = mount();
+    await acknowledge();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    const old = record.mock.calls[0][1];
+    await client.invalidateQueries({ queryKey: key() });
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    await acknowledge();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    const now = record.mock.calls[1][1];
+    expect(now).toMatchObject({ generation: 5, fencing_token: 13 });
+    expect(now.idempotency_key).not.toBe(old.idempotency_key);
+  });
+
+  it("invalidates org and user scope without carrying a previous acknowledgement", async () => {
+    const { rerender } = mount();
+    await acknowledge();
+    auth.orgId = "new-org";
+    rerender();
+    await waitFor(() => expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled());
+    await acknowledge();
+    auth.userId = "other-user";
+    rerender();
+    await waitFor(() => expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled());
+    expect(record).not.toHaveBeenCalled();
+  });
+});
