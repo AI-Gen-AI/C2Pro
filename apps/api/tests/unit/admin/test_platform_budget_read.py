@@ -73,10 +73,25 @@ async def test_no_read_capability_fail_closed() -> None:
 
 
 def test_exact_registry_only_read_route() -> None:
-    from src.core.middleware.tenant_isolation import is_platform_route
-    assert is_platform_route("GET", "/api/v1/platform/budgets")
+    """Inspect the literal registry without importing unrelated Redis runtime."""
+    import ast
+    from pathlib import Path
+
+    middleware = Path(__file__).resolve().parents[3] / "src/core/middleware/tenant_isolation.py"
+    module = ast.parse(middleware.read_text(encoding="utf-8"))
+    registry = next(node for node in module.body
+                    if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "PLATFORM_ROUTE_REGISTRY"
+                            for target in node.targets))
+    assert isinstance(registry.value, ast.Call)
+    values = ast.literal_eval(registry.value.args[0])
+    assert ("GET", "/api/v1/platform/budgets") in values
     for verb in ("POST", "PATCH", "PUT", "DELETE"):
-        assert not is_platform_route(verb, "/api/v1/platform/budgets")
+        assert (verb, "/api/v1/platform/budgets") not in values
+
+    from src.admin.adapters.http.platform_budget_router import router
+    route = next(route for route in router.routes if route.path == "/platform/budgets")
+    assert route.methods == {"GET"}
 
 
 @pytest.mark.asyncio
