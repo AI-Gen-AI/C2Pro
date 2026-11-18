@@ -96,6 +96,28 @@ function proposedImpact(value: unknown): string {
   return typeof value === "number" ? `${claim} (unit/currency not supplied)` : claim;
 }
 
+/** Manual comparison is bound to the reviewer, pinned revision, processing lease and exact finding.
+ * Missing pins fail closed; JSON avoids ambiguous string delimiters. No PDF provenance is asserted.
+ */
+function sourceComparisonIdentity(
+  view: ReviewFindingsResponse,
+  finding: ReviewFindingResponse,
+  scope: { orgId: string | null | undefined; userId: string | null | undefined; reviewRowId: string },
+): string | null {
+  const ids = [
+    scope.orgId, scope.userId, scope.reviewRowId, view.review_row_id,
+    view.artifact_id, view.artifact_hash, view.document_revision_id,
+    finding.finding_id, finding.source_item_id,
+  ];
+  const numbers = [view.artifact_version, view.generation, view.fencing_token, finding.ordinal];
+  if (
+    ids.some((id) => typeof id !== "string" || !id.trim()) ||
+    numbers.some((value) => typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) ||
+    view.review_row_id !== scope.reviewRowId
+  ) return null;
+  return JSON.stringify([...ids, ...numbers, finding.risk.source_quote_status, finding.risk.source_quote]);
+}
+
 function newKey(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
@@ -162,6 +184,14 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   });
   // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
   const mayReview = query.data?.capabilities?.review_finding !== false;
+  // Revoke all manual comparisons when a candidate moves, including A -> B -> A.
+  const currentCandidateKey = query.data
+    ? JSON.stringify([
+        orgId, userId, reviewRowId, query.data.review_row_id,
+        query.data.artifact_id, query.data.artifact_version, query.data.artifact_hash,
+        query.data.document_revision_id, query.data.generation, query.data.fencing_token,
+      ])
+    : null;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
   // A manual source-to-claim comparison is needed for quoted findings, keyed to the exact candidate.
   // This checkbox does not certify a source or authorize a server decision.
@@ -176,7 +206,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     setDrafts({});
     setSourceReviewed({});
     setRefusal(null);
-  }, [reviewRowId, orgId, userId]);
+  }, [reviewRowId, orgId, userId, currentCandidateKey, query.isError]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmingDerive, setConfirmingDerive] = useState(false);
   const [derived, setDerived] = useState<DerivedCandidateResponse | null>(null);
@@ -220,7 +250,8 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         proposed_text: draft.action === "CORRECTION_PROPOSED" ? draft.proposedText.trim() : null,
       }),
     onSuccess: (_receipt, { view, finding }) => {
-      setSourceReviewed((current) => ({ ...current, [`${view.artifact_hash}:${finding.finding_id}`]: false }));
+      const comparedKey = sourceComparisonIdentity(view, finding, { orgId, userId, reviewRowId });
+      if (comparedKey) setSourceReviewed((current) => ({ ...current, [comparedKey]: false }));
       delete pendingConfirmations.current[finding.ordinal];
       delete pendingDraftSubmissions.current[finding.ordinal];
       setRefusal(null);
@@ -324,10 +355,13 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
           // RiskItem.impact is a legacy severity label: do not report it as quantified business impact.
           const financialImpact = proposedImpact(finding.risk.financial_impact);
           const scheduleImpact = proposedImpact(finding.risk.schedule_impact);
-          const sourceComparisonKey = `${view.artifact_hash}:${finding.finding_id}`;
+          const sourceComparisonKey = sourceComparisonIdentity(view, finding, { orgId, userId, reviewRowId });
           const quotedSource = finding.risk.source_quote_status === "VERIFIED" &&
             typeof finding.risk.source_quote === "string" && finding.risk.source_quote.trim().length > 0;
-          const sourceWasReviewed = sourceReviewed[sourceComparisonKey] === true;
+          const sourceWasReviewed = sourceComparisonKey !== null && sourceReviewed[sourceComparisonKey] === true;
+          // Never confirm from stale cached data during an in-flight refetch.
+          const mayConfirmFinding = sourceComparisonKey !== null && !query.isFetching &&
+            (!quotedSource || sourceWasReviewed);
           const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
             .find((value) => typeof value === "string" && value.trim().length > 0);
           const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
@@ -403,7 +437,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         type="checkbox"
                         className="mt-0.5"
                         checked={sourceWasReviewed}
-                        onChange={(event) => setSourceReviewed((current) => ({ ...current, [sourceComparisonKey]: event.target.checked }))}
+                        disabled={sourceComparisonKey === null || query.isFetching}
+                        onChange={(event) => {
+                          if (!sourceComparisonKey || query.isFetching) return;
+                          setSourceReviewed((current) => ({ ...current, [sourceComparisonKey]: event.target.checked }));
+                        }}
                         data-testid={`finding-source-reviewed-${finding.ordinal}`}
                       />
                       I have compared the AI claim with the full visible quote for this candidate; confirmation records provisional intent only.
@@ -414,6 +452,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     No server-verified literal quotation is available. Inspect the original document and consider Needs info or correction.
                   </p>
                 )}
+                {!sourceComparisonKey ? (
+                  <p role="alert" className="mt-1 text-xs text-destructive" data-testid={`finding-invalid-source-${finding.ordinal}`}>
+                    Source or reviewer identity is incomplete. Confirmation is blocked until the exact candidate can be verified.
+                  </p>
+                ) : null}
               </div>
               {finding.current?.reason ? (
                 <p className="mt-1 text-xs">Reason: {finding.current.reason}</p>
@@ -432,13 +475,13 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     key={action}
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
-                    disabled={record.isPending || !mayReview || (action === "CONFIRMED" && quotedSource && !sourceWasReviewed)}
-                    title={action === "CONFIRMED" && quotedSource && !sourceWasReviewed ? "Compare the full visible quote and acknowledge the review before confirming." : undefined}
+                    disabled={record.isPending || query.isFetching || !mayReview || (action === "CONFIRMED" && !mayConfirmFinding)}
+                    title={action === "CONFIRMED" && !mayConfirmFinding ? "Refresh the exact source identity and review its quotation before confirming." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
-                        if (quotedSource && !sourceWasReviewed) return;
+                        if (!mayConfirmFinding || !query.isSuccess) return;
                         const previous = pendingConfirmations.current[finding.ordinal];
                         // The same revision may have been refreshed after a lost response.
                         // Replay the exact original request; clear only on success or a
@@ -448,7 +491,10 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                           previous.view.artifact_id === view.artifact_id &&
                           previous.view.artifact_version === view.artifact_version &&
                           previous.view.artifact_hash === view.artifact_hash &&
-                          previous.view.document_revision_id === view.document_revision_id
+                          previous.view.document_revision_id === view.document_revision_id &&
+                          previous.view.generation === view.generation &&
+                          previous.view.fencing_token === view.fencing_token &&
+                          previous.finding.finding_id === finding.finding_id
                           ? previous
                           : { view, finding, draft: { action, reason: "", proposedText: "", key: newKey() } };
                         pendingConfirmations.current[finding.ordinal] = attempt;
