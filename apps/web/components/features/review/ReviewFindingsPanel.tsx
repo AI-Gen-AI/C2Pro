@@ -113,6 +113,7 @@ function sourceComparisonIdentity(
   if (
     ids.some((id) => typeof id !== "string" || !id.trim()) ||
     numbers.some((value) => typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) ||
+    view.artifact_version < 1 ||
     view.review_row_id !== scope.reviewRowId
   ) return null;
   return JSON.stringify([...ids, ...numbers, finding.risk.source_quote_status, finding.risk.source_quote]);
