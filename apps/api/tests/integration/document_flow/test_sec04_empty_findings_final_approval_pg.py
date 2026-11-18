@@ -24,7 +24,10 @@ from src.core.auth.models import UserRole
 from src.core.security import get_current_tenant_id
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 from src.modules.hitl.adapters.http import router as hitl_router
-from src.modules.hitl.adapters.http.dependencies import get_hitl_service, get_resume_workflow_use_case
+from src.modules.hitl.adapters.http.dependencies import (
+    get_hitl_service,
+    get_resume_workflow_use_case,
+)
 from src.modules.hitl.adapters.persistence.repository import SqlAlchemyReviewQueueRepository
 from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowUseCase
 from tests.integration.document_flow.test_758_checkpoint_lineage_authority_fence import (  # noqa: F401
