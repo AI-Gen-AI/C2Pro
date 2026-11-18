@@ -365,7 +365,10 @@ export default function ProjectDocumentsPage() {
   const inProgressCount = rows.filter(
     (row) => row.status === 'uploaded' || row.status === 'processing',
   ).length;
-  const errorCount = rows.filter((row) => row.status === 'error').length;
+  // Terminal failed analysis is an error/attention state even if parsing succeeded.
+  const errorCount = rows.filter(
+    (row) => row.status === 'error' || row.status === 'failed_retryable',
+  ).length;
   const hasBackendDocuments = rows.length > 0;
   const hasInFlightDocuments = documents.some((doc) =>
     isInFlightStatus(doc.status, doc.lifecycleStatus),

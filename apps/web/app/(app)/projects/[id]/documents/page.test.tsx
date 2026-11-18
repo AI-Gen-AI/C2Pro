@@ -508,6 +508,7 @@ describe("ProjectDocumentsPage", () => {
     render(<ProjectDocumentsPage />);
     expect(screen.getByTestId("document-row-doc_budget_blocked")).toHaveTextContent("Budget required");
     expect(screen.getByTestId("document-row-doc_budget_blocked")).toHaveTextContent("AI budget authorization required");
+    expect(screen.getByLabelText("Errors")).toHaveTextContent("1");
     expect(screen.queryByRole("button", { name: /retry processing large-contract\.pdf/i })).not.toBeInTheDocument();
   });
 
