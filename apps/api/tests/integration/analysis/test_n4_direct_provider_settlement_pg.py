@@ -100,3 +100,48 @@ async def test_n4_declines_fallback_if_reservation_cap_does_not_match():
             _runner(engine, provider)
     finally:
         await engine.dispose()
+
+
+async def test_n4_partial_billable_fallback_settles_actual_provider_but_not_findings():
+    from src.core.ai.llm_client import LLMPartialGenerationError
+
+    class PartialProvider(FallbackResultProvider):
+        async def generate(self, *, window, tenant_id, request_id):
+            self.calls.append(window.ordinal)
+            raise LLMPartialGenerationError(
+                "output truncated after charge",
+                model="gpt-4.1", input_tokens=101,
+                output_tokens=25, cost_usd=0.012345,
+            )
+
+    a, project, engine = await _prepare()
+    runner = _runner(engine, PartialProvider())
+    try:
+        result = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert result.stopped_reason == "PROVIDER_RESULT_UNCERTAIN"
+        assert result.persisted_result_windows == 0
+        conn = await asyncpg.connect(_DSN)
+        try:
+            await conn.execute(
+                "SELECT set_config('app.current_tenant', $1, false)",
+                str(a.tenant_id),
+            )
+            row = await conn.fetchrow("""
+                SELECT status, spent_usd, actual_model_name,
+                       actual_provider, input_tokens, output_tokens
+                FROM public.n4_usage_reservations
+                WHERE tenant_id=$1
+            """, a.tenant_id)
+            assert row["status"] == "SETTLED"
+            assert row["spent_usd"] == Decimal("0.012345")
+            assert row["actual_model_name"] == "gpt-4.1"
+            assert row["actual_provider"] == "openai"
+            assert row["input_tokens"] == 101
+            assert row["output_tokens"] == 25
+        finally:
+            await conn.close()
+    finally:
+        await engine.dispose()

@@ -173,13 +173,18 @@ class N4IncrementalRunner:
     async def _account_and_block(
         self, *, authority: ProcessingAuthority, run_id: UUID,
         ordinal: int, reservation_id: UUID, cost: Decimal | None,
-        reason: str,
+        reason: str, actual_model_name: str | None = None,
+        actual_provider: str | None = None,
+        input_tokens: int | None = None, output_tokens: int | None = None,
     ) -> None:
         async with self.sessions() as session, session.begin():
             await self._tenant_context(session, authority.tenant_id)
             await account_call(
                 session, authority=authority,
                 reservation_id=reservation_id, billed_usd=cost,
+                actual_model_name=actual_model_name,
+                actual_provider=actual_provider,
+                input_tokens=input_tokens, output_tokens=output_tokens,
             )
             await block_window(
                 session, authority=authority, run_id=run_id,
@@ -287,11 +292,31 @@ class N4IncrementalRunner:
                         cost = None
                 except (InvalidOperation, ValueError, TypeError):
                     cost = None
+                billable_model = getattr(exc, "model", None)
+                billable_provider = (
+                    "anthropic" if billable_model == self.provider.model_name
+                    else next(
+                        (
+                            route.provider
+                            for route in getattr(self.provider, "fallback_routes", ())
+                            if route.model == billable_model
+                        ),
+                        None,
+                    )
+                )
+                # An ambiguous billable amount with unknown model identity
+                # remains in UNKNOWN, not falsely attributed to Anthropic.
+                if billable_provider is None:
+                    cost = None
                 await self._account_and_block(
                     authority=authority, run_id=run_id,
                     ordinal=window.ordinal,
                     reservation_id=reserved.reservation_id,
                     cost=cost, reason="PROVIDER_RESULT_UNCERTAIN",
+                    actual_model_name=billable_model if billable_provider else None,
+                    actual_provider=billable_provider,
+                    input_tokens=getattr(exc, "input_tokens", None),
+                    output_tokens=getattr(exc, "output_tokens", None),
                 )
                 return await self._outcome(
                     authority, run_id, "PROVIDER_RESULT_UNCERTAIN",
