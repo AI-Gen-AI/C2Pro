@@ -61,12 +61,12 @@ GRANT SELECT (tenant_id,scope_kind,scope_id,period_key,cap_usd)
 
 -- Test a hostile column-only UPDATE grant; revoke before operating as reader.
 GRANT UPDATE (cap_usd) ON public.n4_budget_buckets TO c2pro_platform_budget_reader;
-DO $
+DO $privilege$
 BEGIN
   IF NOT has_any_column_privilege('c2pro_budget_fixture_login','public.n4_budget_buckets','UPDATE')
   THEN RAISE EXCEPTION 'FAIL column-level UPDATE grant not detected'; END IF;
   RAISE NOTICE 'PG_NEGATIVE_PRIVILEGE_INJECTION_PASS: column-only UPDATE detectable';
-END $;
+END $privilege$;
 REVOKE UPDATE (cap_usd) ON public.n4_budget_buckets FROM c2pro_platform_budget_reader;
 
 \connect - c2pro_budget_fixture_login
