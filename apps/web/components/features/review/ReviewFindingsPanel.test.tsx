@@ -459,7 +459,7 @@ describe("HITL-UX-01 concise, source-bounded risk review", () => {
         description: full,
         mitigation_suggestion: "Negotiate a release deadline and a partial release milestone.",
         consequences: "Retention may stay outstanding until the certificate is issued.",
-        impact: "Working capital exposure; amount not quantified.",
+        financial_impact: "Working capital exposure; amount not quantified.",
         source_locator: "Section 2.3",
         clause_ref: "2.3",
         source_quote: "A retention of 5% shall be withheld from each payment.",
