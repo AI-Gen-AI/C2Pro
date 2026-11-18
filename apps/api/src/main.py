@@ -17,6 +17,7 @@ from sentry_sdk.utils import BadDsn
 
 # Import AI tools to trigger registration via @register_tool decorators
 import src.analysis.adapters.ai.tools  # noqa: F401
+from src.admin.adapters.http.platform_budget_router import router as platform_budget_router
 from src.admin.adapters.http.router import router as dlq_admin_router
 from src.ai_feedback.router import router as ai_feedback_router
 from src.alerts.adapters.http.router import project_alerts_router
@@ -324,6 +325,7 @@ def create_application() -> FastAPI:
     app.include_router(ai_feedback_router, prefix=api_v1_prefix)
     app.include_router(ai_analytics_router, prefix=api_v1_prefix)
     app.include_router(dlq_admin_router, prefix=api_v1_prefix)
+    app.include_router(platform_budget_router, prefix=api_v1_prefix)
     app.include_router(frontend_support_router, prefix=api_v1_prefix)
     app.include_router(decision_intelligence_router, prefix=api_v1_prefix)
     app.include_router(hitl_router, prefix=api_v1_prefix)

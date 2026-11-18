@@ -100,6 +100,15 @@ class Settings(BaseSettings):
     # Points to a LOGIN principal that is a MEMBER OF c2pro_admin_ops capability role.
     # The capability role is NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, non-owner.
     # Do not fallback to DATABASE_URL or owner credential.
+    # #1274: separate, never-fallback capability for cross-tenant budget reads.
+    # Kept unset until security review and controlled provisioning.
+    platform_budget_read_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PLATFORM_BUDGET_READ_DATABASE_URL"),
+        repr=False,
+        description="Dedicated read-only platform budget capability DSN; no fallback",
+    )
+
     admin_ops_database_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("ADMIN_OPS_DATABASE_URL"),
