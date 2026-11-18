@@ -1078,8 +1078,26 @@ async def _run_analysis_graph_best_effort(
             project_id=document.project_id,
             document_id=document_id,
         )
+    # N4's revision-anchored parser-text provenance is independent of N12's
+    # verified-full-original-source assurance. An explicitly UNVERIFIED DOCX
+    # parser can still supply provisional N4 candidates without false recall.
+    n4_identity = None
+    if (
+        pinned_revision is not None and source_revision is not None
+        and str(source_revision.revision_id) == str(pinned_revision)
+    ):
+        from src.documents.application.n4_source_identity import (
+            build_n4_source_identity,
+        )
+        n4_identity = build_n4_source_identity(
+            metadata=getattr(document, "document_metadata", None),
+            parsed_text=parsed_text, revision=source_revision,
+            tenant_id=tenant_id, project_id=document.project_id,
+            document_id=document_id,
+        )
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
+        "n4_source_identity": n4_identity,
         "project_id": str(document.project_id),
         "document_id": str(document.id),
         "doc_type": getattr(document.document_type, "value", "") if document.document_type else "",
