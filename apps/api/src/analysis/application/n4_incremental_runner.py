@@ -94,6 +94,11 @@ class N4IncrementalRunner:
         self.provider = provider
         self.run_cap = Decimal(str(run_cap_usd))
         self.call_reservation = Decimal(str(per_window_reservation_usd))
+        configured_fallback_hold = getattr(provider, "fallback_reservation_usd", None)
+        if configured_fallback_hold is not None and (
+            configured_fallback_hold != self.call_reservation
+        ):
+            raise ValueError("N4 fallback escrow must equal the actual per-window reservation")
         self.period_key = period_key
         self.enabled = enabled
         self.context_limit = max_context_chars
@@ -308,7 +313,10 @@ class N4IncrementalRunner:
                 )
                 return await self._outcome(authority, run_id, "USAGE_UNAVAILABLE")
 
-            if response.model_used != self.provider.model_name:
+            allowed_fallback_models = getattr(self.provider, "approved_fallback_models", frozenset())
+            if response.model_used != self.provider.model_name and (
+                response.model_used not in allowed_fallback_models
+            ):
                 await self._account_and_block(
                     authority=authority, run_id=run_id,
                     ordinal=window.ordinal,
@@ -318,6 +326,26 @@ class N4IncrementalRunner:
                 return await self._outcome(
                     authority, run_id, "PROVIDER_MODEL_MISMATCH",
                 )
+            actual_provider = (
+                "anthropic"
+                if response.model_used == self.provider.model_name
+                else next(
+                    (
+                        route.provider
+                        for route in getattr(self.provider, "fallback_routes", ())
+                        if route.model == response.model_used
+                    ),
+                    None,
+                )
+            )
+            if actual_provider not in ("anthropic", "openai", "gemini"):
+                await self._account_and_block(
+                    authority=authority, run_id=run_id,
+                    ordinal=window.ordinal,
+                    reservation_id=reserved.reservation_id,
+                    cost=cost, reason="UNVERIFIED_PROVIDER_IDENTITY",
+                )
+                return await self._outcome(authority, run_id, "UNVERIFIED_PROVIDER_IDENTITY")
             try:
                 parsed = parse_n4_window_output(
                     response.content, window=window,
@@ -343,6 +371,8 @@ class N4IncrementalRunner:
                     input_tokens=response.input_tokens,
                     output_tokens=response.output_tokens,
                     provider_request_id=response.provider_request_id,
+                    actual_model_name=response.model_used,
+                    actual_provider=actual_provider,
                 )
                 await commit_window(
                     session, authority=authority, run_id=run_id,

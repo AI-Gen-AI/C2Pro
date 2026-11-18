@@ -467,6 +467,8 @@ async def account_call(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     provider_request_id: str | None = None,
+    actual_model_name: str | None = None,
+    actual_provider: str | None = None,
 ) -> str:
     """Reconcile provider receipt once, or retain reserve if price unknown.
 
@@ -506,7 +508,7 @@ async def account_call(
     reservation = (await session.execute(text("""
         SELECT reservation_id, run_id, status, reserved_usd,
                spent_usd, bucket_scopes, input_tokens, output_tokens,
-               provider_request_id
+               provider_request_id, model_name, actual_model_name, actual_provider
           FROM public.n4_usage_reservations
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND reservation_id = CAST(:reservation AS uuid)
@@ -516,6 +518,18 @@ async def account_call(
         "reservation": str(reservation_id),
     })).mappings().one()
     status = str(reservation["status"])
+    # The primary reservation model must remain immutable. Explicitly retain
+    # the actual provider/model when a different direct API settled the call.
+    resolved_model = actual_model_name or str(reservation["model_name"])
+    resolved_provider = actual_provider or (
+        "anthropic" if resolved_model == reservation["model_name"] else None
+    )
+    if not (
+        isinstance(resolved_model, str)
+        and 2 <= len(resolved_model) <= 128
+        and resolved_provider in ("anthropic", "openai", "gemini")
+    ):
+        raise N4LedgerError("actual provider/model identity is invalid")
     if billed_usd is None:
         if status == "SETTLED":
             return status
@@ -536,6 +550,11 @@ async def account_call(
         return "UNKNOWN"
     actual = _amount(billed_usd)
     if status == "SETTLED":
+        if (
+            (reservation["actual_model_name"] or reservation["model_name"]) != resolved_model
+            or (reservation["actual_provider"] or "anthropic") != resolved_provider
+        ):
+            raise N4LedgerError("replayed provider identity differs from committed receipt")
         if Decimal(reservation["spent_usd"]) != actual or any(
             provided is not None and provided != reservation[name]
             for name, provided in (
@@ -605,6 +624,8 @@ async def account_call(
                input_tokens = COALESCE(:in_tokens, input_tokens),
                output_tokens = COALESCE(:out_tokens, output_tokens),
                provider_request_id = COALESCE(:provider_req, provider_request_id),
+               actual_model_name = :actual_model,
+               actual_provider = :actual_provider,
                settled_at = clock_timestamp()
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND reservation_id = CAST(:reservation AS uuid)
@@ -613,6 +634,8 @@ async def account_call(
         "reservation": str(reservation_id),
         "in_tokens": input_tokens, "out_tokens": output_tokens,
         "provider_req": provider_request_id,
+        "actual_model": resolved_model,
+        "actual_provider": resolved_provider,
     })
     return "SETTLED"
 
