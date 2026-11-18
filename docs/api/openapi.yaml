@@ -13,7 +13,7 @@ info:
     n\n\n        La API usa JWT (JSON Web Tokens) para autenticaci\xF3n.\n\n     \
     \   1. **Registro**: `POST /api/v1/auth/register`\n        2. **Login**: `POST\
     \ /api/v1/auth/login`\n        3. **Usar Token**: Incluir en header `Authorization:\
-    \ ***        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
+    \ Bearer <token>`\n\n        ## L\xEDmites de Uso\n\n        - **Rate Limit**:\
     \ 60 requests/minuto\n        - **AI Budget**: $50 USD/mes (plan free)\n     \
     \   - **File Upload**: Max 50 MB\n\n        ## Soporte\n\n        - \U0001F4E7\
     \ Email: support@c2pro.app\n        - \U0001F4D6 Docs: https://docs.c2pro.app\n\
@@ -343,7 +343,7 @@ paths:
       summary: Get current user info
       description: "Returns information about the currently authenticated user.\n\n\
         \    Requires valid JWT access token in Authorization header:\n    ```\n \
-        \   Authorization: ***    ```"
+        \   Authorization: Bearer <access_token>\n    ```"
       operationId: get_me_api_v1_auth_me_get
       responses:
         '200':
@@ -9412,7 +9412,7 @@ components:
           - type: string
           - type: 'null'
           title: Webhook Auth Token
-          description: Optional webhook authentication token (***
+          description: Optional webhook authentication token (Bearer token)
         custom_headers:
           anyOf:
           - additionalProperties:
