@@ -1445,6 +1445,101 @@ async def reprocess_n4_only_pilot_endpoint(
     return DocumentQueuedResponse(**payload)
 
 
+@router.post(
+    "/projects/{project_id}/documents/{document_id}/n4-only-pilot/recover-enqueue",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Manual recovery of a stranded N4-only enqueue, under a new fenced claim",
+)
+async def recover_n4_only_enqueue_endpoint(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> dict[str, object]:
+    """Recover COMMITTED CAS -> NO broker ack without resetting the generation.
+
+    Only a separately enabled, server-authorized owner can claim a queued
+    INGESTION attempt that has never reached N4. No auto-retry, no provider,
+    no generic recovery and NO N12. Failed dispatch retains the CLAIMED
+    DB-clock lease, so the next manual claim cannot duplicate a live worker.
+    """
+    from src.documents.application.n4_only_enqueue_recovery import (
+        N4OnlyEnqueueRecoveryDenied,
+        claim_stranded_n4_enqueue,
+    )
+
+    try:
+        claimed = await claim_stranded_n4_enqueue(
+            repo=repo, tenant_id=tenant_id, project_id=project_id,
+            document_id=document_id, user_id=user_id,
+        )
+        # The CLAIMED authority and audit event must be durable before any
+        # broker interaction. If this commit fails, no task is sent.
+        await repo.commit()
+    except N4OnlyEnqueueRecoveryDenied as exc:
+        await repo.session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="N4-only enqueue recovery denied; verify owner, fence and receipts",
+        ) from exc
+
+    # Exact authority handshake; duplicate messages cannot both adopt it.
+    # Reuse the original INGESTION task; the existing trigger selects the
+    # N4-only ANALYSIS task from the server-persisted marker.
+    task_id: str | None = None
+    try:
+        from src.core.tasks.ingestion_tasks import process_document_async
+
+        task = process_document_async.apply_async(
+            kwargs={
+                "document_id": str(document_id),
+                "revision_id": str(claimed.revision_id),
+                "generation": claimed.generation,
+                "authority": claimed.authority.to_message(),
+            },
+            task_id=f"n4-pilot-recovery-{claimed.authority.attempt_id}",
+        )
+        task_id = getattr(task, "id", None)
+    except Exception:
+        # An exception can mean broker rejection OR lost acknowledgement.
+        # Never roll back the committed grant and never enqueue a second
+        # task now. Wait for DB lease expiry and a *new* owner command.
+        logger.exception(
+            "n4_only_recovery_broker_ack_unknown",
+            document_id=str(document_id),
+            generation=claimed.generation,
+            fencing_token=claimed.authority.fencing_token,
+            attempt_id=str(claimed.authority.attempt_id),
+        )
+
+    if task_id is None:
+        logger.warning(
+            "n4_only_recovery_claimed_but_not_confirmed",
+            document_id=str(document_id),
+            generation=claimed.generation,
+            fencing_token=claimed.authority.fencing_token,
+        )
+    else:
+        logger.info(
+            "n4_only_recovery_enqueued",
+            document_id=str(document_id),
+            generation=claimed.generation,
+            fencing_token=claimed.authority.fencing_token,
+            task_id=task_id,
+        )
+    return {
+        "status": "ENQUEUED" if task_id else "BROKER_ACK_UNKNOWN_STOP",
+        "task_id": task_id,
+        "document_revision_id": str(claimed.revision_id),
+        "generation": claimed.generation,
+        "fencing_token": claimed.authority.fencing_token,
+        "n4_billable_in_this_request": False,
+        "n12_status": "UNASSESSED",
+        "retry_policy": "MANUAL_AFTER_LEASE_AND_RECEIPT_PREFLIGHT_ONLY",
+    }
+
+
 @router.get(
     "/projects/{project_id}/documents/{document_id}/n4-only-pilot/findings",
     summary="Read the authorized N4 pilot ledger; N2 citations are NOT PDF-verified",
