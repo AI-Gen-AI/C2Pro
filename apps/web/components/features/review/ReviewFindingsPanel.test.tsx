@@ -36,10 +36,10 @@ const finding = (ordinal: number, over: object = {}) => ({
 });
 const view = (over: object = {}) => ({
   review_row_id: ROW,
-  artifact_id: "art-1",
+  artifact_id: "123e4567-e89b-42d3-a456-426614174001",
   artifact_version: 2,
   artifact_hash: "a".repeat(64),
-  document_revision_id: "rev-1",
+  document_revision_id: "123e4567-e89b-42d3-a456-426614174002",
   generation: 3,
   fencing_token: 10,
   ledger_revision: 0,
@@ -196,8 +196,8 @@ describe("ReviewFindingsPanel", () => {
     it("asks for explicit confirmation, then sends the SERVER's candidate hash and ledger head and shows Vn+1 as PROPOSED", async () => {
       list.mockResolvedValue(dismissed());
       derive.mockResolvedValue({
-        review_row_id: ROW, source_artifact_id: "art-1", source_artifact_version: 2, source_artifact_hash: "a".repeat(64),
-        derived_artifact_id: "art-2", derived_artifact_version: 3, derived_artifact_hash: "b".repeat(64),
+        review_row_id: ROW, source_artifact_id: "123e4567-e89b-42d3-a456-426614174001", source_artifact_version: 2, source_artifact_hash: "a".repeat(64),
+        derived_artifact_id: "123e4567-e89b-42d3-a456-426614174003", derived_artifact_version: 3, derived_artifact_hash: "b".repeat(64),
         reconciliation_digest: "d", source_ledger_revision: 3, retained: 1, excluded: 1, corrected: 0, replayed: false,
         event_id: "ev", scoring_state: "PENDING_REEVALUATION", derived_state: "PROPOSED",
       });
@@ -236,10 +236,10 @@ describe("ReviewFindingsPanel", () => {
     const [rowId, body] = record.mock.calls[0];
     expect(rowId).toBe(ROW);
     expect(body).toMatchObject({
-      artifact_id: "art-1",
+      artifact_id: "123e4567-e89b-42d3-a456-426614174001",
       artifact_version: 2,
       artifact_hash: "a".repeat(64),
-      document_revision_id: "rev-1",
+      document_revision_id: "123e4567-e89b-42d3-a456-426614174002",
       generation: 3,
       fencing_token: 10,
       ordinal: 0,
@@ -624,11 +624,11 @@ describe("UX-REG-04 source comparison identity and stale responses", () => {
   });
 
   it.each([
-    ["document revision", { document_revision_id: "rev-2" }],
+    ["document revision", { document_revision_id: "123e4567-e89b-42d3-a456-426614174004" }],
     ["generation", { generation: 4 }],
     ["fencing token", { fencing_token: 11 }],
     ["artifact version", { artifact_version: 3 }],
-    ["artifact identity", { artifact_id: "art-2" }],
+    ["artifact identity", { artifact_id: "123e4567-e89b-42d3-a456-426614174003" }],
     ["artifact digest", { artifact_hash: "b".repeat(64) }],
   ])("requires fresh comparison on %s even with unchanged risk ID and previous digest where applicable", async (_name, change) => {
     list.mockResolvedValueOnce(candidate()).mockResolvedValueOnce(candidate(change));
@@ -850,6 +850,96 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
     await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
     expect(record.mock.calls[0][1]).toMatchObject({ action: "CONFIRMED" });
+  });
+
+  // IDENT-05: nonempty strings can still violate the backend CandidateReviewIdentity contract.
+  // Keep the existing ledger decisions visible; only readiness and new confirmation fail closed.
+  it.each([
+    ["artifact id arbitrary text", { artifact_id: "oops" }],
+    ["artifact id malformed 32 hex", { artifact_id: "f".repeat(31) + "z" }],
+    ["artifact id malformed UUID groups", { artifact_id: "123e4567-e89b-42d3-a456-42661417400" }],
+    ["document revision arbitrary text", { document_revision_id: "not-a-uuid" }],
+    ["document revision invalid hex", { document_revision_id: "123e4567-e89b-42d3-a456-42661417400z" }],
+    ["document revision malformed group", { document_revision_id: "123e4567-e89b-42d3-a456-42661417400" }],
+    ["hash arbitrary text", { artifact_hash: "not-sha256" }],
+    ["hash incomplete", { artifact_hash: "a".repeat(63) }],
+    ["hash oversized", { artifact_hash: "a".repeat(65) }],
+    ["hash nonhex", { artifact_hash: "a".repeat(63) + "g" }],
+    ["hash uppercase hex", { artifact_hash: "A".repeat(64) }],
+  ])("IDENT-05: %s blocks final readiness without rewriting historical CONFIRMED", async (_label, invalid) => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(complete(invalid));
+    renderPanel(onReady);
+    await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-0-NEEDS_INFO")).toBeEnabled();
+    expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["artifact id arbitrary text", { artifact_id: "oops" }],
+    ["revision arbitrary text", { document_revision_id: "not-a-uuid" }],
+    ["hash nonhex", { artifact_hash: "a".repeat(63) + "z" }],
+    ["hash incomplete", { artifact_hash: "a".repeat(63) }],
+    ["hash uppercase", { artifact_hash: "A".repeat(64) }],
+  ])("IDENT-05: %s blocks new CONFIRMED despite VERIFIED quote and available comparison", async (_label, invalid) => {
+    list.mockResolvedValue(view({ findings: [finding(0)], ...invalid }));
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-quote-0")).toHaveTextContent("Contract clause 0");
+    expect(screen.getByTestId("finding-invalid-source-0")).toHaveTextContent(/identity is incomplete/i);
+    expect(screen.getByTestId("finding-source-reviewed-0")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-0-NEEDS_INFO")).toBeEnabled();
+    expect(screen.getByTestId("finding-action-0-CORRECTION_PROPOSED")).toBeEnabled();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["canonical UUIDs", {
+      artifact_id: "123e4567-e89b-42d3-a456-426614174001",
+      document_revision_id: "123e4567-e89b-42d3-a456-426614174002",
+      artifact_hash: "b".repeat(64),
+    }],
+    ["uppercase canonical UUIDs", {
+      artifact_id: "123E4567-E89B-42D3-A456-426614174001",
+      document_revision_id: "123E4567-E89B-42D3-A456-426614174002",
+      artifact_hash: "f".repeat(64),
+    }],
+    ["compact backend UUID representation", {
+      artifact_id: "123e4567e89b42d3a456426614174001",
+      document_revision_id: "123e4567e89b42d3a456426614174002",
+      artifact_hash: "0".repeat(64),
+    }],
+  ])("IDENT-05 positive: %s permits readiness for already valid decisions", async (_label, good) => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(complete(good));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("IDENT-05 positive: a UUID and digest valid against backend still require human comparison for new CONFIRMED", async () => {
+    list.mockResolvedValue(view({ findings: [finding(0)] }));
+    renderPanel();
+    expect(await screen.findByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    await acknowledgeQuote();
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeEnabled();
+    await userEvent.click(screen.getByTestId("finding-action-0-CONFIRMED"));
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+    expect(record.mock.calls[0][1]).toMatchObject({
+      artifact_id: "123e4567-e89b-42d3-a456-426614174001",
+      document_revision_id: "123e4567-e89b-42d3-a456-426614174002",
+      artifact_hash: "a".repeat(64),
+      action: "CONFIRMED",
+    });
   });
 
   it("does not discard a valid historical decision because a different finding needs new evidence", async () => {
