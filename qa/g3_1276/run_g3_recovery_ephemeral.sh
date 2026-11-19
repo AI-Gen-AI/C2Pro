@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# G3 exact SHA; invoked ONLY inside pg_virtualenv 16.
+set -euo pipefail
+test -n "$(printenv PG_CLUSTER_CONF_ROOT)" || { echo "STOP no pg_virtualenv"; exit 10; }
+case "$PG_CLUSTER_CONF_ROOT" in /tmp/pg_virtualenv.*) ;; *) echo "STOP non-ephemeral PG"; exit 10;; esac
+ROOT=/srv/c2pro/ops-c2pro-runner/checkouts/14c35b7f0b89-214064af
+EV=/home/aigenadmin/qa_evidence/g3-1276-fix
+EXPECTED=14c35b7f0b8933a4ff0b4f330f3941073809ff24
+CURRENT="$(git -C "$ROOT" rev-parse HEAD)"
+echo "EXACT_SOURCE_SHA=$CURRENT"
+test "$CURRENT" = "$EXPECTED" || { echo "STOP source mismatch"; exit 11; }
+test -z "$(git -C "$ROOT" status --porcelain)" || { echo "STOP dirty worktree"; exit 11; }
+DB=c2pro_g3_1276_test
+createdb "$DB"
+psql -X -d "$DB" -v ON_ERROR_STOP=1 -q -c "CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;"
+export ENVIRONMENT=test
+export JWT_SECRET_KEY=offline-synthetic-g3-only
+export DATABASE_URL="postgresql://aigenadmin:$PGPASSWORD@localhost:$PGPORT/$DB"
+export TEST_DATABASE_URL="$DATABASE_URL"
+export C2PRO_N4_SCRATCH_DSN="$DATABASE_URL"
+export PYTHONPATH="$ROOT/apps/api"
+export OPENAI_API_KEY=
+export ANTHROPIC_API_KEY=
+export GOOGLE_API_KEY=
+cd "$ROOT/apps/api"
+PY=/home/aigenadmin/.cache/c2pro-local-ci/venv-py3.11/bin/python
+"$PY" -m alembic upgrade head > "$EV/g3_alembic.log" 2>&1 || {
+  echo "MIGRATIONS=FAIL"
+  tail -30 "$EV/g3_alembic.log"
+  exit 12
+}
+echo "MIGRATIONS_ALEMBIC_HEAD=PASS"
+echo "MIGRATIONS_LOG_SHA256=$(sha256sum "$EV/g3_alembic.log" | cut -d' ' -f1)"
+if "$PY" -u "$EV/g3_integrated_sql_celery.py" >"$EV/g3_integrated.log" 2>&1; then
+  echo "G3_INTEGRATED_PYTHON_EXIT=0"
+  grep -E 'G3_|PASS|CELERY|GET_|Traceback' "$EV/g3_integrated.log" | tail -15
+else
+  st=$?
+  echo "G3_INTEGRATED_PYTHON_EXIT=$st"
+  tail -42 "$EV/g3_integrated.log"
+  exit "$st"
+fi
+echo "G3_INTEGRATED_LOG_SHA256=$(sha256sum "$EV/g3_integrated.log" | cut -d' ' -f1)"
+
+# Targeted financial/authority negatives on SAME migrated ephemeral PG cluster;
+# independent synthetic fixtures; no external provider or UAT.
+if "$PY" -m pytest -q \
+  tests/integration/analysis/test_n4_window_runner_pg.py \
+  tests/integration/analysis/test_n4_incremental_store_pg.py \
+  tests/integration/analysis/test_n4_shared_tenant_budget_pg.py \
+  -k "simultaneous_runners_replay or provider_timeout_preserves_unknown_charge or no_cost_receipt_is_not_zero or idempotency_budget_resume_fencing_and_rls or global_cap_serializes_two_independent_n4_project_workers" \
+  --disable-warnings >"$EV/g3_negative_pg.log" 2>&1; then
+  grep -E "passed|skipped|failed|100%" "$EV/g3_negative_pg.log" | tail -4
+  echo "G3_NEGATIVE_PG_EXIT=0"
+else
+  st=$?
+  echo "G3_NEGATIVE_PG_EXIT=$st"
+  tail -35 "$EV/g3_negative_pg.log"
+  exit "$st"
+fi
+echo "G3_NEGATIVE_PG_LOG_SHA256=$(sha256sum "$EV/g3_negative_pg.log" | cut -d' ' -f1)"
+
+echo "EPHEMERAL_DB=DESTROY_ON_PG_VIRTUALENV_EXIT"
+
