@@ -26,6 +26,12 @@ for key, value in CTX["scope_env"].items():
 
 from src.core.tasks.celery_app import celery_app as app
 from src.core.tasks import ingestion_tasks as tasks
+from src.documents.application.n4_only_ingestion_effects_guard import (
+    manual_claim_required, record_before_ingestion_effects,
+    record_ingestion_effects_possible, BEFORE_EFFECTS, MAY_HAVE_OCCURRED, GUARD_KEY,
+)
+from src.documents.adapters.persistence.sqlalchemy_document_repository import SqlAlchemyDocumentRepository
+from src.documents.domain.models import DocumentStatus
 from src.core.processing_authority import (
     ProcessingAuthority, ProcessingStage, acquire, adopt, finish_ingestion,
     AcquireOutcome, bound_authority,
@@ -79,27 +85,68 @@ def forbidden(label: str):
 
 
 async def ingestion_stub(*, document_id, revision_id, generation, authority):
+    """Use B's actual two-phase guarded commits; replace only external R2/parser/RAG lifecycle."""
     assert document_id == D and revision_id == R and generation == 3
-    grant = ProcessingAuthority.from_message(authority)
-    assert grant is not None and grant.generation == 3 and grant.stage is ProcessingStage.INGESTION
     engine = create_async_engine(DB_URL, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+        grant = ProcessingAuthority.from_message(authority) if authority else None
+        if grant is None:
+            async with factory() as session:
+                document = await SqlAlchemyDocumentRepository(session).get_by_id(T, D)
+                assert manual_claim_required(document, None)
+            event("ORIGINAL_UNCLAIMED_REDELIVERY_DENIED")
+            return {"status": "n4_only_manual_recovery_required"}
+
+        assert grant.generation == 3 and grant.stage is ProcessingStage.INGESTION
+        # Real PRE-EFFECT seam: document PARSING + ADOPT + marker BEFORE_EFFECTS
+        # are committed atomically by the SAME actual PostgreSQL transaction.
         async with factory() as session:
             async with session.begin():
+                repo = SqlAlchemyDocumentRepository(session)
+                await repo.update_status(T, D, DocumentStatus.PARSING)
                 accepted = await adopt(session, grant)
                 if not accepted:
                     event("DUPLICATE_ADOPT_DENIED", fencing_token=grant.fencing_token)
                     return {"status": "duplicate_denied", "generation": 3}
-                event("CELERY_WORKER_ADOPT_ONCE", fencing_token=grant.fencing_token)
-        # Adopt has now COMMITTED in PostgreSQL, independently of broker ACK.
-        hold_seconds = int(os.getenv("G4_CRASH_HOLD_SECONDS", "0"))
-        if hold_seconds > 0:
-            event("G4_ADOPT_COMMITTED_WORKER_HOLD", seconds=hold_seconds)
-            await asyncio.sleep(hold_seconds)
+                document = await repo.get_by_id(T, D)
+                await record_before_ingestion_effects(
+                    repo=repo, document=document, grant=grant,
+                )
+        # Session.begin EXIT has COMMITTED, not merely flushed the marker.
+        event("BEFORE_EFFECTS_ADOPT_COMMITTED", fence=grant.fencing_token)
+        hold = int(os.getenv("G4_CRASH_HOLD_SECONDS", "0"))
+        killpoint = os.getenv("G4_KILLPOINT", "")
+        if hold and killpoint == "before":
+            event("KILLPOINT_BEFORE_EFFECTS_DURABLY_COMMITTED", fence=grant.fencing_token)
+            await asyncio.sleep(hold)
+
+        # Real post-ADOPT UNSAFE seam, with actual B authority verification.
+        async with factory() as session:
+            repo = SqlAlchemyDocumentRepository(session)
+            document = await repo.get_by_id(T, D)
+            await record_ingestion_effects_possible(
+                repo=repo, document=document, grant=grant,
+            )
+        # B helper's repo.commit() has durably persisted MAY_HAVE_OCCURRED.
+        event("MAY_HAVE_OCCURRED_COMMITTED", fence=grant.fencing_token)
+        if hold and killpoint in ("after", "after-embedding"):
+            if killpoint == "after-embedding":
+                # Stub the true RagService embedding adapter at the function
+                # boundary; real provider calls are prohibited.
+                from src.documents.adapters.rag import rag_service
+                async def mocked_embedding(texts):
+                    event("RAGSERVICE_EMBEDDING_STUB_CALLED", count=len(texts))
+                    return [[0.0, 0.0, 0.0] for _ in texts]
+                with patch.object(rag_service, "_embed_texts", mocked_embedding):
+                    assert len(await rag_service._embed_texts(["synthetic"])) == 1
+            event("KILLPOINT_UNSAFE_BARRIER_DURABLY_COMMITTED", fence=grant.fencing_token)
+            await asyncio.sleep(hold)
+
         async with factory() as session:
             async with session.begin():
                 await finish_ingestion(session, grant)
+        event("FINISH_INGESTION_AFTER_UNSAFE_BARRIER")
         result = tasks.process_document_n4_only_pilot_async.apply_async(
             kwargs={"tenant_id": str(T), "document_id": str(D), "generation": 3},
             queue="document_parsing",
