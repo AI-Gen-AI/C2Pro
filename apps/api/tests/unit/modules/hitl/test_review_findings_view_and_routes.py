@@ -34,7 +34,7 @@ from src.modules.hitl.domain.finding_decision import (
 from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
 
 _RISKS = [
-    {"title": "Penalty", "description": "30 days", "category": "TIME", "severity": "high", "raw_model_noise": "x"},
+    {"title": "Penalty", "description": "30 days", "category": "TIME", "severity": "high", "financial_impact": "exposure not quantified", "consequences": "liquidated damages", "mitigation_suggestion": "agree extension", "source_locator": "Section 3.2", "raw_model_noise": "x"},
     {"title": "Price", "description": "revised", "category": "BUDGET"},
 ]
 _PAYLOAD = {"extracted_risks": _RISKS}
@@ -127,7 +127,7 @@ async def test_the_view_lists_risks_with_pins_and_reviewer_facing_fields_only() 
     assert view.ledger_revision == 1
     assert [f.ordinal for f in view.findings] == [0, 1]
     assert "raw_model_noise" not in view.findings[0].risk
-    assert view.findings[0].risk == {"title": "Penalty", "description": "30 days", "category": "TIME", "severity": "high"}
+    assert view.findings[0].risk == {"title": "Penalty", "description": "30 days", "category": "TIME", "severity": "high", "financial_impact": "exposure not quantified", "consequences": "liquidated damages", "mitigation_suggestion": "agree extension", "source_locator": "Section 3.2"}
     assert view.findings[0].current is None
     assert view.findings[1].current is not None and view.findings[1].current.action == "DISMISSED"
 
