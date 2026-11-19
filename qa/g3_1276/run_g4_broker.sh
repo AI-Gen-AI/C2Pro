@@ -5,13 +5,13 @@ set -euo pipefail
 umask 077
 [[ "$(id -un)" == aigenadmin ]] || { echo "STOP: wrong user"; exit 10; }
 G4_CASE="${1:-normal}"
-case "$G4_CASE" in normal|worker-crash) ;; *) echo "STOP: unknown G4 test case"; exit 10 ;; esac
+case "$G4_CASE" in barrier-before|barrier-after|barrier-after-embedding) ;; *) echo "STOP: G4 requires barrier-before / barrier-after / barrier-after-embedding"; exit 10 ;; esac
 PARENT="$HOME/.cache/ai-gen-qa-g4"
 [[ "$(stat -c %u "$PARENT")" == "$(id -u)" ]] || exit 10
 [[ "$(stat -c %a "$PARENT")" == 700 ]] || exit 10
 
-SOURCE="/srv/c2pro/ops-c2pro-runner/checkouts/14c35b7f0b89-214064af"
-EXPECTED_SOURCE="14c35b7f0b8933a4ff0b4f330f3941073809ff24"
+SOURCE="/srv/c2pro/ops-c2pro-runner/checkouts/916808c5212e-8f2a2cad"
+EXPECTED_SOURCE="916808c5212e3dbc652407f35f3a17557623c06c"
 [[ "$(git -C "$SOURCE" rev-parse HEAD)" == "$EXPECTED_SOURCE" ]] || exit 10
 [[ -z "$(git -C "$SOURCE" status --porcelain)" ]] || exit 10
 REDIS_SRC="$PARENT/redis-source-7.2.8"
@@ -24,11 +24,7 @@ PG_BIN=/usr/lib/postgresql/16/bin
 QA="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 export G4_RUN_DIR="$(mktemp -d "$PARENT/c2pro-g4-broker.XXXXXXXX")"
 R="$G4_RUN_DIR"
-if [[ "$G4_CASE" == normal ]]; then
-  EVIDENCE="$HOME/qa_evidence/g4-broker"
-else
-  EVIDENCE="$HOME/qa_evidence/g4-broker-worker-crash"
-fi
+EVIDENCE="$HOME/qa_evidence/g4-916-${G4_CASE}"
 mkdir -p -m 0700 "$EVIDENCE"
 WORKER_PID=
 REDIS_PID=
@@ -39,7 +35,7 @@ cleanup() {
   if [[ -n "$WORKER_PID" ]]; then kill -TERM "$WORKER_PID" >/dev/null 2>&1 || :; wait "$WORKER_PID" >/dev/null 2>&1 || :; fi
   if [[ -n "$REDIS_PID" ]]; then kill -TERM "$REDIS_PID" >/dev/null 2>&1 || :; wait "$REDIS_PID" >/dev/null 2>&1 || :; fi
   if [[ -d "$R/data" ]]; then "$PG_BIN/pg_ctl" -D "$R/data" -m immediate -w stop >/dev/null 2>&1 || :; fi
-  for name in seed.log recovery.log verify.log crash-check.log crash-redelivery.log pg_negative.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
+  for name in seed.log recovery.log barrier-check.log barrier-claim.log barrier-verify.log pg_negative.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
     [[ -f "$R/$name" ]] && cp -- "$R/$name" "$EVIDENCE/$name" || :
   done
   (
@@ -111,72 +107,53 @@ echo "REDIS_REAL_PID=$REDIS_PID"
 "$PY" "$QA/g4_controller.py" recover > "$R/recovery.log" 2>&1 || { tail -75 "$R/recovery.log"; exit 14; }
 grep '^G4_' "$R/recovery.log" || :
 
-# Actual Celery worker(s) run as separate OS processes, not .apply() in coordinator.
-if [[ "$G4_CASE" == worker-crash ]]; then
-  G4_CRASH_HOLD_SECONDS=30 "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
+# New B SHA916808 guard seam: kill immediately after exact DB COMMIT.
+KILL_AT="${G4_CASE#barrier-}"
+EXPECTED_MARKER=KILLPOINT_UNSAFE_BARRIER_DURABLY_COMMITTED
+if [[ "$KILL_AT" == "before" ]]; then EXPECTED_MARKER=KILLPOINT_BEFORE_EFFECTS_DURABLY_COMMITTED; fi
+G4_CRASH_HOLD_SECONDS=75 G4_KILLPOINT="$KILL_AT" "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
     -Q document_parsing --loglevel=info --without-gossip --without-mingle \
-    --without-heartbeat --hostname=g4-crash@localhost > "$R/worker.log" 2>&1 &
-  WORKER_PID=$!
-  FIRST_WORKER_PID=$WORKER_PID
-  echo "G4_CRASH_CELERY_WORKER_PID=$WORKER_PID CONTROLLER_PID=$$"
-  seen=0
-  for _ in $(seq 1 150); do
-    if [[ -f "$R/worker_events.jsonl" ]] &&
-       grep -q 'G4_ADOPT_COMMITTED_WORKER_HOLD' "$R/worker_events.jsonl"; then
-      seen=1
-      break
-    fi
-    if ! kill -0 "$WORKER_PID" 2>/dev/null; then break; fi
-    sleep .2
-  done
-  [[ "$seen" == 1 ]] || { echo "NO_DURABLE_ADOPT_MARKER"; tail -80 "$R/worker.log"; exit 16; }
-  kill -KILL "$WORKER_PID"
-  wait "$WORKER_PID" >/dev/null 2>&1 || :
-  WORKER_PID=
-  echo "G4_WORKER_ACTUALLY_SIGKILL_AFTER_ADOPT=$FIRST_WORKER_PID"
-  "$PY" "$QA/g4_controller.py" crash-check > "$R/crash-check.log" 2>&1 || {
-    tail -55 "$R/crash-check.log"; exit 17
-  }
-  grep '^G4_' "$R/crash-check.log" || :
-  "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
+    --without-heartbeat --hostname=g4-barrier-kill@localhost > "$R/worker.log" 2>&1 &
+WORKER_PID=$!
+OLD_WORKER_PID=$WORKER_PID
+echo "SHA916_WORKER_BEFORE_KILL_PID=$WORKER_PID KILLPOINT=$EXPECTED_MARKER"
+seen=0
+for _ in $(seq 1 200); do
+  if [[ -f "$R/worker_events.jsonl" ]] &&
+     grep -q "$EXPECTED_MARKER" "$R/worker_events.jsonl"; then
+    seen=1
+    break
+  fi
+  if ! kill -0 "$WORKER_PID" 2>/dev/null; then break; fi
+  sleep .25
+done
+[[ "$seen" == 1 ]] || { echo "FAIL_EXACT_BARRIER_COMMIT_NOT_REACHED"; tail -90 "$R/worker.log"; exit 16; }
+kill -KILL "$WORKER_PID"
+wait "$WORKER_PID" >/dev/null 2>&1 || :
+WORKER_PID=
+echo "SHA916_SIGKILL_AFTER_EXACT_DURABLE_MARKER_PID=$OLD_WORKER_PID KILLPOINT=$EXPECTED_MARKER"
+
+"$PY" "$QA/g4_barrier_controller.py" check "$KILL_AT" > "$R/barrier-check.log" 2>&1 || {
+  echo "FAIL_DB_GUARD_SEQUENCE"; tail -80 "$R/barrier-check.log"; exit 17
+}
+grep '^G4_' "$R/barrier-check.log" || :
+"$PY" "$QA/g4_barrier_controller.py" expire-claim "$KILL_AT" > "$R/barrier-claim.log" 2>&1 || {
+  echo "FAIL_DB_LEASE_OR_MANUAL_CLAIM"; tail -85 "$R/barrier-claim.log"; exit 18
+}
+grep '^G4_' "$R/barrier-claim.log" || :
+
+# Replaced process: original Redis messages remain; only claimed new fencing
+# may reenter after BEFORE_EFFECTS. No auto retry or unscoped R2.
+G4_CRASH_HOLD_SECONDS=0 G4_KILLPOINT= "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
     -Q document_parsing --loglevel=info --without-gossip --without-mingle \
-    --without-heartbeat --hostname=g4-restart@localhost > "$R/worker-restart.log" 2>&1 &
-  WORKER_PID=$!
-  echo "G4_RESTARTED_WORKER_OS_PID=$WORKER_PID"
-  "$PY" "$QA/g4_controller.py" crash-redelivery > "$R/crash-redelivery.log" 2>&1 || {
-    tail -65 "$R/crash-redelivery.log"; tail -75 "$R/worker-restart.log"; exit 18
-  }
-  grep '^G4_' "$R/crash-redelivery.log" || :
-  echo "CELERY_REAL_WORKER_KILL_AND_FENCED_DUPLICATE=PASS_LIMITED"
-else
-  "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
-    -Q document_parsing --loglevel=info --without-gossip --without-mingle \
-    --without-heartbeat --hostname=g4-test@localhost > "$R/worker.log" 2>&1 &
-  WORKER_PID=$!
-  echo "CELERY_WORKER_OS_PID=$WORKER_PID CONTROLLER_OS_PID=$$"
-  "$PY" "$QA/g4_controller.py" verify > "$R/verify.log" 2>&1 || {
-    echo "G4_REAL_WORKER_VERIFY_FAIL"
-    tail -70 "$R/verify.log"
-    tail -75 "$R/worker.log"
-    exit 15
-  }
-  grep '^G4_' "$R/verify.log" || :
-  echo "CELERY_SEPARATE_WORKER_N4=PASS"
-  # Focused PG negatives on the SAME scratch instance: UNKNOWN, zero cost,
-  # concurrency and fencing. Explicitly 0 SKIPPED; deselection is not skip.
-  "$PY" -m pytest -q \
-    tests/integration/analysis/test_n4_window_runner_pg.py \
-    tests/integration/analysis/test_n4_incremental_store_pg.py \
-    tests/integration/analysis/test_n4_shared_tenant_budget_pg.py \
-    -k "simultaneous_runners_replay or provider_timeout_preserves_unknown_charge or no_cost_receipt_is_not_zero or idempotency_budget_resume_fencing_and_rls or global_cap_serializes_two_independent_n4_project_workers" \
-    --disable-warnings > "$R/pg_negative.log" 2>&1 || {
-      tail -65 "$R/pg_negative.log"
-      exit 19
-    }
-  grep -E "passed|skipped|failed|100%" "$R/pg_negative.log" | tail -3 || :
-  if grep -qi 'skipped' "$R/pg_negative.log"; then echo "G4_SKIPPED_NOT_ALLOWED"; exit 19; fi
-  echo "G4_NEGATIVE_PG_FOCALS=PASS"
-fi
+    --without-heartbeat --hostname=g4-barrier-restart@localhost > "$R/worker-restart.log" 2>&1 &
+WORKER_PID=$!
+echo "SHA916_WORKER_RESTART_PID=$WORKER_PID"
+"$PY" "$QA/g4_barrier_controller.py" verify "$KILL_AT" > "$R/barrier-verify.log" 2>&1 || {
+  echo "FAIL_WORKER_REAL_REDELIVERY_OR_N4"; tail -100 "$R/barrier-verify.log"; tail -70 "$R/worker-restart.log"; exit 19
+}
+grep '^G4_' "$R/barrier-verify.log" || :
+echo "G4_EXACT_BARRIER_SCENARIO_COMPLETED=$KILL_AT"
 
 # Actual Redis process outage after completed settlement; no new provider calls.
 kill -TERM "$REDIS_PID"
@@ -187,5 +164,5 @@ cat "$R/broker-down.log" | grep '^G4_' || :
 echo "REDIS_REAL_SHUTDOWN_CONFIRMED=YES"
 
 cp "$R/alembic.log" "$EVIDENCE/alembic.log"
-echo "G4_BROKER_CASE=$G4_CASE RESULT=PASS_LIMITED; ACK loss injected after real broker publish"
+echo "G4_BROKER_CASE=$G4_CASE RESULT=EXECUTED; SHA_B=916808c5212e3dbc652407f35f3a17557623c06c"
 echo "G4_PG_DROPPED_BY_TRAP=YES"
