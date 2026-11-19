@@ -41,7 +41,14 @@ from tests.integration.analysis.test_n4_incremental_store_pg import (
 from tests.integration.analysis.test_n4_window_runner_pg import StubProvider
 
 DSN = os.environ["C2PRO_N4_SCRATCH_DSN"]
-assert "c2pro_g3_1276_test" in DSN and os.environ.get("PG_CLUSTER_CONF_ROOT","").startswith("/tmp/pg_virtualenv."), "pg_virtualenv scratch only"
+assert "c2pro_g3_1276_test" in DSN, "G3 disposable DB name required"
+assert (
+    os.environ.get("PG_CLUSTER_CONF_ROOT", "").startswith("/tmp/pg_virtualenv.")
+    or (
+        os.environ.get("C2PRO_G3_EPHEMERAL_PG_DIR", "").startswith("/tmp/c2pro-g4-pg.")
+        and os.path.isdir(os.environ["C2PRO_G3_EPHEMERAL_PG_DIR"] + "/data")
+    )
+), "STOP: no verified disposable local PG setup"
 PG = DSN.replace("postgresql://", "postgresql+asyncpg://", 1)
 EVENTS: list[str] = []
 PROVIDER = StubProvider()
