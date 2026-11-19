@@ -9,7 +9,7 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import asyncpg
 import redis
@@ -20,7 +20,12 @@ from g4_barrier_controller import context_ids, db_snapshot
 from src.documents.adapters.persistence.sqlalchemy_document_repository import SqlAlchemyDocumentRepository
 
 async def deny_once(label: str, *, owner=None, tenant=None, project=None) -> None:
-    ctx, T, D, P, OWNER, R = context_ids()
+    # Do not call load_context() here: it would overwrite intentional
+    # revoked/expired test env mutations and create a false positive.
+    ctx = json.loads((ROOT / "context.json").read_text())
+    T, D, P, OWNER, R = (UUID(ctx[k]) for k in (
+        "tenant_id", "document_id", "project_id", "owner_id", "revision_id",
+    ))
     client = redis.Redis.from_url(BROKER)
     size_before = client.llen("document_parsing")
     eng, sessions = factory()
