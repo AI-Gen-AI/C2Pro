@@ -406,5 +406,3 @@ async def run_g3(*, manual_recovery: bool):
     await engine.dispose()
 
 
-    asyncio.run(run_g3())
-
