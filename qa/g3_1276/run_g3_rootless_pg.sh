@@ -6,9 +6,13 @@ umask 077
 case "${1:-}" in legacy|recovery) export G3_CASE="$1" ;; *) echo "usage: $0 legacy|recovery"; exit 2 ;; esac
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PG_BIN=/usr/lib/postgresql/16/bin
-for bin in initdb pg_ctl pg_isready; do test -x "$PG_BIN/$bin" || exit 10; done
+for bin in initdb pg_ctl pg_isready; do [[ -x "$PG_BIN/$bin" ]] || exit 10; done
 [[ "$(id -un)" == "aigenadmin" ]] || { echo "STOP: wrong user"; exit 10; }
-export C2PRO_G3_EPHEMERAL_PG_DIR="$(mktemp -d /tmp/c2pro-g4-pg.XXXXXXXX)"
+PRIVATE_PARENT="$HOME/.cache/ai-gen-qa-g4"
+mkdir -p -m 0700 -- "$PRIVATE_PARENT"
+[[ "$(stat -c %u "$PRIVATE_PARENT")" == "$(id -u)" ]] || exit 10
+[[ "$(stat -c %a "$PRIVATE_PARENT")" == "700" ]] || exit 10
+export C2PRO_G3_EPHEMERAL_PG_DIR="$(mktemp -d "$PRIVATE_PARENT/c2pro-g4-pg.XXXXXXXX")"
 ROOT="$C2PRO_G3_EPHEMERAL_PG_DIR"
 cleanup() {
   local rc=$?
@@ -16,7 +20,7 @@ cleanup() {
   if [[ -d "$ROOT/data" ]]; then
     "$PG_BIN/pg_ctl" -D "$ROOT/data" -m immediate -w stop >/dev/null 2>&1 || :
   fi
-  case "$ROOT" in /tmp/c2pro-g4-pg.*) rm -rf -- "$ROOT" ;; *) echo "BAD TEMP PATH" >&2 ;; esac
+  case "$ROOT" in "$PRIVATE_PARENT"/c2pro-g4-pg.*) rm -rf -- "$ROOT" ;; *) echo "BAD TEMP PATH" >&2 ;; esac
   echo "ROOTLESS_PG16_TERMINATED_AND_REMOVED=YES"
   exit "$rc"
 }
