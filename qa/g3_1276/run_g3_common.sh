@@ -44,7 +44,7 @@ export ENVIRONMENT=test
 PY=/home/aigenadmin/.cache/c2pro-local-ci/venv-py3.11/bin/python
 # Synthetic, per-execution JWT secret: no hardcoded credentials and no value logged.
 export JWT_SECRET_KEY="$("$PY" -c 'import secrets; print(secrets.token_urlsafe(48))')"
-export DATABASE_URL="postgresql://aigenadmin:${PGPASSWORD}@localhost:${PGPORT}/${DB}"
+export DATABASE_URL="postgresql://aigenadmin:${PGPASSWORD}@127.0.0.1:${PGPORT}/${DB}"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export C2PRO_N4_SCRATCH_DSN="$DATABASE_URL"
 export PYTHONPATH="$SOURCE/apps/api"
