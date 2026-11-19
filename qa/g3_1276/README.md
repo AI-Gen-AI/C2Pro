@@ -32,10 +32,11 @@ The scripts in this PR match the executed copies but have host-specific QA paths
 - RLS check uses the **actual Alembic policies** under `SET ROLE c2pro_g3_rls_reader` (NOLOGIN, NOSUPERUSER, NOBYPASSRLS). Unscoped document query returns zero, tenant-scoped query returns its document and 23 N4 reservations; other tenant hidden. Schema metadata: documents, n4_extraction_runs and n4_usage_reservations ENABLE+FORCE RLS; tenants ENABLE RLS (not FORCE). **JWT→tenant GUC mapping is mocked and not proven.**
 
 Hashes from terminal run:
-- Runner Python `e0d847ca8e98f426f33c4849684fb8369fb8f1afe621e5988c4f840eb7e9c702`.
-- Runner shell `ec234d616833f4b7854a0d1b1d5812c1227924a34b3f0f163c6dd6e5fae526c8`.
+- Runner Python `46b4cee12d873c7a0d88cddfbf1f6f0b263a3f0c6a015532840957ef38c3c67b`.
+- Runner shell `c50f00f566d3e26423dcbaa9c1e6c01501de13e1cab35f4bd74dd32ca0bb5637`.
 - Alembic log `c140dd352d206b33e6fe7525b9c4dcbe0420e51623fb6bfea50fcba9bf0eef46`.
-- G3 completed log `edacfbd3567a93ef1847d9b751c13d75d7e86993fa3812776e471c16b9114c41`.
+- G3 completed log `155bd2d8fd6f6a791174948bbb749afb372db4b4e9227bc5ca35c35772454fdd`.
+- Focused negative PG log `1158f68695403cb3a1c85b3b8efb14b7ef05a74f681ecb744ce4b632c8e964bd`. Runner output: `..... [100%]`, `G3_NEGATIVE_PG_EXIT=0` (5 targeted real-PG tests; no skip markers): N4 race/replay, provider timeout UNKNOWN, unknown usage not zero, fencing/idempotency, shared TENANT $5 cap across workers. These use separate synthetic fixture rows in **the same ephemeral migrated PG cluster**, and are NOT the full real queue/worker crash path.
 - Logs retained only on authorized QA VPS, no Clerk secrets and no PDF contractual content.
 
 ## Independently blocking issues
