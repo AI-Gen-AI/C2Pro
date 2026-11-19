@@ -85,6 +85,13 @@ async def ingestion_stub(*, document_id, revision_id, generation, authority):
                     event("DUPLICATE_ADOPT_DENIED", fencing_token=grant.fencing_token)
                     return {"status": "duplicate_denied", "generation": 3}
                 event("CELERY_WORKER_ADOPT_ONCE", fencing_token=grant.fencing_token)
+        # Adopt has now COMMITTED in PostgreSQL, independently of broker ACK.
+        hold_seconds = int(os.getenv("G4_CRASH_HOLD_SECONDS", "0"))
+        if hold_seconds > 0:
+            event("G4_ADOPT_COMMITTED_WORKER_HOLD", seconds=hold_seconds)
+            await asyncio.sleep(hold_seconds)
+        async with factory() as session:
+            async with session.begin():
                 await finish_ingestion(session, grant)
         result = tasks.process_document_n4_only_pilot_async.apply_async(
             kwargs={"tenant_id": str(T), "document_id": str(D), "generation": 3},
