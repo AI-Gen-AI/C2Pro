@@ -1,5 +1,7 @@
 # C2Pro — WBS de implementación: reparación y mejora de orquestación, modelo de datos e integración
 
+> **SUSTITUIDO (histórico).** CORE revisó este documento con el dictamen `PLAN_USEFUL / APPROVAL_WITHHELD` ([#1259 comentario 7021223373](https://github.com/AI-Gen-AI/C2Pro/issues/1259#issuecomment-7021223373)). La versión vigente es `C2PRO_E2E_REMEDIATION_WBS_V2_2026-11-19.md`. Esta v1 contiene errores reconocidos: tiene 40 WP y no 39, el corpus es de 6 documentos y no de 5, el calendario de 10 semanas no es realista, y propone retirar controles de reservas y fusionar en `main`, dos recomendaciones ya retiradas. Se conserva solo para la trazabilidad.
+
 | Campo | Valor |
 |---|---|
 | Fecha | 2026-11-19 |

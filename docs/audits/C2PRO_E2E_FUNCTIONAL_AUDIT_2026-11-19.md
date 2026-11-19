@@ -42,7 +42,7 @@ CORE revisó este informe ([#1259 comentario 7020970699](https://github.com/AI-G
 | RC-14 / P2-3 | "Simplificar gobernanza: presupuesto por run + idempotencia" | **Retirado.** Eliminar controles del sistema de reservas podría permitir gastos duplicados. Se mantiene solo una recomendación de observabilidad: que cada bloqueo explique su causa. | — |
 | Plan de aceptación | "5 documentos" | El corpus son **6 documentos de 4 familias**. | — |
 
-**Invariantes vigentes** (CORE): `N4_BILLABLE=STOP`, `N12_BILLABLE=STOP`, `MERGE=STOP`, `UAT_DEPLOY=STOP`. La hoja de ruta de este informe es orientativa. El plan corregido está en `docs/architecture/proposals/C2PRO_E2E_REMEDIATION_WBS_2026-11-19.md` (v2).
+**Invariantes vigentes** (CORE): `N4_BILLABLE=STOP`, `N12_BILLABLE=STOP`, `MERGE=STOP`, `UAT_DEPLOY=STOP`. La hoja de ruta de este informe es orientativa. El plan corregido está en `docs/architecture/proposals/C2PRO_E2E_REMEDIATION_WBS_V2_2026-11-19.md`.
 
 ---
 
