@@ -2,21 +2,26 @@
 # Unified G3 offline harness. Runs only in disposable pg_virtualenv, never shared PG.
 set -euo pipefail
 
-case "${PG_CLUSTER_CONF_ROOT:-}" in
-  /tmp/pg_virtualenv.*) ;;
-  *) echo "STOP: not disposable pg_virtualenv"; exit 10 ;;
-esac
+if [[ "${PG_CLUSTER_CONF_ROOT:-}" != /tmp/pg_virtualenv.* ]]; then
+  case "${C2PRO_G3_EPHEMERAL_PG_DIR:-}" in
+    /tmp/c2pro-g4-pg.*)
+      test -d "${C2PRO_G3_EPHEMERAL_PG_DIR}/data" || exit 10
+      [[ "${PGHOST:-}" == "127.0.0.1" ]] || { echo "STOP: PGHOST not loopback"; exit 10; }
+      ;;
+    *) echo "STOP: no disposable PostgreSQL identity"; exit 10 ;;
+  esac
+fi
 
 case "${G3_CASE:-}" in
   legacy)
     SOURCE=/home/aigenadmin/qa_workspaces/c2pro-g3-1276-20261119
-    EVIDENCE=/home/aigenadmin/qa_evidence/g3-1276
+    EVIDENCE=/home/aigenadmin/qa_evidence/g4-1277-sonar-regression/legacy
     EXPECTED_SHA=8a84f9ebcd54928347171cef0cc80f34ca3fb949
     DRIVER=g3_integrated_sql_celery.py
     ;;
   recovery)
     SOURCE=/srv/c2pro/ops-c2pro-runner/checkouts/14c35b7f0b89-214064af
-    EVIDENCE=/home/aigenadmin/qa_evidence/g3-1276-fix
+    EVIDENCE=/home/aigenadmin/qa_evidence/g4-1277-sonar-regression/recovery
     EXPECTED_SHA=14c35b7f0b8933a4ff0b4f330f3941073809ff24
     DRIVER=g3_recovery_14c35_sql_celery.py
     ;;
