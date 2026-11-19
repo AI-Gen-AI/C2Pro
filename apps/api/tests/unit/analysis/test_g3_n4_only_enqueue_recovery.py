@@ -62,6 +62,8 @@ class State:
         self.phase = "PENDING"
         self.gen = 3
         self.fence = 9
+        self.attempt_id = uuid4()
+        self.owner_token = uuid4()
         self.attempts = 0
         self.lease = False
         self.active_revision = True
@@ -113,6 +115,8 @@ class Session:
                     "phase": self.s.phase,
                     "fencing_token": self.s.fence,
                     "attempt_count": self.s.attempts,
+                    "attempt_id": self.s.attempt_id,
+                    "owner_token": self.s.owner_token,
                     "lease_valid": self.s.lease,
                 }
             )
@@ -318,3 +322,273 @@ async def test_denied_operator_or_identity(scope, claim, broker, monkeypatch, de
             project=OTHER if denial == "project" else PROJECT,
         )
     assert not calls and s.claims == 0
+
+
+def _g4_running_after_adopt(state, *, guard_state="ADOPTED_BEFORE_EFFECTS"):
+    """A synthetic SIGKILL immediately AFTER adopting fence 10."""
+    state.phase = "RUNNING"
+    state.status = DocumentStatus.PARSING
+    state.attempts = 1
+    state.fence = 10
+    state.lease = False
+    if guard_state is not None:
+        state.marker["ingestion_effects_guard"] = {
+            "state": guard_state,
+            "generation": 3,
+            "document_revision_id": str(REV),
+            "attempt_id": str(state.attempt_id),
+            "fencing_token": 10,
+        }
+    return state
+
+
+@pytest.mark.asyncio
+async def test_g4_sigkill_post_adopt_before_effects_recovers_once(scope, claim, broker):
+    _task, messages = broker
+    state = _g4_running_after_adopt(State(scope))
+    response = await send(state)
+    assert response["status"] == "ENQUEUED"
+    assert response["generation"] == 3 and response["fencing_token"] == 11
+    assert state.claims == 1 and len(messages) == 1
+    assert state.audit[-1]["recovered_from_phase"] == "RUNNING"
+    assert state.audit[-1]["pre_effects_guard_verified"] is True
+    assert messages[0][0]["authority"]["fencing_token"] == 11
+    with pytest.raises(HTTPException):
+        await send(state)  # lease active; no new enqueue
+    assert len(messages) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "guard_status",
+    [
+        None,
+        "EFFECTS_MAY_HAVE_OCCURRED",
+        "UNVERIFIED",
+    ],
+)
+async def test_g4_sigkill_with_uncertain_ingestion_must_stop(scope, claim, broker, guard_status):
+    _task, messages = broker
+    state = _g4_running_after_adopt(State(scope), guard_state=guard_status)
+    with pytest.raises(HTTPException) as exc:
+        await send(state)
+    assert exc.value.status_code == 409
+    assert not messages and state.claims == 0 and state.audit == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "stale_attempt",
+        "wrong_fence",
+        "wrong_revision",
+        "active_lease",
+        "old_n4_run",
+        "any_receipt",
+        "attempts_exhausted",
+        "expired_policy",
+    ],
+)
+async def test_g4_running_fails_closed_on_stale_lineage_or_possible_cost(
+    scope, claim, broker, monkeypatch, damage
+):
+    _task, messages = broker
+    state = _g4_running_after_adopt(State(scope))
+    proof = state.marker["ingestion_effects_guard"]
+    if damage == "stale_attempt":
+        proof["attempt_id"] = str(uuid4())
+    if damage == "wrong_fence":
+        proof["fencing_token"] = 9
+    if damage == "wrong_revision":
+        proof["document_revision_id"] = str(OTHER)
+    if damage == "active_lease":
+        state.lease = True
+    if damage == "old_n4_run":
+        state.run = True
+    if damage == "any_receipt":
+        state.receipts = True
+    if damage == "attempts_exhausted":
+        state.attempts = 2
+    if damage == "expired_policy":
+        import os
+
+        payload = json.loads(os.environ["C2PRO_N4_ONLY_APPROVED_SCOPE"])
+        payload["expires_at"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+        monkeypatch.setenv("C2PRO_N4_ONLY_APPROVED_SCOPE", json.dumps(payload))
+    with pytest.raises(HTTPException) as exc:
+        await send(state)
+    assert exc.value.status_code == 409
+    assert not messages and state.claims == 0
+
+
+@pytest.mark.asyncio
+async def test_g4_running_concurrent_recovery_only_one_claim(scope, claim, broker):
+    _, messages = broker
+    state = _g4_running_after_adopt(State(scope))
+    outcomes = await asyncio.gather(send(state), send(state), return_exceptions=True)
+    assert sum(isinstance(x, dict) for x in outcomes) == 1
+    assert sum(isinstance(x, HTTPException) for x in outcomes) == 1
+    assert len(messages) == 1 and state.claims == 1
+
+
+@pytest.mark.asyncio
+async def test_g4_two_phase_barrier_is_committed_before_ingestion(
+    scope, claim, broker, monkeypatch
+):
+    from src.documents.application.n4_only_ingestion_effects_guard import (
+        BEFORE_EFFECTS,
+        MAY_HAVE_OCCURRED,
+        record_before_ingestion_effects,
+        record_ingestion_effects_possible,
+    )
+
+    state = State(scope)
+    repo = Repo(state)
+    doc = await repo.get_by_id(TENANT, DOC)
+    grant = ProcessingAuthority(
+        tenant_id=TENANT,
+        document_id=DOC,
+        revision_id=REV,
+        generation=3,
+        stage=ProcessingStage.INGESTION,
+        attempt_id=state.attempt_id,
+        owner_token=state.owner_token,
+        fencing_token=10,
+    )
+    await record_before_ingestion_effects(repo=repo, document=doc, grant=grant)
+    assert repo.commits == 0  # same txn as ADOPT, worker commits both
+    assert state.marker["ingestion_effects_guard"]["state"] == BEFORE_EFFECTS
+    await repo.commit()
+
+    checks = []
+
+    async def verify(session, authority):
+        checks.append(authority.fencing_token)
+
+    monkeypatch.setattr(
+        "src.documents.application.n4_only_ingestion_effects_guard."
+        "processing_authority.verify_in_transaction",
+        verify,
+    )
+    await record_ingestion_effects_possible(repo=repo, document=doc, grant=grant)
+    assert checks == [10] and repo.commits == 2
+    assert state.marker["ingestion_effects_guard"]["state"] == MAY_HAVE_OCCURRED
+
+    state = _g4_running_after_adopt(state, guard_state=MAY_HAVE_OCCURRED)
+    _task, messages = broker
+    with pytest.raises(HTTPException):
+        await send(state)
+    assert not messages and state.claims == 0
+
+
+@pytest.mark.asyncio
+async def test_g4_unsafe_marker_cannot_be_reset_by_new_adoption(scope):
+    from src.documents.application.n4_only_ingestion_effects_guard import (
+        N4OnlyIngestionEffectsUnsafe,
+        record_before_ingestion_effects,
+    )
+
+    state = _g4_running_after_adopt(State(scope), guard_state="EFFECTS_MAY_HAVE_OCCURRED")
+    repo = Repo(state)
+    doc = await repo.get_by_id(TENANT, DOC)
+    future = ProcessingAuthority(
+        tenant_id=TENANT,
+        document_id=DOC,
+        revision_id=REV,
+        generation=3,
+        stage=ProcessingStage.INGESTION,
+        attempt_id=uuid4(),
+        owner_token=uuid4(),
+        fencing_token=11,
+    )
+    with pytest.raises(N4OnlyIngestionEffectsUnsafe):
+        await record_before_ingestion_effects(repo=repo, document=doc, grant=future)
+    assert repo.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_g4_effects_seal_commit_failure_prevents_ingestion(scope, monkeypatch):
+    from src.documents.application.n4_only_ingestion_effects_guard import (
+        record_before_ingestion_effects,
+        record_ingestion_effects_possible,
+    )
+
+    state = State(scope)
+    repo = Repo(state)
+    doc = await repo.get_by_id(TENANT, DOC)
+    grant = ProcessingAuthority(
+        tenant_id=TENANT,
+        document_id=DOC,
+        revision_id=REV,
+        generation=3,
+        stage=ProcessingStage.INGESTION,
+        attempt_id=state.attempt_id,
+        owner_token=state.owner_token,
+        fencing_token=10,
+    )
+    await record_before_ingestion_effects(repo=repo, document=doc, grant=grant)
+    await repo.commit()
+
+    async def verified(session, authority):
+        assert authority.fencing_token == 10
+
+    async def fail_commit():
+        raise RuntimeError("synthetic database commit unavailable")
+
+    monkeypatch.setattr(
+        "src.documents.application.n4_only_ingestion_effects_guard."
+        "processing_authority.verify_in_transaction",
+        verified,
+    )
+    monkeypatch.setattr(repo, "commit", fail_commit)
+    with pytest.raises(RuntimeError, match="commit unavailable"):
+        await record_ingestion_effects_possible(repo=repo, document=doc, grant=grant)
+    # Caller must not proceed into _ingest_owned when the guard commit fails.
+    assert state.marker["ingestion_effects_guard"]["state"] == "EFFECTS_MAY_HAVE_OCCURRED"
+
+
+@pytest.mark.parametrize(
+    ("status", "has_guard", "authority_present", "manual"),
+    [
+        (DocumentStatus.UPLOADED, False, False, False),
+        (DocumentStatus.UPLOADED, True, False, True),
+        (DocumentStatus.PARSING, False, False, True),
+        (DocumentStatus.PARSING, True, False, True),
+        (DocumentStatus.PARSED_PENDING_ANALYSIS, False, False, True),
+        (DocumentStatus.PARSING, True, True, False),
+    ],
+)
+def test_g4_legacy_redelivery_never_auto_acquires_expired_running(
+    status,
+    has_guard,
+    authority_present,
+    manual,
+):
+    from src.documents.application.n4_only_ingestion_effects_guard import manual_claim_required
+
+    marker = {"state": "QUEUED"}
+    if has_guard:
+        marker["ingestion_effects_guard"] = {"state": "ADOPTED_BEFORE_EFFECTS"}
+    doc = SimpleNamespace(upload_status=status, document_metadata={"n4_only_pilot": marker})
+    authority = {"claimed": True} if authority_present else None
+    assert manual_claim_required(doc, authority) is manual
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("malformed", ["string", "unknown-state"])
+async def test_g4_malformed_guard_never_requeues_even_if_phase_pending(
+    scope,
+    claim,
+    broker,
+    malformed,
+):
+    _task, messages = broker
+    state = State(scope)
+    state.marker["ingestion_effects_guard"] = (
+        "corrupt" if malformed == "string" else {"state": "UNKNOWN"}
+    )
+    with pytest.raises(HTTPException) as exc:
+        await send(state)
+    assert exc.value.status_code == 409
+    assert not messages and state.claims == 0

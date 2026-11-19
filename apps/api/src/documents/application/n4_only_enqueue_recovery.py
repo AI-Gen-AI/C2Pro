@@ -21,6 +21,10 @@ from src.analysis.application.n4_only_pilot_policy import (
 )
 from src.core import processing_authority
 from src.core.processing_authority import ProcessingAuthority, ProcessingStage
+from src.documents.application.n4_only_ingestion_effects_guard import (
+    BEFORE_EFFECTS,
+    GUARD_KEY,
+)
 from src.documents.domain.models import DocumentStatus, DocumentType
 
 
@@ -35,14 +39,14 @@ class RecoveryClaim:
     generation: int
 
 
-# A current-gen run may already carry ambiguous provider activity even if it
-# has zero visible receipts. No recalc, no N4-run replay and no reprocess.
-_CURRENT_RUN_EXISTS = text("""
+# A run in ANY generation is evidence of prior N4 activity/uncertainty.
+# Even a historic PARTIAL with no SETTLED receipt now blocks manual redrive.
+# This is conservative by explicit CORE G4 requirement.
+_ANY_N4_RUN = text("""
     SELECT EXISTS (
         SELECT 1 FROM public.n4_extraction_runs r
          WHERE r.tenant_id = CAST(:tenant AS uuid)
            AND r.document_id = CAST(:document AS uuid)
-           AND r.generation = :generation
     )
 """)
 
@@ -69,7 +73,7 @@ _LOCK_DOCUMENT = text("""
 
 _CURRENT_AUTHORITY = text("""
     SELECT revision_id, generation, stage, phase, fencing_token, attempt_count,
-           lease_expires_at,
+           attempt_id, owner_token, lease_expires_at,
            (lease_expires_at IS NOT NULL AND
             lease_expires_at > (clock_timestamp() AT TIME ZONE 'UTC')) AS lease_valid
       FROM public.document_processing_operations
@@ -142,7 +146,7 @@ async def claim_stranded_n4_enqueue(
         doc is None
         or doc.project_id != project_id
         or doc.document_type != DocumentType.CONTRACT
-        or doc.upload_status != DocumentStatus.UPLOADED
+        or doc.upload_status not in (DocumentStatus.UPLOADED, DocumentStatus.PARSING)
         or marker.get("state") != "QUEUED"
         or (doc.document_metadata or {}).get("parsed_text_revision_id") != str(scope.revision_id)
     ):
@@ -159,17 +163,49 @@ async def claim_stranded_n4_enqueue(
         or str(row["revision_id"]) != str(scope.revision_id)
         or row["generation"] != scope.next_generation
         or str(row["stage"]) != "INGESTION"
-        or str(row["phase"]) not in ("PENDING", "CLAIMED")
+        or str(row["phase"]) not in ("PENDING", "CLAIMED", "RUNNING")
         or bool(row["lease_valid"])
         or int(row["fencing_token"]) <= scope.predecessor_fence
         or int(row["attempt_count"]) >= MAX_MANUAL_RECOVERY_CLAIMS
     ):
         raise N4OnlyEnqueueRecoveryDenied("processing generation owned/stale or recovery exhausted")
 
-    if (await session.execute(
-        _CURRENT_RUN_EXISTS, args | {"generation": scope.next_generation}
-    )).scalar_one():
-        raise N4OnlyEnqueueRecoveryDenied("N4 run exists; no enqueue recovery")
+    # G4-LIVENESS-02: RUNNING after ADOPT is NOT safe just because the lease
+    # expired and the N4 ledger is empty. RAG embedding can bill *before*
+    # finish_ingestion. Permit recovery only if a durable BEFORE_EFFECTS proof
+    # was committed atomically with THIS exact adoption attempt and no later
+    # EFFECTS_MAY_HAVE_OCCURRED seal exists. Absence is NOT permission.
+    phase = str(row["phase"])
+    guard = marker.get(GUARD_KEY)
+    if phase == "RUNNING":
+        if (
+            doc.upload_status != DocumentStatus.PARSING
+            or not isinstance(guard, dict)
+            or guard.get("state") != BEFORE_EFFECTS
+            or guard.get("document_revision_id") != str(scope.revision_id)
+            or guard.get("generation") != scope.next_generation
+            or guard.get("fencing_token") != int(row["fencing_token"])
+            or guard.get("attempt_id") != str(row["attempt_id"])
+            or row["owner_token"] is None
+        ):
+            raise N4OnlyEnqueueRecoveryDenied(
+                "RUNNING ingestion side effects cannot be disproved; STOP"
+            )
+    elif doc.upload_status != DocumentStatus.UPLOADED:
+        raise N4OnlyEnqueueRecoveryDenied("queued recovery state changed")
+    # Any evidence that the external-effect barrier was passed denies ALL
+    # manual resend paths, including malformed PENDING/CLAIMED states.
+    if guard is not None and (
+        not isinstance(guard, dict) or guard.get("state") != BEFORE_EFFECTS
+    ):
+        raise N4OnlyEnqueueRecoveryDenied(
+            "ingestion effects marker invalid or unsafe; STOP"
+        )
+
+    if (await session.execute(_ANY_N4_RUN, args)).scalar_one():
+        raise N4OnlyEnqueueRecoveryDenied(
+            "N4 run exists in a generation; manual resend forbidden"
+        )
 
     if (await session.execute(_ANY_N4_RECEIPT, args)).scalar_one():
         raise N4OnlyEnqueueRecoveryDenied("provider receipt exists; reconciliation required")
@@ -204,6 +240,8 @@ async def claim_stranded_n4_enqueue(
         "claimed_fence": grant.fencing_token,
         "attempt_id": str(grant.attempt_id),
         "event": "manual_enqueue_recovery_claimed",
+        "recovered_from_phase": phase,
+        "pre_effects_guard_verified": phase == "RUNNING",
         "observed_at_utc": datetime.now(UTC).isoformat(),
     })
     pilot["enqueue_recovery_events"] = events

@@ -1800,6 +1800,21 @@ async def _process(
             return {"status": "error", "message": "Project not found"}
         tenant_id = require_tenant_id(raw_tenant_id)
 
+        # G4: a redelivered ORIGINAL Celery message (no claimed authority)
+        # must not silently take over an expired N4-only RUNNING attempt.
+        # Once an INGESTION attempt has been adopted, only an explicit
+        # owner-authorized manual claim with an exact fenced authority may
+        # recover it. A stale task with authority is rejected by adopt().
+        from src.documents.application.n4_only_ingestion_effects_guard import (
+            manual_claim_required,
+        )
+
+        if manual_claim_required(document, authority):
+            return {
+                "status": "n4_only_manual_recovery_required",
+                "document_id": str(document_id),
+            }
+
         # ACK-loss redelivery after either durable seam is a no-op.
         if document.upload_status is DocumentStatus.ANALYZED:
             return {
@@ -1873,6 +1888,21 @@ async def _process(
                 extra={"document_id": str(document_id), "outcome": claim_outcome},
             )
             return {"status": claim_outcome, "document_id": str(document_id)}
+        # G4: the worker must prove that no side-effecting ingestion step
+        # started. The BEFORE_EFFECTS marker lands in the exact transaction
+        # that made this worker RUNNING; a crash after ADOPT but before entry
+        # into _ingest_owned therefore leaves a recoverable durable proof.
+        n4_only_marker_present = isinstance(
+            (document.document_metadata or {}).get("n4_only_pilot"), dict
+        )
+        if n4_only_marker_present:
+            from src.documents.application.n4_only_ingestion_effects_guard import (
+                record_before_ingestion_effects,
+            )
+
+            await record_before_ingestion_effects(
+                repo=repo, document=document, grant=grant
+            )
         await session.commit()
 
         heartbeat = asyncio.create_task(_document_processing_heartbeat_loop(authority=grant))
@@ -1880,6 +1910,17 @@ async def _process(
             if resolution_error is not None:
                 raise resolution_error
             with processing_authority.bound_authority(grant):
+                if n4_only_marker_present:
+                    from src.documents.application.n4_only_ingestion_effects_guard import (
+                        record_ingestion_effects_possible,
+                    )
+
+                    # This fenced commit is BEFORE R2 download, parser,
+                    # stakeholder staging, RAG embeddings, N1/N2 or N4.
+                    # If it fails, no ingestion side effects may begin.
+                    await record_ingestion_effects_possible(
+                        repo=repo, document=document, grant=grant
+                    )
                 return await _ingest_owned(
                     session=session,
                     repo=repo,

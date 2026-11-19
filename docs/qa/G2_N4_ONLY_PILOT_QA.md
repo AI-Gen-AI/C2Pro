@@ -47,3 +47,59 @@ CORE negative proof: original POST commits generation 3/fence 9 then Celery enqu
 - This small, fail-closed manual control is deliberately not a replacement for eventual outbox-based liveness across all document types.
 
 **B tests**: synthetic broker error/ACK ambiguity and permission negatives, bounded manual redrive, two simultaneous requests -> one claim; separate disposable PostgreSQL 16 test of real `claim_for_recovery` + `adopt`, duplicate delivery denied and stale fence after lease expiry denied. E/D should independently run a FULL migrated PG+Celery stub journey on this exact SHA, particularly CAS→broker down→manual claim→worker and N12/HITL/Trust/Score negative spies; do not attribute test-mock results to live Celery, Clerk or RLS.
+
+## G4-LIVENESS-02 — SIGKILL after ADOPT, lease expired (P0, 19/11)
+D reproduced on real Redis/Celery/PG that a worker can be killed after ADOPT,
+leaving `INGESTION/RUNNING`; the old recovery refuses even after DB lease expiry.
+**Do NOT simply add RUNNING to allowed phases**: before `finish_ingestion`,
+`_ingest_owned` invokes `RagService.ingest_document` and `_embed_texts`
+on the external embedding provider **before the final transaction commit**.
+Also handles immutable R2 GET, file parsing, stakeholder observations, RAG
+chunk replacements, clause/event staging. SQL stage/CLAIMED is fenced, but the
+external embedding bill cannot be rolled back by a SQL transaction. Zero N4
+runs or receipts do not exclude external ingestion spend or effects.
+
+### Strict two-phase side-effect barrier
+The only recoverable RUNNING crash is one **provably before** any potentially
+external step. For a marked, pinned N4-only UAT document:
+1. The ingestion worker records `ingestion_effects_guard.state=ADOPTED_BEFORE_EFFECTS`
+   in **the same transaction** as the first acquire or the manual claim's
+   `CLAIMED→RUNNING` ADOPT. It pins the exact revision, generation, fencing
+   and attempt_id. This is staged before the first commit, with status PARSING.
+2. **Before** calling `_ingest_owned` (even before source R2 GET), the worker
+   must verify its current lease/fence in the DB transaction, then durably
+   change the marker to `EFFECTS_MAY_HAVE_OCCURRED` and COMMIT. An exception,
+   stale authority or failed commit prevents entering ingestion entirely.
+3. The manual recovery endpoint accepts `RUNNING` with **expired DB-clock
+   lease** and status PARSING ONLY IF the persisted barrier is still
+   `ADOPTED_BEFORE_EFFECTS` for the exact current attempt/fence/revision/gen,
+   and owner_token present. It obtains a new CLAIMED grant with new fence,
+   bounded audit and sends a single exact-authority ingestion message.
+   Old Celery messages with no claimed authority cannot silently acquire
+   an expired pilot attempt once the guard exists.
+4. **Fail closed** if the barrier is absent (including older pre-patch
+   attempts), already `EFFECTS_MAY_HAVE_OCCURRED`, malformed/stale, expired
+   policy, foreign owner/tenant, live lease, changed revision/phase/generation/
+   fence, recovery limit, **ANY N4 run in ANY generation**, or **ANY N4
+   receipt** (including UNKNOWN/RESERVED/SETTLED/CANCELED). This deliberately
+   can STOP a document with historical partial runs; a later exception to
+   this policy requires a separate audited CORE approval.
+5. A crash after the UNSAFE seal, even before any actual embedding call,
+   is conservatively **NOT_SAFE_TO_RECOVER**. Manual review or future
+   instrumented idempotent ingestion is necessary. No attempt to infer
+   absence of external provider spend from empty N4 tables.
+
+### Evidence / remaining gates
+- Unit tests validate the pre-effect safe window, unsafe/missing or forged
+  marker, exact attempt/fence identity, active lease, N4 history, receipt,
+  permissions, concurrent recovery, and two-phase barrier ordering.
+- G3 real ephemeral PostgreSQL claim/adopt regression covers lease, stale
+  delivery and fencing; it does not simulate an external embedding provider.
+- **D must rerun exact-SHA against real disposable Redis/Celery worker/PG16**,
+  inject SIGKILL **after ADOPT, before the UNSAFE barrier** and expect recovery,
+  and separately inject SIGKILL **after UNSAFE barrier** and expect STOP.
+  Re-test old stale delivery, real broker ACK ambiguity, N12/HITL/TRUSTED/
+  Score 8 spies, read-only GET and zero external calls. If D's current crash
+  point is after the barrier, HTTP409 is now the CORRECT security outcome.
+- Until D and E independently verify this, **G4_CODE=DRAFT_FOR_QA** and
+  **N4_BILLABLE/UAT_DEPLOY/MERGE=STOP**.
