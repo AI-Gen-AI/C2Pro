@@ -38,7 +38,10 @@ async def db_snapshot(db, document_id):
         WHERE op.document_id=$1
     """, document_id)
     assert row is not None
-    return row
+    out = dict(row)
+    if isinstance(out["document_metadata"], str):
+        out["document_metadata"] = json.loads(out["document_metadata"])
+    return out
 
 async def check_killed(case):
     ctx, T, D, P, OWNER, REV = context_ids()
@@ -60,7 +63,7 @@ async def check_killed(case):
         row = await db_snapshot(db, D)
         assert str(row["stage"]) == "INGESTION" and str(row["phase"]) == "RUNNING"
         assert row["generation"] == 3 and row["fencing_token"] == 10
-        assert row["upload_status"] == "parsing", dict(row)
+        assert row["upload_status"] == "processing", dict(row)  # DocumentStatus.PARSING storage value
         guard = row["document_metadata"]["n4_only_pilot"][GUARD_KEY]
         assert guard["state"] == (BEFORE_EFFECTS if before else MAY_HAVE_OCCURRED)
         assert guard["generation"] == 3 and guard["fencing_token"] == 10
