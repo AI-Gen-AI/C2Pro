@@ -100,6 +100,23 @@ class TriggerDocumentAnalysisUseCase:
         # the document ANALYZED. Gating here stranded structured docs in
         # parsed_pending_analysis and flooded the DLQ ("parsed_text not available").
         task = self._get_analysis_task()
+        # Only a dedicated server-issued, exact-scope pilot marker may route
+        # this analysis to the N4-only worker. An ordinary reprocess retains
+        # the complete N4 -> N12 workflow.
+        marker = (getattr(document, "document_metadata", None) or {}).get("n4_only_pilot")
+        if marker is not None:
+            from src.analysis.application.n4_only_pilot_policy import require_marked_pilot
+            from src.core.tasks.ingestion_tasks import process_document_n4_only_pilot_async
+
+            if generation is None:
+                raise ValueError("N4-only requires a pinned processing generation")
+            require_marked_pilot(
+                marker, tenant_id=effective_tenant_id,
+                project_id=document.project_id, document_id=document_id,
+                revision_id=marker.get("revision_id") if isinstance(marker, dict) else None,
+                generation=generation,
+            )
+            task = cast(AnalysisTask, process_document_n4_only_pilot_async)
         task_kwargs: dict[str, str | int] = {
             "tenant_id": str(effective_tenant_id),
             "document_id": str(document_id),

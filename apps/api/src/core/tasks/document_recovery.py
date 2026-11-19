@@ -314,6 +314,11 @@ async def _sweep_async(
             if is_analysis_excluded(str(row.document_type) if row.document_type is not None else None):
                 # PC-2b.3: a WBS source is never ingestion or analysis work.
                 action = RecoveryAction.SKIP
+            # An explicitly scoped N4-only research pilot may NEVER be
+            # resumed by the generic recovery sweep (which invokes full
+            # N4 -> N12). Crash/UNKNOWN states require manual CORE review.
+            if isinstance(metadata.get("n4_only_pilot"), dict):
+                action = RecoveryAction.SKIP
             if action is RecoveryAction.SKIP:
                 if bool(row.hitl_pending):
                     skipped_hitl += 1

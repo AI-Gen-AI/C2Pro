@@ -22,6 +22,9 @@ class ProjectState(TypedDict):
     project_id: str
     document_id: str
     document_text: str
+    # Server-issued per-document, per-generation UAT authorization. Never a
+    # client flag; only the dedicated N4-only worker may populate this field.
+    n4_only_pilot: dict[str, Any] | None
     doc_type: str
     messages: Annotated[list[BaseMessage], add_messages]
     extracted_risks: list[Risk]
