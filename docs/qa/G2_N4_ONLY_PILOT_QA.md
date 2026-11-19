@@ -23,3 +23,10 @@ After successful persistence, result is PROPOSED_N12_UNASSESSED or NO_FINDINGS_U
 
 ## QA states
 DRAFT code prepared for independent E audit; focal tests do not replace the full E QA nor browser UAT. No production change.
+
+## P1 — historical read-only QA, partial evidence (#7002874201)
+- The **POST/worker** still use the expiring execution policy and reject PARTIAL_UNASSESSED; expired grants cannot queue, reserve or restart any provider.
+- The **GET** now invokes a separate, owner-only READ policy that permits PARTIAL_UNASSESSED and ignores execution expiration only for retrieval. The exact server-side UAT scope and persisted digest/owner/tenant/doc/R1/N2 SHA/generation must match; removing the server-side scope revokes read access.
+- The GET requires current pinned parsed-text revision; its SELECT joins the current processing authority with equality on generation/revision/fencing, requires source SHA and an active document revision, and refuses stale/missing runs. No DML, retry, task dispatch, N12, HITL or trust promotion.
+- Response includes truthful PARTIAL_UNASSESSED and original ledger status separately; existing PROPOSED findings, N2 analysis spans and quotes are read with tenant/run-scoped pagination. N2 citation verification never establishes original PDF page verification.
+- Focused permanent suite: tests/unit/analysis/test_g2_n4_partial_read_p1.py, including expiry-read/POST-denial, GET 200, paginated PROPOSED quotes, foreign owner/tenant/project, stale revision/generation/fence and marker forgery. Independent E should also exercise real SQL against ephemeral PG before PASS.

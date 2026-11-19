@@ -56,6 +56,21 @@ class N4OnlyPilotScope:
 
     @classmethod
     def from_environment(cls) -> N4OnlyPilotScope:
+        """Execution policy: expiration disables POST and all new reservations."""
+        return cls._load_environment(require_unexpired=True)
+
+    @classmethod
+    def from_environment_for_read(cls) -> N4OnlyPilotScope:
+        """Read-only authority: retain historical QA after execution expiry.
+
+        The server environment, owner, tenant, revision and signed marker must
+        still match. This method MUST NOT be used by a task, POST or runner.
+        Removing the server-side policy remains an explicit read revocation.
+        """
+        return cls._load_environment(require_unexpired=False)
+
+    @classmethod
+    def _load_environment(cls, *, require_unexpired: bool) -> N4OnlyPilotScope:
         raw = os.getenv("C2PRO_N4_ONLY_APPROVED_SCOPE")
         if not raw:
             raise N4OnlyPilotDenied("N4-only scope not provisioned")
@@ -88,7 +103,7 @@ class N4OnlyPilotScope:
         if (
             not _SHA.fullmatch(scope.source_sha256)
             or scope.expires_at.tzinfo is None
-            or scope.expires_at <= datetime.now(UTC)
+            or (require_unexpired and scope.expires_at <= datetime.now(UTC))
             or scope.predecessor_generation < 1
             or scope.predecessor_fence < 1
             or scope.expected_windows != 23
@@ -143,4 +158,37 @@ def require_marked_pilot(
         or marker.get("state") not in ("QUEUED", "PROPOSED_N12_UNASSESSED", "NO_FINDINGS_UNASSESSED")
     ):
         raise N4OnlyPilotDenied("N4-only marker is incomplete or changed")
+    return scope
+
+
+def require_readable_pilot(
+    marker: object, *, tenant_id: object, project_id: object,
+    document_id: object, revision_id: object, generation: int,
+    user_id: object,
+) -> N4OnlyPilotScope:
+    """Authorize reading EXISTING N4 ledger records, never executing N4.
+
+    The execution window may expire, but no scope is broadened: this requires
+    the exact server-issued, DB-persisted marker, approved user and UAT identity.
+    It has no provider, reservation, retry or task-dispatch capabilities.
+    """
+    if not isinstance(marker, dict):
+        raise N4OnlyPilotDenied("N4-only read marker missing")
+    scope = N4OnlyPilotScope.from_environment_for_read()
+    scope.check_target(
+        tenant_id=tenant_id, project_id=project_id, document_id=document_id,
+        revision_id=revision_id, generation=generation,
+        scope_digest=str(marker.get("scope_digest") or ""),
+        user_id=user_id,
+    )
+    if (
+        marker.get("revision_id") != str(scope.revision_id)
+        or marker.get("source_sha256") != scope.source_sha256
+        or marker.get("generation") != scope.next_generation
+        or marker.get("state") not in (
+            "QUEUED", "PROPOSED_N12_UNASSESSED",
+            "NO_FINDINGS_UNASSESSED", "PARTIAL_UNASSESSED",
+        )
+    ):
+        raise N4OnlyPilotDenied("N4-only read marker is incomplete or changed")
     return scope

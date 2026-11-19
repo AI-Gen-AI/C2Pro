@@ -1461,7 +1461,7 @@ async def read_n4_only_pilot_findings(
     """Owner-scoped read-only output, independent of automatic HITL creation."""
     from src.analysis.application.n4_only_pilot_policy import (
         N4OnlyPilotDenied,
-        require_marked_pilot,
+        require_readable_pilot,
     )
 
     doc = await repo.get_by_id(tenant_id, document_id)
@@ -1469,17 +1469,15 @@ async def read_n4_only_pilot_findings(
         raise HTTPException(status_code=404, detail="document unavailable")
     marker = (doc.document_metadata or {}).get("n4_only_pilot")
     try:
-        scope = require_marked_pilot(
+        scope = require_readable_pilot(
             marker, tenant_id=tenant_id, project_id=project_id,
             document_id=document_id,
             revision_id=marker.get("revision_id") if isinstance(marker, dict) else None,
             generation=marker.get("generation") if isinstance(marker, dict) else -1,
+            user_id=user_id,
         )
-        scope.check_target(
-            tenant_id=tenant_id, project_id=project_id, document_id=document_id,
-            revision_id=scope.revision_id, generation=scope.next_generation,
-            scope_digest=scope.digest, user_id=user_id,
-        )
+        if (doc.document_metadata or {}).get("parsed_text_revision_id") != str(scope.revision_id):
+            raise N4OnlyPilotDenied("N4 pilot document revision has been superseded")
     except N4OnlyPilotDenied as exc:
         raise HTTPException(status_code=404, detail="pilot findings unavailable") from exc
 
@@ -1488,22 +1486,44 @@ async def read_n4_only_pilot_findings(
     run = (await repo.session.execute(text("""
         SELECT r.run_id, r.status, r.fencing_token, r.total_windows
           FROM public.n4_extraction_runs r
+          JOIN public.document_processing_operations op
+            ON op.tenant_id = r.tenant_id
+           AND op.document_id = r.document_id
+           AND op.revision_id = r.document_revision_id
+           AND op.generation = r.generation
+           AND op.fencing_token = r.fencing_token
          WHERE r.tenant_id = CAST(:tenant AS uuid)
            AND r.project_id = CAST(:project AS uuid)
            AND r.document_id = CAST(:document AS uuid)
            AND r.document_revision_id = CAST(:revision AS uuid)
+           AND r.source_sha256 = :source_sha
            AND r.generation = :generation
+           AND r.fencing_token > :predecessor_fence
+           AND EXISTS (
+               SELECT 1 FROM public.document_revisions dr
+                WHERE dr.document_id = r.document_id
+                  AND dr.tenant_id = r.tenant_id
+                  AND dr.revision_id = r.document_revision_id
+                  AND dr.valid_to IS NULL
+           )
          ORDER BY r.created_at DESC LIMIT 1
     """), {
         "tenant": str(tenant_id), "project": str(project_id),
         "document": str(document_id), "revision": str(scope.revision_id),
         "generation": scope.next_generation,
+        "source_sha": scope.source_sha256,
+        "predecessor_fence": scope.predecessor_fence,
     })).mappings().one_or_none()
     if run is None:
-        return {
-            "status": "NOT_RUN", "findings": [], "total_findings": 0,
-            "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
-        }
+        # Queued without a persisted run is possible. PARTIAL without one
+        # could be a crash before any window was booked; don't imply
+        # COMPLETED and don't open a retry or create any review.
+        if marker["state"] == "QUEUED":
+            return {
+                "status": "NOT_RUN", "findings": [], "total_findings": 0,
+                "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
+            }
+        raise HTTPException(status_code=404, detail="pilot run unavailable or superseded")
     count = (await repo.session.execute(text("""
         SELECT count(*) FROM public.n4_candidate_findings
          WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
@@ -1540,7 +1560,12 @@ async def read_n4_only_pilot_findings(
             "review_state": "PROPOSED",
         })
     return {
-        "status": str(run["status"]),
+        "status": (
+            "PARTIAL_UNASSESSED" if marker["state"] == "PARTIAL_UNASSESSED"
+            else str(run["status"])
+        ),
+        "pilot_status": marker["state"],
+        "ledger_status": str(run["status"]),
         "run_id": str(run["run_id"]),
         "document_revision_id": str(scope.revision_id),
         "generation": scope.next_generation,
