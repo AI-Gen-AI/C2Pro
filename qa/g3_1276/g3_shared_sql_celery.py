@@ -9,6 +9,8 @@ import asyncio
 import hashlib
 import json
 import os
+import stat
+from urllib.parse import urlparse
 from contextlib import ExitStack
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -40,15 +42,28 @@ from tests.integration.analysis.test_n4_incremental_store_pg import (
 )
 from tests.integration.analysis.test_n4_window_runner_pg import StubProvider
 
+# SECURITY: reject shared databases and world-writable / symlinked cluster roots.
+# The bootstrap owns a private 0700 directory, independently of other services.
 DSN = os.environ["C2PRO_N4_SCRATCH_DSN"]
-assert "c2pro_g3_1276_test" in DSN, "G3 disposable DB name required"
-assert (
-    os.environ.get("PG_CLUSTER_CONF_ROOT", "").startswith("/tmp/pg_virtualenv.")
-    or (
-        os.environ.get("C2PRO_G3_EPHEMERAL_PG_DIR", "").startswith("/tmp/c2pro-g4-pg.")
-        and os.path.isdir(os.environ["C2PRO_G3_EPHEMERAL_PG_DIR"] + "/data")
-    )
-), "STOP: no verified disposable local PG setup"
+parsed_dsn = urlparse(DSN)
+private_parent = Path.home() / ".cache" / "ai-gen-qa-g4"
+ephemeral_dir = Path(os.environ["C2PRO_G3_EPHEMERAL_PG_DIR"])
+if (
+    parsed_dsn.hostname != "127.0.0.1"
+    or parsed_dsn.path != "/c2pro_g3_1276_test"
+    or ephemeral_dir.name.startswith("c2pro-g4-pg.") is False
+    or ephemeral_dir.parent != private_parent
+    or os.environ.get("PGHOST") != "127.0.0.1"
+):
+    raise RuntimeError("STOP: unapproved database or ephemeral root")
+for private_dir in (private_parent, ephemeral_dir, ephemeral_dir / "data"):
+    metadata = private_dir.lstat()
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise RuntimeError("STOP: cluster directory is not private to QA user")
 PG = DSN.replace("postgresql://", "postgresql+asyncpg://", 1)
 EVENTS: list[str] = []
 PROVIDER = StubProvider()
