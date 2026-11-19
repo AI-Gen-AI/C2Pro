@@ -350,7 +350,7 @@ async def run_g3():
     EVENTS.append("REDELIVERED_POST_NO_REEXECUTION_PASS")
 
     print("G3_EVENTS_JSON="+json.dumps(EVENTS,sort_keys=True),flush=True)
-    print("G3_CORE_PATH_STATUS=PASS_LIMITED; NO_REAL_CLERK_BROKER_PARSER_RLS",flush=True)
+    print("G3_CORE_PATH_STATUS=PASS_LIMITED; REAL_LOCAL_RLS_PASS; CLERK_BROKER_PARSER_MOCKED",flush=True)
     await engine.dispose()
 
 if __name__ == "__main__":
