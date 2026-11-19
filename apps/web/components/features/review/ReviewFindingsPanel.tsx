@@ -110,8 +110,15 @@ function sourceComparisonIdentity(
     finding.finding_id, finding.source_item_id,
   ];
   const numbers = [view.artifact_version, view.generation, view.fencing_token, finding.ordinal];
+  // Match backend UUID fields and lowercase SHA-256 digest without constraining Clerk IDs.
+  // Backend UUID accepts canonical hyphenated and compact 32-hex forms, any UUID version.
+  const uuidPattern = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})$/i;
+  const artifactUuidValid = typeof view.artifact_id === "string" && uuidPattern.test(view.artifact_id);
+  const documentRevisionUuidValid = typeof view.document_revision_id === "string" && uuidPattern.test(view.document_revision_id);
+  const artifactHashValid = typeof view.artifact_hash === "string" && /^[0-9a-f]{64}$/.test(view.artifact_hash);
   if (
     ids.some((id) => typeof id !== "string" || !id.trim()) ||
+    !artifactUuidValid || !documentRevisionUuidValid || !artifactHashValid ||
     numbers.some((value) => typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) ||
     view.artifact_version < 1 ||
     view.review_row_id !== scope.reviewRowId
