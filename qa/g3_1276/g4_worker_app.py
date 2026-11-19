@@ -49,7 +49,7 @@ assert os.environ.get("G4_ALLOW_BILLABLE") is None
 app.conf.update(
     broker_url=BROKER, result_backend=os.environ["CELERY_RESULT_BACKEND_URL"],
     task_always_eager=False, worker_prefetch_multiplier=1,
-    broker_transport_options={"socket_connect_timeout": 1, "socket_timeout": 4},
+    broker_transport_options={"socket_connect_timeout": 1, "socket_timeout": 4, "visibility_timeout": 8},
     task_default_queue="document_parsing", beat_schedule={},
 )
 PROVIDER = StubProvider()
