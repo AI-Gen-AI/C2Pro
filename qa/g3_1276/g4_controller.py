@@ -13,6 +13,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlsplit
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
@@ -32,8 +33,14 @@ from tests.integration.analysis.test_n4_incremental_store_pg import (
 )
 
 ROOT = Path(os.environ["G4_RUN_DIR"])
+WORKER_EVENTS_FILENAME = "worker_events.jsonl"
 DSN = os.environ["DATABASE_URL"]
-assert DSN.startswith("postgresql://aigenadmin:@127.0.0.1:") and DSN.endswith("/c2pro_g3_1276_test")
+dsn_parts = urlsplit(DSN)
+assert (
+    dsn_parts.scheme == "postgresql" and dsn_parts.hostname == "127.0.0.1"
+    and dsn_parts.username == "aigenadmin" and bool(dsn_parts.password)
+    and dsn_parts.path == "/c2pro_g3_1276_test"
+), "STOP: G4 requires privately authenticated loopback PostgreSQL"
 BROKER = os.environ["CELERY_BROKER_URL"]
 assert BROKER.startswith("redis://127.0.0.1:") and BROKER.endswith("/14")
 celery_app.conf.update(
@@ -109,10 +116,11 @@ async def seed_and_post():
     # Synthetic environmental marker values only, no access to Railway or UAT.
     os.environ.update(approved)
     assert N4OnlyPilotScope.from_environment().next_generation == 3
-    ctx = dict(
-        tenant_id=str(T), document_id=str(D), revision_id=str(R),
-        project_id=str(P), owner_id=str(OWNER), text=source, scope_env=approved,
-    )
+    ctx = {
+        "tenant_id": str(T), "document_id": str(D), "revision_id": str(R),
+        "project_id": str(P), "owner_id": str(OWNER), "text": source,
+        "scope_env": approved,
+    }
     (ROOT / "context.json").write_text(json.dumps(ctx))
     db = await asyncpg.connect(DSN)
     try:
@@ -226,14 +234,13 @@ async def recover():
 async def verify():
     ctx = load_context()
     T, D, P, OWNER = (UUID(ctx[key]) for key in ("tenant_id", "document_id", "project_id", "owner_id"))
-    events_path = ROOT / "worker_events.jsonl"
-    import time
+    events_path = ROOT / WORKER_EVENTS_FILENAME
     for _ in range(150):
         if events_path.exists():
             lines = [json.loads(line) for line in events_path.read_text().splitlines() if line]
             if any(e["event"] == "N4_COMPLETED_REAL_WORKER" for e in lines):
                 break
-        time.sleep(0.4)
+        await asyncio.sleep(0.4)
     else:
         raise AssertionError("real worker did not complete N4 before deadline")
     all_events = [json.loads(line) for line in events_path.read_text().splitlines() if line]
@@ -246,7 +253,7 @@ async def verify():
     assert any(e["event"] == "N4_COMPLETED_REAL_WORKER" and e["provider_calls"] == 23 for e in all_events)
     worker_pids = {e["pid"] for e in all_events}
     assert os.getpid() not in worker_pids and len(worker_pids) == 1
-    event("REAL_WORKER_SEPARATE_PROCESS_VERIFIED", worker_pid=list(worker_pids)[0])
+    event("REAL_WORKER_SEPARATE_PROCESS_VERIFIED", worker_pid=next(iter(worker_pids)))
     engine, sessions = factory()
     try:
         async with sessions() as session:
@@ -285,6 +292,45 @@ async def verify():
                 assert exc.status_code in (403, 404)
                 await session.rollback()
                 event("OWNER_MOCK_DENIED")
+        async with sessions() as session:
+            try:
+                await router_mod.read_n4_only_pilot_findings(
+                    project_id=P, document_id=D, tenant_id=uuid4(), user_id=OWNER,
+                    repo=SqlAlchemyDocumentRepository(session), offset=0, limit=25,
+                )
+                raise AssertionError("cross tenant allowed")
+            except HTTPException as exc:
+                assert exc.status_code in (403, 404)
+                await session.rollback()
+                event("TENANT_MOCK_DENIED")
+        # PostgreSQL's actual FORCE RLS, as a non-owner NOLOGIN/non-BYPASSRLS role.
+        db = await asyncpg.connect(DSN)
+        try:
+            await db.execute("CREATE ROLE c2pro_g4_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS")
+            await db.execute("GRANT USAGE ON SCHEMA public TO c2pro_g4_reader")
+            await db.execute("""
+                GRANT SELECT ON public.tenants, public.documents,
+                    public.n4_extraction_runs, public.n4_usage_reservations
+                TO c2pro_g4_reader
+            """)
+            policies = await db.fetch("""
+                SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class
+                WHERE relname IN ('documents','n4_extraction_runs','n4_usage_reservations')
+            """)
+            assert len(policies) == 3 and all(x["relrowsecurity"] and x["relforcerowsecurity"] for x in policies)
+            await db.execute("SET ROLE c2pro_g4_reader")
+            assert await db.fetchval("SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user") is False
+            await db.execute("SELECT set_config('app.current_tenant','',false)")
+            assert await db.fetchval("SELECT count(*) FROM public.documents") == 0
+            await db.execute("SELECT set_config('app.current_tenant',$1,false)", str(T))
+            assert await db.fetchval("SELECT count(*) FROM public.documents WHERE tenant_id=$1", T) == 1
+            assert await db.fetchval("SELECT count(*) FROM public.n4_usage_reservations WHERE tenant_id=$1", T) == 23
+            await db.execute("SELECT set_config('app.current_tenant',$1,false)", str(uuid4()))
+            assert await db.fetchval("SELECT count(*) FROM public.documents") == 0
+            await db.execute("RESET ROLE")
+            event("RESTRICTED_ROLE_RLS_TENANT_ISOLATION_PASS")
+        finally:
+            await db.close()
     finally:
         await engine.dispose()
 
@@ -292,7 +338,7 @@ async def verify():
 async def crash_check():
     ctx = load_context()
     T, D, P, OWNER = (UUID(ctx[key]) for key in ("tenant_id", "document_id", "project_id", "owner_id"))
-    entries = [json.loads(s) for s in (ROOT / "worker_events.jsonl").read_text().splitlines() if s]
+    entries = [json.loads(s) for s in (ROOT / WORKER_EVENTS_FILENAME).read_text().splitlines() if s]
     assert any(x["event"] == "G4_ADOPT_COMMITTED_WORKER_HOLD" for x in entries)
     assert not any(x["event"] in ("N4_23_SETTLED", "FORBIDDEN_SIDE_EFFECT") for x in entries)
     db = await asyncpg.connect(DSN)
@@ -329,8 +375,7 @@ async def crash_check():
 async def crash_redelivery():
     ctx = load_context()
     T, D = (UUID(ctx[key]) for key in ("tenant_id", "document_id"))
-    path = ROOT / "worker_events.jsonl"
-    import time
+    path = ROOT / WORKER_EVENTS_FILENAME
     first = [json.loads(s) for s in path.read_text().splitlines() if s]
     original_pids = {x["pid"] for x in first if x["event"] == "CELERY_WORKER_ADOPT_ONCE"}
     assert len(original_pids) == 1
@@ -338,7 +383,7 @@ async def crash_redelivery():
         current = [json.loads(s) for s in path.read_text().splitlines() if s]
         if any(x["event"] == "DUPLICATE_ADOPT_DENIED" and x["pid"] not in original_pids for x in current):
             break
-        time.sleep(0.3)
+        await asyncio.sleep(0.3)
     else:
         raise AssertionError("no actual duplicate broker message reached the restarted worker")
     assert not any(x["event"] in ("N4_23_SETTLED", "FORBIDDEN_SIDE_EFFECT") for x in current)
