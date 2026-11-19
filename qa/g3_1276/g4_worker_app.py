@@ -11,6 +11,7 @@ import os
 from contextlib import ExitStack
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlsplit
 from unittest.mock import patch
 from uuid import UUID
 
@@ -44,7 +45,13 @@ from tests.integration.analysis.test_n4_window_runner_pg import StubProvider
 
 DB_URL = os.environ["DATABASE_URL"].replace("postgresql://", "postgresql+asyncpg://", 1)
 BROKER = os.environ["CELERY_BROKER_URL"]
-assert BROKER.startswith("redis://127.0.0.1:") and DB_URL.startswith("postgresql+asyncpg://aigenadmin:@127.0.0.1:")
+parts = urlsplit(os.environ["DATABASE_URL"])
+assert (
+    parts.scheme == "postgresql" and parts.hostname == "127.0.0.1"
+    and parts.username == "aigenadmin" and bool(parts.password)
+    and parts.path == "/c2pro_g3_1276_test"
+), "STOP: worker PostgreSQL must require a password on loopback"
+assert BROKER.startswith("redis://127.0.0.1:") and BROKER.endswith("/14")
 assert os.environ.get("G4_ALLOW_BILLABLE") is None
 app.conf.update(
     broker_url=BROKER, result_backend=os.environ["CELERY_RESULT_BACKEND_URL"],
