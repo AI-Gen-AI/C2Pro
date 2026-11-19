@@ -1252,6 +1252,14 @@ async def reprocess_document_endpoint(
         )
     if is_analysis_excluded(document.document_type):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=WBS_ANALYSIS_EXCLUDED_DETAIL)
+    # A pilot-marked document cannot be sent through a normal retry that
+    # would re-enable the N4 -> N12 route. Only CORE's pinned pilot
+    # endpoint (new generation, new authority) may operate on it.
+    if isinstance((document.document_metadata or {}).get("n4_only_pilot"), dict):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="N4-only pilot is restricted to its approved operation",
+        )
 
     expected_authority = (
         expected_revision_id,
@@ -1333,6 +1341,338 @@ async def reprocess_document_endpoint(
         else "Document reprocessing has been queued."
     )
     return DocumentQueuedResponse(**response_data)
+
+
+@router.post(
+    "/projects/{project_id}/documents/{document_id}/n4-only-pilot/reprocess",
+    response_model=DocumentQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Explicit scoped N4-only research pilot (no N12, HITL, or TRUSTED)",
+)
+async def reprocess_n4_only_pilot_endpoint(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> DocumentQueuedResponse:
+    """Use the official fenced generation/reprocess machinery, NEVER a SQL reset.
+
+    Disabled unless an expiring one-document, one-owner, one-revision UAT scope
+    was provisioned separately by CORE. This endpoint cannot enable arbitrary
+    N4-only mode for any other contract.
+    """
+    from src.analysis.application.n4_only_pilot_policy import (
+        N4OnlyPilotDenied,
+        N4OnlyPilotScope,
+        pilot_marker,
+    )
+
+    try:
+        scope = N4OnlyPilotScope.from_environment()
+        scope.check_target(
+            tenant_id=tenant_id, project_id=project_id, document_id=document_id,
+            revision_id=scope.revision_id, generation=scope.next_generation,
+            scope_digest=scope.digest, user_id=user_id,
+        )
+    except N4OnlyPilotDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="N4-only pilot not authorized") from exc
+
+    document = await repo.get_by_id(tenant_id, document_id)
+    if (
+        document is None or document.project_id != project_id
+        or document.upload_status != DocumentStatus.ERROR
+        or document.document_type != DocumentType.CONTRACT
+        or (document.document_metadata or {}).get("parsed_text_revision_id") != str(scope.revision_id)
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="N4-only pilot source is not the pinned retryable contract")
+
+    # Row locks and exact expected lineage prevent racing with an upload,
+    # another reprocess, or a recovery worker; no metadata write can commit
+    # until the generation CAS succeeds.
+    op = (await repo.session.execute(text("""
+        SELECT revision_id, generation, stage, phase, outcome, fencing_token
+          FROM public.document_processing_operations
+         WHERE tenant_id = CAST(:tenant AS uuid) AND document_id = CAST(:document AS uuid)
+         FOR UPDATE
+    """), {"tenant": str(tenant_id), "document": str(document_id)})).mappings().one_or_none()
+    if not op or (
+        str(op["revision_id"]) != str(scope.revision_id)
+        or op["generation"] != scope.predecessor_generation
+        or op["fencing_token"] != scope.predecessor_fence
+        or str(op["stage"]) != "ANALYSIS"
+        or str(op["phase"]) != "FAILED"
+        or str(op["outcome"]) != "fail_retryable"
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="N4-only pilot processing authority has changed")
+
+    metadata = dict(document.document_metadata or {})
+    metadata["n4_only_pilot"] = pilot_marker(scope)
+    await repo.update_metadata(tenant_id, document_id, metadata)
+    await repo.update_status(tenant_id, document_id, DocumentStatus.UPLOADED, parsing_error=None)
+    try:
+        generation = await repo.begin_processing_generation(
+            tenant_id, document_id,
+            expected_revision_id=scope.revision_id,
+            expected_generation=scope.predecessor_generation,
+            expected_stage="ANALYSIS",
+            expected_phase="FAILED",
+            expected_outcome="fail_retryable",
+        )
+    except ProcessingAuthorityLost as exc:
+        await repo.session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="N4-only pilot retry lost the generation CAS") from exc
+    if generation != scope.next_generation:
+        await repo.session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="N4-only pilot unexpected new generation")
+    await repo.commit()
+    await repo.refresh(document)
+    payload = DocumentResponse.model_validate(document).model_dump()
+    payload["task_id"] = _enqueue_document_processing(
+        document_id, revision_id=scope.revision_id, generation=generation
+    )
+    payload["processing_status"] = DocumentPollingStatus.QUEUED
+    payload["status_detail"] = (
+        "N4-only pilot ingestion queued; N12/approval will not run."
+        if payload["task_id"] else
+        "N4-only pilot generation reserved, but worker enqueue unavailable; manual recovery needed."
+    )
+    return DocumentQueuedResponse(**payload)
+
+
+@router.post(
+    "/projects/{project_id}/documents/{document_id}/n4-only-pilot/recover-enqueue",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Manual recovery of a stranded N4-only enqueue, under a new fenced claim",
+)
+async def recover_n4_only_enqueue_endpoint(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> dict[str, object]:
+    """Recover COMMITTED CAS -> NO broker ack without resetting the generation.
+
+    Only a separately enabled, server-authorized owner can claim a queued
+    INGESTION attempt that has never reached N4. No auto-retry, no provider,
+    no generic recovery and NO N12. Failed dispatch retains the CLAIMED
+    DB-clock lease, so the next manual claim cannot duplicate a live worker.
+    """
+    from src.documents.application.n4_only_enqueue_recovery import (
+        N4OnlyEnqueueRecoveryDenied,
+        claim_stranded_n4_enqueue,
+    )
+
+    try:
+        claimed = await claim_stranded_n4_enqueue(
+            repo=repo, tenant_id=tenant_id, project_id=project_id,
+            document_id=document_id, user_id=user_id,
+        )
+        # The CLAIMED authority and audit event must be durable before any
+        # broker interaction. If this commit fails, no task is sent.
+        await repo.commit()
+    except N4OnlyEnqueueRecoveryDenied as exc:
+        await repo.session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="N4-only enqueue recovery denied; verify owner, fence and receipts",
+        ) from exc
+
+    # Exact authority handshake; duplicate messages cannot both adopt it.
+    # Reuse the original INGESTION task; the existing trigger selects the
+    # N4-only ANALYSIS task from the server-persisted marker.
+    task_id: str | None = None
+    try:
+        from src.core.tasks.ingestion_tasks import process_document_async
+
+        task = process_document_async.apply_async(
+            kwargs={
+                "document_id": str(document_id),
+                "revision_id": str(claimed.revision_id),
+                "generation": claimed.generation,
+                "authority": claimed.authority.to_message(),
+            },
+            task_id=f"n4-pilot-recovery-{claimed.authority.attempt_id}",
+        )
+        task_id = getattr(task, "id", None)
+    except Exception:
+        # An exception can mean broker rejection OR lost acknowledgement.
+        # Never roll back the committed grant and never enqueue a second
+        # task now. Wait for DB lease expiry and a *new* owner command.
+        logger.exception(
+            "n4_only_recovery_broker_ack_unknown",
+            document_id=str(document_id),
+            generation=claimed.generation,
+            fencing_token=claimed.authority.fencing_token,
+            attempt_id=str(claimed.authority.attempt_id),
+        )
+
+    if task_id is None:
+        logger.warning(
+            "n4_only_recovery_claimed_but_not_confirmed",
+            document_id=str(document_id),
+            generation=claimed.generation,
+            fencing_token=claimed.authority.fencing_token,
+        )
+    else:
+        logger.info(
+            "n4_only_recovery_enqueued",
+            document_id=str(document_id),
+            generation=claimed.generation,
+            fencing_token=claimed.authority.fencing_token,
+            task_id=task_id,
+        )
+    return {
+        "status": "ENQUEUED" if task_id else "BROKER_ACK_UNKNOWN_STOP",
+        "task_id": task_id,
+        "document_revision_id": str(claimed.revision_id),
+        "generation": claimed.generation,
+        "fencing_token": claimed.authority.fencing_token,
+        "n4_billable_in_this_request": False,
+        "n12_status": "UNASSESSED",
+        "retry_policy": "MANUAL_AFTER_LEASE_AND_RECEIPT_PREFLIGHT_ONLY",
+    }
+
+
+@router.get(
+    "/projects/{project_id}/documents/{document_id}/n4-only-pilot/findings",
+    summary="Read the authorized N4 pilot ledger; N2 citations are NOT PDF-verified",
+)
+async def read_n4_only_pilot_findings(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,
+    tenant_id: CurrentTenantId,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> dict[str, object]:
+    """Owner-scoped read-only output, independent of automatic HITL creation."""
+    from src.analysis.application.n4_only_pilot_policy import (
+        N4OnlyPilotDenied,
+        require_readable_pilot,
+    )
+
+    doc = await repo.get_by_id(tenant_id, document_id)
+    if doc is None or doc.project_id != project_id:
+        raise HTTPException(status_code=404, detail="document unavailable")
+    marker = (doc.document_metadata or {}).get("n4_only_pilot")
+    try:
+        scope = require_readable_pilot(
+            marker, tenant_id=tenant_id, project_id=project_id,
+            document_id=document_id,
+            revision_id=marker.get("revision_id") if isinstance(marker, dict) else None,
+            generation=marker.get("generation") if isinstance(marker, dict) else -1,
+            user_id=user_id,
+        )
+        if (doc.document_metadata or {}).get("parsed_text_revision_id") != str(scope.revision_id):
+            raise N4OnlyPilotDenied("N4 pilot document revision has been superseded")
+    except N4OnlyPilotDenied as exc:
+        raise HTTPException(status_code=404, detail="pilot findings unavailable") from exc
+
+    # The trusted DB metadata, not an unvalidated query parameter, chooses
+    # the exact tenant/doc/revision/generation. No writes or approval endpoint.
+    run = (await repo.session.execute(text("""
+        SELECT r.run_id, r.status, r.fencing_token, r.total_windows
+          FROM public.n4_extraction_runs r
+          JOIN public.document_processing_operations op
+            ON op.tenant_id = r.tenant_id
+           AND op.document_id = r.document_id
+           AND op.revision_id = r.document_revision_id
+           AND op.generation = r.generation
+           AND op.fencing_token = r.fencing_token
+         WHERE r.tenant_id = CAST(:tenant AS uuid)
+           AND r.project_id = CAST(:project AS uuid)
+           AND r.document_id = CAST(:document AS uuid)
+           AND r.document_revision_id = CAST(:revision AS uuid)
+           AND r.source_sha256 = :source_sha
+           AND r.generation = :generation
+           AND r.fencing_token > :predecessor_fence
+           AND EXISTS (
+               SELECT 1 FROM public.document_revisions dr
+                WHERE dr.document_id = r.document_id
+                  AND dr.tenant_id = r.tenant_id
+                  AND dr.revision_id = r.document_revision_id
+                  AND dr.valid_to IS NULL
+           )
+         ORDER BY r.created_at DESC LIMIT 1
+    """), {
+        "tenant": str(tenant_id), "project": str(project_id),
+        "document": str(document_id), "revision": str(scope.revision_id),
+        "generation": scope.next_generation,
+        "source_sha": scope.source_sha256,
+        "predecessor_fence": scope.predecessor_fence,
+    })).mappings().one_or_none()
+    if run is None:
+        # Queued without a persisted run is possible. PARTIAL without one
+        # could be a crash before any window was booked; don't imply
+        # COMPLETED and don't open a retry or create any review.
+        if marker["state"] == "QUEUED":
+            return {
+                "status": "NOT_RUN", "findings": [], "total_findings": 0,
+                "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
+            }
+        raise HTTPException(status_code=404, detail="pilot run unavailable or superseded")
+    count = (await repo.session.execute(text("""
+        SELECT count(*) FROM public.n4_candidate_findings
+         WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+    """), {"tenant": str(tenant_id), "run": str(run["run_id"])})).scalar_one()
+    rows = (await repo.session.execute(text("""
+        SELECT f.finding_key, f.window_ordinal, f.claim, f.source_refs
+          FROM public.n4_candidate_findings f
+         WHERE f.tenant_id = CAST(:tenant AS uuid)
+           AND f.run_id = CAST(:run AS uuid)
+         ORDER BY f.window_ordinal, f.finding_key
+         LIMIT :limit OFFSET :offset
+    """), {
+        "tenant": str(tenant_id), "run": str(run["run_id"]),
+        "limit": limit, "offset": offset,
+    })).mappings().all()
+    items: list[dict[str, object]] = []
+    for row in rows:
+        claim = row["claim"] if isinstance(row["claim"], dict) else {}
+        refs = row["source_refs"] if isinstance(row["source_refs"], list) else []
+        exact = any(
+            isinstance(ref, dict)
+            and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
+            and ref.get("evidence_status") == "EXACT_MODEL_SAFE_MATCH"
+            and isinstance(ref.get("analysis_span"), list)
+            for ref in refs
+        )
+        items.append({
+            "finding_key": row["finding_key"],
+            "window_ordinal": row["window_ordinal"],
+            "claim": claim,
+            "n2_source_refs": refs,
+            "n2_quote_status": "VERIFIED_IN_N2" if exact else "UNVERIFIED_IN_N2",
+            "pdf_quote_status": "UNVERIFIED",
+            "review_state": "PROPOSED",
+        })
+    return {
+        "status": (
+            "PARTIAL_UNASSESSED" if marker["state"] == "PARTIAL_UNASSESSED"
+            else str(run["status"])
+        ),
+        "pilot_status": marker["state"],
+        "ledger_status": str(run["status"]),
+        "run_id": str(run["run_id"]),
+        "document_revision_id": str(scope.revision_id),
+        "generation": scope.next_generation,
+        "fencing_token": int(run["fencing_token"]),
+        "total_windows": int(run["total_windows"]),
+        "total_findings": count,
+        "offset": offset, "limit": limit,
+        "findings": items,
+        "n12_status": "UNASSESSED",
+        "original_pdf_coverage": "UNVERIFIED",
+        "trusted": False,
+    }
 
 
 @router.post(

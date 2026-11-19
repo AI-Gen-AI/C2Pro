@@ -132,7 +132,8 @@ async def _locked_run(
 ) -> dict[str, Any]:
     row = (await session.execute(text("""
         SELECT run_id, tenant_id, project_id, document_id, document_revision_id,
-               generation, fencing_token, status, total_windows, budget_cap_usd
+               generation, fencing_token, status, total_windows, budget_cap_usd,
+               source_sha256
           FROM public.n4_extraction_runs
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND run_id = CAST(:run AS uuid)
@@ -375,6 +376,21 @@ async def _lock_budget_scopes(
     return rows
 
 
+# Reused in ephemeral-PG regression to verify the EXACT live reservation gate.
+_CROSS_GENERATION_RECEIPT_SQL = text("""
+    SELECT 1
+      FROM public.n4_usage_reservations prior
+      JOIN public.n4_extraction_runs previous
+        ON previous.tenant_id = prior.tenant_id AND previous.run_id = prior.run_id
+     WHERE previous.tenant_id = CAST(:tenant AS uuid)
+       AND previous.document_id = CAST(:document AS uuid)
+       AND previous.document_revision_id = CAST(:revision AS uuid)
+       AND previous.source_sha256 = :source_sha
+       AND previous.run_id <> CAST(:run AS uuid)
+       AND prior.status IN ('SETTLED', 'RESERVED', 'UNKNOWN')
+     LIMIT 1
+""")
+
 async def reserve_call(
     session: AsyncSession, *, authority: ProcessingAuthority,
     run_id: UUID, window_ordinal: int, idempotency_key: str,
@@ -448,6 +464,24 @@ async def reserve_call(
     if open_attempt:
         raise N4BudgetError(
             "window has unsettled or unknown provider cost; reconcile before retry"
+        )
+    # A run-local idempotency key contains run_id and cannot prevent a later
+    # generation from paying for the same source a second time. Before ANY
+    # reservation/bucket mutation, refuse a new run whenever an earlier run
+    # of this immutable document revision + N2 source has billable history.
+    # This conservative stop requires explicit reconciliation / reuse design,
+    # never silently drops a SETTLED, RESERVED, or UNKNOWN provider liability.
+    cross_generation = (await session.execute(_CROSS_GENERATION_RECEIPT_SQL, {
+        "tenant": _uuid(authority.tenant_id),
+        "document": _uuid(authority.document_id),
+        "revision": _uuid(authority.revision_id),
+        "source_sha": str(run["source_sha256"]),
+        "run": str(run_id),
+    })).scalar_one_or_none()
+    if cross_generation:
+        raise N4BudgetError(
+            "earlier generation has billable or unknown N4 usage; "
+            "reconcile before any new provider call"
         )
     if inherit_approved_scopes:
         await _inherit_missing_subscopes(

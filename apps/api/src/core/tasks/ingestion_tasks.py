@@ -1020,8 +1020,9 @@ async def _run_analysis_graph_best_effort(
     tenant_id: TenantId,
     document_id: UUID,
     source_revision: DocumentRevision | None = None,
+    n4_only_pilot: bool = False,
 ) -> dict[str, Any]:
-    """Run the N1-N17 enrichment graph and report its outcome.
+    """Run normal graph or the isolated N1-N2-N4 pilot.
 
     Best-effort by design: a graph failure must not block the document from being
     marked ANALYZED, since its structured extraction already succeeded during
@@ -1116,6 +1117,10 @@ async def _run_analysis_graph_best_effort(
         "document_revision_id": str(pinned_revision) if pinned_revision else None,
         "n12_source_attestation": attestation,
         "force_full_pipeline": True,
+        "n4_only_pilot": (
+            (getattr(document, "document_metadata", None) or {}).get("n4_only_pilot")
+            if n4_only_pilot else None
+        ),
     }
     # #758: take the existing review's lineage over the moment this attempt
     # becomes authoritative -- BEFORE the graph starts.
@@ -1132,24 +1137,37 @@ async def _run_analysis_graph_best_effort(
     # retryable, never proceed to present a review that resumes someone
     # else's checkpoint. The review is briefly unresumable until this
     # attempt's interrupt checkpoint exists, which is the intended state.
-    await claim_review_lineage_for_current_attempt(
-        thread_id=thread_id,
-        tenant_id=str(tenant_id),
-        document_id=str(document_id),
-    )
+    if not n4_only_pilot:
+        await claim_review_lineage_for_current_attempt(
+            thread_id=thread_id,
+            tenant_id=str(tenant_id),
+            document_id=str(document_id),
+        )
 
     logger.info(
         "document_analysis_task_started",
         extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
     )
     try:
+        if n4_only_pilot:
+            from src.analysis.application.n4_only_pilot import run_n4_only_pilot
+            result = await run_n4_only_pilot(initial_state)
+            return {
+                "analysis_id": None, "human_approval_required": False,
+                "n4_only_pilot_status": result["n4_only_pilot_status"],
+                "n4_pilot_run_id": result["n4_incremental_run_id"],
+            }
         result = await graph_orchestrator.run(initial_state, thread_id=thread_id)
     except Exception:
         logger.exception(
             "document_analysis_graph_failed_nonfatal",
             extra={"document_id": str(document_id), "tenant_id": str(tenant_id)},
         )
-        return {"analysis_id": None, "human_approval_required": False}
+        return {
+            "analysis_id": None, "human_approval_required": False,
+            **({"terminal_unassessed": True,
+                "n4_only_pilot_status": "PARTIAL_UNASSESSED"} if n4_only_pilot else {}),
+        }
     # A provider failure terminated the graph before N12 and the HITL gate.
     # A pre-existing analysis_id must not make the document appear ANALYZED.
     if result.get("workflow_terminated") is True:
@@ -1302,8 +1320,9 @@ async def _run_document_analysis(
     automatic_retry_available: bool = False,
     generation: int | None = None,
     authority: Mapping[str, Any] | None = None,
+    n4_only_pilot: bool = False,
 ) -> dict[str, Any]:
-    """Analyze a parsed document; the N1-N17 graph is a best-effort enrichment.
+    """Analyze a parsed document under its fenced processing grant.
 
     #711: runs only under the document's ANALYSIS authority. The authority is
     bound for the graph run, so every durable seam the graph reaches (HITL
@@ -1365,6 +1384,7 @@ async def _run_document_analysis(
                     orchestrator=orchestrator,
                     automatic_retry_available=automatic_retry_available,
                     grant=grant,
+                    n4_only_pilot=n4_only_pilot,
                 )
         except ProcessingAuthorityLost as lost:
             await session.rollback()
@@ -1417,6 +1437,7 @@ async def _analyze_owned(
     orchestrator: Any,
     automatic_retry_available: bool,
     grant: ProcessingAuthority,
+    n4_only_pilot: bool = False,
 ) -> tuple[dict[str, Any], bool, str]:
     parsed_text = (
         document.document_metadata.get("parsed_text") if document.document_metadata else None
@@ -1437,6 +1458,9 @@ async def _analyze_owned(
     human_approval_required = False
     graph_terminal_unassessed = False
     graph_blocker_code: str | None = None
+    n4_pilot_status: str | None = None
+    if n4_only_pilot and not requires_text_analysis(document.document_type, parsed_text):
+        raise ValueError("N4-only pilot requires an extractable text contract")
     if requires_text_analysis(document.document_type, parsed_text):
         # Repository read is tenant-scoped and bound to this processing grant.
         # Missing revision or mismatched identity yields NO coverage assertion.
@@ -1455,7 +1479,9 @@ async def _analyze_owned(
             tenant_id=tenant_id,
             document_id=document_id,
             source_revision=source_revision,
+            n4_only_pilot=n4_only_pilot,
         )
+        n4_pilot_status = graph_result.get("n4_only_pilot_status")
         analysis_id = graph_result["analysis_id"]
         human_approval_required = graph_result["human_approval_required"]
         graph_terminal_unassessed = bool(graph_result.get("terminal_unassessed"))
@@ -1493,7 +1519,8 @@ async def _analyze_owned(
     # sense. Auto-retrying it would re-run the whole graph, orphan the
     # pending review, and (pre-fix) mint a duplicate one.
     retry = (
-        should_retry_analysis(status=status, rag_outcome=rag_outcome)
+        not n4_only_pilot
+        and should_retry_analysis(status=status, rag_outcome=rag_outcome)
         and not human_approval_required
         and not graph_terminal_unassessed
     )
@@ -1505,13 +1532,25 @@ async def _analyze_owned(
     #   exhausted, or immediately for a non-retryable incomplete outcome
     #   such as MISCONFIGURED;
     # - HITL pauses are represented by durable review_items instead.
+    n4_pilot_complete = n4_pilot_status in (
+        "PROPOSED_N12_UNASSESSED", "NO_FINDINGS_UNASSESSED"
+    )
     terminal_incomplete = (
-        not completed
+        not completed and not n4_pilot_complete
         and not human_approval_required
         and (not retry or not automatic_retry_available)
     )
     current_metadata = dict(document.document_metadata or {})
     metadata_changed = False
+    if n4_only_pilot:
+        marker = current_metadata.get("n4_only_pilot")
+        if not isinstance(marker, dict) or not n4_pilot_status:
+            raise ValueError("N4-only source/status marker disappeared")
+        current_metadata["n4_only_pilot"] = {
+            **marker, "state": n4_pilot_status,
+            "n12_state": "UNASSESSED", "pdf_original_coverage": "UNVERIFIED",
+        }
+        metadata_changed = True
     if current_metadata.get("analysis_last_attempt_incomplete") != terminal_incomplete:
         if terminal_incomplete:
             current_metadata["analysis_last_attempt_incomplete"] = True
@@ -1535,9 +1574,10 @@ async def _analyze_owned(
     if metadata_changed:
         await repo.update_metadata(tenant_id, document_id, current_metadata)
     result_status = (
-        "waiting_for_review"
-        if human_approval_required
-        else ("completed" if completed else "incomplete")
+        "n4_pilot_proposed" if n4_pilot_complete else
+        "n4_pilot_partial" if n4_only_pilot else
+        "waiting_for_review" if human_approval_required else
+        "completed" if completed else "incomplete"
     )
     # #711: the terminal write commits only for the exact current owner. Only
     # a completed analysis closes the stage; an incomplete / paused one stays
@@ -1545,7 +1585,10 @@ async def _analyze_owned(
     await processing_authority.settle(
         session,
         grant,
-        phase=ProcessingPhase.COMPLETED if completed else ProcessingPhase.PENDING,
+        phase=(
+            ProcessingPhase.COMPLETED if completed or n4_pilot_complete
+            else ProcessingPhase.FAILED if n4_only_pilot else ProcessingPhase.PENDING
+        ),
         outcome=result_status,
     )
     await session.commit()
@@ -1591,6 +1634,8 @@ async def _analyze_owned(
         "document_status": status.value,
         "human_approval_required": human_approval_required,
         "will_retry": retry,
+        **({"n4_only_pilot_status": n4_pilot_status,
+            "n12_status": "UNASSESSED"} if n4_only_pilot else {}),
     }
     retry_error = (
         f"document {document_id} analysis incomplete "
@@ -1755,6 +1800,21 @@ async def _process(
             return {"status": "error", "message": "Project not found"}
         tenant_id = require_tenant_id(raw_tenant_id)
 
+        # G4: a redelivered ORIGINAL Celery message (no claimed authority)
+        # must not silently take over an expired N4-only RUNNING attempt.
+        # Once an INGESTION attempt has been adopted, only an explicit
+        # owner-authorized manual claim with an exact fenced authority may
+        # recover it. A stale task with authority is rejected by adopt().
+        from src.documents.application.n4_only_ingestion_effects_guard import (
+            manual_claim_required,
+        )
+
+        if manual_claim_required(document, authority):
+            return {
+                "status": "n4_only_manual_recovery_required",
+                "document_id": str(document_id),
+            }
+
         # ACK-loss redelivery after either durable seam is a no-op.
         if document.upload_status is DocumentStatus.ANALYZED:
             return {
@@ -1828,6 +1888,21 @@ async def _process(
                 extra={"document_id": str(document_id), "outcome": claim_outcome},
             )
             return {"status": claim_outcome, "document_id": str(document_id)}
+        # G4: the worker must prove that no side-effecting ingestion step
+        # started. The BEFORE_EFFECTS marker lands in the exact transaction
+        # that made this worker RUNNING; a crash after ADOPT but before entry
+        # into _ingest_owned therefore leaves a recoverable durable proof.
+        n4_only_marker_present = isinstance(
+            (document.document_metadata or {}).get("n4_only_pilot"), dict
+        )
+        if n4_only_marker_present:
+            from src.documents.application.n4_only_ingestion_effects_guard import (
+                record_before_ingestion_effects,
+            )
+
+            await record_before_ingestion_effects(
+                repo=repo, document=document, grant=grant
+            )
         await session.commit()
 
         heartbeat = asyncio.create_task(_document_processing_heartbeat_loop(authority=grant))
@@ -1835,6 +1910,17 @@ async def _process(
             if resolution_error is not None:
                 raise resolution_error
             with processing_authority.bound_authority(grant):
+                if n4_only_marker_present:
+                    from src.documents.application.n4_only_ingestion_effects_guard import (
+                        record_ingestion_effects_possible,
+                    )
+
+                    # This fenced commit is BEFORE R2 download, parser,
+                    # stakeholder staging, RAG embeddings, N1/N2 or N4.
+                    # If it fails, no ingestion side effects may begin.
+                    await record_ingestion_effects_possible(
+                        repo=repo, document=document, grant=grant
+                    )
                 return await _ingest_owned(
                     session=session,
                     repo=repo,
@@ -2329,6 +2415,7 @@ async def _run_document_analysis_task_lifecycle(
     automatic_retry_available: bool,
     generation: int | None = None,
     authority: Mapping[str, Any] | None = None,
+    n4_only_pilot: bool = False,
 ) -> dict[str, Any]:
     """Own every loop-bound analysis resource for one Celery task invocation.
 
@@ -2343,6 +2430,7 @@ async def _run_document_analysis_task_lifecycle(
             automatic_retry_available=automatic_retry_available,
             generation=generation,
             authority=authority,
+            n4_only_pilot=n4_only_pilot,
         )
     except AnalysisIncompleteRetryableError as error:
         primary_error = error
@@ -2403,6 +2491,32 @@ async def _run_document_analysis_task_lifecycle(
         raise
     finally:
         await _close_document_analysis_task_resources(primary_error=primary_error)
+
+
+@celery_app.task(
+    name="documents.analyze_document_n4_only_pilot",
+    bind=True,
+    task_track_started=True,
+    queue="document_parsing",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def process_document_n4_only_pilot_async(
+    self: Any, tenant_id: str, document_id: str,
+    generation: int | None = None, authority: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """No automatic retry/duplicate provider call after an unknown charge."""
+    if generation is None:
+        raise ValueError("N4-only pilot requires a pinned generation")
+    return asyncio.run(_run_document_analysis_task_lifecycle(
+        tenant_id=require_tenant_id(tenant_id),
+        document_id=UUID(document_id),
+        route_rag_unavailable_to_dlq=True,
+        automatic_retry_available=False,
+        generation=generation,
+        authority=_authority_for_delivery(self, authority),
+        n4_only_pilot=True,
+    ))
 
 
 @celery_app.task(
