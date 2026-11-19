@@ -5,7 +5,7 @@ set -euo pipefail
 umask 077
 [[ "$(id -un)" == aigenadmin ]] || { echo "STOP: wrong user"; exit 10; }
 G4_CASE="${1:-normal}"
-case "$G4_CASE" in barrier-before|barrier-after|barrier-after-embedding) ;; *) echo "STOP: G4 requires barrier-before / barrier-after / barrier-after-embedding"; exit 10 ;; esac
+case "$G4_CASE" in barrier-before|barrier-after|barrier-after-embedding|barrier-negative-matrix) ;; *) echo "STOP: G4 requires barrier-before / barrier-after / barrier-after-embedding"; exit 10 ;; esac
 PARENT="$HOME/.cache/ai-gen-qa-g4"
 [[ "$(stat -c %u "$PARENT")" == "$(id -u)" ]] || exit 10
 [[ "$(stat -c %a "$PARENT")" == 700 ]] || exit 10
@@ -109,6 +109,7 @@ grep '^G4_' "$R/recovery.log" || :
 
 # New B SHA916808 guard seam: kill immediately after exact DB COMMIT.
 KILL_AT="${G4_CASE#barrier-}"
+if [[ "$G4_CASE" == barrier-negative-matrix ]]; then KILL_AT=before; fi
 EXPECTED_MARKER=KILLPOINT_UNSAFE_BARRIER_DURABLY_COMMITTED
 if [[ "$KILL_AT" == "before" ]]; then EXPECTED_MARKER=KILLPOINT_BEFORE_EFFECTS_DURABLY_COMMITTED; fi
 G4_CRASH_HOLD_SECONDS=75 G4_KILLPOINT="$KILL_AT" "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
@@ -137,6 +138,13 @@ echo "SHA916_SIGKILL_AFTER_EXACT_DURABLE_MARKER_PID=$OLD_WORKER_PID KILLPOINT=$E
   echo "FAIL_DB_GUARD_SEQUENCE"; tail -80 "$R/barrier-check.log"; exit 17
 }
 grep '^G4_' "$R/barrier-check.log" || :
+if [[ "$G4_CASE" == barrier-negative-matrix ]]; then
+  "$PY" "$QA/g4_negative_matrix.py" > "$R/negative-matrix.log" 2>&1 || {
+    echo "FAIL_G4_NEGATIVE_MATRIX"; tail -90 "$R/negative-matrix.log"; exit 20
+  }
+  grep '^G4_' "$R/negative-matrix.log" || :
+  echo "G4_MIGRATED_PG_NEGATIVE_MATRIX=PASS"
+else
 "$PY" "$QA/g4_barrier_controller.py" expire-claim "$KILL_AT" > "$R/barrier-claim.log" 2>&1 || {
   echo "FAIL_DB_LEASE_OR_MANUAL_CLAIM"; tail -85 "$R/barrier-claim.log"; exit 18
 }
@@ -154,6 +162,8 @@ echo "SHA916_WORKER_RESTART_PID=$WORKER_PID"
 }
 grep '^G4_' "$R/barrier-verify.log" || :
 echo "G4_EXACT_BARRIER_SCENARIO_COMPLETED=$KILL_AT"
+
+fi
 
 # Actual Redis process outage after completed settlement; no new provider calls.
 kill -TERM "$REDIS_PID"
