@@ -39,7 +39,7 @@ cleanup() {
   if [[ -n "$WORKER_PID" ]]; then kill -TERM "$WORKER_PID" >/dev/null 2>&1 || :; wait "$WORKER_PID" >/dev/null 2>&1 || :; fi
   if [[ -n "$REDIS_PID" ]]; then kill -TERM "$REDIS_PID" >/dev/null 2>&1 || :; wait "$REDIS_PID" >/dev/null 2>&1 || :; fi
   if [[ -d "$R/data" ]]; then "$PG_BIN/pg_ctl" -D "$R/data" -m immediate -w stop >/dev/null 2>&1 || :; fi
-  for name in seed.log recovery.log verify.log crash-check.log crash-redelivery.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
+  for name in seed.log recovery.log verify.log crash-check.log crash-redelivery.log pg_negative.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
     [[ -f "$R/$name" ]] && cp -- "$R/$name" "$EVIDENCE/$name" || :
   done
   (
@@ -63,15 +63,20 @@ for _ in range(2):
 print(*ports)
 PY
 )
-"$PG_BIN/initdb" -D "$R/data" --username=aigenadmin --auth-local=trust --auth-host=trust --no-instructions > "$R/initdb.log" 2>&1
-export PGHOST=127.0.0.1 PGUSER=aigenadmin PGPASSWORD= PGPORT
+# PostgreSQL is loopback-only AND SCRAM-authenticated with per-run random password.
+"$PY" -c 'import secrets,sys; open(sys.argv[1], "w").write(secrets.token_urlsafe(48) + "\\n")' "$R/pg_pass"
+chmod 600 "$R/pg_pass"
+"$PG_BIN/initdb" -D "$R/data" --username=aigenadmin --auth-local=trust \
+  --auth-host=scram-sha-256 --pwfile="$R/pg_pass" --no-instructions > "$R/initdb.log" 2>&1
+export PGHOST=127.0.0.1 PGUSER=aigenadmin PGPORT
+export PGPASSWORD="$(tr -d '\\n' < "$R/pg_pass")"
 "$PG_BIN/pg_ctl" -D "$R/data" -l "$R/pg.log" -w \
   -o "-h 127.0.0.1 -p $PGPORT -k $R -c fsync=off" start >/dev/null
 "$PG_BIN/pg_isready" -h 127.0.0.1 -p "$PGPORT" -U aigenadmin >/dev/null
 createdb c2pro_g3_1276_test
 psql -X -d c2pro_g3_1276_test -v ON_ERROR_STOP=1 -q -c \
  "CREATE ROLE c2pro_admin_ops NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;"
-export DATABASE_URL="postgresql://aigenadmin:@127.0.0.1:$PGPORT/c2pro_g3_1276_test"
+export DATABASE_URL="postgresql://aigenadmin:$PGPASSWORD@127.0.0.1:$PGPORT/c2pro_g3_1276_test"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export C2PRO_N4_SCRATCH_DSN="$DATABASE_URL"
 export CELERY_BROKER_URL="redis://127.0.0.1:$REDIS_PORT/14"
@@ -157,6 +162,20 @@ else
   }
   grep '^G4_' "$R/verify.log" || :
   echo "CELERY_SEPARATE_WORKER_N4=PASS"
+  # Focused PG negatives on the SAME scratch instance: UNKNOWN, zero cost,
+  # concurrency and fencing. Explicitly 0 SKIPPED; deselection is not skip.
+  "$PY" -m pytest -q \
+    tests/integration/analysis/test_n4_window_runner_pg.py \
+    tests/integration/analysis/test_n4_incremental_store_pg.py \
+    tests/integration/analysis/test_n4_shared_tenant_budget_pg.py \
+    -k "simultaneous_runners_replay or provider_timeout_preserves_unknown_charge or no_cost_receipt_is_not_zero or idempotency_budget_resume_fencing_and_rls or global_cap_serializes_two_independent_n4_project_workers" \
+    --disable-warnings > "$R/pg_negative.log" 2>&1 || {
+      tail -65 "$R/pg_negative.log"
+      exit 19
+    }
+  grep -E "passed|skipped|failed|100%" "$R/pg_negative.log" | tail -3 || :
+  if grep -qi 'skipped' "$R/pg_negative.log"; then echo "G4_SKIPPED_NOT_ALLOWED"; exit 19; fi
+  echo "G4_NEGATIVE_PG_FOCALS=PASS"
 fi
 
 # Actual Redis process outage after completed settlement; no new provider calls.
