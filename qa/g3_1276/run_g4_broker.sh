@@ -35,7 +35,7 @@ cleanup() {
   if [[ -n "$WORKER_PID" ]]; then kill -TERM "$WORKER_PID" >/dev/null 2>&1 || :; wait "$WORKER_PID" >/dev/null 2>&1 || :; fi
   if [[ -n "$REDIS_PID" ]]; then kill -TERM "$REDIS_PID" >/dev/null 2>&1 || :; wait "$REDIS_PID" >/dev/null 2>&1 || :; fi
   if [[ -d "$R/data" ]]; then "$PG_BIN/pg_ctl" -D "$R/data" -m immediate -w stop >/dev/null 2>&1 || :; fi
-  for name in seed.log recovery.log barrier-check.log barrier-claim.log barrier-verify.log pg_negative.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
+  for name in seed.log recovery.log barrier-check.log barrier-claim.log barrier-verify.log negative-matrix.log pg_negative.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
     [[ -f "$R/$name" ]] && cp -- "$R/$name" "$EVIDENCE/$name" || :
   done
   (
