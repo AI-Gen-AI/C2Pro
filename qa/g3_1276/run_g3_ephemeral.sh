@@ -41,5 +41,24 @@ else
   exit "$st"
 fi
 echo "G3_INTEGRATED_LOG_SHA256=$(sha256sum "$EV/g3_integrated.log" | cut -d' ' -f1)"
+
+# Targeted financial/authority negatives on SAME migrated ephemeral PG cluster;
+# independent synthetic fixtures; no external provider or UAT.
+if "$PY" -m pytest -q \
+  tests/integration/analysis/test_n4_window_runner_pg.py \
+  tests/integration/analysis/test_n4_incremental_store_pg.py \
+  tests/integration/analysis/test_n4_shared_tenant_budget_pg.py \
+  -k "simultaneous_runners_replay or provider_timeout_preserves_unknown_charge or no_cost_receipt_is_not_zero or idempotency_budget_resume_fencing_and_rls or global_cap_serializes_two_independent_n4_project_workers" \
+  --disable-warnings >"$EV/g3_negative_pg.log" 2>&1; then
+  grep -E "passed|skipped|failed|100%" "$EV/g3_negative_pg.log" | tail -4
+  echo "G3_NEGATIVE_PG_EXIT=0"
+else
+  st=$?
+  echo "G3_NEGATIVE_PG_EXIT=$st"
+  tail -35 "$EV/g3_negative_pg.log"
+  exit "$st"
+fi
+echo "G3_NEGATIVE_PG_LOG_SHA256=$(sha256sum "$EV/g3_negative_pg.log" | cut -d' ' -f1)"
+
 echo "EPHEMERAL_DB=DESTROY_ON_PG_VIRTUALENV_EXIT"
 
