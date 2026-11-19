@@ -77,4 +77,4 @@ else
   echo "G3_NEGATIVE_PG_EXIT=$exitcode"; tail -35 "$EVIDENCE/g3_negative_pg.log"; exit "$exitcode"
 fi
 echo "G3_NEGATIVE_SHA256=$(sha256sum "$EVIDENCE/g3_negative_pg.log" | cut -d' ' -f1)"
-echo "DB_IS_EPHEMERAL=YES; DESTRUCTION_BY_PG_VIRTUALENV_EXIT"
+echo "DB_IS_EPHEMERAL=YES; DESTRUCTION_BY_WRAPPER_CLEANUP"
