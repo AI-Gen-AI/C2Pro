@@ -64,12 +64,12 @@ print(*ports)
 PY
 )
 # PostgreSQL is loopback-only AND SCRAM-authenticated with per-run random password.
-"$PY" -c 'import secrets,sys; open(sys.argv[1], "w").write(secrets.token_urlsafe(48) + "\\n")' "$R/pg_pass"
+"$PY" -c 'import secrets,sys; open(sys.argv[1], "w").write(secrets.token_urlsafe(48))' "$R/pg_pass"
 chmod 600 "$R/pg_pass"
 "$PG_BIN/initdb" -D "$R/data" --username=aigenadmin --auth-local=trust \
   --auth-host=scram-sha-256 --pwfile="$R/pg_pass" --no-instructions > "$R/initdb.log" 2>&1
 export PGHOST=127.0.0.1 PGUSER=aigenadmin PGPORT
-export PGPASSWORD="$(tr -d '\\n' < "$R/pg_pass")"
+export PGPASSWORD="$(cat "$R/pg_pass")"
 "$PG_BIN/pg_ctl" -D "$R/data" -l "$R/pg.log" -w \
   -o "-h 127.0.0.1 -p $PGPORT -k $R -c fsync=off" start >/dev/null
 "$PG_BIN/pg_isready" -h 127.0.0.1 -p "$PGPORT" -U aigenadmin >/dev/null
