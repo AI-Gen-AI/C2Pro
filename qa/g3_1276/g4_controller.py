@@ -40,7 +40,7 @@ celery_app.conf.update(
     broker_url=BROKER,
     result_backend=os.environ["CELERY_RESULT_BACKEND_URL"],
     broker_connection_retry=False, broker_connection_retry_on_startup=False,
-    broker_transport_options={"socket_connect_timeout": 0.4, "socket_timeout": 1, "max_retries": 0},
+    broker_transport_options={"socket_connect_timeout": 0.4, "socket_timeout": 1, "max_retries": 0, "visibility_timeout": 8},
     task_always_eager=False, task_publish_retry=False, task_default_queue="document_parsing",
 )
 
@@ -289,6 +289,93 @@ async def verify():
         await engine.dispose()
 
 
+async def crash_check():
+    ctx = load_context()
+    T, D, P, OWNER = (UUID(ctx[key]) for key in ("tenant_id", "document_id", "project_id", "owner_id"))
+    entries = [json.loads(s) for s in (ROOT / "worker_events.jsonl").read_text().splitlines() if s]
+    assert any(x["event"] == "G4_ADOPT_COMMITTED_WORKER_HOLD" for x in entries)
+    assert not any(x["event"] in ("N4_23_SETTLED", "FORBIDDEN_SIDE_EFFECT") for x in entries)
+    db = await asyncpg.connect(DSN)
+    try:
+        row = await db.fetchrow("""
+            SELECT generation, fencing_token, stage, phase,
+                   lease_expires_at > clock_timestamp() AS lease_valid
+            FROM public.document_processing_operations WHERE document_id=$1
+        """, D)
+        assert row["generation"] == 3 and row["fencing_token"] == 10
+        assert str(row["stage"]) == "INGESTION" and str(row["phase"]) == "RUNNING"
+        assert row["lease_valid"] is True, dict(row)
+        runs = await db.fetchval("SELECT count(*) FROM public.n4_extraction_runs WHERE document_id=$1", D)
+        assert runs == 0
+        event("REAL_WORKER_KILLED_POST_ADOPT_BEFORE_N4_NO_RUN")
+    finally:
+        await db.close()
+    engine, sessions = factory()
+    try:
+        async with sessions() as session:
+            try:
+                await router_mod.recover_n4_only_enqueue_endpoint(
+                    P, D, OWNER, T, SqlAlchemyDocumentRepository(session)
+                )
+                raise AssertionError("crash with RUNNING lease allowed manual recover")
+            except HTTPException as exc:
+                assert exc.status_code == 409
+                await session.rollback()
+                event("CRASH_ACTIVE_LEASE_RECOVERY_DENIED")
+    finally:
+        await engine.dispose()
+
+
+async def crash_redelivery():
+    ctx = load_context()
+    T, D = (UUID(ctx[key]) for key in ("tenant_id", "document_id"))
+    path = ROOT / "worker_events.jsonl"
+    import time
+    first = [json.loads(s) for s in path.read_text().splitlines() if s]
+    original_pids = {x["pid"] for x in first if x["event"] == "CELERY_WORKER_ADOPT_ONCE"}
+    assert len(original_pids) == 1
+    for _ in range(70):
+        current = [json.loads(s) for s in path.read_text().splitlines() if s]
+        if any(x["event"] == "DUPLICATE_ADOPT_DENIED" and x["pid"] not in original_pids for x in current):
+            break
+        time.sleep(0.3)
+    else:
+        raise AssertionError("no actual duplicate broker message reached the restarted worker")
+    assert not any(x["event"] in ("N4_23_SETTLED", "FORBIDDEN_SIDE_EFFECT") for x in current)
+    db = await asyncpg.connect(DSN)
+    try:
+        assert await db.fetchval("SELECT count(*) FROM public.n4_extraction_runs WHERE document_id=$1", D) == 0
+        assert await db.fetchval(
+            """SELECT count(*) FROM public.n4_usage_reservations r
+               JOIN public.n4_extraction_runs n ON n.run_id=r.run_id AND n.tenant_id=r.tenant_id
+               WHERE n.document_id=$1""", D
+        ) == 0
+        event("REAL_BROKER_REDELIVERY_AFTER_WORKER_KILL_DENIED_ZERO_N4_USAGE")
+        # Test a DB-clock expired lease without waiting for TTL; isolated scratch DB only.
+        await db.execute("""
+            UPDATE public.document_processing_operations
+            SET lease_expires_at=clock_timestamp() - interval '15 seconds'
+            WHERE document_id=$1
+        """, D)
+    finally:
+        await db.close()
+    engine, sessions = factory()
+    try:
+        async with sessions() as session:
+            try:
+                await router_mod.recover_n4_only_enqueue_endpoint(
+                    UUID(ctx["project_id"]), D, UUID(ctx["owner_id"]), T,
+                    SqlAlchemyDocumentRepository(session)
+                )
+                raise AssertionError("post-adopt RUNNING lease expiry accepted by manual enqueue recovery")
+            except HTTPException as exc:
+                assert exc.status_code == 409
+                await session.rollback()
+                event("EXPIRED_RUNNING_LEASE_RECOVERY_STOP_NO_N4")
+    finally:
+        await engine.dispose()
+
+
 def broker_down():
     import redis
     try:
@@ -304,4 +391,6 @@ if __name__ == "__main__":
     {"seed-post": lambda: asyncio.run(seed_and_post()),
      "recover": lambda: asyncio.run(recover()),
      "verify": lambda: asyncio.run(verify()),
+     "crash-check": lambda: asyncio.run(crash_check()),
+     "crash-redelivery": lambda: asyncio.run(crash_redelivery()),
      "broker-down": broker_down}[cmd]()
