@@ -2,15 +2,17 @@
 # Unified G3 offline harness. Runs only in disposable pg_virtualenv, never shared PG.
 set -euo pipefail
 
-if [[ "${PG_CLUSTER_CONF_ROOT:-}" != /tmp/pg_virtualenv.* ]]; then
-  case "${C2PRO_G3_EPHEMERAL_PG_DIR:-}" in
-    /tmp/c2pro-g4-pg.*)
-      test -d "${C2PRO_G3_EPHEMERAL_PG_DIR}/data" || exit 10
-      [[ "${PGHOST:-}" == "127.0.0.1" ]] || { echo "STOP: PGHOST not loopback"; exit 10; }
-      ;;
-    *) echo "STOP: no disposable PostgreSQL identity"; exit 10 ;;
-  esac
-fi
+EXPECTED_QA_PARENT="$HOME/.cache/ai-gen-qa-g4"
+case "${C2PRO_G3_EPHEMERAL_PG_DIR:-}" in
+  "$EXPECTED_QA_PARENT"/c2pro-g4-pg.*) ;;
+  *) echo "STOP: invalid private cluster root"; exit 10 ;;
+esac
+[[ -d "${C2PRO_G3_EPHEMERAL_PG_DIR}/data" ]] || exit 10
+[[ "${PGHOST:-}" == "127.0.0.1" ]] || { echo "STOP: PGHOST not loopback"; exit 10; }
+for target in "$EXPECTED_QA_PARENT" "$C2PRO_G3_EPHEMERAL_PG_DIR" "${C2PRO_G3_EPHEMERAL_PG_DIR}/data"; do
+  [[ "$(stat -c %u "$target")" == "$(id -u)" ]] || exit 10
+  [[ "$(stat -c %a "$target")" == "700" ]] || exit 10
+done
 
 case "${G3_CASE:-}" in
   legacy)
@@ -31,8 +33,8 @@ esac
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_SHA="$(git -C "$SOURCE" rev-parse HEAD)"
 echo "SOURCE_SHA=$CURRENT_SHA G3_CASE=$G3_CASE"
-test "$CURRENT_SHA" = "$EXPECTED_SHA" || { echo "STOP: checkout drift"; exit 11; }
-test -z "$(git -C "$SOURCE" status --porcelain)" || { echo "STOP: dirty source checkout"; exit 11; }
+[[ "$CURRENT_SHA" == "$EXPECTED_SHA" ]] || { echo "STOP: checkout drift"; exit 11; }
+[[ -z "$(git -C "$SOURCE" status --porcelain)" ]] || { echo "STOP: dirty source checkout"; exit 11; }
 mkdir -p "$EVIDENCE"
 DB=c2pro_g3_1276_test
 createdb "$DB"
