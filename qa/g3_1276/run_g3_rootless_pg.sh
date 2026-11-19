@@ -26,7 +26,7 @@ trap cleanup EXIT INT TERM
     --auth-local=trust --auth-host=trust --no-instructions >"$ROOT/initdb.log" 2>&1
 export PGHOST=127.0.0.1
 export PGUSER=aigenadmin
-export PGPASSWORD=offline-test-only
+export PGPASSWORD=
 export PGPORT="$(python3 - <<'PY'
 import socket
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
