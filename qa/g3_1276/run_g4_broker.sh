@@ -4,6 +4,8 @@
 set -euo pipefail
 umask 077
 [[ "$(id -un)" == aigenadmin ]] || { echo "STOP: wrong user"; exit 10; }
+G4_CASE="${1:-normal}"
+case "$G4_CASE" in normal|worker-crash) ;; *) echo "STOP: unknown G4 test case"; exit 10 ;; esac
 PARENT="$HOME/.cache/ai-gen-qa-g4"
 [[ "$(stat -c %u "$PARENT")" == "$(id -u)" ]] || exit 10
 [[ "$(stat -c %a "$PARENT")" == 700 ]] || exit 10
@@ -22,7 +24,11 @@ PG_BIN=/usr/lib/postgresql/16/bin
 QA="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 export G4_RUN_DIR="$(mktemp -d "$PARENT/c2pro-g4-broker.XXXXXXXX")"
 R="$G4_RUN_DIR"
-EVIDENCE="$HOME/qa_evidence/g4-broker"
+if [[ "$G4_CASE" == normal ]]; then
+  EVIDENCE="$HOME/qa_evidence/g4-broker"
+else
+  EVIDENCE="$HOME/qa_evidence/g4-broker-worker-crash"
+fi
 mkdir -p -m 0700 "$EVIDENCE"
 WORKER_PID=
 REDIS_PID=
@@ -33,7 +39,7 @@ cleanup() {
   if [[ -n "$WORKER_PID" ]]; then kill -TERM "$WORKER_PID" >/dev/null 2>&1 || :; wait "$WORKER_PID" >/dev/null 2>&1 || :; fi
   if [[ -n "$REDIS_PID" ]]; then kill -TERM "$REDIS_PID" >/dev/null 2>&1 || :; wait "$REDIS_PID" >/dev/null 2>&1 || :; fi
   if [[ -d "$R/data" ]]; then "$PG_BIN/pg_ctl" -D "$R/data" -m immediate -w stop >/dev/null 2>&1 || :; fi
-  for name in seed.log recovery.log verify.log broker-down.log redis.log worker.log controller_events.jsonl worker_events.jsonl; do
+  for name in seed.log recovery.log verify.log crash-check.log crash-redelivery.log broker-down.log redis.log worker.log worker-restart.log controller_events.jsonl worker_events.jsonl; do
     [[ -f "$R/$name" ]] && cp -- "$R/$name" "$EVIDENCE/$name" || :
   done
   (
@@ -100,20 +106,58 @@ echo "REDIS_REAL_PID=$REDIS_PID"
 "$PY" "$QA/g4_controller.py" recover > "$R/recovery.log" 2>&1 || { tail -75 "$R/recovery.log"; exit 14; }
 grep '^G4_' "$R/recovery.log" || :
 
-# Worker runs as an independent OS process, with actual registered C2Pro Celery tasks.
-"$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
-  -Q document_parsing --loglevel=info --without-gossip --without-mingle \
-  --without-heartbeat --hostname=g4-test@localhost > "$R/worker.log" 2>&1 &
-WORKER_PID=$!
-echo "CELERY_WORKER_OS_PID=$WORKER_PID CONTROLLER_OS_PID=$$"
-"$PY" "$QA/g4_controller.py" verify > "$R/verify.log" 2>&1 || {
-  echo "G4_REAL_WORKER_VERIFY_FAIL"
-  tail -70 "$R/verify.log"
-  tail -75 "$R/worker.log"
-  exit 15
-}
-grep '^G4_' "$R/verify.log" || :
-echo "CELERY_SEPARATE_WORKER_N4=PASS"
+# Actual Celery worker(s) run as separate OS processes, not .apply() in coordinator.
+if [[ "$G4_CASE" == worker-crash ]]; then
+  G4_CRASH_HOLD_SECONDS=30 "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
+    -Q document_parsing --loglevel=info --without-gossip --without-mingle \
+    --without-heartbeat --hostname=g4-crash@localhost > "$R/worker.log" 2>&1 &
+  WORKER_PID=$!
+  FIRST_WORKER_PID=$WORKER_PID
+  echo "G4_CRASH_CELERY_WORKER_PID=$WORKER_PID CONTROLLER_PID=$$"
+  seen=0
+  for _ in $(seq 1 150); do
+    if [[ -f "$R/worker_events.jsonl" ]] &&
+       grep -q 'G4_ADOPT_COMMITTED_WORKER_HOLD' "$R/worker_events.jsonl"; then
+      seen=1
+      break
+    fi
+    if ! kill -0 "$WORKER_PID" 2>/dev/null; then break; fi
+    sleep .2
+  done
+  [[ "$seen" == 1 ]] || { echo "NO_DURABLE_ADOPT_MARKER"; tail -80 "$R/worker.log"; exit 16; }
+  kill -KILL "$WORKER_PID"
+  wait "$WORKER_PID" >/dev/null 2>&1 || :
+  WORKER_PID=
+  echo "G4_WORKER_ACTUALLY_SIGKILL_AFTER_ADOPT=$FIRST_WORKER_PID"
+  "$PY" "$QA/g4_controller.py" crash-check > "$R/crash-check.log" 2>&1 || {
+    tail -55 "$R/crash-check.log"; exit 17
+  }
+  grep '^G4_' "$R/crash-check.log" || :
+  "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
+    -Q document_parsing --loglevel=info --without-gossip --without-mingle \
+    --without-heartbeat --hostname=g4-restart@localhost > "$R/worker-restart.log" 2>&1 &
+  WORKER_PID=$!
+  echo "G4_RESTARTED_WORKER_OS_PID=$WORKER_PID"
+  "$PY" "$QA/g4_controller.py" crash-redelivery > "$R/crash-redelivery.log" 2>&1 || {
+    tail -65 "$R/crash-redelivery.log"; tail -75 "$R/worker-restart.log"; exit 18
+  }
+  grep '^G4_' "$R/crash-redelivery.log" || :
+  echo "CELERY_REAL_WORKER_KILL_AND_FENCED_DUPLICATE=PASS_LIMITED"
+else
+  "$PY" -m celery -A g4_worker_app:app worker -P solo -c 1 \
+    -Q document_parsing --loglevel=info --without-gossip --without-mingle \
+    --without-heartbeat --hostname=g4-test@localhost > "$R/worker.log" 2>&1 &
+  WORKER_PID=$!
+  echo "CELERY_WORKER_OS_PID=$WORKER_PID CONTROLLER_OS_PID=$$"
+  "$PY" "$QA/g4_controller.py" verify > "$R/verify.log" 2>&1 || {
+    echo "G4_REAL_WORKER_VERIFY_FAIL"
+    tail -70 "$R/verify.log"
+    tail -75 "$R/worker.log"
+    exit 15
+  }
+  grep '^G4_' "$R/verify.log" || :
+  echo "CELERY_SEPARATE_WORKER_N4=PASS"
+fi
 
 # Actual Redis process outage after completed settlement; no new provider calls.
 kill -TERM "$REDIS_PID"
@@ -124,5 +168,5 @@ cat "$R/broker-down.log" | grep '^G4_' || :
 echo "REDIS_REAL_SHUTDOWN_CONFIRMED=YES"
 
 cp "$R/alembic.log" "$EVIDENCE/alembic.log"
-echo "G4_BROKER_RESULT=PASS_LIMITED; broker real, ACK loss injected at client boundary; no worker-crash proof"
+echo "G4_BROKER_CASE=$G4_CASE RESULT=PASS_LIMITED; ACK loss injected after real broker publish"
 echo "G4_PG_DROPPED_BY_TRAP=YES"
