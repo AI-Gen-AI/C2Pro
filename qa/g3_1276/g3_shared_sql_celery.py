@@ -285,7 +285,28 @@ async def run_g3(*, manual_recovery: bool):
             "document_text": projection, "messages": [], "extracted_risks": [],
             "n4_only_pilot": pilot_marker(scope),
         }
+        # Fail-fast guards are installed at real non-N4 entrypoints while the
+        # N4 graph runs. This is a bounded adapter proof, not a worker/broker proof.
+        from src.analysis.adapters.graph import nodes as normal_nodes
+        from src.analysis.adapters.graph import nodes_extended as extended_nodes
+        from src.analysis.application.critique_extraction_use_case import CritiqueExtractionUseCase
+        from src.analysis.application.structured_source_trust import DecideStructuredSourceTrustService
+        from src.analysis.application import persist_resume_analysis, document_artifact_completion
+        from src.core.tasks import materialization_tasks
+
         with ExitStack() as stack:
+            for obj, attr, name in (
+                (normal_nodes, "critique_node", "N12_GRAPH"),
+                (CritiqueExtractionUseCase, "execute", "N12_ADAPTER"),
+                (normal_nodes, "human_interrupt_node", "HITL_GRAPH"),
+                (extended_nodes, "coherence_scorer_node", "SCORE_GRAPH"),
+                (DecideStructuredSourceTrustService, "execute", "TRUST_DECISION"),
+                (persist_resume_analysis, "persist_resume_analysis_atomically", "TRUST_COMMIT"),
+                (document_artifact_completion, "persist_artifact_and_enqueue_project_graph", "TRUST_MATERIALIZATION"),
+                (materialization_tasks, "enqueue_materialization", "TRUST_TASK_DISPATCH"),
+            ):
+                stack.enter_context(patch.object(obj, attr, forbidden(name)))
+            EVENTS.append("FAIL_FAST_N12_HITL_TRUST_SCORE_ADAPTER_SPIES_ARMED")
             for obj, attr, value in (
                 (graph, "document_ingestion_node", n1),
                 (graph, "pii_anonymizer_node", n2),
@@ -305,7 +326,7 @@ async def run_g3(*, manual_recovery: bool):
             assert result["hitl_generated"] is False
             assert result["trust_state"] == "PROPOSED"
         assert not fail_spies, fail_spies
-        EVENTS.append("N4_END_NO_N12_HITL_TRUSTED_SCORE")
+        EVENTS.append("N4_END_NO_N12_HITL_TRUSTED_SCORE_SPIES_ZERO")
         # In real worker this marker is persisted by ingestion lifecycle, which
         # is mocked here; explicitly seed same local DB for GET readback.
         async with local_factory() as session:
