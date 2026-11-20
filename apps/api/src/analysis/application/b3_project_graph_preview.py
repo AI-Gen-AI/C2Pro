@@ -1,4 +1,4 @@
-"""Read-only B3 candidate source preview through actual ProjectGraph nodes.
+"""Read-only B3 candidate source preview with two actual ProjectGraph nodes.
 
 Never changes Celery, database, runtime upload policy or Coherence. Intentionally
 supplies no TRUSTED artifacts and no source-unit payload. This evaluates
@@ -78,15 +78,33 @@ async def preview_b3_sources_in_project_graph(
     tenant_id: UUID,
     graph_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    """Exercise existing graph with no trusted artifacts, persistence or writes.
+    """Execute two source-only nodes reused from the real ProjectGraph.
 
-    The default graph_factory is the actual build_project_graph app function.
-    Injection is used only for isolated negative-path tests.
+    A separate compiled graph includes ONLY load_current_artifacts and
+    align_entities. No health, Coherence, snapshot or alert nodes can run.
+    Inject graph_factory in tests only.
     """
     refs = _validated_b3_refs(packet, project_id=project_id, tenant_id=tenant_id)
     if graph_factory is None:
-        from src.analysis.adapters.graph.project_graph import build_project_graph
-        graph_factory = build_project_graph
+        # Build a narrowly scoped graph from the ACTUAL read-only core nodes.
+        # Never run the full ProjectGraph: its later nodes may acquire
+        # persistence/alert side effects as the product evolves.
+        from langgraph.graph import END, StateGraph
+        from src.analysis.adapters.graph.project_graph import (
+            load_current_artifacts, align_entities,
+        )
+        from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
+
+        def _read_only_graph():
+            workflow = StateGraph(ProjectGraphState)
+            workflow.add_node("load_current_artifacts", load_current_artifacts)
+            workflow.add_node("align_entities", align_entities)
+            workflow.set_entry_point("load_current_artifacts")
+            workflow.add_edge("load_current_artifacts", "align_entities")
+            workflow.add_edge("align_entities", END)
+            return workflow.compile()
+
+        graph_factory = _read_only_graph
 
     initial = {
         "tenant_id": tenant_id,
@@ -122,14 +140,12 @@ async def preview_b3_sources_in_project_graph(
     if not isinstance(nodes, list) or not nodes:
         raise B3SourceBridgeError("ProjectGraph did not execute nodes")
     states = {str(n.node): str(getattr(n.status, "value", n.status)) for n in nodes}
-    if states.get("cross_doc_coherence", "").lower() != "skipped":
-        raise B3SourceBridgeError("source-only ProjectGraph must skip scoring")
-    if any(s.lower() in {"failed", "degraded"} for s in states.values()):
-        raise B3SourceBridgeError("ProjectGraph source-only node failed or degraded")
-    if states.get("load_current_artifacts", "").lower() != "ok":
-        raise B3SourceBridgeError("ProjectGraph did not load B3 sources")
-    if states.get("align_entities", "").lower() != "ok":
-        raise B3SourceBridgeError("ProjectGraph did not align B3 sources")
+    if set(states) != {"load_current_artifacts", "align_entities"}:
+        raise B3SourceBridgeError("B3 preview ran a node outside read-only allowlist")
+    if len(nodes) != 2:
+        raise B3SourceBridgeError("B3 preview node receipt count mismatch")
+    if any(state.lower() != "ok" for state in states.values()):
+        raise B3SourceBridgeError("B3 read-only node failed")
     return {
         "status": "SOURCE_ONLY_GRAPH_PREVIEW",
         "node_count": len(nodes),
