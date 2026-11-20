@@ -53,3 +53,24 @@ Tampoco resuelve las referencias entre documentos, la procedencia a la página d
 ## Límites de autoridad
 
 **`N4_BILLABLE=STOP` · `N12_BILLABLE=STOP` · `MERGE=STOP` · `UAT_DEPLOY=STOP`.** Esta rama no solicita alterar esos controles. El análisis histórico completo permanece en el expediente de QA y el reporte focal en `docs/audits/C2PRO_FG1_SOLARMAX_REAL_CONTRACT_OFFLINE_REPLAY_2026-11-20.md` de la PR #1279.
+
+## Requisito funcional de producto no negociable — generalista ES/EN
+
+**Decisión del propietario (20/11/2026):** C2Pro no es un extractor específico para SolarMax ni para EPC en inglés. El núcleo N4 debe entender y analizar contratos de diferente naturaleza y estar validado para **español e inglés desde la primera aceptación funcional**. Esta decisión corrige el sesgo del POC actual.
+
+### Auditoría del estado del POC
+
+- El prompt experimental actual empieza por «You research EPC contracts» y los ejemplos y tests proceden esencialmente de un contrato EPC estadounidense en inglés. **Esto no demuestra soporte para español ni generalización contractual.**
+- La unión Pydantic `fact/risk` es una estructura técnica reutilizable, pero `FactKind` y el vocabulario de riesgos no constituyen aún una ontología completa para servicios, suministro, obras, compras, MSA, O&M, NDA ni otros documentos.
+- Una instrucción en inglés puede procesar texto español dependiendo del modelo; **capacidad probable no es cobertura verificada**. No proclamar «multilingüe» ni «multi-contrato» con los tests actuales.
+- VS-2 está desconectado de N4 runtime, N12, DB, ProjectGraph y anexos; no es una función disponible para usuarios.
+
+### Requisitos de diseño para la siguiente iteración, antes de promover VS-2
+
+1. **Núcleo contractual agnóstico:** extraer *hechos verificables, obligaciones, derechos, partes, disparadores, plazos, importes, condiciones, exclusiones, contradicciones, riesgos propuestos y referencias a anexos* independientemente del sector. Contrato y subcategoría son metadatos con `unknown` permitido, no filtros que omitan cláusulas. Perfiles EPC, suministro, servicios/O&M, obras/subcontratación, acuerdos marco o confidencialidad amplían preguntas y prioridades, **nunca recortan el barrido exhaustivo**.
+2. **Idiomas obligatorios:** EN y ES, incluso contratos que mezclen ambas lenguas. Conservar **cita literal en idioma original** + hash, offsets y futura página; explicación/lectura de interfaz separada en idioma solicitado (ES/EN), con cautela ante términos jurídicos no equivalentes. No traducir una cita y después etiquetarla «literal». Normalizar cifras, separadores, moneda, fechas y duración con conservación del valor bruto y su jurisdicción/contexto; no inferir semántica legal por traducción.
+3. **Corpus de aceptación cruzada:** al menos EPC/obra, suministro/compraventa, servicios/O&M y acuerdo marco o subcontratación, en **ambos idiomas**, con documentos independientes *held-out* y uno mixto. Los anexos presupuestos, cronogramas, especificaciones y garantías se evalúan por procedencia y referencia al documento exacto; si faltan, alcance `UNASSESSED/PARTIAL` en lugar de completar datos. Incluir casos con LD, SLA, Incoterms, responsabilidad, fuerza mayor, confidencialidad, renovación, rescisión, penalizaciones, garantías y protección de datos según proceda.
+4. **Medición de calidad, no solo validación JSON:** oráculo externo por tipo contractual e idioma para omisión material, precision/recall por elementos tipados, evidencia literal, citas originales/página, valor/fecha/parte correctos, contradicciones, abstención ante anexos ausentes, coste y tasa de truncación. Una matriz 4×2 **no significa 8 contratos suficientes para aceptación estadística**: definir tamaño/umbrales por riesgo y adjudicar omisiones críticas individualmente.
+5. **Seguridad y límites:** N2 preserva identidad y la extracción cubre todas las ventanas, sin depender solo de RAG. Ningún hecho se promociona a riesgo aprobado, Score, alertas o ProjectGraph sin reglas posteriores y validación. `N4_BILLABLE=STOP`, `MERGE=STOP`, `UAT_DEPLOY=STOP` hasta los gates necesarios.
+
+**Estado del requisito:** especificado, **NO IMPLEMENTADO / NO VALIDADO**. No modificar el runtime ni proclamar que VS-2 supera esta nueva condición hasta evaluación independiente.
