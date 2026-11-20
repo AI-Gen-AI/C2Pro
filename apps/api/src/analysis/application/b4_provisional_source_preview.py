@@ -8,7 +8,6 @@ hashes again; it cannot certify authenticity of a PDF or the completeness of BOQ
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
@@ -118,6 +117,8 @@ def preview_b4_provisional_comparison(
             "findings": [],
             "not_assessed_reasons": ["TRUSTED_CONTRACT_ARTIFACT_UNAVAILABLE"],
             "source_unit_count": len(validated_units),
+            "original_source_attestation": "NOT_PERFORMED_BY_B4_PREVIEW",
+            "original_pdf_page_attestation": "UNVERIFIED",
             "source_quote_count": len(checked_quotes),
             "coherence_score": None,
             "n12_assessment": "NOT_RUN_BY_B4",
@@ -129,6 +130,8 @@ def preview_b4_provisional_comparison(
     evaluation = compare_original_source_rows(
         artifacts, validated_units, checked_quotes
     )
+    # SHA256 here checks internal payload consistency only; physical file
+    # attestation must be supplied by the existing revision-bound readers.
     # Deliberately no call into evaluate_artifact_set(), ProjectGraph scoring,
     # write_snapshot(), alerts, HITL writes or any model.
     return {
@@ -136,7 +139,9 @@ def preview_b4_provisional_comparison(
         "findings": evaluation["findings"],
         "not_assessed_reasons": evaluation["not_assessed_reasons"],
         "source_unit_count": len(validated_units),
-        "source_rows_verified": evaluation["source_rows_verified"],
+        "source_unit_checksums_valid": evaluation["source_rows_verified"],
+        "original_source_attestation": "NOT_PERFORMED_BY_B4_PREVIEW",
+        "original_pdf_page_attestation": "UNVERIFIED",
         "source_quote_count": len(checked_quotes),
         "review_required": bool(evaluation["findings"]),
         "coherence_score": None,
