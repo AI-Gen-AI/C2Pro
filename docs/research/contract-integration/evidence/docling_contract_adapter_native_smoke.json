@@ -1,0 +1,47 @@
+{
+  "study": "I-C01 Docling native isolated integration",
+  "synthetic_only": true,
+  "status": "PASS",
+  "results": [
+    {
+      "file": "synthetic_contract.pdf",
+      "kind": "contract",
+      "status": "PASS",
+      "expected_term_presence": {
+        "950000": true,
+        "FAT": true,
+        "9.6": true
+      },
+      "pages": 2,
+      "tables": 0,
+      "text_items": 5,
+      "anchored_items": 5,
+      "unanchored_items": 0,
+      "pages_without_grounded_content": [],
+      "trusted_promotions": 0
+    },
+    {
+      "file": "synthetic_annex.pdf",
+      "kind": "annex",
+      "status": "PASS",
+      "expected_term_presence": {
+        "1030000": true,
+        "WBS-130": true,
+        "20 June 2027": true
+      },
+      "pages": 1,
+      "tables": 1,
+      "text_items": 4,
+      "anchored_items": 5,
+      "unanchored_items": 0,
+      "pages_without_grounded_content": [],
+      "trusted_promotions": 0
+    }
+  ],
+  "limitations": [
+    "Source page anchors and bbox are Docling estimates; not yet visually audited against original PDF.",
+    "Presence of a string or clause number is NOT correct contractual interpretation.",
+    "No N4/N12, HITL, ProjectGraph, baseline comparison, approved risk or legal oracle was executed.",
+    "No changes to C2Pro upload router, existing PDFFileParser or database."
+  ]
+}
