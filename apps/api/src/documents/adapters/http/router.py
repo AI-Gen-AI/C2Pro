@@ -1273,6 +1273,40 @@ async def reprocess_document_endpoint(
         )
     if is_analysis_excluded(document.document_type):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=WBS_ANALYSIS_EXCLUDED_DETAIL)
+    # H-04: the UI's retryable=false is not a server-side authorization rule.
+    if (document.document_metadata or {}).get("analysis_blocker_code") in _N4_UNSAFE_REPROCESS_BLOCKERS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="N4 findings or earlier usage require supervised reconciliation, not automatic reprocessing.",
+        )
+    # A legacy or interrupted analysis may not have reached the metadata
+    # update. Check durable receipts for the current source revision instead.
+    previous_n4_usage = (await repo.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1
+              FROM public.n4_usage_reservations u
+              JOIN public.n4_extraction_runs r
+                ON r.tenant_id = u.tenant_id AND r.run_id = u.run_id
+              JOIN public.document_revisions dr
+                ON dr.tenant_id = r.tenant_id
+               AND dr.document_id = r.document_id
+               AND dr.revision_id = r.document_revision_id
+             WHERE r.tenant_id = CAST(:tenant AS uuid)
+               AND r.project_id = CAST(:project AS uuid)
+               AND r.document_id = CAST(:document AS uuid)
+               AND dr.valid_to IS NULL
+               AND u.status IN ('RESERVED', 'UNKNOWN', 'SETTLED')
+        )
+    """), {
+        "tenant": str(tenant_id),
+        "project": str(project_id),
+        "document": str(document_id),
+    })).scalar_one()
+    if previous_n4_usage:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Earlier N4 usage exists for this revision; reconcile before reprocessing.",
+        )
     # A pilot-marked document cannot be sent through a normal retry that
     # would re-enable the N4 -> N12 route. Only CORE's pinned pilot
     # endpoint (new generation, new authority) may operate on it.
