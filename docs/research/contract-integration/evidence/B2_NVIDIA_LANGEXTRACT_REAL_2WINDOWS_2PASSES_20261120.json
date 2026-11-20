@@ -1,0 +1,77 @@
+{
+  "study": "B2 real LangExtract 1.7.1 inference, NVIDIA Nemotron 3.5 Bolt",
+  "status": "PASS_LIMITED",
+  "date": "2026-11-20",
+  "source_kind": "PUBLIC_SEC_HTML_PROJECTION_NOT_ORIGINAL_PDF",
+  "source_sha256": "b4009aee679ebef7c81c07446a897ad5f9b7e8c224db7f0156f6a7967af99044",
+  "n4_source_sha": "916808c5212e3dbc652407f35f3a17557623c06c",
+  "selected_source_window_ordinals": [
+    7,
+    8
+  ],
+  "context_chars": [
+    11999,
+    11994
+  ],
+  "model": "nvidia/nemotron-3.5-bolt-e4b",
+  "one_pass": {
+    "calls": 8,
+    "tokens": 21800,
+    "candidates": 115,
+    "exact_literal_spans": 79,
+    "unverified_spans": 36,
+    "unique_literal_spans": 79
+  },
+  "two_passes": {
+    "calls": 16,
+    "tokens": 42505,
+    "candidates": 141,
+    "exact_literal_spans": 80,
+    "unverified_spans": 61,
+    "unique_literal_spans": 80
+  },
+  "delta": {
+    "candidate_count": 26,
+    "exact_quote_count": 1,
+    "unique_exact_global_spans": 1,
+    "unverified_quote_count": 25,
+    "additional_logical_model_calls": 8,
+    "additional_output_tokens": 10328
+  },
+  "second_pass_new_exact_spans": 1,
+  "second_pass_lost_exact_spans": 0,
+  "per_window_two_pass": [
+    {
+      "ordinal": 7,
+      "candidates": 73,
+      "exact": 36,
+      "unverified": 37,
+      "types": {
+        "obligation": 55,
+        "reference": 18
+      }
+    },
+    {
+      "ordinal": 8,
+      "candidates": 68,
+      "exact": 44,
+      "unverified": 24,
+      "types": {
+        "condition": 4,
+        "obligation": 53,
+        "reference": 5,
+        "right": 6
+      }
+    }
+  ],
+  "replay_network_calls": 0,
+  "actual_logical_requests": 16,
+  "real_requests_reused_from_prior_cache": 4,
+  "new_requests_in_final_run": 12,
+  "visual_audit_private_vps_only": true,
+  "independent_semantic_oracle": false,
+  "n4_v2_same_model_run": false,
+  "n12_run": false,
+  "projectgraph_promotions": 0,
+  "token_cost_usd": "NOT_VERIFIED"
+}
