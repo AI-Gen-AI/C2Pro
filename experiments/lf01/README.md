@@ -9,7 +9,7 @@
 - Credentials: local owner-only `/home/lf01lab/lf01-config/.env`, **never committed**; log in as `lf01lab`. Access via an SSH tunnel; do not expose the port to the internet.
 - Persistence: `/home/lf01lab/lf01-data`; **no** C2Pro database mounts, production tokens, contract PDFs or Railway credentials.
 - Controls: login required; custom components and Python interpreter disabled; local-file restriction enabled; `DO_NOT_TRACK=true`; external LangSmith tracing disabled; no model/provider API key.
-- Source: `langflow_flow_builder.py` obtains *Langflow's own* Basic Prompting schema and creates two local flows with 12 nodes (two executable ChatInput/ChatOutput nodes + ten explanatory **notes**). **Notes are not executed graph nodes.** The single functional edge echoes the passed snapshot. This is NOT an execution of N1–N12.
+- Source: `langflow_flow_builder.py` obtains *Langflow's own* Basic Prompting schema and creates two local flows with 13 nodes (two executable ChatInput/ChatOutput nodes + eleven explanatory **notes**). **Notes are not executed graph nodes.** The single functional edge echoes the passed snapshot, and both tested HTTP 200 on 20 Nov 2026. This is NOT an execution of N1–N12.
 - Cases: `REAL_OFFLINE_AGGREGATED` (prior SEC N4 recovery; redacted aggregates) and `SYNTHETIC_DESIGNED` (invented partial failure). They MUST remain visually distinct.
 - C2Pro connection: offline aggregate snapshot only. The authenticated, owner-scoped GET in **draft** PR #1276 is not equivalent to an approved, deployed read-only integration. No Railway or production runtime connection was attempted.
 
@@ -38,7 +38,7 @@ The runtime smoke test is `verify_lab.py`. It logs in to a **local** lab account
 
 To inspect: `curl -I http://127.0.0.1:17860/` and `curl -I http://127.0.0.1:17860/api/v1/flows/` without authentication (should be forbidden). For the graphical editor, use local SSH forwarding `ssh -N -L 17860:127.0.0.1:17860 aigenadmin@<authorised-private-VPS-host>`; browse to `http://127.0.0.1:17860`. Never use public port forwarding.
 
-To start on an authorized VPS: `sudo bash experiments/lf01/install_vps.sh`. It only installs Podman/uidmap and operates a dedicated `lf01lab` account; no Docker daemon, no C2Pro changes. Existing lab credentials must never be regenerated inadvertently.
+To start on an authorized VPS: `sudo bash experiments/lf01/install_vps.sh`. It only installs Podman/uidmap, provisions a dedicated `lf01lab` account and enables a dedicated systemd unit with a hard 4 GiB RAM / 2 CPU cap; no Docker daemon, no C2Pro changes. Existing lab credentials must never be regenerated inadvertently.
 
 ## What LF-01 can and cannot prove
 
@@ -58,3 +58,20 @@ To start on an authorized VPS: `sudo bash experiments/lf01/install_vps.sh`. It o
 | Security | Isolated local port and owner account | Must isolate dev service | External transmission requires prior privacy review |
 
 **Preliminary recommendation:** keep Langflow only as a **time-bounded sandbox**, not as a production integration or duplicated N4/N12. It adds explanatory display but so far cannot trace the true C2Pro execution. Do not introduce Langfuse unless a measurable diagnostic need remains unmet.
+
+## Reproduction and evaluated outcome
+
+Read [RESULTS_20261120.md](RESULTS_20261120.md) for the test matrix, real blocker codes, diagram, access method, operational resources, and **NO-GO integration** decision. The two flow IDs are written as lab-only evidence files; do not confuse their HTTP 200 echo executions with actual N4/N12 LangGraph executions.
+
+Generate snapshots from the pre-existing authorized private VPS packet (never copy raw evidence into GitHub):
+
+```bash
+sudo python3 experiments/lf01/prepare_snapshots.py \
+  --real-metrics /home/aigenadmin/c2pro-recovery-evidence-20261117/private-output/n4_offline_audit_metrics.json \
+  --real-packet /home/aigenadmin/c2pro-recovery-evidence-20261117/private-output/n4_t05_packet_20261120.json \
+  --output-dir /home/lf01lab/lf01-evidence
+sudo python3 experiments/lf01/langflow_flow_builder.py
+sudo python3 experiments/lf01/verify_lab.py
+```
+
+The lab outputs remain on the VPS. Each flow has two executed nodes and eleven explicitly non-executed diagnostic cards, including five whitelisted blocker labels. The actual direct C2Pro read-only connection is not present because the relevant owner-scoped route is confined to draft PR #1276 and no live deployment was authorized. Never bypass tenant access to complete the demo.
