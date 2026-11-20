@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "synthetic_only": true,
+  "input_type": "Docling markdown from two generated PDFs",
+  "method": "fixture-specific regex, NOT a general contract analysis algorithm",
+  "candidates": [
+    {
+      "type": "FAT_DATE_CONTRADICTION",
+      "status": "CANDIDATE_UNVALIDATED",
+      "delay_days": 21,
+      "contractual_date": "2027-05-30",
+      "proposed_date": "2027-06-20",
+      "evidence": [
+        {
+          "source": "synthetic_contract.pdf",
+          "source_sha256": "fc3a73d5dc9ce02af0aad346cf282537fe1a0a1408a3972cefaf91052be67b9b",
+          "text_start": 184,
+          "text_end": 213,
+          "quote": "FAT no later than 30 May 2027",
+          "reference_type": "markdown_char_span_not_pdf_coordinates"
+        },
+        {
+          "source": "synthetic_annex.pdf",
+          "source_sha256": "da059efa1955bfef70569530e5992fcbfaf3cf24fc0a4b6c1817418b476e59d7",
+          "text_start": 383,
+          "text_end": 407,
+          "quote": "FAT date is 20 June 2027",
+          "reference_type": "markdown_char_span_not_pdf_coordinates"
+        }
+      ]
+    },
+    {
+      "type": "BUDGET_OFFER_CONTRADICTION",
+      "status": "CANDIDATE_UNVALIDATED",
+      "overrun_eur": 80000,
+      "approved_ceiling_eur": 950000,
+      "offered_price_eur": 1030000,
+      "evidence": [
+        {
+          "source": "synthetic_contract.pdf",
+          "source_sha256": "fc3a73d5dc9ce02af0aad346cf282537fe1a0a1408a3972cefaf91052be67b9b",
+          "text_start": 390,
+          "text_end": 414,
+          "quote": "cost ceiling: EUR 950000",
+          "reference_type": "markdown_char_span_not_pdf_coordinates"
+        },
+        {
+          "source": "synthetic_annex.pdf",
+          "source_sha256": "da059efa1955bfef70569530e5992fcbfaf3cf24fc0a4b6c1817418b476e59d7",
+          "text_start": 454,
+          "text_end": 486,
+          "quote": "transformer quote is EUR 1030000",
+          "reference_type": "markdown_char_span_not_pdf_coordinates"
+        }
+      ]
+    }
+  ],
+  "trusted_promotions": 0,
+  "alerts_created": 0,
+  "score_modified": false,
+  "limitations": [
+    "Markdown offsets are not original PDF coordinates.",
+    "Pattern-based extraction is valid only for this synthetic corpus.",
+    "No MPXJ schedule linkage or C2Pro ProjectGraph API has been exercised.",
+    "No N4/N12 analysis, human review, or accuracy benchmark has been executed."
+  ]
+}
