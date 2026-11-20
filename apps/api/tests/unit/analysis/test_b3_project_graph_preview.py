@@ -16,7 +16,7 @@ from src.analysis.application.b3_source_inventory_bridge import (
 from src.analysis.application.b3_project_graph_preview import (
     preview_b3_sources_in_project_graph,
 )
-from test_b3_source_inventory_bridge import CONTRACT, PROJECT, TENANT, BUDGET, SCHEDULE, input_bundle
+from tests.unit.analysis.test_b3_source_inventory_bridge import CONTRACT, PROJECT, TENANT, BUDGET, SCHEDULE, input_bundle
 
 
 def packet():
