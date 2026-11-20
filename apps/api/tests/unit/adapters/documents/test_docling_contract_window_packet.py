@@ -37,8 +37,8 @@ class ContractWindowPacketTests(unittest.TestCase):
     def test_conserves_all_characters_and_keeps_source_offsets(self):
         source = candidate()
         result = build_untrusted_contract_windows(source, max_chars=256)
-        self.assertEqual(result["coverage"]["parsed_chars"], 663)
-        self.assertEqual(result["coverage"]["window_chars"], 663)
+        self.assertEqual(result["coverage"]["parsed_chars"], 665)
+        self.assertEqual(result["coverage"]["window_chars"], 665)
         self.assertEqual(result["coverage"]["window_count"], 3)
         self.assertEqual(result["coverage"]["unanchored_segments"], 1)
         self.assertEqual(result["windows"][0]["parts"][0]["source_start"], 0)
