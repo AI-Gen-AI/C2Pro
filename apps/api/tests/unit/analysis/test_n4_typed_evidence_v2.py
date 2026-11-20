@@ -273,6 +273,111 @@ def test_json_string_and_dict_are_equivalent_and_source_digest_is_stable():
     assert a.facts[0]["finding_key"] == b.facts[0]["finding_key"]
 
 
+def test_real_solarmax_p36_quote_with_pdf_linebreak_is_located_without_forging_literal():
+    # Source layout mirrors the literal p36 paragraph in SolarMax 94p PDF.
+    original = (
+        "Contractor shall pay to Owner, as liquidated damages and not as a\n"
+        "penalty, the following:"
+    )
+    model_reformatted = (
+        "Contractor shall pay to Owner, as liquidated damages and not as a "
+        "penalty, the following:"
+    )
+    fact = {
+        "record_type": "fact", "local_id": "F1",
+        "kind": "penalty", "title": "Contractor's payment duty",
+        "clause_ref": "2.5.5", "value_text": None,
+        "evidence": [_quote(model_reformatted)],
+    }
+    out = parse_n4_typed_evidence_v2(_payload(fact), window=_window(original))
+    found = out.facts[0]["claim"]["decisive_evidence"][0]
+    assert found["evidence_status"] == "WHITESPACE_NORMALIZED_MODEL_SAFE_MATCH"
+    assert found["quote"] == original
+    assert out.facts[0]["source_refs"][0]["analysis_span"] == [0, len(original)]
+    assert found["original_pdf_status"] == "UNVERIFIED"
+    assert out.facts[0]["claim"]["source_coverage_status"] == "ALL_QUOTES_MATCH_N2"
+
+
+def test_spanish_supply_and_english_services_are_both_supported_as_literal_source():
+    # The parser is language-independent; this does not assert model recall.
+    source = (
+        "Suministro: El proveedor abonará 10.000 € si incumple el plazo.\n"
+        "El comprador podrá resolver el contrato tras aviso escrito.\n"
+        "Services: The Supplier shall replace defective goods within thirty (30) days."
+    )
+    es_quote = "El proveedor abonará 10.000 € si incumple el plazo."
+    en_quote = "The Supplier shall replace defective goods within thirty (30) days."
+    es = {
+        "record_type": "fact", "local_id": "FES", "kind": "penalty",
+        "title": "Penalización de suministro", "clause_ref": "S.4",
+        "value_text": "10.000 €", "evidence": [_quote(es_quote, "amount")],
+    }
+    en = {
+        "record_type": "fact", "local_id": "FEN", "kind": "warranty",
+        "title": "Replacement within thirty days", "clause_ref": "S.5",
+        "value_text": "thirty (30) days", "evidence": [_quote(en_quote, "condition")],
+    }
+    out = parse_n4_typed_evidence_v2(_payload(es, en), window=_window(source))
+    assert len(out.facts) == 2
+    assert [f["claim"]["value_status"] for f in out.facts] == [
+        "N2_QUOTE_CONTAINS_REPORTED_VALUE", "N2_QUOTE_CONTAINS_REPORTED_VALUE",
+    ]
+    assert [f["claim"]["value_text"] for f in out.facts] == [
+        "10.000 €", "thirty (30) days",
+    ]
+    assert [f["claim"]["decisive_evidence"][0]["quote"] for f in out.facts] == [
+        es_quote, en_quote,
+    ]
+    assert all(f["claim"]["original_pdf_status"] == "UNVERIFIED" for f in out.facts)
+
+
+@pytest.mark.parametrize("invented_quote", [
+    "El proveedor abonará 100.000 € si incumple el plazo.",
+    "The supplier shall pay 10,000 EUR if it misses the deadline.",
+    "El Proveedor abonará 10.000 € si incumple el plazo.",
+    "El proveedor abonara 10.000 € si incumple el plazo.",
+])
+def test_translation_case_accent_and_number_changes_cannot_become_source_quotes(
+    invented_quote,
+):
+    original = "El proveedor abonará 10.000 € si incumple el plazo."
+    fact = {
+        "record_type": "fact", "local_id": "FES", "kind": "penalty",
+        "title": "Propuesta de penalización", "clause_ref": "4",
+        "value_text": "10.000 €", "evidence": [_quote(invented_quote, "amount")],
+    }
+    out = parse_n4_typed_evidence_v2(_payload(fact), window=_window(original))
+    assert out.facts[0]["claim"]["source_coverage_status"] == "HAS_UNVERIFIED_QUOTES"
+    assert out.facts[0]["claim"]["decisive_evidence"][0]["quote"] is None
+    assert out.facts[0]["claim"]["value_status"] == "VALUE_NOT_CITED"
+    assert out.facts[0]["source_refs"][0]["analysis_span"] is None
+
+
+def test_duplicate_quote_with_different_whitespace_cannot_pick_arbitrary_span():
+    source = (
+        "The supplier shall deliver within thirty days.\n"
+        "The supplier shall deliver within\nthirty days."
+    )
+    reported = "The supplier shall deliver within thirty days."
+    f = {
+        "record_type": "fact", "local_id": "FZ", "kind": "milestone",
+        "title": "Delivery deadline reference", "clause_ref": "8",
+        "value_text": None, "evidence": [_quote(reported)],
+    }
+    out = parse_n4_typed_evidence_v2(_payload(f), window=_window(source))
+    assert out.facts[0]["source_refs"][0]["evidence_status"] == "AMBIGUOUS_REPEATED_QUOTE"
+    assert out.facts[0]["source_refs"][0]["analysis_span"] is None
+
+
+def test_generic_prompt_makes_es_en_and_multiple_contract_types_explicit():
+    system = N4_TYPED_EVIDENCE_V2_SYSTEM_PROMPT.casefold()
+    assert "any type" in system
+    for term in ("spanish", "english", "mixed language", "supply", "services",
+                 "construction", "nda", "original language", "never translate"):
+        assert term in system
+    assert "you research epc contracts" not in system
+
+
 def test_no_arbitrary_top_n_or_hidden_provider_and_original_pdf_certification():
     prompt = N4_TYPED_EVIDENCE_V2_SYSTEM_PROMPT.casefold()
     for term in (
