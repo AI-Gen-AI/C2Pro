@@ -1184,7 +1184,9 @@ async def _run_analysis_graph_best_effort(
             "terminal_unassessed": True,
             "analysis_blocker_code": blocker if blocker in (
                 "N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED",
+                "N4_PARTIAL_RESULTS", "N4_PRIOR_RUN_RECONCILIATION_REQUIRED",
             ) else None,
+            "n4_incremental_run_id": result.get("n4_incremental_run_id"),
         }
     analysis_id = result.get("analysis_id")
     human_approval_required = bool(result.get("human_approval_required", False))
@@ -1458,6 +1460,7 @@ async def _analyze_owned(
     human_approval_required = False
     graph_terminal_unassessed = False
     graph_blocker_code: str | None = None
+    graph_n4_run_id: str | None = None
     n4_pilot_status: str | None = None
     if n4_only_pilot and not requires_text_analysis(document.document_type, parsed_text):
         raise ValueError("N4-only pilot requires an extractable text contract")
@@ -1486,6 +1489,7 @@ async def _analyze_owned(
         human_approval_required = graph_result["human_approval_required"]
         graph_terminal_unassessed = bool(graph_result.get("terminal_unassessed"))
         graph_blocker_code = graph_result.get("analysis_blocker_code")
+        graph_n4_run_id = graph_result.get("n4_incremental_run_id")
     else:
         analysis_id = None
         logger.info(
@@ -1563,8 +1567,20 @@ async def _analyze_owned(
     valid_blocker = graph_blocker_code if (
         terminal_incomplete and graph_blocker_code in (
             "N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED",
+            "N4_PARTIAL_RESULTS", "N4_PRIOR_RUN_RECONCILIATION_REQUIRED",
         )
     ) else None
+    # Preserve a prior run containing candidates if a subsequent generation
+    # is blocked before producing any. A zero-result run must not erase history.
+    if valid_blocker == "N4_PARTIAL_RESULTS" and graph_n4_run_id:
+        pinned_run = str(UUID(str(graph_n4_run_id)))
+        pinned_revision = str(grant.revision_id)
+        if current_metadata.get("analysis_n4_run_id") != pinned_run:
+            current_metadata["analysis_n4_run_id"] = pinned_run
+            metadata_changed = True
+        if current_metadata.get("analysis_n4_revision_id") != pinned_revision:
+            current_metadata["analysis_n4_revision_id"] = pinned_revision
+            metadata_changed = True
     if current_metadata.get("analysis_blocker_code") != valid_blocker:
         if valid_blocker:
             current_metadata["analysis_blocker_code"] = valid_blocker
