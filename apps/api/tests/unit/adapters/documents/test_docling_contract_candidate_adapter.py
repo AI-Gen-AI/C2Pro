@@ -24,13 +24,16 @@ DATA = b"%PDF-1.4\n%synthetic fixture\n"
 def fake_document(anchor=True):
     bbox = NS(l=10.0, t=20.0, r=30.0, b=40.0)
     prov = [NS(page_no=1, bbox=bbox)] if anchor else []
-    return NS(
-        pages={1: NS(), 2: NS()},
-        texts=[NS(text="Clause 9.6 FAT deadline 2027-05-30", label="text", prov=prov)],
-        tables=[NS(data=NS(num_rows=1, num_cols=2, table_cells=[
+    clause = NS(text="Clause 9.6 FAT deadline 2027-05-30",
+                label="text", prov=prov, self_ref="#/texts/0")
+    table = NS(data=NS(num_rows=1, num_cols=2, table_cells=[
             NS(text="WBS", start_row_offset_idx=0, start_col_offset_idx=0),
             NS(text="WBS-100", start_row_offset_idx=0, start_col_offset_idx=1),
-        ]), prov=prov)],
+        ]), prov=prov, self_ref="#/tables/0")
+    return NS(
+        pages={1: NS(), 2: NS()},
+        texts=[clause], tables=[table],
+        iterate_items=lambda: iter([(clause, 1), (table, 1)]),
     )
 
 
@@ -59,6 +62,8 @@ class DoclingContractAdapterTests(unittest.TestCase):
         self.assertEqual(result["tables"][0]["cells"][1]["text"], "WBS-100")
         self.assertEqual(result["coverage"]["pages_without_grounded_content"], [2])
         self.assertFalse(result["coverage"]["annex_coverage_complete"])
+        self.assertEqual(result["reading_order"], ["docling:text:0", "docling:table:0"])
+        self.assertTrue(result["coverage"]["docling_layout_sequence_available"])
 
     def test_pinned_sha_checked_before_converter_instantiation(self):
         called = []
