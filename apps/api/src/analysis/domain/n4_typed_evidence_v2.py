@@ -78,7 +78,7 @@ class N4V2ContractError(ValueError):
 
 
 class _StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
 
 
 class EvidenceQuote(_StrictModel):
@@ -93,7 +93,7 @@ class FactRecord(_StrictModel):
     title: str = Field(min_length=4, max_length=200)
     clause_ref: str | None = Field(default=None, max_length=100)
     value_text: str | None = Field(default=None, max_length=300)
-    evidence: list[EvidenceQuote] = Field(min_length=1)
+    evidence: list[EvidenceQuote] = Field(min_length=1, max_length=8)
 
 
 class RiskRecord(_StrictModel):
@@ -104,7 +104,7 @@ class RiskRecord(_StrictModel):
     clause_ref: str | None = Field(default=None, max_length=100)
     risk_reason: str = Field(min_length=12, max_length=2000)
     linked_fact_ids: list[str] = Field(default_factory=list)
-    evidence: list[EvidenceQuote] = Field(min_length=1)
+    evidence: list[EvidenceQuote] = Field(min_length=1, max_length=8)
 
 
 TypedRecord = Annotated[FactRecord | RiskRecord, Field(discriminator="record_type")]
