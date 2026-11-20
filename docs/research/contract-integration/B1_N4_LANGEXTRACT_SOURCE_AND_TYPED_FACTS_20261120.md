@@ -12,7 +12,7 @@
 
 ## Experimento ejecutado
 
-Cuatro citas semilla de las secciones identificadas por encabezados 2.5.5, 9.6, 4.3.1 y artículo 13 del PDF público. Cada cita es **literal completa con límites de palabra y aparición única en todo el texto de 74 páginas**. Se inyectaron tres variantes por muestra (12 salidas controladas), **no generadas por modelo**.
+Cuatro citas semilla asociadas a los patrones textuales 2.5.5, 9.6, 4.3.1 y 13 del PDF público. **Esas coincidencias no garantizan por sí solas que la cita corresponda al cuerpo operativo de una cláusula: pueden provenir de índice, referencias cruzadas u otros apartados.** Este ensayo es exclusivamente de posicionamiento literal, no de contenido jurídico. Cada cita es **literal completa con límites de palabra y aparición única en todo el texto de 74 páginas**. Se inyectaron tres variantes por muestra (12 salidas controladas), **no generadas por modelo**.
 
 | Candidato | N4 actual (literal) | LangExtract estricto | LangExtract flexible |
 |---|---:|---:|---:|
