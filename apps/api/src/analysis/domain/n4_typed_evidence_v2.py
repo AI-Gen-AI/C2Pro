@@ -170,7 +170,7 @@ def _quote_ref(quote: EvidenceQuote, window: N4SourceWindow) -> tuple[dict[str, 
     Reject repeated matches even if one occurrence has exact whitespace.
     """
     words = quote.quote.split()
-    pattern = r"\\s+".join(re.escape(word) for word in words)
+    pattern = r"\s+".join(re.escape(word) for word in words)
     matches = list(re.finditer(pattern, window.context_text))
     status: str
     start: int | None
