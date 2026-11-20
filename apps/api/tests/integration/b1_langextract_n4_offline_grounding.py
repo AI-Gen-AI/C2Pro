@@ -24,9 +24,9 @@ from src.analysis.domain.n4_compact_window_response import parse_n4_window_outpu
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 
 MARKERS = {
-    "2_5_5": r"2\s*\.\s*5\s*\.\s*5",
-    "9_6": r"\b9\s*\.\s*6\b",
-    "4_3_1": r"\b4\s*\.\s*3\s*\.\s*1",
+    "2_5_5": r"(?<![\d.])2\s*\.\s*5\s*\.\s*5(?![\d.])",
+    "9_6": r"(?<![\d.])9\s*\.\s*6(?![\d.])",
+    "4_3_1": r"(?<![\d.])4\s*\.\s*3\s*\.\s*1(?![\d.])",
     "article_13": r"\b(?:ARTICLE\s+)?13\s*[.:\-]",
 }
 MAX_SAFE_QUOTE_CHARS = 95
@@ -50,7 +50,7 @@ def make_probes(text: str, windows: tuple) -> list[dict]:
             quote = raw[:boundary].strip() if boundary >= 40 else raw.strip()
             if len(quote) < 30:
                 continue
-            if w.context_text.count(quote) != 1:
+            if w.context_text.count(quote) != 1 or text.count(quote) != 1:
                 continue
             probes.append({"clause":label, "ordinal":w.ordinal,
                            "source_start":text.find(quote,start,w.core_end),
