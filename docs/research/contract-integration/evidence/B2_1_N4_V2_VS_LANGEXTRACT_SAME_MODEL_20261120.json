@@ -1,0 +1,65 @@
+{
+  "status": "B2_1_EXPLORATORY_COMPARISON_NO_GOLD_RECALL",
+  "source_sha256": "b4009aee679ebef7c81c07446a897ad5f9b7e8c224db7f0156f6a7967af99044",
+  "oracle_sha256": "3eee6ee765dd04bf7ddab754662a78c5c3466eaed03b1688cd3099b404c01bd3",
+  "model": "nvidia/nemotron-3.5-bolt-e4b",
+  "n4_experimental_root_facts": {
+    "architecture": "isolated root schema proposal; NOT N4 916808c5 runner",
+    "one_pass": true,
+    "few_shot": false,
+    "usage": {
+      "calls": 8,
+      "prompt_tokens": 8750,
+      "completion_tokens": 11269,
+      "total_tokens": 20019,
+      "wall_seconds": 136.11
+    }
+  },
+  "langextract_native": {
+    "architecture": "native LangExtract 1.7.1, ExampleData few-shot, one pass",
+    "one_pass": true,
+    "few_shot": true,
+    "usage": {
+      "logical_calls": 8,
+      "reported_total_tokens_prior_B2": 21800
+    }
+  },
+  "n4_counts": {
+    "candidate_count": 73,
+    "source_exact_count": 71,
+    "source_unverified_count": 2,
+    "strict_exact_distinct_spans": 70,
+    "entity_type_totals": {
+      "obligation": 65,
+      "right": 4,
+      "condition": 3,
+      "reference": 1
+    },
+    "provisional_anchor_hits": 12,
+    "provisional_anchor_denominator": 13
+  },
+  "lx_counts": {
+    "candidate_count": 115,
+    "source_exact_count": 79,
+    "source_unverified_count": 36,
+    "strict_exact_distinct_spans": 79,
+    "entity_type_totals": {
+      "obligation": 89,
+      "reference": 17,
+      "right": 5,
+      "condition": 4
+    },
+    "provisional_anchor_hits": 12,
+    "provisional_anchor_denominator": 13
+  },
+  "comparison_limits": [
+    "The source checklist is provisional, not a blinded expert gold oracle.",
+    "Provisional anchor coverage is NOT full recall or legal validity.",
+    "The N4 side uses a research-only ROOT prompt/schema, not production N4 provider/ledger.",
+    "Both models used NVIDIA Bolt on same SEC HTML N4 windows and same UnicodeTokenizer chunk boundaries; prompts/few-shot differ by design.",
+    "PDF physical page provenance, N2 PII projection, N12, ProjectGraph were not tested.",
+    "NVIDIA price/currency not verified; token totals are measured."
+  ],
+  "approved_findings": 0,
+  "projectgraph_effects": 0
+}
