@@ -30,6 +30,27 @@ from src.core.processing_authority import ProcessingStage, current_authority
 class N4GraphBridgeBlocked(RuntimeError):
     """Fail closed without claiming the source was analyzed or reviewable."""
 
+class N4RunIncomplete(N4GraphBridgeBlocked):
+    """A durable N4 run has observable progress but is not HITL-reviewable."""
+
+    def __init__(
+        self, *, run_id: UUID, status: str, examined_windows: int,
+        total_windows: int, persisted_result_windows: int,
+        blocked_result_windows: int, stopped_reason: str | None,
+    ) -> None:
+        self.run_id = run_id
+        self.status = status
+        self.examined_windows = examined_windows
+        self.total_windows = total_windows
+        self.persisted_result_windows = persisted_result_windows
+        self.blocked_result_windows = blocked_result_windows
+        self.stopped_reason = stopped_reason
+        super().__init__(
+            "N4 durable source window run incomplete; "
+            f"reason={stopped_reason or status}"
+        )
+
+
 
 def _identity(state: Mapping[str, Any]) -> tuple[Any, UUID, str]:
     authority = current_authority()
@@ -194,9 +215,14 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         or outcome.settled_receipt_windows != outcome.total_windows
         or outcome.persisted_result_windows != outcome.total_windows
     ):
-        raise N4GraphBridgeBlocked(
-            "N4 durable source window run incomplete; "
-            f"reason={outcome.stopped_reason or outcome.status}"
+        raise N4RunIncomplete(
+            run_id=outcome.run_id,
+            status=outcome.status,
+            examined_windows=outcome.examined_windows,
+            total_windows=outcome.total_windows,
+            persisted_result_windows=outcome.persisted_result_windows,
+            blocked_result_windows=outcome.blocked_result_windows,
+            stopped_reason=outcome.stopped_reason,
         )
 
     # Tenant RLS and an exact run_id: never import another document's candidates.
