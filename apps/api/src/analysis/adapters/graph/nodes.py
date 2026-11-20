@@ -316,6 +316,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
     """TS-QA-SWAGGER-ANALYSIS-001: extract risks via AI and fail honestly."""
     if os.getenv("C2PRO_N4_GRAPH_LEDGER_ENABLED") == "1":
         from src.analysis.adapters.graph.n4_governed_bridge import (
+            N4RunIncomplete,
             run_governed_n4_in_graph,
         )
         try:
@@ -340,11 +341,34 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         except Exception as exc:  # noqa: BLE001
             # Missing contractual AI budget is an operator action, NOT a
             # retryable transient failure or a reason to fabricate zero risks.
-            state["analysis_blocker_code"] = (
-                "N4_BUDGET_NOT_CONFIGURED" if "N4BudgetNotConfigured" in str(exc)
-                else "N4_BUDGET_EXCEEDED" if "N4BudgetExceeded" in str(exc)
-                else None
-            )
+            if isinstance(exc, N4RunIncomplete):
+                # A new failed generation may have no findings. Never promote
+                # it over a previously pinned run with durable evidence.
+                if exc.persisted_result_windows > 0:
+                    state["n4_incremental_run_id"] = str(exc.run_id)
+                    state["n4_incremental_window_coverage"] = {
+                        "examined": exc.examined_windows,
+                        "persisted_results": exc.persisted_result_windows,
+                        "blocked_results": exc.blocked_result_windows,
+                        "total": exc.total_windows,
+                    }
+                state["analysis_blocker_code"] = (
+                    "N4_PRIOR_RUN_RECONCILIATION_REQUIRED"
+                    if exc.stopped_reason == "N4PriorRunReconciliationRequired"
+                    else "N4_PARTIAL_RESULTS"
+                    if exc.persisted_result_windows > 0
+                    else "N4_BUDGET_NOT_CONFIGURED"
+                    if exc.stopped_reason == "N4BudgetNotConfigured"
+                    else "N4_BUDGET_EXCEEDED"
+                    if exc.stopped_reason == "N4BudgetExceeded"
+                    else None
+                )
+            else:
+                state["analysis_blocker_code"] = (
+                    "N4_BUDGET_NOT_CONFIGURED" if "N4BudgetNotConfigured" in str(exc)
+                    else "N4_BUDGET_EXCEEDED" if "N4BudgetExceeded" in str(exc)
+                    else None
+                )
             # No fallback to the old unbudgeted, potentially truncated tool:
             # even an unavailable provider/budget is a material failed node.
             failed = _failed_node_result("risk_extractor", exc)
