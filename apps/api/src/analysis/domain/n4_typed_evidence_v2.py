@@ -213,14 +213,24 @@ def parse_n4_typed_evidence_v2(
             ref["analysis_span"] for ref in source_refs
             if ref["evidence_status"] == "EXACT_MODEL_SAFE_MATCH"
         ]
+        # Model-provided local_id is only a within-window link, not a
+        # stable cross-window identity. When quotes are anchored to N2, use
+        # their absolute offsets so overlap windows can resolve duplicates.
         identity = {
             "source_sha256": window.source_sha256,
             "revision_id": window.revision_id,
             "record_type": record.record_type,
-            "local_id": record.local_id,
             "clause_ref": record.clause_ref,
-            "ordinal": window.ordinal,
-            "offsets": unique_offsets,
+            "record_kind": (
+                record.kind if isinstance(record, FactRecord) else record.category
+            ),
+            "title": " ".join(record.title.casefold().split()),
+            "offsets": sorted(unique_offsets),
+            **(
+                {}
+                if unique_offsets else
+                {"ordinal": window.ordinal, "local_id": record.local_id}
+            ),
         }
         finding_key = sha256(json.dumps(
             identity, sort_keys=True, ensure_ascii=False, separators=(",", ":")
@@ -274,6 +284,17 @@ def parse_n4_typed_evidence_v2(
                 "score_allowed": False,
             })
             risks.append(common)
+
+    # Resolve local fact references to stable IDs after all records have
+    # been processed. Do not let a risk silently reference an absent fact.
+    fact_key_by_local_id = {
+        record["claim"]["local_id"]: record["finding_key"] for record in facts
+    }
+    for record in risks:
+        record["claim"]["linked_fact_keys"] = [
+            fact_key_by_local_id[local_id]
+            for local_id in record["claim"]["linked_fact_ids"]
+        ]
 
     return N4V2Parsed(
         window_ordinal=window.ordinal,
