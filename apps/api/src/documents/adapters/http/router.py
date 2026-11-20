@@ -1596,6 +1596,157 @@ async def recover_n4_only_enqueue_endpoint(
 
 
 @router.get(
+    "/projects/{project_id}/documents/{document_id}/n4-findings",
+    summary="Read the pinned N4 run's provisional candidates without approval",
+)
+async def read_n4_partial_findings(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,  # noqa: ARG001 -- authentication required
+    tenant_id: CurrentTenantId,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> dict[str, object]:
+    """Read durable PROPOSED candidates; never invoke N4, HITL or Score.
+
+    The document's fenced analysis result pins run, source digest and revision.
+    A newer empty retry must not erase a prior run containing valid evidence.
+    """
+    import re
+
+    doc = await repo.get_by_id(tenant_id, document_id)
+    if doc is None or doc.project_id != project_id:
+        raise HTTPException(status_code=404, detail="document unavailable")
+    metadata = doc.document_metadata or {}
+    run_raw = metadata.get("analysis_n4_run_id")
+    revision_raw = metadata.get("analysis_n4_revision_id")
+    digest = metadata.get("analysis_n4_source_sha256")
+    if not run_raw or not revision_raw or not digest:
+        # NOT_AVAILABLE is not the claim that the contract contains zero risks.
+        return {
+            "status": "RESULTS_NOT_AVAILABLE", "findings": [],
+            "total_findings": None, "coverage": None,
+            "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
+            "trusted": False, "approvable": False,
+        }
+    try:
+        pinned_run = UUID(str(run_raw))
+        pinned_revision = UUID(str(revision_raw))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=404, detail="N4 run unavailable") from exc
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise HTTPException(status_code=404, detail="N4 source identity unavailable")
+
+    run = (await repo.session.execute(text("""
+        SELECT r.run_id, r.status, r.total_windows, r.generation
+          FROM public.n4_extraction_runs r
+          JOIN public.document_revisions dr
+            ON dr.tenant_id = r.tenant_id
+           AND dr.document_id = r.document_id
+           AND dr.revision_id = r.document_revision_id
+           AND dr.valid_to IS NULL
+          JOIN public.document_processing_operations op
+            ON op.tenant_id = r.tenant_id
+           AND op.document_id = r.document_id
+           AND op.revision_id = r.document_revision_id
+           AND op.generation >= r.generation
+         WHERE r.tenant_id = CAST(:tenant AS uuid)
+           AND r.project_id = CAST(:project AS uuid)
+           AND r.document_id = CAST(:document AS uuid)
+           AND r.document_revision_id = CAST(:revision AS uuid)
+           AND r.run_id = CAST(:run AS uuid)
+           AND r.source_sha256 = :digest
+    """), {
+        "tenant": str(tenant_id), "project": str(project_id),
+        "document": str(document_id), "revision": str(pinned_revision),
+        "run": str(pinned_run), "digest": digest,
+    })).mappings().one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="N4 run unavailable or superseded")
+
+    windows = (await repo.session.execute(text("""
+        SELECT w.ordinal, w.status, w.blocked_reason, w.unresolved_refs,
+               (w.committed_at IS NOT NULL
+                AND w.findings_sha256 IS NOT NULL) AS has_result
+          FROM public.n4_extraction_windows w
+         WHERE w.tenant_id = CAST(:tenant AS uuid)
+           AND w.run_id = CAST(:run AS uuid)
+         ORDER BY w.ordinal
+    """), {"tenant": str(tenant_id), "run": str(pinned_run)})).mappings().all()
+    read_count = sum(1 for w in windows if w["has_result"])
+    examined = sum(1 for w in windows if w["status"] == "EXAMINED")
+    blocked = sum(1 for w in windows if w["status"] == "BLOCKED")
+    count = (await repo.session.execute(text("""
+        SELECT count(*) FROM public.n4_candidate_findings
+         WHERE tenant_id = CAST(:tenant AS uuid)
+           AND run_id = CAST(:run AS uuid)
+    """), {"tenant": str(tenant_id), "run": str(pinned_run)})).scalar_one()
+    rows = (await repo.session.execute(text("""
+        SELECT f.finding_key, f.window_ordinal, f.claim, f.source_refs
+          FROM public.n4_candidate_findings f
+         WHERE f.tenant_id = CAST(:tenant AS uuid)
+           AND f.run_id = CAST(:run AS uuid)
+         ORDER BY f.window_ordinal, f.finding_key
+         LIMIT :limit OFFSET :offset
+    """), {
+        "tenant": str(tenant_id), "run": str(pinned_run),
+        "limit": limit, "offset": offset,
+    })).mappings().all()
+    findings: list[dict[str, object]] = []
+    for row in rows:
+        claim = row["claim"] if isinstance(row["claim"], dict) else {}
+        refs = row["source_refs"] if isinstance(row["source_refs"], list) else []
+        matched_n2 = any(
+            isinstance(ref, dict)
+            and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
+            and ref.get("evidence_status") == "EXACT_MODEL_SAFE_MATCH"
+            and isinstance(ref.get("analysis_span"), list)
+            for ref in refs
+        )
+        findings.append({
+            "finding_key": row["finding_key"],
+            "window_ordinal": row["window_ordinal"],
+            "title": str(claim.get("title") or "Untitled provisional finding"),
+            "clause_ref": claim.get("clause_ref"),
+            "source_quote": claim.get("source_quote") if matched_n2 else None,
+            "n2_quote_status": "N2_EXACT_MATCH" if matched_n2 else "NOT_LOCATED",
+            "original_pdf_quote_status": "UNVERIFIED",
+            "severity": "UNASSESSED",
+            "review_state": "PROPOSED",
+            "approvable": False,
+        })
+    return {
+        "status": "PARTIAL_UNASSESSED" if run["status"] != "COMPLETE"
+            else "PROPOSED_UNASSESSED",
+        "run_id": str(pinned_run),
+        "document_revision_id": str(pinned_revision),
+        "ledger_status": str(run["status"]),
+        "total_findings": int(count), "offset": offset, "limit": limit,
+        "findings": findings,
+        "coverage": {
+            "total": int(run["total_windows"]),
+            "windows_with_result": read_count,
+            "examined": examined,
+            "blocked": blocked,
+            "windows": [
+                {
+                    "ordinal": int(w["ordinal"]), "status": str(w["status"]),
+                    "blocked_reason": w["blocked_reason"],
+                    "unresolved_refs": w["unresolved_refs"] or [],
+                    "has_result": bool(w["has_result"]),
+                }
+                for w in windows
+            ],
+            "semantic_recall_certified": False,
+            "original_pdf_coverage_certified": False,
+        },
+        "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
+        "trusted": False, "approvable": False,
+    }
+
+
+@router.get(
     "/projects/{project_id}/documents/{document_id}/n4-only-pilot/findings",
     summary="Read the authorized N4 pilot ledger; N2 citations are NOT PDF-verified",
 )
