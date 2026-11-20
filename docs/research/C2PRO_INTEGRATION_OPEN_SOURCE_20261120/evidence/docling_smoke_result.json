@@ -1,0 +1,57 @@
+{
+  "spike": "Docling",
+  "synthetic_only": true,
+  "docling_version": "2.151.1",
+  "reportlab_version": "5.1.0",
+  "inputs": [
+    {
+      "file": "synthetic_contract.pdf",
+      "sha256": "fc3a73d5dc9ce02af0aad346cf282537fe1a0a1408a3972cefaf91052be67b9b",
+      "bytes": 2649
+    },
+    {
+      "file": "synthetic_annex.pdf",
+      "sha256": "da059efa1955bfef70569530e5992fcbfaf3cf24fc0a4b6c1817418b476e59d7",
+      "bytes": 2108
+    }
+  ],
+  "documents": {
+    "synthetic_contract.pdf": {
+      "status": "PASS",
+      "conversion_status": "ConversionStatus.SUCCESS",
+      "seconds": 118.859,
+      "pages": 2,
+      "tables": 0,
+      "expected_terms": {
+        "132": true,
+        "950000": true,
+        "FAT": true,
+        "30 May 2027": true,
+        "0.5": true
+      },
+      "markdown_chars": 637,
+      "markdown_sha256": "d77d9ee4f8911fe4b6c84b3556a2d31bf091678488b830b9b0cc4d2fd8066699"
+    },
+    "synthetic_annex.pdf": {
+      "status": "PASS",
+      "conversion_status": "ConversionStatus.SUCCESS",
+      "seconds": 4.094,
+      "pages": 1,
+      "tables": 1,
+      "expected_terms": {
+        "1030000": true,
+        "FAT": true,
+        "20 June 2027": true,
+        "WBS-130": true
+      },
+      "markdown_chars": 529,
+      "markdown_sha256": "5814516afc1bdd798b0de70694acacee69adfb4d4d120cb3fbdebf179bc53bb2"
+    }
+  },
+  "limitations": [
+    "Synthetic digital PDFs; not scanned contracts.",
+    "No comparison with current C2Pro parser or N4/N12.",
+    "Text presence and table detection do not prove legal interpretation."
+  ],
+  "status": "PASS"
+}
