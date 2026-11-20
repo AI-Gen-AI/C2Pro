@@ -1,0 +1,129 @@
+schema_version: c2pro-m2-oracle-v1
+status: TEMPLATE_ONLY_NOT_EVIDENCE
+corpus_role: calibration | held_out
+document_set:
+  set_id: REQUIRED
+  authorization_ref: REQUIRED
+  contract_revision_id: REQUIRED
+  contract_pdf_sha256: REQUIRED_64_HEX
+  annexes:
+  - annex_id: PLACEHOLDER
+    file_sha256: REQUIRED_64_HEX
+    status: PRESENT | MISSING | NOT_APPLICABLE
+  page_policy: pdf_page_1_based; printed_page_separately
+  source_access: controlled_local_only
+configuration_freeze:
+  repo_commit: 799ce5315c01cdf6ec83f5716a02a509a6be1785
+  n4_prompt_sha256: TO_RECORD
+  model_id: TO_RECORD
+  model_parameters_hash: TO_RECORD
+  freeze_timestamp: TO_RECORD
+  held_out_sealed_until: TO_RECORD
+annotators:
+  A: INDEPENDENT_PSEUDONYM
+  B: INDEPENDENT_PSEUDONYM
+  adjudicator: INDEPENDENT_PSEUDONYM
+  blind_to_n4_n12: true
+enums:
+  kind:
+  - risk
+  - obligation
+  - milestone
+  - guarantee
+  - penalty
+  - payment_term
+  - exclusion
+  - responsibility
+  materiality:
+  - critical
+  - high
+  - other
+  - undetermined
+  source_state:
+  - ORIGINAL_VERIFIED
+  - N2_ONLY
+  - ORIGINAL_UNVERIFIED
+  - INVALID
+  outcome:
+  - TP
+  - FN
+  - FP
+  - NOT_SCORABLE
+  risk_severity:
+  - critical
+  - high
+  - medium
+  - low
+  - unknown
+  - not_applicable
+strata_required:
+- kind
+- materiality
+- principal_or_annex
+- normal_or_exception
+- annex_reference
+- absolute_or_relative_deadline
+- amount_format
+- termination
+- source_legibility
+annotation_template:
+  gold_id: G-001
+  annotator: A_OR_B
+  kind: risk
+  short_label: REPLACE
+  subject: REPLACE
+  beneficiary: REPLACE_OR_NA
+  modality: right | duty | condition | exception | exposure
+  polarity: affirmative | negative | conditional
+  clause_id: REPLACE
+  annex_id: MAIN_OR_ID
+  pdf_page_1based: null
+  printed_page: null
+  exact_source_quote: INSERT_LOCALLY_NOT_IN_REPO
+  quote_original_sha256: HASH_ONLY_IF_CONFIDENTIAL
+  cross_refs: []
+  exception_or_carveout: REPLACE_OR_NONE
+  trigger_event: REPLACE_OR_NONE
+  deadline_rule: REPLACE_OR_NONE
+  amount_rule: REPLACE_OR_NONE
+  materiality: undetermined
+  materiality_reason: REPLACE
+  risk_severity: not_applicable
+  semantic_rationale: REPLACE
+  adversarial_tags: []
+  evidence_status: ORIGINAL_UNVERIFIED
+  adjudication_status: PENDING
+  adjudicator_rationale: ''
+  decision_log_ref: ''
+  matched_prediction_id: null
+  match_outcome: NOT_SCORABLE
+  match_rationale: ''
+  critical_omission_disclosed: null
+  mitigation: ''
+  human_decision_status: NOT_APPROVABLE
+scoring_template:
+  group_by:
+  - kind
+  - materiality
+  - contract_set_id
+  tp: null
+  fp: null
+  fn: null
+  wilson_95pct:
+    lower: null
+    upper: null
+  citation_original_verified: null
+  citations_exposed: null
+  severity_exact_matches: null
+  severity_comparable_total: null
+  critical_fn_inventory: []
+blind_workflow:
+- read_original_and_annexes
+- annotate_A_and_B_independently
+- measure_interannotator_agreement
+- adjudicate_without_model_output
+- freeze_oracle
+- reveal_predictions
+- one_to_one_match
+- report_all_critical_FN_individually
+privacy_note: 'Template only: never place restricted passages, PII or private candidate records in a public repo.'
