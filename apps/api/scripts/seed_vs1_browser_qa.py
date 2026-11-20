@@ -19,10 +19,9 @@ from sqlalchemy import text
 
 from src.core.database import close_db, get_raw_session, init_db
 from src.documents.adapters.persistence.models import DocumentORM
-from src.documents.domain.models import DocumentStatus
+from src.documents.domain.models import DocumentStatus, DocumentType
 from src.temporal.adapters.persistence.models import DocumentRevisionORM
 from tests.e2e_seed.seed_wedge import (
-    DOC_CONTRACT_ID,
     FOREIGN_PROJECT_ID,
     seed_wedge_e2e,
 )
@@ -51,10 +50,18 @@ async def seed() -> dict[str, object]:
         async with get_raw_session() as db:
             ids = await seed_wedge_e2e(db)
             tenant, project = ids["tenant_id"], ids["project_id"]
-            document = await db.get(DocumentORM, DOC_CONTRACT_ID)
-            if document is None:
-                raise RuntimeError("BASELINE_CONTRACT_FIXTURE_MISSING")
-            revision, run = uuid4(), uuid4()
+            # A separate document avoids the wedge's unrelated pre-existing HITL
+            # review, which must not mask this isolated partial-N4 UI state.
+            document_id, revision, run = uuid4(), uuid4(), uuid4()
+            document = DocumentORM(
+                id=document_id, tenant_id=tenant, project_id=project,
+                document_type=DocumentType.CONTRACT,
+                filename="vs1-synthetic-contract.pdf",
+                storage_url=f"synthetic/vs1/{document_id}",
+                file_size_bytes=10240, upload_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
+                created_by=ids["user_id"],
+            )
+            db.add(document)
             digest = hashlib.sha256(b"synthetic-N2-projection-for-VS1-no-real-contract").hexdigest()
             now = datetime.now(UTC).replace(tzinfo=None)
             document.upload_status = DocumentStatus.PARSED_PENDING_ANALYSIS
@@ -66,7 +73,7 @@ async def seed() -> dict[str, object]:
                 "analysis_n4_source_sha256": digest,
             }
             db.add(DocumentRevisionORM(
-                revision_id=revision, document_id=DOC_CONTRACT_ID,
+                revision_id=revision, document_id=document_id,
                 tenant_id=tenant, project_id=project, rev_no=1,
                 blob_hash="a" * 64, blob_key="synthetic/vs1/not-a-real-document",
                 valid_from=now, created_at=now,
@@ -74,7 +81,7 @@ async def seed() -> dict[str, object]:
             await db.flush()
             bound = {
                 "tenant": str(tenant), "project": str(project),
-                "document": str(DOC_CONTRACT_ID), "revision": str(revision),
+                "document": str(document_id), "revision": str(revision),
                 "run": str(run), "source": digest,
             }
             await db.execute(text("""
@@ -169,7 +176,7 @@ async def seed() -> dict[str, object]:
             })
             await db.commit()
             return {
-                "projectId": str(project), "documentId": str(DOC_CONTRACT_ID),
+                "projectId": str(project), "documentId": str(document_id),
                 "tenantId": str(tenant), "runId": str(run),
                 "revisionId": str(revision), "foreignProjectId": str(FOREIGN_PROJECT_ID),
                 "fixtureMode": "SYNTHETIC_N4_NO_MODEL", "findingsCount": 4,
