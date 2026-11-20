@@ -8,7 +8,7 @@ Contracts are now an independent integration effort, separate from MPXJ schedule
 ## Implemented
 1. Docling structural candidate adapter at apps/api/src/documents/adapters/parsers/docling_contract_candidate_adapter.py: immutable PDF SHA check, project/tenant/document/revision scope, text/table/cell extraction with page/bbox provenance, explicit missing coverage and candidate-only status.
 2. Source-conserving bounded window packet at apps/api/src/documents/adapters/parsers/docling_contract_window_packet.py: keeps every parsed source character, separates different text items, records source offsets and pages, marks split text and unverified reading order.
-3. Tests: 12 + 7 unit tests PASS. Actual local Docling 2.151.1 on synthetic 2-page contract: PASS, five anchored items, two 512-char windows and 623 input chars preserved. Actual local synthetic annex: PASS, one table, five anchored items, one window and 409 input chars preserved.
+3. Tests: 12 + 10 unit tests PASS. Actual local Docling 2.151.1 on synthetic 2-page contract: PASS, five anchored items, two 512-char windows and 623 input chars preserved. Actual local synthetic annex: PASS, one table, five anchored items, one window and 405 input chars preserved.
 4. Evidence JSON: docs/research/contract-integration/evidence/docling_contract_adapter_native_smoke.json.
 
 ## Explicitly NOT yet implemented
@@ -21,10 +21,10 @@ No invocation of N4/N12, no contractual obligation/typed fact/risk interpretatio
 - Separately validate N4 and N12 against a held-out independent legal/EPC oracle for critical omissions, citations, false positives and multi-document changes.
 - Keep all outputs untrusted and user-visible only as candidates until approved.
 
-## Parallel agent review
-Gemini read-only code QA: job 1e4a7b063a9e94f39de2f10111866572.
-Codex read-only N4/N12 bridge plan: job 1112e70647c45598a01f7de43a8d50ee.
-Results not assumed until returned.
+## Independent QA and corrections
+Gemini QA job 1e4a7b063a9e94f39de2f10111866572 initially returned FAIL: (1) text/table order, (2) two-dimensional tables, (3) multipage page provenance, and (4) word/number splitting. All four findings were addressed in the isolated branch using Docling.iterate_items, explicit table rows, full page lists, and token-boundary-aware windows that fail closed on unbreakable tokens. 22/22 unit tests PASS and a second native Docling smoke on two synthetic PDFs PASS. A focused independent QA rerun (job c958360504c426d2c176abd8d5579929) has been requested; its verdict is not yet assumed.
+Codex N4/N12 bridge planner job 1112e70647c45598a01f7de43a8d50ee exited -25 without a completed deliverable. We do NOT claim a planner architecture review completed.
+Next priority is integration with N4/N12 on pinned current SHA; structural source extraction is not yet semantic contract intelligence.
 
 ## Other workstreams
 Schedule / MPXJ: research/c2pro-integration-open-source-20261120, 10 unit PASS + native smoke PASS, still not live API integration.
