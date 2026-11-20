@@ -1,3 +1,5 @@
+> **ESTADO: SUSTITUIDO COMO PLAN OPERATIVO EL 20/11/2026.** Por instrucción expresa del propietario, esta línea deja de centrarse en clasificar documentación histórica y pasa a desarrollar **adaptadores funcionales de integración**. El plan vigente es [INTEGRATION_EXECUTION_PLAN.md](INTEGRATION_EXECUTION_PLAN.md). Este documento permanece como antecedente de investigación, no como orden de trabajo. Los expedientes históricos se gestionan por otra línea privada y no son dependencias obligatorias de los adaptadores.
+
 # Plan de investigación y propuesta técnica — C2Pro Integration & Open Source
 
 ## Objetivo de negocio
