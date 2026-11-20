@@ -7,7 +7,7 @@
 
 ## Corpus y reproducibilidad
 - Fuente pública: [SolarMax / Longfellow BESS I, contrato EPC en SEC](https://www.sec.gov/Archives/edgar/data/1519472/000164033425001363/solarmax_ex991.htm). Descargado en HTML desde la SEC y **renderizado localmente a PDF con Chrome** para realizar una comparación sobre exactamente los mismos bytes. El PDF derivado tiene **74 páginas**, 1.211.834 bytes, SHA256 `8c7104d3b5c1a5e0a1f457e23c3480ef3832e3c2567f7b16a95d38e3ee5d48e4`. **No** es el PDF original de la SEC ni coincide necesariamente con los expedientes PDF de QA/UAT; sus páginas NO son numeraciones oficiales del contrato.
-- [Harness reproducible](../../apps/api/tests/integration/benchmark_docling_vs_legacy_public_pdf.py) (en el repo, ruta correcta: `apps/api/tests/integration/benchmark_docling_vs_legacy_public_pdf.py`).
+- [Harness reproducible](https://github.com/AI-Gen-AI/C2Pro/blob/research/c2pro-docling-contract-integration-20261120/apps/api/tests/integration/benchmark_docling_vs_legacy_public_pdf.py).
 - [JSON factual de ejecución](evidence/B0_Longfellow_SEC_PUBLIC_RENDER.json): métricas agregadas, sin reproducción del contrato. Entorno local Windows, Python 3.11, PyMuPDF/Docling 2.151.1. No hubo LLM ni inferencia de pago.
 
 ## Resultados medidos
