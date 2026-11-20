@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import json
 import unittest
-from copy import deepcopy
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -107,7 +106,8 @@ class B4SourceComparisonPreviewTests(unittest.TestCase):
         packet, units, quotes, artifacts = fixture()
         result = check(packet, units, quotes, artifacts)
         self.assertEqual(result["status"], "PROVISIONAL_SOURCE_OBSERVATIONS")
-        self.assertEqual(result["source_rows_verified"], 2)
+        self.assertEqual(result["source_unit_checksums_valid"], 2)
+        self.assertEqual(result["original_source_attestation"], "NOT_PERFORMED_BY_B4_PREVIEW")
         findings = {finding["rule_id"]: finding for finding in result["findings"]}
         self.assertEqual(set(findings), {"DET-CRS-SCHDEAD", "DET-CRS-NEGMARGIN"})
         self.assertEqual(findings["DET-CRS-SCHDEAD"]["compared_values"]["overrun_days"], 92)
