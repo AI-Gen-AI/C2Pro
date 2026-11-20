@@ -118,9 +118,13 @@ class _ReadOnlySession:
         if "SELECT f.finding_key" in sql:
             return _SqlResult(rows=[
                 {"finding_key": str(uuid4()), "window_ordinal": 0,
-                 "claim": {"title": "Proposed risk", "source_quote": "exact N2 quote",
+                 "claim": {"title": "Proposed risk", "risk_reason": "Scope discrepancy",
+                           "source_quote": "exact N2 quote",
+                           "source_evidence_status": "EXACT_MODEL_SAFE_MATCH",
                            "clause_ref": "2.1"},
                  "source_refs": [{"source_kind": "MODEL_SAFE_PROJECTION",
+                                  "document_revision_id": str(self.revision),
+                                  "source_sha256": self.digest,
                                   "evidence_status": "EXACT_MODEL_SAFE_MATCH",
                                   "analysis_span": [0, 14]}]},
             ])
@@ -150,6 +154,7 @@ async def test_partial_get_reads_pinned_run_and_discloses_real_coverage_only():
     assert data["coverage"]["examined"] == 1
     assert data["coverage"]["blocked"] == 1
     assert data["findings"][0]["n2_quote_status"] == "N2_EXACT_MATCH"
+    assert data["findings"][0]["interpretation"] == "Scope discrepancy"
     assert data["findings"][0]["original_pdf_quote_status"] == "UNVERIFIED"
     assert data["approvable"] is False and data["trusted"] is False
     assert len(session.calls) == 4
