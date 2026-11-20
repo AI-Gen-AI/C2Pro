@@ -8,7 +8,7 @@ import { apiClient } from '@/lib/api/client';
 
 type Finding = {
   finding_key: string; window_ordinal: number; title: string;
-  clause_ref: string | null; source_quote: string | null;
+  interpretation: string; clause_ref: string | null; source_quote: string | null;
   n2_quote_status: string; severity: string; review_state: string;
 };
 type WindowInfo = {
@@ -76,6 +76,11 @@ export default function N4FindingsPage() {
             <Badge variant="outline">Severity: not assessed</Badge>
           </div>
           <h3 className="font-semibold">{f.title}</h3>
+          {f.interpretation && (
+            <p className="text-sm" data-testid="n4-risk-interpretation">
+              AI interpretation (not independently validated): {f.interpretation}
+            </p>
+          )}
           <p className="text-sm">Clause: {f.clause_ref || 'not identified'} · Window {f.window_ordinal + 1}</p>
           {f.n2_quote_status === 'N2_EXACT_MATCH' && f.source_quote ?
             <blockquote className="border-l-2 pl-3 text-sm italic">{f.source_quote}</blockquote> :
