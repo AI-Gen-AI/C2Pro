@@ -47,12 +47,13 @@ def _read_mpxj_project(source_file: Path) -> Any:
     """Lazy optional dependency: no JVM starts on ordinary API imports."""
     try:
         import jpype
+        import mpxj  # Registers MPXJ JVM classpath before JPype starts.
         with JVM_START_LOCK:
             if not jpype.isJVMStarted():
                 jpype.startJVM(convertStrings=True)
         from org.mpxj.reader import UniversalProjectReader
         project = UniversalProjectReader().read(str(source_file))
-    except (ImportError, OSError, RuntimeError, Exception) as exc:
+    except Exception as exc:
         # Only expose the exception *class*: provider diagnostics may contain
         # private filesystem paths or embedded project metadata.
         raise ScheduleCandidateError(
