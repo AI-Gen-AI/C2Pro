@@ -32,7 +32,17 @@ def build_real(metrics: dict, packet: dict) -> dict:
         raise ValueError("Packet and offline metrics candidate counts disagree")
     if packet["n12_status"] != metrics["n12_status"]:
         raise ValueError("N12 status mismatch")
+    safe_blockers = {
+        "N4_PARTIAL_SOURCE_COVERAGE",
+        "N12_REAL_PROVIDER_NOT_EXECUTED",
+        "NO_IMMUTABLE_CANDIDATE_ARTIFACT_OR_AUTHENTICATED_REVIEW",
+        "NO_HUMAN_DECISIONS",
+        "USER_94_PAGE_PDF_NOT_ATTESTED",
+    }
+    blocker_codes = [b if b in safe_blockers else "UNKNOWN_PRIVATE_BLOCKER"
+                     for b in packet["blockers"]]
     return {
+        "blocker_codes":blocker_codes,
         "data_class":"REAL_OFFLINE_AGGREGATED",
         "source":"SEC_N4_T05_offline_recovery_20261120",
         "evidence_kind":"prior_execution_reconciliation_not_new_inference",
@@ -85,6 +95,7 @@ def build_synthetic() -> dict:
         "UI":{"status":"NO_PUBLISHED_RESULTS"},
         "Budget_Schedule_Tech_Annexes":{"status":"LINKS_DESIGNED_NOT_EVALUATED"},
         "blocker_reason":"synthetic provider timeout at window 4",
+        "blocker_codes":["SYNTHETIC_PROVIDER_TIMEOUT"],
         "interpretation":"intentional illustration of loss of visibility between persisted N4 proposals and downstream interfaces",
     }
 
