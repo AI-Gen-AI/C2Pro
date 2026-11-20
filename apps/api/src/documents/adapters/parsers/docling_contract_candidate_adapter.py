@@ -144,11 +144,40 @@ def _extract_structural_candidates(document: Any) -> dict[str, Any]:
             "locations": locations,
             "review_state": "CANDIDATE_UNVALIDATED",
         })
+    # Never infer document order by concatenating texts and tables.
+    # Docling's iterator preserves its parsed layout sequence (still requiring
+    # visual QA before we call that sequence verified against the original).
+    lookup: dict[str, str] = {}
+    for index, obj in enumerate(texts):
+        if str(getattr(obj, "text", "") or "").strip():
+            lookup[str(getattr(obj, "self_ref", f"missing-text-{index}"))] = f"docling:text:{index}"
+    for index, obj in enumerate(tables):
+        lookup[str(getattr(obj, "self_ref", f"missing-table-{index}"))] = f"docling:table:{index}"
+    order: list[str] = []
+    found: set[str] = set()
+    iterator = getattr(document, "iterate_items", None)
+    if callable(iterator):
+        try:
+            for item, _level in iterator():
+                locator = lookup.get(str(getattr(item, "self_ref", "")))
+                if locator is not None and locator not in found:
+                    order.append(locator)
+                    found.add(locator)
+        except Exception:
+            # Honest failure: never guess a replacement text/table order.
+            order = []
+    order_complete = len(order) == len(items) + len(tab_items)
+    if not order_complete:
+        order = []
+
     anchors = pages_with_text | pages_with_tables
     return {
         "text_items": items,
         "tables": tab_items,
+        "reading_order": order,
         "coverage": {
+            "docling_layout_sequence_available": order_complete,
+            "reading_order_verified_against_pdf": False,
             "pages_reported": count,
             "pages_with_grounded_text": sorted(pages_with_text),
             "pages_with_grounded_tables": sorted(pages_with_tables),
