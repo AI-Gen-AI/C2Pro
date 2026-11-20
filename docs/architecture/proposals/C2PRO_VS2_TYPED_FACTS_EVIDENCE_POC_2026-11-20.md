@@ -50,6 +50,20 @@ Tampoco resuelve las referencias entre documentos, la procedencia a la página d
 - Un timeout **no permite calcular** recall, precisión, cobertura de citas ni validez de salida v2. Qwen local no es un sustituto válido del proveedor de producción en esta configuración. No ejecutar otra llamada local automática ni considerar que esto demuestra una mejora de v2 frente a v1.
 - Los 66 PASS **sí** prueban reglas de validación y no-regresión; no prueban que un modelo rellene correctamente las estructuras.
 
+## Hallazgo nuevo: trazabilidad de citas en PDFs reales (20/11/2026)
+
+Se ha reproducido un problema **real** del contrato de citas sobre el archivo público SolarMax de **94 páginas**, SHA256 `e58a128e01348aa3c77e4a101861a6ebcdc0e303e599314c85bde3aa2ec7d63d`, página física 36 (§2.5.5):
+
+- El texto PDF contiene una frase sobre LD separada por un salto de línea. El método anterior `.find(model_quote)` devolvía **no localizada**, aunque la frase conserva exactamente las mismas palabras, cifras y puntuación al sustituir saltos por espacios.
+- En el nuevo código, el estado es `WHITESPACE_NORMALIZED_MODEL_SAFE_MATCH`, diferenciado de `EXACT_MODEL_SAFE_MATCH`. Conserva el **texto real del input** y los offsets verificables en origen; si hay dos o más coincidencias (incluidas diferencias de espacios), se devuelve `AMBIGUOUS_REPEATED_QUOTE` sin escoger una página arbitraria.
+- La normalización admite **solo secuencias de blancos**, no traducciones, cambios de mayúsculas, tildes, palabras, monedas, cifras ni puntuación. Casos ingleses, españoles y mixtos se prueban por separado; es una validación **mecánica de evidencias**, no comprensión contractual por IA.
+- **Estado de página PDF original** permanece `UNVERIFIED`: esta prueba aislada tomó el texto de la página con PyMuPDF y comprobó sus offsets, pero la ruta productiva debe reconstruir la cadena PDF original→parser→N2 para atribuir página a una cita real sin suposiciones.
+- La cifra histórica de **92/142 citas no localizadas** corresponde a otro expediente SEC de 73 páginas, y no incluye todas las propuestas de citas originales. **No se puede cuantificar cuántas recuperaríamos** con este cambio ni equiparar SolarMax 94p y SEC 73p.
+
+**Evidencia técnica:** suite de regresión focal OPS QA job `3b3a15c725e34abcbfa29cb1`, SHA `8f2add638086cc36a7c06b3d1b52ccffdc0de753`: **74 PASS, una advertencia pytest no bloqueante**, coste externo 0 €, sin modificar N4 productivo. Comprobación adicional directa de página 36 en VPS: coincidencia anterior `False`, nueva `WHITESPACE_NORMALIZED_MODEL_SAFE_MATCH`, `offsets_recover_original_page_text=True`.
+
+**Implicación de producto:** una fuente presente en el documento no debe convertirse en «sin cita» únicamente por el formato de saltos de línea del PDF. Esto mejora trazabilidad en el **POC**, pero **NO valida la extracción semántica ni soporta una promoción a producción**. Faltan ensayos con modelos reales de los dos idiomas y contratos held-out, así como trazabilidad auténtica al documento original.
+
 ## Límites de autoridad
 
 **`N4_BILLABLE=STOP` · `N12_BILLABLE=STOP` · `MERGE=STOP` · `UAT_DEPLOY=STOP`.** Esta rama no solicita alterar esos controles. El análisis histórico completo permanece en el expediente de QA y el reporte focal en `docs/audits/C2PRO_FG1_SOLARMAX_REAL_CONTRACT_OFFLINE_REPLAY_2026-11-20.md` de la PR #1279.
