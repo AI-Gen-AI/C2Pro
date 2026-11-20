@@ -64,7 +64,7 @@ def build_real(metrics: dict, packet: dict) -> dict:
         "UI":{"status":"NOT_VERIFIED_BY_THIS_OFFLINE_PACKET"},
         "Budget_Schedule_Tech_Annexes":{"status":"NO_CROSS_DOCUMENT_MAPPING_ATTESTED"},
         "blocker_count":len(packet["blockers"]),
-        "interpretation":"N4 partial proposals exist; N12 and downstream publishing have no verified completion; N2 literal verification is not PDF citation certification",
+        "interpretation":"N4 partial proposals exist; N12 and downstream publishing do not have verified completion; N2 literal verification is not PDF citation certification",
     }
 
 def build_synthetic() -> dict:
