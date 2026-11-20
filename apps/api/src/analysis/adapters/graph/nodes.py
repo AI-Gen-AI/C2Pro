@@ -346,6 +346,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
                 # it over a previously pinned run with durable evidence.
                 if exc.persisted_result_windows > 0:
                     state["n4_incremental_run_id"] = str(exc.run_id)
+                    state["n4_incremental_source_sha256"] = exc.source_sha256
                     state["n4_incremental_window_coverage"] = {
                         "examined": exc.examined_windows,
                         "persisted_results": exc.persisted_result_windows,
