@@ -2,6 +2,8 @@
 
 **Fecha:** 20/11/2026. **Dictamen:** PASS_LIMITED para alineación de citas **sin LLM**. NO-GO para afirmar mejora de análisis contractual, activar LangExtract o reemplazar N4.
 
+> **Actualización posterior, 20/11/2026:** se completó un **único smoke generativo Gemini** sobre la §2.5.5 pública y su JSON se validó con N4 v2: **5 candidatos, 5/5 citas exactas, 1 referencia a anexo pendiente y ninguna obligación emitida con tipo individual `obligation`**. No fue un ensayo directo N4 vs LangExtract ni una evaluación semántica exhaustiva. Ver [B1B_REAL_GEMINI_TYPED_EPC_CLAUSE_20261120.md](B1B_REAL_GEMINI_TYPED_EPC_CLAUSE_20261120.md). El apartado B1b inferior sigue describiendo el benchmark comparativo completo pendiente.
+
 ## Fuente y versiones
 
 - Mismo texto emitido por `PDFFileParser` de C2Pro en SHA `916808c5212e3dbc652407f35f3a17557623c06c` sobre PDF público SEC de Longfellow generado localmente a partir del HTML SEC: **227.313 caracteres**, 22 ventanas planificadas por `n4_source_windows.py` (12.000 caracteres de contexto/400 de solapamiento). No es el PDF original firmado ni la UAT.
