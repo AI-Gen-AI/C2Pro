@@ -1,3 +1,5 @@
+> **Actualización B2 — 20/11/2026:** LangExtract **ya fue ejecutado con LLM real en el VPS**, dentro de `lx.extract()`, usando NVIDIA Nemotron 3.5 Bolt, dos ventanas originales N4 y dos pasadas con segmentación interna. **16 llamadas lógicas, 141 candidatos, 80 citas literales exactas; segunda pasada: +26 candidatos, solo +1 span exacto único y +20.705 tokens.** No equivale a *recall* ni a un comparador N4 v2 con el mismo modelo. [Informe B2](B2_VPS_REAL_LANGEXTRACT_NATIVE_20261120.md). Se conserva todo en rama experimental sin merge, UAT ni producción.
+
 # C2Pro Contract Intelligence — I-C01/I-C02 integration checkpoint
 
 Date: 2026-11-20. Status: OPTIONAL ADAPTERS IMPLEMENTED AND TESTED. N4/N12 SEMANTIC ACCURACY NOT PROVEN.
