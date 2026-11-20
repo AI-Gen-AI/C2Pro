@@ -1,0 +1,89 @@
+{
+  "study": "SEC EPC HTML public extraction, no private PDFs",
+  "format": "text/html (SEC official original), NOT original QA/UAT PDF",
+  "comparison_scope": "structural term/marker detection, not contractual legal reasoning",
+  "runs": [
+    {
+      "file": "SEC_solarmax_longfellow_2025_ex991_original.html",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1519472/000164033425001363/solarmax_ex991.htm",
+      "case": "Longfellow BESS I / SolarMax",
+      "bytes": 492928,
+      "sha256": "0213ce2d545c38896251c3a7a96ade6283a857ae3308440875e734f04a21ea34",
+      "html_text_chars": 227157,
+      "html_tables": 78,
+      "source_markers": {
+        "liquidated_damages_2_5_5": true,
+        "suspension_9_6": true,
+        "specification_4_3_1": true,
+        "article_13": true,
+        "exhibit_C": true,
+        "exhibit_D": true,
+        "table_C_1": true,
+        "table_D_2": true
+      },
+      "docling": {
+        "status": "ConversionStatus.SUCCESS",
+        "elapsed_seconds": 1.93,
+        "markdown_chars": 242169,
+        "markdown_sha256": "43d058b5214f2567e34fecba6e0222ddb3e9c93085735cf3e88cc092339126f7",
+        "tables": 78,
+        "marker_recovery": {
+          "liquidated_damages_2_5_5": true,
+          "suspension_9_6": true,
+          "specification_4_3_1": true,
+          "article_13": true,
+          "exhibit_C": true,
+          "exhibit_D": true,
+          "table_C_1": true,
+          "table_D_2": true
+        }
+      }
+    },
+    {
+      "file": "SEC_solarmax_naguabo_2025_ex991_holdout.html",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1519472/000164033426000032/solarmax_ex991.htm",
+      "case": "Naguabo BESS / SolarMax",
+      "bytes": 478422,
+      "sha256": "b90a590e134e92059915e9b3d574a06f38fdef9aef756db456b256ad4c3bea60",
+      "html_text_chars": 227339,
+      "html_tables": 83,
+      "source_markers": {
+        "liquidated_damages_2_5_5": true,
+        "suspension_9_6": true,
+        "specification_4_3_1": true,
+        "article_13": true,
+        "exhibit_C": true,
+        "exhibit_D": true,
+        "table_C_1": true,
+        "table_D_2": true
+      },
+      "docling": {
+        "status": "ConversionStatus.SUCCESS",
+        "elapsed_seconds": 1.792,
+        "markdown_chars": 255969,
+        "markdown_sha256": "3bc1247b7a64f66290aec9a86608385f77053a3720430569f33dfcb97aa99956",
+        "tables": 83,
+        "marker_recovery": {
+          "liquidated_damages_2_5_5": true,
+          "suspension_9_6": true,
+          "specification_4_3_1": true,
+          "article_13": true,
+          "exhibit_C": true,
+          "exhibit_D": true,
+          "table_C_1": true,
+          "table_D_2": true
+        }
+      }
+    }
+  ],
+  "status": "PASS",
+  "docling_loader": "available",
+  "limitations": [
+    "The 2025 and 2026 SEC filing URLs are two DIFFERENT EPC agreements.",
+    "Original QA (94p), UAT (51p), SEC rendition (73p) private PDFs were not supplied to this run.",
+    "HTML/Markdown spans are not original PDF page/bounding-box evidence.",
+    "Occurrence of a marker does not prove its clause, annex, table, or obligation was analysed.",
+    "Annexes C/D/E may be absent from the public SEC filing or represented only partially.",
+    "No N4/N12, independent contractual oracle, ProjectGraph, cross-document risk analysis, or external LLM inference."
+  ]
+}
