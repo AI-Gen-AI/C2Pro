@@ -1,0 +1,4 @@
+anthropic==0.125.0
+pydantic==2.14.4
+pydantic-ai-slim==2.32.2
+pydantic-core==2.50.5

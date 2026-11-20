@@ -1,0 +1,4 @@
+valid, retries=1: {'calls': 1, 'ok': True, 'requests': 1}
+invalid, retries=None (library default): {'calls': 2, 'ok': False, 'error': 'UnexpectedModelBehavior'}
+invalid, retries=1: {'calls': 2, 'ok': False, 'error': 'UnexpectedModelBehavior'}
+invalid, retries=0: {'calls': 1, 'ok': False, 'error': 'UnexpectedModelBehavior'}
