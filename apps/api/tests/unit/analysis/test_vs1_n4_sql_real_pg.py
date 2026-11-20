@@ -31,13 +31,13 @@ def _setup(pg):
     with pg.begin() as db:
         db.execute(text("""
             ALTER TABLE public.n4_extraction_runs
-            ADD COLUMN project_id uuid,
-            ADD COLUMN status varchar(16),
-            ADD COLUMN total_windows integer,
-            ADD COLUMN generation bigint
+            ADD COLUMN IF NOT EXISTS project_id uuid,
+            ADD COLUMN IF NOT EXISTS status varchar(16),
+            ADD COLUMN IF NOT EXISTS total_windows integer,
+            ADD COLUMN IF NOT EXISTS generation bigint
         """))
         db.execute(text("""
-            CREATE TABLE public.document_revisions (
+            CREATE TABLE IF NOT EXISTS public.document_revisions (
                 revision_id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL,
                 document_id uuid NOT NULL,
@@ -45,7 +45,7 @@ def _setup(pg):
             )
         """))
         db.execute(text("""
-            CREATE TABLE public.document_processing_operations (
+            CREATE TABLE IF NOT EXISTS public.document_processing_operations (
                 tenant_id uuid NOT NULL,
                 document_id uuid NOT NULL,
                 revision_id uuid NOT NULL,
@@ -53,7 +53,7 @@ def _setup(pg):
             )
         """))
         db.execute(text("""
-            CREATE TABLE public.n4_extraction_windows (
+            CREATE TABLE IF NOT EXISTS public.n4_extraction_windows (
                 tenant_id uuid NOT NULL,
                 run_id uuid NOT NULL,
                 ordinal integer NOT NULL,
@@ -65,7 +65,7 @@ def _setup(pg):
             )
         """))
         db.execute(text("""
-            CREATE TABLE public.n4_candidate_findings (
+            CREATE TABLE IF NOT EXISTS public.n4_candidate_findings (
                 tenant_id uuid NOT NULL,
                 run_id uuid NOT NULL,
                 window_ordinal integer NOT NULL,
