@@ -27,6 +27,17 @@ def main():
         headers={"Content-Type":"application/x-www-form-urlencoded"})
     assert status == 200, ("login", status)
     head = {"Content-Type":"application/json", "Authorization":"Bearer "+login["access_token"]}
+    key_path = ENV.parent / ".lf01_test_api_key"
+    if key_path.exists():
+        api_key = key_path.read_text().strip()
+    else:
+        kstatus, key_response = req("/api_key/", data=json.dumps({"name":"LF01-local-smoke"}).encode(), headers=head)
+        assert kstatus in (200,201) and "api_key" in key_response, ("create test key",kstatus,str(key_response)[:180])
+        api_key = key_response["api_key"]
+        key_path.write_text(api_key + "\n")
+        key_path.chmod(0o600)
+        print("LOCAL_API_KEY_CREATED not_logged")
+    run_head = {"Content-Type":"application/json","x-api-key":api_key}
     for tag,fname in [("real","real_offline_aggregate.json"),
                       ("synthetic","synthetic_partial_scenario.json")]:
         definition = json.loads((DIR/("lf01_"+tag+"_flow_definition.json")).read_text())
@@ -42,7 +53,7 @@ def main():
             "session_id":"lf01-"+tag+"-readonly"
         }
         code,output=req("/run/"+id_+"?stream=false",
-                        data=json.dumps(request).encode(), headers=head)
+                        data=json.dumps(request).encode(), headers=run_head)
         output_text=json.dumps(output,ensure_ascii=False)
         verified = code==200 and marker in output_text
         print("RUN",tag,"http",code,"output_contains_evidence_class",marker in output_text,
