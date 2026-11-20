@@ -133,8 +133,17 @@ def _setup(pg):
 
 
 async def _engine(pg):
+    # psycopg accepts ?dbname= but asyncpg expects database in the URL.
+    original = pg.url
     return create_async_engine(
-        str(pg.url).replace("postgresql+psycopg", "postgresql+asyncpg"),
+        original.set(
+            drivername="postgresql+asyncpg",
+            database=original.query.get("dbname", "postgres"),
+            query={
+                "host": original.query["host"],
+                "port": original.query["port"],
+            },
+        ),
         pool_pre_ping=True,
     )
 
