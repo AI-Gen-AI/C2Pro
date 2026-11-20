@@ -1,3 +1,5 @@
+> **Actualización de seguridad / 20-11-2026:** una auditoría independiente impidió fusionar la PR #1281 por el riesgo de invocar nodos del grafo con posibles efectos futuros y por alterar el HEAD de la UAT #1276. Se cambió el preview para ejecutar **solo dos nodos reales y de lectura** del núcleo de ProjectGraph (`load_current_artifacts` y `align_entities`) mediante un grafo restringido compilado; los nodos `cross_doc_coherence`, `health`, `write_snapshot`, `alert_correlation` y `hitl_routing` **ya no se invocan** en el preview. Pruebas actualizadas: **15/15 PASS** en el VPS aislado, incluyendo el grafo restringido. Las referencias a nueve nodos de las secciones siguientes describen **un ensayo histórico anterior y ya sustituido**, no el comportamiento actual del código. **Decisión: NO-GO de fusión en #1276 durante la UAT.**
+
 # B3.1 — ProjectGraph real, inventario de tres fuentes, sin aprobación ni score
 
 **Fecha:** 20/11/2026. **Dictamen:** `PASS_LIMITED — GRAPH_RUNTIME_SOURCE_ONLY`. No es Complete Journey, no compara valores reales, no habilita la integración productiva.
