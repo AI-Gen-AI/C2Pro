@@ -43,6 +43,13 @@ Tampoco resuelve las referencias entre documentos, la procedencia a la página d
 
 **Criterio de decisión:** no elegir v2 por un JSON estructurado ni por tests verdes; debe identificar más elementos materiales que v1 con respaldo literal fiable, y sin aumentar omisiones críticas o coste fuera de tope. En caso contrario, rechazarlo o reducirlo. No construir un agente autónomo para N4 hasta probar necesidad real.
 
+## Evidencia de ejecución (20/11/2026)
+
+- `66 passed, 1 warning` en 5,90 s con Python 3.11, sobre SHA `402d7c231321dc716d6621fd3f06b63a355ed213`: incluye nueva suite VS-2 y regresiones v1. Advertencia de reescritura de `tests._bootstrap`, sin fallos.
+- **Piloto Qwen local (página 36 del PDF SolarMax de 94 páginas): FAIL/TIMEOUT**. Única solicitud a `http://127.0.0.1:11434/api/chat`, modelo `qwen3:4b-instruct`, ventana con §2.5.5 y las tarifas $5.000/$10.000/$20.000, `num_predict=1700`, `num_ctx=8192`, `temperature=0`; `TimeoutError` sin respuesta tras 265,1 s. **Sin reintentos**, gasto de proveedor externo **0 €**. Informe restringido `/home/aigenadmin/qa_evidence/solarmax-real-pdf-20261110/vs2_local_ollama_qwen4b_p36_20261120.json`, SHA256 `b44d81deebb26b53cd8a98507c8dec57fd995d5f858bf3f183dd92b73eba7069`.
+- Un timeout **no permite calcular** recall, precisión, cobertura de citas ni validez de salida v2. Qwen local no es un sustituto válido del proveedor de producción en esta configuración. No ejecutar otra llamada local automática ni considerar que esto demuestra una mejora de v2 frente a v1.
+- Los 66 PASS **sí** prueban reglas de validación y no-regresión; no prueban que un modelo rellene correctamente las estructuras.
+
 ## Límites de autoridad
 
 **`N4_BILLABLE=STOP` · `N12_BILLABLE=STOP` · `MERGE=STOP` · `UAT_DEPLOY=STOP`.** Esta rama no solicita alterar esos controles. El análisis histórico completo permanece en el expediente de QA y el reporte focal en `docs/audits/C2PRO_FG1_SOLARMAX_REAL_CONTRACT_OFFLINE_REPLAY_2026-11-20.md` de la PR #1279.
