@@ -1,0 +1,43 @@
+name: VS-1 Web qualification (isolated, no backend or provider)
+on:
+  pull_request:
+    branches:
+      - feat/g2-governed-n4-only-20261119
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/vs1-web-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    name: VS-1 TypeScript, lint, Next build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsubW9jay5sb2NhbCQ
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:9
+      BACKEND_URL: http://127.0.0.1:9
+      C2PRO_AI_MOCK: '1'
+      C2PRO_EMBEDDINGS_MOCK: '1'
+      ENVIRONMENT: test
+    steps:
+      - name: Checkout exact PR HEAD (no credentials persisted)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install frozen web toolchain
+        uses: ./.github/actions/setup-node-web
+      - name: Typecheck
+        working-directory: apps/web
+        run: pnpm typecheck
+      - name: Scoped lint
+        working-directory: apps/web
+        run: |
+          pnpm exec eslint \
+            'app/(app)/projects/[id]/documents/page.tsx' \
+            'app/(app)/projects/[id]/documents/[documentId]/n4-findings/page.tsx'
+      - name: Build Next.js web without reachable backend
+        working-directory: apps/web
+        run: pnpm build
