@@ -1,0 +1,59 @@
+{
+  "study": "ODOT 2025 sample bill-of-items / bid data integrity",
+  "source_url": "https://www.oregon.gov/odot/business/pages/average_bid_item_prices.aspx",
+  "download_url": "https://www.oregon.gov/odot/Business/Estimating/2025%20BID%20DATA%20PROGRAM.zip",
+  "file_name": "2025 - BID DATA PROGRAM.xlsx",
+  "sha256": "77D885090E5F75A30364B7349010A9F0A63F16B9736C9B419267DFD5AD996F65",
+  "scope": "BID ITEMS!B15:N114, first 100 bid data rows only",
+  "kind": "statewide public bid tabulation data, NOT a complete project BOQ or SolarMax budget",
+  "rows_examined": 100,
+  "valid_numeric_rows": 100,
+  "distinct_contracts": 18,
+  "amount_check": "ABS(QUANTITY*CALCULATED_UNIT_PRICE-EXTENDED_AMT) <= USD 0.02",
+  "arithmetic_mismatches": 0,
+  "max_abs_deviation": 0,
+  "sample": [
+    {
+      "contract": "15571",
+      "project": "OR224: SE 17TH AVE - SE RUSK ROAD",
+      "item": "0222-0102000J",
+      "description": "TEMPORARY SIGNS",
+      "qty": 2900,
+      "unitPrice": 30,
+      "extended": 87000
+    },
+    {
+      "contract": "15594",
+      "project": "OR141 (SW HALL BLVD): SW SPRUCE ST - SW HEMLOCK ST",
+      "item": "0222-0102000J",
+      "description": "TEMPORARY SIGNS",
+      "qty": 410,
+      "unitPrice": 13,
+      "extended": 5330
+    },
+    {
+      "contract": "15611",
+      "project": "CORNELIUS PASS HWY & US30 ITS IMPROVEMENTS",
+      "item": "0222-0102000J",
+      "description": "TEMPORARY SIGNS",
+      "qty": 750,
+      "unitPrice": 12.65,
+      "extended": 9487.5
+    },
+    {
+      "contract": "15617",
+      "project": "I-84: CORBETT INTERCHANGE - MULTNOMAH FALLS PHASE 2",
+      "item": "0222-0102000J",
+      "description": "TEMPORARY SIGNS",
+      "qty": 840,
+      "unitPrice": 8.459999999999999,
+      "extended": 7106.4
+    }
+  ],
+  "limitations": [
+    "The 100 consecutive rows are a sample and are not one project's full budget.",
+    "No actual cost/commitment version or reconciliation with a schedule exists.",
+    "No formatting, formulas, or validation constraints edited; workbook read only via Desktop Commander.",
+    "Quoted-price relationship is arithmetic only; not proof of commercial contract compliance."
+  ]
+}
