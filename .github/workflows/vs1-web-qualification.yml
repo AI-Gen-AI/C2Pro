@@ -32,6 +32,11 @@ jobs:
       - name: Typecheck
         working-directory: apps/web
         run: pnpm typecheck
+      - name: Focused VS-1 read-only panel tests (jsdom; no mock service worker)
+        working-directory: apps/web
+        run: |
+          pnpm exec vitest run --config vitest.config.mts \
+            'app/(app)/projects/[id]/documents/[documentId]/n4-findings/page.test.tsx'
       - name: Scoped lint
         working-directory: apps/web
         run: |
