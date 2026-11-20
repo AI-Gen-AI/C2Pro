@@ -1,3 +1,5 @@
+> **Actualización posterior del 20/11/2026:** el bloqueo de inferencia se resolvió utilizando **una clave NVIDIA ya presente y autorizada en el VPS**, sin instalar claves OpenAI/Gemini ni modificar producción. Se ejecutó **LangExtract nativo real sobre dos ventanas N4 × dos pasadas**, con 16 respuestas válidas y resultado técnico PASS_LIMITED. La segunda pasada añadió 26 candidatos pero solo una cita exacta nueva. Consulte el [informe B2 ejecutado](B2_VPS_REAL_LANGEXTRACT_NATIVE_20261120.md) y su evidencia JSON. Este documento refleja el preflight anterior a ese avance; los bloqueos de modelo aquí descritos ya no son vigentes para NVIDIA.
+
 # B2 — LangExtract 1.7.1 instalado y preparado en VPS de AI-GEN
 
 **Fecha:** 2026-11-20. **Estado:** ENTORNO PASS / PROMPTS NATIVOS PASS / INFERENCIA B2 PENDIENTE — NO se ha completado comparación semántica N4 v2 vs LangExtract.
