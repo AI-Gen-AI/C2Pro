@@ -1,0 +1,91 @@
+{
+  "status": "PASS_LIMITED_MODEL_OUTPUT_VALIDATED",
+  "source_provenance": "SEC HTML locally printed to PDF; N2 original-source attestation absent",
+  "model_executed": true,
+  "model_runner": "AI-GEN Ops Gemini agent, NOT N4 or LangExtract provider",
+  "model_provider_and_cost_verified": false,
+  "n4_v2_schema_parsed": true,
+  "source_sha256": "457e75a53d2f4d1f61718e95b021403a61b857f4454c93f939d6fd9235b4c11e",
+  "source_window_ordinal": 7,
+  "window_count": 22,
+  "model_proposed_count": 5,
+  "source_exact_candidate_count": 5,
+  "source_unverified_count": 0,
+  "entity_type_counts": {
+    "amount": 4,
+    "condition": 1
+  },
+  "has_explicit_obligation_fact": false,
+  "source_contains_explicit_pay_obligation": true,
+  "reviewer_note": "A condition statement mentioning duty to pay is NOT the same as an independently typed obligation fact",
+  "model_self_reported_examined": true,
+  "source_coverage_state": "PARTIAL_OR_REFERENCES_PENDING",
+  "unresolved_refs_count": 1,
+  "unresolved_reference_flags": [
+    "EXHIBIT_C_TABLE_C1"
+  ],
+  "facts": [
+    {
+      "type": "condition",
+      "dimensions": [
+        "LEGAL",
+        "TIME"
+      ],
+      "status": "EXACT_MODEL_SAFE_MATCH",
+      "valid_global_source_span": true,
+      "has_quote": true
+    },
+    {
+      "type": "amount",
+      "dimensions": [
+        "BUDGET",
+        "TIME"
+      ],
+      "status": "EXACT_MODEL_SAFE_MATCH",
+      "valid_global_source_span": true,
+      "has_quote": true
+    },
+    {
+      "type": "amount",
+      "dimensions": [
+        "BUDGET",
+        "TIME"
+      ],
+      "status": "EXACT_MODEL_SAFE_MATCH",
+      "valid_global_source_span": true,
+      "has_quote": true
+    },
+    {
+      "type": "amount",
+      "dimensions": [
+        "BUDGET",
+        "TIME"
+      ],
+      "status": "EXACT_MODEL_SAFE_MATCH",
+      "valid_global_source_span": true,
+      "has_quote": true
+    },
+    {
+      "type": "amount",
+      "dimensions": [
+        "BUDGET",
+        "LEGAL"
+      ],
+      "status": "EXACT_MODEL_SAFE_MATCH",
+      "valid_global_source_span": true,
+      "has_quote": true
+    }
+  ],
+  "n12_status": "UNASSESSED",
+  "trusted_promotions": 0,
+  "not_validated": [
+    "human expert adjudication",
+    "legal risk recall",
+    "all annexes",
+    "original page citations",
+    "N4 runner",
+    "N12",
+    "ProjectGraph",
+    "cost/latency"
+  ]
+}
