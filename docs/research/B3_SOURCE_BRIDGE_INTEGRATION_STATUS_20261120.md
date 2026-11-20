@@ -1,3 +1,5 @@
+> **Actualización B3.1 — 20/11/2026:** el inventario sintético de contrato/cronograma/presupuesto **ya ha pasado por los nueve nodos del ProjectGraph compilado real**, en VPS aislado, sin artefactos TRUSTED, sin escrituras ni cálculo de Coherence (`null`). Se han ejecutado **15/15 pruebas PASS**, incluidas comprobaciones negativas de autoridad y una de ejecución real del grafo. Esto **no** es N4→N12 ni Complete Journey, y los parsers Docling/MPXJ siguen sin ruta de subida productiva. [Informe de la ejecución B3.1](B3_REAL_PROJECTGRAPH_PREVIEW_20261120.md).
+
 # B3 — Integración mínima y segura de fuentes (20/11/2026)
 
 **Estado: SOURCE_BRIDGE_PASS_LIMITED. No es un complete journey ni una implementación productiva.**
