@@ -42,7 +42,6 @@ class StubGraph:
             "node_results": [
                 SimpleNamespace(node="load_current_artifacts", status="ok"),
                 SimpleNamespace(node="align_entities", status="ok"),
-                SimpleNamespace(node="cross_doc_coherence", status="skipped"),
             ],
         }
         if self.outcome == "promote":
@@ -111,19 +110,20 @@ class B3PreviewTests(unittest.IsolatedAsyncioTestCase):
 
     @unittest.skipUnless(
         os.environ.get("B3_RUN_ACTUAL_GRAPH") == "1",
-        "explicit isolated real-graph smoke only",
+        "explicit isolated real-node preview smoke only",
     )
-    async def test_actual_compiled_project_graph_all_nine_nodes(self):
+    async def test_actual_compiled_read_only_graph_only_two_nodes(self):
         result = await preview_b3_sources_in_project_graph(
             packet=packet(), project_id=PROJECT, tenant_id=TENANT,
         )
-        self.assertEqual(result["node_count"], 9)
+        self.assertEqual(result["node_count"], 2)
         self.assertEqual(result["source_revision_count"], 3)
         self.assertEqual(result["node_statuses"]["load_current_artifacts"], "ok")
         self.assertEqual(result["node_statuses"]["align_entities"], "ok")
-        self.assertEqual(result["node_statuses"]["cross_doc_coherence"], "skipped")
-        self.assertEqual(result["node_statuses"]["write_snapshot"], "skipped")
-        self.assertEqual(result["node_statuses"]["alert_correlation"], "skipped")
+        self.assertEqual(set(result["node_statuses"]), {"load_current_artifacts", "align_entities"})
+        self.assertNotIn("cross_doc_coherence", result["node_statuses"])
+        self.assertNotIn("write_snapshot", result["node_statuses"])
+        self.assertNotIn("alert_correlation", result["node_statuses"])
         self.assertIsNone(result["coherence_score"])
 
 
