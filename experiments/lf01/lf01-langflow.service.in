@@ -1,0 +1,23 @@
+[Unit]
+Description=LF01 isolated rootless Langflow diagnostic lab (not C2Pro)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=lf01lab
+Group=lf01lab
+Environment=XDG_RUNTIME_DIR=/run/user/__LF01_UID__
+Environment=HOME=/home/lf01lab
+ExecStartPre=+/usr/bin/install -d -m 0700 -o lf01lab -g lf01lab /run/user/__LF01_UID__
+ExecStart=/usr/bin/podman --cgroup-manager=cgroupfs start --attach c2pro-lf01
+ExecStop=/usr/bin/podman --cgroup-manager=cgroupfs stop --time=15 c2pro-lf01
+Restart=on-failure
+RestartSec=10s
+MemoryMax=4G
+CPUQuota=200%
+TasksMax=256
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
