@@ -18,7 +18,11 @@
       "anchored_items": 5,
       "unanchored_items": 0,
       "pages_without_grounded_content": [],
-      "trusted_promotions": 0
+      "trusted_promotions": 0,
+      "context_windows": 2,
+      "window_chars_preserved": 623,
+      "window_input_chars": 623,
+      "n4_executed": false
     },
     {
       "file": "synthetic_annex.pdf",
@@ -35,7 +39,11 @@
       "anchored_items": 5,
       "unanchored_items": 0,
       "pages_without_grounded_content": [],
-      "trusted_promotions": 0
+      "trusted_promotions": 0,
+      "context_windows": 1,
+      "window_chars_preserved": 409,
+      "window_input_chars": 409,
+      "n4_executed": false
     }
   ],
   "limitations": [
