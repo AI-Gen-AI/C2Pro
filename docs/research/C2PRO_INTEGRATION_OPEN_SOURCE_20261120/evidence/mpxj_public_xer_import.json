@@ -1,0 +1,138 @@
+{
+  "study": "MPXJ public XER import",
+  "mpxj_version": "16.10.0",
+  "synthetic_or_illustrative_inputs": true,
+  "files": [
+    {
+      "file": "Meridian_EPC_Level3_public_illustrative.xer",
+      "source": "https://sketchdule.com/blog/img/xer-onepager/Meridian_EPC_Level3.xer",
+      "bytes": 170384,
+      "sha256": "54b046997e734171174cf25377689da3c2c533d2edbaab72165d4b14e1521657",
+      "raw_table_rows": {
+        "CURRTYPE": 1,
+        "CALENDAR": 1,
+        "PROJECT": 1,
+        "PROJWBS": 25,
+        "TASK": 809,
+        "TASKPRED": 1618
+      },
+      "status": "FAIL",
+      "error": "org.mpxj.MPXJException: Error reading file (failed at line 3)",
+      "exception_class": "org.mpxj.MPXJException"
+    },
+    {
+      "file": "stratum4d_sample.xer",
+      "source": "https://github.com/xunaidlnt-sudo/stratum-4d/blob/main/samples/demo.xer",
+      "bytes": 6572,
+      "sha256": "8b9c31b2050f3eadbdde14709f805ac7de7230fe249f59f1da751c1dd032de4e",
+      "raw_table_rows": {
+        "CALENDAR": 1,
+        "PROJECT": 1,
+        "PROJWBS": 5,
+        "ACTVTYPE": 1,
+        "ACTVCODE": 3,
+        "TASK": 14,
+        "TASKACTV": 9,
+        "RSRC": 7,
+        "UMEASURE": 2,
+        "RSRCRATE": 7,
+        "TASKRSRC": 24,
+        "UDFTYPE": 1,
+        "UDFVALUE": 3,
+        "TASKPRED": 14
+      },
+      "status": "PASS",
+      "seconds": 0.291,
+      "mpxj_task_count": 19,
+      "mpxj_predecessor_relationship_count": 14,
+      "mpxj_calendars": 1,
+      "mpxj_resources": 7,
+      "sample_ids": [
+        {
+          "id": "1",
+          "uid": "10"
+        },
+        {
+          "id": "2",
+          "uid": "11"
+        },
+        {
+          "id": "3",
+          "uid": "1000"
+        }
+      ]
+    },
+    {
+      "file": "project_toolkit_sample.xer",
+      "source": "https://github.com/indrapandu/project-toolkit/blob/main/tools/p6-xer-viewer/sample.xer",
+      "bytes": 6552,
+      "sha256": "6395b4324cfed183b4ca68d132fc3b1f447be96dba9bb596b95b3436f8b6bcbb",
+      "raw_table_rows": {
+        "CALENDAR": 1,
+        "PROJECT": 1,
+        "PROJWBS": 6,
+        "TASK": 24,
+        "TASKPRED": 27
+      },
+      "status": "PASS",
+      "seconds": 0.014,
+      "mpxj_task_count": 30,
+      "mpxj_predecessor_relationship_count": 27,
+      "mpxj_calendars": 1,
+      "mpxj_resources": 0,
+      "sample_ids": [
+        {
+          "id": "1",
+          "uid": "200"
+        },
+        {
+          "id": "2",
+          "uid": "201"
+        },
+        {
+          "id": "3",
+          "uid": "1001"
+        }
+      ]
+    },
+    {
+      "file": "P6_schedule_AI_sample.xer",
+      "source": "https://github.com/akhilkarthik/P6-Schedule-AI-Automation/blob/main/sample_schedule.xer",
+      "bytes": 10012,
+      "sha256": "37407ae9ba6d33e46d291ebf3f5403bc27d3b36f91895493772ca4089afcf671",
+      "raw_table_rows": {
+        "PROJECT": 1,
+        "PROJWBS": 8,
+        "TASK": 64,
+        "TASKPRED": 52,
+        "TASKRSRC": 54
+      },
+      "status": "PASS",
+      "seconds": 0.018,
+      "mpxj_task_count": 72,
+      "mpxj_predecessor_relationship_count": 0,
+      "mpxj_calendars": 1,
+      "mpxj_resources": 0,
+      "sample_ids": [
+        {
+          "id": "1",
+          "uid": "100"
+        },
+        {
+          "id": "2",
+          "uid": "1001"
+        },
+        {
+          "id": "3",
+          "uid": "1002"
+        }
+      ]
+    }
+  ],
+  "status": "PASS_LIMITED",
+  "limitations": [
+    "Examples are public project simulations, not accepted actual as-built programmes.",
+    "Raw XER TASK count can differ from MPXJ task count when summary/WBS records are materialized.",
+    "Parser import PASS does not prove calendar/baseline/float/constraint fidelity."
+  ]
+}
