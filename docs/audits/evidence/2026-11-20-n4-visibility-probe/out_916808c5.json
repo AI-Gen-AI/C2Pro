@@ -1,0 +1,137 @@
+{
+  "code_sha": "916808c5",
+  "A_bridge": "N4GraphBridgeBlocked: N4 durable source window run incomplete; reason=PARTIAL",
+  "A_provider_calls_first": [
+    0,
+    1
+  ],
+  "A_ledger_after_bridge": {
+    "runs": [
+      {
+        "run_id": "ab702278-1ae3-4aad-a2c3-d17db207db4b",
+        "generation": 1,
+        "status": "PARTIAL",
+        "total_windows": 2
+      }
+    ],
+    "windows": [
+      {
+        "run_id": "ab702278-1ae3-4aad-a2c3-d17db207db4b",
+        "ordinal": 0,
+        "status": "BLOCKED",
+        "blocked_reason": "REFERENCES_UNRESOLVED",
+        "refs": "[\"Annex 0 referenced but not provided\"]"
+      },
+      {
+        "run_id": "ab702278-1ae3-4aad-a2c3-d17db207db4b",
+        "ordinal": 1,
+        "status": "EXAMINED",
+        "blocked_reason": null,
+        "refs": "[]"
+      }
+    ],
+    "candidates": 4,
+    "receipts": [
+      {
+        "status": "SETTLED",
+        "n": 2
+      }
+    ]
+  },
+  "A_provider_calls_total_after_node": 2,
+  "A_node": {
+    "extracted_risks": 0,
+    "workflow_terminated": true,
+    "termination_reason": "risk_extraction_unassessed",
+    "analysis_blocker_code": null,
+    "human_approval_required": false,
+    "node_results": [
+      [
+        "risk_extractor",
+        "failed"
+      ]
+    ],
+    "critique_notes": "N4 governed source-window analysis unavailable or incomplete; N4GraphBridgeBlocked: N4 durable source window run incomplete; reason=PARTIAL"
+  },
+  "A_route": "terminated",
+  "A_user_sees": {
+    "persisted_blocker_code": null,
+    "lifecycle": "failed_retryable",
+    "retryable": true,
+    "status_detail": "Automatic analysis did not complete after several attempts. Retry to try again."
+  },
+  "B_bridge": "N4GraphBridgeBlocked: N4 durable source window run incomplete; reason=N4BudgetError",
+  "B_new_provider_calls_on_retry": 0,
+  "B_ledger": {
+    "runs": [
+      {
+        "run_id": "ab702278-1ae3-4aad-a2c3-d17db207db4b",
+        "generation": 1,
+        "status": "PARTIAL",
+        "total_windows": 2
+      },
+      {
+        "run_id": "2b8cdda0-13d4-4613-892c-c99c33032931",
+        "generation": 2,
+        "status": "PARTIAL",
+        "total_windows": 2
+      }
+    ],
+    "windows": [
+      {
+        "run_id": "2b8cdda0-13d4-4613-892c-c99c33032931",
+        "ordinal": 0,
+        "status": "BLOCKED",
+        "blocked_reason": "BUDGET_OR_RESERVATION_UNAVAILABLE",
+        "refs": "[]"
+      },
+      {
+        "run_id": "2b8cdda0-13d4-4613-892c-c99c33032931",
+        "ordinal": 1,
+        "status": "PENDING",
+        "blocked_reason": null,
+        "refs": "[]"
+      },
+      {
+        "run_id": "ab702278-1ae3-4aad-a2c3-d17db207db4b",
+        "ordinal": 0,
+        "status": "BLOCKED",
+        "blocked_reason": "REFERENCES_UNRESOLVED",
+        "refs": "[\"Annex 0 referenced but not provided\"]"
+      },
+      {
+        "run_id": "ab702278-1ae3-4aad-a2c3-d17db207db4b",
+        "ordinal": 1,
+        "status": "EXAMINED",
+        "blocked_reason": null,
+        "refs": "[]"
+      }
+    ],
+    "candidates": 4,
+    "receipts": [
+      {
+        "status": "SETTLED",
+        "n": 2
+      }
+    ]
+  },
+  "B_note": "generation advanced by direct UPDATE in scratch DB, emulating reprocess; not the HTTP path",
+  "C_complete": {
+    "outcome": "PROPOSED_NOT_VERIFIED",
+    "risks": 4,
+    "verified_quotes": 2,
+    "not_found_quotes": 2,
+    "severity_values": [
+      "None"
+    ],
+    "model_impact_kept": false,
+    "alert_severity_for_first": "low",
+    "coverage": {
+      "examined": 2,
+      "total": 2,
+      "source_kind": "MODEL_SAFE_PROJECTION",
+      "original_document_completeness_certified": false,
+      "semantic_recall_certified": false
+    }
+  }
+}
