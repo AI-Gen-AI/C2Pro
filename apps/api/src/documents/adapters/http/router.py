@@ -393,6 +393,12 @@ def get_pending_review_document_ids(
     return _lookup
 
 
+_N4_UNSAFE_REPROCESS_BLOCKERS = frozenset({
+    "N4_PARTIAL_RESULTS",
+    "N4_PRIOR_RUN_RECONCILIATION_REQUIRED",
+})
+
+
 def _document_status_detail(
     status: DocumentStatus,
     lifecycle: DocumentLifecycleStatus,
@@ -403,6 +409,18 @@ def _document_status_detail(
     every lifecycle state that isn't one of #712's new truthful states, so
     existing copy for UPLOADED/PROCESSING/PARSED/ANALYSIS_PENDING/ANALYZED/
     ERROR is unchanged."""
+    if analysis_blocker_code == "N4_PARTIAL_RESULTS":
+        return (
+            "Partial N4 findings are available but not approved. "
+            "Open the proposed findings to see analyzed windows, evidence and "
+            "unresolved references. Automatic retry is disabled."
+        )
+    if analysis_blocker_code == "N4_PRIOR_RUN_RECONCILIATION_REQUIRED":
+        return (
+            "An earlier N4 execution requires financial reconciliation. "
+            "Previously persisted findings may still be available. "
+            "Automatic retry is disabled to prevent duplicate charges."
+        )
     if analysis_blocker_code == "N4_BUDGET_NOT_CONFIGURED":
         return (
             "AI budget authorization required: no approved N4 spending cap "
@@ -1155,7 +1173,10 @@ async def list_documents_for_project(
         # A missing cap is not a transient failure; blind Retry merely
         # re-parses a full document without changing its budget permissions.
         budget_blocked = (
-            blocker_code in ("N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED")
+            blocker_code in (
+                "N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED",
+                *_N4_UNSAFE_REPROCESS_BLOCKERS,
+            )
             and lifecycle in (
                 DocumentLifecycleStatus.FAILED_RETRYABLE, DocumentLifecycleStatus.ERROR,
             )
