@@ -224,6 +224,22 @@ def test_invalid_truncated_json_never_means_empty_extracted_records():
         parse_n4_typed_evidence_v2('{"window_examined":true,"records":[', window=_window())
 
 
+def test_strict_boolean_rejects_integer_claim_of_examined():
+    payload = _payload()
+    payload["window_examined"] = 1
+    with pytest.raises(N4V2ContractError):
+        parse_n4_typed_evidence_v2(payload, window=_window())
+
+
+def test_excessive_quoted_passages_fail_without_discarding_evidence():
+    excessive = _fact(evidence=[
+        _quote("The Contractor shall pay $5,000 per Day for delayed Mechanical Completion.")
+        for _ in range(9)
+    ])
+    with pytest.raises(N4V2ContractError):
+        parse_n4_typed_evidence_v2(_payload(excessive), window=_window())
+
+
 def test_blank_unresolved_reference_fails():
     with pytest.raises(N4V2ContractError):
         parse_n4_typed_evidence_v2(_payload(refs=[""]), window=_window())
