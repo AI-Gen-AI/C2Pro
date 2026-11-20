@@ -41,8 +41,8 @@
       "pages_without_grounded_content": [],
       "trusted_promotions": 0,
       "context_windows": 1,
-      "window_chars_preserved": 409,
-      "window_input_chars": 409,
+      "window_chars_preserved": 405,
+      "window_input_chars": 405,
       "n4_executed": false
     }
   ],
