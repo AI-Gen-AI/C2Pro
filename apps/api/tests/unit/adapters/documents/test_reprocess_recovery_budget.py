@@ -10,6 +10,15 @@ from src.documents.adapters.http import router
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 
 
+def _repo_without_prior_n4_receipts() -> Mock:
+    """Normal retry tests explicitly attest an empty financial ledger."""
+    repo = Mock()
+    repo.session.execute = AsyncMock(
+        return_value=Mock(scalar_one=Mock(return_value=False)),
+    )
+    return repo
+
+
 @pytest.mark.asyncio
 async def test_reprocess_clears_only_processing_recovery_metadata(
     monkeypatch: pytest.MonkeyPatch,
@@ -34,7 +43,7 @@ async def test_reprocess_clears_only_processing_recovery_metadata(
         },
     )
 
-    repo = Mock()
+    repo = _repo_without_prior_n4_receipts()
     repo.get_by_id = AsyncMock(return_value=document)
 
     async def _update_status(_tenant_id, _document_id, status, **_kwargs):
@@ -93,7 +102,7 @@ async def test_failed_retryable_analysis_is_allowed_to_reprocess(
         upload_status=DocumentStatus.PARSED_PENDING_ANALYSIS,
         document_metadata={"analysis_last_attempt_incomplete": True},
     )
-    repo = Mock()
+    repo = _repo_without_prior_n4_receipts()
     repo.get_by_id = AsyncMock(return_value=document)
 
     async def _update_status(_tenant_id, _document_id, new_status, **_kwargs):
@@ -163,7 +172,7 @@ async def test_reprocess_rejects_every_non_retryable_lifecycle_without_mutation(
         upload_status=stored_status,
         document_metadata=metadata,
     )
-    repo = Mock()
+    repo = _repo_without_prior_n4_receipts()
     repo.get_by_id = AsyncMock(return_value=document)
     repo.update_status = AsyncMock()
     repo.update_metadata = AsyncMock()
@@ -208,7 +217,7 @@ async def test_reprocess_binds_complete_expected_authority_tuple(
         upload_status=DocumentStatus.ERROR,
         document_metadata={},
     )
-    repo = Mock()
+    repo = _repo_without_prior_n4_receipts()
     repo.get_by_id = AsyncMock(return_value=document)
 
     async def _update_status(_tenant_id, _document_id, new_status, **_kwargs):
@@ -269,7 +278,7 @@ async def test_reprocess_authority_mismatch_fails_before_commit(
         upload_status=DocumentStatus.ERROR,
         document_metadata={},
     )
-    repo = Mock()
+    repo = _repo_without_prior_n4_receipts()
     repo.get_by_id = AsyncMock(return_value=document)
     repo.update_status = AsyncMock()
     repo.update_metadata = AsyncMock()
@@ -318,7 +327,7 @@ async def test_reprocess_rejects_partial_expected_authority_without_mutation() -
         upload_status=DocumentStatus.ERROR,
         document_metadata={},
     )
-    repo = Mock()
+    repo = _repo_without_prior_n4_receipts()
     repo.get_by_id = AsyncMock(return_value=document)
     repo.update_status = AsyncMock()
     repo.update_metadata = AsyncMock()

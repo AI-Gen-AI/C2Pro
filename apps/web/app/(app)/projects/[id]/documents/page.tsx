@@ -802,6 +802,12 @@ export default function ProjectDocumentsPage() {
                         >
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {(doc.status === 'failed_retryable' || doc.status === 'error') &&
+                          doc.statusDetail?.startsWith('Partial N4 findings')
+                            ? 'Partial N4 results'
+                            : (doc.status === 'failed_retryable' || doc.status === 'error') &&
+                              doc.statusDetail?.startsWith('An earlier N4 execution')
+                              ? 'Reconciliation required'
+                              : (doc.status === 'failed_retryable' || doc.status === 'error') &&
                           doc.statusDetail?.startsWith('AI budget authorization required:')
                             ? 'Budget required'
                             : (doc.status === 'failed_retryable' || doc.status === 'error') &&
@@ -821,6 +827,15 @@ export default function ProjectDocumentsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
+                          {(doc.statusDetail?.startsWith('Partial N4 findings') ||
+                            doc.statusDetail?.startsWith('An earlier N4 execution')) && (
+                            <Button variant="outline" size="sm" asChild>
+                              <Link href={`/projects/${projectId}/documents/${doc.id}/n4-findings`}
+                                data-testid="document-n4-readonly-cta">
+                                View N4 findings
+                              </Link>
+                            </Button>
+                          )}
                           {doc.reviewHref && (
                             <Button
                               variant="outline"

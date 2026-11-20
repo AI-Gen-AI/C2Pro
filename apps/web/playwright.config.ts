@@ -66,6 +66,7 @@ export default defineConfig({
         // Opt-in real-AI vertical (own project, manual job only: it spends a provider budget).
         /(^|[\\/])real-ai-hitl-vertical\.spec\.ts$/,
         /(^|[\\/])owner-session-plumbing\.spec\.ts$/,
+        /(^|[\\/])vs1-n4-partial-visibility\.spec\.ts$/,
         // Pilot probe is opt-in and must never run in the default authenticated suite.
         /(^|[\\/])pilot-clerk-readonly\.spec\.ts$/,
         /(^|[\\/])prod-acceptance[\\/].*\.spec\.ts$/,
@@ -112,6 +113,19 @@ export default defineConfig({
         type: "e2e",
         priority: "p0",
         description: "PJ-01 first real user journey (Login → Create → Upload A → Processing → Health → Evidence → Revision B → What Changed → Current State)",
+      },
+    },
+    {
+      // FG-1a explicitly selected by its isolated CI lane; not ordinary E2E.
+      name: "vs1-fg1a",
+      testMatch: [/(^|[\\/])vs1-n4-partial-visibility\.spec\.ts$/],
+      use: { ...devices["Desktop Chrome"], trace: "off", screenshot: "off", video: "off" },
+      dependencies: ["global-setup"],
+      metadata: {
+        suite: "C2PRO-VS1-FG1A",
+        type: "disposable-clerk-pg-browser",
+        priority: "p0",
+        description: "Read-only N4 partial visibility using real Clerk Development, web and PostgreSQL",
       },
     },
     {

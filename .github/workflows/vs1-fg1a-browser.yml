@@ -1,0 +1,120 @@
+name: VS-1 FG-1a — real Clerk browser and disposable PostgreSQL
+on:
+  pull_request:
+    branches:
+      - feat/g2-governed-n4-only-20261119
+    paths:
+      - 'apps/api/scripts/seed_vs1_browser_qa.py'
+      - 'apps/api/scripts/verify_vs1_browser_qa.py'
+      - 'apps/web/src/tests/e2e/vs1-n4-partial-visibility.spec.ts'
+      - 'apps/web/playwright.config.ts'
+      - '.github/workflows/vs1-fg1a-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fg1a:
+    name: FG-1a — browser → actual API → disposable PG → reload
+    # Do not grant Dev Clerk fixtures to fork PRs or untrusted event sources.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ENVIRONMENT: test
+      STORAGE_PROVIDER: local
+      C2PRO_AI_MOCK: '1'
+      C2PRO_EMBEDDINGS_MOCK: '1'
+      C2PRO_N4_GRAPH_LEDGER_ENABLED: '0'
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5433/c2pro_test
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:8000
+      PLAYWRIGHT_BASE_URL: http://localhost:3100
+      CORS_ORIGINS: '["http://localhost:3100"]'
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_TESTING_TOKEN: ${{ secrets.CLERK_TESTING_TOKEN }}
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout exact PR SHA without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail closed unless keys are Clerk DEVELOPMENT
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CLERK_SECRET_KEY:-}" == sk_test_* || "${CLERK_SECRET_KEY:-}" == test_* ]] || {
+            echo '::error::Only Clerk Development secret is allowed'; exit 2;
+          }
+          [[ "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" == pk_test_* ]] || {
+            echo '::error::Only Clerk Development publishable key is allowed'; exit 2;
+          }
+          test "$C2PRO_AI_MOCK" = "1" && test "$C2PRO_EMBEDDINGS_MOCK" = "1"
+          test "$C2PRO_N4_GRAPH_LEDGER_ENABLED" = "0"
+          test "$STORAGE_PROVIDER" = "local"
+          test "$DATABASE_URL" = "postgresql://postgres:postgres@localhost:5433/c2pro_test"
+      - name: Generate ephemeral JWT signing secret
+        shell: bash
+        run: |
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          echo "JWT_SECRET_KEY=$secret" >> "$GITHUB_ENV"
+      - name: Set up Python backend pinned dependencies
+        uses: ./.github/actions/setup-python-backend
+      - name: Start disposable PostgreSQL only (and reuse local Redis service)
+        run: python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
+      - name: Provision existing Clerk Development E2E identity
+        run: python apps/api/scripts/provision_clerk_e2e_fixture.py
+      - name: Seed synthetic partial N4 evidence + settled receipt in migrated PG
+        working-directory: apps/api
+        run: python -m scripts.seed_vs1_browser_qa
+      - name: Run real FastAPI against disposable PG and local JWKS fixture
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP" > "$RUNNER_TEMP/vs1-jwks.log" 2>&1 &
+          CLERK_JWKS_URL=http://127.0.0.1:8765/clerk-jwks.json python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/vs1-api.log" 2>&1 &
+          for _ in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/health/live >/dev/null; then
+              echo 'VS1_EPHEMERAL_API_READY'; exit 0
+            fi
+            sleep 2
+          done
+          tail -n 70 "$RUNNER_TEMP/vs1-api.log"
+          exit 1
+      - name: Install frozen web toolchain
+        uses: ./.github/actions/setup-node-web
+      - name: Install Chromium for exact Playwright project
+        working-directory: apps/web
+        run: ./node_modules/.bin/playwright install chromium
+      - name: FG-1a real browser journey
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/playwright test --project=vs1-fg1a --workers=1 --reporter=list
+      - name: Check N4 ledger unchanged after browser
+        if: success()
+        working-directory: apps/api
+        run: python -m scripts.verify_vs1_browser_qa
+      - name: Sanitized summary (no token, cookie or private evidence)
+        if: always()
+        run: |
+          echo 'FG-1a uses real Clerk Development + Next + API + disposable PG.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Synthetic candidates only. No N4/N12 inference, no HITL actions, no production database.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Browser PASS and ledger verification must both pass to qualify this gate.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Destroy disposable PostgreSQL and Redis
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

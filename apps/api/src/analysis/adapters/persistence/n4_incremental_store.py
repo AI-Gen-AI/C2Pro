@@ -48,6 +48,10 @@ class N4BudgetExceeded(N4BudgetError):
     """A reservation would exceed at least one spending limit."""
 
 
+class N4PriorRunReconciliationRequired(N4BudgetError):
+    """Prior N4 usage requires reconciliation; a new paid run is forbidden."""
+
+
 @dataclass(frozen=True)
 class N4Reservation:
     reservation_id: UUID
@@ -479,7 +483,7 @@ async def reserve_call(
         "run": str(run_id),
     })).scalar_one_or_none()
     if cross_generation:
-        raise N4BudgetError(
+        raise N4PriorRunReconciliationRequired(
             "earlier generation has billable or unknown N4 usage; "
             "reconcile before any new provider call"
         )

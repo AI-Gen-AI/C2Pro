@@ -393,6 +393,12 @@ def get_pending_review_document_ids(
     return _lookup
 
 
+_N4_UNSAFE_REPROCESS_BLOCKERS = frozenset({
+    "N4_PARTIAL_RESULTS",
+    "N4_PRIOR_RUN_RECONCILIATION_REQUIRED",
+})
+
+
 def _document_status_detail(
     status: DocumentStatus,
     lifecycle: DocumentLifecycleStatus,
@@ -403,6 +409,18 @@ def _document_status_detail(
     every lifecycle state that isn't one of #712's new truthful states, so
     existing copy for UPLOADED/PROCESSING/PARSED/ANALYSIS_PENDING/ANALYZED/
     ERROR is unchanged."""
+    if analysis_blocker_code == "N4_PARTIAL_RESULTS":
+        return (
+            "Partial N4 findings are available but not approved. "
+            "Open the proposed findings to see analyzed windows, evidence and "
+            "unresolved references. Automatic retry is disabled."
+        )
+    if analysis_blocker_code == "N4_PRIOR_RUN_RECONCILIATION_REQUIRED":
+        return (
+            "An earlier N4 execution requires financial reconciliation. "
+            "Previously persisted findings may still be available. "
+            "Automatic retry is disabled to prevent duplicate charges."
+        )
     if analysis_blocker_code == "N4_BUDGET_NOT_CONFIGURED":
         return (
             "AI budget authorization required: no approved N4 spending cap "
@@ -1155,7 +1173,10 @@ async def list_documents_for_project(
         # A missing cap is not a transient failure; blind Retry merely
         # re-parses a full document without changing its budget permissions.
         budget_blocked = (
-            blocker_code in ("N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED")
+            blocker_code in (
+                "N4_BUDGET_NOT_CONFIGURED", "N4_BUDGET_EXCEEDED",
+                *_N4_UNSAFE_REPROCESS_BLOCKERS,
+            )
             and lifecycle in (
                 DocumentLifecycleStatus.FAILED_RETRYABLE, DocumentLifecycleStatus.ERROR,
             )
@@ -1252,6 +1273,12 @@ async def reprocess_document_endpoint(
         )
     if is_analysis_excluded(document.document_type):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=WBS_ANALYSIS_EXCLUDED_DETAIL)
+    # H-04: the UI's retryable=false is not a server-side authorization rule.
+    if (document.document_metadata or {}).get("analysis_blocker_code") in _N4_UNSAFE_REPROCESS_BLOCKERS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="N4 findings or earlier usage require supervised reconciliation, not automatic reprocessing.",
+        )
     # A pilot-marked document cannot be sent through a normal retry that
     # would re-enable the N4 -> N12 route. Only CORE's pinned pilot
     # endpoint (new generation, new authority) may operate on it.
@@ -1300,6 +1327,35 @@ async def reprocess_document_endpoint(
                 "Document cannot be retried while lifecycle state is "
                 f"'{lifecycle.value}'."
             ),
+        )
+
+    # A legacy or interrupted analysis may not have reached the metadata
+    # update. Check durable receipts for the current source revision instead.
+    previous_n4_usage = (await repo.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1
+              FROM public.n4_usage_reservations u
+              JOIN public.n4_extraction_runs r
+                ON r.tenant_id = u.tenant_id AND r.run_id = u.run_id
+              JOIN public.document_revisions dr
+                ON dr.tenant_id = r.tenant_id
+               AND dr.document_id = r.document_id
+               AND dr.revision_id = r.document_revision_id
+             WHERE r.tenant_id = CAST(:tenant AS uuid)
+               AND r.project_id = CAST(:project AS uuid)
+               AND r.document_id = CAST(:document AS uuid)
+               AND dr.valid_to IS NULL
+               AND u.status IN ('RESERVED', 'UNKNOWN', 'SETTLED')
+        )
+    """), {
+        "tenant": str(tenant_id),
+        "project": str(project_id),
+        "document": str(document_id),
+    })).scalar_one()
+    if previous_n4_usage:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Earlier N4 usage exists for this revision; reconcile before reprocessing.",
         )
 
     # An explicit user retry starts a fresh bounded recovery budget while
@@ -1537,6 +1593,170 @@ async def recover_n4_only_enqueue_endpoint(
         "n4_billable_in_this_request": False,
         "n12_status": "UNASSESSED",
         "retry_policy": "MANUAL_AFTER_LEASE_AND_RECEIPT_PREFLIGHT_ONLY",
+    }
+
+
+@router.get(
+    "/projects/{project_id}/documents/{document_id}/n4-findings",
+    summary="Read the pinned N4 run's provisional candidates without approval",
+)
+async def read_n4_partial_findings(
+    project_id: UUID,
+    document_id: UUID,
+    user_id: CurrentUserId,  # noqa: ARG001 -- authentication required
+    tenant_id: CurrentTenantId,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    repo: SqlAlchemyDocumentRepository = Depends(get_document_repository),
+) -> dict[str, object]:
+    """Read durable PROPOSED candidates; never invoke N4, HITL or Score.
+
+    The document's fenced analysis result pins run, source digest and revision.
+    A newer empty retry must not erase a prior run containing valid evidence.
+    """
+    import re
+
+    doc = await repo.get_by_id(tenant_id, document_id)
+    if doc is None or doc.project_id != project_id:
+        raise HTTPException(status_code=404, detail="document unavailable")
+    metadata = doc.document_metadata or {}
+    run_raw = metadata.get("analysis_n4_run_id")
+    revision_raw = metadata.get("analysis_n4_revision_id")
+    digest = metadata.get("analysis_n4_source_sha256")
+    if not run_raw or not revision_raw or not digest:
+        # NOT_AVAILABLE is not the claim that the contract contains zero risks.
+        return {
+            "status": "RESULTS_NOT_AVAILABLE", "findings": [],
+            "total_findings": None, "coverage": None,
+            "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
+            "trusted": False, "approvable": False,
+        }
+    try:
+        pinned_run = UUID(str(run_raw))
+        pinned_revision = UUID(str(revision_raw))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=404, detail="N4 run unavailable") from exc
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise HTTPException(status_code=404, detail="N4 source identity unavailable")
+
+    run = (await repo.session.execute(text("""
+        SELECT r.run_id, r.status, r.total_windows, r.generation
+          FROM public.n4_extraction_runs r
+          JOIN public.document_revisions dr
+            ON dr.tenant_id = r.tenant_id
+           AND dr.document_id = r.document_id
+           AND dr.revision_id = r.document_revision_id
+           AND dr.valid_to IS NULL
+          JOIN public.document_processing_operations op
+            ON op.tenant_id = r.tenant_id
+           AND op.document_id = r.document_id
+           AND op.revision_id = r.document_revision_id
+           AND op.generation >= r.generation
+         WHERE r.tenant_id = CAST(:tenant AS uuid)
+           AND r.project_id = CAST(:project AS uuid)
+           AND r.document_id = CAST(:document AS uuid)
+           AND r.document_revision_id = CAST(:revision AS uuid)
+           AND r.run_id = CAST(:run AS uuid)
+           AND r.source_sha256 = :digest
+    """), {
+        "tenant": str(tenant_id), "project": str(project_id),
+        "document": str(document_id), "revision": str(pinned_revision),
+        "run": str(pinned_run), "digest": digest,
+    })).mappings().one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="N4 run unavailable or superseded")
+
+    windows = (await repo.session.execute(text("""
+        SELECT w.ordinal, w.status, w.blocked_reason, w.unresolved_refs,
+               (w.committed_at IS NOT NULL
+                AND w.findings_sha256 IS NOT NULL) AS has_result
+          FROM public.n4_extraction_windows w
+         WHERE w.tenant_id = CAST(:tenant AS uuid)
+           AND w.run_id = CAST(:run AS uuid)
+         ORDER BY w.ordinal
+    """), {"tenant": str(tenant_id), "run": str(pinned_run)})).mappings().all()
+    read_count = sum(1 for w in windows if w["has_result"])
+    examined = sum(1 for w in windows if w["status"] == "EXAMINED")
+    blocked = sum(1 for w in windows if w["status"] == "BLOCKED")
+    count = (await repo.session.execute(text("""
+        SELECT count(*) FROM public.n4_candidate_findings
+         WHERE tenant_id = CAST(:tenant AS uuid)
+           AND run_id = CAST(:run AS uuid)
+    """), {"tenant": str(tenant_id), "run": str(pinned_run)})).scalar_one()
+    rows = (await repo.session.execute(text("""
+        SELECT f.finding_key, f.window_ordinal, f.claim, f.source_refs
+          FROM public.n4_candidate_findings f
+         WHERE f.tenant_id = CAST(:tenant AS uuid)
+           AND f.run_id = CAST(:run AS uuid)
+         ORDER BY f.window_ordinal, f.finding_key
+         LIMIT :limit OFFSET :offset
+    """), {
+        "tenant": str(tenant_id), "run": str(pinned_run),
+        "limit": limit, "offset": offset,
+    })).mappings().all()
+    findings: list[dict[str, object]] = []
+    for row in rows:
+        claim = row["claim"] if isinstance(row["claim"], dict) else {}
+        refs = row["source_refs"] if isinstance(row["source_refs"], list) else []
+        # Both the claim and its immutable span must attest the N2 quote.
+        # A forged/mismatched source ref alone must never elevate a quote.
+        matched_n2 = (
+            claim.get("source_evidence_status") == "EXACT_MODEL_SAFE_MATCH"
+            and isinstance(claim.get("source_quote"), str)
+            and bool(claim["source_quote"].strip())
+            and any(
+                isinstance(ref, dict)
+                and ref.get("document_revision_id") == str(pinned_revision)
+                and ref.get("source_sha256") == digest
+                and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
+                and ref.get("evidence_status") == "EXACT_MODEL_SAFE_MATCH"
+                and isinstance(ref.get("analysis_span"), list)
+                and len(ref["analysis_span"]) == 2
+                and all(type(value) is int and value >= 0 for value in ref["analysis_span"])
+                and ref["analysis_span"][1] > ref["analysis_span"][0]
+                for ref in refs
+            )
+        )
+        findings.append({
+            "finding_key": row["finding_key"],
+            "window_ordinal": row["window_ordinal"],
+            "title": str(claim.get("title") or "Untitled provisional finding"),
+            "interpretation": str(claim.get("risk_reason") or ""),
+            "clause_ref": claim.get("clause_ref"),
+            "source_quote": claim.get("source_quote") if matched_n2 else None,
+            "n2_quote_status": "N2_EXACT_MATCH" if matched_n2 else "NOT_LOCATED",
+            "original_pdf_quote_status": "UNVERIFIED",
+            "severity": "UNASSESSED",
+            "review_state": "PROPOSED",
+            "approvable": False,
+        })
+    return {
+        "status": "PARTIAL_UNASSESSED" if run["status"] != "COMPLETE"
+            else "PROPOSED_UNASSESSED",
+        "run_id": str(pinned_run),
+        "document_revision_id": str(pinned_revision),
+        "ledger_status": str(run["status"]),
+        "total_findings": int(count), "offset": offset, "limit": limit,
+        "findings": findings,
+        "coverage": {
+            "total": int(run["total_windows"]),
+            "windows_with_result": read_count,
+            "examined": examined,
+            "blocked": blocked,
+            "windows": [
+                {
+                    "ordinal": int(w["ordinal"]), "status": str(w["status"]),
+                    "blocked_reason": w["blocked_reason"],
+                    "unresolved_refs": w["unresolved_refs"] or [],
+                    "has_result": bool(w["has_result"]),
+                }
+                for w in windows
+            ],
+            "semantic_recall_certified": False,
+            "original_pdf_coverage_certified": False,
+        },
+        "n12_status": "UNASSESSED", "original_pdf_coverage": "UNVERIFIED",
+        "trusted": False, "approvable": False,
     }
 
 
