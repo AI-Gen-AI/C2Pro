@@ -75,13 +75,19 @@ def make_graph(template, snapshot, tag):
         ("DOCUMENT", "Evidence source: " + snapshot["data_class"] + ". NOT a fresh model execution."),
         ("N1 / N2", "Historical windows: " + str(snapshot["N1_N2"]["processing_windows_historical"]) + ". " + ("50 literal N2 verified / 92 unverified" if tag == "REAL" else "Partial by design; 3 of 6 processed")),
         ("N3", "Status: " + snapshot["N3"]["status"] + ". No claims about real N3 processing."),
-        ("N4", "Status: " + n4["status"] + ". Proposed candidates: " + str(n4["candidate_count"]) + ". Never accepted risks."),
+        ("N4", "Status: " + n4["status"] + ". Proposed candidates: " +
+          str(n4["candidate_count"]) + ". Never accepted risks. " +
+          ("Source literal N2: 50 verified / 92 unverified. Historical window states unavailable."
+           if tag == "REAL" else "3 processed, 1 blocked, 2 pending; 2 unresolved references (synthetic).")),
         ("N12", "Status: " + snapshot["N12"]["status"] + ". No reviewer completion evidenced."),
         ("HITL", "Status: " + snapshot["HITL"]["status"] + ". Zero approvals, no write operations."),
         ("PROJECTGRAPH", "Status: " + snapshot["ProjectGraph"]["status"] + ". No promoted candidates."),
         ("N8 / SCORE", "Status: " + snapshot["N8_Coherence"]["status"] + ". No score recomputation."),
         ("USER UI", "Status: " + snapshot["UI"]["status"] + ". Do not assume results reached UI."),
         ("RELATED DOCUMENTS", "Budget, schedule, specs & annexes: " + snapshot["Budget_Schedule_Tech_Annexes"]["status"]),
+        ("KNOWN BLOCKERS", "Recorded limits (NOT root-cause traces): " +
+          ", ".join(snapshot.get("blocker_codes", ["BLOCKERS_NOT_ATTESTED"]))),
+
     ]
     notes = []
     for index, (title, body) in enumerate(stages):
