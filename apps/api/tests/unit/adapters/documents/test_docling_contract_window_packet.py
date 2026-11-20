@@ -17,19 +17,21 @@ def candidate():
         "trusted_promotions": 0,
         "effects_allowed": False,
         "text_items": [
-            {"source_locator":"docling:text:0","content":"A"*400,
+            {"source_locator":"docling:text:0","content":"A "*200,
              "locations":[{"page":1}]},
-            {"source_locator":"docling:text:1","content":"B"*250,
+            {"source_locator":"docling:text:1","content":"B "*125,
              "locations":[{"page":2}]},
             {"source_locator":"docling:text:2","content":"UNANCHORED",
              "locations":[]},
         ],
         "tables": [
             {"source_locator":"docling:table:0",
+             "rows":1, "columns":2,
              "cells":[{"text":"x","row_start":0,"col_start":0},
                       {"text":"y","row_start":0,"col_start":1}],
              "locations":[{"page":2}]},
         ],
+        "reading_order": ["docling:text:0", "docling:table:0", "docling:text:1", "docling:text:2"],
     }
 
 
@@ -72,6 +74,7 @@ class ContractWindowPacketTests(unittest.TestCase):
         source = candidate()
         source["text_items"] = []
         source["tables"] = []
+        source["reading_order"] = []
         with self.assertRaisesRegex(ContractWindowError, "no parsed"):
             build_untrusted_contract_windows(source)
 
@@ -82,13 +85,46 @@ class ContractWindowPacketTests(unittest.TestCase):
     def test_splits_oversized_blocks_with_no_holes(self):
         source = candidate()
         source["text_items"] = [{
-            "source_locator":"docling:text:0","content":"Z"*1200,
+            "source_locator":"docling:text:0","content":"Z "*600,
             "locations":[{"page":1}]}]
         source["tables"] = []
+        source["reading_order"] = ["docling:text:0"]
         output = build_untrusted_contract_windows(source, max_chars=256)
         reassembled = "".join(w["text"] for w in output["windows"])
-        self.assertEqual(reassembled, "Z"*1200)
+        self.assertEqual(reassembled, "Z "*600)
         self.assertEqual(len(output["windows"]), 5)
+
+    def test_unbreakable_large_token_fails_instead_of_silent_split(self):
+        source = candidate()
+        source["text_items"] = [{"source_locator":"docling:text:0",
+            "content":"X"*600,"locations":[{"page":1}]}]
+        source["tables"] = []
+        source["reading_order"] = ["docling:text:0"]
+        with self.assertRaisesRegex(ContractWindowError, "unbreakable"):
+            build_untrusted_contract_windows(source, max_chars=256)
+
+    def test_table_rows_and_native_layout_are_preserved(self):
+        source = candidate()
+        source["tables"][0]["rows"] = 2
+        source["tables"][0]["cells"].extend([
+            {"text":"total","row_start":1,"col_start":0},
+            {"text":"500","row_start":1,"col_start":1},
+        ])
+        source["tables"][0]["locations"] = [{"page":2}, {"page":3}]
+        result = build_untrusted_contract_windows(source, max_chars=512)
+        pieces = [p for window in result["windows"] for p in window["parts"]]
+        table = [p for p in pieces if p["kind"] == "table_projection"]
+        self.assertEqual(len(table), 1)
+        self.assertEqual(table[0]["pages"], [2, 3])
+        self.assertIn("x | y\\ntotal | 500", table[0]["text"])
+        text = "".join(w["text"] for w in result["windows"])
+        self.assertLess(text.index("x | y"), text.index("B B "))
+
+    def test_fails_when_docling_reading_order_is_missing(self):
+        source = candidate()
+        source.pop("reading_order")
+        with self.assertRaisesRegex(ContractWindowError, "reading order"):
+            build_untrusted_contract_windows(source, max_chars=512)
 
 
 if __name__ == "__main__":
