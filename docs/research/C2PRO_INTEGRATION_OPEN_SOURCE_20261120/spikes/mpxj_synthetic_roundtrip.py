@@ -46,12 +46,12 @@ try:
     procurement.setName("WBS-120 Adjudicacion y fabricacion")
     procurement.setStart(LocalDateTime.of(2026, 11, 30, 8, 0))
     procurement.setDuration(Duration.getInstance(10, TimeUnit.DAYS))
-    procurement.addPredecessor(Relation.Builder().targetTask(spec))
+    procurement.addPredecessor(Relation.Builder().predecessorTask(spec).successorTask(procurement))
     deadline = summary.addTask()
     deadline.setName("WBS-130 Hito contractual entrega FAT")
     deadline.setStart(LocalDateTime.of(2026, 12, 14, 8, 0))
     deadline.setDuration(Duration.getInstance(0, TimeUnit.DAYS))
-    deadline.addPredecessor(Relation.Builder().targetTask(procurement))
+    deadline.addPredecessor(Relation.Builder().predecessorTask(procurement).successorTask(deadline))
     expected_names = [str(t.getName()) for t in project.getTasks() if t.getName()]
     report["input_task_names"] = expected_names
     report["input_task_count"] = len(expected_names)
