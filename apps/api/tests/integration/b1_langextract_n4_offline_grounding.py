@@ -43,7 +43,11 @@ def make_probes(text: str, windows: tuple) -> list[dict]:
             # Select a contiguous quote entirely inside the core span.
             start = m.start()
             stop = min(start + MAX_SAFE_QUOTE_CHARS, w.core_end)
-            quote = text[start:stop].strip()
+            # A LangExtract token aligner cannot anchor half of a word.
+            # Use complete-word literal quotes for a fair N4/LX comparison.
+            raw = text[start:stop]
+            boundary = max(raw.rfind(" "), raw.rfind("\n"), raw.rfind("\t"))
+            quote = raw[:boundary].strip() if boundary >= 40 else raw.strip()
             if len(quote) < 30:
                 continue
             if w.context_text.count(quote) != 1:
@@ -74,7 +78,8 @@ def langextract_match(window, quote: str, *, fuzzy: bool) -> tuple[str, tuple | 
     items=list(resolver.Resolver().align([extraction],
           source_text=window.context_text,token_offset=0,
           char_offset=window.context_start,
-          enable_fuzzy_alignment=fuzzy))
+          enable_fuzzy_alignment=fuzzy,
+          accept_match_lesser=fuzzy))
     if not items:
         return "NOT_RETURNED",None,False
     result=items[0]
