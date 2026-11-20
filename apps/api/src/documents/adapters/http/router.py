@@ -1697,17 +1697,30 @@ async def read_n4_partial_findings(
     for row in rows:
         claim = row["claim"] if isinstance(row["claim"], dict) else {}
         refs = row["source_refs"] if isinstance(row["source_refs"], list) else []
-        matched_n2 = any(
-            isinstance(ref, dict)
-            and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
-            and ref.get("evidence_status") == "EXACT_MODEL_SAFE_MATCH"
-            and isinstance(ref.get("analysis_span"), list)
-            for ref in refs
+        # Both the claim and its immutable span must attest the N2 quote.
+        # A forged/mismatched source ref alone must never elevate a quote.
+        matched_n2 = (
+            claim.get("source_evidence_status") == "EXACT_MODEL_SAFE_MATCH"
+            and isinstance(claim.get("source_quote"), str)
+            and bool(claim["source_quote"].strip())
+            and any(
+                isinstance(ref, dict)
+                and ref.get("document_revision_id") == str(pinned_revision)
+                and ref.get("source_sha256") == digest
+                and ref.get("source_kind") == "MODEL_SAFE_PROJECTION"
+                and ref.get("evidence_status") == "EXACT_MODEL_SAFE_MATCH"
+                and isinstance(ref.get("analysis_span"), list)
+                and len(ref["analysis_span"]) == 2
+                and all(type(value) is int and value >= 0 for value in ref["analysis_span"])
+                and ref["analysis_span"][1] > ref["analysis_span"][0]
+                for ref in refs
+            )
         )
         findings.append({
             "finding_key": row["finding_key"],
             "window_ordinal": row["window_ordinal"],
             "title": str(claim.get("title") or "Untitled provisional finding"),
+            "interpretation": str(claim.get("risk_reason") or ""),
             "clause_ref": claim.get("clause_ref"),
             "source_quote": claim.get("source_quote") if matched_n2 else None,
             "n2_quote_status": "N2_EXACT_MATCH" if matched_n2 else "NOT_LOCATED",
