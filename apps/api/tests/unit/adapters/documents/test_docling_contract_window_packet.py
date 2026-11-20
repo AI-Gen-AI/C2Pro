@@ -116,7 +116,7 @@ class ContractWindowPacketTests(unittest.TestCase):
         table = [p for p in pieces if p["kind"] == "table_projection"]
         self.assertEqual(len(table), 1)
         self.assertEqual(table[0]["pages"], [2, 3])
-        self.assertIn("x | y\\ntotal | 500", table[0]["text"])
+        self.assertIn("x | y\ntotal | 500", table[0]["text"])
         text = "".join(w["text"] for w in result["windows"])
         self.assertLess(text.index("x | y"), text.index("B B "))
 
