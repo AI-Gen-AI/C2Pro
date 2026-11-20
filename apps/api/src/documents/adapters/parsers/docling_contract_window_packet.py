@@ -77,7 +77,9 @@ def build_untrusted_contract_windows(
         windows.append({
             "window_index": len(windows),
             "parts": current,
-            "text": "".join(part["text"] for part in current),
+            # Delimit different source items rather than silently concatenating
+            # unrelated clauses or table contents.
+            "text": "".join(part["separator_before"] + part["text"] for part in current),
             "state": "CANDIDATE_UNVALIDATED",
             "original_pdf_attestation": "UNVERIFIED",
         })
@@ -91,12 +93,15 @@ def build_untrusted_contract_windows(
         pos = 0
         while pos < len(text):
             left = max_chars - used
-            if left == 0:
+            separator = "\\n\\n" if current and current[-1]["source_locator"] != segment["source_locator"] else ""
+            if left <= len(separator):
                 flush()
                 left = max_chars
-            end = min(len(text), pos + left)
+                separator = ""
+            end = min(len(text), pos + left - len(separator))
             piece = text[pos:end]
             current.append({
+                "separator_before": separator,
                 "source_locator": segment["source_locator"],
                 "source_start": pos,
                 "source_end": end,
@@ -105,7 +110,7 @@ def build_untrusted_contract_windows(
                 "text": piece,
                 "is_split_segment": len(text) > max_chars or pos > 0 or end < len(text),
             })
-            used += len(piece)
+            used += len(piece) + len(separator)
             covered_chars += len(piece)
             pos = end
             if used >= max_chars:
