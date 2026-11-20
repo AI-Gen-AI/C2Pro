@@ -99,6 +99,7 @@ def test_fact_and_risk_are_typed_without_promoting_fact_to_risk_or_score():
     assert f["value_text"] == "$5,000"
     assert f["value_status"] == "N2_QUOTE_CONTAINS_REPORTED_VALUE"
     assert r["linked_fact_ids"] == ["F1"]
+    assert r["linked_fact_keys"] == [out.facts[0]["finding_key"]]
     assert r["risk_reason"] and r["severity"] is None
     assert all(not v["claim"]["alerts_allowed"] and
                not v["claim"]["score_allowed"] and
@@ -170,6 +171,14 @@ def test_missing_exhibit_is_not_treated_as_verified_schedule():
     assert not out.can_commit_as_examined
     assert out.source_coverage_state == "PARTIAL_OR_PENDING_REFERENCES"
     assert out.outstanding_references == ("Missing Exhibit D Table D-2",)
+
+
+def test_local_model_ids_are_not_anchored_finding_keys():
+    w = _window()
+    a = parse_n4_typed_evidence_v2(_payload(_fact("F1")), window=w)
+    b = parse_n4_typed_evidence_v2(_payload(_fact("F9")), window=w)
+    assert a.facts[0]["finding_key"] == b.facts[0]["finding_key"]
+    assert a.facts[0]["claim"]["local_id"] != b.facts[0]["claim"]["local_id"]
 
 
 def test_unlocated_and_repeated_quotes_are_not_disclosed_as_verified_evidence():
