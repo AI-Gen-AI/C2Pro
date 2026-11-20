@@ -802,6 +802,12 @@ export default function ProjectDocumentsPage() {
                         >
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {(doc.status === 'failed_retryable' || doc.status === 'error') &&
+                          doc.statusDetail?.startsWith('Partial N4 findings')
+                            ? 'Partial N4 results'
+                            : (doc.status === 'failed_retryable' || doc.status === 'error') &&
+                              doc.statusDetail?.startsWith('An earlier N4 execution')
+                              ? 'Reconciliation required'
+                              : (doc.status === 'failed_retryable' || doc.status === 'error') &&
                           doc.statusDetail?.startsWith('AI budget authorization required:')
                             ? 'Budget required'
                             : (doc.status === 'failed_retryable' || doc.status === 'error') &&
