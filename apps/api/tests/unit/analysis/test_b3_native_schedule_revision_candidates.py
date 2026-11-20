@@ -16,7 +16,7 @@ from src.documents.adapters.parsers.mpxj_schedule_candidate_adapter import Sched
 from src.documents.application.document_source import RevisionSourceError
 from src.documents.domain.models import Document, DocumentStatus, DocumentType
 from src.temporal.domain.document_revision import DocumentRevision
-from test_b3_source_inventory_bridge import FakeProject, PROJECT, TENANT
+from tests.unit.analysis.test_b3_source_inventory_bridge import FakeProject, PROJECT, TENANT
 
 
 class B3NativeRevisionTests(unittest.IsolatedAsyncioTestCase):
