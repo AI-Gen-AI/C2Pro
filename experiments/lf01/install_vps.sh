@@ -39,18 +39,33 @@ fi
 chmod 600 "$ENVFILE"
 P=(runuser -u lf01lab -- env "XDG_RUNTIME_DIR=/run/user/${LAB_UID}" HOME=/home/lf01lab podman --cgroup-manager=cgroupfs)
 "${P[@]}" pull docker.io/langflowai/langflow:1.13.3
-if "${P[@]}" container exists c2pro-lf01; then
-  if "${P[@]}" ps --filter name=c2pro-lf01 --format '{{.Names}}' | grep -qx c2pro-lf01; then
-    echo 'LF01 container already running. No restart, no credential rotation.'
-    exit 0
-  fi
-  "${P[@]}" rm c2pro-lf01 >/dev/null
+if ! "${P[@]}" container exists c2pro-lf01; then
+  "${P[@]}" create --name c2pro-lf01 --pull=never \
+    --security-opt=no-new-privileges --cap-drop=all \
+    --pids-limit=256 --memory=4g --cpus=2 \
+    --env-file "$ENVFILE" -p 127.0.0.1:17860:7860 \
+    --volume /home/lf01lab/lf01-data:/app/langflow:rw,U \
+    docker.io/langflowai/langflow:1.13.3 >/dev/null
 fi
-"${P[@]}" run -d --name c2pro-lf01 --pull=never \
-  --security-opt=no-new-privileges --cap-drop=all \
-  --pids-limit=256 --memory=4g --cpus=2 \
-  --env-file "$ENVFILE" -p 127.0.0.1:17860:7860 \
-  --volume /home/lf01lab/lf01-data:/app/langflow:rw,U \
-  docker.io/langflowai/langflow:1.13.3 >/dev/null
-echo 'LF01 started; only localhost:17860 is bound. Use SSH private tunnel.'
-echo 'Credentials are stored locally in /home/lf01lab/lf01-config/.env (0600).'
+
+# A rootless podman --memory flag alone is not enough without cgroup delegation.
+# Place the container process inside a separately capped root-managed systemd
+# unit. Never attach it to the AI-GEN Ops service's cgroup.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATE="${SCRIPT_DIR}/lf01-langflow.service.in"
+test -f "$TEMPLATE" || { echo "Missing $TEMPLATE"; exit 1; }
+SERVICE_PATH=/etc/systemd/system/lf01-langflow.service
+if ! test -f "$SERVICE_PATH"; then
+  if systemctl is-active --quiet lf01-langflow.service; then
+    echo 'LF01 uses a transient unit; refusing to overwrite a running unit automatically.'
+    exit 1
+  fi
+  sed "s/__LF01_UID__/${LAB_UID}/g" "$TEMPLATE" > "$SERVICE_PATH"
+  chmod 0644 "$SERVICE_PATH"
+  systemctl daemon-reload
+fi
+systemctl enable --now lf01-langflow.service >/dev/null
+systemctl show lf01-langflow.service -p ActiveState -p MemoryMax -p CPUQuotaPerSecUSec --no-pager
+echo 'LF01 service installed with systemd cgroup 4 GiB / 2 CPU max.'
+echo 'Only 127.0.0.1:17860 is bound. Use an SSH tunnel; never expose publicly.'
+echo 'Credentials stored at /home/lf01lab/lf01-config/.env (0600), never in Git.'
