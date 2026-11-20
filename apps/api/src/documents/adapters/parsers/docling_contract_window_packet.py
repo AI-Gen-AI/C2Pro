@@ -93,7 +93,7 @@ def build_untrusted_contract_windows(
         pos = 0
         while pos < len(text):
             left = max_chars - used
-            separator = "\\n\\n" if current and current[-1]["source_locator"] != segment["source_locator"] else ""
+            separator = "\n\n" if current and current[-1]["source_locator"] != segment["source_locator"] else ""
             if left <= len(separator):
                 flush()
                 left = max_chars
