@@ -13,6 +13,9 @@ import sys
 from src.documents.adapters.parsers.docling_contract_candidate_adapter import (
     DocumentEvidenceScope, _make_docling_converter, parse_verified_docling_candidates
 )
+from src.documents.adapters.parsers.docling_contract_window_packet import (
+    build_untrusted_contract_windows,
+)
 
 lab = Path(os.getenv("C2PRO_OSS_LAB", Path.home() / "AppData" / "Local" / "AI-GEN" / "C2ProOSSResearch20261120"))
 converter = _make_docling_converter(ocr_enabled=False)
@@ -38,10 +41,14 @@ for index, (filename, kind, expected) in enumerate(inputs, start=1):
     strings += " " + " ".join(cell["text"] for table in output["tables"] for cell in table["cells"])
     present = {term: term.lower() in strings.lower() for term in expected}
     page_anchors = sum(len(x["locations"]) for x in output["text_items"] + output["tables"])
+    packet = build_untrusted_contract_windows(output, max_chars=512)
     status = (
         "PASS"
         if all(present.values()) and page_anchors and output["trusted_promotions"] == 0
         and not output["effects_allowed"] and output["state"] == "CANDIDATE_UNVALIDATED"
+        and packet["coverage"]["parsed_chars"] == packet["coverage"]["window_chars"]
+        and packet["trusted_promotions"] == 0 and not packet["n4_executed"]
+        and all(len(w["text"]) <= 512 for w in packet["windows"])
         else "FAIL"
     )
     results.append({
@@ -53,6 +60,10 @@ for index, (filename, kind, expected) in enumerate(inputs, start=1):
         "unanchored_items": output["coverage"]["items_without_page_provenance"],
         "pages_without_grounded_content": output["coverage"]["pages_without_grounded_content"],
         "trusted_promotions": output["trusted_promotions"],
+        "context_windows": packet["coverage"]["window_count"],
+        "window_chars_preserved": packet["coverage"]["window_chars"],
+        "window_input_chars": packet["coverage"]["parsed_chars"],
+        "n4_executed": packet["n4_executed"],
     })
 report = {
     "study": "I-C01 Docling native isolated integration",
