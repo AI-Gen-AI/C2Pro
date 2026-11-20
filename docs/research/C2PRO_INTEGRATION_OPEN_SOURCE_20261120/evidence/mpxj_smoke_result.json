@@ -1,0 +1,113 @@
+{
+  "spike": "MPXJ",
+  "synthetic_only": true,
+  "read_only_sources": true,
+  "source": "MPXJ Python README / UniversalProjectWriter",
+  "checks": [],
+  "formats": {
+    "mspdi": {
+      "output": "synthetic_schedule.xml",
+      "status": "PASS",
+      "input_names": 4,
+      "reloaded_names": 4,
+      "unmatched_names": [],
+      "reloaded_predecessor_count": 2,
+      "sha256": "303b961eb6139f2a3b889a87a6d8dbd3c1b6528ed53052ad6bc1594fe7000e66",
+      "bytes": 12135,
+      "tasks": [
+        {
+          "name": "WBS-100 Subestacion / paquete transformador",
+          "id": "1",
+          "uid": "1",
+          "start": "None",
+          "finish": "None",
+          "predecessors": 0
+        },
+        {
+          "name": "WBS-110 Aprobar especificaciones de transformador",
+          "id": "2",
+          "uid": "2",
+          "start": "2026-11-23T08:00",
+          "finish": "2026-11-27T17:00",
+          "predecessors": 0
+        },
+        {
+          "name": "WBS-120 Adjudicacion y fabricacion",
+          "id": "3",
+          "uid": "3",
+          "start": "2026-11-30T08:00",
+          "finish": "2026-12-11T17:00",
+          "predecessors": 1
+        },
+        {
+          "name": "WBS-130 Hito contractual entrega FAT",
+          "id": "4",
+          "uid": "4",
+          "start": "2026-12-14T08:00",
+          "finish": "2026-12-14T08:00",
+          "predecessors": 1
+        }
+      ]
+    },
+    "xer": {
+      "output": "synthetic_schedule.xer",
+      "status": "PASS",
+      "input_names": 4,
+      "reloaded_names": 4,
+      "unmatched_names": [],
+      "reloaded_predecessor_count": 2,
+      "sha256": "d3f0df0efaf50da4b2e60340bbec86bd6630b78945dcceb003b73c66dce7114a",
+      "bytes": 5079,
+      "tasks": [
+        {
+          "name": "WBS-100 Subestacion / paquete transformador",
+          "id": "1",
+          "uid": "1",
+          "start": "None",
+          "finish": "None",
+          "predecessors": 0
+        },
+        {
+          "name": "WBS-110 Aprobar especificaciones de transformador",
+          "id": "2",
+          "uid": "2",
+          "start": "None",
+          "finish": "None",
+          "predecessors": 0
+        },
+        {
+          "name": "WBS-120 Adjudicacion y fabricacion",
+          "id": "3",
+          "uid": "3",
+          "start": "None",
+          "finish": "None",
+          "predecessors": 1
+        },
+        {
+          "name": "WBS-130 Hito contractual entrega FAT",
+          "id": "4",
+          "uid": "4",
+          "start": "None",
+          "finish": "None",
+          "predecessors": 1
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Synthetic self-generated schedule: validates API round-trip only.",
+    "Does NOT establish fidelity against native Primavera P6/Asta/MPP exports.",
+    "Dates, calendars, baselines and float need independent oracle review."
+  ],
+  "mpxj_version": "16.10.0",
+  "jpype_version": "1.7.1",
+  "input_task_names": [
+    "WBS-100 Subestacion / paquete transformador",
+    "WBS-110 Aprobar especificaciones de transformador",
+    "WBS-120 Adjudicacion y fabricacion",
+    "WBS-130 Hito contractual entrega FAT"
+  ],
+  "input_task_count": 4,
+  "input_predecessor_count": 2,
+  "status": "PASS"
+}
