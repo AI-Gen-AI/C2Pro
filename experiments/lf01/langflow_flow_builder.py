@@ -16,7 +16,7 @@ BASE = os.environ.get("LF01_URL", "http://127.0.0.1:17860") + "/api/v1"
 ENV_PATH = Path(os.environ.get("LF01_ENV_PATH", "/home/lf01lab/lf01-config/.env"))
 EVIDENCE_DIR = Path(os.environ.get("LF01_EVIDENCE_DIR", "/home/lf01lab/lf01-evidence"))
 
-def request(path, *, token=None, payload=None, form=None):
+def request(path, *, token=None, payload=None, form=None, method=None):
     if form is not None:
         body = urlencode(form).encode()
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -28,7 +28,7 @@ def request(path, *, token=None, payload=None, form=None):
         headers = {}
     if token:
         headers["Authorization"] = "Bearer " + token
-    with urlopen(Request(BASE + path, data=body, headers=headers), timeout=60) as result:
+    with urlopen(Request(BASE + path, data=body, headers=headers, method=method), timeout=60) as result:
         return json.load(result)
 
 def make_graph(template, snapshot, tag):
@@ -65,6 +65,10 @@ def make_graph(template, snapshot, tag):
     edge["target"] = output_id
     edge["sourceHandle"] = source_to_model["sourceHandle"].replace(original_input["id"], input_id)
     edge["targetHandle"] = model_to_output["targetHandle"].replace(original_output["id"], output_id)
+    edge["data"]["sourceHandle"] = copy.deepcopy(source_to_model["data"]["sourceHandle"])
+    edge["data"]["sourceHandle"]["id"] = input_id
+    edge["data"]["targetHandle"] = copy.deepcopy(model_to_output["data"]["targetHandle"])
+    edge["data"]["targetHandle"]["id"] = output_id
 
     n4 = snapshot["N4"]
     stages = [
@@ -120,7 +124,10 @@ def main():
             json.dumps(flow, indent=2, ensure_ascii=False) + "\n")
         duplicate = next((x for x in existing if x.get("name") == name), None)
         if duplicate:
-            print(tag, "already_installed", duplicate["id"])
+            updated = request("/flows/" + duplicate["id"], token=access,
+                              payload={"data": graph}, method="PATCH")
+            print(tag, "updated", duplicate["id"], "nodes", len(graph["nodes"]))
+            (EVIDENCE_DIR / ("lf01_" + tag.lower() + "_flow_id.txt")).write_text(duplicate["id"] + "\n")
             continue
         created = request("/flows/", token=access, payload=flow)
         print(tag, "created", created["id"], "nodes", len(graph["nodes"]),
