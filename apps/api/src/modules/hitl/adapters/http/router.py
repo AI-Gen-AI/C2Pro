@@ -53,10 +53,12 @@ from src.modules.hitl.application.project_review_authorization import (
 )
 from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
     N4CoverageGapsError,
-    require_n4_coverage_ready,
-    ResumeWorkflowRequest as UseCaseResumeRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
+    require_n4_coverage_ready,
+)
+from src.modules.hitl.application.resume_workflow_use_case import (
+    ResumeWorkflowRequest as UseCaseResumeRequest,
 )
 from src.modules.hitl.domain.entities import (
     AWAITING_DECISION_STATUSES,
