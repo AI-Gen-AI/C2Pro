@@ -79,6 +79,7 @@ class AIRequest:
     - use_cache: Habilitar caché de respuestas
     - cache_ttl: TTL personalizado para caché
     - bypass_anonymization: Omitir el proceso de anonimización (usar con precaución)
+    - tools/tool_choice: Herramientas Anthropic y selección forzada para salida estructurada
     """
 
     prompt: str
@@ -92,6 +93,8 @@ class AIRequest:
     max_tokens: int | None = None
     temperature: float = DEFAULT_TEMPERATURE
     force_model_tier: ModelTier | None = None
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: dict[str, Any] | None = None
 
     # Tracking
     tenant_id: UUID | None = None
@@ -365,7 +368,11 @@ class AnthropicWrapper:
 
         cache_key = None
         cache_allowed = (
-            request.use_cache and self.cache_service is not None and request.tenant_id is not None
+            request.use_cache
+            and request.tools is None
+            and request.tool_choice is None
+            and self.cache_service is not None
+            and request.tenant_id is not None
         )
         if request.use_cache and self.cache_service is not None and request.tenant_id is None:
             logger.warning(
@@ -432,6 +439,8 @@ class AnthropicWrapper:
             task_type=request.task_type.value,  # type: ignore[union-attr]
             metadata=request.metadata,
             bypass_cache=full_source or not request.use_cache,
+            tools=request.tools,
+            tool_choice=request.tool_choice,
         )
 
         try:
