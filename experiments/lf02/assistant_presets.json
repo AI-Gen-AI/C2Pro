@@ -1,0 +1,23 @@
+{
+  "source_baseline": "main@299aaf19f5025a2162c6a2c626542f6dd472c3c6",
+  "n4_domain_source": "G2@916808c5212e3dbc652407f35f3a17557623c06c",
+  "graph_id": "c2pro_n4_g2_diagnostic",
+  "presets": {
+    "strict": {
+      "model_name": "qwen3:4b-instruct",
+      "max_context_chars": 12000,
+      "overlap_chars": 400,
+      "max_output_tokens": 2048,
+      "temperature": 0.0,
+      "use_local_model": true
+    },
+    "contrast": {
+      "model_name": "qwen3:4b-instruct",
+      "max_context_chars": 16000,
+      "overlap_chars": 600,
+      "max_output_tokens": 3072,
+      "temperature": 0.3,
+      "use_local_model": true
+    }
+  }
+}

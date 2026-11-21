@@ -1,0 +1,17 @@
+{
+  "dependencies": [
+    "../../apps/api",
+    "."
+  ],
+  "graphs": {
+    "c2pro_main": "./studio_graphs.py:full_c2pro",
+    "c2pro_project_graph": "./studio_graphs.py:project_graph",
+    "c2pro_n4_g2_diagnostic": "./n4_diagnostic.py:build_n4_diagnostic"
+  },
+  "env": {
+    "ENVIRONMENT": "test",
+    "C2PRO_AI_MOCK": "1",
+    "LANGSMITH_TRACING": "false",
+    "LANGCHAIN_TRACING_V2": "false"
+  }
+}
