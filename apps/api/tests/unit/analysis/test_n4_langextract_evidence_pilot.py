@@ -6,6 +6,7 @@ import pytest
 
 from src.analysis.application.n4_langextract_evidence_pilot import (
     EvidencePilotInvalid,
+    advise_evidence_index_reprompt,
     make_n4_evidence_index,
     normalize_clause,
     reconcile_n4_with_langextract,
@@ -155,3 +156,37 @@ def test_hallucinated_quote_stays_unverified_even_when_lx_has_related_evidence()
     assert claim["source_quote_status"] == "UNSUPPORTED_SOURCE_QUOTE"
     assert claim["langextract_colocated_spans"] == []
     assert fused["trust_state"] == "UNASSESSED"
+
+
+
+def test_evidence_index_is_not_automatically_applied_when_n4_quotes_are_exact():
+    decision = advise_evidence_index_reprompt(SOURCE, _n4(REMEDY), _spans())
+    assert decision["suggestion"] == "SIDECAR_ONLY"
+    assert decision["reason"] == "ALL_N4_QUOTES_ALREADY_EXACT"
+    assert decision["provider_calls_made"] == 0
+
+
+def test_reflow_quote_allows_at_most_an_operator_controlled_second_inference():
+    quote = "The supplier pays 1% each week, calculated on the late item."
+    decision = advise_evidence_index_reprompt(
+        SOURCE, _n4(quote), _spans(), verified_layout_ranges=LAYOUT
+    )
+    assert decision["suggestion"] == "OPTIONAL_SINGLE_REPROMPT_AFTER_BUDGET_CHECK"
+    assert decision["unverified_quote_count"] == 1
+    assert decision["provider_calls_made"] == 0
+
+
+def test_incomplete_window_cannot_trigger_optional_reprompt():
+    raw = _n4(REMEDY)
+    raw["window_examined"] = False
+    decision = advise_evidence_index_reprompt(SOURCE, raw, _spans())
+    assert decision["suggestion"] == "DO_NOT_AUTOMATICALLY_REPROMPT"
+    assert decision["provider_calls_made"] == 0
+
+
+def test_zero_n4_candidates_not_misread_as_risk_free():
+    raw = _n4(REMEDY)
+    raw["findings"] = []
+    decision = advise_evidence_index_reprompt(SOURCE, raw, _spans())
+    assert decision["reason"] == "ZERO_CANDIDATES_IS_NOT_SEMANTIC_COMPLETENESS"
+    assert decision["provider_calls_made"] == 0
