@@ -51,8 +51,30 @@ def _contradicts(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
     return bool(fa and fb and fa != fb)
 
 
+def _normalized(value: Any) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def _same_obligation(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
+    """Prefer leaving duplicates to silently losing distinct contractual risks.
+
+    Same clause or span is evidence of shared *location*, not shared meaning.
+    Require equivalent literal evidence and, when both interpretations exist,
+    equivalent interpretations. Otherwise retain both for HITL review.
+    """
+    quote_a = _normalized(a.get("source_quote"))
+    quote_b = _normalized(b.get("source_quote"))
+    if not quote_a or quote_a != quote_b:
+        return False
+    reason_a = _normalized(a.get("description") or a.get("risk_reason"))
+    reason_b = _normalized(b.get("description") or b.get("risk_reason"))
+    return not (reason_a and reason_b and reason_a != reason_b)
+
+
 def _rule(a: Mapping[str, Any], b: Mapping[str, Any]) -> str | None:
     if str(a.get("category")) != str(b.get("category")):
+        return None
+    if not _same_obligation(a, b):
         return None
     if _clause(a) and _clause(a) == _clause(b):
         return "same_clause"

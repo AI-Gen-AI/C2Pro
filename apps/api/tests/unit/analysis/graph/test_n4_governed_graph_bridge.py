@@ -531,3 +531,29 @@ def test_unanchored_model_reference_cannot_create_missing_external_proposal():
     record = next(x for x in register if x["label"] == "Annex Z")
     assert record["status"] == "UNRESOLVED"
     assert record["proposal"] is None
+
+
+def test_same_clause_distinct_obligations_are_never_consolidated():
+    from src.analysis.domain.n4_consolidation import consolidate_candidates
+
+    notice = _cand("notice", "The contractor shall notify the owner.", (0, 45), clause="9.6")
+    report = _cand("report", "The contractor shall submit a report.", (500, 540), clause="9.6")
+    assert len(consolidate_candidates([notice, report])) == 2
+
+
+def test_overlapping_spans_do_not_override_distinct_quoted_obligations():
+    from src.analysis.domain.n4_consolidation import consolidate_candidates
+
+    notice = _cand("notice", "The contractor shall notify the owner.", (0, 90), clause="9.6")
+    report = _cand("report", "The contractor shall submit a report.", (45, 135), clause="9.6")
+    assert len(consolidate_candidates([notice, report])) == 2
+
+
+def test_same_literal_clause_with_distinct_risk_reasons_stays_separate():
+    from src.analysis.domain.n4_consolidation import consolidate_candidates
+
+    a = _cand("k1", "If delayed, the contractor shall notify and report.", (0, 90), clause="9.6")
+    b = _cand("k2", "If delayed, the contractor shall notify and report.", (0, 90), clause="9.6")
+    a["description"] = "Late notification may void entitlement."
+    b["description"] = "Failure to file a report may incur separate damages."
+    assert len(consolidate_candidates([a, b])) == 2
