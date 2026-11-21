@@ -20,6 +20,13 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 
+from src.analysis.domain.n4_failure_kinds import (
+    N4_COVERAGE_SCHEMA_VERSION,
+    N4_ITEM_DATA_COVERAGE_KEY,
+    N4_METADATA_COVERAGE_KEY,
+    N4CoverageStatus,
+    N4GapResolution,
+)
 from src.core import resume_lineage
 from src.core.checkpoint_lineage import is_legacy_shared_analysis_thread
 from src.core.observability.monitoring import (
@@ -121,6 +128,108 @@ class ResumeWorkflowResponse:
     review_id: UUID
     status: str  # "resumed", "approved", "rejected", "terminated"
     message: str
+
+
+
+class N4CoverageGapsError(Exception):
+    """Final approval cannot trust an N4 run with outstanding or unverifiable coverage."""
+
+    code = "n4_coverage_gaps"
+
+    def __init__(self, *, pending_windows: int) -> None:
+        self.pending_windows = pending_windows
+        super().__init__(
+            "Final approval is blocked: N4 has open, incomplete, or inconsistent "
+            f"section coverage ({pending_windows} unresolved sections)."
+        )
+
+
+def _n4_uncovered_windows(coverage: Any) -> int:
+    """Validate persisted JV1-A1 coverage; unknown evidence fails closed.
+
+    The ledger's original gap_windows preserves failed-section identities.
+    A16 may mark individual gaps CLOSED_MANUALLY after documented human
+    review; only that explicit resolution counts as coverage.
+    """
+    if not isinstance(coverage, dict) or coverage.get("schema_version") != N4_COVERAGE_SCHEMA_VERSION:
+        raise N4CoverageGapsError(pending_windows=0)
+    if coverage.get("status") not in {status.value for status in N4CoverageStatus}:
+        raise N4CoverageGapsError(pending_windows=0)
+    if not isinstance(coverage.get("run_id"), str) or not coverage["run_id"]:
+        raise N4CoverageGapsError(pending_windows=0)
+    if not isinstance(coverage.get("source_sha256"), str) or not coverage["source_sha256"]:
+        raise N4CoverageGapsError(pending_windows=0)
+
+    total, examined = coverage.get("total_windows"), coverage.get("examined_windows")
+    if (
+        type(total) is not int or type(examined) is not int
+        or total <= 0 or examined < 0 or examined > total
+    ):
+        raise N4CoverageGapsError(pending_windows=0)
+    gap_windows, gaps = coverage.get("gap_windows"), coverage.get("gaps")
+    if not isinstance(gap_windows, list) or not isinstance(gaps, list):
+        raise N4CoverageGapsError(pending_windows=0)
+    if any(type(ordinal) is not int or ordinal < 0 or ordinal > total for ordinal in gap_windows):
+        raise N4CoverageGapsError(pending_windows=0)
+
+    open_gaps: set[int] = set()
+    closed_gaps: set[int] = set()
+    for gap in gaps:
+        if not isinstance(gap, dict):
+            raise N4CoverageGapsError(pending_windows=0)
+        ordinal = gap.get("ordinal")
+        if type(ordinal) is not int or ordinal < 0 or ordinal > total:
+            raise N4CoverageGapsError(pending_windows=0)
+        resolution = gap.get("resolution")
+        if resolution == N4GapResolution.OPEN:
+            open_gaps.add(ordinal)
+        elif resolution == N4GapResolution.CLOSED_MANUALLY:
+            closed_gaps.add(ordinal)
+        else:
+            raise N4CoverageGapsError(pending_windows=0)
+
+    # An OPEN record wins over a conflicting CLOSED_MANUALLY record. A listed
+    # failed ordinal without a closure record remains open, not silently safe.
+    closed_gaps.difference_update(open_gaps)
+    open_gaps.update(set(gap_windows) - closed_gaps)
+    uncovered = max(len(open_gaps), total - examined - len(closed_gaps))
+    return max(0, uncovered)
+
+
+def require_n4_coverage_ready(review_item: Any, *, approve: bool) -> None:
+    """Require complete coverage before FINAL approval only.
+
+    Read the authoritative persisted review row, never client-supplied data.
+    Reviews predating JV1-A1 and individual/rejection decisions stay compatible.
+    """
+    if not approve:
+        return
+    metadata = getattr(review_item, "metadata", None) or {}
+    item_data = getattr(review_item, "item_data", None) or {}
+    coverage_records = [
+        source[key] for source, key in (
+            (metadata, N4_METADATA_COVERAGE_KEY),
+            (item_data, N4_ITEM_DATA_COVERAGE_KEY),
+        )
+        if isinstance(source, dict) and key in source
+    ]
+    if not coverage_records:
+        return
+
+    # If both projections exist they must belong to the same N4 run/source.
+    # Treat a mismatch as an unsafe rebind rather than choosing the nicer one.
+    identities = {
+        (record.get("run_id"), record.get("source_sha256"))
+        for record in coverage_records if isinstance(record, dict)
+    }
+    if len(identities) != 1 or len(identities) != len(coverage_records) and any(
+        not isinstance(record, dict) for record in coverage_records
+    ):
+        raise N4CoverageGapsError(pending_windows=0)
+    pending = max(_n4_uncovered_windows(record) for record in coverage_records)
+    if pending:
+        raise N4CoverageGapsError(pending_windows=pending)
+
 
 
 class ResumeWorkflowUseCase:
@@ -967,6 +1076,12 @@ class ResumeWorkflowUseCase:
                 row_id=row_id,
                 document_id=document_id,
                 approve=request.decision == WorkflowDecision.APPROVE,
+            )
+
+            # JV1-A15: never acquire a fenced resume operation while any
+            # original N4 section remains uncovered. Rejection remains allowed.
+            require_n4_coverage_ready(
+                review_item, approve=request.decision is WorkflowDecision.APPROVE
             )
 
             # S5-04: under enforce, an approval of a candidate-bound analysis review needs a CURRENT, clean
