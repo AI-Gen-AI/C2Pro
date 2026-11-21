@@ -57,7 +57,10 @@ class DirectOpenAIN4WindowProvider:
 
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
+        attempt: int = 1,  # noqa: ARG002 - frozen by JV1-A1, used from A5
     ) -> N4ProviderReceipt:
+        # JV1-A1: ``attempt`` (1-based) is part of the frozen signature; the
+        # per-attempt output budget is implemented by A5 (unused until then).
         # The runner committed the reservation UUID before calling here.
         UUID(request_id)
         if not window.revision_id:
