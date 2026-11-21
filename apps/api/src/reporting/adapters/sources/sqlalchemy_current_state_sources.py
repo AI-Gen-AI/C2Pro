@@ -257,10 +257,10 @@ class SqlAlchemyCurrentStateSources:
         An XLSX row must still have the original canonical revision and hashes.
         Nothing here converts a source observation into an approved baseline.
         """
-        from src.documents.application.structured_source_units import load_canonical_source_units
         from src.analysis.adapters.graph.source_clause_evidence import (
             load_revision_bound_source_quotes,
         )
+        from src.documents.application.structured_source_units import load_canonical_source_units
 
         scoped = require_tenant_id(tenant_id)
         async with self._session_scope(scoped) as session:

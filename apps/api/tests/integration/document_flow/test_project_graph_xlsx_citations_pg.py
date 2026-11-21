@@ -5,8 +5,8 @@ comes from the existing current-revision and RLS SQL seam.
 """
 from __future__ import annotations
 
-import importlib.util
 import copy
+import importlib.util
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from io import BytesIO
@@ -19,20 +19,27 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import select, text
 
-from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
 from src.analysis.adapters.graph.source_clause_evidence import load_revision_bound_source_quotes
-from src.analysis.adapters.persistence.document_artifact_repository import SqlAlchemyDocumentArtifactRepository
-from src.reporting.adapters.sources.sqlalchemy_current_state_sources import SqlAlchemyCurrentStateSources
-from src.reporting.application.current_state_projection import project_source_discrepancies
-from src.reporting.application.ports import SourceOk
-from src.reporting.domain.current_state_report import SectionStatus
-from src.temporal.adapters.persistence.models import ProjectEventORM
+from src.analysis.adapters.graph.structured_source_comparison import compare_original_source_rows
+from src.analysis.adapters.persistence.document_artifact_repository import (
+    SqlAlchemyDocumentArtifactRepository,
+)
 from src.analysis.domain.contracts import DocumentArtifact, RiskItem
 from src.core.tasks.project_graph_tasks import persist_provisional_source_discrepancies
 from src.documents.application.structured_source_units import load_canonical_source_units
 from src.documents.domain.models import DocumentType
+from src.reporting.adapters.sources.sqlalchemy_current_state_sources import (
+    SqlAlchemyCurrentStateSources,
+)
+from src.reporting.application.current_state_projection import project_source_discrepancies
+from src.reporting.application.ports import SourceOk
+from src.reporting.domain.current_state_report import SectionStatus
+from src.temporal.adapters.persistence.models import ProjectEventORM
 from tests.integration.document_flow.test_contract_schedule_completion_flow import (
-    _docx, _project, _upload_and_ingest, _xlsx,
+    _docx,
+    _project,
+    _upload_and_ingest,
+    _xlsx,
     worker,  # noqa: F401 - reuse isolated genuine ingestion fixture
 )
 

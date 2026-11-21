@@ -15,7 +15,9 @@ import pytest
 
 from src.analysis.application import n4_only_pilot as pilot
 from src.analysis.application.n4_only_pilot_policy import (
-    N4OnlyPilotDenied, N4OnlyPilotScope, pilot_marker,
+    N4OnlyPilotDenied,
+    N4OnlyPilotScope,
+    pilot_marker,
 )
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 from src.core.processing_authority import ProcessingStage

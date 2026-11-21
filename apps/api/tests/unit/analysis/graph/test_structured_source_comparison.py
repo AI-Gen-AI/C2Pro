@@ -141,6 +141,7 @@ def test_missing_currency_does_not_invent_financial_contradiction():
 @pytest.mark.asyncio
 async def test_projectgraph_node_exposes_provisional_findings_without_scoring(monkeypatch):
     from types import SimpleNamespace
+
     from src.analysis.adapters.graph import project_graph
     artifacts, rows = _sources()
     project_id, tenant_id = uuid4(), uuid4()
@@ -273,6 +274,7 @@ async def test_real_original_budget_total_budget_label_staged_as_declared_total(
     bound locator that must be available to the provisional comparator.
     """
     from openpyxl import Workbook
+
     from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser
     from src.documents.application.structured_source_units import _prepare_units
 

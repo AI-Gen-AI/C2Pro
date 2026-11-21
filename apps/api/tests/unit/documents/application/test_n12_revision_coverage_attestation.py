@@ -41,10 +41,10 @@ def _fixture(*, status="COMPLETE", assurance="verified_full_source_text"):
         revision_id=rev, tenant_id=tenant, project_id=project,
         document_id=doc, blob_hash="a" * 64,
     )
-    kwargs = dict(
-        metadata=metadata, parsed_text=TEXT, revision=revision,
-        tenant_id=tenant, project_id=project, document_id=doc,
-    )
+    kwargs = {
+        "metadata": metadata, "parsed_text": TEXT, "revision": revision,
+        "tenant_id": tenant, "project_id": project, "document_id": doc,
+    }
     return metadata, revision, kwargs
 
 
@@ -130,9 +130,10 @@ def test_graph_cannot_accept_a_coverage_attestation_for_a_redacted_projection():
 
 
 def test_real_pdf_docx_parser_metadata_stays_unverified() -> None:
-    from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
     # Both actual parser branches publish UNVERIFIED, not assurance.
     from inspect import getsource
+
+    from src.documents.adapters.parsers.composite_file_parser import CompositeFileParser
     source = getsource(CompositeFileParser.parse_document_file)
     assert source.count('"status": "UNVERIFIED"') >= 2
     assert "verified_full_source_text" not in source
@@ -163,6 +164,7 @@ async def test_canonical_n12_node_accepts_only_trusted_synthetic_attestation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from unittest.mock import AsyncMock
+
     from src.analysis.adapters.graph import nodes
     from tests.unit.analysis.graph.test_thin_nodes import _make_state
 

@@ -90,8 +90,10 @@ async def preview_b3_sources_in_project_graph(
         # Never run the full ProjectGraph: its later nodes may acquire
         # persistence/alert side effects as the product evolves.
         from langgraph.graph import END, StateGraph
+
         from src.analysis.adapters.graph.project_graph import (
-            load_current_artifacts, align_entities,
+            align_entities,
+            load_current_artifacts,
         )
         from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 

@@ -20,7 +20,9 @@ from src.analysis.adapters.persistence.document_artifact_repository import (
 from src.core.tasks import project_graph_tasks as tasks
 from tests.integration.document_flow.test_budget_revision_authority_flow import _trust
 from tests.integration.document_flow.test_contract_revision_authority_flow import _contract_scenario
-from tests.integration.document_flow.test_contract_schedule_completion_flow import worker  # noqa: F401
+from tests.integration.document_flow.test_contract_schedule_completion_flow import (
+    worker,  # noqa: F401
+)
 
 
 @pytest.mark.asyncio

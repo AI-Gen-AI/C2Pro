@@ -13,11 +13,13 @@ import pytest
 
 from src.analysis.application.n4_incremental_runner import (
     N4ProviderReceipt,
-    N4IncrementalRunner,
 )
 from src.core.ai.direct_provider_fallback import DirectRoute
 from tests.integration.analysis.test_n4_window_runner_pg import (
-    _prepare, _source, _runner, StubProvider,
+    StubProvider,
+    _prepare,
+    _runner,
+    _source,
 )
 
 _DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN", "")

@@ -10,13 +10,21 @@ import unittest
 from types import SimpleNamespace
 from uuid import UUID
 
-from src.analysis.application.b3_source_inventory_bridge import (
-    B3SourceBridgeError, assemble_b3_source_inventory,
-)
 from src.analysis.application.b3_project_graph_preview import (
     preview_b3_sources_in_project_graph,
 )
-from tests.unit.analysis.test_b3_source_inventory_bridge import CONTRACT, PROJECT, TENANT, BUDGET, SCHEDULE, input_bundle
+from src.analysis.application.b3_source_inventory_bridge import (
+    B3SourceBridgeError,
+    assemble_b3_source_inventory,
+)
+from tests.unit.analysis.test_b3_source_inventory_bridge import (
+    BUDGET,
+    CONTRACT,
+    PROJECT,
+    SCHEDULE,
+    TENANT,
+    input_bundle,
+)
 
 
 def packet():
@@ -105,7 +113,7 @@ class B3PreviewTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(B3SourceBridgeError):
                     await preview_b3_sources_in_project_graph(
                         packet=packet(), project_id=PROJECT, tenant_id=TENANT,
-                        graph_factory=lambda: StubGraph(outcome=outcome),
+                        graph_factory=lambda outcome=outcome: StubGraph(outcome=outcome),
                     )
 
     @unittest.skipUnless(

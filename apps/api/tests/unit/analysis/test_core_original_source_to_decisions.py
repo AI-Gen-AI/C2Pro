@@ -6,8 +6,6 @@ as an approved project budget or schedule baseline.
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from src.analysis.application.project_source_evidence import summarize_source_units
 from src.analysis.domain.report_assembly import (
     DecisionPackageAssemblyService,
@@ -29,12 +27,12 @@ def _source_row(family: str, locator: str, payload: dict):
 
 
 def _decision(**updates) -> DecisionPackageInput:
-    data = dict(
-        coherence_score=None, coherence_score_version=None,
-        extracted_risks=[], extracted_stakeholders=[], extracted_wbs=[],
-        bom_items=[], citations=[], citation_validation_passed=False,
-        human_feedback="",
-    )
+    data = {
+        "coherence_score": None, "coherence_score_version": None,
+        "extracted_risks": [], "extracted_stakeholders": [], "extracted_wbs": [],
+        "bom_items": [], "citations": [], "citation_validation_passed": False,
+        "human_feedback": "",
+    }
     data.update(updates)
     return DecisionPackageInput(**data)
 

@@ -14,7 +14,7 @@ import hmac
 import re
 import tempfile
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -47,7 +47,6 @@ def _read_mpxj_project(source_file: Path) -> Any:
     """Lazy optional dependency: no JVM starts on ordinary API imports."""
     try:
         import jpype
-        import mpxj  # Registers MPXJ JVM classpath before JPype starts.
         with JVM_START_LOCK:
             if not jpype.isJVMStarted():
                 jpype.startJVM(convertStrings=True)

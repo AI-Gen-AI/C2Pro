@@ -29,7 +29,6 @@ def setup(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_openai_direct_called_once_with_existing_uuid_and_source(setup, monkeypatch):
-    import httpx
     calls = []
     async def fake_invoke(route, request, *, key, client):
         calls.append((route,request))

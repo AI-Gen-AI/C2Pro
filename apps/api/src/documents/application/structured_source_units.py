@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.documents.adapters.parsers.excel_file_parser import ExcelFileParser, ExcelParsingError
 from src.temporal.adapters.persistence.current_revision_sql import current_revision_lateral
 
-
 _DELETE = text("""
     DELETE FROM public.document_source_units
     WHERE tenant_id = CAST(:tenant_id AS uuid)

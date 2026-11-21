@@ -1,8 +1,6 @@
 """Security boundaries for the V4.1 offline source/recovery CLI (no provider)."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from scripts.v41_private_cli_paths import (

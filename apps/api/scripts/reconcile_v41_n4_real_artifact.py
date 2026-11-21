@@ -8,10 +8,6 @@ the disposed PostgreSQL window status rows or unavailable raw model outputs.
 """
 from __future__ import annotations
 
-from scripts.v41_private_cli_paths import (
-    authorize_private_input, authorize_private_output,
-)
-
 import argparse
 import json
 import os
@@ -22,6 +18,10 @@ from hashlib import sha256
 from pathlib import Path
 from uuid import UUID
 
+from scripts.v41_private_cli_paths import (
+    authorize_private_input,
+    authorize_private_output,
+)
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 
 

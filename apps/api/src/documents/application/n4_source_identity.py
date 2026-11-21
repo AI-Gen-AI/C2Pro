@@ -7,12 +7,14 @@ stringent full-source assurance remains separate and untouched.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from hashlib import sha256
-from typing import Any, Mapping
+from typing import Any
 from uuid import UUID
 
 from src.documents.application.document_coverage import (
-    COVERAGE_METADATA_KEY, N12_TEXT_DIGEST_KEY,
+    COVERAGE_METADATA_KEY,
+    N12_TEXT_DIGEST_KEY,
 )
 
 

@@ -1262,7 +1262,7 @@ def requires_text_analysis(
 def decide_document_status(
     *,
     requires_text_analysis: bool,
-    rag_chunk_count: int,
+    rag_chunk_count: int,  # noqa: ARG001 — retained for existing keyword-call API
     graph_analysis_id: str | None,
 ) -> DocumentStatus:
     """Decide whether a document may be called ANALYZED.

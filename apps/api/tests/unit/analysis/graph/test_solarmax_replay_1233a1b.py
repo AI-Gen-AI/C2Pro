@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import pytest
 
@@ -123,7 +123,7 @@ def _code(risk) -> str:
 def test_provenance_gate_assigns_verified_to_all_15_including_not_carried(gated):
     statuses = [r.source_quote_status for r in gated]
     assert statuses == ["VERIFIED"] * 15  # location-only gate: no claim-level status exists
-    assert {i for i in NOT_CARRIED} <= set(range(15))
+    assert set(NOT_CARRIED) <= set(range(15))
 
 
 def test_n12_observations_have_literal_quotes_but_feed_no_gate(stored, text):
@@ -174,13 +174,13 @@ async def test_trusted_projectgraph_binding_per_risk(gated, text):
 
 @pytest.mark.asyncio
 async def test_coherence_and_health_with_partial_binding(gated, text):
-    from uuid import UUID as _U
     from src.analysis.adapters.graph.project_graph import evaluate_artifact_set, health
     from src.analysis.adapters.persistence.risk_source_clause_binding import (
         load_trusted_risk_source_clause_ids,
     )
     from src.project_state.application.trusted_artifact_projector import (
-        TrustedRevisionBundle, build_trusted_state_candidate,
+        TrustedRevisionBundle,
+        build_trusted_state_candidate,
     )
 
     art = _artifact(gated)
@@ -212,11 +212,13 @@ async def test_coherence_and_health_with_partial_binding(gated, text):
 # ----------------------------------------------------------------- alerts (a)
 def _alert_rows(gated, text, bound_refs: bool):
     from datetime import UTC, datetime
+
     from src.alerts.application.mappers.alert_mapper import AlertMapper
     from src.alerts.domain.enums import AlertSeverity, AlertStatus, ApprovalStatus
     from src.alerts.domain.models import Alert
     from src.analysis.adapters.graph.review_source_references import (
-        bind_risk_alert_source_references, grounded_review_source_references,
+        bind_risk_alert_source_references,
+        grounded_review_source_references,
     )
     from src.coherence.alert_generator import AlertGenerator
 
@@ -267,7 +269,8 @@ async def test_non_verified_risk_is_withheld_from_scored_paths_GREEN(stored, tex
     """Pins the working part of the gate: an invented quote is never scored/projected."""
     from src.analysis.adapters.graph.risk_signal_bridge import build_risk_signals
     from src.project_state.application.trusted_artifact_projector import (
-        TrustedRevisionBundle, build_trusted_state_candidate,
+        TrustedRevisionBundle,
+        build_trusted_state_candidate,
     )
 
     bad = _tampered(stored, text)
@@ -296,6 +299,7 @@ def test_blank_pages_9_21_55_do_not_touch_any_gate_input(stored, text):
     # classify_quote / bridge / projector take (quote, text) only: no page number or
     # completeness flag exists in their signatures, so blank pages are invisible to them.
     import inspect
+
     from src.analysis.domain.risk_provenance import classify_quote
 
     assert "page" not in " ".join(inspect.signature(classify_quote).parameters)
@@ -327,7 +331,8 @@ def test_RED_B_risk_health_unqualified_when_n12_not_assessed(gated, text):
     """
     from src.analysis.adapters.graph.project_graph import health
     from src.project_state.application.trusted_artifact_projector import (
-        TrustedRevisionBundle, build_trusted_state_candidate,
+        TrustedRevisionBundle,
+        build_trusted_state_candidate,
     )
 
     art = _artifact(gated, confidence=None)
@@ -353,7 +358,8 @@ async def test_RED_C_all_withheld_risks_yield_clean_green_risk_health(stored, te
     """
     from src.analysis.adapters.graph.project_graph import health
     from src.project_state.application.trusted_artifact_projector import (
-        TrustedRevisionBundle, build_trusted_state_candidate,
+        TrustedRevisionBundle,
+        build_trusted_state_candidate,
     )
 
     art = _artifact(gated, confidence=0.9)
