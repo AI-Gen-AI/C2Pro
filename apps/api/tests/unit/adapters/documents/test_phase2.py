@@ -21,10 +21,20 @@ class TestBC3ParserAdvanced:
     """Advanced tests for BC3FileParser."""
 
     @pytest.mark.asyncio
-    async def test_parse_success(self):
+    async def test_parse_success(self, monkeypatch):
         """Test successful BC3 parsing."""
-        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+        # BC3 dependency is intentionally optional. Mock the adapter boundary,
+        # never pretend an unavailable parser produced real budget evidence.
+        from types import SimpleNamespace
 
+        from src.documents.adapters.parsers import bc3_file_parser as bc3_module
+        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+        monkeypatch.setattr(bc3_module, "PYFIEBDC_AVAILABLE", True)
+        monkeypatch.setattr(
+            bc3_module,
+            "pyfiebdc",
+            SimpleNamespace(Fiebdc=lambda path: SimpleNamespace(parse=lambda: {"source_path": str(path), "items": []})),
+        )
         parser = BC3FileParser()
 
         # Create mock content
@@ -46,10 +56,20 @@ A2;Item 2;200.00
             os.unlink(tmp_path)
 
     @pytest.mark.asyncio
-    async def test_parse_with_comments(self):
+    async def test_parse_with_comments(self, monkeypatch):
         """Test BC3 parsing with comment lines."""
-        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+        # BC3 dependency is intentionally optional. Mock the adapter boundary,
+        # never pretend an unavailable parser produced real budget evidence.
+        from types import SimpleNamespace
 
+        from src.documents.adapters.parsers import bc3_file_parser as bc3_module
+        from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
+        monkeypatch.setattr(bc3_module, "PYFIEBDC_AVAILABLE", True)
+        monkeypatch.setattr(
+            bc3_module,
+            "pyfiebdc",
+            SimpleNamespace(Fiebdc=lambda path: SimpleNamespace(parse=lambda: {"source_path": str(path), "items": []})),
+        )
         parser = BC3FileParser()
 
         bc3_content = """*

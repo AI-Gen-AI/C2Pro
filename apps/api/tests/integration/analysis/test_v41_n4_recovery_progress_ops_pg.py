@@ -31,6 +31,7 @@ async def _apply_scratch_migrations(engine):
         "20261116_0001_n4_incremental_ledger.py",
         "20261116_0002_n4_window_blocked_provenance.py",
         "20261117_0001_n4_shared_tenant_reserved_budget.py",
+        "20261118_0001_n4_actual_provider_provenance.py",
     )
     async with engine.begin() as conn:
         existing_reserved_column = bool((await conn.execute(text("""

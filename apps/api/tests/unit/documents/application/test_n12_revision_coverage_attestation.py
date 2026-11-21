@@ -189,7 +189,7 @@ async def test_canonical_n12_node_accepts_only_trusted_synthetic_attestation(
     )
     verified = await nodes.critique_node(state)
     assert verified["confidence_score"] == pytest.approx(0.99)
-    assert verified["human_approval_required"] is False
+    assert verified["human_approval_required"] is True  # N12 evidence matching never bypasses the human gate
 
     missing = _make_state(**{
         **state,

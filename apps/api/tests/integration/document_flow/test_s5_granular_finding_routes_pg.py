@@ -201,6 +201,7 @@ async def test_after_the_final_approval_no_finding_can_be_listed_or_decided(
         app=w.app,
         sessions=w.sessions,
         row_id=w.review_row_id,
+        current_user=test_user,
     )
 
     with pytest.raises(HTTPException) as listed:

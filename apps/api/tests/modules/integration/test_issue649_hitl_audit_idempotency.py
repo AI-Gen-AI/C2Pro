@@ -123,6 +123,7 @@ async def _post_approve(
     app: Any,
     sessions: Any,
     row_id: UUID | None = None,
+    current_user: Any | None = None,
 ) -> Any:
     """One ``POST /queue/{item_id}/approve`` on its OWN connection/transaction.
 
@@ -147,7 +148,7 @@ async def _post_approve(
                 item_id=item_id,
                 payload=ApproveRequest(row_id=row_id),
                 _tenant_id=tenant_id,
-                current_user=_reviewer(tenant_id),
+                current_user=current_user if current_user is not None else _reviewer(tenant_id),
                 service=SimpleNamespace(review_queue_repo=repo),
                 resume_use_case=use_case,
             )

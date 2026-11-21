@@ -55,8 +55,8 @@ def test_the_supabase_mirror_is_exactly_what_the_migration_generates_and_the_cha
         for p in VERSIONS.glob("*.py")
         if f'down_revision = "{migration.revision}"' in p.read_text()
     ]
-    assert successors == [], (
-        "this migration must be the head until another one is added deliberately"
+    assert successors == ["20261104_0001_document_source_units.py"], (
+        "this grants migration must retain exactly one registered successor without an Alembic fork"
     )
     same_parent = [
         p.name

@@ -68,7 +68,7 @@ def test_the_real_ai_vertical_is_real_for_inference_and_mocked_for_embeddings_an
     env = _jobs()["real-ai-hitl-vertical"]["env"]
     assert (env["C2PRO_AI_MOCK"], env["C2PRO_EMBEDDINGS_MOCK"], env["C2PRO_SKIP_HITL"]) == ("0", "1", "0")
     assert "OPENAI_API_KEY" not in env, "no embeddings credential exists in this job"
-    assert env["AI_MAX_TOKENS_OUTPUT"] == "4096"
+    assert env["AI_MAX_TOKENS_OUTPUT"] == "8192"
     assert env["C2PRO_AI_GOVERNOR_LEDGER"].endswith("playwright-report/real-ai-governor-ledger.jsonl")
 
 

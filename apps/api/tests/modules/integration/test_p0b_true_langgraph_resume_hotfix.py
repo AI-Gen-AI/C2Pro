@@ -60,6 +60,7 @@ from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
+from src.modules.hitl.application.final_decision_authorization import authorize_final_decider
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
@@ -422,7 +423,7 @@ async def test_use_case_approve_resumes_real_graph_to_n17_and_analyzed(
     response = await use_case.execute(
         review_id=review.item_id,
         request=ResumeWorkflowRequest(
-            decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+            decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
         ),
     )
 
@@ -565,7 +566,7 @@ async def test_sequential_double_approve_executes_downstream_once(
     await db.commit()
 
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
-    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R")
+    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id))
 
     first = await use_case.execute(review_id=review.item_id, request=req)
     assert first.status == "resumed"
@@ -648,7 +649,7 @@ async def test_concurrent_double_approve_executes_downstream_once(
             yield claim_db
             await claim_db.commit()
 
-    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R")
+    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id))
 
     async def approve_from_independent_request():
         async with test_session_factory() as request_db:
@@ -739,7 +740,7 @@ async def test_resume_failure_does_not_produce_false_approval(
         await use_case.execute(
             review_id=review.item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
             ),
         )
 
@@ -788,7 +789,7 @@ async def test_wrong_checkpoint_resume_fails_closed(
         await use_case.execute(
             review_id=review.item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
             ),
         )
 
@@ -839,7 +840,7 @@ async def test_historical_row_a_is_never_targeted_by_resume(
     response = await use_case.execute(
         review_id=row_b.item_id,
         request=ResumeWorkflowRequest(
-            decision=WorkflowDecision.APPROVE, feedback="", approved_by="R"
+            decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
         ),
     )
     assert response.status == "resumed"

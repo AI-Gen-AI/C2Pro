@@ -277,10 +277,18 @@ async def test_the_use_case_boundary_refuses_a_request_without_a_decider_so_no_o
 @pytest.mark.parametrize("role", [UserRole.ADMIN, UserRole.USER])
 @pytest.mark.parametrize("route", ["approve", "resume"])
 async def test_admin_and_user_keep_exactly_the_capability_they_had_and_the_decider_is_recorded(
-    db: AsyncSession, controlled: Any, request_sessions: Any, role: UserRole, route: str  # noqa: F811
+    db: AsyncSession, test_user: Any, controlled: Any, request_sessions: Any, role: UserRole, route: str  # noqa: F811
 ) -> None:
     w = controlled
+    # Promotion revalidates the authenticated principal against persisted
+    # tenant membership. Use an actual User row rather than a fabricated ID.
+    await db.execute(
+        text("UPDATE users SET role = :role WHERE id = :user AND tenant_id = :tenant"),
+        {"role": role.value, "user": test_user.id, "tenant": w.tenant_id},
+    )
+    await db.commit()
     decider = _member(w.tenant_id, role, f"{role.value.title()} Reviewer")
+    decider.id = test_user.id
     result = await _final(w, request_sessions, route, decider)
     after = await _footprint(db, w)
     assert after["review"] == "APPROVED"
@@ -293,7 +301,7 @@ async def test_admin_and_user_keep_exactly_the_capability_they_had_and_the_decid
 
 
 async def test_a_denied_attempt_leaves_the_review_decidable_by_an_authorized_human_afterwards(
-    db: AsyncSession, controlled: Any, request_sessions: Any  # noqa: F811
+    db: AsyncSession, test_user: Any, controlled: Any, request_sessions: Any  # noqa: F811
 ) -> None:
     from fastapi import HTTPException
 
@@ -301,5 +309,7 @@ async def test_a_denied_attempt_leaves_the_review_decidable_by_an_authorized_hum
     with pytest.raises(HTTPException):
         await _final(w, request_sessions, "approve", _member(w.tenant_id, UserRole.VIEWER, "Viewer"))
     assert (await _footprint(db, w))["review"] == "PENDING_REVIEW_REQUIRED"
-    await _final(w, request_sessions, "approve", _member(w.tenant_id, UserRole.USER, "Real Reviewer"))
+    reviewer = _member(w.tenant_id, UserRole.ADMIN, "Real Reviewer")
+    reviewer.id = test_user.id
+    await _final(w, request_sessions, "approve", reviewer)
     assert (await _footprint(db, w))["review"] == "APPROVED"

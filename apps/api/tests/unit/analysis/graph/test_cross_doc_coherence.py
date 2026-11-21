@@ -162,9 +162,9 @@ async def test_cross_doc_coherence_aggregates_signals_and_returns_typed_summary(
     assert summary.overall_score == 82.5
     assert summary.artifact_count == 2
     assert summary.llm_on is True
-    assert summary.signal_count >= 4
+    assert summary.signal_count == 2  # one source-bound risk signal per artifact; no duplicate scoring
     assert summary.finding_count == 2
-    assert summary.insufficient_data_reasons == ["TIME"]
+    assert summary.insufficient_data_reasons == ["TIME", "risk_provenance"]  # no verified source quotes
     assert result["node_results"][0].status is NodeStatus.OK
 
     signals = captured["seed_signals"]
