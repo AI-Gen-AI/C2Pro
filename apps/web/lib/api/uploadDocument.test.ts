@@ -35,6 +35,9 @@ function mockBackendUrl(apiBaseUrl: string | null): void {
 
 describe("uploadDocument", () => {
   beforeEach(() => {
+    // CI may inject an absolute preview API URL. Tests of the runtime URL
+    // lookup must start from a same-origin base unless explicitly overridden.
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "/api");
     vi.stubGlobal("fetch", fetchMock);
   });
 
