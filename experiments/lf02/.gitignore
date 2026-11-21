@@ -1,0 +1,9 @@
+# Local Studio state contains document text, checkpoints, run metadata.
+.langgraph_api/
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.pyc
