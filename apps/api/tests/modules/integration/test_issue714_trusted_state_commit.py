@@ -44,9 +44,16 @@ from src.analysis.domain.trust import (
 from src.core.auth.models import Tenant, User
 from src.core.tasks import materialization_tasks, project_graph_tasks
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.application.finding_review_authorization import FindingDecisionSubmission
+from src.modules.hitl.application.record_finding_decision_use_case import (
+    RecordFindingDecisionUseCase,
+)
+from src.modules.hitl.application.review_findings_view import ReviewFindingsViewService
 from src.modules.hitl.domain.entities import ReviewStatus
+from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.temporal.application import project_snapshot_trigger
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.modules.integration.hitl_actor import persisted_reviewer
 from tests.modules.integration.test_issue649_hitl_audit_idempotency import (
     _post_approve,
     _post_reject,
@@ -114,6 +121,9 @@ def _risks(title: str, level: str = "HIGH") -> list[dict[str, str]]:
             "category": category,
             "impact": level,
             "likelihood": level,
+            "source_quote": f"Synthetic {category} source clause for integration testing.",
+            "source_quote_status": "VERIFIED",
+            "source": f"Synthetic {category} source clause for integration testing.",
         }
         for i, category in enumerate(_CATEGORIES)
     ]
@@ -135,6 +145,10 @@ def _final_state(arranged: Any, tenant_id: UUID, *, gated: bool, title: str) -> 
         "document_id": str(arranged.document_id),
         "thread_id": f"document:{arranged.document_id}:analysis",
         "doc_type": "contract",
+        "document_text": "\n".join(
+            f"Synthetic {category} source clause for integration testing."
+            for category in _CATEGORIES
+        ),
         "human_approval_required": gated,
         "extracted_risks": _risks(title),
         "extracted_wbs": [],
@@ -194,6 +208,51 @@ async def _propose(
         assert pending is not None
         if pending.checkpoint_id is None:
             pending.checkpoint_id = arranged.checkpoint_id
+
+    actor = persisted_reviewer()
+    assert actor is not None, "a persisted reviewer is required for governed test setup"
+    async with completion_sessions["sessions"](tenant_id) as session:
+        review = (
+            await session.execute(
+                select(ReviewItemORM)
+                .where(ReviewItemORM.document_id == arranged.document_id)
+                .order_by(ReviewItemORM.created_at.desc())
+            )
+        ).scalars().all()
+        current = next(
+            (
+                row for row in review
+                if row.current_status in {
+                    ReviewStatus.PENDING_REVIEW_REQUIRED,
+                    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+                    ReviewStatus.ESCALATED,
+                }
+            ),
+            None,
+        )
+        assert current is not None
+        view = await ReviewFindingsViewService(session).execute(
+            tenant_id=tenant_id, user=actor, review_row_id=current.id,
+        )
+        # This is a synthetic pre-decision for mechanics tests, NOT user data
+        # or approval of the whole project. The signed ledger is real.
+        for offset, finding in enumerate(view.findings):
+            await RecordFindingDecisionUseCase(session).execute(
+                tenant_id=tenant_id, user=actor, review_row_id=current.id,
+                submission=FindingDecisionSubmission(
+                    artifact_id=view.artifact_id,
+                    artifact_version=view.artifact_version,
+                    artifact_hash=view.artifact_hash,
+                    document_revision_id=view.document_revision_id,
+                    generation=view.generation,
+                    fencing_token=view.fencing_token,
+                    source_item_id=finding.source_item_id,
+                    ordinal=finding.ordinal,
+                    action=FindingDecisionAction.CONFIRMED,
+                    expected_ledger_revision=view.ledger_revision + offset,
+                    idempotency_key=f"p714-fixture-{current.id}-{offset}",
+                ),
+            )
 
 
 async def _rows(sessions, tenant_id: UUID, document_id: UUID) -> list[DocumentArtifactORM]:

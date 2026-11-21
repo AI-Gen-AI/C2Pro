@@ -55,6 +55,7 @@ from src.analysis.adapters.graph.nodes import (
 )
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.adapters.persistence.models import Analysis
+from src.analysis.domain.contracts import RiskItem, Severity
 from src.core.auth.models import Tenant, User
 from src.documents.adapters.persistence.models import DocumentORM, DocumentProcessingOperationORM
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
@@ -63,11 +64,17 @@ from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
 from src.modules.hitl.application.final_decision_authorization import authorize_final_decider
+from src.modules.hitl.application.finding_review_authorization import FindingDecisionSubmission
+from src.modules.hitl.application.record_finding_decision_use_case import (
+    RecordFindingDecisionUseCase,
+)
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
+from src.modules.hitl.application.review_findings_view import ReviewFindingsViewService
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
+from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
 from tests.modules.integration.hitl_actor import (
@@ -262,6 +269,17 @@ def _review_row(
     )
 
 
+_SOURCE_QUOTE = "Liquidated damages of EUR 3,000 per calendar day"
+
+
+def _reviewable_test_risk() -> RiskItem:
+    return RiskItem(
+        title="Synthetic P0b delay damages", description="Reviewable test proposal",
+        category="schedule", severity=Severity.HIGH, source=_SOURCE_QUOTE,
+        source_quote=_SOURCE_QUOTE, source_quote_status="VERIFIED", clause_ref="3.2",
+    )
+
+
 def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dict[str, Any]:
     return {
         "project_id": str(document.project_id),
@@ -269,12 +287,12 @@ def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dic
         "tenant_id": str(tenant.id),
         "thread_id": thread_id,
         "doc_type": "contract",
-        "document_text": "",
+        "document_text": _SOURCE_QUOTE,
         "retry_count": 0,
         "confidence_score": 0.0,
         "critique_notes": "",
         "messages": [],
-        "extracted_risks": [],
+        "extracted_risks": [_reviewable_test_risk().model_dump(mode="json")],
         "extracted_wbs": [],
         "coherence_score": 90,
         "coherence_breakdown": {"overall": 90},
@@ -299,7 +317,9 @@ async def _run_to_interrupt(app, document, tenant, thread_id, *, db=None) -> tup
             _persist_bound_candidate,
         )
 
-        await _persist_bound_candidate(db, tenant, document, thread_id)
+        await _persist_bound_candidate(
+            db, tenant, document, thread_id, risks=[_reviewable_test_risk()],
+        )
         review_rows = (
             await db.execute(select(ReviewItemORM).where(
                 ReviewItemORM.document_id == document.id,
@@ -313,6 +333,41 @@ async def _run_to_interrupt(app, document, tenant, thread_id, *, db=None) -> tup
         await db.commit()
     snapshot = await app.aget_state(cfg)
     return cfg, snapshot.config["configurable"]["checkpoint_id"]
+
+
+async def _confirm_source_bound_finding(
+    sessions, tenant: Tenant, document: DocumentORM, reviewer: User,
+) -> None:
+    """Real provisional CONFIRMED event before the final approval."""
+    async with sessions(tenant.id) as db:
+        review = (
+            await db.execute(
+                select(ReviewItemORM).where(
+                    ReviewItemORM.document_id == document.id,
+                    ReviewItemORM.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED,
+                )
+            )
+        ).scalars().one()
+        view = await ReviewFindingsViewService(db).execute(
+            tenant_id=tenant.id, user=reviewer, review_row_id=review.id,
+        )
+        assert len(view.findings) == 1, "must carry one reviewable source-bound risk"
+        f = view.findings[0]
+        await RecordFindingDecisionUseCase(db).execute(
+            tenant_id=tenant.id, user=reviewer, review_row_id=review.id,
+            submission=FindingDecisionSubmission(
+                artifact_id=view.artifact_id,
+                artifact_version=view.artifact_version,
+                artifact_hash=view.artifact_hash,
+                document_revision_id=view.document_revision_id,
+                generation=view.generation, fencing_token=view.fencing_token,
+                source_item_id=f.source_item_id, ordinal=f.ordinal,
+                action=FindingDecisionAction.CONFIRMED,
+                expected_ledger_revision=0,
+                idempotency_key=f"p0b-confirm-{review.id}",
+            ),
+        )
+        await db.commit()
 
 
 def _use_case(db, tenant, saver, app, session_factory) -> ResumeWorkflowUseCase:
@@ -474,6 +529,7 @@ async def test_use_case_approve_resumes_real_graph_to_n17_and_analyzed(
     review.review_metadata = {**(review.review_metadata or {}), "tenant_id": str(tenant.id)}
     await db.commit()
 
+    await _confirm_source_bound_finding(claim_session_factory, tenant, document, test_user)
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
     response = await use_case.execute(
         review_id=review.item_id,
@@ -620,6 +676,7 @@ async def test_sequential_double_approve_executes_downstream_once(
     review.review_metadata = {**(review.review_metadata or {}), "tenant_id": str(tenant.id)}
     await db.commit()
 
+    await _confirm_source_bound_finding(claim_session_factory, tenant, document, test_user)
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
     req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id))
 
@@ -704,6 +761,7 @@ async def test_concurrent_double_approve_executes_downstream_once(
             yield claim_db
             await claim_db.commit()
 
+    await _confirm_source_bound_finding(independent_claim_session, tenant, document, test_user)
     req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id))
 
     async def approve_from_independent_request():
@@ -891,6 +949,7 @@ async def test_historical_row_a_is_never_targeted_by_resume(
     await db.commit()
     original_a_approved_at = row_a.approved_at
 
+    await _confirm_source_bound_finding(claim_session_factory, tenant, document, test_user)
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
     response = await use_case.execute(
         review_id=row_b.item_id,

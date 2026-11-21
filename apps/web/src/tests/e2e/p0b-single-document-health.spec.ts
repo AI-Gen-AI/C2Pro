@@ -115,7 +115,25 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   const reviewRowId = matchingRows[0].row_id;
   const card = page.getByTestId(`review-item-${reviewItemId}`);
   await expect(card).toBeVisible({ timeout: 30_000 });
-  await card.getByTestId(`approve-${reviewItemId}`).click();
+
+  // P0b runs against the public sample contract and an explicitly synthetic
+  // test-only N4 proposal. This scripted human action proves individual
+  // review → ledger → final approval; it is NOT a validation of model recall.
+  const findings = card.getByTestId(`review-findings-${reviewRowId}`);
+  await expect(findings).toBeVisible({ timeout: 30_000 });
+  await expect(findings.getByText('1 finding in this analysis')).toBeVisible();
+  await expect(findings.getByTestId('finding-quote-0')).toBeVisible();
+  const reviewed = findings.getByTestId('finding-source-reviewed-0');
+  await expect(reviewed).toBeEnabled();
+  await reviewed.check();
+  const confirmFinding = findings.getByTestId('finding-action-0-CONFIRMED');
+  await expect(confirmFinding).toBeEnabled();
+  await confirmFinding.click();
+  await expect(card.getByTestId(`review-findings-progress-${reviewRowId}`))
+    .toContainText('1/1 findings approved individually.', { timeout: 30_000 });
+  const approveAll = card.getByTestId(`approve-${reviewItemId}`);
+  await expect(approveAll).toBeEnabled({ timeout: 30_000 });
+  await approveAll.click();
   const dialog = page.getByRole("dialog", { name: /approve review item/i });
   await expect(dialog).toBeVisible();
   // The review row may become visible before LangGraph has durably bound its

@@ -54,7 +54,7 @@ from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.adapters.persistence.document_artifact_repository import (
     SqlAlchemyDocumentArtifactRepository,
 )
-from src.analysis.domain.contracts import DocumentArtifact
+from src.analysis.domain.contracts import DocumentArtifact, RiskItem, Severity
 from src.analysis.domain.trust import TrustState
 from src.core import checkpoint_lineage as lineage
 from src.core import processing_authority as pa
@@ -73,10 +73,19 @@ from src.modules.hitl.application import (
     resume_workflow_use_case as resume_workflow_module,
 )
 from src.modules.hitl.application.final_decision_authorization import authorize_final_decider
+from src.modules.hitl.application.finding_review_authorization import FindingDecisionSubmission
+from src.modules.hitl.application.record_finding_decision_use_case import (
+    RecordFindingDecisionUseCase,
+)
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
+from src.modules.hitl.application.review_findings_view import (
+    ReviewFindingsUnavailable,
+    ReviewFindingsViewService,
+)
+from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.temporal.application import project_snapshot_trigger
 from tests.modules.integration.hitl_actor import (
     decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
@@ -230,6 +239,26 @@ async def _seed_analysable(db: AsyncSession, test_user: Any) -> Any:
         },
     )
     db.add(document)
+    await db.commit()
+
+    from datetime import UTC, timedelta
+
+    from src.documents.adapters.persistence.models import DocumentProcessingOperationORM
+    from src.temporal.adapters.persistence.models import DocumentRevisionORM
+
+    revision = DocumentRevisionORM(
+        revision_id=uuid4(), document_id=document.id, project_id=project.id,
+        tenant_id=tenant, rev_no=1, blob_hash="a" * 64,
+        blob_key=f"p758-synthetic/{document.id}",
+    )
+    db.add(revision)
+    await db.flush()
+    db.add(DocumentProcessingOperationORM(
+        document_id=document.id, tenant_id=tenant, revision_id=revision.revision_id,
+        generation=1, stage="ANALYSIS", phase="PENDING",
+        fencing_token=0,
+        lease_expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+    ))
     await db.commit()
 
     await db.execute(
@@ -409,6 +438,7 @@ async def _make_review_trust_ready(
     worker: Any,
     tenant_id: UUID,
     document: Any,
+    reviewer: Any,
 ) -> None:
     """Persist/bind a real #714 PROPOSED candidate for this #758 review.
 
@@ -420,13 +450,64 @@ async def _make_review_trust_ready(
     rows = await _review(db, document.id)
     assert len(rows) == 1 and rows[0].thread_id
     async with worker.tenant_session(tenant_id) as session:
+        # Restore the SQL-only append-only ledger's true constraints in the
+        # disposable test database (ORM create_all cannot create triggers).
+        from runpy import run_path
+        present = (await session.execute(
+            text("SELECT to_regclass('public.hitl_finding_decisions')")
+        )).scalar_one_or_none()
+        if present is None:
+            migration = (
+                Path(__file__).resolve().parents[3]
+                / "alembic/versions/20261008_0001_hitl_finding_decisions.py"
+            )
+            for statement in run_path(str(migration))["UPGRADE_STATEMENTS"]:
+                await session.execute(text(statement))
+
+        revision_id = (
+            await session.execute(
+                text("SELECT revision_id FROM document_processing_operations WHERE document_id = :d"),
+                {"d": document.id},
+            )
+        ).scalar_one()
+        assert revision_id is not None
+        quote = "Clause 1: the contractor shall deliver the works."
+        proposal = RiskItem(
+            title="Synthetic P758 scope risk", description="Test-only source-bound proposal",
+            category="scope", severity=Severity.HIGH, source=quote,
+            source_quote=quote, source_quote_status="VERIFIED", clause_ref="1",
+        )
         await SqlAlchemyDocumentArtifactRepository(session).save(
-            DocumentArtifact(document_id=str(document.id), doc_type="contract"),
+            DocumentArtifact(
+                document_id=str(document.id),
+                document_revision_id=str(revision_id),
+                doc_type="contract",
+                extracted_risks=[proposal],
+            ),
             project_id=document.project_id,
             tenant_id=tenant_id,
             trust_state=TrustState.PROPOSED,
             scoring=None,
             review_thread_id=str(rows[0].thread_id),
+        )
+    async with worker.tenant_session(tenant_id) as session:
+        view = await ReviewFindingsViewService(session).execute(
+            tenant_id=tenant_id, user=reviewer, review_row_id=rows[0].id,
+        )
+        assert len(view.findings) == 1, "fencing test begins with a reviewable source"
+        finding = view.findings[0]
+        await RecordFindingDecisionUseCase(session).execute(
+            tenant_id=tenant_id, user=reviewer, review_row_id=rows[0].id,
+            submission=FindingDecisionSubmission(
+                artifact_id=view.artifact_id, artifact_version=view.artifact_version,
+                artifact_hash=view.artifact_hash,
+                document_revision_id=view.document_revision_id,
+                generation=view.generation, fencing_token=view.fencing_token,
+                source_item_id=finding.source_item_id, ordinal=finding.ordinal,
+                action=FindingDecisionAction.CONFIRMED,
+                expected_ledger_revision=0,
+                idempotency_key=f"p758-synthetic-{rows[0].id}",
+            ),
         )
     rows = await _review(db, document.id)
     binding = (rows[0].review_metadata or {}).get("candidate_binding")
@@ -1358,7 +1439,7 @@ async def test_new_generation_ends_resumability_before_analysis_runs(
     assert rows[0].checkpoint_id in a.checkpoint_ids, "the review is bound to A"
     review_item_id = rows[0].item_id
     generation_a = int((await _op(db, document.id)).generation)
-    await _make_review_trust_ready(db, worker, tenant, document)
+    await _make_review_trust_ready(db, worker, tenant, document, test_user)
 
     # The production generation transition, called exactly as the reprocess
     # route and the reupload use case call it: in the caller's transaction,
@@ -1384,7 +1465,7 @@ async def test_new_generation_ends_resumability_before_analysis_runs(
         checkpoint_service=CheckpointService(checkpointer=saver),
         graph_app=a.app,
     )
-    with pytest.raises(ValueError, match="no longer be resumed"):
+    with pytest.raises((ValueError, ReviewFindingsUnavailable)):
         await use_case.execute(
             review_id=review_item_id,
             request=ResumeWorkflowRequest(
@@ -1545,7 +1626,7 @@ async def test_resume_is_bound_to_the_lineage_it_was_authorized_against(
     rows = await _review(db, document.id)
     assert rows[0].thread_id == a.thread_id
     review_item_id, review_row_id = rows[0].item_id, rows[0].id
-    await _make_review_trust_ready(db, worker, tenant, document)
+    await _make_review_trust_ready(db, worker, tenant, document, test_user)
 
     await _expire_lease()
     monkeypatch.setattr(pa, "LEASE_TTL_SECONDS", 60)

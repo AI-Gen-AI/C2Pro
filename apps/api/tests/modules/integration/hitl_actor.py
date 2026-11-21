@@ -9,12 +9,16 @@ authorization itself is proven, with denials, in ``test_s5_project_authorization
 
 from __future__ import annotations
 
+from contextvars import ContextVar, Token
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
 from src.core.auth.models import UserRole
-from src.modules.hitl.application.final_decision_authorization import AuthorizedFinalDecider
+from src.modules.hitl.application.final_decision_authorization import (
+    AuthorizedFinalDecider,
+    authorize_final_decider,
+)
 from src.modules.hitl.application.project_review_authorization import (
     AuthorizationMode,
     EffectiveCapabilities,
@@ -23,6 +27,24 @@ from src.modules.hitl.application.project_review_authorization import (
     ProjectReviewAuthorizer,
 )
 from src.modules.hitl.application.resume_workflow_use_case import ResumeWorkflowRequest
+
+_PERSISTED_REVIEWER: ContextVar[Any | None] = ContextVar("a0b_test_reviewer", default=None)
+
+
+def bind_persisted_reviewer(user: Any) -> Token:
+    """Per-test real database-backed user. Never valid outside the test scope."""
+    return _PERSISTED_REVIEWER.set(user)
+
+
+def unbind_persisted_reviewer(token: Token) -> None:
+    _PERSISTED_REVIEWER.reset(token)
+
+
+
+def persisted_reviewer() -> Any | None:
+    """Return the real fixture user only while this exact pytest case runs."""
+    return _PERSISTED_REVIEWER.get()
+
 
 TEST_DECIDER = AuthorizedFinalDecider(
     tenant_id=UUID(int=0xA11CE), user_id=UUID(int=0xB0B), display_name="Test Reviewer"
@@ -57,7 +79,13 @@ class PermissiveProjectAuthorizer(ProjectReviewAuthorizer):
 
 def decided_request(*args: Any, **kwargs: Any) -> ResumeWorkflowRequest:
     """A ``ResumeWorkflowRequest`` that carries an authenticated human decider (same signature as the real one)."""
-    kwargs.setdefault("decider", TEST_DECIDER)
+    if "decider" not in kwargs:
+        db_user = _PERSISTED_REVIEWER.get()
+        kwargs["decider"] = (
+            authorize_final_decider(db_user, tenant_id=db_user.tenant_id)
+            if db_user is not None
+            else TEST_DECIDER  # Pure fake-session tests only.
+        )
     return ResumeWorkflowRequest(*args, **kwargs)
 
 
@@ -69,4 +97,17 @@ def human(
     active: bool = True,
 ) -> Any:
     """What ``get_current_user`` yields for a member of ``tenant_id`` (an active human ADMIN/USER by default)."""
+    db_user = _PERSISTED_REVIEWER.get()
+    if (
+        db_user is not None
+        and str(db_user.tenant_id) == str(tenant_id)
+        and role in (UserRole.USER, UserRole.ADMIN)
+        and active
+    ):
+        # Return a request-shaped identity with an actually persisted ID.
+        # Authorization remains enforced by production code and real SQL.
+        return SimpleNamespace(
+            id=db_user.id, tenant_id=tenant_id, role=role,
+            is_active=active, full_name=name,
+        )
     return SimpleNamespace(id=uuid4(), tenant_id=tenant_id, role=role, is_active=active, full_name=name)
