@@ -334,3 +334,28 @@ async def test_a15_final_approval_routes_return_stable_409_without_resume(route:
     assert result.status_code == 409, result.text
     assert result.json()["detail"]["code"] == "n4_coverage_gaps"
     assert result.json()["detail"]["pending_windows"] == 1
+
+
+def test_a15_explicit_incomplete_status_must_block_even_when_counters_appear_complete() -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    coverage = _synthetic_n4_coverage(status="INCOMPLETE")
+    coverage["examined_windows"] = coverage["total_windows"]
+    coverage["gap_windows"] = []
+    coverage["gaps"] = []
+    with pytest.raises(module.N4CoverageGapsError):
+        module.require_n4_coverage_ready(
+            SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={}), approve=True
+        )
+
+
+@pytest.mark.parametrize("missing", ["closed_reason", "closed_by", "closed_at"])
+def test_a15_manual_closure_without_an_audit_field_is_not_a_valid_resolution(missing: str) -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    coverage = _synthetic_n4_coverage(resolution="CLOSED_MANUALLY")
+    del coverage["gaps"][0][missing]
+    with pytest.raises(module.N4CoverageGapsError):
+        module.require_n4_coverage_ready(
+            SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={}), approve=True
+        )
