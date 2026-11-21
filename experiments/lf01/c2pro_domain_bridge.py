@@ -118,7 +118,7 @@ def plan_run(data):
                                max_context_chars=max_chars, overlap_chars=overlap)
     run_id = str(uuid.uuid4())
     with LOCK, connect() as db:
-        db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?)",
+        db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)",
                    (run_id,time.time(),source_kind,ws[0].source_sha256,
                     text,revision_id,len(ws),max_chars,overlap,src_sha()))
         for w in ws:
