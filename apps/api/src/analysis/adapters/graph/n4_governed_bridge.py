@@ -365,6 +365,60 @@ def _candidate_payload(
     }
 
 
+def _reference_proposals(
+    register: Sequence[Mapping[str, Any]], *, source: str,
+    source_sha256: str, revision_id: str, page_spans: Sequence[Any] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Turn verified literal missing-external references into PROPOSED risks.
+
+    Missing is relative to this analyzed source, not proof that the project
+    has failed to supply the referenced attachment elsewhere. Never auto-trust.
+    """
+    risks: list[dict[str, Any]] = []
+    provenance: list[dict[str, Any]] = []
+    for entry in register:
+        if entry.get("status") != "MISSING_EXTERNAL":
+            continue
+        quote = entry.get("source_quote")
+        label = entry.get("label")
+        if not isinstance(quote, str) or not quote or not isinstance(label, str):
+            continue
+        start = source.find(quote)
+        if start < 0:  # No literal evidence: no manufactured proposal.
+            continue
+        key = sha256(
+            (source_sha256 + ":" + label + ":" + quote).encode("utf-8")
+        ).hexdigest()
+        refs = [{
+            "document_revision_id": revision_id,
+            "source_sha256": source_sha256,
+            "source_kind": "MODEL_SAFE_PROJECTION",
+            "evidence_status": "EXACT_MODEL_SAFE_MATCH",
+            "analysis_span": [start, start + len(quote)],
+        }]
+        risk = _candidate_payload({
+            "title": "Referenced document not provided",
+            "risk_reason": (
+                f"Reference to {label} is not resolved in the analyzed source. "
+                "Verify whether the attachment was supplied separately."
+            ),
+            "category": "SCOPE",
+            "clause_ref": label,
+            "source_quote": quote,
+            "source_evidence_status": "EXACT_MODEL_SAFE_MATCH",
+        }, refs, source, page_spans=page_spans)
+        risks.append(risk)
+        provenance.append({
+            "finding_key": key,
+            "window_ordinal": None,
+            "source_refs": refs,
+            "source_keys": [key],
+            "consolidation_trace": [],
+            "detector": "literal_reference_register",
+        })
+    return risks, provenance
+
+
 async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     """Run N4 against exact N2 source and return an existing graph-shaped state update."""
     if os.getenv("C2PRO_N4_GRAPH_LEDGER_ENABLED") != "1":
@@ -444,13 +498,24 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
             text("SELECT set_config('app.current_tenant', :tenant, true)"),
             {"tenant": str(authority.tenant_id)},
         )
+        params = {"tenant": str(authority.tenant_id), "run": str(outcome.run_id)}
         rows = (await session.execute(text("""
             SELECT f.finding_key, f.claim, f.source_refs, f.window_ordinal
               FROM public.n4_candidate_findings f
              WHERE f.tenant_id = CAST(:tenant AS uuid)
                AND f.run_id = CAST(:run AS uuid)
              ORDER BY f.window_ordinal, f.finding_key
-        """), {"tenant": str(authority.tenant_id), "run": str(outcome.run_id)})).mappings().all()
+        """), params)).mappings().all()
+        unresolved_rows = (await session.execute(text("""
+            SELECT unresolved_refs FROM public.n4_extraction_windows
+             WHERE tenant_id = CAST(:tenant AS uuid)
+               AND run_id = CAST(:run AS uuid)
+             ORDER BY ordinal
+        """), params)).scalars().all()
+        unresolved_refs = [
+            ref for entry in unresolved_rows if isinstance(entry, list)
+            for ref in entry if isinstance(ref, str)
+        ]
 
     candidates: list[dict[str, Any]] = []
     for row in rows:
@@ -477,7 +542,13 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     register = build_reference_register(source_text, [
         {"finding_key": m["finding_key"], "source_quote": m.get("source_quote")}
         for m in merged
-    ])
+    ], unresolved_refs=unresolved_refs)
+    reference_risks, reference_provenance = _reference_proposals(
+        register, source=source_text, source_sha256=source_sha256,
+        revision_id=str(authority.revision_id), page_spans=spans,
+    )
+    risks.extend(reference_risks)
+    provenance.extend(reference_provenance)
     return {
         "extracted_risks": risks,
         "risk_extraction_outcome": (

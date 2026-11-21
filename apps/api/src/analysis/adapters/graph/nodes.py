@@ -1045,6 +1045,14 @@ def _technical_wbs_review_summary(state: ProjectState) -> dict[str, Any]:
     }
 
 
+def _n4_coverage_review_metadata(state: ProjectState) -> dict[str, Any]:
+    """Bind exact N4 coverage to the HITL review's durable metadata."""
+    coverage = state.get("n4_coverage")
+    if isinstance(coverage, dict):
+        return {"analysis_n4_coverage": dict(coverage)}
+    return {}
+
+
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
 
@@ -1084,6 +1092,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                     # C2PRO #714: no decision until the exact candidate is
                     # persisted and bound (see document_artifact_completion).
                     "trust_candidate_required": True,
+                    **_n4_coverage_review_metadata(state),
                 }
                 thread_id = state.get("thread_id")
                 if thread_id:

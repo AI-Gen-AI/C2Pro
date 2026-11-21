@@ -465,3 +465,69 @@ def test_reference_register_never_proposes_without_literal_quote_in_source():
     ])
     assert reg[0]["status"] == "UNRESOLVED"
     assert reg[0]["proposal"] is None
+
+
+def test_register_scans_literal_remissions_even_without_risk_findings():
+    from src.analysis.domain.n4_reference_register import build_reference_register
+
+    register = {r["label"]: r for r in build_reference_register(_DOC, [])}
+    assert register["Annex B"]["status"] == "MISSING_EXTERNAL"
+    assert register["Annex B"]["source_quote"] in _DOC
+    assert register["Annex A"]["status"] == "IN_DOCUMENT"
+
+
+def test_missing_external_reference_becomes_proposed_risk_with_literal_evidence():
+    from src.analysis.domain.n4_reference_register import build_reference_register
+
+    register = build_reference_register(_DOC, [])
+    risks, provenance = bridge._reference_proposals(
+        register, source=_DOC, source_sha256=_SHA, revision_id="test-revision",
+    )
+    assert len(risks) >= 1
+    candidate = next(r for r in risks if r["clause_ref"] == "Annex B")
+    assert candidate["title"] == "Referenced document not provided"
+    assert candidate["source_quote"] in _DOC
+    assert candidate["severity"] is None
+    assert candidate["confidence"] is None
+    assert candidate["page_number"] is None
+    assert candidate["page_verification_status"] == "PAGE_UNVERIFIED_NO_PAGE_MAP"
+    assert any(p["source_refs"][0]["source_kind"] == "MODEL_SAFE_PROJECTION"
+               for p in provenance)
+
+
+def test_coverage_metadata_is_bound_to_exact_hitl_review():
+    from src.analysis.adapters.graph import nodes
+
+    state, _ = _state()
+    cov = {"schema_version": "n4-coverage-v1",
+           "status": "COMPLETE_WITH_GAPS", "run_id": str(uuid4()),
+           "gap_windows": [2], "gaps": [{"ordinal": 2}]}
+    state["n4_coverage"] = cov
+    assert nodes._n4_coverage_review_metadata(state) == {
+        "analysis_n4_coverage": cov
+    }
+
+
+def test_model_unresolved_refs_are_never_silently_discarded():
+    from src.analysis.domain.n4_reference_register import build_reference_register
+
+    register = build_reference_register(
+        _DOC, [], unresolved_refs=["Annex B", "Unspecified vendor datasheet Q"]
+    )
+    assert any(x["label"] == "Annex B" and x["status"] == "MISSING_EXTERNAL"
+               for x in register)
+    unresolved = next(x for x in register if x["label"] == "Unspecified vendor datasheet Q")
+    assert unresolved["status"] == "UNRESOLVED"
+    assert unresolved["source_quote"] is None
+    assert unresolved["proposal"] is None
+
+
+def test_unanchored_model_reference_cannot_create_missing_external_proposal():
+    from src.analysis.domain.n4_reference_register import build_reference_register
+
+    register = build_reference_register(
+        _DOC, [], unresolved_refs=["Annex Z"]
+    )
+    record = next(x for x in register if x["label"] == "Annex Z")
+    assert record["status"] == "UNRESOLVED"
+    assert record["proposal"] is None

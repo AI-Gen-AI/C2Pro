@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from hashlib import sha256
 from typing import Any
 
 MISSING_DOCUMENT_PROPOSAL = "Referenced document not provided"
@@ -31,9 +32,24 @@ def _defined(label: str, source_text: str) -> bool:
 
 def build_reference_register(
     source_text: str, items: Sequence[Mapping[str, Any]],
+    *, unresolved_refs: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
     entries: dict[str, dict[str, Any]] = {}
-    for item in items:
+    # Remissions can be contractually material even when N4 found no risks.
+    # Inspect every source line instead of limiting this register to model
+    # findings. Only literal projection text is eligible for a proposal.
+    source_items: list[Mapping[str, Any]] = list(items)
+    for line in source_text.splitlines():
+        quote = line.strip()
+        if quote and (
+            _ATTACHMENT.search(quote) or _STANDARD.search(quote)
+            or _INTERNAL.search(quote)
+        ):
+            source_items.append({
+                "finding_key": "source-ref:" + sha256(quote.encode("utf-8")).hexdigest(),
+                "source_quote": quote,
+            })
+    for item in source_items:
         quote = item.get("source_quote")
         literal = isinstance(quote, str) and bool(quote) and quote in source_text
         if not isinstance(quote, str):
@@ -42,7 +58,7 @@ def build_reference_register(
         for m in _ATTACHMENT.finditer(quote):
             found.append((f"{m.group(1).title()} {m.group(2).rstrip('.-')}", True))
         for m in _STANDARD.finditer(quote):
-            found.append((f"{m.group(1)} {m.group(2).rstrip('.-')}", True))
+            found.append((f"{m.group(1)} {m.group(2).rstrip('.-')}", False))
         for m in _INTERNAL.finditer(quote):
             found.append((f"{m.group(1).title()} {m.group(2).rstrip('.-')}", False))
         for label, external in found:
@@ -66,4 +82,23 @@ def build_reference_register(
             key = item.get("finding_key")
             if key is not None and key not in entry["finding_keys"]:
                 entry["finding_keys"].append(key)
+    # Preserve model-declared remissions from the ledger, even when they are
+    # not literal quotations or do not match our known reference patterns.
+    # Only the source scan above may classify MISSING_EXTERNAL: a model alone
+    # cannot prove an attachment was absent from the reviewed document set.
+    for raw in unresolved_refs:
+        if not isinstance(raw, str):
+            continue
+        label = " ".join(raw.split())[:160]
+        if not label:
+            continue
+        if label in entries:
+            continue
+        entries[label] = {
+            "label": label,
+            "status": "UNRESOLVED",
+            "source_quote": None,
+            "proposal": None,
+            "finding_keys": [],
+        }
     return list(entries.values())
