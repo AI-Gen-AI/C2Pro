@@ -13,7 +13,7 @@
 - **Objetivo:** que un usuario real complete el recorrido *subir contrato (+ cronograma y presupuesto) → análisis sin pérdidas silenciosas → hallazgos con cita literal y página → revisión uno a uno → Score global + 6 subscores → Excel/PDF → sigue ahí al volver a entrar*, con calidad medida sobre **6 contratos** y no sobre uno.
 - **Fechas:** V1 **mar 24/11 12:00** · V2 **jue 26/11 10:00** · aceptación **lun 30/11 17:00** · margen mar 1/12 (tope 3/12). El umbral de calidad no se rebaja.
 - **Umbral (por contrato):** C2Pro ≥ análisis directo (Claude/ChatGPT con el contrato completo) **y** ≥ 90 % de controles críticos del oráculo; **100 % de citas literales con página**; **0 ventanas perdidas en silencio**.
-- **Qué arregla:** N4 deja de pararse en la primera ventana que falla y deja de bloquearse por remisiones; reintenta con salida estructurada y más tokens; consolida y resuelve remisiones; las filas de cláusulas dejan de perder el 70 % del texto (alimentan el Score); los hallazgos llegan a la revisión aunque haya huecos (visibles y cerrables); **los hallazgos que confirmas alimentan los 6 subscores** (hoy el Score los ignora); el Score se calcula solo; hay Excel y PDF.
+- **Qué arregla:** N4 deja de pararse en la primera ventana que falla y deja de bloquearse por remisiones; reintenta con salida estructurada y más tokens; consolida y resuelve remisiones; las filas de cláusulas dejan de perder el 70 % del texto (alimentan el Score); los hallazgos llegan a la revisión aunque haya huecos (visibles y cerrables); **el Score pasa a reflejar el estado real del proyecto**: validado (lo confirmado) y proyectado (si se confirma lo pendiente), por exposición y sin doble conteo (hoy ignora riesgos y alertas); el Score se calcula solo; hay Excel y PDF.
 - **Red de seguridad:** si en V1 el N4 mejorado no alcanza el umbral, se activa el motor "extracción directa" (`C2PRO_N4_ENGINE=direct`) sobre el mismo ledger, revisión, página y exportación. No se rehace nada.
 - **Coste:** ≤ 100 USD de API con topes duros; la línea experimental se para al 85 %.
 - **Equipo:** hasta 9 carriles de escritura sin conflictos de archivos (Claude Code, Codex, Gemini CLI/Antigravity, ChatGPT, OpenCode, OpenClaw, Hermes) + auditor de solo lectura. **Integra y fusiona Claude; suplente ChatGPT GPT-6.** Despliegues al piloto preautorizados con CI verde.
@@ -48,7 +48,8 @@ T9 no demuestra superioridad del híbrido; T0 no fue ciego; Docling y LangExtrac
 ### 1.3 Discrepancias y cómo se resuelven
 | Tema | Resolución |
 |---|---|
-| Puerta de materialidad (Gemini sí, ChatGPT aún no) | Implementada tras flag (A18); decide el fundador en V2 con datos |
+| Puerta de materialidad (Gemini sí, ChatGPT aún no) | Implementada tras flag (A18), sin umbral fijo; se calibra en V2 con datos |
+| Fórmula del Score (Claude: −40/−20/−10/−5 por hallazgo) | **Rechazada por el fundador.** Sustituida por exposición acumulada con bandas, Score validado + proyectado y deduplicación (A26) |
 | Resultados parciales | `COMPLETE_WITH_GAPS`: hallazgos revisables uno a uno; aprobación final y Score bloqueados hasta cerrar huecos (A15, A18) |
 | OpenContracts / Docling | Fuera de la ruta crítica (X6, X4) |
 | Gobernanza G2–G4 | Congelada; control de gasto con topes de consola + `RUN_USD` + gobernador |
@@ -65,7 +66,7 @@ T9 no demuestra superioridad del híbrido; T0 no fue ciego; Docling y LangExtrac
 | D4 | Umbral por contrato: ≥ directo **y** ≥ 90 % críticos; 100 % citas literales con página; 0 ventanas perdidas en silencio | Fundador |
 | D5 | Contratos privados solo a Anthropic y OpenAI (tras N2 tal cual, nombres incluidos); nunca en el repo. Agentes con modelos gratuitos/otros (OpenCode, OpenClaw, Hermes, DeepSeek, Gemini) solo código y datos sintéticos | Fundador |
 | D6 | Oráculo validado por el fundador (~1 h/contrato) sobre plantilla prerrellenada por OpenAI; los de aceptación se validan y se fijan con hash antes de ver salidas de C2Pro | Fundador |
-| D7 | Un Score global + 6 subscores; "No evaluada" (null, nunca 0); aceptar un riesgo no sube el Score; con huecos el Score queda "Pendiente"; materialidad tras flag | Fundador / ADR-018 |
+| D7 | Un Score global + 6 subscores que reflejan la **exposición vigente** del proyecto (riesgos, alertas, desviaciones, incoherencias confirmadas); **Score validado y Score proyectado**; bandas de severidad × materialidad calibradas en V2 (sin descuentos fijos); sin doble penalización; aceptar no mejora, solo la mitigación verificada; "No evaluada" (null, nunca 0); con huecos el validado queda "Pendiente"; materialidad tras flag, calibrada con datos; pesos 20/20/15/15/15/15 | Fundador (revisión con ChatGPT, 21/11) / enmienda ADR-018 |
 | D8 | HITL individual; nada provisional pasa a TRUSTED solo; un usuario funcional (Clerk admin) | Fundador |
 | D9 | Integración en `integration/journey-v1` (creada). **Fusiona Claude; suplente ChatGPT GPT-6.** Condición: CI verde + auditor en WPs de riesgo alto. Nada va a `main` en esta campaña | Fundador |
 | D10 | Despliegues al piloto **preautorizados con CI verde** (todos). Vuelta atrás a 799ce53 documentada | Fundador |
@@ -112,7 +113,7 @@ Rutas relativas a `apps/api/src` salvo indicación. Regla: **un archivo, un carr
 | L8 | Test/QA · OpenClaw / OpenCode-DeepSeek | A23 | solo archivos de test nuevos | **solo sintéticos**; usuario Clerk de prueba en entorno desechable, nunca credenciales del piloto |
 | LB1 | Test/QA · OpenCode / Hermes | B0, B4, B5 | `apps/api/scripts/journey_v1_*.py`, `apps/api/tests/unit/scripts/test_journey_v1_*.py`, `evals/journey_v1/synthetic/` | **solo sintéticos**: escriben código con fixtures; B0, B4 y B5 sobre datos reales los ejecuta solo Claude Code o el fundador en local |
 | LB2 | Evaluación · ChatGPT (API OpenAI) + Claude Code | B1, B2, B3, B6, B7 | `evals/journey_v1/` (plantillas); datos reales solo en Drive privado | contratos reales (Anthropic/OpenAI) |
-| LV | Verification Auditor · Gemini CLI (solo lectura) + Claude (este chat) | revisa A2, A3, A7, A15, A16 antes de fusionar; auditoría final | ninguno | código y métricas agregadas; **nunca** salidas, citas u oráculos de contratos privados |
+| LV | Verification Auditor · Gemini CLI (solo lectura) + Claude (este chat) | revisa A2, A3, A7, A15, A16, A26 y todo PR que modifique aserciones de tests existentes (p. ej. #1286) antes de fusionar; auditoría final | ninguno | código y métricas agregadas; **nunca** salidas, citas u oráculos de contratos privados |
 
 Paralelismo: 9 carriles de escritura simultáneos sin solapamiento de archivos; **recomendado 6 de código a la vez** (L1–L5, L7) + LB1/LB2 + LV. El cuello de botella real es la puerta CI + integración (L0), no los agentes.
 
@@ -225,14 +226,19 @@ Formato: **objetivo** · rol/agente · tamaño · bloqueado por · franja. Acept
 - Verificación: `cd apps/api && pytest tests/core/test_coherence_dashboard_derivation.py tests/unit/coherence -q`.
 
 **A18 · Score "Pendiente", "No evaluada" y materialidad tras flag** · L5 · S · A17 · mar 12:00 → mié 12:00
-- Dashboard (1724-1848): contrato con huecos → Score global null, motivo `n4_coverage_gaps`, `pending_windows=N`; `C2PRO_SCORE_MATERIALITY_GATE=1` limita el global a ≤ 59 si hay alerta CRITICAL abierta validada.
+- Dashboard (1724-1848): contrato con huecos → Score validado global null, motivo `n4_coverage_gaps`, `pending_windows=N`; `C2PRO_SCORE_MATERIALITY_GATE=1` activa una **condición de materialidad**: una alerta o riesgo crítico confirmado y vigente impide que el global se muestre en verde. El umbral concreto **no se fija ahora**: se calibra en V2 con datos reales (sin tope fijo de 59).
 - Aceptación: (1) subscore sin evidencia = null, nunca 0; (2) flag apagado = sin cambios; (3) aceptar un riesgo no sube el Score.
 - Verificación: la de A17.
 
-**A26 · Hallazgos validados → subscores (y enmienda de ADR-018)** · L5b Claude Code (Sonnet) · S · A17 · mar 12:00 → mié 10:00
-- Hoy el Score solo lee cláusulas, cronograma y presupuesto: **no consume los hallazgos N4 revisados**. Nuevo `coherence/application/validated_findings_evidence.py` que convierte cada hallazgo **confirmado** por el revisor en evidencia de su dimensión, y `project_evaluation.py` la combina. Regla propuesta (configurable, el fundador la confirma en V2): subscore = mín(subscore por reglas existente, 100 − Σ penalización) con penalización CRITICAL 40 / HIGH 20 / MEDIUM 10 / LOW 5, suelo 0; una dimensión es "evaluada" si tiene evidencia de reglas **o** ≥ 1 hallazgo confirmado; los hallazgos rechazados no penalizan; "riesgo aceptado" **mantiene** la penalización; global = media ponderada por confianza de ADR-018 (+ puerta de materialidad A18 si se activa). Enmienda de ADR-018 en `docs/architecture/decisions/` (vía Reconciler).
-- Aceptación: (1) confirmar un hallazgo HIGH de LEGAL baja el subscore LEGAL según la regla y queda trazado; (2) marcarlo como riesgo aceptado no sube el Score; (3) sin evidencia ni hallazgos la dimensión sigue en null.
-- Verificación: `cd apps/api && pytest tests/unit/coherence -q` (+ nuevo `tests/unit/coherence/test_validated_findings_evidence.py`).
+**A26 · Score como estado real del proyecto: validado + proyectado, por exposición (y enmienda de ADR-018)** · L5b Claude Code (Sonnet) · M · A17 · mar 12:00 → mié 12:00
+- Hoy el Score solo lee cláusulas, cronograma y presupuesto y **no consume los riesgos ni las alertas confirmados**. Definición acordada (fundador, 21/11): *el Coherence Score global y sus seis subscores reflejan la exposición vigente del proyecto a riesgos contractuales, alertas, desviaciones e incoherencias materiales, basada en hechos confirmados y trazables.*
+- **Dos puntuaciones:** *Score validado* (solo hechos y hallazgos confirmados por el revisor) y *Score proyectado* (validado + impacto de los hallazgos pendientes, como hipótesis). Los hallazgos de IA solo mueven el proyectado.
+- **Cálculo por exposición acumulada, no descuento fijo por hallazgo:** cada hecho confirmado y vigente aporta exposición a su dimensión según **banda** de severidad × materialidad (importe/plazo afectado cuando exista); el subscore se obtiene de la exposición acumulada con rendimiento decreciente; **cada hecho cuenta una sola vez** aunque aparezca en contrato, cronograma y presupuesto (clave de deduplicación = cláusula/hecho tipado de VS-2 + dimensión). Los valores de las bandas se **calibran en V2** con los oráculos de C1–C3 y quedan en configuración, no en código.
+- **Transiciones:** IA detecta → solo baja el proyectado; revisor confirma → baja el validado; rechaza (falso positivo) → sale de la proyección; "riesgo aceptado" → **mantiene** el impacto; mitigación o corrección **verificada con evidencia** → reduce la exposición residual; sin evidencia → dimensión `null` y "pendiente de evidencia".
+- **Global:** pesos SCOPE 20 %, BUDGET 20 %, LEGAL/TIME/QUALITY/TECHNICAL 15 % cada uno, normalizados solo entre dimensiones evaluables (contrastar con la tabla de pesos vigente en `coherence/router.py`). Cobertura y confianza se muestran como atributos del Score, no como otro Score.
+- Enmienda de ADR-018 (un único Score visible como indicador de estado del proyecto, alimentado por coherencia, riesgos confirmados y alertas materiales) vía Reconciler, y actualización de la definición funcional en el MASTER (ChatGPT, Document Steward). No se cambia el significado en código sin esa enmienda.
+- Aceptación: (1) confirmar un hallazgo baja el validado y lo refleja el proyectado; rechazarlo lo quita de la proyección; aceptarlo no sube nada; (2) el mismo hecho presente en contrato y presupuesto penaliza una sola vez; (3) una mitigación con evidencia reduce la exposición y queda trazada; sin evidencia, `null`.
+- Verificación: `cd apps/api && pytest tests/unit/coherence -q` (+ nuevos `tests/unit/coherence/test_project_exposure_score.py` y `test_validated_vs_projected_score.py`).
 
 **A19 · Exportación Excel** · L6 Gemini CLI (sintéticos) · S · A1 (forma); A7 (datos) · lun 09:00 → mar 18:00
 - `GET /projects/{id}/reports/journey.xlsx` (openpyxl): hojas Summary (Score, 6 subscores, cobertura), Findings (título, interpretación IA etiquetada, cita exacta, página, cláusula, decisión, revisor, fecha), Gaps & References.
@@ -248,7 +254,7 @@ Formato: **objetivo** · rol/agente · tamaño · bloqueado por · franja. Acept
 - Sin jerga (N12, N2, window, "NOT APPROVABLE") → "Section k of N (pp. a–b)", "Exact quote found, page X"; hallazgos agrupados por dimensión; banner de huecos + "Retry failed sections"; aprobación final deshabilitada con motivo; página visible en cada hallazgo; al confirmar un hallazgo el revisor ve y puede corregir **severidad y dimensión** (un clic); acción "Close gap manually" con motivo.
 - Verificación: `cd apps/web && pnpm vitest run "app/(app)/projects/[id]/documents/[documentId]/n4-findings/page.test.tsx" components/features/review/ReviewFindingsPanel.test.tsx components/features/review/ReviewItemCard.test.tsx`.
 
-**A22 · Interfaz del Score y botones de exportación** · L7 · S · A18, A19, A26 · mié 12:00–16:00 (maquetación con datos simulados desde mar 18:00)
+**A22 · Interfaz del Score (validado + proyectado, pendientes, cobertura) y botones de exportación** · L7 · S · A18, A19, A26 · mié 12:00–16:00 (maquetación con datos simulados desde mar 18:00)
 - "Not evaluated" y "Pending: N sections not analyzed"; botones Excel/PDF; al cargar, re-evalúa si la última evaluación es anterior a la última aprobación (respaldo de A17).
 - Verificación: `cd apps/web && pnpm vitest run components/coherence components/features/report "app/(app)/projects/[id]/coherence"`.
 
@@ -346,7 +352,7 @@ Ruta crítica: **A0 → A0b → A2 → A3 → A7 → A12 → A13 → A14 → V1 
 | R9 Sin OCR en el worker | A11 | hueco visible por página, nunca silencioso |
 | R10 Rojos semánticos tras la integración | A0 | se clasifican; el que bloquee la ruta crítica va primero |
 | R11 Una ventana falla siempre | ledger | A16: reintento partido en 2 subllamadas; si persiste, cierre manual con motivo y revisión humana de esas páginas |
-| R12 La regla de subscores no refleja el criterio experto | V2 | regla configurable (A26); el fundador la ajusta en V2 antes de congelar |
+| R12 Las bandas de exposición no reflejan el criterio experto | V2 | bandas y materialidad en configuración (A26/A18); el fundador las calibra en V2 con C1–C3 antes de congelar |
 
 Puertas de fusión: CI `ci-status` verde + revisión del integrador; **LV obligatorio** en A2, A3, A7, A15, A16. Puerta de despliegue: CI verde (preautorizado, D10).
 
@@ -380,7 +386,7 @@ Plantilla común (añadir al inicio de cada prompt): *"Repo AI-Gen-AI/C2Pro, bas
 | L3 (Claude Code Sonnet) | "Ejecuta A7 con stubs de A1; integra A3/A9 cuando estén en la rama; después A8." |
 | L4 (Codex 2.ª) | "Ejecuta A10, A11 y A12 en ese orden. A9 lo hace OpenCode." |
 | L5a (Claude Code Sonnet 2.ª) | "Ejecuta A15, A17 y A18." |
-| L5b (Claude Code Sonnet 3.ª) | "Ejecuta A26 cuando A17 esté fusionado; deja la regla de penalización configurable." |
+| L5b (Claude Code Sonnet 3.ª) | "Ejecuta A26 cuando A17 esté fusionado: Score validado + proyectado por exposición, bandas en configuración, deduplicación por hecho, mitigación solo con evidencia." |
 | L6 (Gemini CLI) | "Ejecuta A19 y A20 solo con datos sintéticos." |
 | L7 (Sonnet/Antigravity) | "Ejecuta A21 y A22; textos de negocio, sin jerga interna." |
 | L8 (OpenClaw/OpenCode) | "Ejecuta A23: primero rojo con A1, verde cuando A15–A22 estén integrados. Solo sintéticos." |
@@ -399,7 +405,7 @@ Plantilla común (añadir al inicio de cada prompt): *"Repo AI-Gen-AI/C2Pro, bas
 - Valores actuales de variables, buckets y herencia UAT del piloto (A13 los descubre).
 - Comportamiento real de `route_for_review` y del rebind del candidato tras reintento (se demuestra en A16).
 - Disponibilidad de salida estructurada nativa por JSON-schema con el SDK fijado (se usa tool_choice forzado, que sí está soportado).
-- Regla exacta de materialidad (V2).
+- Calibración de bandas de exposición y de la condición de materialidad (V2).
 - Consolidación posterior de los 120 PR abiertos y actualización de `main`: después de la aceptación, como decisión aparte.
 - Registro de "Integrador: Claude (primario), ChatGPT GPT-6 (suplente)" en `.claude/rules/agents.md` vía Reconciler.
 
