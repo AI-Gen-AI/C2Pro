@@ -6,7 +6,6 @@ full application migration or browser integration test.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -17,7 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from src.documents.adapters.http.router import (
-    read_n4_partial_findings, reprocess_document_endpoint,
+    read_n4_partial_findings,
+    reprocess_document_endpoint,
 )
 from src.documents.domain.models import DocumentStatus, DocumentType
 from tests.unit.analysis.test_g2_n4_crossgen_pg import pg  # noqa: F401

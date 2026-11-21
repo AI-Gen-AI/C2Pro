@@ -166,7 +166,10 @@ async def test_n17_skips_technical_spec_without_final_n15_evidence() -> None:
 @pytest.mark.asyncio
 async def test_direct_trusted_repository_save_refuses_uncited_spec_before_supersede(monkeypatch) -> None:
     from unittest.mock import AsyncMock
-    from src.analysis.adapters.persistence.document_artifact_repository import SqlAlchemyDocumentArtifactRepository
+
+    from src.analysis.adapters.persistence.document_artifact_repository import (
+        SqlAlchemyDocumentArtifactRepository,
+    )
     from src.analysis.domain.trust import StaleCandidateError, TrustState
 
     state = _state()

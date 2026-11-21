@@ -13,7 +13,6 @@ from scripts import n4_n12_real_ai_eval as old
 from scripts import n4_n12_representative_eval as trial
 
 
-
 def test_focal_ner_fails_closed_when_presidio_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.core.privacy import anonymizer as privacy
 
@@ -145,7 +144,8 @@ def test_representative_n4_uses_same_prellm_graph_preparation() -> None:
     candidate = trial.prepare_graph_n4_input(tool, source)
     assert candidate.document_text == real_seam.document_text
     assert candidate.max_risks == 20
-    assert candidate.filter_relevant is True
+    assert candidate.filter_relevant is False
+    assert candidate.strict_completeness is True
     coverage = trial.input_coverage(source, candidate.document_text, fixture)
     assert coverage["source_clauses_retained"] == 9
     assert coverage["source_clause_ids_retained"] == [f"EPC-{i:02d}" for i in range(1, 10)]

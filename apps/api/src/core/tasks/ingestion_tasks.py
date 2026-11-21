@@ -1262,7 +1262,7 @@ def requires_text_analysis(
 def decide_document_status(
     *,
     requires_text_analysis: bool,
-    rag_chunk_count: int,
+    rag_chunk_count: int,  # noqa: ARG001 — retained for existing keyword-call API
     graph_analysis_id: str | None,
 ) -> DocumentStatus:
     """Decide whether a document may be called ANALYZED.
@@ -1466,7 +1466,7 @@ async def _analyze_owned(
     n4_pilot_status: str | None = None
     if n4_only_pilot and not requires_text_analysis(document.document_type, parsed_text):
         raise ValueError("N4-only pilot requires an extractable text contract")
-    if requires_text_analysis(document.document_type, parsed_text):
+    if isinstance(parsed_text, str) and requires_text_analysis(document.document_type, parsed_text):
         # Repository read is tenant-scoped and bound to this processing grant.
         # Missing revision or mismatched identity yields NO coverage assertion.
         # A repository error is not downgraded to an untrusted positive grant.

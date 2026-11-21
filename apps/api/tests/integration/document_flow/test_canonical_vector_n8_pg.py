@@ -6,7 +6,6 @@ Synthetic contract and technical requirement; no provider calls or real data.
 from __future__ import annotations
 
 from io import BytesIO
-from uuid import uuid4
 
 import pytest
 from fastapi import UploadFile

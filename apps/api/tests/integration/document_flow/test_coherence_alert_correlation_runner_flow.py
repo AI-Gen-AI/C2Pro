@@ -35,7 +35,6 @@ from src.coherence.router import get_clauses_from_rag
 from src.documents.adapters.persistence.sqlalchemy_document_repository import (
     SqlAlchemyDocumentRepository,
 )
-from src.documents.domain.models import DocumentType
 from tests.integration.document_flow.test_budget_revision_authority_flow import (
     _propose,
     _reupload_and_ingest,
@@ -53,7 +52,6 @@ from tests.integration.document_flow.test_contract_schedule_completion_flow impo
     PROVISIONAL_RULE,
     _project,
     _scenario,
-    _upload_and_ingest,
     worker,  # noqa: F401  (pytest fixture)
 )
 

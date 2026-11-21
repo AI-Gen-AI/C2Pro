@@ -530,7 +530,24 @@ async def test_reprocess_generation_isolates_metadata_and_failure_path(
     """GENERATION_METADATA_ISOLATION + stale failure path: after the sweep fails
     the abandoned generation and the user reprocesses, the old worker can
     neither write metadata/outputs nor mark anything ERROR."""
+    from runpy import run_path
+
     from src.documents.adapters.http import router as documents_router
+
+    # Reprocess checks the N4 receipt ledger in production. This test DB
+    # bootstraps ORM tables (not SQL-only N4 migrations), so provision the
+    # actual N4 ledger DDL before entering the adversarial worker race.
+    ledger_present = (await db.execute(text(
+        "SELECT to_regclass('public.n4_usage_reservations')"
+    ))).scalar_one_or_none()
+    if ledger_present is None:
+        migration = (
+            Path(__file__).resolve().parents[3]
+            / "alembic/versions/20261116_0001_n4_incremental_ledger.py"
+        )
+        for statement in run_path(str(migration))["UPGRADE_STATEMENTS"]:
+            await db.execute(text(statement))
+        await db.commit()
 
     document, _revision = await _upload(db, worker, test_user)
     version = (

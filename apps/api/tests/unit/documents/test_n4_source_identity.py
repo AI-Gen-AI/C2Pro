@@ -3,11 +3,12 @@ from hashlib import sha256
 from types import SimpleNamespace
 from uuid import uuid4
 
-from src.documents.application.n4_source_identity import (
-    build_n4_source_identity, is_n4_source_identity_valid,
-)
 from src.documents.application.document_coverage import (
     build_n12_source_attestation,
+)
+from src.documents.application.n4_source_identity import (
+    build_n4_source_identity,
+    is_n4_source_identity_valid,
 )
 
 

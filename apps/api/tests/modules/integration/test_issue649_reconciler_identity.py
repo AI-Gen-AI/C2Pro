@@ -558,7 +558,9 @@ async def test_deleted_review_operation_cannot_starve_bounded_sweep(
 ):
     saver, register = real_saver
     tenant = await db.get(Tenant, test_user.tenant_id)
-    orphan = await _arrange(db, tenant, saver, register)
+    # The deleted review must have no immutable finding-decision ledger rows.
+    # A real audited review cannot be deleted due to the intentional FK.
+    orphan = await _arrange(db, tenant, saver, register, with_candidate=False)
     await _claim(independent_sessions, tenant, orphan)
     await _expire(independent_sessions, tenant, orphan.review_row_id)
     async with independent_sessions(tenant.id) as session:

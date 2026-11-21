@@ -7,8 +7,9 @@ silently treated as full original-source coverage.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from hashlib import sha256
-from typing import Any, Mapping
+from typing import Any
 
 
 def is_n12_source_attestation_valid(

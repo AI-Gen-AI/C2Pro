@@ -67,6 +67,7 @@ from tests.modules.integration.hitl_actor import (
 from tests.modules.integration.test_p0b_crash_safe_resume_recovery import (
     N17_RUNS,
     _arrange,
+    _confirm_fixture_finding,
     _dsn,
     _initial_state,
     _persist_bound_candidate,
@@ -123,6 +124,7 @@ async def _post_approve(
     app: Any,
     sessions: Any,
     row_id: UUID | None = None,
+    current_user: Any | None = None,
 ) -> Any:
     """One ``POST /queue/{item_id}/approve`` on its OWN connection/transaction.
 
@@ -147,7 +149,7 @@ async def _post_approve(
                 item_id=item_id,
                 payload=ApproveRequest(row_id=row_id),
                 _tenant_id=tenant_id,
-                current_user=_reviewer(tenant_id),
+                current_user=current_user if current_user is not None else _reviewer(tenant_id),
                 service=SimpleNamespace(review_queue_repo=repo),
                 resume_use_case=use_case,
             )
@@ -516,6 +518,17 @@ async def _rerun_to_new_review(
         .one()
     )
     new_row.thread_id, new_row.checkpoint_id = thread_id, checkpoint_id
+    current_authority = (await db.execute(
+        text(
+            "SELECT generation, fencing_token FROM document_processing_operations "
+            "WHERE document_id = :d AND tenant_id = :t"
+        ),
+        {"d": arranged.document_id, "t": tenant.id},
+    )).one()
+    # This test bypasses the processing worker when it opens a second graph
+    # checkpoint. Bind the new review to the real, current document authority.
+    new_row.lineage_generation = current_authority.generation
+    new_row.lineage_fencing_token = current_authority.fencing_token
     new_row.review_metadata = {
         **(new_row.review_metadata or {}),
         "tenant_id": str(tenant.id),
@@ -525,6 +538,9 @@ async def _rerun_to_new_review(
     # C2PRO #714: production binds the re-run's PROPOSED candidate after the
     # interrupt; the new review refuses a decision until then.
     await _persist_bound_candidate(db, tenant, document, thread_id)
+    # A second, distinct review needs its OWN provisional finding decision.
+    # The first rejected row's ledger cannot authorize the new candidate.
+    await _confirm_fixture_finding(db, tenant, document)
     await db.refresh(new_row)
     return new_row
 

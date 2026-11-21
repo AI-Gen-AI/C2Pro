@@ -100,7 +100,11 @@ async def load_trusted_risk_source_clause_ids(
             full_text = getattr(clause, "full_text", None)
             # The quote must sit verbatim inside THIS physical clause (no
             # normalisation); a missing legacy full_text fails closed.
-            if not isinstance(full_text, str) or risk.source_quote not in full_text:
+            if (
+                clause is None or not isinstance(full_text, str)
+                or not isinstance(risk.source_quote, str)
+                or risk.source_quote not in full_text
+            ):
                 continue
             key = risk_quote_source_key(document, revision, code, risk.source_quote)
             if key is not None:

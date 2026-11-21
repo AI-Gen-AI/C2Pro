@@ -53,7 +53,7 @@ class DirectRoute:
     output_usd_m: Decimal
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DirectRoute":
+    def from_dict(cls, data: dict[str, Any]) -> DirectRoute:
         if data.get("provider") not in {"openai", "gemini"}:
             raise ValueError("Only direct OpenAI and Gemini providers are supported")
         model = data.get("model")

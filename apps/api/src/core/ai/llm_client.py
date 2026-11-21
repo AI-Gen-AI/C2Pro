@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import anthropic
@@ -624,8 +624,8 @@ class LLMClient:
         """Use SSE for high-capacity generations (SDK HTTP timeout requirement)."""
         if int(api_kwargs["max_tokens"]) > 20_000:
             with self.client.messages.stream(**api_kwargs) as stream:
-                return stream.get_final_message()
-        return self.client.messages.create(**api_kwargs)
+                return cast(Message, stream.get_final_message())
+        return cast(Message, self.client.messages.create(**api_kwargs))
 
     def _partial_generation_error(
         self,

@@ -265,7 +265,7 @@ async def test_the_final_approval_is_the_separate_act_and_trusts_exactly_the_dec
     await _post(w, test_user, _submission(w, ordinal=1, action=FindingDecisionAction.DISMISSED, expected=1, reason="not applicable"))
 
     response = await _post_approve(
-        request_sessions, w.tenant_id, w.review_item_id, saver=w.saver, app=w.app, sessions=w.sessions, row_id=w.review_row_id,
+        request_sessions, w.tenant_id, w.review_item_id, saver=w.saver, app=w.app, sessions=w.sessions, row_id=w.review_row_id, current_user=test_user,
     )
     assert response.current_status.value == "APPROVED"
 

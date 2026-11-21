@@ -117,6 +117,7 @@ async def test_mirror_reconciles_via_canonical_service_with_evidence_locator() -
         rule_id="DET-TIM-GAP",
         message="Milestone gap exceeds tolerance",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=str(clause_id),
             claim="Schedule gap detected",
             quote="Milestone B starts thirty days later",
@@ -184,6 +185,7 @@ async def test_verified_clause_uses_database_document_not_request_metadata() -> 
         rule_id="DET-LEG-PROVENANCE",
         message="Verified clause provenance",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=str(clause_id),
             claim="Persisted clause",
             quote="Canonical source",
@@ -241,6 +243,7 @@ async def test_composite_clause_locator_verifies_every_current_clause() -> None:
         rule_id="CROSS-LEGAL-CONFLICT",
         message="Cross-clause conflict",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=f"{clause_a}|{clause_b}",
             claim="Clauses conflict",
             quote="A conflicts with B",
@@ -300,6 +303,7 @@ async def test_partially_verified_composite_locator_fails_closed() -> None:
         rule_id="CROSS-LEGAL-CONFLICT",
         message="Composite provenance must be all-or-nothing",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=f"{current_clause}|{unverified_clause}",
             claim="Clauses conflict",
             quote="A conflicts with B",
@@ -358,6 +362,7 @@ async def test_historical_revision_clause_is_not_promoted_to_current_evidence() 
         rule_id="DET-LEG-STALE",
         message="Historical clause must fail closed",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=str(stale_clause_id),
             claim="Old revision clause",
             quote="Superseded text",
@@ -422,6 +427,7 @@ async def test_only_proposed_revision_does_not_authorize_canonical_document_link
         rule_id="DET-BUD-PROPOSED-ONLY",
         message="Proposed-only evidence must not be linked as trusted",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=str(clause_id),
             claim="Candidate budget clause",
             quote="Proposed amount",
@@ -476,6 +482,7 @@ async def test_uuid_looking_external_locator_is_not_used_as_clause_foreign_key()
         rule_id="DET-LEG-EXTERNAL",
         message="External clause locator",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id=str(external_locator),
             claim="Caller-provided locator",
             quote="External text",
@@ -526,6 +533,7 @@ async def test_mirror_keeps_unresolvable_locator_as_text_but_not_fake_uuid_fk() 
         rule_id="AUDIT_INCOMPLETE",
         message="",
         evidence=SimpleNamespace(
+            economic_discrepancy_key=None,
             source_clause_id="parsed_deadbeef",
             claim="Missing dimensions",
             quote="",

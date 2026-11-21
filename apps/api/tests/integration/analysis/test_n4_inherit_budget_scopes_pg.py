@@ -4,15 +4,15 @@ Uses the guarded test_engine on a disposable PostgreSQL database; never producti
 """
 from __future__ import annotations
 
-from decimal import Decimal
-from dataclasses import replace
-from uuid import uuid4
-
-import asyncpg
 import asyncio
 import os
 import sys
+from dataclasses import replace
+from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
+
+import asyncpg
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine

@@ -220,18 +220,16 @@ async def test_compiled_workflow_accepts_contract_validated_dict_payloads_with_r
     import src.analysis.adapters.graph.workflow as workflow_module
     from src.analysis.application import persist_analysis_use_case as persist_module
     from src.coherence.alert_generator import AlertGenerator
+    from src.coherence.models import EnrichedCoherenceResult
 
     async def fake_evaluate_coherence_async(*_args: object, **_kwargs: object):
-        class _Result:
-            overall_score = 82
-            category_breakdown: list[object] = []
-            score_version = "coherence-v1"
-            score_reason = "seeded_risk_signals"
-            score_missing_dimensions: list[str] = []
-            # Mirrors the real result's default (src/coherence/graph/graph.py).
-            finding_signals: list[object] = []
-
-        return _Result()
+        # Real DTO interface: the scorer may use Pydantic.model_copy when
+        # incomplete N4 source provenance limits the score.
+        return EnrichedCoherenceResult(
+            overall_score=82,
+            score_reason="seeded_risk_signals",
+            score_missing_dimensions=[],
+        )
 
     class _StubStakeholders:
         def __init__(self, *_args: object, **_kwargs: object) -> None: ...
@@ -434,6 +432,20 @@ async def test_compiled_workflow_merges_node_results_with_tenant(
     monkeypatch.setattr(workflow_module, "knowledge_graph_builder_node", stub_knowledge_graph)
     monkeypatch.setattr(workflow_module, "save_to_db_node", no_save)
 
+    async def synthesized_n4_for_graph_reducer(state: dict[str, object]) -> dict[str, object]:
+        return {
+            "extracted_risks": [{
+                "id": "risk-reducer-1",
+                "title": "Reviewable schedule issue",
+                "description": "Synthetic N4 output for the graph reducer test",
+                "category": "schedule",
+                "severity": "high",
+                "source_quote": "Contract text with no specific clauses.",
+            }],
+            "messages": [],
+        }
+
+    monkeypatch.setattr(workflow_module, "risk_extractor_node", synthesized_n4_for_graph_reducer)
     _install_assessed_critique(monkeypatch)
     app = compile_workflow(checkpointer=None, persist_diagram=False)
     result = await app.ainvoke(

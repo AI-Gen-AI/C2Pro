@@ -342,7 +342,7 @@ class N4IncrementalRunner:
                 )
                 return await self._outcome(authority, run_id, "USAGE_UNAVAILABLE")
 
-            allowed_fallback_models = getattr(self.provider, "approved_fallback_models", frozenset())
+            allowed_fallback_models: frozenset[str] = getattr(self.provider, "approved_fallback_models", frozenset())
             if response.model_used != self.provider.model_name and (
                 response.model_used not in allowed_fallback_models
             ):

@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 from datetime import UTC, datetime
-from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4

@@ -152,10 +152,21 @@ def _extract_usage_metrics(result: Any) -> dict[str, Any]:
     if not isinstance(usage, dict):
         usage = {}
 
+    input_count = usage.get("prompt_tokens", 0)
+    output_count = usage.get("completion_tokens", 0)
+    total_count = usage.get("total_tokens")
+    # Record bounded numeric usage, never provider text or other usage fields.
+    tokens_input = input_count if type(input_count) is int and input_count >= 0 else 0
+    tokens_output = output_count if type(output_count) is int and output_count >= 0 else 0
+    tokens_total = (
+        total_count
+        if type(total_count) is int and total_count >= 0
+        else tokens_input + tokens_output
+    )
     return {
-        "tokens_input": usage.get("prompt_tokens", 0),
-        "tokens_output": usage.get("completion_tokens", 0),
-        "tokens_total": usage.get("total_tokens", 0),
+        "tokens_input": tokens_input,
+        "tokens_output": tokens_output,
+        "tokens_total": tokens_total,
         "cost_usd": result.get("cost_usd", 0.0),
         "operation": result.get("operation_type") or result.get("task_type"),
         "cached": bool(result.get("cached", False)),

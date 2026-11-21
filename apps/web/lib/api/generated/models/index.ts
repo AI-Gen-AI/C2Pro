@@ -258,6 +258,7 @@ export * from "./healthSection";
 export * from "./healthSignal";
 export * from "./healthTrend";
 export * from "./healthVector";
+export * from "./healthVectorSingleDocumentClassificationMethodVersion";
 export * from "./hitlData";
 export * from "./hitlItem";
 export * from "./hitlSection";

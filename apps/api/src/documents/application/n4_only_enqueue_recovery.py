@@ -142,6 +142,8 @@ async def claim_stranded_n4_enqueue(
         )
     except N4OnlyPilotDenied as exc:
         raise N4OnlyEnqueueRecoveryDenied("pilot marker is not QUEUED/authorized") from exc
+    if not isinstance(marker, dict):
+        raise N4OnlyEnqueueRecoveryDenied("pilot marker missing")
     if (
         doc is None
         or doc.project_id != project_id

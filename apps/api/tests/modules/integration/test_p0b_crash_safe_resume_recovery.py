@@ -48,22 +48,31 @@ from src.analysis.adapters.graph.nodes import (
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.adapters.persistence.models import Analysis
 from src.core.auth.models import Tenant, User
-from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.adapters.persistence.models import DocumentORM, DocumentProcessingOperationORM
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
 from src.modules.hitl.adapters.persistence.resume_ownership import Phase
+from src.modules.hitl.application.finding_review_authorization import FindingDecisionSubmission
+from src.modules.hitl.application.record_finding_decision_use_case import (
+    RecordFindingDecisionUseCase,
+)
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
+from src.modules.hitl.application.review_findings_view import ReviewFindingsViewService
 from src.modules.hitl.domain.entities import ReviewStatus
+from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.projects.adapters.persistence.models import ProjectORM
-from src.temporal.adapters.persistence.models import ProjectEventORM
+from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
 from tests.modules.integration.hitl_actor import (
     decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
+)
+from tests.modules.integration.hitl_actor import (
+    persisted_reviewer,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -203,6 +212,23 @@ async def _seed(db: AsyncSession, tenant: Tenant) -> DocumentORM:
     db.add(document)
     await db.commit()
     await db.refresh(document)
+    # A source-bound TRUST candidate requires an actual revision and a
+    # current processing operation even for synthetic crash-recovery tests.
+    revision = DocumentRevisionORM(
+        revision_id=uuid4(), document_id=document.id, project_id=project_id,
+        tenant_id=tenant.id, rev_no=1, blob_hash="a" * 64,
+        blob_key=f"p0b-crash-fixture/{document.id}",
+    )
+    db.add(revision)
+    await db.flush()
+    db.add(DocumentProcessingOperationORM(
+        document_id=document.id, tenant_id=tenant.id,
+        revision_id=revision.revision_id, generation=1,
+        stage="ANALYSIS", phase="RUNNING", attempt_id=uuid4(),
+        owner_token=uuid4(), fencing_token=1,
+        lease_expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+    ))
+    await db.commit()
     return document
 
 
@@ -213,12 +239,12 @@ def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dic
         "tenant_id": str(tenant.id),
         "thread_id": thread_id,
         "doc_type": "contract",
-        "document_text": "",
+        "document_text": _FIXTURE_CLAUSE,
         "retry_count": 0,
         "confidence_score": 0.0,
         "critique_notes": "",
         "messages": [],
-        "extracted_risks": [],
+        "extracted_risks": [_fixture_risk().model_dump(mode="json")],
         "extracted_wbs": [],
         "coherence_score": 90,
         "coherence_breakdown": {"overall": 90},
@@ -245,7 +271,21 @@ async def _arrange(db, tenant, saver, register, *, with_candidate: bool = True):
     thread_id = register(f"document:{document.id}:analysis") or f"document:{document.id}:analysis"
     app = _build_real_graph(saver)
     cfg = {"configurable": {"thread_id": thread_id}}
-    result = await app.ainvoke(_initial_state(document, tenant, thread_id), cfg)
+    state = _initial_state(document, tenant, thread_id)
+    # The real worker includes source revision identity in its checkpoint;
+    # this direct graph fixture must do the same. Otherwise resumed N8 can
+    # never match a version-pinned artifact, even when source facts agree.
+    revision_id = (
+        await db.execute(
+            select(DocumentRevisionORM.revision_id).where(
+                DocumentRevisionORM.document_id == document.id,
+                DocumentRevisionORM.tenant_id == tenant.id,
+                DocumentRevisionORM.valid_to.is_(None),
+            )
+        )
+    ).scalar_one()
+    state["document_revision_id"] = str(revision_id)
+    result = await app.ainvoke(state, cfg)
     assert "__interrupt__" in result
     checkpoint_id = (await app.aget_state(cfg)).config["configurable"]["checkpoint_id"]
 
@@ -253,6 +293,8 @@ async def _arrange(db, tenant, saver, register, *, with_candidate: bool = True):
         await db.execute(select(ReviewItemORM).where(ReviewItemORM.document_id == document.id))
     ).scalars().one()
     review.thread_id, review.checkpoint_id = thread_id, checkpoint_id
+    review.lineage_generation = 1
+    review.lineage_fencing_token = 1
     review.review_metadata = {
         **(review.review_metadata or {}),
         "tenant_id": str(tenant.id),
@@ -261,6 +303,9 @@ async def _arrange(db, tenant, saver, register, *, with_candidate: bool = True):
     await db.commit()
     if with_candidate:
         await _persist_bound_candidate(db, tenant, document, thread_id)
+        # The only positive final-approval fixtures in this legacy test
+        # harness begin with a real provisional CONFIRMED decision.
+        await _confirm_fixture_finding(db, tenant, document)
     await db.refresh(review)
     await db.refresh(document)
     # Plain values: the session expires ORM objects on commit, and a later
@@ -276,16 +321,81 @@ async def _arrange(db, tenant, saver, register, *, with_candidate: bool = True):
     )
 
 
-async def _persist_bound_candidate(db, tenant, document, thread_id: str) -> None:
+_FIXTURE_CLAUSE = "Liquidated damages of EUR 3,000 per calendar day"
+
+
+def _fixture_risk():
+    """Synthetic, explicitly source-bound finding; not an AI model prediction."""
+    from src.analysis.domain.contracts import RiskItem, Severity
+
+    return RiskItem(
+        title="P0b test delay-damages proposal",
+        description="Synthetic finding for crash/replay and audit mechanics",
+        category="schedule", severity=Severity.HIGH,
+        source=_FIXTURE_CLAUSE, source_quote=_FIXTURE_CLAUSE,
+        source_quote_status="VERIFIED", clause_ref="3.2",
+    )
+
+
+async def _confirm_fixture_finding(db, tenant, document) -> None:
+    """Seed a REAL provisional per-finding decision, not a final approval."""
+    reviewer = persisted_reviewer()
+    if reviewer is None:
+        raise AssertionError("HITL recovery tests require the persisted reviewer fixture")
+    review = (
+        await db.execute(select(ReviewItemORM).where(
+            ReviewItemORM.document_id == document.id,
+            ReviewItemORM.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED,
+        ))
+    ).scalars().one()
+    view = await ReviewFindingsViewService(db).execute(
+        tenant_id=tenant.id, user=reviewer, review_row_id=review.id,
+    )
+    assert len(view.findings) == 1, "fixture must have one reviewable source-bound risk"
+    finding = view.findings[0]
+    assert finding.risk.get("source_quote_status") == "VERIFIED"
+    await RecordFindingDecisionUseCase(db).execute(
+        tenant_id=tenant.id, user=reviewer, review_row_id=review.id,
+        submission=FindingDecisionSubmission(
+            artifact_id=view.artifact_id,
+            artifact_version=view.artifact_version,
+            artifact_hash=view.artifact_hash,
+            document_revision_id=view.document_revision_id,
+            generation=view.generation, fencing_token=view.fencing_token,
+            source_item_id=finding.source_item_id, ordinal=finding.ordinal,
+            action=FindingDecisionAction.CONFIRMED,
+            expected_ledger_revision=0,
+            idempotency_key=f"legacy-resume-fixture-{review.id}",
+        ),
+    )
+    await db.commit()
+
+
+async def _persist_bound_candidate(db, tenant, document, thread_id: str, *, risks=None) -> None:
     """What document_artifact_completion does after a HITL interrupt (#714)."""
     from src.analysis.adapters.persistence.document_artifact_repository import (
         SqlAlchemyDocumentArtifactRepository,
     )
     from src.analysis.domain.contracts import DocumentArtifact
     from src.analysis.domain.trust import CandidateScoring, TrustState
+    from src.temporal.adapters.persistence.models import DocumentRevisionORM
 
+    revision_id = (
+        await db.execute(
+            select(DocumentRevisionORM.revision_id).where(
+                DocumentRevisionORM.document_id == document.id,
+                DocumentRevisionORM.tenant_id == tenant.id,
+                DocumentRevisionORM.valid_to.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
     await SqlAlchemyDocumentArtifactRepository(db).save(
-        DocumentArtifact(document_id=str(document.id), doc_type="contract"),
+        DocumentArtifact(
+            document_id=str(document.id),
+            document_revision_id=str(revision_id) if revision_id else None,
+            doc_type="contract",
+            extracted_risks=list([_fixture_risk()] if risks is None else risks),
+        ),
         project_id=document.project_id,
         tenant_id=tenant.id,
         trust_state=TrustState.PROPOSED,

@@ -172,12 +172,12 @@ async def verify_coherence_project_manifest(
         """), {
             "tenant": str(tenant_id), "project": str(project_id),
         })).mappings().all()
-        expected = {(r.document_id, r.revision_id) for r in revisions}
+        expected_pairs = {(r.document_id, r.revision_id) for r in revisions}
         actual = [(r["document_id"], r["revision_id"]) for r in active_rows]
         if (
-            len(actual) != len(expected)
+            len(actual) != len(expected_pairs)
             or any(revision is None for _doc, revision in actual)
-            or set(actual) != expected
+            or set(actual) != expected_pairs
         ):
             raise CoherenceEscrowIdentityError(
                 "selected revisions do not cover current project documents"

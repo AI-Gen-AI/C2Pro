@@ -14,11 +14,15 @@ import httpx
 
 from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
 from src.analysis.domain.n4_compact_window_response import (
-    N4_WINDOW_SYSTEM_PROMPT, n4_window_source_message,
+    N4_WINDOW_SYSTEM_PROMPT,
+    n4_window_source_message,
 )
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from src.core.ai.direct_provider_fallback import (
-    DirectRoute, FallbackUnavailable, ProviderUsageUnknown, _estimate_max_charge,
+    DirectRoute,
+    FallbackUnavailable,
+    ProviderUsageUnknown,
+    _estimate_max_charge,
     _invoke,
 )
 from src.core.ai.llm_client import LLMRequest
@@ -27,7 +31,7 @@ from src.core.ai.llm_client import LLMRequest
 class DirectOpenAIN4WindowProvider:
     provider_name = "openai"
     fallback_routes = ()
-    approved_fallback_models = frozenset()
+    approved_fallback_models: frozenset[str] = frozenset()
     fallback_reservation_usd = None
 
     def __init__(self, *, max_output_tokens: int, reservation_usd: Decimal) -> None:

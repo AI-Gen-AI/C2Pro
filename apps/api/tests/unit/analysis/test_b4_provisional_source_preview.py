@@ -13,14 +13,20 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from src.analysis.application.b3_source_inventory_bridge import (
-    B3SourceBridgeError, assemble_b3_source_inventory,
+    B3SourceBridgeError,
+    assemble_b3_source_inventory,
 )
 from src.analysis.application.b4_provisional_source_preview import (
     preview_b4_provisional_comparison,
 )
 from src.analysis.domain.contracts import DocumentArtifact
 from tests.unit.analysis.test_b3_source_inventory_bridge import (
-    BUDGET, CONTRACT, PROJECT, SCHEDULE, TENANT, input_bundle,
+    BUDGET,
+    CONTRACT,
+    PROJECT,
+    SCHEDULE,
+    TENANT,
+    input_bundle,
 )
 
 

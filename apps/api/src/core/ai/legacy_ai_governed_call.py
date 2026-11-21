@@ -90,8 +90,8 @@ async def execute_budgeted_legacy_call(
             actual is None or not actual.is_finite() or actual < 0
             or (
                 actual == 0 and (
-                    getattr(response, "input_tokens", 0)
-                    or getattr(response, "output_tokens", 0)
+                    getattr(response, "input_tokens", False)
+                    or getattr(response, "output_tokens", False)
                 )
             )
         ):

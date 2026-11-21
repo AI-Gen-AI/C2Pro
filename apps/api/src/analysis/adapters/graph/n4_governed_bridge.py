@@ -9,23 +9,24 @@ match is NOT proof of original-PDF source or semantic/legal correctness.
 from __future__ import annotations
 
 import os
-from hashlib import sha256
-from datetime import datetime, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Mapping
+from hashlib import sha256
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 
 from src.analysis.adapters.ai.n4_anthropic_window_provider import AnthropicN4WindowProvider
-from src.analysis.application.n4_incremental_runner import N4IncrementalRunner
+from src.analysis.application.n4_incremental_runner import N4IncrementalRunner, N4WindowProvider
 from src.analysis.domain.ai_source_text import llm_document_text
-from src.documents.application.n4_source_identity import is_n4_source_identity_valid
 from src.analysis.domain.risk_provenance import classify_quote
 from src.core.ai.anthropic_wrapper import AnthropicWrapper
 from src.core.ai.model_router import ModelTier
 from src.core.database import get_session_factory
 from src.core.processing_authority import ProcessingStage, current_authority
+from src.documents.application.n4_source_identity import is_n4_source_identity_valid
 
 
 class N4GraphBridgeBlocked(RuntimeError):
@@ -133,7 +134,7 @@ def _uat_inherited_scopes(tenant_id: UUID) -> bool:
     return True
 
 
-def _candidate_payload(claim: Mapping[str, Any], refs: list, source: str) -> dict[str, Any]:
+def _candidate_payload(claim: Mapping[str, Any], refs: list[dict[str, Any]], source: str) -> dict[str, Any]:
     if not isinstance(claim, dict) or not isinstance(refs, list) or not refs:
         raise N4GraphBridgeBlocked("N4 candidate lacks persisted claim and source reference")
     title = claim.get("title")
@@ -178,6 +179,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     authority, project_id, source_text = _identity(state)
     run_cap, per_call, chars, overlap = _limits()
     primary = os.getenv("C2PRO_N4_GRAPH_PRIMARY_PROVIDER", "anthropic")
+    provider: N4WindowProvider
     if primary == "openai":
         from src.analysis.adapters.ai.n4_direct_openai_window_provider import (
             DirectOpenAIN4WindowProvider,
@@ -203,7 +205,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         provider=provider,
         run_cap_usd=run_cap,
         per_window_reservation_usd=per_call,
-        period_key=datetime.now(timezone.utc).strftime("%Y-%m"),
+        period_key=datetime.now(UTC).strftime("%Y-%m"),
         max_context_chars=chars,
         overlap_chars=overlap,
         enabled=True,

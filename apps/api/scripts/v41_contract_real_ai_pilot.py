@@ -8,8 +8,6 @@ SDK call governor and a disposable PostgreSQL database.
 """
 from __future__ import annotations
 
-from scripts.v41_private_cli_paths import authorize_runner_sec_paths
-
 import asyncio
 import hashlib
 import json
@@ -28,6 +26,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from v41_contract_source_preflight import preflight
 
+from scripts.v41_private_cli_paths import authorize_runner_sec_paths
 from src.analysis.adapters.ai.anthropic_client import AIService
 from src.analysis.adapters.ai.n4_anthropic_window_provider import AnthropicN4WindowProvider
 from src.analysis.adapters.graph import nodes, workflow

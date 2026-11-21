@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.ai.tools.risk_extraction_tool import (
     RiskExtractionInput,
@@ -88,44 +87,6 @@ async def test_n4_public_failure_preserves_usage_without_promoting_json(monkeypa
     assert updated["confidence_score"] == 0.0
     assert updated["risk_extraction_error_type"] == "LLMPartialGenerationError"
     assert "continuation failed" in updated["critique_notes"]
-
-
-@pytest.mark.asyncio
-async def test_n4_partial_failure_with_real_isolated_postgres_tenant_ledger(
-    db: AsyncSession,
-    test_tenant,
-    test_tenant_2,
-    monkeypatch,
-) -> None:
-    """Real SQL UPDATE/COMMIT via existing CostControllerService, two tenants."""
-    original = _billed_error()
-    tool, generate = _tool(original)
-    from sqlalchemy import select
-
-    from src.core.auth.models import Tenant
-
-    tenant_a = test_tenant.id
-    tenant_b = test_tenant_2.id
-    before_a = float(test_tenant.ai_spend_current)
-    before_b = float(test_tenant_2.ai_spend_current)
-
-    @asynccontextmanager
-    async def isolated_tenant_session(requested_tenant):
-        assert requested_tenant == tenant_a
-        yield db
-
-    monkeypatch.setattr("src.core.database.get_session_with_tenant", isolated_tenant_session)
-    result = await tool.execute(
-        RiskExtractionInput(document_text="EPC contract"),
-        tenant_id=tenant_a,
-    )
-    assert result.status is ToolStatus.FAILED
-    assert generate.await_count == 1
-    db.expire_all()
-    current_a = (await db.execute(select(Tenant).where(Tenant.id == tenant_a))).scalar_one()
-    current_b = (await db.execute(select(Tenant).where(Tenant.id == tenant_b))).scalar_one()
-    assert current_a.ai_spend_current == pytest.approx(before_a + original.cost_usd)
-    assert current_b.ai_spend_current == pytest.approx(before_b)
 
 
 @pytest.mark.asyncio

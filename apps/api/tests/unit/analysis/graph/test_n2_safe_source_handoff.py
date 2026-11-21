@@ -6,11 +6,10 @@ from typing import Any
 
 import pytest
 
-from src.analysis.domain.ai_source_text import llm_document_text
 from src.analysis.adapters.ai.tools.risk_extraction_tool import RiskExtractionTool
 from src.analysis.adapters.ai.tools.wbs_extraction_tool import WBSExtractionTool
 from src.analysis.adapters.graph.nodes import router_node
-
+from src.analysis.domain.ai_source_text import llm_document_text
 
 RAW = "Contract contact: juan@example.org. EPC contractor shall deliver transformers in May."
 REDACTED = "Contract contact: [REDACTED]. EPC contractor shall deliver transformers in May."

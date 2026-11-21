@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import ROUND_UP, Decimal, InvalidOperation
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -54,7 +55,7 @@ def _id(value: UUID) -> str:
 
 async def _lock_tenant(
     session: AsyncSession, tenant_id: UUID, *, for_settlement: bool,
-) -> dict:
+) -> dict[str, Any]:
     current = await session.scalar(
         text("SELECT current_setting('app.current_tenant', true)")
     )

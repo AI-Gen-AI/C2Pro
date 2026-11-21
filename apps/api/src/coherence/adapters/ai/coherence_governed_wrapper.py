@@ -29,6 +29,10 @@ class CoherenceEscrowIdentityError(LegacyAIReservationError):
 class CoherenceUnverifiedResponse(LegacyAIReservationError):
     """Model response is not a single, evidenced, bounded evaluation."""
 
+    input_tokens: int = 0
+    output_tokens: int = 0
+    model: str = ""
+
 
 @dataclass(frozen=True, slots=True)
 class CoherenceCallIdentity:
@@ -151,9 +155,9 @@ class BudgetedCoherenceWrapper:
                 err = CoherenceUnverifiedResponse(
                     "Coherence provider amount cannot be verified"
                 )
-                err.input_tokens = tokens_in
-                err.output_tokens = tokens_out
-                err.model = model
+                err.input_tokens = tokens_in if isinstance(tokens_in, int) else 0
+                err.output_tokens = tokens_out if isinstance(tokens_out, int) else 0
+                err.model = model if isinstance(model, str) else ""
                 raise err
             return response
 
@@ -168,7 +172,7 @@ class BudgetedCoherenceWrapper:
         # replay can be issued to hide the overage.
         if (
             Decimal(str(response.cost_usd)) > self.cap
-            or getattr(response, "continuations", 0)
+            or getattr(response, "continuations", False)
         ):
             raise CoherenceUnverifiedResponse(
                 "Coherence billed above reserved cap or exceeded segment policy"

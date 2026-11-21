@@ -8,13 +8,16 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from src.analysis.application.b3_source_inventory_bridge import (
-    B3Revision, B3SourceBridgeError, assemble_b3_source_inventory,
+    B3Revision,
+    B3SourceBridgeError,
+    assemble_b3_source_inventory,
 )
 from src.documents.adapters.parsers.docling_optional_table_sidecar import (
     build_optional_table_sidecar,
 )
 from src.documents.adapters.parsers.mpxj_schedule_candidate_adapter import (
-    ScheduleSourceScope, parse_verified_mpxj_candidates,
+    ScheduleSourceScope,
+    parse_verified_mpxj_candidates,
 )
 
 

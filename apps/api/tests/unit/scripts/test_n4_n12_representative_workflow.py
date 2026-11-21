@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import ast
-import os
 import subprocess
-import sys
 from pathlib import Path
 
 import yaml
@@ -59,38 +57,21 @@ def test_representative_workflow_steps_well_formed_and_script_is_scoped() -> Non
 
 
 
-def test_spacy_cache_output_heredoc_writes_exact_newline(tmp_path: Path) -> None:
-    """Run the actual CI heredoc: a literal backslash-n is not a line break."""
+def test_spacy_release_install_is_sha256_verified_and_before_provider() -> None:
+    """The wheel must be authenticated before install; no cache bypass is allowed."""
     workflow = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
     steps = workflow["jobs"]["n4-n12-real-ai-focal"]["steps"]
-    step = next(
-        s for s in steps if s["name"] == "Resolve spaCy model cache directory"
-    )
-    output = tmp_path / "github-output"
-    # The isolated pytest runner exposes Python as python3, whereas GitHub
-    # Actions exposes "python"; retain the EXACT workflow command unmodified.
-    (tmp_path / "python").symlink_to(sys.executable)
-    completed = subprocess.run(
-        ["bash"],
-        input=step["run"],
-        cwd=ROOT,
-        env={
-            **os.environ,
-            "GITHUB_OUTPUT": str(output),
-            "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}",
-        },
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    actual = output.read_bytes()
-    assert actual.startswith(b"site=")
-    assert actual.endswith(b"\x0a")
-    assert len(actual.splitlines(keepends=True)) == 1
-    assert b"\\n" not in actual
-    site = Path(actual[len(b"site=") : -1].decode())
-    assert site.is_dir() and site.name in {"site-packages", "dist-packages"}
+    names = [step["name"] for step in steps]
+    install = "Install SHA-256-verified Spanish spaCy model"
+    privacy = "Fail closed if Spanish PII NER is unavailable"
+    provider = "Execute N4 Sonnet then N12 adversarial and chained critiques"
+    assert names.index(install) < names.index(privacy) < names.index(provider)
+    run = steps[names.index(install)]["run"]
+    assert "es_core_news_md-3.7.0" in run
+    assert "sha256sum --check --status" in run
+    assert "0d6d6ebed875869a9759c8c096f2cef581fa32d861646030f771c83e5799de82" in run
+    assert "pip install --no-deps --force-reinstall" in run
+    assert "|| true" not in run
 
 
 def test_representative_workflow_blocks_before_provider_when_spanish_ner_missing() -> None:
@@ -101,11 +82,7 @@ def test_representative_workflow_blocks_before_provider_when_spanish_ner_missing
     privacy_step = "Fail closed if Spanish PII NER is unavailable"
     provider_step = "Execute N4 Sonnet then N12 adversarial and chained critiques"
     assert names.index(privacy_step) < names.index(provider_step)
-    assert names.index("Install pinned Spanish spaCy model if missing") < names.index(privacy_step)
-    assert names.index("Restore pinned Spanish spaCy model (privacy preflight)") < names.index(privacy_step)
-    cache = next(step for step in steps if step["name"].startswith("Restore pinned Spanish"))
-    assert "es_core_news_md*" in cache["with"]["path"]
-    assert "3.7.0" in cache["with"]["key"]
+    assert names.index("Install SHA-256-verified Spanish spaCy model") < names.index(privacy_step)
     privacy_run = next(step["run"] for step in steps if step["name"] == privacy_step)
     assert 'spacy.load("es_core_news_md")' in privacy_run
     assert 'PiiAnonymizerService._get_analyzer() is not None' in privacy_run

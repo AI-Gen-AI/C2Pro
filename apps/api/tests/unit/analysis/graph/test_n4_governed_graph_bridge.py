@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 from hashlib import sha256
-from types import SimpleNamespace
-from uuid import uuid4
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from langchain_core.messages import AIMessage

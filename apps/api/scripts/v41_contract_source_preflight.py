@@ -10,12 +10,11 @@ import argparse
 import asyncio
 import hashlib
 import json
-
-from scripts.v41_private_cli_paths import authorize_runner_sec_paths
 from pathlib import Path
 
 import fitz
 
+from scripts.v41_private_cli_paths import authorize_runner_sec_paths
 from src.analysis.adapters.graph.nodes_extended import pii_anonymizer_node
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 from src.documents.adapters.parsers.pdf_file_parser import PDFFileParser

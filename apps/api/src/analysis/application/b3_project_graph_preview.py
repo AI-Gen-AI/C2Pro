@@ -50,7 +50,7 @@ def _validated_b3_refs(packet: Mapping[str, Any], *, project_id: UUID, tenant_id
         sha = ref.get("blob_sha256")
         if not isinstance(sha, str) or not _SHA.fullmatch(sha):
             raise B3SourceBridgeError("B3 source SHA missing")
-        identity = (ref["family"], document_id, revision_id)
+        identity = (str(ref["family"]), str(document_id), str(revision_id))
         if identity in seen:
             raise B3SourceBridgeError("duplicate B3 source revision")
         seen.add(identity)
@@ -90,12 +90,14 @@ async def preview_b3_sources_in_project_graph(
         # Never run the full ProjectGraph: its later nodes may acquire
         # persistence/alert side effects as the product evolves.
         from langgraph.graph import END, StateGraph
+
         from src.analysis.adapters.graph.project_graph import (
-            load_current_artifacts, align_entities,
+            align_entities,
+            load_current_artifacts,
         )
         from src.analysis.adapters.graph.project_graph_state import ProjectGraphState
 
-        def _read_only_graph():
+        def _read_only_graph() -> Any:
             workflow = StateGraph(ProjectGraphState)
             workflow.add_node("load_current_artifacts", load_current_artifacts)
             workflow.add_node("align_entities", align_entities)

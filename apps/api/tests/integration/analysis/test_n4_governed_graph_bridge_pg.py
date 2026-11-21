@@ -6,11 +6,7 @@ model output itself is synthetic and cannot establish semantic quality.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
-from decimal import Decimal
 from hashlib import sha256
-from types import SimpleNamespace
-from uuid import UUID
 
 import asyncpg
 import pytest
@@ -20,7 +16,8 @@ from src.analysis.adapters.graph import n4_governed_bridge as bridge
 from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
 from src.core.processing_authority import bound_authority
 from tests.integration.analysis.test_n4_window_runner_pg import (
-    _prepare, _source,
+    _prepare,
+    _source,
 )
 
 _DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN", "")

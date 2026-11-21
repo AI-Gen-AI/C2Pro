@@ -10,9 +10,10 @@ import hashlib
 import hmac
 import re
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID
 
 MAX_PDF_BYTES = 24 * 1024 * 1024
@@ -43,9 +44,9 @@ class DocumentEvidenceScope:
 def _make_docling_converter(*, ocr_enabled: bool) -> Any:
     """Load optional heavy dependency only when this research adapter is used."""
     try:
-        from docling.document_converter import DocumentConverter, PdfFormatOption
         from docling.datamodel.base_models import InputFormat
         from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.document_converter import DocumentConverter, PdfFormatOption
         options = PdfPipelineOptions()
         options.do_ocr = ocr_enabled
         options.do_table_structure = True

@@ -7,7 +7,7 @@ Test Suite ID: TS-UD-COH-RUL-001
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 import structlog
@@ -19,11 +19,15 @@ from src.coherence.graph.prompts import (
 )
 from src.coherence.llm_schemas import LlmEvaluationV3Response
 from src.coherence.models import CoherenceCategory, impact_to_severity
-from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper, get_anthropic_wrapper
+from src.core.ai.anthropic_wrapper import AIRequest, get_anthropic_wrapper
 from src.core.ai.model_router import AITaskType
 from src.core.ai.structured_output import LLMSchemaError, parse_llm_json
 
 logger = structlog.get_logger()
+
+
+class _RuleLLMGenerator(Protocol):
+    async def generate(self, request: AIRequest) -> Any: ...
 
 
 @dataclass
@@ -43,9 +47,9 @@ class LLMRuleEvaluatorAdapter:
         )
     """
 
-    _wrapper: AnthropicWrapper | None = None
+    _wrapper: _RuleLLMGenerator | None = None
 
-    def __init__(self, wrapper: AnthropicWrapper | None = None):
+    def __init__(self, wrapper: _RuleLLMGenerator | None = None):
         """
         Initialize the adapter.
 
@@ -55,7 +59,7 @@ class LLMRuleEvaluatorAdapter:
         self._wrapper = wrapper
 
     @property
-    def wrapper(self) -> AnthropicWrapper:
+    def wrapper(self) -> _RuleLLMGenerator:
         """Get the underlying wrapper (lazy singleton)."""
         if self._wrapper is None:
             self._wrapper = get_anthropic_wrapper()

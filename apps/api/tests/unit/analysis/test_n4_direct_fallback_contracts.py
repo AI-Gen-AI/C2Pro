@@ -16,7 +16,9 @@ import pytest
 from src.analysis.adapters.ai.n4_anthropic_window_provider import AnthropicN4WindowProvider
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 from src.core.ai.direct_provider_fallback import (
-    DirectRoute, FallbackUnavailable, fallback_after_unbilled_rejection,
+    DirectRoute,
+    FallbackUnavailable,
+    fallback_after_unbilled_rejection,
 )
 from src.core.ai.llm_client import LLMRequest
 from src.core.ai.model_router import ModelTier

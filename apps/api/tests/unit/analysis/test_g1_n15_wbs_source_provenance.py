@@ -4,7 +4,11 @@ An extraction may be PROPOSED, but must not pass citation validation unless
 EVERY claimed WBS has a verbatim passage from its source document.
 """
 
-from src.analysis.adapters.ai.tools.wbs_extraction_tool import WBSExtractionInput, WBSExtractionTool, WBSItemOutput
+from src.analysis.adapters.ai.tools.wbs_extraction_tool import (
+    WBSExtractionInput,
+    WBSExtractionTool,
+    WBSItemOutput,
+)
 from src.analysis.adapters.graph.nodes import _wbs_contract_payload
 from src.analysis.domain.citation_validation import CitationValidatorService
 from src.analysis.domain.contracts import WbsActivity

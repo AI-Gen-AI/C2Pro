@@ -291,7 +291,7 @@ class TestBC3ParserEdgeCases:
     """Test BC3 parser edge cases."""
 
     @pytest.mark.asyncio
-    async def test_bc3_parser_empty_content(self, tmp_path):
+    async def test_bc3_parser_empty_content(self, tmp_path, monkeypatch):
         """Test BC3 parser handles empty content."""
 
         from src.documents.adapters.parsers.bc3_file_parser import BC3FileParser
@@ -301,8 +301,13 @@ class TestBC3ParserEdgeCases:
         bc3_path = tmp_path / "empty.bc3"
         bc3_path.write_text("")
 
-        result = await parser.parse(bc3_path)
-        assert isinstance(result, dict)
+        # Missing BC3 decoder must fail explicitly: fabricating an empty budget
+        # would incorrectly imply successful analysis of an unreadable source.
+        from src.documents.adapters.parsers import bc3_file_parser as bc3_module
+        from src.documents.adapters.parsers.bc3_file_parser import BC3ParsingError
+        monkeypatch.setattr(bc3_module, "PYFIEBDC_AVAILABLE", False)
+        with pytest.raises(BC3ParsingError, match="no budget data was generated"):
+            await parser.parse(bc3_path)
 
 
 class TestPDFParserEdgeCases:

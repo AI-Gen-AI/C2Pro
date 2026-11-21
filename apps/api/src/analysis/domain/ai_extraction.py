@@ -131,7 +131,7 @@ class CritiqueExtractionService:
             # Inspect the real adapter type: bare AsyncMock creates arbitrary
             # callable attributes and would bypass its configured mock result.
             full_review = getattr(type(ai), "run_full_source_review", None)
-            review = ai.run_full_source_review if callable(full_review) else ai.run_extraction
+            review = getattr(ai, "run_full_source_review") if callable(full_review) else ai.run_extraction  # noqa: B009
             payload = await review(
                 CRITIQUE_SYSTEM_PROMPT,
                 f"Document type: {doc_type}\n{evidence}\nExtraction results: {items}",

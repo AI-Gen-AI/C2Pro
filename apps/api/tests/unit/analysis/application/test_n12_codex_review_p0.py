@@ -1,13 +1,16 @@
 """Adversarial regression probes for Codex P0 assessment on N12."""
 from __future__ import annotations
+
 from typing import Any
 
 import pytest
 from langchain_core.messages import AIMessage
-from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
+
 from src.analysis.application.critique_extraction_use_case import (
-    CritiqueExtractionCommand, CritiqueExtractionUseCase,
+    CritiqueExtractionCommand,
+    CritiqueExtractionUseCase,
 )
+from src.analysis.domain.critique_evaluation import CritiqueEvaluationService
 
 
 class _AI:

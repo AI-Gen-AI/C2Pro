@@ -3,17 +3,15 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
-from uuid import uuid4
-from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import anthropic
 import httpx
 import pytest
 
-from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper, PROMPT_SEPARATOR
-from src.core.ai.llm_client import LLMPartialGenerationError, LLMRequest, LLMResponse
-from src.core.ai.model_router import AITaskType, ModelTier
+from src.core.ai.anthropic_wrapper import PROMPT_SEPARATOR, AIRequest, AnthropicWrapper
 from src.core.ai.direct_provider_fallback import (
     DirectRoute,
     FallbackUnavailable,
@@ -22,6 +20,8 @@ from src.core.ai.direct_provider_fallback import (
     fallback_after_unbilled_rejection,
     safe_initial_fallback,
 )
+from src.core.ai.llm_client import LLMPartialGenerationError, LLMRequest, LLMResponse
+from src.core.ai.model_router import AITaskType, ModelTier
 
 
 def _credit_rejection() -> anthropic.BadRequestError:
@@ -211,9 +211,9 @@ def test_no_fallback_on_ambiguous_anthropic_error() -> None:
 
 def test_route_whitelist_and_validated_nonzero_prices() -> None:
     with pytest.raises(ValueError):
-        approved_routes(json.dumps([dict(provider="openrouter", model="gpt-4.1", context_tokens=200000, output_tokens=8192, input_usd_m=2, output_usd_m=8)]))
+        approved_routes(json.dumps([{"provider": "openrouter", "model": "gpt-4.1", "context_tokens": 200000, "output_tokens": 8192, "input_usd_m": 2, "output_usd_m": 8}]))
     with pytest.raises(ValueError):
-        approved_routes(json.dumps([dict(provider="openai", model="../../escape", context_tokens=200000, output_tokens=8192, input_usd_m=2, output_usd_m=8)]))
+        approved_routes(json.dumps([{"provider": "openai", "model": "../../escape", "context_tokens": 200000, "output_tokens": 8192, "input_usd_m": 2, "output_usd_m": 8}]))
 
 
 @pytest.mark.asyncio

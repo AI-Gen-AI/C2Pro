@@ -12,7 +12,7 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import structlog
@@ -48,6 +48,7 @@ from src.analysis.application.critique_extraction_use_case import (
     CritiqueExtractionUseCase,
 )
 from src.analysis.domain.ai_extraction import (
+    AIExtractionPort,
     CritiqueExtractionService,
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
@@ -321,7 +322,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         )
         try:
             update = await run_governed_n4_in_graph(state)
-            state.update(update)
+            cast(dict[str, Any], state).update(update)
             state["node_results"] = [
                 *state.get("node_results", []),
                 NodeResult(
@@ -383,6 +384,40 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             _append_risk_extraction_summary(state)
             return state
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
+        # Explicit test-only seam for the public 2-page P0b PDF. It exercises
+        # the real asynchronous pipeline and source-citation checks without
+        # claiming any measured LLM accuracy. Never available in production:
+        # the runtime image excludes tests/ and both switches must be set.
+        if (
+            os.getenv("ENVIRONMENT", "").lower() == "test"
+            and os.getenv("C2PRO_P0B_SYNTHETIC_N4_FIXTURE") == "1"
+        ):
+            from tests.e2e_seed.p0b_synthetic_n4 import proposed_fixture_risks
+
+            source_text = llm_document_text(state)
+            proposals = proposed_fixture_risks(source_text)
+            if proposals:
+                state["extracted_risks"] = [
+                    _risk_contract_payload(item, source_text) for item in proposals
+                ]
+                state["confidence_score"] = None
+                state["human_approval_required"] = True
+                state["risk_extraction_outcome"] = "SYNTHETIC_CI_NOT_MODEL_ASSESSED"
+                state["node_results"] = [
+                    *state.get("node_results", []),
+                    NodeResult(
+                        node="risk_extractor",
+                        status=NodeStatus.DEGRADED,
+                        degradation_reason="synthetic_e2e_fixture_not_model_assessed",
+                    ),
+                ]
+                logger.warning(
+                    "ci_synthetic_n4_proposal_requires_human_review",
+                    document_id=state.get("document_id"),
+                    assessed_by_model=False,
+                )
+                _append_risk_extraction_summary(state)
+                return state
         _mark_risk_extraction_honest_failure(
             state,
             reason="AI risk extraction unavailable in mock mode — no risks extracted",
@@ -732,9 +767,11 @@ async def critique_node(
         state, source_text=source_text,
     )
     try:
-        service = get_ai_service(state.get("tenant_id"))
+        service: AIExtractionPort = get_ai_service(state.get("tenant_id"))
         if os.getenv("C2PRO_N12_CHECKPOINT_ESCROW") == "1":
             from src.analysis.adapters.ai.n12_checkpoint_escrow_port import (
+                N12CheckpointIdentityError,
+                N12GovernedExtraction,
                 bind_n12_checkpoint_escrow,
             )
             from src.analysis.adapters.graph.n12_checkpoint_witness import (
@@ -746,10 +783,12 @@ async def critique_node(
             await verify_n12_durable_predecessor(
                 state=state, model_safe_source=source_text, config=config,
             )
+            if not callable(getattr(service, "run_full_source_review", None)):
+                raise N12CheckpointIdentityError("N12_SERVICE_GOVERNED_REVIEW_MISSING")
             service = bind_n12_checkpoint_escrow(
                 state=state,
                 model_safe_source=source_text,
-                service=service,
+                service=cast(N12GovernedExtraction, service),
                 checkpoint_persisted=True,
             )
         use_case = CritiqueExtractionUseCase(ai=service)

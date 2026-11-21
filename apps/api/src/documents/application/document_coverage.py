@@ -169,8 +169,8 @@ def build_n12_source_attestation(
     metadata. COMPLETE by itself and mere text length are never assurance.
     False or missing attestation means N12 stays UNASSESSED and routes to HITL.
     """
-    from hashlib import sha256
     import re
+    from hashlib import sha256
 
     if not metadata or not parsed_text or revision is None:
         return None

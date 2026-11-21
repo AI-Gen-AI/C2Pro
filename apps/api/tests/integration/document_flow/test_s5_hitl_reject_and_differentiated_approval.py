@@ -397,6 +397,7 @@ async def test_the_final_approval_is_a_separate_act_that_trusts_exactly_the_deci
         app=w.app,
         sessions=w.sessions,
         row_id=w.review_row_id,
+        current_user=test_user,
     )
 
     assert response.current_status == ReviewStatus.APPROVED
@@ -422,6 +423,7 @@ async def test_the_final_approval_is_a_separate_act_that_trusts_exactly_the_deci
 
 
 async def test_current_state_reports_the_pending_revision_until_approval_then_the_trusted_one(
+    test_user: Any,
     db: AsyncSession,
     world: Any,
     request_sessions: Any,  # noqa: F811
@@ -452,6 +454,7 @@ async def test_current_state_reports_the_pending_revision_until_approval_then_th
         app=w.app,
         sessions=w.sessions,
         row_id=w.review_row_id,
+        current_user=test_user,
     )
 
     approved = await _states()
@@ -653,6 +656,7 @@ async def test_a_duplicate_decision_is_replayed_not_recorded_twice_and_a_changed
 
 async def test_approving_twice_commits_the_candidate_once(
     db: AsyncSession,
+    test_user: Any,
     world: Any,
     request_sessions: Any,  # noqa: F811
 ) -> None:
@@ -665,6 +669,7 @@ async def test_approving_twice_commits_the_candidate_once(
         app=w.app,
         sessions=w.sessions,
         row_id=w.review_row_id,
+        current_user=test_user,
     )
     second = await _post_approve(
         request_sessions,
@@ -674,6 +679,7 @@ async def test_approving_twice_commits_the_candidate_once(
         app=w.app,
         sessions=w.sessions,
         row_id=w.review_row_id,
+        current_user=test_user,
     )
 
     assert first.current_status == second.current_status == ReviewStatus.APPROVED
@@ -685,6 +691,7 @@ async def test_approving_twice_commits_the_candidate_once(
 
 async def test_a_contradictory_final_decision_after_the_first_is_refused(
     db: AsyncSession,
+    test_user: Any,
     world: Any,
     request_sessions: Any,  # noqa: F811
 ) -> None:
@@ -697,6 +704,7 @@ async def test_a_contradictory_final_decision_after_the_first_is_refused(
         app=w.app,
         sessions=w.sessions,
         row_id=w.review_row_id,
+        current_user=test_user,
     )
 
     with pytest.raises(HTTPException) as refused:

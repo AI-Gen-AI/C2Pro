@@ -35,6 +35,8 @@ import asyncio
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from runpy import run_path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -43,7 +45,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import Command
 from psycopg_pool import AsyncConnectionPool
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.graph.nodes import (
@@ -53,25 +55,57 @@ from src.analysis.adapters.graph.nodes import (
 )
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.adapters.persistence.models import Analysis
+from src.analysis.domain.contracts import RiskItem, Severity
 from src.core.auth.models import Tenant, User
-from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.adapters.persistence.models import DocumentORM, DocumentProcessingOperationORM
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.adapters.persistence.repository import (
     SqlAlchemyReviewQueueRepository,
 )
+from src.modules.hitl.application.final_decision_authorization import authorize_final_decider
+from src.modules.hitl.application.finding_review_authorization import FindingDecisionSubmission
+from src.modules.hitl.application.record_finding_decision_use_case import (
+    RecordFindingDecisionUseCase,
+)
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
 )
+from src.modules.hitl.application.review_findings_view import ReviewFindingsViewService
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
+from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.projects.adapters.persistence.models import ProjectORM
-from src.temporal.adapters.persistence.models import ProjectEventORM
+from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
 from tests.modules.integration.hitl_actor import (
     decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+# ── SQL-only PostgreSQL decisions ledger ────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+async def real_hitl_decision_ledger(db: AsyncSession) -> None:
+    """Apply the actual immutable HITL ledger DDL to this disposable test DB.
+
+    The general unit-oriented bootstrap uses ORM create_all and cannot create
+    SQL-only append-only ledgers, triggers or RLS; the live resume path requires
+    those exact contracts. Never replace with a permissive mock table.
+    """
+    exists = (await db.execute(
+        text("SELECT to_regclass('public.hitl_finding_decisions')")
+    )).scalar_one_or_none()
+    if exists is None:
+        migration = (
+            Path(__file__).resolve().parents[3]
+            / "alembic/versions/20261008_0001_hitl_finding_decisions.py"
+        )
+        for statement in run_path(str(migration))["UPGRADE_STATEMENTS"]:
+            await db.execute(text(statement))
+        await db.commit()
 
 
 # ── real checkpointer ────────────────────────────────────────────────────────
@@ -181,6 +215,24 @@ async def _seed(db: AsyncSession, tenant: Tenant) -> DocumentORM:
     db.add(document)
     await db.commit()
     await db.refresh(document)
+
+    # A governed candidate is revision-scoped. This synthetic fixture needs a
+    # real disposable-db revision and authority, not an unbound document.
+    revision = DocumentRevisionORM(
+        revision_id=uuid4(), document_id=document.id, project_id=project_id,
+        tenant_id=tenant.id, rev_no=1, blob_hash="a" * 64,
+        blob_key=f"synthetic-p0b/{document.id}",
+    )
+    db.add(revision)
+    await db.flush()
+    db.add(DocumentProcessingOperationORM(
+        document_id=document.id, tenant_id=tenant.id,
+        revision_id=revision.revision_id, generation=1, stage="ANALYSIS",
+        phase="RUNNING", attempt_id=uuid4(), owner_token=uuid4(),
+        fencing_token=1,
+        lease_expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+    ))
+    await db.commit()
     return document
 
 
@@ -217,6 +269,17 @@ def _review_row(
     )
 
 
+_SOURCE_QUOTE = "Liquidated damages of EUR 3,000 per calendar day"
+
+
+def _reviewable_test_risk() -> RiskItem:
+    return RiskItem(
+        title="Synthetic P0b delay damages", description="Reviewable test proposal",
+        category="schedule", severity=Severity.HIGH, source=_SOURCE_QUOTE,
+        source_quote=_SOURCE_QUOTE, source_quote_status="VERIFIED", clause_ref="3.2",
+    )
+
+
 def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dict[str, Any]:
     return {
         "project_id": str(document.project_id),
@@ -224,12 +287,12 @@ def _initial_state(document: DocumentORM, tenant: Tenant, thread_id: str) -> dic
         "tenant_id": str(tenant.id),
         "thread_id": thread_id,
         "doc_type": "contract",
-        "document_text": "",
+        "document_text": _SOURCE_QUOTE,
         "retry_count": 0,
         "confidence_score": 0.0,
         "critique_notes": "",
         "messages": [],
-        "extracted_risks": [],
+        "extracted_risks": [_reviewable_test_risk().model_dump(mode="json")],
         "extracted_wbs": [],
         "coherence_score": 90,
         "coherence_breakdown": {"overall": 90},
@@ -254,9 +317,57 @@ async def _run_to_interrupt(app, document, tenant, thread_id, *, db=None) -> tup
             _persist_bound_candidate,
         )
 
-        await _persist_bound_candidate(db, tenant, document, thread_id)
+        await _persist_bound_candidate(
+            db, tenant, document, thread_id, risks=[_reviewable_test_risk()],
+        )
+        review_rows = (
+            await db.execute(select(ReviewItemORM).where(
+                ReviewItemORM.document_id == document.id,
+                ReviewItemORM.thread_id == thread_id,
+            ))
+        ).scalars().all()
+        assert review_rows, "synthetic graph must have a review bound to current authority"
+        for row in review_rows:
+            row.lineage_generation = 1
+            row.lineage_fencing_token = 1
+        await db.commit()
     snapshot = await app.aget_state(cfg)
     return cfg, snapshot.config["configurable"]["checkpoint_id"]
+
+
+async def _confirm_source_bound_finding(
+    sessions, tenant: Tenant, document: DocumentORM, reviewer: User,
+) -> None:
+    """Real provisional CONFIRMED event before the final approval."""
+    async with sessions(tenant.id) as db:
+        review = (
+            await db.execute(
+                select(ReviewItemORM).where(
+                    ReviewItemORM.document_id == document.id,
+                    ReviewItemORM.current_status == ReviewStatus.PENDING_REVIEW_REQUIRED,
+                )
+            )
+        ).scalars().one()
+        view = await ReviewFindingsViewService(db).execute(
+            tenant_id=tenant.id, user=reviewer, review_row_id=review.id,
+        )
+        assert len(view.findings) == 1, "must carry one reviewable source-bound risk"
+        f = view.findings[0]
+        await RecordFindingDecisionUseCase(db).execute(
+            tenant_id=tenant.id, user=reviewer, review_row_id=review.id,
+            submission=FindingDecisionSubmission(
+                artifact_id=view.artifact_id,
+                artifact_version=view.artifact_version,
+                artifact_hash=view.artifact_hash,
+                document_revision_id=view.document_revision_id,
+                generation=view.generation, fencing_token=view.fencing_token,
+                source_item_id=f.source_item_id, ordinal=f.ordinal,
+                action=FindingDecisionAction.CONFIRMED,
+                expected_ledger_revision=0,
+                idempotency_key=f"p0b-confirm-{review.id}",
+            ),
+        )
+        await db.commit()
 
 
 def _use_case(db, tenant, saver, app, session_factory) -> ResumeWorkflowUseCase:
@@ -418,11 +529,12 @@ async def test_use_case_approve_resumes_real_graph_to_n17_and_analyzed(
     review.review_metadata = {**(review.review_metadata or {}), "tenant_id": str(tenant.id)}
     await db.commit()
 
+    await _confirm_source_bound_finding(claim_session_factory, tenant, document, test_user)
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
     response = await use_case.execute(
         review_id=review.item_id,
         request=ResumeWorkflowRequest(
-            decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+            decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
         ),
     )
 
@@ -564,8 +676,9 @@ async def test_sequential_double_approve_executes_downstream_once(
     review.review_metadata = {**(review.review_metadata or {}), "tenant_id": str(tenant.id)}
     await db.commit()
 
+    await _confirm_source_bound_finding(claim_session_factory, tenant, document, test_user)
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
-    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R")
+    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id))
 
     first = await use_case.execute(review_id=review.item_id, request=req)
     assert first.status == "resumed"
@@ -648,7 +761,8 @@ async def test_concurrent_double_approve_executes_downstream_once(
             yield claim_db
             await claim_db.commit()
 
-    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R")
+    await _confirm_source_bound_finding(independent_claim_session, tenant, document, test_user)
+    req = ResumeWorkflowRequest(decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id))
 
     async def approve_from_independent_request():
         async with test_session_factory() as request_db:
@@ -739,7 +853,7 @@ async def test_resume_failure_does_not_produce_false_approval(
         await use_case.execute(
             review_id=review.item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
             ),
         )
 
@@ -788,7 +902,7 @@ async def test_wrong_checkpoint_resume_fails_closed(
         await use_case.execute(
             review_id=review.item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
             ),
         )
 
@@ -835,11 +949,12 @@ async def test_historical_row_a_is_never_targeted_by_resume(
     await db.commit()
     original_a_approved_at = row_a.approved_at
 
+    await _confirm_source_bound_finding(claim_session_factory, tenant, document, test_user)
     use_case = _use_case(db, tenant, saver, app, claim_session_factory)
     response = await use_case.execute(
         review_id=row_b.item_id,
         request=ResumeWorkflowRequest(
-            decision=WorkflowDecision.APPROVE, feedback="", approved_by="R"
+            decision=WorkflowDecision.APPROVE, feedback="", approved_by="R", decider=authorize_final_decider(test_user, tenant_id=tenant.id)
         ),
     )
     assert response.status == "resumed"

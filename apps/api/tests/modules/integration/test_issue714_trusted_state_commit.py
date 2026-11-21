@@ -44,9 +44,16 @@ from src.analysis.domain.trust import (
 from src.core.auth.models import Tenant, User
 from src.core.tasks import materialization_tasks, project_graph_tasks
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
+from src.modules.hitl.application.finding_review_authorization import FindingDecisionSubmission
+from src.modules.hitl.application.record_finding_decision_use_case import (
+    RecordFindingDecisionUseCase,
+)
+from src.modules.hitl.application.review_findings_view import ReviewFindingsViewService
 from src.modules.hitl.domain.entities import ReviewStatus
+from src.modules.hitl.domain.finding_decision import FindingDecisionAction
 from src.temporal.application import project_snapshot_trigger
 from src.wbs.adapters.persistence.models import WBSNodeORM
+from tests.modules.integration.hitl_actor import persisted_reviewer
 from tests.modules.integration.test_issue649_hitl_audit_idempotency import (
     _post_approve,
     _post_reject,
@@ -157,6 +164,16 @@ async def _propose(
         state = _final_state(arranged, tenant_id, gated=True, title=title)
     if risks is not None:
         state["extracted_risks"] = risks
+    # The completion hook receives the graph's actual immutable revision in
+    # production. This direct-hook test must supply the same persisted identity,
+    # rather than binding an unversioned candidate to a versioned review.
+    async with completion_sessions["sessions"](tenant_id) as session:
+        revision_id = (await session.execute(
+            text("SELECT revision_id FROM document_processing_operations WHERE document_id = :d"),
+            {"d": arranged.document_id},
+        )).scalar_one()
+    assert revision_id is not None
+    state["document_revision_id"] = str(revision_id)
     await document_artifact_completion._persist_artifact(
         state
     )
@@ -194,6 +211,71 @@ async def _propose(
         assert pending is not None
         if pending.checkpoint_id is None:
             pending.checkpoint_id = arranged.checkpoint_id
+        # The direct completion-hook shortcut opens a successor review without
+        # running the processing-worker lineage binder. Reproduce that
+        # production binding against the actual current operation, or the
+        # candidate rightly fails the exact generation/fence reader.
+        authority = (await session.execute(
+            text(
+                "SELECT generation, fencing_token "
+                "FROM document_processing_operations WHERE document_id = :d"
+            ),
+            {"d": arranged.document_id},
+        )).one()
+        pending.lineage_generation = authority.generation
+        pending.lineage_fencing_token = authority.fencing_token
+
+    await _confirm_current_synthetic_review(
+        completion_sessions["sessions"], tenant_id, arranged.document_id
+    )
+
+
+async def _confirm_current_synthetic_review(sessions, tenant_id, document_id) -> None:
+    """Use the real ledger after each new synthetic candidate, including Vn+1."""
+    actor = persisted_reviewer()
+    assert actor is not None, "a persisted reviewer is required for governed test setup"
+    async with sessions(tenant_id) as session:
+        review = (
+            await session.execute(
+                select(ReviewItemORM)
+                .where(ReviewItemORM.document_id == document_id)
+                .order_by(ReviewItemORM.created_at.desc())
+            )
+        ).scalars().all()
+        current = next(
+            (
+                row for row in review
+                if row.current_status in {
+                    ReviewStatus.PENDING_REVIEW_REQUIRED,
+                    ReviewStatus.PENDING_REVIEW_CONDITIONAL,
+                    ReviewStatus.ESCALATED,
+                }
+            ),
+            None,
+        )
+        assert current is not None
+        view = await ReviewFindingsViewService(session).execute(
+            tenant_id=tenant_id, user=actor, review_row_id=current.id,
+        )
+        # This is a synthetic pre-decision for mechanics tests, NOT user data
+        # or approval of the whole project. The signed ledger is real.
+        for offset, finding in enumerate(view.findings):
+            await RecordFindingDecisionUseCase(session).execute(
+                tenant_id=tenant_id, user=actor, review_row_id=current.id,
+                submission=FindingDecisionSubmission(
+                    artifact_id=view.artifact_id,
+                    artifact_version=view.artifact_version,
+                    artifact_hash=view.artifact_hash,
+                    document_revision_id=view.document_revision_id,
+                    generation=view.generation,
+                    fencing_token=view.fencing_token,
+                    source_item_id=finding.source_item_id,
+                    ordinal=finding.ordinal,
+                    action=FindingDecisionAction.CONFIRMED,
+                    expected_ledger_revision=view.ledger_revision + offset,
+                    idempotency_key=f"p714-fixture-{current.id}-{view.artifact_version}-{offset}",
+                ),
+            )
 
 
 async def _rows(sessions, tenant_id: UUID, document_id: UUID) -> list[DocumentArtifactORM]:
@@ -438,6 +520,9 @@ async def test_e_corrected_proposal_commits_only_corrected_version(
     with pytest.raises(StaleCandidateError):
         await _commit_in(independent_sessions, tenant.id, original)
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
+    await _confirm_current_synthetic_review(
+        independent_sessions, tenant.id, arranged.document_id
+    )
 
     await _post_approve(
         request_sessions, tenant.id, arranged.review_item_id,
@@ -517,6 +602,9 @@ async def test_corrected_v2_risks_replace_stale_v1_resume_state_in_analysis_and_
         risk["title"] for risk in v1_risks
     ]
     assert await _binding(db, arranged.review_row_id) == v2
+    await _confirm_current_synthetic_review(
+        independent_sessions, tenant.id, arranged.document_id
+    )
 
     response = await _post_approve(
         request_sessions,

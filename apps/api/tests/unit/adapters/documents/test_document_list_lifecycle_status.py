@@ -18,8 +18,8 @@ from fastapi.testclient import TestClient
 from src.documents.adapters.http.router import (
     _PENDING_REVIEW_STATUSES,
     get_list_documents_use_case,
-    get_pending_review_document_ids,
     get_missing_n4_cap_lookup,
+    get_pending_review_document_ids,
 )
 from src.documents.adapters.http.router import router as documents_router
 from src.documents.domain.models import Document, DocumentStatus, DocumentType

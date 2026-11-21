@@ -60,7 +60,13 @@ def _key(s: FindingSignal) -> tuple[float, float, str, str, str, str, str, str, 
         isinstance(digest, str) and len(digest) == 64 for digest in (parts[2], contract_parts[2])
     ):
         return None
-    return (float(a), float(b), *parts, *contract_parts)
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        return None
+    return (
+        float(a), float(b),
+        str(parts[0]), str(parts[1]), str(parts[2]), str(parts[3]),
+        str(contract_parts[0]), str(contract_parts[1]), str(contract_parts[2]),
+    )
 
 
 def economic_discrepancy_key(signal: FindingSignal) -> str | None:

@@ -6,14 +6,14 @@ and not approval of a monetary or schedule baseline.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
 
 def summarize_source_units(
-    budget_rows: list[Mapping[str, Any]],
-    schedule_rows: list[Mapping[str, Any]],
+    budget_rows: Sequence[Mapping[str, Any]],
+    schedule_rows: Sequence[Mapping[str, Any]],
     *,
     max_preview_per_family: int = 40,
 ) -> dict[str, Any]:

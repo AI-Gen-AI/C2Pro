@@ -879,6 +879,19 @@ class SqlAlchemyDocumentArtifactRepository(IDocumentArtifactRepository):
         _refuse_structured(row, "propose_correction")
         if UUID(corrected.document_id) != binding.document_id:
             raise ValueError("A correction must target the same document")
+        # A human correction changes the proposed findings, NOT their original
+        # source revision. Preserve the immutable source identity when the
+        # correction DTO omits it (legacy clients); refuse an attempted
+        # cross-revision substitution before superseding the current proposal.
+        pinned_revision = str(row.document_revision_id) if row.document_revision_id else None
+        if corrected.document_revision_id is None:
+            corrected = corrected.model_copy(
+                update={"document_revision_id": pinned_revision}
+            )
+        elif corrected.document_revision_id != pinned_revision:
+            raise StaleCandidateError(
+                "a finding correction cannot replace the source document revision"
+            )
         await self._supersede_proposed(binding.document_id)
         new_row = await self._insert(
             corrected,

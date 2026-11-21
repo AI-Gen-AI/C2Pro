@@ -1027,6 +1027,8 @@ async def write_snapshot(state: ProjectGraphState) -> dict[str, Any]:
         "missing_dimensions": list(coherence.insufficient_data_reasons),
     }
     health_vector = state["health_result"]
+    if health_vector is None:
+        raise ValueError("cannot persist a snapshot without a health result")
     try:
         previous = await repository.latest(state["project_id"], state["tenant_id"])
         if (

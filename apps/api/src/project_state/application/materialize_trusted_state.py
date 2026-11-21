@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
+from src.core.tenants.types import require_tenant_id
 from src.project_state.application.trusted_artifact_projector import (
     TrustedRevisionBundle,
     build_trusted_state_candidate,
@@ -92,7 +93,7 @@ async def materialize_trusted_state_if_absent(
             diagnostics.rejected_unverified_risks,
         )
 
-    existing = await repository.get(project_id, tenant_id)
+    existing = await repository.get(project_id, require_tenant_id(tenant_id))
     if existing is None:
         # Example: conflicting row exists for a different tenant under RLS.
         raise RuntimeError("TRUSTED_STATE_ATOMIC_CONFLICT_NOT_VISIBLE")
