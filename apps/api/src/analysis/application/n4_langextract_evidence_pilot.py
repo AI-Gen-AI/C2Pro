@@ -225,3 +225,56 @@ def reconcile_n4_with_langextract(
         "coherence_score": None,
         "hitl_generated": False,
     }
+
+
+def advise_evidence_index_reprompt(
+    source: str,
+    n4_raw: Mapping[str, Any],
+    spans: Sequence[AnchoredExtraction],
+    *,
+    verified_layout_ranges: Sequence[tuple[int, int]] = (),
+) -> dict[str, Any]:
+    """Advisory policy ONLY: never calls the provider or changes any N4 result.
+
+    A second, more expensive inference is unnecessary if all existing quotes
+    already have unique exact source positions. For refloated or unsupported
+    quotes, an *operator* may elect one bounded experiment; this helper does
+    not retry automatically and has no budget, reservation or ledger authority.
+    """
+    fusion = reconcile_n4_with_langextract(
+        source, n4_raw, spans, verified_layout_ranges=verified_layout_ranges
+    )
+    if not n4_raw["window_examined"]:
+        return {
+            "suggestion": "DO_NOT_AUTOMATICALLY_REPROMPT",
+            "reason": "BASELINE_WINDOW_NOT_EXAMINED",
+            "provider_calls_made": 0,
+        }
+    if not spans:
+        return {
+            "suggestion": "SIDECAR_ONLY",
+            "reason": "NO_VERIFIED_LANGEXTRACT_SPANS",
+            "provider_calls_made": 0,
+        }
+    findings = fusion["findings"]
+    if not findings:
+        return {
+            "suggestion": "SIDECAR_ONLY",
+            "reason": "ZERO_CANDIDATES_IS_NOT_SEMANTIC_COMPLETENESS",
+            "provider_calls_made": 0,
+        }
+    if all(p["source_quote_status"] == "EXACT_SOURCE_MATCH" for p in findings):
+        return {
+            "suggestion": "SIDECAR_ONLY",
+            "reason": "ALL_N4_QUOTES_ALREADY_EXACT",
+            "provider_calls_made": 0,
+        }
+    return {
+        "suggestion": "OPTIONAL_SINGLE_REPROMPT_AFTER_BUDGET_CHECK",
+        "reason": "SOME_N4_QUOTES_NOT_EXACT",
+        "provider_calls_made": 0,
+        "unverified_quote_count": sum(
+            p["source_quote_status"] != "EXACT_SOURCE_MATCH" for p in findings
+        ),
+        "disclaimer": "Sidecar mapping may avoid re-inference; manual review first.",
+    }
