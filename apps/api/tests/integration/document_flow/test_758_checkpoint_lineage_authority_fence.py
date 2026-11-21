@@ -72,6 +72,7 @@ from src.modules.hitl.adapters.persistence.repository import (
 from src.modules.hitl.application import (
     resume_workflow_use_case as resume_workflow_module,
 )
+from src.modules.hitl.application.final_decision_authorization import authorize_final_decider
 from src.modules.hitl.application.resume_workflow_use_case import (
     ResumeWorkflowUseCase,
     WorkflowDecision,
@@ -1193,7 +1194,7 @@ async def test_approval_between_takeover_and_graph_start_cannot_resume_a(
             await use_case.execute(
                 review_id=review_item_id,
                 request=ResumeWorkflowRequest(
-                    decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+                    decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer", decider=authorize_final_decider(test_user, tenant_id=tenant)
                 ),
             )
         assert DOWNSTREAM_RUNS == [], (
@@ -1288,7 +1289,7 @@ async def test_claim_to_checkpoint_crash_window_is_recoverable_and_never_false_s
         await use_case.execute(
             review_id=review_item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer", decider=authorize_final_decider(test_user, tenant_id=tenant)
             ),
         )
     assert DOWNSTREAM_RUNS == [], "nothing may be replayed in the window"
@@ -1387,7 +1388,7 @@ async def test_new_generation_ends_resumability_before_analysis_runs(
         await use_case.execute(
             review_id=review_item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer", decider=authorize_final_decider(test_user, tenant_id=tenant)
             ),
         )
     assert DOWNSTREAM_RUNS == [], (
@@ -1571,7 +1572,7 @@ async def test_resume_is_bound_to_the_lineage_it_was_authorized_against(
         use_case.execute(
             review_id=review_item_id,
             request=ResumeWorkflowRequest(
-                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer"
+                decision=WorkflowDecision.APPROVE, feedback="", approved_by="Reviewer", decider=authorize_final_decider(test_user, tenant_id=tenant)
             ),
         )
     )

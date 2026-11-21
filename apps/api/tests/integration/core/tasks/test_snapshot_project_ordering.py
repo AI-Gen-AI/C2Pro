@@ -104,7 +104,8 @@ async def test_concurrent_correction_snapshot_does_not_hide_resolved_assessment(
         # keeps its transaction open while the correction snapshot is written.
         assert source_event_id == graph_event_id
         await asyncio.sleep(_GRAPH_LINEAGE_DELAY_S)
-        return coverage, EvidenceGranularity.DOCUMENT
+        from src.health.domain.analysis_assessment import HEALTH_METHOD_ROUTER_V1
+        return coverage, EvidenceGranularity.DOCUMENT, HEALTH_METHOD_ROUTER_V1
 
     monkeypatch.setattr(SnapshotWriter, "_coverage_from_lineage", slow_lineage)
 

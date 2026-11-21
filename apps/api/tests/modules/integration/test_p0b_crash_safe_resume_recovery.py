@@ -283,9 +283,23 @@ async def _persist_bound_candidate(db, tenant, document, thread_id: str) -> None
     )
     from src.analysis.domain.contracts import DocumentArtifact
     from src.analysis.domain.trust import CandidateScoring, TrustState
+    from src.temporal.adapters.persistence.models import DocumentRevisionORM
 
+    revision_id = (
+        await db.execute(
+            select(DocumentRevisionORM.revision_id).where(
+                DocumentRevisionORM.document_id == document.id,
+                DocumentRevisionORM.tenant_id == tenant.id,
+                DocumentRevisionORM.valid_to.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
     await SqlAlchemyDocumentArtifactRepository(db).save(
-        DocumentArtifact(document_id=str(document.id), doc_type="contract"),
+        DocumentArtifact(
+            document_id=str(document.id),
+            document_revision_id=str(revision_id) if revision_id else None,
+            doc_type="contract",
+        ),
         project_id=document.project_id,
         tenant_id=tenant.id,
         trust_state=TrustState.PROPOSED,

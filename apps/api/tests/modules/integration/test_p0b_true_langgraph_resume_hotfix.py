@@ -54,7 +54,7 @@ from src.analysis.adapters.graph.nodes import (
 from src.analysis.adapters.graph.schema import ProjectState
 from src.analysis.adapters.persistence.models import Analysis
 from src.core.auth.models import Tenant, User
-from src.documents.adapters.persistence.models import DocumentORM
+from src.documents.adapters.persistence.models import DocumentORM, DocumentProcessingOperationORM
 from src.modules.hitl.adapters.checkpoint_service import CheckpointService
 from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.adapters.persistence.repository import (
@@ -67,7 +67,7 @@ from src.modules.hitl.application.resume_workflow_use_case import (
 )
 from src.modules.hitl.domain.entities import ImpactLevel, ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
-from src.temporal.adapters.persistence.models import ProjectEventORM
+from src.temporal.adapters.persistence.models import DocumentRevisionORM, ProjectEventORM
 from tests.modules.integration.hitl_actor import (
     decided_request as ResumeWorkflowRequest,  # noqa: F811 (decider-carrying)
 )
@@ -182,6 +182,24 @@ async def _seed(db: AsyncSession, tenant: Tenant) -> DocumentORM:
     db.add(document)
     await db.commit()
     await db.refresh(document)
+
+    # A governed candidate is revision-scoped. This synthetic fixture needs a
+    # real disposable-db revision and authority, not an unbound document.
+    revision = DocumentRevisionORM(
+        revision_id=uuid4(), document_id=document.id, project_id=project_id,
+        tenant_id=tenant.id, rev_no=1, blob_hash="a" * 64,
+        blob_key=f"synthetic-p0b/{document.id}",
+    )
+    db.add(revision)
+    await db.flush()
+    db.add(DocumentProcessingOperationORM(
+        document_id=document.id, tenant_id=tenant.id,
+        revision_id=revision.revision_id, generation=1, stage="ANALYSIS",
+        phase="RUNNING", attempt_id=uuid4(), owner_token=uuid4(),
+        fencing_token=1,
+        lease_expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+    ))
+    await db.commit()
     return document
 
 
@@ -256,6 +274,17 @@ async def _run_to_interrupt(app, document, tenant, thread_id, *, db=None) -> tup
         )
 
         await _persist_bound_candidate(db, tenant, document, thread_id)
+        review_rows = (
+            await db.execute(select(ReviewItemORM).where(
+                ReviewItemORM.document_id == document.id,
+                ReviewItemORM.thread_id == thread_id,
+            ))
+        ).scalars().all()
+        assert review_rows, "synthetic graph must have a review bound to current authority"
+        for row in review_rows:
+            row.lineage_generation = 1
+            row.lineage_fencing_token = 1
+        await db.commit()
     snapshot = await app.aget_state(cfg)
     return cfg, snapshot.config["configurable"]["checkpoint_id"]
 
