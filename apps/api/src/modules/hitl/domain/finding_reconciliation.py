@@ -33,7 +33,7 @@ from uuid import UUID
 
 from src.modules.hitl.domain.finding_decision import CandidateReviewIdentity, FindingDecisionAction
 
-RECONCILIATION_POLICY_VERSION = "s5-03/v1"
+RECONCILIATION_POLICY_VERSION = "s5-03/v2"
 
 
 class ReconciliationStatus(StrEnum):
@@ -50,6 +50,7 @@ class FindingResolution(StrEnum):
 
 
 class BlockerCode(StrEnum):
+    NO_REVIEWABLE_FINDINGS = "NO_REVIEWABLE_FINDINGS"  # zero findings is not proof of complete analysis
     NEEDS_INFO = "NEEDS_INFO"
     UNDECIDED_FINDING = "UNDECIDED_FINDING"
     MATERIAL_CRITIQUE_UNRESOLVED = "MATERIAL_CRITIQUE_UNRESOLVED"
@@ -220,8 +221,8 @@ class ReconciliationResult:
 
     @property
     def signable_as_is(self) -> bool:
-        """True only if NOTHING blocks and NOTHING requires a derived candidate. It is not a permission to sign."""
-        return self.status is ReconciliationStatus.CONSISTENT and not self.blockers and not self.derivations
+        """A nonempty, individually reviewed candidate with no blockers or derivations. Not signing authority."""
+        return bool(self.outcomes) and self.status is ReconciliationStatus.CONSISTENT and not self.blockers and not self.derivations
 
     def receipt(self) -> ReconciliationReceipt:
         return ReconciliationReceipt(
@@ -316,6 +317,16 @@ def reconcile(data: ReconciliationInput) -> ReconciliationResult:
     advisories: list[Advisory] = []
     retained: list[CandidateFinding] = []
     excluded: list[CandidateFinding] = []
+
+    # SEC-04: an empty extraction (or an invalid/missing risk envelope filtered upstream)
+    # is NOT an attestation that the full document was assessed. Do not let the
+    # vacuous all([]) rule authorize a final human signature or TRUSTED promotion.
+    # This blocker is part of the signed digest, including during S5-05 revalidation.
+    if not findings:
+        blockers.append(Blocker(
+            BlockerCode.NO_REVIEWABLE_FINDINGS, None,
+            "the candidate has no reviewable findings; analysis coverage must be established before final approval",
+        ))
 
     if not inconsistencies:
         by_finding: dict[str, list[LedgerEvent]] = {}

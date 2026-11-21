@@ -106,9 +106,25 @@ def test_a_finding_without_a_decision_blocks_fail_closed():
     assert not run([]).signable_as_is and len(run([]).blockers) == 4
 
 
-def test_a_candidate_with_no_findings_is_vacuously_signable():
-    r = run([], findings=())
-    assert r.signable_as_is and r.retained == () and r.ledger_revision == 0
+@pytest.mark.parametrize("coverage", list(CritiqueCoverage))
+def test_sec04_zero_findings_blocks_final_approval_even_with_reported_critique_coverage(coverage):
+    r = run([], findings=(), coverage=coverage)
+    assert r.status is ReconciliationStatus.CONSISTENT, "the ledger may be valid while the analysis coverage is NOT"
+    assert r.blockers[0].code is BlockerCode.NO_REVIEWABLE_FINDINGS
+    assert r.outcomes == r.retained == () and r.ledger_revision == 0
+    assert not r.signable_as_is and not r.receipt().signable_as_is
+    assert r.receipt().policy_version == "s5-03/v2"
+    assert "no reviewable findings" in r.blockers[0].detail
+    assert r.digest == run([], findings=(), coverage=coverage).digest, "a denial must be deterministic"
+    assert r.digest != run(all_confirmed()).digest, "the empty candidate is never the approved candidate"
+
+
+def test_sec04_an_old_stale_decision_does_not_certify_a_new_empty_candidate():
+    stale = event(1, 0, A.CONFIRMED, artifact_hash="b" * 64)
+    r = run([stale], findings=())
+    assert not r.signable_as_is
+    assert any(b.code is BlockerCode.NO_REVIEWABLE_FINDINGS for b in r.blockers)
+    assert len(r.stale_event_ids) == 1 and r.retained == ()
 
 
 @pytest.mark.parametrize(
@@ -209,5 +225,5 @@ def test_the_receipt_carries_the_exact_identity_the_signature_must_match():
     receipt = r.receipt()
     assert (receipt.review_row_id, receipt.project_id, receipt.artifact_id, receipt.artifact_version) == (REVIEW, PROJECT, ART, 2)
     assert (receipt.artifact_hash, receipt.generation, receipt.fencing_token, receipt.ledger_revision) == (HASH, 3, 10, 4)
-    assert receipt.digest == r.digest and receipt.signable_as_is and receipt.policy_version == "s5-03/v1"
+    assert receipt.digest == r.digest and receipt.signable_as_is and receipt.policy_version == "s5-03/v2"
     assert isinstance(receipt.review_row_id, UUID)
