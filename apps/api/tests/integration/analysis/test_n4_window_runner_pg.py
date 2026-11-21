@@ -222,7 +222,7 @@ async def test_malformed_output_is_charged_but_not_accepted_as_no_risk():
         await engine.dispose()
 
 
-async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
+async def test_unresolved_reference_keeps_candidates_proposed_without_blocking_window():
     a, project, engine = await _prepare()
     provider = StubProvider(missing_at=0)
     runner = _runner(engine, provider)
@@ -231,11 +231,12 @@ async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
             authority=a, project_id=project,
             model_safe_text=_source(), n2_projection_attested=True,
         )
-        assert partial.status == "PARTIAL"
-        assert partial.examined_windows == partial.total_windows - 1
+        # JV1-A2: references no longer block; the window was examined.
+        assert partial.status == "COMPLETE"
+        assert partial.examined_windows == partial.total_windows
         assert partial.settled_receipt_windows == partial.total_windows
         assert partial.persisted_result_windows == partial.total_windows
-        assert partial.blocked_result_windows == 1
+        assert partial.blocked_result_windows == 0
         conn = await asyncpg.connect(_DSN)
         try:
             row = await conn.fetchrow("""
@@ -243,9 +244,9 @@ async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
                   FROM public.n4_extraction_windows
                  WHERE tenant_id=$1 AND run_id=$2 AND ordinal=0
             """, a.tenant_id, partial.run_id)
-            assert row["status"] == "BLOCKED"
+            assert row["status"] == "EXAMINED"
             assert json.loads(row["unresolved_refs"]) == ["Annex 21 not uploaded"]
-            assert row["blocked_reason"] == "REFERENCES_UNRESOLVED"
+            assert row["blocked_reason"] is None
             assert await conn.fetchval("""
                 SELECT count(*) FROM public.n4_candidate_findings
                  WHERE tenant_id=$1 AND run_id=$2

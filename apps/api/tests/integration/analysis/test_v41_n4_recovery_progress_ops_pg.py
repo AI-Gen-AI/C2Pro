@@ -123,12 +123,13 @@ async def test_n4_progress_is_not_equivalent_to_billable_receipts(
         authority=authority, project_id=project_id,
         model_safe_text=_source(), n2_projection_attested=True,
     )
-    assert outcome.status == "PARTIAL"
     if failure_kind == "missing_reference":
-        assert outcome.examined_windows == outcome.total_windows - 1
+        # JV1-A2: an unresolved reference is stored but no longer blocks.
+        assert outcome.status == "COMPLETE"
+        assert outcome.examined_windows == outcome.total_windows
         assert outcome.settled_receipt_windows == outcome.total_windows
         assert outcome.persisted_result_windows == outcome.total_windows
-        assert outcome.blocked_result_windows == 1
+        assert outcome.blocked_result_windows == 0
         assert len(provider.calls) == outcome.total_windows
         replay = await runner.run(
             authority=authority, project_id=project_id,
@@ -137,6 +138,7 @@ async def test_n4_progress_is_not_equivalent_to_billable_receipts(
         assert replay.persisted_result_windows == outcome.total_windows
         assert provider.calls == list(range(outcome.total_windows))
     else:
+        assert outcome.status == "PARTIAL"
         assert outcome.examined_windows == 0
         assert outcome.settled_receipt_windows == 1
         assert outcome.persisted_result_windows == 0

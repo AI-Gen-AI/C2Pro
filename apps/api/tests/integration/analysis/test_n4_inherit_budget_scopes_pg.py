@@ -397,7 +397,12 @@ async def test_budget_blocked_zero_receipt_recovery_uses_new_fenced_generation(t
                 session, authority=new_authority, project_id=project,
                 windows=windows, config_sha256="f" * 64, budget_cap_usd="5",
             )
-            assert new_run != old_run
+            # JV1-A2: same config -> the new fenced generation ADOPTS the run.
+            assert new_run == old_run
+            assert await session.scalar(text("""
+                SELECT generation FROM public.n4_extraction_runs
+                 WHERE tenant_id=CAST(:tenant AS uuid) AND run_id=CAST(:run AS uuid)
+            """), {"tenant": str(new_authority.tenant_id), "run": str(new_run)}) == 2
             reserved = await reserve_call(
                 session, authority=new_authority, run_id=new_run,
                 window_ordinal=0, idempotency_key="recovered-new-generation-01",
@@ -410,11 +415,13 @@ async def test_budget_blocked_zero_receipt_recovery_uses_new_fenced_generation(t
                  WHERE tenant_id=CAST(:tenant AS uuid)
                    AND run_id=CAST(:old_run AS uuid)
             """), {"tenant": str(new_authority.tenant_id), "old_run": str(old_run)})
-            assert old_receipts == 0
+            # Only the new generation's single reservation; no replay billing.
+            assert old_receipts == 1
             old_status = await progress(
                 session, tenant_id=new_authority.tenant_id, run_id=old_run,
             )
-            assert old_status["status"] == "PARTIAL"
+            # The paid retry reopened the unpaid blocked window.
+            assert old_status["status"] == "RUNNING"
             assert old_status["examined_windows"] == 0
     finally:
         await engine.dispose()
