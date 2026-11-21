@@ -35,6 +35,7 @@ from src.analysis.domain.n4_compact_window_response import (
     N4WindowContractError,
     parse_n4_window_output,
 )
+from src.analysis.domain.n4_failure_kinds import N4CoverageStatus
 from src.analysis.domain.n4_source_windows import (
     N4SourceWindow,
     plan_n4_source_windows,
@@ -57,6 +58,7 @@ class N4WindowProvider(Protocol):
 
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
+        attempt: int = 1,
     ) -> N4ProviderReceipt: ...
 
 
@@ -71,6 +73,10 @@ class N4RunOutcome:
     settled_receipt_windows: int = 0
     persisted_result_windows: int = 0
     blocked_result_windows: int = 0
+    # JV1-A1 contract: derived in application code (never a DB status), see
+    # derive_n4_coverage_status. None until the runner computes it (A3).
+    coverage_status: N4CoverageStatus | None = None
+    gap_windows: tuple[int, ...] = ()
 
 
 class N4IncrementalRunner:

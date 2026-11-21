@@ -14,11 +14,15 @@ import httpx
 
 from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
 from src.analysis.domain.n4_compact_window_response import (
-    N4_WINDOW_SYSTEM_PROMPT, n4_window_source_message,
+    N4_WINDOW_SYSTEM_PROMPT,
+    n4_window_source_message,
 )
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from src.core.ai.direct_provider_fallback import (
-    DirectRoute, FallbackUnavailable, ProviderUsageUnknown, _estimate_max_charge,
+    DirectRoute,
+    FallbackUnavailable,
+    ProviderUsageUnknown,
+    _estimate_max_charge,
     _invoke,
 )
 from src.core.ai.llm_client import LLMRequest
@@ -53,7 +57,10 @@ class DirectOpenAIN4WindowProvider:
 
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
+        attempt: int = 1,  # noqa: ARG002 - frozen by JV1-A1, used from A5
     ) -> N4ProviderReceipt:
+        # JV1-A1: ``attempt`` (1-based) is part of the frozen signature; the
+        # per-attempt output budget is implemented by A5 (unused until then).
         # The runner committed the reservation UUID before calling here.
         UUID(request_id)
         if not window.revision_id:
