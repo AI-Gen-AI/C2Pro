@@ -271,7 +271,21 @@ async def _arrange(db, tenant, saver, register, *, with_candidate: bool = True):
     thread_id = register(f"document:{document.id}:analysis") or f"document:{document.id}:analysis"
     app = _build_real_graph(saver)
     cfg = {"configurable": {"thread_id": thread_id}}
-    result = await app.ainvoke(_initial_state(document, tenant, thread_id), cfg)
+    state = _initial_state(document, tenant, thread_id)
+    # The real worker includes source revision identity in its checkpoint;
+    # this direct graph fixture must do the same. Otherwise resumed N8 can
+    # never match a version-pinned artifact, even when source facts agree.
+    revision_id = (
+        await db.execute(
+            select(DocumentRevisionORM.revision_id).where(
+                DocumentRevisionORM.document_id == document.id,
+                DocumentRevisionORM.tenant_id == tenant.id,
+                DocumentRevisionORM.valid_to.is_(None),
+            )
+        )
+    ).scalar_one()
+    state["document_revision_id"] = str(revision_id)
+    result = await app.ainvoke(state, cfg)
     assert "__interrupt__" in result
     checkpoint_id = (await app.aget_state(cfg)).config["configurable"]["checkpoint_id"]
 

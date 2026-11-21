@@ -121,9 +121,6 @@ def _risks(title: str, level: str = "HIGH") -> list[dict[str, str]]:
             "category": category,
             "impact": level,
             "likelihood": level,
-            "source_quote": f"Synthetic {category} source clause for integration testing.",
-            "source_quote_status": "VERIFIED",
-            "source": f"Synthetic {category} source clause for integration testing.",
         }
         for i, category in enumerate(_CATEGORIES)
     ]
@@ -145,10 +142,6 @@ def _final_state(arranged: Any, tenant_id: UUID, *, gated: bool, title: str) -> 
         "document_id": str(arranged.document_id),
         "thread_id": f"document:{arranged.document_id}:analysis",
         "doc_type": "contract",
-        "document_text": "\n".join(
-            f"Synthetic {category} source clause for integration testing."
-            for category in _CATEGORIES
-        ),
         "human_approval_required": gated,
         "extracted_risks": _risks(title),
         "extracted_wbs": [],
@@ -218,14 +211,34 @@ async def _propose(
         assert pending is not None
         if pending.checkpoint_id is None:
             pending.checkpoint_id = arranged.checkpoint_id
+        # The direct completion-hook shortcut opens a successor review without
+        # running the processing-worker lineage binder. Reproduce that
+        # production binding against the actual current operation, or the
+        # candidate rightly fails the exact generation/fence reader.
+        authority = (await session.execute(
+            text(
+                "SELECT generation, fencing_token "
+                "FROM document_processing_operations WHERE document_id = :d"
+            ),
+            {"d": arranged.document_id},
+        )).one()
+        pending.lineage_generation = authority.generation
+        pending.lineage_fencing_token = authority.fencing_token
 
+    await _confirm_current_synthetic_review(
+        completion_sessions["sessions"], tenant_id, arranged.document_id
+    )
+
+
+async def _confirm_current_synthetic_review(sessions, tenant_id, document_id) -> None:
+    """Use the real ledger after each new synthetic candidate, including Vn+1."""
     actor = persisted_reviewer()
     assert actor is not None, "a persisted reviewer is required for governed test setup"
-    async with completion_sessions["sessions"](tenant_id) as session:
+    async with sessions(tenant_id) as session:
         review = (
             await session.execute(
                 select(ReviewItemORM)
-                .where(ReviewItemORM.document_id == arranged.document_id)
+                .where(ReviewItemORM.document_id == document_id)
                 .order_by(ReviewItemORM.created_at.desc())
             )
         ).scalars().all()
@@ -260,7 +273,7 @@ async def _propose(
                     ordinal=finding.ordinal,
                     action=FindingDecisionAction.CONFIRMED,
                     expected_ledger_revision=view.ledger_revision + offset,
-                    idempotency_key=f"p714-fixture-{current.id}-{offset}",
+                    idempotency_key=f"p714-fixture-{current.id}-{view.artifact_version}-{offset}",
                 ),
             )
 
@@ -507,6 +520,9 @@ async def test_e_corrected_proposal_commits_only_corrected_version(
     with pytest.raises(StaleCandidateError):
         await _commit_in(independent_sessions, tenant.id, original)
     assert await _canonical(independent_sessions, tenant.id, arranged.project_id) == []
+    await _confirm_current_synthetic_review(
+        independent_sessions, tenant.id, arranged.document_id
+    )
 
     await _post_approve(
         request_sessions, tenant.id, arranged.review_item_id,
@@ -586,6 +602,9 @@ async def test_corrected_v2_risks_replace_stale_v1_resume_state_in_analysis_and_
         risk["title"] for risk in v1_risks
     ]
     assert await _binding(db, arranged.review_row_id) == v2
+    await _confirm_current_synthetic_review(
+        independent_sessions, tenant.id, arranged.document_id
+    )
 
     response = await _post_approve(
         request_sessions,
