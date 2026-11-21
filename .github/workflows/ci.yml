@@ -26,9 +26,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, "integration/**"]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, "integration/**"]
   workflow_dispatch:
 
 # Cancel superseded PR runs; never cancel main/develop pushes.
