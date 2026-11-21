@@ -39,7 +39,7 @@ Los tres modelos: **ACCEPT_WITH_CONDITIONS**, sin objeciones bloqueantes. Las co
 | H9 | El Score no se calcula solo; N8 usa solo cláusulas del documento; TIME/BUDGET solo vía `POST /coherence/evaluate` (DET-CRS-SCHDEAD, DET-CRS-CONBUD…) | `coherence/router.py:1175-1479`; `coherence/graph/nodes.py:994` |
 | H10 | Exportación = solo `window.print()` | `AuditReportMode.tsx:109` |
 | H11 | N2 solo anonimiza DNI, email, teléfono e IBAN (nombres e importes pasan) — **aceptado por el fundador** para Anthropic/OpenAI | `anonymizer/domain/pii_detector_service.py:51-57` |
-| H12 | El piloto Railway ejecuta **799ce53**; `main` está parado desde el 28/10; hay **120 PR abiertos (99 borradores)** apilados; `ci.yml` **no corría** en PR contra ramas de feature | Railway (solo lectura); GitHub REST; `.github/workflows/ci.yml` |
+| H12 | El piloto Railway ejecuta **799ce53**; `main` está parado desde el 28/10; hay **120 PR abiertos (99 borradores)** apilados; `ci.yml` **no corría** en PR contra ramas de feature. Primer CI real de la integración: ruff 80, mypy +91, 19 unit + 3 web en rojo (A0b) | Railway (solo lectura); GitHub REST; run 44917370712 |
 | H13 | Benchmark T5: 22 ventanas → 9 JSON válidos, 6 por límite de tokens, 7 formato inválido. FG-1: SM-03/05/08 sin hallazgo directo; citas sin cifras | CSV T5; `docs/audits/C2PRO_FG1_SOLARMAX_REAL_CONTRACT_OFFLINE_REPLAY_2026-11-20.md` |
 
 ### 1.2 Correcciones aceptadas de ChatGPT
@@ -79,7 +79,8 @@ T9 no demuestra superioridad del híbrido; T0 no fue ciego; Docling y LangExtrac
 
 | Hito | Cuándo | Qué se demuestra con uso real | Decide |
 |---|---|---|---|
-| **C0 Arranque** | dom 22/11 09:00 | Plan aprobado; topes de consola Anthropic/OpenAI puestos; `integration/journey-v1` en verde; corpus confirmado | Fundador |
+| **C0 Arranque** | dom 22/11 09:00 | Plan aprobado; topes de consola Anthropic/OpenAI puestos; corpus confirmado; arranca A0b | Fundador |
+| CI en verde | dom 22/11 20:00 | `integration/journey-v1` con `ci-status` verde (A0b) | — |
 | Despliegue 1 | lun 23/11 ~21:30 | `integration/journey-v1` con A2–A12 en el piloto (automático con CI verde) | — |
 | Despliegue 1b | mar 24/11 ~10:30 | Motor alternativo A8 disponible tras flag | — |
 | **V1** | **mar 24/11 12:00** | SolarMax + C2 en el piloto: N4 sin ventanas perdidas, hallazgos con cita y página, revisables uno a uno; métricas D4 frente a oráculo y análisis directo | Fundador: modelo N4 (B7) y **motor por ventanas vs directo** |
@@ -129,6 +130,12 @@ Formato: **objetivo** · rol/agente · tamaño · bloqueado por · franja. Acept
 - Hecho: rama creada (34b4180) con las 5 hojas y `ci.yml` ampliado a `integration/**`.
 - Pendiente: clasificar cada test en rojo como "preexistente" o asignado a un WP; registrar en el PR de seguimiento.
 - Verificación: CI `ci-status` en `integration/journey-v1`; `make test-api && make test-web`; `cd apps/api && C2PRO_N4_SCRATCH_DSN=$DSN pytest tests/integration/analysis -q`.
+
+**A0b · CI a verde en la rama de integración (condición de todos los despliegues)** · L0 + 4 agentes en paralelo · M · A0 · dom 22 09:00–20:00
+- Primer CI real de la pila (run 44917370712, 21/11): los PR apilados nunca habían ejecutado `ci.yml`. Resultado: ruff **80 errores** (casi todos de orden de imports, autocorregibles); mypy ratchet **91 errores nuevos** (baseline 0); unit backend **19 fallos + 1 error** de ~6.200; web **3 fallos** de 1.613; Docker build, E2E smoke y P0b journey en rojo; seguridad, coherencia, core, build web y migraciones en verde.
+- Reparto: Codex → ruff (`ruff check --fix`) + mypy; Claude Code → 19 unit + 1 error backend (corregir o marcar con motivo si el test es obsoleto, nunca borrar en silencio); Sonnet → 3 tests web + E2E smoke; Codex DevOps → Docker build y P0b.
+- Aceptación: `ci-status` verde en `integration/journey-v1`; cada test cambiado justificado en el PR; ningún gate debilitado.
+- Verificación: CI `ci-status` (required).
 
 **A1 · Contrato de interfaces N4 (sin lógica)** · L1 Claude Code · XS · — · dom 09:00–11:00
 - `N4RunOutcome` gana `coverage_status` (`COMPLETE` / `COMPLETE_WITH_GAPS` / `INCOMPLETE`, calculado en aplicación, **sin migración**: la columna `status varchar(16)` tiene CHECK cerrado) y `gap_windows`; `generate(..., attempt)`; `n4_failure_kinds.py` (OUTPUT_TRUNCATED, INVALID_ENVELOPE, PROVIDER_REJECTED_UNBILLED, PROVIDER_RESULT_UNCERTAIN, BUDGET_UNAVAILABLE); stubs `quote_page_locator`, `n4_clause_inventory`; forma de `item_data.n4_coverage` y `metadata.analysis_n4_coverage`; esquema de hallazgo compartido con el motor directo (A8) y el brazo directo (B3).
@@ -324,7 +331,7 @@ Campos por control: id, tipo, crítico, presente/ausente, cláusula, página, ci
 
 ## 7. Ruta crítica, puertas y red de seguridad
 
-Ruta crítica: **A0 → A2 → A3 → A7 → A12 → A13 → A14 → V1 (B4) → A16/A17/A26/A18/A21 → A14 → V2 → A24 → Aceptación.** Críticas también para V1: A5 (calidad de cita), A10–A11 (filas de cláusula y páginas, alimentan el Score) y la red de seguridad A8 + B3. En paralelo: A4, A9, B0–B2.
+Ruta crítica: **A0 → A0b → A2 → A3 → A7 → A12 → A13 → A14 → V1 (B4) → A16/A17/A26/A18/A21 → A14 → V2 → A24 → Aceptación.** Críticas también para V1: A5 (calidad de cita), A10–A11 (filas de cláusula y páginas, alimentan el Score) y la red de seguridad A8 + B3. En paralelo: A4, A9, B0–B2.
 
 | Riesgo | Detección | Respuesta |
 |---|---|---|
@@ -399,7 +406,8 @@ Plantilla común (añadir al inicio de cada prompt): *"Repo AI-Gen-AI/C2Pro, bas
 ## 12. Progreso
 | Fase / WP | Estado |
 |---|---|
-| A0 rama de integración | CREADA (34b4180); primer CI en curso |
+| A0 rama de integración | CREADA (34b4180) |
+| A0b CI a verde | PENDIENTE — primer CI: ruff 80, mypy +91, 19 unit + 1 error, 3 web, Docker/E2E/P0b en rojo |
 | Plan | PROPUESTO (este PR) |
 | Fase 1 (A1–A14) | PENDIENTE |
 | Fase 2 (A15–A23, A26) | PENDIENTE |
