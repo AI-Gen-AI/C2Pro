@@ -35,6 +35,8 @@ import asyncio
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from runpy import run_path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -43,7 +45,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import Command
 from psycopg_pool import AsyncConnectionPool
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.analysis.adapters.graph.nodes import (
@@ -73,6 +75,30 @@ from tests.modules.integration.hitl_actor import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+# ── SQL-only PostgreSQL decisions ledger ────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+async def real_hitl_decision_ledger(db: AsyncSession) -> None:
+    """Apply the actual immutable HITL ledger DDL to this disposable test DB.
+
+    The general unit-oriented bootstrap uses ORM create_all and cannot create
+    SQL-only append-only ledgers, triggers or RLS; the live resume path requires
+    those exact contracts. Never replace with a permissive mock table.
+    """
+    exists = (await db.execute(
+        text("SELECT to_regclass('public.hitl_finding_decisions')")
+    )).scalar_one_or_none()
+    if exists is None:
+        migration = (
+            Path(__file__).resolve().parents[3]
+            / "alembic/versions/20261008_0001_hitl_finding_decisions.py"
+        )
+        for statement in run_path(str(migration))["UPGRADE_STATEMENTS"]:
+            await db.execute(text(statement))
+        await db.commit()
 
 
 # ── real checkpointer ────────────────────────────────────────────────────────

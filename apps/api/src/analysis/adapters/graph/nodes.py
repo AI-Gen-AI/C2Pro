@@ -384,6 +384,40 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             _append_risk_extraction_summary(state)
             return state
     if os.getenv("C2PRO_AI_MOCK", "0") == "1":
+        # Explicit test-only seam for the public 2-page P0b PDF. It exercises
+        # the real asynchronous pipeline and source-citation checks without
+        # claiming any measured LLM accuracy. Never available in production:
+        # the runtime image excludes tests/ and both switches must be set.
+        if (
+            os.getenv("ENVIRONMENT", "").lower() == "test"
+            and os.getenv("C2PRO_P0B_SYNTHETIC_N4_FIXTURE") == "1"
+        ):
+            from tests.e2e_seed.p0b_synthetic_n4 import proposed_fixture_risks
+
+            source_text = llm_document_text(state)
+            proposals = proposed_fixture_risks(source_text)
+            if proposals:
+                state["extracted_risks"] = [
+                    _risk_contract_payload(item, source_text) for item in proposals
+                ]
+                state["confidence_score"] = None
+                state["human_approval_required"] = True
+                state["risk_extraction_outcome"] = "SYNTHETIC_CI_NOT_MODEL_ASSESSED"
+                state["node_results"] = [
+                    *state.get("node_results", []),
+                    NodeResult(
+                        node="risk_extractor",
+                        status=NodeStatus.DEGRADED,
+                        degradation_reason="synthetic_e2e_fixture_not_model_assessed",
+                    ),
+                ]
+                logger.warning(
+                    "ci_synthetic_n4_proposal_requires_human_review",
+                    document_id=state.get("document_id"),
+                    assessed_by_model=False,
+                )
+                _append_risk_extraction_summary(state)
+                return state
         _mark_risk_extraction_honest_failure(
             state,
             reason="AI risk extraction unavailable in mock mode — no risks extracted",
