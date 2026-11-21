@@ -9,7 +9,7 @@ match is NOT proof of original-PDF source or semantic/legal correctness.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from hashlib import sha256
@@ -21,12 +21,23 @@ from sqlalchemy import text
 from src.analysis.adapters.ai.n4_anthropic_window_provider import AnthropicN4WindowProvider
 from src.analysis.application.n4_incremental_runner import N4IncrementalRunner, N4WindowProvider
 from src.analysis.domain.ai_source_text import llm_document_text
+from src.analysis.domain.n4_consolidation import consolidate_candidates
+from src.analysis.domain.n4_failure_kinds import (
+    N4_COVERAGE_SCHEMA_VERSION,
+    N4CoverageGap,
+    N4CoverageStatus,
+    N4FailureKind,
+    N4GapResolution,
+    derive_n4_coverage_status,
+)
+from src.analysis.domain.n4_reference_register import build_reference_register
 from src.analysis.domain.risk_provenance import classify_quote
 from src.core.ai.anthropic_wrapper import AnthropicWrapper
 from src.core.ai.model_router import ModelTier
 from src.core.database import get_session_factory
 from src.core.processing_authority import ProcessingStage, current_authority
 from src.documents.application.n4_source_identity import is_n4_source_identity_valid
+from src.documents.domain import quote_page_locator as _page_locator
 
 
 class N4GraphBridgeBlocked(RuntimeError):
@@ -134,7 +145,170 @@ def _uat_inherited_scopes(tenant_id: UUID) -> bool:
     return True
 
 
-def _candidate_payload(claim: Mapping[str, Any], refs: list[dict[str, Any]], source: str) -> dict[str, Any]:
+_INFLIGHT_RESERVATIONS = frozenset({"RESERVED", "UNKNOWN"})
+_KNOWN_FAILURE_KINDS = frozenset(k.value for k in N4FailureKind)
+_UNCLASSIFIED_REASON = "Window not examined; failure kind unclassified"
+
+
+def _page_spans(raw: Sequence[Any] | None) -> list[_page_locator.PageSpan]:
+    """Normalize a page map (PageSpan or dict rows); malformed rows are dropped."""
+    spans: list[_page_locator.PageSpan] = []
+    for row in raw or ():
+        if isinstance(row, _page_locator.PageSpan):
+            spans.append(row)
+        elif isinstance(row, Mapping):
+            try:
+                spans.append(_page_locator.PageSpan(
+                    int(row["page"]), int(row["start_offset"]), int(row["end_offset"]),
+                ))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return spans
+
+
+def _grounded_page_spans(state: Mapping[str, Any]) -> list[_page_locator.PageSpan]:
+    """Page map offsets address parser text; valid for N2 projection only if unchanged."""
+    if state.get("anonymized_text") != state.get("document_text"):
+        return []
+    return _page_spans(state.get("parsed_text_page_spans"))
+
+
+def _approx_pages(
+    spans: Sequence[_page_locator.PageSpan], start: int, end: int,
+) -> tuple[int | None, int | None]:
+    hit = [p.page for p in spans if p.start_offset < end and p.end_offset > start]
+    return (min(hit), max(hit)) if hit else (None, None)
+
+
+def assess_n4_run(
+    *,
+    outcome: Any,
+    windows: Sequence[Mapping[str, Any]],
+    reservations: Sequence[Mapping[str, Any]],
+    source_sha256: str,
+    page_spans: Sequence[Any] | None = None,
+) -> dict[str, Any]:
+    """Return N4Coverage for a reviewable run or raise ``N4RunIncomplete``.
+
+    Reviewable = every window terminal (EXAMINED, or BLOCKED as a recorded gap),
+    at least one persisted result, and no in-flight/UNKNOWN reservation (a
+    possibly billed or still running call is never a closed gap).
+    """
+    spans = _page_spans(page_spans)
+    examined = [w for w in windows if w["status"] == "EXAMINED"]
+    blocked = [w for w in windows if w["status"] == "BLOCKED"]
+    inflight = any(r["status"] in _INFLIGHT_RESERVATIONS for r in reservations)
+    terminal = bool(windows) and len(examined) + len(blocked) == len(windows)
+    if (
+        not terminal or inflight or not examined
+        or int(outcome.persisted_result_windows) < 1
+    ):
+        raise N4RunIncomplete(
+            run_id=outcome.run_id, status=outcome.status,
+            examined_windows=outcome.examined_windows,
+            total_windows=outcome.total_windows,
+            persisted_result_windows=outcome.persisted_result_windows,
+            blocked_result_windows=outcome.blocked_result_windows,
+            stopped_reason=outcome.stopped_reason, source_sha256=source_sha256,
+        )
+    attempts: dict[int, int] = {}
+    for r in reservations:
+        ordinal = int(r["window_ordinal"])
+        attempts[ordinal] = attempts.get(ordinal, 0) + 1
+    gaps: list[N4CoverageGap] = []
+    for w in sorted(blocked, key=lambda row: int(row["ordinal"])):
+        raw = str(w.get("blocked_reason") or "")
+        known = raw in _KNOWN_FAILURE_KINDS
+        start, end = _approx_pages(spans, int(w["core_start"]), int(w["core_end"]))
+        gaps.append({
+            "ordinal": int(w["ordinal"]),
+            "failure_kind": raw if known else "UNCLASSIFIED",
+            # Raw ledger text is never echoed: only a closed vocabulary.
+            "reason": raw if known else _UNCLASSIFIED_REASON,
+            "attempts": attempts.get(int(w["ordinal"]), 0),
+            "page_start": start,
+            "page_end": end,
+            "resolution": N4GapResolution.OPEN.value,
+        })
+    gap_windows = [g["ordinal"] for g in gaps]
+    status = derive_n4_coverage_status(
+        total_windows=len(windows), examined_windows=len(examined),
+        gap_windows=gap_windows,
+    )
+    if status is N4CoverageStatus.INCOMPLETE:  # defensive: unreachable if terminal
+        raise N4RunIncomplete(
+            run_id=outcome.run_id, status=outcome.status,
+            examined_windows=outcome.examined_windows,
+            total_windows=outcome.total_windows,
+            persisted_result_windows=outcome.persisted_result_windows,
+            blocked_result_windows=outcome.blocked_result_windows,
+            stopped_reason=outcome.stopped_reason, source_sha256=source_sha256,
+        )
+    return {
+        "schema_version": N4_COVERAGE_SCHEMA_VERSION,
+        "status": status.value,
+        "run_id": str(outcome.run_id),
+        "source_sha256": source_sha256,
+        "total_windows": len(windows),
+        "examined_windows": len(examined),
+        "gap_windows": gap_windows,
+        "gaps": gaps,
+    }
+
+
+async def _load_run_ledger(
+    tenant_id: UUID, run_id: UUID,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    async with get_session_factory()() as session, session.begin():
+        await session.execute(
+            text("SELECT set_config('app.current_tenant', :tenant, true)"),
+            {"tenant": str(tenant_id)},
+        )
+        params = {"tenant": str(tenant_id), "run": str(run_id)}
+        windows = (await session.execute(text("""
+            SELECT ordinal, status, blocked_reason, core_start, core_end
+              FROM public.n4_extraction_windows
+             WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+             ORDER BY ordinal
+        """), params)).mappings().all()
+        reservations = (await session.execute(text("""
+            SELECT window_ordinal, status FROM public.n4_usage_reservations
+             WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+        """), params)).mappings().all()
+    return [dict(w) for w in windows], [dict(r) for r in reservations]
+
+
+def _page_evidence(
+    quote: str, source: str, refs: list[dict[str, Any]],
+    spans: Sequence[_page_locator.PageSpan],
+) -> tuple[int | None, str | None, str]:
+    """(page_number, source_locator, page_verification_status) for a verified quote."""
+    if not spans:
+        return None, None, "PAGE_UNVERIFIED_NO_PAGE_MAP"
+    near = next((
+        int(ref["analysis_span"][0]) for ref in refs
+        if isinstance(ref, dict) and isinstance(ref.get("analysis_span"), list)
+        and ref["analysis_span"]
+    ), None)
+    try:
+        location = _page_locator.locate_quote_page(
+            quote, source_text=source, page_spans=spans, near_offset=near,
+        )
+    except NotImplementedError:  # A9 locator not merged: no page claim
+        return None, None, "PAGE_UNRESOLVED"
+    if location is None:
+        return None, None, "PAGE_UNRESOLVED"
+    locator = (
+        f"p. {location.page_start}" if location.page_start == location.page_end
+        else f"pp. {location.page_start}\u2013{location.page_end}"
+    )
+    return location.page_start, locator, "PAGE_LOCATED"
+
+
+def _candidate_payload(
+    claim: Mapping[str, Any], refs: list[dict[str, Any]], source: str,
+    *, page_spans: Sequence[Any] | None = None,
+) -> dict[str, Any]:
     if not isinstance(claim, dict) or not isinstance(refs, list) or not refs:
         raise N4GraphBridgeBlocked("N4 candidate lacks persisted claim and source reference")
     title = claim.get("title")
@@ -156,6 +330,21 @@ def _candidate_payload(claim: Mapping[str, Any], refs: list[dict[str, Any]], sou
         )
     )
     quote = verified_quote if is_projection_match else None
+    # "VERIFIED" here means an exact match in the N2 model-safe projection. It is
+    # not a page-verified citation of the original document: that is reported
+    # separately in ``page_verification_status``. When a page map exists but the
+    # quote cannot be placed on a page, the quote is withheld, never VERIFIED.
+    page_number: int | None = None
+    locator: str | None = None
+    page_status: str | None = None
+    unresolved = False
+    if quote:
+        page_number, locator, page_status = _page_evidence(
+            quote, source, refs, _page_spans(page_spans),
+        )
+        unresolved = page_status == "PAGE_UNRESOLVED"
+        if unresolved:
+            quote = None
     return {
         "title": title.strip(),
         "description": reason.strip(),
@@ -165,8 +354,14 @@ def _candidate_payload(claim: Mapping[str, Any], refs: list[dict[str, Any]], sou
         "confidence": None,
         "clause_ref": str(claim.get("clause_ref") or "") or None,
         "source_quote": quote,
-        "source_quote_status": "VERIFIED" if quote else "NOT_FOUND_IN_DOCUMENT",
+        "source_quote_status": (
+            "VERIFIED" if quote
+            else "PAGE_UNRESOLVED" if unresolved else "NOT_FOUND_IN_DOCUMENT"
+        ),
         "source": quote,
+        "page_number": page_number,
+        "source_locator": locator,
+        "page_verification_status": page_status,
     }
 
 
@@ -215,20 +410,32 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         authority=authority, project_id=project_id,
         model_safe_text=source_text, n2_projection_attested=True,
     )
-    if outcome.status != "COMPLETE" or (
-        outcome.examined_windows != outcome.total_windows
-        or outcome.settled_receipt_windows != outcome.total_windows
-        or outcome.persisted_result_windows != outcome.total_windows
+    source_sha256 = sha256(source_text.encode("utf-8")).hexdigest()
+    spans = _grounded_page_spans(state)
+    if outcome.status == "COMPLETE" and (
+        outcome.examined_windows == outcome.total_windows
+        and outcome.settled_receipt_windows == outcome.total_windows
+        and outcome.persisted_result_windows == outcome.total_windows
     ):
-        raise N4RunIncomplete(
-            run_id=outcome.run_id,
-            status=outcome.status,
-            examined_windows=outcome.examined_windows,
-            total_windows=outcome.total_windows,
-            persisted_result_windows=outcome.persisted_result_windows,
-            blocked_result_windows=outcome.blocked_result_windows,
-            stopped_reason=outcome.stopped_reason,
-            source_sha256=sha256(source_text.encode("utf-8")).hexdigest(),
+        coverage: dict[str, Any] = {
+            "schema_version": N4_COVERAGE_SCHEMA_VERSION,
+            "status": N4CoverageStatus.COMPLETE.value,
+            "run_id": str(outcome.run_id),
+            "source_sha256": source_sha256,
+            "total_windows": outcome.total_windows,
+            "examined_windows": outcome.examined_windows,
+            "gap_windows": [],
+            "gaps": [],
+        }
+    else:
+        # Any other terminal state is reviewable only as an explicit, open-gap
+        # COMPLETE_WITH_GAPS; in-flight/UNKNOWN or zero results still block.
+        windows, reservations = await _load_run_ledger(
+            authority.tenant_id, outcome.run_id,
+        )
+        coverage = assess_n4_run(
+            outcome=outcome, windows=windows, reservations=reservations,
+            source_sha256=source_sha256, page_spans=spans,
         )
 
     # Tenant RLS and an exact run_id: never import another document's candidates.
@@ -245,15 +452,32 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
              ORDER BY f.window_ordinal, f.finding_key
         """), {"tenant": str(authority.tenant_id), "run": str(outcome.run_id)})).mappings().all()
 
-    risks = []
-    provenance = []
+    candidates: list[dict[str, Any]] = []
     for row in rows:
-        risks.append(_candidate_payload(row["claim"], row["source_refs"], source_text))
-        provenance.append({
+        payload = _candidate_payload(
+            row["claim"], row["source_refs"], source_text, page_spans=spans,
+        )
+        candidates.append({
+            **payload,
             "finding_key": row["finding_key"],
             "window_ordinal": int(row["window_ordinal"]),
             "source_refs": row["source_refs"],
         })
+    merged = consolidate_candidates(candidates)
+    _trace_keys = {"finding_key", "window_ordinal", "source_refs", "source_keys",
+                   "consolidation_trace"}
+    risks = [{k: v for k, v in m.items() if k not in _trace_keys} for m in merged]
+    provenance = [{
+        "finding_key": m["finding_key"],
+        "window_ordinal": m["window_ordinal"],
+        "source_refs": m["source_refs"],
+        "source_keys": m["source_keys"],
+        "consolidation_trace": m["consolidation_trace"],
+    } for m in merged]
+    register = build_reference_register(source_text, [
+        {"finding_key": m["finding_key"], "source_quote": m.get("source_quote")}
+        for m in merged
+    ])
     return {
         "extracted_risks": risks,
         "risk_extraction_outcome": (
@@ -264,11 +488,13 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         "human_approval_required": True,
         "n4_incremental_run_id": str(outcome.run_id),
         "n4_incremental_window_coverage": {
-            "examined": outcome.examined_windows,
+            "examined": coverage["examined_windows"],
             "total": outcome.total_windows,
             "source_kind": "MODEL_SAFE_PROJECTION",
             "original_document_completeness_certified": False,
             "semantic_recall_certified": False,
         },
         "n4_candidate_provenance": provenance,
+        "n4_coverage": coverage,
+        "n4_reference_register": register,
     }

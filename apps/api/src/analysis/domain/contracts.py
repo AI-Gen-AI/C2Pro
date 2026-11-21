@@ -85,6 +85,12 @@ class RiskItem(BaseModel):
     # and the status says why. ``clause_ref`` stays the extractor's own clause label.
     source_quote: str | None = None
     source_quote_status: str | None = None
+    # JV1-A7: page evidence is optional and only set when a page map located the
+    # quote; never inferred. ``page_verification_status`` separates an exact N2
+    # projection match from a page-verified citation of the original document.
+    page_number: int | None = Field(default=None, ge=1)
+    source_locator: str | None = None
+    page_verification_status: str | None = None
 
     @model_validator(mode="before")
     @classmethod

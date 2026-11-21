@@ -298,7 +298,9 @@ def test_candidate_payload_without_page_map_has_no_page_and_stays_verified():
     quote = "The contractor shall notify within 12 days."
     value = bridge._candidate_payload(*_claim_refs(quote), quote)
     assert value["page_number"] is None and value["source_locator"] is None
+    # Exact N2-projection match only; explicitly not a page-verified citation.
     assert value["source_quote_status"] == "VERIFIED"
+    assert value["page_verification_status"] == "PAGE_UNVERIFIED_NO_PAGE_MAP"
 
 
 def test_candidate_payload_uses_page_locator_when_map_available(monkeypatch):
@@ -311,14 +313,17 @@ def test_candidate_payload_uses_page_locator_when_map_available(monkeypatch):
     assert value["source_locator"] == "pp. 4–5"
 
 
-def test_candidate_payload_locator_stub_unimplemented_leaves_page_none():
+def test_candidate_payload_locator_stub_unimplemented_is_not_verified():
     from src.documents.domain.quote_page_locator import PageSpan
     quote = "The contractor shall notify within 12 days."
     value = bridge._candidate_payload(
         *_claim_refs(quote), quote, page_spans=[PageSpan(1, 0, 100)],
     )
     assert value["page_number"] is None
-    assert value["source_quote_status"] == "VERIFIED"  # A9 absent: no map result
+    # Page map present but A9 locator unimplemented: no page => not VERIFIED.
+    assert value["source_quote_status"] != "VERIFIED"
+    assert value["source_quote"] is None
+    assert value["page_verification_status"] == "PAGE_UNRESOLVED"
 
 
 def test_candidate_payload_not_verified_when_map_available_but_page_missing(monkeypatch):
