@@ -10,12 +10,13 @@ from typing import Any
 
 try:
     import pyfiebdc
-    from pyfiebdc.exceptions import InvalidFileException
+    from pyfiebdc.exceptions import InvalidFileException as _BC3InvalidFileException
 except ImportError:
     pyfiebdc = None
     InvalidFileException: type[Exception] | None = None
     PYFIEBDC_AVAILABLE = False
 else:
+    InvalidFileException = _BC3InvalidFileException
     PYFIEBDC_AVAILABLE = True
 
 

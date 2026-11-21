@@ -69,7 +69,7 @@ def _amount(value: Decimal | str | int) -> Decimal:
         raise ValueError("invalid financial amount") from exc
 
 
-def _uuid(value: UUID | str) -> str:
+def _uuid(value: UUID | str | None) -> str:
     return str(UUID(str(value)))
 
 

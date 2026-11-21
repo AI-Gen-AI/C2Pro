@@ -1783,12 +1783,17 @@ async def read_n4_only_pilot_findings(
     if doc is None or doc.project_id != project_id:
         raise HTTPException(status_code=404, detail="document unavailable")
     marker = (doc.document_metadata or {}).get("n4_only_pilot")
+    if not isinstance(marker, dict):
+        raise HTTPException(status_code=404, detail="pilot findings unavailable")
+    generation = marker.get("generation")
+    if not isinstance(generation, int) or isinstance(generation, bool):
+        raise HTTPException(status_code=404, detail="pilot findings unavailable")
     try:
         scope = require_readable_pilot(
             marker, tenant_id=tenant_id, project_id=project_id,
             document_id=document_id,
             revision_id=marker.get("revision_id") if isinstance(marker, dict) else None,
-            generation=marker.get("generation") if isinstance(marker, dict) else -1,
+            generation=generation,
             user_id=user_id,
         )
         if (doc.document_metadata or {}).get("parsed_text_revision_id") != str(scope.revision_id):

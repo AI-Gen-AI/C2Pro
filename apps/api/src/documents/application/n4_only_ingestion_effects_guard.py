@@ -137,7 +137,7 @@ async def record_ingestion_effects_possible(
     """
     marker = _authorized_marker(document, grant)
     guard = marker.get(GUARD_KEY)
-    if not _same_attempt(guard, grant) or guard.get("state") != BEFORE_EFFECTS:
+    if not isinstance(guard, dict) or not _same_attempt(guard, grant) or guard.get("state") != BEFORE_EFFECTS:
         raise N4OnlyIngestionEffectsUnsafe("missing or stale pre-effect attestation")
     await processing_authority.verify_in_transaction(repo.session, grant)
     next_marker = dict(marker)

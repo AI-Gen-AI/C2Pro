@@ -51,8 +51,8 @@ SINGLE_DOCUMENT_ASSESSMENT_KEY = "single_document_assessment"
 SINGLE_DOCUMENT_ASSESSMENT_VERSION = 1
 # Method revisions are distinct from serialization shape revisions. Historical
 # v1 artifacts without the field decode as the legacy classifier, never as v2.
-HEALTH_METHOD_ROUTER_V1 = "router_no_prior_v1"
-HEALTH_METHOD_CLAUSE_V2 = "router_clause_anchors_v2"
+HEALTH_METHOD_ROUTER_V1: Literal["router_no_prior_v1"] = "router_no_prior_v1"
+HEALTH_METHOD_CLAUSE_V2: Literal["router_clause_anchors_v2"] = "router_clause_anchors_v2"
 HealthMethodVersion = Literal["router_no_prior_v1", "router_clause_anchors_v2"]
 
 

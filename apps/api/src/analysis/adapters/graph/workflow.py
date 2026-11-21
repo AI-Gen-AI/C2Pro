@@ -295,8 +295,8 @@ def build_workflow() -> ProjectWorkflow:
 
     # Classification & extraction
     workflow.add_node("router", router_node)                                # N3
-    workflow.add_node("unextractable_document", unextractable_document_node)
-    workflow.add_node("unclassified_document", unclassified_document_node)
+    workflow.add_node("unextractable_document", cast(StateNode[ProjectState, None], unextractable_document_node))
+    workflow.add_node("unclassified_document", cast(StateNode[ProjectState, None], unclassified_document_node))
     workflow.add_node("risk_extractor", risk_extractor_node)                # N4
     workflow.add_node("wbs_extractor", wbs_extractor_node)                  # N5
     workflow.add_node("budget_parser", budget_parser_node)                  # N9

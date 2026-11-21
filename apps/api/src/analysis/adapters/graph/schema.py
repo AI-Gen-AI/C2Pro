@@ -38,6 +38,7 @@ class ProjectState(TypedDict):
     # N4 V4 opt-in: input-window coverage and proposed source evidence, never
     # an original-PDF citation or semantic completeness certificate.
     n4_incremental_run_id: str | None
+    n4_incremental_source_sha256: str | None
     n4_incremental_window_coverage: dict[str, Any] | None
     n4_candidate_provenance: list[dict[str, Any]]
     # Pre-HITL literal source matching in the N2 analysis projection, not

@@ -298,8 +298,8 @@ def compare_original_source_rows(
     )
     for spec in specs:
         quote = spec["source_quote"].lower()
-        deadline = _date_from_quote(spec["source_quote"])
-        if deadline is None or not any(mark in quote for mark in
+        spec_deadline = _date_from_quote(spec["source_quote"])
+        if spec_deadline is None or not any(mark in quote for mark in
             ("no later than", " by ", "a más tardar", "antes del", "no después del")):
             continue
         names = [name for name in _SPEC_MILESTONES if name in quote]
@@ -308,14 +308,14 @@ def compare_original_source_rows(
         for row in schedule:
             task = str(row["payload"].get("task") or "").lower()
             finish = _row_date(row["payload"].get("end_date"))
-            if names[0] not in task or finish is None or finish <= deadline:
+            if names[0] not in task or finish is None or finish <= spec_deadline:
                 continue
             findings.append(_finding(
                 "SPEC-MILESTONE-VS-SCHEDULE",
-                names[0] + " planned for " + finish + " after specification deadline " + deadline,
+                names[0] + " planned for " + finish + " after specification deadline " + spec_deadline,
                 spec, row,
-                values={"technical_deadline": deadline, "planned_finish": finish,
-                        "overrun_days": (date.fromisoformat(finish) - date.fromisoformat(deadline)).days},
+                values={"technical_deadline": spec_deadline, "planned_finish": finish,
+                        "overrun_days": (date.fromisoformat(finish) - date.fromisoformat(spec_deadline)).days},
             ))
     return {
         "findings": findings,

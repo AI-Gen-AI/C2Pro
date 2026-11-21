@@ -12,7 +12,7 @@ Refers to EPIC-CORE-DECOUPLE / TASK-IMPL-010 Phase 3.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import structlog
@@ -48,6 +48,7 @@ from src.analysis.application.critique_extraction_use_case import (
     CritiqueExtractionUseCase,
 )
 from src.analysis.domain.ai_extraction import (
+    AIExtractionPort,
     CritiqueExtractionService,
     DeterministicRiskRulesService,
     DeterministicWbsRulesService,
@@ -321,7 +322,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         )
         try:
             update = await run_governed_n4_in_graph(state)
-            state.update(update)
+            cast(dict[str, Any], state).update(update)
             state["node_results"] = [
                 *state.get("node_results", []),
                 NodeResult(
@@ -732,9 +733,11 @@ async def critique_node(
         state, source_text=source_text,
     )
     try:
-        service = get_ai_service(state.get("tenant_id"))
+        service: AIExtractionPort = get_ai_service(state.get("tenant_id"))
         if os.getenv("C2PRO_N12_CHECKPOINT_ESCROW") == "1":
             from src.analysis.adapters.ai.n12_checkpoint_escrow_port import (
+                N12CheckpointIdentityError,
+                N12GovernedExtraction,
                 bind_n12_checkpoint_escrow,
             )
             from src.analysis.adapters.graph.n12_checkpoint_witness import (
@@ -746,10 +749,12 @@ async def critique_node(
             await verify_n12_durable_predecessor(
                 state=state, model_safe_source=source_text, config=config,
             )
+            if not callable(getattr(service, "run_full_source_review", None)):
+                raise N12CheckpointIdentityError("N12_SERVICE_GOVERNED_REVIEW_MISSING")
             service = bind_n12_checkpoint_escrow(
                 state=state,
                 model_safe_source=source_text,
-                service=service,
+                service=cast(N12GovernedExtraction, service),
                 checkpoint_persisted=True,
             )
         use_case = CritiqueExtractionUseCase(ai=service)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from hashlib import sha256
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 
@@ -69,7 +69,7 @@ async def n4_only_risk_node(state: ProjectState) -> ProjectState:
     return await risk_extractor_node(state)
 
 
-def build_n4_only_workflow() -> StateGraph:
+def build_n4_only_workflow() -> StateGraph[ProjectState, None, ProjectState, ProjectState]:
     """An independent topology, not an N12 escape hatch or workflow_terminated spoof."""
     graph = StateGraph(ProjectState)
     graph.add_node("document_ingestion", document_ingestion_node)
@@ -96,7 +96,7 @@ async def run_n4_only_pilot(initial_state: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(initial_state.get("n4_only_pilot"), dict):
         raise N4OnlyPilotDenied("no server-issued N4-only pilot marker")
     # Graph topology is fail-closed; N12 and HITL are not registered at all.
-    result = await build_n4_only_workflow().compile().ainvoke(initial_state)
+    result = await build_n4_only_workflow().compile().ainvoke(cast(ProjectState, initial_state))
     if result.get("workflow_terminated") is True:
         raise N4OnlyPilotIncomplete("N4 ledger incomplete or provider failed")
     coverage = result.get("n4_incremental_window_coverage") or {}

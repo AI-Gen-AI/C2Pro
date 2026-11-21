@@ -98,7 +98,7 @@ def create_pending_s2_s4_manifest(packet: Mapping[str, Any]) -> dict[str, Any]:
             or risk_key in seen
             or ordinal != i or type(ordinal) is not int
             or type(window) is not int or not 0 <= window < 24
-            or not _uuid(rev)
+            or not isinstance(rev, str) or not _uuid(rev)
             or candidate.get("n4_run_id") != run_id
             or candidate.get("review_decision") is not None
             or candidate.get("reviewer_identity") is not None

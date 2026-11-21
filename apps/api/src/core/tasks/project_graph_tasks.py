@@ -227,12 +227,6 @@ async def run_project_graph_once(
         "previous_snapshot_id": None,
         "changed_artifact_ids": [],
         "artifacts": artifacts,
-        **(
-            {"canonical_materialization_status": canonical_outcome.status}
-            if canonical_outcome is not None
-            else {}
-        ),
-        **({"canonical_project_state": canonical_state} if canonical_state is not None else {}),
         "structured_source_refs": list(structured_source_refs or []),
         "structured_source_units": list(structured_source_units or []),
         "structured_document_quotes": list(structured_document_quotes or []),
@@ -243,6 +237,10 @@ async def run_project_graph_once(
         "node_results": [],
         "artifact_repository": artifact_repository,
     }
+    if canonical_outcome is not None:
+        graph_input["canonical_materialization_status"] = canonical_outcome.status
+    if canonical_state is not None:
+        graph_input["canonical_project_state"] = canonical_state
     if artifacts:
         # An empty successful lookup is different from a failed lookup.
         # Neither is permission to score a persisted VERIFIED claim.
@@ -268,7 +266,7 @@ async def run_project_graph_once(
     failed_nodes = [
         node.node
         for node in result.get("node_results", [])
-        if getattr(node, "status", None).value == "failed"
+        if getattr(getattr(node, "status", None), "value", None) == "failed"
     ]
     if failed_nodes:
         raise RuntimeError(f"ProjectGraph execution failed: {', '.join(failed_nodes)}")
@@ -474,11 +472,14 @@ async def _run_project_graph_async(
                 )
                 # Persist only PROVISIONAL, dual-source citations in the same
                 # transaction as Tier-2. No promotion to canonical alerts.
+                comparison = result.get("structured_source_comparison")
+                if comparison is not None and not isinstance(comparison, dict):
+                    raise RuntimeError("STRUCTURED_SOURCE_COMPARISON_MALFORMED")
                 await persist_provisional_source_discrepancies(
                     session,
                     project_id=project_id,
                     tenant_id=tenant_id,
-                    comparison=result.get("structured_source_comparison"),
+                    comparison=comparison,
                 )
                 await session.commit()
                 await active_governance.clear_project_pending(project_id)

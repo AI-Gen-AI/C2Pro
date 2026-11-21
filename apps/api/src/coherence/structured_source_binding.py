@@ -6,6 +6,7 @@ a VERIFIED source_clause_id. The caller retains the governing HITL state.
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
@@ -120,7 +121,7 @@ async def resolve_alert_original_rows(
         refs = detection.get("structured_sources")
         if not isinstance(refs, list) or not refs:
             continue
-        updated: list[dict] = []
+        updated: list[dict[str, object]] = []
         resolved = True
         for value in refs:
             if not isinstance(value, dict):
@@ -205,7 +206,7 @@ async def revalidate_listed_alert_source_bindings(
     *,
     tenant_id: UUID,
     project_id: UUID,
-    alerts: list,
+    alerts: list[Any],
 ) -> None:
     """Read-time currentness, without changing the historical alert ledger.
 
@@ -253,7 +254,7 @@ async def revalidate_listed_alert_source_bindings(
             if len(hashes) != 1 or hashes[0].blob_hash != ref.blob_sha256:
                 current = False
                 break
-        if current and getattr(evidence, "contract_source", None) is not None:
+        if current and evidence is not None and evidence.contract_source is not None:
             current = await _verified_contract_source(
                 db,
                 tenant_id=tenant_id,

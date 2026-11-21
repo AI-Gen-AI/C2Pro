@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir \
 # ===========================================
 # Stage 2: Runtime
 # ===========================================
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim AS runtime-base
 
 # Metadata
 LABEL maintainer="C2Pro Team <dev@c2pro.app>"
@@ -102,3 +102,18 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Default image role is API-only. Railway worker and scheduler services reuse
 # this image with explicit run_worker.sh / run_scheduler.sh start commands.
 CMD ["bash", "scripts/run_api.sh"]
+
+
+# Governed UAT may invoke owner/admin bootstrap tools explicitly. Existing
+# pilot images are unchanged; future UAT deployments must select --target uat.
+FROM runtime-base AS uat
+
+# Default image is production. Admin-only bootstrap scripts and the UAT
+# launcher must never be shipped to production containers. The CI production
+# image smoke gate asserts their absence rather than relaxing the check.
+FROM runtime-base AS production
+USER root
+RUN rm -f /app/scripts/admin_ops_bootstrap.py \
+          /app/scripts/checkpoint_bootstrap.py \
+          /app/scripts/run_uat_api.sh
+USER appuser

@@ -235,8 +235,8 @@ def _impact_score_for(raw: dict[str, Any]) -> float | None:
         return max(0.0, min(1.0, normalized))
 
     impact = raw.get("impact") or raw.get("severity")
-    normalized = str(getattr(impact, "value", impact) or "").upper().strip()
-    return _IMPACT_TO_SCORE.get(normalized)
+    normalized_impact = str(getattr(impact, "value", impact) or "").upper().strip()
+    return _IMPACT_TO_SCORE.get(normalized_impact)
 
 
 def _severity_for(raw: dict[str, Any]) -> SeverityLevel:
@@ -266,7 +266,7 @@ def _valid_confidence(value: object) -> bool:
 
 def _confidence_for(raw: dict[str, Any]) -> float:
     value = raw.get("confidence")
-    return float(value) if _valid_confidence(value) else _EXTRACTOR_CONFIDENCE
+    return float(value) if isinstance(value, (int, float)) and _valid_confidence(value) else _EXTRACTOR_CONFIDENCE
 
 
 def _quote_for(raw: dict[str, Any]) -> str:

@@ -188,12 +188,13 @@ def audit_v41_financial_evidence(report: object) -> V41FinanceEvidenceResult:
         and src.get("n4_windows_planned") != n4.get("total_windows")
     ):
         issues.append("SOURCE_WINDOW_INVENTORY_MISMATCH")
+    total_windows = n4.get("total_windows")
     if n4.get("status") != "COMPLETE":
         issues.append("N4_ANALYSIS_NOT_COMPLETE")
     elif (
-        n4.get("examined_windows") != n4.get("total_windows")
-        or type(n4.get("total_windows")) is not int
-        or n4.get("total_windows") <= 0
+        n4.get("examined_windows") != total_windows
+        or type(total_windows) is not int
+        or total_windows <= 0
     ):
         issues.append("WINDOW_COVERAGE_INCOMPLETE")
     if (

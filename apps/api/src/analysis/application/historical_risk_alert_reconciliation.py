@@ -435,8 +435,8 @@ def _normalise_risk(value: object) -> dict[str, object] | None:
             return None
         result[field] = item
     if any(
-        not isinstance(result[field], str) or not result[field].strip()
-        for field in _REQUIRED_RISK_FIELDS
+        not isinstance(value, str) or not value.strip()
+        for value in (result[field] for field in _REQUIRED_RISK_FIELDS)
     ):
         return None
     severity = _risk_severity(result)
@@ -455,11 +455,10 @@ def _risk_severity(risk: Mapping[str, object]) -> str | None:
 
 
 def _has_source_evidence(risk: Mapping[str, object]) -> bool:
+    source, quote = risk.get("source"), risk.get("source_quote")
     return (
-        isinstance(risk.get("source"), str)
-        and bool(risk["source"].strip())
-        and isinstance(risk.get("source_quote"), str)
-        and bool(risk["source_quote"].strip())
+        isinstance(source, str) and bool(source.strip())
+        and isinstance(quote, str) and bool(quote.strip())
         and risk.get("source_quote_status") == "VERIFIED"
     )
 
@@ -528,7 +527,7 @@ def _snapshot_digest(input_data: ReconciliationInput) -> str:
         ),
         "historical_analyses": sorted(
             (_analysis_json(analysis) for analysis in input_data.historical_analyses),
-            key=lambda row: row["analysis_id"],
+            key=lambda row: str(row["analysis_id"]),
         ),
     }
     return sha256(_canonical_json(value).encode()).hexdigest()
@@ -558,7 +557,7 @@ def _analysis_json(analysis: HistoricalAnalysisSnapshot) -> dict[str, object]:
         "analysis_type": analysis.analysis_type,
         "status": analysis.status,
         "alerts": sorted(
-            (_alert_json(alert) for alert in analysis.alerts), key=lambda row: row["alert_id"]
+            (_alert_json(alert) for alert in analysis.alerts), key=lambda row: str(row["alert_id"])
         ),
     }
 

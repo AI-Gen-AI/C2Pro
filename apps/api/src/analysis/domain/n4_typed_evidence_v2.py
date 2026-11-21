@@ -272,7 +272,7 @@ def parse_n4_typed_evidence_v2(
         finding_key = sha256(json.dumps(
             identity, sort_keys=True, ensure_ascii=False, separators=(",", ":")
         ).encode("utf-8")).hexdigest()
-        common = {
+        common: dict[str, Any] = {
             "finding_key": finding_key,
             "record_type": record.record_type,
             "source_refs": source_refs,
@@ -327,10 +327,10 @@ def parse_n4_typed_evidence_v2(
     fact_key_by_local_id = {
         record["claim"]["local_id"]: record["finding_key"] for record in facts
     }
-    for record in risks:
-        record["claim"]["linked_fact_keys"] = [
+    for risk_payload in risks:
+        risk_payload["claim"]["linked_fact_keys"] = [
             fact_key_by_local_id[local_id]
-            for local_id in record["claim"]["linked_fact_ids"]
+            for local_id in risk_payload["claim"]["linked_fact_ids"]
         ]
 
     return N4V2Parsed(
