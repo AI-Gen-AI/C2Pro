@@ -155,6 +155,11 @@ def _n4_uncovered_windows(coverage: Any) -> int:
         raise N4CoverageGapsError(pending_windows=0)
     if coverage.get("status") not in {status.value for status in N4CoverageStatus}:
         raise N4CoverageGapsError(pending_windows=0)
+    if coverage["status"] == N4CoverageStatus.INCOMPLETE:
+        raise N4CoverageGapsError(
+            pending_windows=len(coverage.get("gap_windows", []))
+            if isinstance(coverage.get("gap_windows"), list) else 0
+        )
     if not isinstance(coverage.get("run_id"), str) or not coverage["run_id"]:
         raise N4CoverageGapsError(pending_windows=0)
     if not isinstance(coverage.get("source_sha256"), str) or not coverage["source_sha256"]:
@@ -184,6 +189,11 @@ def _n4_uncovered_windows(coverage: Any) -> int:
         if resolution == N4GapResolution.OPEN:
             open_gaps.add(ordinal)
         elif resolution == N4GapResolution.CLOSED_MANUALLY:
+            # A16 manual review is an explicit, attributable, audited act.
+            # Missing evidence must never be treated as a silent gap closure.
+            if any(not isinstance(gap.get(field), str) or not gap[field].strip()
+                   for field in ("closed_reason", "closed_by", "closed_at")):
+                raise N4CoverageGapsError(pending_windows=1)
             closed_gaps.add(ordinal)
         else:
             raise N4CoverageGapsError(pending_windows=0)
@@ -222,9 +232,7 @@ def require_n4_coverage_ready(review_item: Any, *, approve: bool) -> None:
         (record.get("run_id"), record.get("source_sha256"))
         for record in coverage_records if isinstance(record, dict)
     }
-    if len(identities) != 1 or len(identities) != len(coverage_records) and any(
-        not isinstance(record, dict) for record in coverage_records
-    ):
+    if any(not isinstance(record, dict) for record in coverage_records) or len(identities) != 1:
         raise N4CoverageGapsError(pending_windows=0)
     pending = max(_n4_uncovered_windows(record) for record in coverage_records)
     if pending:
