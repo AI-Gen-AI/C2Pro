@@ -55,8 +55,10 @@ from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-
     ResumeWorkflowRequest as UseCaseResumeRequest,
 )
 from src.modules.hitl.application.resume_workflow_use_case import (
+    N4CoverageGapsError,
     ResumeWorkflowUseCase,
     WorkflowDecision,
+    require_n4_coverage_ready,
 )
 from src.modules.hitl.domain.entities import (
     AWAITING_DECISION_STATUSES,
@@ -193,6 +195,17 @@ def _reconciliation_refusal(exc: ReconciliationBlocksApproval | PromotionNotAuth
         )
     return HTTPException(
         status.HTTP_403_FORBIDDEN, detail={"code": "promotion_not_authorized", "message": str(exc)}
+    )
+
+
+def _n4_coverage_refusal(exc: N4CoverageGapsError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+            "pending_windows": exc.pending_windows,
+        },
     )
 
 
@@ -358,6 +371,8 @@ async def _approve_and_resume_workflow(
                 decider=decider,
             ),
         )
+    except N4CoverageGapsError as exc:
+        raise _n4_coverage_refusal(exc) from exc
     except ValueError as exc:
         error_msg = str(exc)
         if "not found" in error_msg:
@@ -458,6 +473,11 @@ async def approve_item(
         )
     else:
         await _require_project_approval_for_legacy_row(service, existing, decider)
+        # A legacy/non-graph approval must not bypass the same N4 coverage gate.
+        try:
+            require_n4_coverage_ready(existing, approve=True)
+        except N4CoverageGapsError as exc:
+            raise _n4_coverage_refusal(exc) from exc
         try:
             item = await service.approve_item(
                 item_id=payload.row_id or item_id,
@@ -788,6 +808,8 @@ async def resume_workflow(
         raise _project_refusal(exc) from exc
     except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
         raise _reconciliation_refusal(exc) from exc
+    except N4CoverageGapsError as exc:
+        raise _n4_coverage_refusal(exc) from exc
     except ValueError as exc:
         error_msg = str(exc)
         if "not found" in error_msg:
