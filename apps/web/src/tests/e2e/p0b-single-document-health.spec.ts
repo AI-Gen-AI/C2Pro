@@ -134,7 +134,7 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   const approveAll = card.getByTestId(`approve-${reviewItemId}`);
   await expect(approveAll).toBeEnabled({ timeout: 30_000 });
   await approveAll.click();
-  const dialog = page.getByRole("dialog", { name: /approve review item/i });
+  const dialog = page.getByRole("dialog", { name: /approve all reviewed findings|approve review item/i });
   await expect(dialog).toBeVisible();
   // The review row may become visible before LangGraph has durably bound its
   // resumable checkpoint. Retry only that explicitly transient failure; all

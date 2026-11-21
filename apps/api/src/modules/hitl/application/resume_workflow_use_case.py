@@ -36,6 +36,7 @@ from src.modules.hitl.adapters.persistence.resume_ownership import (
     Ownership,
     Phase,
     acquire,
+    decision_hash,
     finalize_v3,
     get_graph_completed_marker,
     mark_graph_completed,
@@ -54,6 +55,7 @@ from src.modules.hitl.adapters.persistence.resume_recovery import (
 )
 from src.modules.hitl.application.approval_authority import (
     ApprovalAuthority,
+    recorded_durable_approval,
     require_reconciled_approval,
 )
 from src.modules.hitl.application.final_decision_authorization import (
@@ -252,6 +254,20 @@ class ResumeWorkflowUseCase:
         authorizer = self._project_authorizer or ProjectReviewAuthorizer.for_repository(self.review_queue_repo)
         if not hasattr(authorizer, "session"):  # an injected authorizer without a database (mechanics-only suites)
             return None
+        # N17_DURABLE / GRAPH_COMPLETED recovery is the SAME human decision.
+        # N17 may have already promoted its artifact to TRUSTED. The ordinary
+        # reconciler selects only PROPOSED artifacts and would reject an
+        # otherwise valid crash-safe retry before acquiring ownership.
+        # A first-time approval remains subject to the full S5-04 ledger gate.
+        durable, saved_authority = await recorded_durable_approval(
+            authorizer,
+            tenant_id=request.decider.tenant_id,
+            user_id=request.decider.user_id,
+            review_row_id=row_id,
+            decision_hash=decision_hash(request.decision.value, request.feedback),
+        )
+        if durable:
+            return saved_authority
         return await require_reconciled_approval(
             authorizer, tenant_id=request.decider.tenant_id, user_id=request.decider.user_id,
             review_row_id=row_id, review_metadata=getattr(review_item, "metadata", None),

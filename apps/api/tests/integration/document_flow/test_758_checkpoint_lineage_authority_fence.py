@@ -98,6 +98,29 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture(autouse=True)
+async def _hitl_decisions_ledger_schema(db: AsyncSession):
+    """Install actual SQL-only HITL ledger BEFORE concurrent worker sessions.
+
+    ALTER TABLE review_items requires an exclusive lock; doing this after the
+    test has opened an idle transaction deadlocks against its own session.
+    """
+    from runpy import run_path
+
+    exists = (await db.execute(
+        text("SELECT to_regclass('public.hitl_finding_decisions')")
+    )).scalar_one_or_none()
+    if exists is None:
+        migration = (
+            Path(__file__).resolve().parents[3]
+            / "alembic/versions/20261008_0001_hitl_finding_decisions.py"
+        )
+        for statement in run_path(str(migration))["UPGRADE_STATEMENTS"]:
+            await db.execute(text(statement))
+        await db.commit()
+    yield
+
+
+@pytest.fixture(autouse=True)
 async def _clean_recovery_discovery_rows(db: AsyncSession, test_user: Any):
     """Remove this file's rows from the #711 recovery discovery index.
 
@@ -450,20 +473,6 @@ async def _make_review_trust_ready(
     rows = await _review(db, document.id)
     assert len(rows) == 1 and rows[0].thread_id
     async with worker.tenant_session(tenant_id) as session:
-        # Restore the SQL-only append-only ledger's true constraints in the
-        # disposable test database (ORM create_all cannot create triggers).
-        from runpy import run_path
-        present = (await session.execute(
-            text("SELECT to_regclass('public.hitl_finding_decisions')")
-        )).scalar_one_or_none()
-        if present is None:
-            migration = (
-                Path(__file__).resolve().parents[3]
-                / "alembic/versions/20261008_0001_hitl_finding_decisions.py"
-            )
-            for statement in run_path(str(migration))["UPGRADE_STATEMENTS"]:
-                await session.execute(text(statement))
-
         revision_id = (
             await session.execute(
                 text("SELECT revision_id FROM document_processing_operations WHERE document_id = :d"),

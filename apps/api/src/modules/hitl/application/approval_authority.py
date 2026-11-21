@@ -121,6 +121,81 @@ def _receipt_from_json(raw: dict[str, Any]) -> ReconciliationReceipt:
     )
 
 
+
+# A retry after N17 must NOT try to re-reconcile a proposal that N17 already
+# atomically promoted to TRUSTED. It recovers an immutable, previously taken
+# decision, never signs an unreviewed candidate. All identifiers and the
+# original decision hash are matched to the durable operation, and the
+# production ownership CAS below still guards lease, phase and lineage.
+_DURABLE_APPROVAL_RECOVERY = text("""
+SELECT o.operation_metadata -> 'authority' AS saved_authority,
+       r.project_id, a.artifact_id, a.artifact_hash, a.artifact_version
+FROM public.resume_operations o
+JOIN public.review_items r
+  ON r.id = o.review_row_id AND r.tenant_id = o.tenant_id
+JOIN public.document_artifacts a
+  ON a.tenant_id = r.tenant_id AND a.project_id = r.project_id
+ AND a.document_id = r.document_id
+WHERE o.review_row_id = cast(:review_id as uuid)
+  AND o.tenant_id = cast(:tenant_id as uuid)
+  AND o.document_id = r.document_id AND o.project_id = r.project_id
+  AND o.thread_id = r.thread_id
+  AND o.source_checkpoint_id = r.checkpoint_id
+  AND o.decision = 'approve'
+  AND o.decision_hash = :decision_hash
+  AND o.phase IN ('N17_DURABLE', 'GRAPH_COMPLETED')
+  AND cast(r.current_status as text) IN
+      ('PENDING_REVIEW_REQUIRED', 'PENDING_REVIEW_CONDITIONAL', 'ESCALATED')
+  AND r.review_metadata ->> 'trust_candidate_required' = 'true'
+  AND r.review_metadata -> 'candidate_binding' ->> 'artifact_id' = a.artifact_id::text
+  AND r.review_metadata -> 'candidate_binding' ->> 'artifact_version' = a.artifact_version::text
+  AND r.review_metadata -> 'candidate_binding' ->> 'artifact_hash' = a.artifact_hash
+  AND a.trust_state = 'trusted' AND a.lifecycle_status = 'active'
+""")
+
+
+async def recorded_durable_approval(
+    authorizer: ProjectReviewAuthorizer,
+    *, tenant_id: UUID, user_id: UUID, review_row_id: UUID, decision_hash: str,
+) -> tuple[bool, ApprovalAuthority | None]:
+    """Read-only recovery proof for ALREADY durable approval; fail closed.
+
+    A false result means ordinary S5-04 reconciliation is still mandatory.
+    A true result never bypasses a first-time decision: N17 must already have
+    committed the exact, now-TRUSTED artifact, and the original approval
+    receipt must be preserved in ENFORCE mode.
+    """
+    row = (await authorizer.session.execute(
+        _DURABLE_APPROVAL_RECOVERY,
+        {"tenant_id": str(tenant_id), "review_id": str(review_row_id),
+         "decision_hash": decision_hash},
+    )).first()
+    if row is None:
+        return False, None
+    recorded = ApprovalAuthority.from_json(row[0])
+    mode = await authorizer.mode(tenant_id)
+    if mode is AuthorizationMode.ENFORCE and recorded is None:
+        raise PromotionNotAuthorized(
+            "durable operation has no recorded human approval authority"
+        )
+    if recorded is not None:
+        receipt = recorded.receipt
+        if (
+            recorded.tenant_id != str(tenant_id)
+            or recorded.user_id != str(user_id)
+            or recorded.project_id != str(row.project_id)
+            or recorded.review_row_id != str(review_row_id)
+            or receipt.get("artifact_id") != str(row.artifact_id)
+            or receipt.get("artifact_hash") != row.artifact_hash
+            or receipt.get("artifact_version") != row.artifact_version
+            or receipt.get("signable_as_is") is not True
+        ):
+            raise PromotionNotAuthorized(
+                "durable approval proof does not match the exact trusted artifact"
+            )
+    return True, recorded
+
+
 async def require_reconciled_approval(
     authorizer: ProjectReviewAuthorizer,
     *,

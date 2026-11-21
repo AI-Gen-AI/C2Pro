@@ -171,6 +171,16 @@ async def _propose(
         state = _final_state(arranged, tenant_id, gated=True, title=title)
     if risks is not None:
         state["extracted_risks"] = risks
+    # The completion hook receives the graph's actual immutable revision in
+    # production. This direct-hook test must supply the same persisted identity,
+    # rather than binding an unversioned candidate to a versioned review.
+    async with completion_sessions["sessions"](tenant_id) as session:
+        revision_id = (await session.execute(
+            text("SELECT revision_id FROM document_processing_operations WHERE document_id = :d"),
+            {"d": arranged.document_id},
+        )).scalar_one()
+    assert revision_id is not None
+    state["document_revision_id"] = str(revision_id)
     await document_artifact_completion._persist_artifact(
         state
     )
