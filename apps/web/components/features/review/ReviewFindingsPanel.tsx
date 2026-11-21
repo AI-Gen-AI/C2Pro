@@ -83,14 +83,54 @@ function shortAnalysis(value: unknown): string {
   return `${normalized.slice(0, Math.max(100, lastSpace)).trimEnd()}…`;
 }
 
-/** Explicit source-backed deadline vs an AI claim that no deadline exists. Advisory, never auto-decides. */
-function contradictsVerifiedDeadline(risk: Record<string, unknown>): boolean {
-  if (risk.source_quote_status !== "VERIFIED" || typeof risk.source_quote !== "string") return false;
-  const quote = risk.source_quote;
-  const claim = `${String(risk.title ?? "")} ${String(risk.description ?? "")}`;
-  const deadline = /\bwithin\s+(?:(?:[a-z]+)\s+)?\(?\d{1,3}\)?\s+(?:calendar\s+)?days?\s+of\s+(?:written\s+)?notice\b/i;
-  const missing = /\b(?:no|without|lacks?|lacking)\s+(?:(?:an?|the|agreed|defined|specified|clear)\s+){0,4}(?:rectification\s+)?(?:time\s?frame|deadline|period|cure\s+period)\b/i;
-  return deadline.test(quote) && missing.test(claim);
+/** A presentation-only scalar. Never assume that an untyped number has units/currency. */
+function readable(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function proposedImpact(value: unknown): string {
+  const claim = readable(value);
+  if (claim === null) return "Not quantified in the candidate.";
+  return typeof value === "number" ? `${claim} (unit/currency not supplied)` : claim;
+}
+
+/** Manual comparison is bound to the reviewer, pinned revision, processing lease and exact finding.
+ * Missing pins fail closed; JSON avoids ambiguous string delimiters. No PDF provenance is asserted.
+ */
+function sourceComparisonIdentity(
+  view: ReviewFindingsResponse,
+  finding: ReviewFindingResponse,
+  scope: { orgId: string | null | undefined; userId: string | null | undefined; reviewRowId: string },
+): string | null {
+  const ids = [
+    scope.orgId, scope.userId, scope.reviewRowId, view.review_row_id,
+    view.artifact_id, view.artifact_hash, view.document_revision_id,
+    finding.finding_id, finding.source_item_id,
+  ];
+  const numbers = [view.artifact_version, view.generation, view.fencing_token, finding.ordinal];
+  // Match backend UUID fields and lowercase SHA-256 digest without constraining Clerk IDs.
+  // Backend UUID accepts canonical hyphenated and compact 32-hex forms, any UUID version.
+  const uuidPattern = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})$/i;
+  const artifactUuidValid = typeof view.artifact_id === "string" && uuidPattern.test(view.artifact_id);
+  const documentRevisionUuidValid = typeof view.document_revision_id === "string" && uuidPattern.test(view.document_revision_id);
+  const artifactHashValid = typeof view.artifact_hash === "string" && /^[0-9a-f]{64}$/.test(view.artifact_hash);
+  if (
+    ids.some((id) => typeof id !== "string" || !id.trim()) ||
+    !artifactUuidValid || !documentRevisionUuidValid || !artifactHashValid ||
+    numbers.some((value) => typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) ||
+    view.artifact_version < 1 ||
+    view.review_row_id !== scope.reviewRowId
+  ) return null;
+  return JSON.stringify([...ids, ...numbers, finding.risk.source_quote_status, finding.risk.source_quote]);
+}
+
+/** A verified literal in analyzed text is not certification of the original PDF. */
+function hasVerifiedLiteralSource(finding: ReviewFindingResponse): boolean {
+  return finding.risk.source_quote_status === "VERIFIED" &&
+    typeof finding.risk.source_quote === "string" &&
+    finding.risk.source_quote.trim().length > 0;
 }
 
 function newKey(): string {
@@ -115,6 +155,8 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
   const clause = typeof risk.clause_ref === "string" ? risk.clause_ref.trim() : "";
   const quote = typeof risk.source_quote === "string" ? risk.source_quote.trim() : "";
   const status = typeof risk.source_quote_status === "string" ? risk.source_quote_status : "";
+  const proposedLocator = readable(risk.source_locator);
+  const proposedPage = readable(risk.page_number);
   const verified = status === "VERIFIED" && quote.length > 0;
   return (
     <div className="mt-2 rounded border border-dashed p-2 text-xs" data-testid={`finding-trace-${ordinal}`}>
@@ -126,7 +168,7 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
           <blockquote className="border-l-2 pl-2 italic" data-testid={`finding-quote-${ordinal}`}>
             {quote}
           </blockquote>
-          <figcaption className="mt-0.5 text-muted-foreground">Quoted from the contract (found verbatim in the document)</figcaption>
+          <figcaption className="mt-0.5 text-muted-foreground">Literal match in the analyzed text; original PDF/page provenance still requires verification.</figcaption>
         </figure>
       ) : (
         <p className="mt-1 text-muted-foreground" data-testid={`finding-quote-missing-${ordinal}`}>
@@ -135,6 +177,11 @@ function ContractTrace({ ordinal, risk }: { ordinal: number; risk: Record<string
             : "No quote available for this finding."}
         </p>
       )}
+      <p className="mt-1 text-muted-foreground" data-testid={`finding-original-location-${ordinal}`}>
+        {proposedLocator || proposedPage
+          ? `Suggested source location (not independently verified): ${[proposedLocator, proposedPage ? `page ${proposedPage}` : null].filter(Boolean).join(", ")}`
+          : "Original page location not verified; check the source document and revision."}
+      </p>
     </div>
   );
 }
@@ -152,7 +199,18 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   });
   // S5-02 (advisory): the capabilities ride on this same read; the server re-validates every action anyway.
   const mayReview = query.data?.capabilities?.review_finding !== false;
+  // Revoke all manual comparisons when a candidate moves, including A -> B -> A.
+  const currentCandidateKey = query.data
+    ? JSON.stringify([
+        orgId, userId, reviewRowId, query.data.review_row_id,
+        query.data.artifact_id, query.data.artifact_version, query.data.artifact_hash,
+        query.data.document_revision_id, query.data.generation, query.data.fencing_token,
+      ])
+    : null;
   const [drafts, setDrafts] = useState<Record<number, Draft | undefined>>({});
+  // A manual source-to-claim comparison is needed for quoted findings, keyed to the exact candidate.
+  // This checkbox does not certify a source or authorize a server decision.
+  const [sourceReviewed, setSourceReviewed] = useState<Record<string, boolean>>({});
   // Unknown outcomes must be retried with the exact same body (including CAS pins).
   // A definitive conflict, identity switch, or explicit action change starts a new operation.
   const pendingConfirmations = useRef<Record<number, PendingSubmission | undefined>>({});
@@ -161,8 +219,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     pendingConfirmations.current = {};
     pendingDraftSubmissions.current = {};
     setDrafts({});
+    setSourceReviewed({});
     setRefusal(null);
-  }, [reviewRowId, orgId, userId]);
+  }, [reviewRowId, orgId, userId, currentCandidateKey, query.isError]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmingDerive, setConfirmingDerive] = useState(false);
   const [derived, setDerived] = useState<DerivedCandidateResponse | null>(null);
@@ -205,7 +264,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         reason: needsReason(draft.action) ? draft.reason.trim() : null,
         proposed_text: draft.action === "CORRECTION_PROPOSED" ? draft.proposedText.trim() : null,
       }),
-    onSuccess: (_receipt, { finding }) => {
+    onSuccess: (_receipt, { view, finding }) => {
+      const comparedKey = sourceComparisonIdentity(view, finding, { orgId, userId, reviewRowId });
+      if (comparedKey) setSourceReviewed((current) => ({ ...current, [comparedKey]: false }));
       delete pendingConfirmations.current[finding.ordinal];
       delete pendingDraftSubmissions.current[finding.ordinal];
       setRefusal(null);
@@ -234,8 +295,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     },
   });
 
-  // Fail closed while loading, refreshing, or when a finding has no CONFIRMED decision.
-  // The backend independently reconciles the exact ledger before any final promotion.
+  // Fail closed on every confirmed finding's source identity and literal evidence,
+  // even if the read model carries a historical CONFIRMED. Never rewrite the ledger.
+  // Backend reconciliation is a separate final-promotion guard.
   const readyForFinalApproval = Boolean(
     isLoaded &&
     userId &&
@@ -244,7 +306,12 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     !query.isFetching &&
     !record.isPending &&
     query.data &&
-    query.data.findings.every((finding) => finding.current?.action === "CONFIRMED"),
+    query.data.findings.length > 0 &&
+    query.data.findings.every((finding) =>
+      finding.current?.action === "CONFIRMED" &&
+      sourceComparisonIdentity(query.data, finding, { orgId, userId, reviewRowId }) !== null &&
+      hasVerifiedLiteralSource(finding),
+    ),
   );
   useEffect(() => {
     onReadinessChange?.(readyForFinalApproval);
@@ -256,7 +323,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   if (query.isError || !query.data) {
     return (
       <div className="mt-3 rounded border border-destructive/40 p-3 text-sm" role="alert" data-testid={`review-findings-error-${reviewRowId}`}>
-        <p>Individual findings could not be loaded for this review. Final approval is unavailable until they can be checked.</p>
+        <p>Findings are unavailable for this review. It may have no eligible analysis candidate, have changed, or be outside your access. Final approval is unavailable; ask the project administrator to verify the source and candidate binding.</p>
         <Button size="sm" variant="outline" className="mt-2" onClick={() => void query.refetch()}>Retry loading findings</Button>
       </div>
     );
@@ -282,11 +349,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
       </p>
       <p className="mt-2 text-xs font-medium" role="status" data-testid={`review-findings-progress-${reviewRowId}`}>
         {view.findings.filter((finding) => finding.current?.action === "CONFIRMED").length}/{view.findings.length} findings approved individually.
-        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked until every finding is confirmed; rejected findings require a corrected candidate."}
+        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked: each finding must be confirmed with a complete source identity and a VERIFIED literal quotation; rejected findings require a corrected candidate."}
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
-          This candidate lists no individual findings to decide.
+          This candidate lists no individual findings. Final approval is blocked until the candidate and its analysis coverage can be verified.
         </p>
       ) : null}
       {!mayReview ? (
@@ -304,9 +371,18 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
           const draft = drafts[finding.ordinal];
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
           const brief = shortAnalysis(finding.risk.description);
+          const consequence = [finding.risk.consequences, finding.risk.consequence].map(readable).find(Boolean);
+          // RiskItem.impact is a legacy severity label: do not report it as quantified business impact.
+          const financialImpact = proposedImpact(finding.risk.financial_impact);
+          const scheduleImpact = proposedImpact(finding.risk.schedule_impact);
+          const sourceComparisonKey = sourceComparisonIdentity(view, finding, { orgId, userId, reviewRowId });
+          const quotedSource = hasVerifiedLiteralSource(finding);
+          const sourceWasReviewed = sourceComparisonKey !== null && sourceReviewed[sourceComparisonKey] === true;
+          // Never confirm from stale cached data during an in-flight refetch.
+          const mayConfirmFinding = sourceComparisonKey !== null && !query.isFetching &&
+            quotedSource && sourceWasReviewed;
           const suggestion = [finding.risk.mitigation_suggestion, finding.risk.recommended_action, finding.risk.mitigation]
             .find((value) => typeof value === "string" && value.trim().length > 0);
-          const conflict = contradictsVerifiedDeadline(finding.risk);
           const clause = typeof finding.risk.clause_ref === "string" ? finding.risk.clause_ref.trim() : "";
           const valid =
             draft !== undefined &&
@@ -333,20 +409,24 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   {brief}
                 </p>
               ) : null}
-              {clause ? <p className="mt-1 text-xs text-muted-foreground">Contract clause {clause}</p> : null}
+              {clause ? <p className="mt-1 text-xs text-muted-foreground">Contract clause {clause} (reference proposed by analysis)</p> : null}
+              <p className="mt-2 text-sm" data-testid={`finding-consequences-${finding.ordinal}`}>
+                <span className="font-medium">Consequences (AI proposal, unverified): </span>{consequence ?? "Not assessed in the candidate."}
+              </p>
+              <div className="mt-1 space-y-1 text-sm" data-testid={`finding-impact-${finding.ordinal}`}>
+                <p data-testid={`finding-financial-impact-${finding.ordinal}`}>
+                  <span className="font-medium">Financial impact (AI claim, unverified): </span>{financialImpact}
+                </p>
+                <p data-testid={`finding-schedule-impact-${finding.ordinal}`}>
+                  <span className="font-medium">Schedule impact (AI claim, unverified): </span>{scheduleImpact}
+                </p>
+              </div>
               <p className="mt-2 text-sm" data-testid={`finding-action-summary-${finding.ordinal}`}>
                 <span className="font-medium">Suggested action: </span>
                 {typeof suggestion === "string"
                   ? shortAnalysis(suggestion)
                   : "No specific mitigation supplied. Verify the contractual basis before deciding."}
               </p>
-              {conflict ? (
-                <p role="alert" className="mt-2 rounded border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900"
-                  data-testid={`finding-source-conflict-${finding.ordinal}`}>
-                  Possible contradiction: the verified contract quotation explicitly specifies a notice deadline,
-                  while the AI description claims no deadline. Do not confirm this finding without correcting it.
-                </p>
-              ) : null}
               <details className="mt-2 rounded border border-dashed p-2" data-testid={`finding-evidence-${finding.ordinal}`}>
                 <summary className="cursor-pointer text-sm font-medium">View evidence and full AI analysis</summary>
                 {finding.risk.description ? (
@@ -360,8 +440,43 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     <span className="font-medium">Full suggested action: </span>{suggestion}
                   </p>
                 ) : null}
-                <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
               </details>
+              <div className="mt-2" data-testid={`finding-source-comparison-${finding.ordinal}`}>
+                <p className="text-xs font-medium">Compare the model interpretation with the source evidence before deciding.</p>
+                <ContractTrace ordinal={finding.ordinal} risk={finding.risk} />
+                {quotedSource ? (
+                  <div className="mt-2 space-y-2 rounded border border-amber-400 p-2 text-xs" data-testid={`finding-interpretation-warning-${finding.ordinal}`}>
+                    <p role="note">
+                      A literal match does not validate the AI interpretation. Check deadlines, exceptions, amounts and
+                      conditions against the full clause before confirming. If the model claim conflicts with its quotation,
+                      choose Propose correction or Needs info. This is not an automated legal determination.
+                    </p>
+                    <label className="flex cursor-pointer items-start gap-2">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={sourceWasReviewed}
+                        disabled={sourceComparisonKey === null || query.isFetching}
+                        onChange={(event) => {
+                          if (!sourceComparisonKey || query.isFetching) return;
+                          setSourceReviewed((current) => ({ ...current, [sourceComparisonKey]: event.target.checked }));
+                        }}
+                        data-testid={`finding-source-reviewed-${finding.ordinal}`}
+                      />
+                      I have compared the AI claim with the full visible quote for this candidate; confirmation records provisional intent only.
+                    </label>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid={`finding-no-verified-source-${finding.ordinal}`}>
+                    No server-verified literal quotation is available. Confirmation is blocked until there is a VERIFIED literal quote and you compare it with the AI claim. Choose Needs info or Propose correction; never invent evidence.
+                  </p>
+                )}
+                {!sourceComparisonKey ? (
+                  <p role="alert" className="mt-1 text-xs text-destructive" data-testid={`finding-invalid-source-${finding.ordinal}`}>
+                    Source or reviewer identity is incomplete. Confirmation is blocked until the exact candidate can be verified.
+                  </p>
+                ) : null}
+              </div>
               {finding.current?.reason ? (
                 <p className="mt-1 text-xs">Reason: {finding.current.reason}</p>
               ) : null}
@@ -379,12 +494,13 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     key={action}
                     size="sm"
                     variant={draft?.action === action ? "default" : "outline"}
-                    disabled={record.isPending || !mayReview || (action === "CONFIRMED" && conflict)}
-                    title={action === "CONFIRMED" && conflict ? "The AI finding conflicts with the verified source. Propose a correction instead." : undefined}
+                    disabled={record.isPending || query.isFetching || !mayReview || (action === "CONFIRMED" && !mayConfirmFinding)}
+                    title={action === "CONFIRMED" && !mayConfirmFinding ? "VERIFIED literal evidence, complete source identity and your comparison are required; otherwise choose Needs info or Propose correction." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
+                        if (!mayConfirmFinding || !query.isSuccess) return;
                         const previous = pendingConfirmations.current[finding.ordinal];
                         // The same revision may have been refreshed after a lost response.
                         // Replay the exact original request; clear only on success or a
@@ -394,7 +510,10 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                           previous.view.artifact_id === view.artifact_id &&
                           previous.view.artifact_version === view.artifact_version &&
                           previous.view.artifact_hash === view.artifact_hash &&
-                          previous.view.document_revision_id === view.document_revision_id
+                          previous.view.document_revision_id === view.document_revision_id &&
+                          previous.view.generation === view.generation &&
+                          previous.view.fencing_token === view.fencing_token &&
+                          previous.finding.finding_id === finding.finding_id
                           ? previous
                           : { view, finding, draft: { action, reason: "", proposedText: "", key: newKey() } };
                         pendingConfirmations.current[finding.ordinal] = attempt;
