@@ -14,6 +14,9 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 _SHA = re.compile(r"^[0-9a-f]{64}$")
+# Limit the selected window inventory; the exact count remains source/revision-
+# bound via the scope digest and rechecked against the N2 projection before N4.
+MAX_N4_ONLY_WINDOWS = 64
 
 
 class N4OnlyPilotDenied(RuntimeError):
@@ -106,7 +109,7 @@ class N4OnlyPilotScope:
             or (require_unexpired and scope.expires_at <= datetime.now(UTC))
             or scope.predecessor_generation < 1
             or scope.predecessor_fence < 1
-            or scope.expected_windows != 23
+            or not 1 <= scope.expected_windows <= MAX_N4_ONLY_WINDOWS
             or scope.tenant_id != _uuid(os.getenv("C2PRO_N4_UAT_APPROVED_TENANT_ID"))
         ):
             raise N4OnlyPilotDenied("N4-only scope expired or not approved")
