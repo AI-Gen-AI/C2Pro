@@ -31,7 +31,7 @@ from src.core.ai.llm_client import LLMRequest
 class DirectOpenAIN4WindowProvider:
     provider_name = "openai"
     fallback_routes = ()
-    approved_fallback_models = frozenset()
+    approved_fallback_models: frozenset[str] = frozenset()
     fallback_reservation_usd = None
 
     def __init__(self, *, max_output_tokens: int, reservation_usd: Decimal) -> None:

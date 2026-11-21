@@ -6,7 +6,7 @@ risk categories. A missing or mismatched checkpoint fails closed.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, NoReturn
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -17,7 +17,7 @@ from src.analysis.adapters.ai.n12_checkpoint_escrow_port import (
 from src.analysis.domain.ai_source_text import llm_document_text
 
 
-def _reject(reason: str) -> None:
+def _reject(reason: str) -> NoReturn:
     # Fixed technical reason only: never include source contents or identities.
     raise N12CheckpointIdentityError(f"N12_CHECKPOINT_UNVERIFIED:{reason}")
 
