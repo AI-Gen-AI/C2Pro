@@ -52,10 +52,8 @@ from src.modules.hitl.application.project_review_authorization import (
     ProjectReviewAuthorizer,
 )
 from src.modules.hitl.application.resume_workflow_use_case import (  # TASK-BCK-024
-    ResumeWorkflowRequest as UseCaseResumeRequest,
-)
-from src.modules.hitl.application.resume_workflow_use_case import (
     N4CoverageGapsError,
+    ResumeWorkflowRequest as UseCaseResumeRequest,
     ResumeWorkflowUseCase,
     WorkflowDecision,
     require_n4_coverage_ready,
