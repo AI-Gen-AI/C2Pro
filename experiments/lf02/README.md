@@ -49,3 +49,13 @@ journalctl -u lf02-studio -n 100 --no-pager
 curl -fsS http://127.0.0.1:17941/ok
 ```
 Deploy/test changes only from this experimental branch; review and merge to main in a separate controlled process.
+
+## Final lab status (2026-11-21)
+See `EVIDENCE_2026-11-21.md` for independently inspectable checks and blockers.
+The lab SQL schema has been migrated through `20261022_0001` (63 tables), N1–N3 ran,
+ProjectGraph's first two nodes ran, state editing/time-travel rerouted N3 to a different
+real node, and exact N4 G2 parser replay passed. The local Qwen N4 provider call timed
+out and remains **BLOCKED**, not a successful model-based extraction.
+`schemathesis` vs `jsonschema-rs` is an unresolved CLI+QA venv compatibility issue.
+The Studio Assistant version-switch API showed inconsistent current context after
+`set_latest(1)`; desired strict context was restored by creating version 3.
