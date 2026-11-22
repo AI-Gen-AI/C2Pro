@@ -77,16 +77,21 @@ describe("JV1-A21 business-facing provisional findings (synthetic; no HITL)", ()
     apiGet.mockResolvedValue({ data: response() });
     render(<N4FindingsPage />);
     const cards = await screen.findAllByTestId("n4-proposed-finding");
-    expect(cards[0]).toHaveTextContent("Page 12");
-    expect(cards[0]).toHaveTextContent(/not independently verified/i);
-    expect(cards[1]).toHaveTextContent(/page not established/i);
-    expect(cards[1]).toHaveTextContent(/consequences/i);
-    expect(screen.queryByText("Exact N2 evidence 0")).not.toBeInTheDocument();
-    fireEvent.click(cards[0].querySelector("summary")!);
+    // Group order is alphabetical; locate by synthetic title rather than relying on response order.
+    const scheduled = cards.find((card) => card.textContent?.includes("Risk 0"))!;
+    const budget = cards.find((card) => card.textContent?.includes("Risk 1"))!;
+    expect(scheduled).toHaveTextContent("Page 12");
+    expect(scheduled).toHaveTextContent(/not independently verified/i);
+    expect(budget).toHaveTextContent(/page not established/i);
+    expect(budget).toHaveTextContent(/consequences/i);
+    const evidence = scheduled.querySelector("details")!;
+    expect(evidence).not.toHaveAttribute("open");
+    fireEvent.click(evidence.querySelector("summary")!);
+    expect(evidence).toHaveAttribute("open");
     expect(screen.getByText("Exact N2 evidence 0")).toBeInTheDocument();
-    fireEvent.click(cards[1].querySelector("summary")!);
+    fireEvent.click(budget.querySelector("summary")!);
     expect(screen.queryByText("Unverified candidate text")).not.toBeInTheDocument();
-    expect(cards[1]).toHaveTextContent(/quotation not verified/i);
+    expect(budget).toHaveTextContent(/quotation not verified/i);
   });
 
   it("does not misrepresent absent results as zero contractual risks", async () => {
