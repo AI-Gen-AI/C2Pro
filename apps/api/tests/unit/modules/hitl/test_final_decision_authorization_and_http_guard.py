@@ -359,3 +359,115 @@ def test_a15_manual_closure_without_an_audit_field_is_not_a_valid_resolution(mis
         module.require_n4_coverage_ready(
             SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={}), approve=True
         )
+
+
+# JV1-A15 coverage hardening: exercise distinct fail-closed branches, never
+# weaken existing assertions or rely on private contract fixtures.
+@pytest.mark.parametrize(
+    "broken",
+    [
+        pytest.param({"status": "UNKNOWN"}, id="unknown-status"),
+        pytest.param({"run_id": ""}, id="missing-run"),
+        pytest.param({"source_sha256": None}, id="missing-source"),
+        pytest.param({"total_windows": 0}, id="zero-windows"),
+        pytest.param({"total_windows": True}, id="boolean-total"),
+        pytest.param({"examined_windows": -1}, id="negative-examined"),
+        pytest.param({"examined_windows": 4}, id="overexamined"),
+        pytest.param({"gap_windows": None}, id="non-list-ordinals"),
+        pytest.param({"gaps": "invalid"}, id="non-list-gaps"),
+        pytest.param({"gap_windows": [True]}, id="boolean-ordinal"),
+        pytest.param({"gap_windows": [4]}, id="out-of-range-ordinal"),
+        pytest.param({"gaps": [None]}, id="non-record-gap"),
+        pytest.param({"gaps": [{"ordinal": 4, "resolution": "OPEN"}]}, id="out-of-range-gap"),
+        pytest.param({"gaps": [{"ordinal": 2, "resolution": "INVALID"}]}, id="unknown-resolution"),
+    ],
+)
+def test_a15_approval_fails_closed_on_each_malformed_coverage_shape(broken: dict[str, Any]) -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    coverage = _synthetic_n4_coverage(resolution="CLOSED_MANUALLY")
+    coverage.update(broken)
+    review = SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={})
+    with pytest.raises(module.N4CoverageGapsError):
+        module.require_n4_coverage_ready(review, approve=True)
+
+
+def test_a15_open_resolution_wins_over_duplicate_manual_closure() -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    coverage = _synthetic_n4_coverage(resolution="CLOSED_MANUALLY")
+    coverage["gaps"].append({"ordinal": 2, "resolution": "OPEN"})
+    with pytest.raises(module.N4CoverageGapsError) as blocked:
+        module.require_n4_coverage_ready(
+            SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={}), approve=True
+        )
+    assert blocked.value.pending_windows == 1
+
+
+def test_a15_same_identity_but_conflicting_projections_must_not_hide_open_gap() -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    closed = _synthetic_n4_coverage(resolution="CLOSED_MANUALLY")
+    opened = _synthetic_n4_coverage()
+    opened["run_id"] = closed["run_id"]
+    opened["source_sha256"] = closed["source_sha256"]
+    with pytest.raises(module.N4CoverageGapsError) as blocked:
+        module.require_n4_coverage_ready(
+            SimpleNamespace(metadata={"analysis_n4_coverage": closed}, item_data={"n4_coverage": opened}),
+            approve=True,
+        )
+    assert blocked.value.pending_windows == 1
+
+
+def test_a15_nonmapping_second_projection_cannot_hide_valid_first_projection() -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    coverage = _synthetic_n4_coverage(resolution="CLOSED_MANUALLY")
+    with pytest.raises(module.N4CoverageGapsError):
+        module.require_n4_coverage_ready(
+            SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={"n4_coverage": "bad"}),
+            approve=True,
+        )
+
+
+def test_a15_manual_closure_not_in_original_gap_ledger_cannot_mark_incomplete_run_as_ready() -> None:
+    from src.modules.hitl.application import resume_workflow_use_case as module
+
+    coverage = _synthetic_n4_coverage(resolution="CLOSED_MANUALLY")
+    coverage["gap_windows"] = []
+    # A16 must close an *original* failed window; an unrelated closure
+    # cannot reduce the missing-count derived from total versus examined.
+    with pytest.raises(module.N4CoverageGapsError):
+        module.require_n4_coverage_ready(
+            SimpleNamespace(metadata={"analysis_n4_coverage": coverage}, item_data={}), approve=True
+        )
+
+
+@pytest.mark.asyncio
+async def test_a15_legacy_approval_route_refuses_open_gap_before_service_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    review_id = uuid4()
+    review = SimpleNamespace(
+        item_id=review_id,
+        metadata={"analysis_n4_coverage": _synthetic_n4_coverage()},
+        item_data={},
+    )
+    service = SimpleNamespace(
+        review_queue_repo=SimpleNamespace(get_review_item=AsyncMock(return_value=review)),
+        approve_item=AsyncMock(side_effect=AssertionError("legacy approval must not mutate state")),
+    )
+    authorizer = AsyncMock()
+    monkeypatch.setattr(hitl_router, "_require_project_approval_for_legacy_row", authorizer)
+    app = _app(_user(), TENANT, _SpyUseCase())
+    app.dependency_overrides[get_hitl_service] = lambda: service
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(f"/api/v1/hitl/queue/{review_id}/approve", json={}, headers=_HEADERS)
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "n4_coverage_gaps"
+    assert response.json()["detail"]["pending_windows"] == 1
+    authorizer.assert_awaited_once()
+    service.approve_item.assert_not_awaited()

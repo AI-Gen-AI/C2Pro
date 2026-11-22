@@ -198,6 +198,12 @@ def _n4_uncovered_windows(coverage: Any) -> int:
         else:
             raise N4CoverageGapsError(pending_windows=0)
 
+    # A manual closure can resolve only an ordinal recorded in the original
+    # gap ledger. Otherwise forged/unrelated closure rows could subtract from
+    # (total - examined) and accidentally permit final approval.
+    if closed_gaps - set(gap_windows):
+        raise N4CoverageGapsError(pending_windows=0)
+
     # An OPEN record wins over a conflicting CLOSED_MANUALLY record. A listed
     # failed ordinal without a closure record remains open, not silently safe.
     closed_gaps.difference_update(open_gaps)
