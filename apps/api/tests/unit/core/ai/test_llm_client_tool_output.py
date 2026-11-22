@@ -65,6 +65,35 @@ def test_max_tokens_response_exposes_billable_usage() -> None:
     assert raised.value.cost_usd == pytest.approx(0.37)
 
 
+def test_missing_usage_on_truncated_response_rejects_without_invented_cost() -> None:
+    """No provider usage means billed cost is unknown, not falsely zero."""
+    client = _bare_client()
+    client.client = MagicMock()
+    client.client.messages.create.return_value = SimpleNamespace(
+        stop_reason="max_tokens", content=[SimpleNamespace(type="text", text="partial")]
+    )
+    request = LLMRequest(model="claude-haiku-test", messages=[{"role": "user", "content": "x"}])
+    with pytest.raises(ValueError, match="usage unavailable") as caught:
+        client._complete_provider_generation(
+            {
+                "model": request.model,
+                "max_tokens": request.max_tokens,
+                "messages": request.messages,
+            },
+            request,
+        )
+    assert not isinstance(caught.value, LLMPartialGenerationError)
+
+
+def test_forced_tool_payload_without_json_object_fails_closed() -> None:
+    """Malformed tool-use input must not be silently treated as extracted JSON."""
+    client = _bare_client()
+    with pytest.raises(ValueError, match="tool_use input"):
+        client._extract_content(
+            SimpleNamespace(content=[SimpleNamespace(type="tool_use", input="not-an-object")])
+        )
+
+
 @pytest.mark.asyncio
 async def test_forced_tool_use_returns_its_json_input_and_reaches_provider(monkeypatch) -> None:
     """Dropping the forced tool choice or its structured result is a transport bug."""

@@ -693,12 +693,25 @@ class LLMClient:
                 raise
             stop = getattr(response, "stop_reason", None)
             if stop == "max_tokens" and not full_source:
-                usage = response.usage
+                usage = getattr(response, "usage", None)
+                input_count = getattr(usage, "input_tokens", None)
+                output_count = getattr(usage, "output_tokens", None)
+                if (
+                    type(input_count) is not int
+                    or type(output_count) is not int
+                    or input_count < 0
+                    or output_count < 0
+                ):
+                    # A failed provider turn may be billable; never invent usage
+                    # or cost when the provider did not supply a valid receipt.
+                    raise ValueError(
+                        "LLM output incomplete: stop_reason=max_tokens (usage unavailable)"
+                    )
                 raise self._partial_generation_error(
                     request,
                     "LLM output incomplete: stop_reason=max_tokens",
-                    usage.input_tokens,
-                    usage.output_tokens,
+                    input_count,
+                    output_count,
                 )
             if full_source and stop not in {"max_tokens", "end_turn"}:
                 if getattr(response, "usage", None):
@@ -804,7 +817,10 @@ class LLMClient:
         content: list[str] = []
         for block in message.content:
             if getattr(block, "type", None) == "tool_use":
-                content.append(json.dumps(block.input))
+                tool_input = getattr(block, "input", None)
+                if not isinstance(tool_input, dict):
+                    raise ValueError("LLM tool_use input must be a JSON object")
+                content.append(json.dumps(tool_input))
             elif hasattr(block, "text"):
                 content.append(block.text)
         return "".join(content)
