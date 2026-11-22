@@ -173,7 +173,7 @@ def pdf_source(tmp_path):
 
 @pytest.fixture
 def register(tmp_path):
-    return arm.JsonlSpendRegister("spend.jsonl", max_usd=Decimal("5"), root=tmp_path)
+    return arm.JsonlSpendRegister(max_usd=Decimal("5"), root=tmp_path)
 
 
 def _config(provider="anthropic", **kw):
@@ -281,15 +281,26 @@ def test_n2_files_are_loaded_from_the_corpus_root(tmp_path):
     assert source == arm.DirectArmSource.from_n2_text(N2_TEXT, PAGE_SPANS)
 
 
-# --- path confinement (SonarCloud S8707) --------------------------------------
+# --- path selection (SonarCloud S8707): CLI values never build a path -------
 
 
-@pytest.mark.parametrize("raw", ["../escape.yaml", "/etc/passwd", "sub/../../escape.yaml"])
-def test_paths_outside_the_allowed_root_are_refused(tmp_path, raw):
+@pytest.mark.parametrize("raw", [
+    "../escape.yaml", "/etc/passwd", "sub/../../escape.yaml", "missing.yaml",
+])
+def test_names_not_listed_under_the_root_are_refused(tmp_path, raw):
     root = tmp_path / "root"
     root.mkdir()
+    (tmp_path / "escape.yaml").write_text("x", encoding="utf-8")
     with pytest.raises(ValueError, match="outside the allowed root"):
-        arm.confined_path(raw, root)
+        arm.select_file(raw, root)
+
+
+def test_listed_files_are_selected_by_relative_or_absolute_name(tmp_path):
+    (tmp_path / "sub").mkdir()
+    target = tmp_path / "sub" / "c2.txt"
+    target.write_text("x", encoding="utf-8")
+    assert arm.select_file("sub/c2.txt", tmp_path) == target
+    assert arm.select_file(str(target), tmp_path) == target
 
 
 def test_symlink_escaping_the_root_is_refused(tmp_path):
@@ -298,7 +309,7 @@ def test_symlink_escaping_the_root_is_refused(tmp_path):
     (tmp_path / "secret.txt").write_text("x", encoding="utf-8")
     (root / "link.txt").symlink_to(tmp_path / "secret.txt")
     with pytest.raises(ValueError, match="outside the allowed root"):
-        arm.confined_path("link.txt", root)
+        arm.select_file("link.txt", root)
 
 
 def test_private_roots_cannot_live_inside_the_repository():
@@ -453,7 +464,7 @@ def test_spend_register_is_readable_by_the_governor_summary(n2_source, taxonomy,
 
 
 def test_global_budget_cap_refuses_before_any_provider_call(tmp_path, n2_source, taxonomy):
-    register = arm.JsonlSpendRegister("spend.jsonl", max_usd=Decimal("0.01"), root=tmp_path)
+    register = arm.JsonlSpendRegister(max_usd=Decimal("0.01"), root=tmp_path)
     transport = RecordingTransport(_anthropic_reply([_finding()]))
     config = _config("anthropic", max_output_tokens=16000)
     with pytest.raises(arm.SpendRefused, match="budget"):
@@ -463,7 +474,7 @@ def test_global_budget_cap_refuses_before_any_provider_call(tmp_path, n2_source,
 
 
 def test_budget_counts_spend_already_in_the_register(tmp_path, n2_source, taxonomy):
-    register = arm.JsonlSpendRegister("spend.jsonl", max_usd=Decimal("0.5"), root=tmp_path)
+    register = arm.JsonlSpendRegister(max_usd=Decimal("0.5"), root=tmp_path)
     config = _config("anthropic", max_output_tokens=16000)  # worst case ~0.25 USD
     _run(config, n2_source, taxonomy, register,
          RecordingTransport(_anthropic_reply([], usage={"input_tokens": 1, "output_tokens": 20000})))
@@ -523,12 +534,21 @@ def test_contract_names_are_refused_as_aliases(n2_source, taxonomy, register):
     assert transport.calls == []
 
 
-def test_result_is_written_only_under_the_results_root(tmp_path):
-    result = {"schema": arm.RESULT_SCHEMA}
-    with pytest.raises(ValueError, match="outside the allowed root"):
-        arm.write_result(result, "../escape.json", root=tmp_path / "results")
-    target = arm.write_result(result, "c1-anthropic.json", root=tmp_path / "results")
+def test_result_file_name_is_built_from_constants_only(tmp_path):
+    result = {"schema": arm.RESULT_SCHEMA, "contract_alias": "C3", "provider": "openai"}
+    target = arm.write_result(result, root=tmp_path / "results")
+    assert target.parent == tmp_path / "results"
+    assert target.name.startswith("C3-openai-")
+    assert target.suffix == ".json"
     assert json.loads(target.read_text(encoding="utf-8")) == result
+
+
+@pytest.mark.parametrize("alias,provider", [("../C1", "openai"), ("C1", "../x")])
+def test_result_with_unknown_alias_or_provider_is_not_written(tmp_path, alias, provider):
+    result = {"contract_alias": alias, "provider": provider}
+    with pytest.raises(ValueError, match="alias|provider"):
+        arm.write_result(result, root=tmp_path)
+    assert not any(tmp_path.iterdir())
 
 
 # --- CLI (mock transport, confined roots) -------------------------------------
@@ -557,23 +577,23 @@ def _cli_args(*extra):
 
 def test_cli_runs_with_mock_transport_and_writes_only_private_files(private_root):
     transport = RecordingTransport(_anthropic_reply([_finding()]))
-    code = arm.main(_cli_args("--source-pdf", "c1.pdf", "--out", "c1-anthropic.json"),
-                    transport=transport)
-    assert code == 0
+    argv = _cli_args("--source-pdf", "c1.pdf")
+    assert arm.main(argv, transport=transport) == 0
     assert len(transport.calls) == 1
-    written = json.loads((private_root / "results/c1-anthropic.json").read_text(encoding="utf-8"))
-    assert written["findings"] == [_finding()]
+    (written,) = (private_root / "results").glob("C1-anthropic-*.json")
+    assert json.loads(written.read_text(encoding="utf-8"))["findings"] == [_finding()]
     assert (private_root / "spend" / arm.DEFAULT_LEDGER).exists()
 
 
 @pytest.mark.parametrize("extra", [
-    ("--source-pdf", "../../etc/passwd", "--out", "x.json"),
-    ("--source-pdf", "c1.pdf", "--out", "../../escape.json"),
-    ("--source-pdf", "c1.pdf", "--out", "x.json", "--ledger", "../escape.jsonl"),
+    ("--source-pdf", "../../etc/passwd"),
+    ("--source-pdf", "c1.pdf", "--taxonomy", "../../escape.yaml"),
+    ("--source-n2", "../c2.txt", "--page-spans", "c2.json"),
 ])
 @pytest.mark.usefixtures("private_root")
-def test_cli_refuses_paths_outside_private_roots(extra):
+def test_cli_refuses_names_outside_private_roots(extra):
     transport = RecordingTransport(_anthropic_reply([]))
+    argv = _cli_args(*extra)
     with pytest.raises(ValueError, match="outside the allowed root"):
-        arm.main(_cli_args(*extra), transport=transport)
+        arm.main(argv, transport=transport)
     assert transport.calls == []

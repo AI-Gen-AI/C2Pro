@@ -13,9 +13,10 @@ Safety rails:
 * a truncated or tool-less reply is billed but never returned as a result;
 * invalid findings are reported, never silently dropped or repaired;
 * contracts are identified only by alias (C1..C6);
-* every file path is confined to a fixed root: the taxonomy to this
-  directory; corpus, results and spend register to ``~/c2pro-jv1-private``,
-  outside the repository. No argument or env var can move those roots.
+* no CLI value ever builds a file path: inputs are SELECTED from the files
+  listed under a fixed root (taxonomy: this directory; corpus:
+  ``~/c2pro-jv1-private/corpus``) and output names are built from constants
+  (``~/c2pro-jv1-private/{results,spend}``), outside the repository.
 """
 from __future__ import annotations
 
@@ -65,7 +66,8 @@ RESULTS_ROOT = PRIVATE_ROOT / "results"
 SPEND_ROOT = PRIVATE_ROOT / "spend"
 
 Provider = Literal["anthropic", "openai"]
-_ALIAS = re.compile(r"^C[1-6]$")
+PROVIDERS: tuple[str, ...] = ("anthropic", "openai")
+ALIASES: tuple[str, ...] = tuple(f"C{n}" for n in range(1, 7))
 _EPC_ID = re.compile(r"^EPC-(\d{2})$")
 _PDF_PAGE_TOKENS = 3000  # pessimistic per-page input estimate for PDF documents
 _MICRO = Decimal("0.000001")
@@ -75,16 +77,35 @@ _FINDING_KEYS = (
 ) - {"window_ordinal"}
 
 
-def confined_path(raw: str | os.PathLike[str], root: Path) -> Path:
-    """Resolve ``raw`` (relative to ``root``, or absolute) and refuse escapes.
+def select_file(name: str | os.PathLike[str], root: Path) -> Path:
+    """Return the regular file listed under ``root`` whose name equals ``name``.
 
-    Symlinks and ``..`` are resolved first, so neither can leave ``root``.
+    ``name`` is only COMPARED with the directory listing; the returned path
+    always comes from the listing, so a value from the CLI never builds a
+    path. ``..``, absolute paths elsewhere, missing files and symlinks that
+    leave ``root`` are all refused.
     """
-    base = os.path.realpath(root)
-    candidate = os.path.realpath(os.path.join(base, os.fspath(raw)))
-    if os.path.commonpath([base, candidate]) != base:
-        raise ValueError(f"path is outside the allowed root {base}")
-    return Path(candidate)
+    base = Path(os.path.realpath(root))
+    wanted = os.path.normpath(os.fspath(name))
+    if os.path.isabs(wanted):
+        wanted = os.path.relpath(wanted, base)
+    wanted = Path(wanted).as_posix()
+    for entry in sorted(base.rglob("*")):
+        if entry.relative_to(base).as_posix() != wanted or not entry.is_file():
+            continue
+        real = Path(os.path.realpath(entry))
+        if real.is_relative_to(base):
+            return real
+        break
+    raise ValueError(f"file not found or outside the allowed root {base}")
+
+
+def _canonical(value: Any, allowed: Sequence[str], what: str) -> str:
+    """Map an untrusted value onto one of our own constants."""
+    for constant in allowed:
+        if value == constant:
+            return constant
+    raise ValueError(f"unknown {what}: must be one of {', '.join(allowed)}")
 
 
 def _private_root(root: Path) -> Path:
@@ -140,7 +161,7 @@ def load_taxonomy(
     name: str | os.PathLike[str] = DEFAULT_TAXONOMY, *, root: Path | None = None,
 ) -> tuple[EpcControl, ...]:
     """Load B1's ``epc_control_taxonomy.yaml`` (confined to ``root``)."""
-    path = confined_path(name, root or TAXONOMY_ROOT)
+    path = select_file(name, root or TAXONOMY_ROOT)
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     controls = [_control(raw) for raw in data["controles"]]
     if not controls or len({c.number for c in controls}) != len(controls):
@@ -165,7 +186,7 @@ class DirectArmSource:
     ) -> DirectArmSource:
         import pymupdf
 
-        data = confined_path(name, _private_root(root or CORPUS_ROOT)).read_bytes()
+        data = select_file(name, _private_root(root or CORPUS_ROOT)).read_bytes()
         if not data.startswith(b"%PDF"):
             raise ValueError("source is not a PDF")
         with pymupdf.open(stream=data, filetype="pdf") as doc:  # type: ignore[no-untyped-call]
@@ -196,8 +217,8 @@ class DirectArmSource:
     ) -> DirectArmSource:
         """N2 projection (UTF-8) + JSON ``[{page,start_offset,end_offset}]``."""
         base = _private_root(root or CORPUS_ROOT)
-        text = confined_path(text_name, base).read_text(encoding="utf-8")
-        spans = json.loads(confined_path(spans_name, base).read_text(encoding="utf-8"))
+        text = select_file(text_name, base).read_text(encoding="utf-8")
+        spans = json.loads(select_file(spans_name, base).read_text(encoding="utf-8"))
         return cls.from_n2_text(text, [
             (int(s["page"]), int(s["start_offset"]), int(s["end_offset"])) for s in spans
         ])
@@ -388,11 +409,8 @@ def estimate_usd(config: ArmConfig, source: DirectArmSource, body: dict[str, Any
 class JsonlSpendRegister:
     """Append-only spend ledger; event shape compatible with real_ai_governor."""
 
-    def __init__(
-        self, name: str | os.PathLike[str] = DEFAULT_LEDGER, *, max_usd: Decimal,
-        root: Path | None = None,
-    ) -> None:
-        self.path = confined_path(name, _private_root(root or SPEND_ROOT))
+    def __init__(self, *, max_usd: Decimal, root: Path | None = None) -> None:
+        self.path = _private_root(root or SPEND_ROOT) / DEFAULT_LEDGER
         if self.path.suffix != ".jsonl":
             raise ValueError("spend register must be a .jsonl file")
         if not max_usd.is_finite() or max_usd <= 0:
@@ -637,8 +655,7 @@ def run_direct_arm(
     contract_alias: str, register: JsonlSpendRegister, transport: Transport,
 ) -> dict[str, Any]:
     """One governed call; returns the result document (nothing is written)."""
-    if not _ALIAS.fullmatch(contract_alias):
-        raise ValueError("contract alias must be C1..C6, never a contract or party name")
+    contract_alias = _canonical(contract_alias, ALIASES, "contract alias (never a name)")
     body = build_request(config, source, taxonomy)
     estimate = estimate_usd(config, source, body).quantize(_MICRO)
     if estimate > config.max_usd_per_call:
@@ -693,12 +710,17 @@ def run_direct_arm(
     }
 
 
-def write_result(
-    result: dict[str, Any], name: str | os.PathLike[str], *, root: Path | None = None,
-) -> Path:
-    """Results may contain private quotes: only under the private results root."""
-    target = confined_path(name, _private_root(root or RESULTS_ROOT))
-    target.parent.mkdir(parents=True, exist_ok=True)
+def write_result(result: dict[str, Any], *, root: Path | None = None) -> Path:
+    """Results may contain private quotes: only under the private results root.
+
+    The file name is built from constants (alias, provider, UTC stamp).
+    """
+    alias = _canonical(result.get("contract_alias"), ALIASES, "contract alias")
+    provider = _canonical(result.get("provider"), PROVIDERS, "provider")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    base = _private_root(root or RESULTS_ROOT)
+    target = base / f"{alias}-{provider}-{stamp}-{uuid.uuid4().hex[:8]}.json"
+    base.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return target
 
@@ -744,13 +766,11 @@ def _parser() -> argparse.ArgumentParser:
     source.add_argument("--source-n2", help=f"N2 projection text under {CORPUS_ROOT}")
     parser.add_argument("--page-spans", help="JSON [{page,start_offset,end_offset}] for --source-n2")
     parser.add_argument("--taxonomy", default=DEFAULT_TAXONOMY, help="file in evals/journey_v1")
-    parser.add_argument("--ledger", default=DEFAULT_LEDGER, help=f".jsonl under {SPEND_ROOT}")
     parser.add_argument("--max-usd", type=Decimal, required=True, help="global B3 USD cap")
     parser.add_argument("--max-output-tokens", type=int, default=16_000)
     parser.add_argument("--max-usd-per-call", type=Decimal, default=Decimal("2"))
     parser.add_argument("--no-temperature", action="store_true",
                         help="omit temperature (reasoning models)")
-    parser.add_argument("--out", required=True, help=f"result file under {RESULTS_ROOT}")
     return parser
 
 
@@ -759,10 +779,10 @@ def main(argv: Sequence[str] | None = None, *, transport: Transport | None = Non
     args = parser.parse_args(argv)
     if args.source_n2 and not args.page_spans:
         parser.error("--page-spans is required with --source-n2")
-    # Resolve and confine EVERY path before anything is read, paid or written.
+    # Every input is selected from a fixed root BEFORE anything is paid;
+    # output names come from constants (see write_result / DEFAULT_LEDGER).
     results_root = _private_root(RESULTS_ROOT)
-    out = confined_path(args.out, results_root)
-    register = JsonlSpendRegister(args.ledger, max_usd=args.max_usd, root=SPEND_ROOT)
+    register = JsonlSpendRegister(max_usd=args.max_usd, root=SPEND_ROOT)
     taxonomy = load_taxonomy(args.taxonomy, root=TAXONOMY_ROOT)
     src = (
         DirectArmSource.from_pdf(args.source_pdf, root=CORPUS_ROOT) if args.source_pdf
@@ -778,7 +798,7 @@ def main(argv: Sequence[str] | None = None, *, transport: Transport | None = Non
         source=src, taxonomy=taxonomy, contract_alias=args.contract_alias,
         register=register, transport=transport or HttpxTransport(),
     )
-    target = write_result(result, out, root=results_root)
+    target = write_result(result, root=results_root)
     print(json.dumps({
         "out": str(target), "findings": len(result["findings"]),
         "rejected": len(result["rejected"]), "cost_usd": result["cost_usd"],
