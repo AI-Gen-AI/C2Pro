@@ -597,3 +597,127 @@ def test_cli_refuses_names_outside_private_roots(extra):
     with pytest.raises(ValueError, match="outside the allowed root"):
         arm.main(argv, transport=transport)
     assert transport.calls == []
+
+
+# --- remaining guards and the real transport (httpx mocked, no network) -------
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"provider": "gemini"},
+    {"model": " "},
+    {"max_output_tokens": 0},
+    {"max_usd_per_call": Decimal("0")},
+])
+def test_invalid_arm_config_is_refused(kwargs):
+    params = {"provider": "anthropic", "model": "m", "price": PRICE, **kwargs}
+    with pytest.raises(ValueError):
+        arm.ArmConfig(**params)
+
+
+def test_non_pdf_bytes_are_refused(tmp_path):
+    (tmp_path / "fake.pdf").write_text("not a pdf", encoding="utf-8")
+    with pytest.raises(ValueError, match="not a PDF"):
+        arm.DirectArmSource.from_pdf("fake.pdf", root=tmp_path)
+
+
+def test_duplicate_controls_are_refused(tmp_path):
+    line = "- {id: EPC-01, tipo: x, critico: true, dimension: BUDGET}\n"
+    (tmp_path / "dup.yaml").write_text("controles:\n" + line + line, encoding="utf-8")
+    with pytest.raises(ValueError, match="unique"):
+        arm.load_taxonomy("dup.yaml", root=tmp_path)
+
+
+def test_spend_register_requires_a_positive_cap(tmp_path):
+    with pytest.raises(ValueError, match="cap"):
+        arm.JsonlSpendRegister(max_usd=Decimal("0"), root=tmp_path)
+
+
+def test_openai_other_tools_and_non_object_arguments_are_not_results():
+    other = _openai_reply([])
+    other["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = "other_tool"
+    listed = _openai_reply([])
+    listed["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] = "[1, 2]"
+    assert arm._parse_reply("openai", other).tool_input is None
+    assert arm._parse_reply("openai", listed).tool_input is None
+
+
+def test_non_text_optional_fields_are_rejected(taxonomy):
+    _, rejected = arm.validate_findings([_finding(clause_ref=7)], taxonomy)
+    assert rejected == [{"index": 0, "reason": "clause_ref must be text"}]
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
+
+
+@pytest.mark.parametrize("provider,env,url,header,value", [
+    ("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/v1/messages",
+     "x-api-key", "sk-ant-synthetic-key-for-tests-only"),
+    ("openai", "OPENAI_API_KEY", "https://api.openai.com/v1/chat/completions",
+     "authorization", "Bearer sk-synthetic-openai-key-for-tests"),
+])
+def test_httpx_transport_builds_provider_request_without_network(
+    monkeypatch, provider, env, url, header, value,
+):
+    import httpx
+
+    monkeypatch.setenv(env, value.removeprefix("Bearer "))
+    calls = []
+
+    def fake_post(target, *, json, headers, timeout):
+        calls.append((target, json, headers, timeout))
+        return _FakeResponse({"ok": True})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    assert arm.HttpxTransport(timeout_s=12.0)(provider, {"model": "m"}) == {"ok": True}
+    ((target, body, headers, timeout),) = calls
+    assert target == url
+    assert body == {"model": "m"}
+    assert headers[header] == value
+    assert timeout == pytest.approx(12.0)
+    if provider == "anthropic":
+        assert headers["anthropic-version"] == "2023-06-01"
+
+
+@pytest.mark.parametrize("provider,env", [
+    ("anthropic", "ANTHROPIC_API_KEY"), ("openai", "OPENAI_API_KEY"),
+])
+def test_httpx_transport_refuses_to_send_without_a_key(monkeypatch, provider, env):
+    import httpx
+
+    monkeypatch.delenv(env, raising=False)
+    monkeypatch.setattr(httpx, "post", pytest.fail)
+    transport = arm.HttpxTransport()
+    with pytest.raises(RuntimeError, match="API key missing"):
+        transport(provider, {"model": "m"})
+
+
+def test_cli_n2_source_requires_page_spans(private_root):
+    argv = _cli_args("--source-n2", "c2.txt")
+    with pytest.raises(SystemExit):
+        arm.main(argv, transport=RecordingTransport(_anthropic_reply([])))
+    assert not (private_root / "results").exists()
+
+
+def test_cli_runs_an_n2_projection_with_mock_transport(private_root):
+    (private_root / "corpus/c2.txt").write_text(N2_TEXT, encoding="utf-8")
+    (private_root / "corpus/c2.json").write_text(json.dumps([
+        {"page": p, "start_offset": s, "end_offset": e} for p, s, e in PAGE_SPANS
+    ]), encoding="utf-8")
+    transport = RecordingTransport(_openai_reply([_finding()]))
+    argv = _cli_args("--source-n2", "c2.txt", "--page-spans", "c2.json", "--no-temperature")
+    argv[argv.index("anthropic")] = "openai"
+    argv[argv.index("C1")] = "C2"
+    assert arm.main(argv, transport=transport) == 0
+    ((provider, body),) = transport.calls
+    assert provider == "openai"
+    assert "temperature" not in body
+    (written,) = (private_root / "results").glob("C2-openai-*.json")
+    assert json.loads(written.read_text(encoding="utf-8"))["source"]["kind"] == "n2_text"

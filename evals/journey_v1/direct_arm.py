@@ -411,8 +411,6 @@ class JsonlSpendRegister:
 
     def __init__(self, *, max_usd: Decimal, root: Path | None = None) -> None:
         self.path = _private_root(root or SPEND_ROOT) / DEFAULT_LEDGER
-        if self.path.suffix != ".jsonl":
-            raise ValueError("spend register must be a .jsonl file")
         if not max_usd.is_finite() or max_usd <= 0:
             raise ValueError("a positive global USD cap is required")
         self.max_usd = max_usd
