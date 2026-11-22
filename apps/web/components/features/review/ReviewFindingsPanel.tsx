@@ -11,7 +11,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,20 @@ import type {
 } from "@/lib/api/generated/models";
 import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDecisionAction";
 import { reviewFindingsKey } from "./useReviewCapabilities";
+
+/** Present category as an AI-proposed business area, never as a validated classification. */
+function findingBusinessArea(finding: ReviewFindingResponse): string {
+  const raw = finding.risk.category;
+  const code = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+  const labels: Record<string, string> = {
+    TIME: "Schedule", SCHEDULE: "Schedule",
+    COST: "Budget", BUDGET: "Budget",
+    SCOPE: "Scope", QUALITY: "Quality",
+    LEGAL: "Contract conditions", CONTRACTUAL: "Contract conditions",
+    PROCUREMENT: "Supply chain", SUPPLY_CHAIN: "Supply chain",
+  };
+  return labels[code] ?? "Area not evaluated";
+}
 
 const ACTION_LABEL: Record<FindingDecisionAction, string> = {
   CONFIRMED: "Approve finding",
@@ -334,6 +348,10 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     (finding) => finding.current?.action === "DISMISSED" || finding.current?.action === "CORRECTION_PROPOSED",
   );
 
+  const groupedFindings = [...view.findings].sort((a, b) =>
+    findingBusinessArea(a).localeCompare(findingBusinessArea(b)) || a.ordinal - b.ordinal,
+  );
+
   return (
     <section
       className="mt-3 rounded-md border bg-muted/30 p-3 text-sm"
@@ -367,7 +385,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         </p>
       ) : null}
       <ul className="mt-2 space-y-3">
-        {view.findings.map((finding) => {
+        {groupedFindings.map((finding, index) => {
           const draft = drafts[finding.ordinal];
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
           const brief = shortAnalysis(finding.risk.description);
@@ -388,8 +406,17 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
             draft !== undefined &&
             (!needsReason(draft.action) || draft.reason.trim().length > 0) &&
             (draft.action !== "CORRECTION_PROPOSED" || draft.proposedText.trim().length > 0);
+          const area = findingBusinessArea(finding);
+          const newArea = index === 0 || findingBusinessArea(groupedFindings[index - 1]) !== area;
           return (
-            <li key={finding.finding_id} className="rounded border bg-background p-2" data-testid={`finding-${finding.ordinal}`}>
+            <Fragment key={finding.finding_id}>
+              {newArea ? (
+                <li role="presentation" className="pt-2">
+                  <h3 className="font-semibold">{area}</h3>
+                  <p className="text-xs text-muted-foreground">Business area proposed by AI, not yet validated.</p>
+                </li>
+              ) : null}
+              <li className="rounded border bg-background p-2" data-testid={ `finding-${finding.ordinal}` }>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{title}</span>
                 {finding.risk.category ? <Badge variant="outline">{String(finding.risk.category)}</Badge> : null}
@@ -607,7 +634,8 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   </Button>
                 </div>
               ) : null}
-            </li>
+              </li>
+            </Fragment>
           );
         })}
       </ul>
