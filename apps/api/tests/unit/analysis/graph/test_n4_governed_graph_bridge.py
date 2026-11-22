@@ -557,3 +557,34 @@ def test_same_literal_clause_with_distinct_risk_reasons_stays_separate():
     a["description"] = "Late notification may void entitlement."
     b["description"] = "Failure to file a report may incur separate damages."
     assert len(consolidate_candidates([a, b])) == 2
+
+
+def test_a7_page_fields_serialize_only_when_present_in_risk_artifact():
+    """New page evidence must not silently break the historical risk contract.
+
+    A7 adds opt-in page metadata. Old artifacts without a page map retain
+    the pre-A7 risk shape, while verified page values survive serialization.
+    """
+    from src.analysis.domain.contracts import DocumentArtifact
+
+    risk = {
+        "title": "Deadline", "description": "Notice by the deadline",
+        "category": "LEGAL", "severity": "HIGH",
+        "source_quote": "The contractor shall notify.",
+    }
+    common = {"document_id": str(uuid4()), "document_revision_id": str(uuid4()),
+              "doc_type": "CONTRACT"}
+    legacy = DocumentArtifact(**common, extracted_risks=[risk])
+    legacy_risk = legacy.model_dump(mode="json")["extracted_risks"][0]
+    for key in ("page_number", "source_locator", "page_verification_status"):
+        assert key not in legacy_risk, f"{key} altered the legacy canonical artifact"
+
+    with_page = {
+        **risk, "page_number": 7, "source_locator": "pdf-page-7",
+        "page_verification_status": "PAGE_LOCATED",
+    }
+    updated = DocumentArtifact(**common, extracted_risks=[with_page])
+    updated_risk = updated.model_dump(mode="json")["extracted_risks"][0]
+    assert updated_risk["page_number"] == 7
+    assert updated_risk["source_locator"] == "pdf-page-7"
+    assert updated_risk["page_verification_status"] == "PAGE_LOCATED"
