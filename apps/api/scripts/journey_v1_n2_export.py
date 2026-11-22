@@ -25,7 +25,7 @@ from typing import Any
 # ──────────────────────────────────────────────────────────────────
 # Configuración JV1-N2-EXPORT
 # ──────────────────────────────────────────────────────────────────
-REPO_ROOT = Path(__file__).resolve().parents[2]  # C2Pro raíz (apps/api/../..)
+REPO_ROOT = Path(__file__).resolve().parents[3]  # C2Pro raíz real; parents[2]=/apps (dentro repo)
 JO1_ROOT = REPO_ROOT / "evals" / "journey_v1"  # taxonomy y óracle sintéticos
 PRIVATE_ROOT = Path.home() / "c2pro-jv1-private"  # JV1-B3: fuera del repo
 
@@ -148,7 +148,8 @@ def export_n2_j1(
             _private_root(Path(export_root))
             export_root_str = str(Path(export_root).resolve())
         except ValueError:
-            export_root_str = "/opt/c2pro-jv1-private-offline"
+            # export_root inside repo (ej. <repo>/evals) es inválido — error forzado
+            raise
         # Asegurar que no es relativo al repo
         if Path(export_root_str).is_relative_to(str(REPO_ROOT)):
             export_root_str = "/opt/c2pro-jv1-private-offline"
