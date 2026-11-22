@@ -12,9 +12,10 @@ Safety rails:
   checked BEFORE the request is sent; no SDK, no retries;
 * a truncated or tool-less reply is billed but never returned as a result;
 * an UNCERTAIN outcome (timeout, reset, 5xx, any error after sending) keeps
-  its worst-case reservation held (event ``unknown``) and blocks a retry of
-  the same contract/provider/source until reconciled; only a request proven
-  NOT sent or explicitly rejected by the provider releases its reservation;
+  its worst-case reservation held (event ``unknown``) and blocks any new
+  call for the same contract alias and provider, whatever the source bytes,
+  until reconciled; only a request proven NOT sent or explicitly rejected
+  before generation releases its reservation (529 overloaded is uncertain);
 * invalid findings are reported, never silently dropped or repaired;
 * contracts are identified only by alias (C1..C6);
 * no CLI value ever builds a file path: inputs are SELECTED from the files
@@ -132,20 +133,27 @@ class ProviderRejected(RuntimeError):
     """The provider explicitly rejected the request before generating (unbilled)."""
 
     def __init__(self, status: int) -> None:
+        if status not in _UNBILLED_STATUS:
+            raise ValueError(f"HTTP {status} is not a documented unbilled rejection")
         super().__init__(f"provider rejected the request with HTTP {status}")
         self.status = status
 
 
 # HTTP statuses where the provider refuses BEFORE generating: not billed.
-# Everything else (5xx incl. 504, 408, unknown codes) is billing-UNCERTAIN.
-_UNBILLED_STATUS = frozenset({400, 401, 402, 403, 404, 413, 422, 429, 529})
+# Everything else is billing-UNCERTAIN: 5xx incl. 504, 408, unknown codes and
+# 529 overloaded (no documented guarantee that it is never charged).
+_UNBILLED_STATUS = frozenset({400, 401, 402, 403, 404, 413, 422, 429})
 
 
-def call_key(contract_alias: str, provider: str, source: DirectArmSource) -> str:
-    """One paid effect per contract alias, provider and exact source."""
+def call_key(contract_alias: str, provider: str) -> str:
+    """Paid-effect identity: contract alias + provider, whatever the source.
+
+    A re-exported or edited source of the same contract must not bypass an
+    unreconciled call; the source sha256 is recorded alongside for tracing.
+    """
     alias = _canonical(contract_alias, ALIASES, "contract alias")
     vendor = _canonical(provider, PROVIDERS, "provider")
-    return f"{alias}:{vendor}:{source.kind}:{source.sha256}"
+    return f"{alias}:{vendor}"
 
 
 class DirectArmOutputError(RuntimeError):
@@ -486,27 +494,31 @@ class JsonlSpendRegister:
         with self._locked():
             self._append({"ev": "refused", "reason": reason, "provider": provider, "model": model})
 
-    def reserve(self, *, provider: str, model: str, est_usd: Decimal, key: str) -> str:
-        if not key:
-            raise ValueError("a call key is required")
+    def reserve(
+        self, *, provider: str, model: str, est_usd: Decimal, key: str,
+        source_sha256: str, source_kind: str | None = None,
+    ) -> str:
+        if not key or not source_sha256:
+            raise ValueError("a call key and the source sha256 are required")
+        trace = {"key": key, "source_sha256": source_sha256, "source_kind": source_kind}
         with self._locked():
             events = self.events()
             if any(e.get("key") == key for e in self._open_reserves(events)):
                 reason = (f"B3_UNRECONCILED_CALL: {key} has an in-flight or billing-uncertain "
                           "call; reconcile it before retrying (no second paid effect)")
                 self._append({"ev": "refused", "reason": reason,
-                              "provider": provider, "model": model})
+                              "provider": provider, "model": model, **trace})
                 raise SpendRefused(reason)
             committed = self._committed_usd(events)
             if committed + est_usd > self.max_usd:
                 reason = (f"B3_BUDGET_CAP: committed {committed} + worst case {est_usd} "
                           f"would exceed the {self.max_usd} USD budget")
                 self._append({"ev": "refused", "reason": reason,
-                              "provider": provider, "model": model})
+                              "provider": provider, "model": model, **trace})
                 raise SpendRefused(reason)
             call_id = uuid.uuid4().hex
             self._append({"ev": "reserve", "id": call_id, "model": model, "provider": provider,
-                          "est_usd": float(est_usd), "key": key, "pid": os.getpid()})
+                          "est_usd": float(est_usd), "pid": os.getpid(), **trace})
         return call_id
 
     def settle(self, call_id: str, *, provider: str, model: str, input_tokens: int,
@@ -716,7 +728,8 @@ def run_direct_arm(
         raise SpendRefused(reason)
     call_id = register.reserve(
         provider=config.provider, model=config.model, est_usd=estimate,
-        key=call_key(contract_alias, config.provider, source),
+        key=call_key(contract_alias, config.provider),
+        source_sha256=source.sha256, source_kind=source.kind,
     )
     started = datetime.now(UTC).isoformat()
     try:

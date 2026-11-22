@@ -801,9 +801,10 @@ def test_unreconciled_call_does_not_block_other_contracts_or_providers(
 
 def test_an_open_reservation_blocks_a_concurrent_duplicate(n2_source, taxonomy, register):
     config = _config("anthropic")
-    key = arm.call_key("C1", "anthropic", n2_source)
+    key = arm.call_key("C1", "anthropic")
     register.reserve(provider="anthropic", model=config.model,
-                     est_usd=Decimal("0.01"), key=key)  # another process, in flight
+                     est_usd=Decimal("0.01"), key=key,
+                     source_sha256=n2_source.sha256)  # another process, in flight
     transport = RecordingTransport(_anthropic_reply([]))
     with pytest.raises(arm.SpendRefused, match="reconcil"):
         _run(config, n2_source, taxonomy, register, transport)
@@ -811,7 +812,7 @@ def test_an_open_reservation_blocks_a_concurrent_duplicate(n2_source, taxonomy, 
 
 
 @pytest.mark.parametrize("error", [
-    arm.RequestNotSent("synthetic"), arm.ProviderRejected(429), arm.ProviderRejected(529),
+    arm.RequestNotSent("synthetic"), arm.ProviderRejected(429),
 ])
 def test_provably_unbilled_failures_release_and_allow_a_retry(
     error, n2_source, taxonomy, register,
@@ -879,7 +880,7 @@ def anthropic_key(monkeypatch):
 
 
 @pytest.mark.usefixtures("anthropic_key")
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 413, 422, 429, 529])
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 413, 422, 429])
 def test_transport_maps_explicit_rejections_to_unbilled(monkeypatch, status):
     import httpx
 
@@ -891,7 +892,7 @@ def test_transport_maps_explicit_rejections_to_unbilled(monkeypatch, status):
 
 
 @pytest.mark.usefixtures("anthropic_key")
-@pytest.mark.parametrize("status", [500, 502, 503, 504])
+@pytest.mark.parametrize("status", [500, 502, 503, 504, 529])
 def test_transport_keeps_server_errors_uncertain(monkeypatch, status):
     import httpx
 
@@ -933,3 +934,94 @@ def test_missing_key_is_a_request_not_sent(monkeypatch):
     transport = arm.HttpxTransport()
     with pytest.raises(arm.RequestNotSent, match="API key missing"):
         transport("openai", {"model": "m"})
+
+
+# --- D2 (L0 22/11, QA FAIL P0 at c91c60a0) ------------------------------------
+
+
+def _variant_source():
+    """Same contract identity, different bytes (e.g. a re-export)."""
+    text = N2_TEXT + " "
+    return arm.DirectArmSource.from_n2_text(text, [(1, 0, 67), (2, 67, len(text))])
+
+
+@pytest.mark.usefixtures("anthropic_key")
+def test_529_overloaded_is_billing_uncertain_and_blocks_retry(
+    monkeypatch, n2_source, taxonomy, register,
+):
+    """F1: 529 is not proof of no charge -> unknown, hold kept, no retry."""
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *_a, **_k: _httpx_response(529))
+    config = _config("anthropic")
+    transport = arm.HttpxTransport()
+    with pytest.raises(httpx.HTTPStatusError):
+        _run(config, n2_source, taxonomy, register, transport)
+    events = register.events()
+    assert [e["ev"] for e in events] == ["reserve", "unknown"]
+    assert register.committed_usd() == Decimal(str(events[0]["est_usd"]))
+    retry = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, n2_source, taxonomy, register, retry)
+    assert retry.calls == []
+
+
+def test_provider_rejected_only_accepts_documented_unbilled_statuses():
+    with pytest.raises(ValueError, match="529"):
+        arm.ProviderRejected(529)
+    assert arm.ProviderRejected(429).status == 429
+
+
+def test_unknown_blocks_the_same_contract_and_provider_even_with_another_source(
+    n2_source, taxonomy, register,
+):
+    """F2: a different source sha256 for the same alias+provider cannot bypass it."""
+    config = _config("anthropic")
+    timeout = RecordingTransport(error=TimeoutError("synthetic"))
+    with pytest.raises(TimeoutError):
+        _run(config, n2_source, taxonomy, register, timeout)
+    variant = _variant_source()
+    assert variant.sha256 != n2_source.sha256
+    retry = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, variant, taxonomy, register, retry)
+    assert retry.calls == []
+
+
+def test_in_flight_call_blocks_the_same_contract_and_provider_with_another_source(
+    n2_source, taxonomy, register,
+):
+    config = _config("anthropic")
+    register.reserve(provider="anthropic", model=config.model, est_usd=Decimal("0.01"),
+                     key=arm.call_key("C1", "anthropic"),
+                     source_sha256=n2_source.sha256)  # another process, in flight
+    transport = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, _variant_source(), taxonomy, register, transport)
+    assert transport.calls == []
+
+
+def test_source_sha256_is_kept_for_traceability(n2_source, taxonomy, register):
+    config = _config("anthropic")
+    with pytest.raises(TimeoutError):
+        _run(config, n2_source, taxonomy, register,
+             RecordingTransport(error=TimeoutError("synthetic")))
+    variant = _variant_source()
+    with pytest.raises(arm.SpendRefused):
+        _run(config, variant, taxonomy, register, RecordingTransport(_anthropic_reply([])))
+    reserve, unknown, refused = register.events()
+    assert reserve["key"] == "C1:anthropic"
+    assert reserve["source_sha256"] == n2_source.sha256
+    assert reserve["source_kind"] == "n2_text"
+    assert unknown["ev"] == "unknown"
+    assert refused["ev"] == "refused"
+    assert refused["source_sha256"] == variant.sha256
+
+
+def test_after_a_settled_call_a_new_source_revision_may_run(n2_source, taxonomy, register):
+    """Blocking is only for open/uncertain calls; settled history does not block."""
+    config = _config("anthropic")
+    _run(config, n2_source, taxonomy, register, RecordingTransport(_anthropic_reply([])))
+    second = RecordingTransport(_anthropic_reply([]))
+    _run(config, _variant_source(), taxonomy, register, second)
+    assert len(second.calls) == 1
