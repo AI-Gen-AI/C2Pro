@@ -996,19 +996,21 @@ def test_in_flight_call_blocks_the_same_contract_and_provider_with_another_sourc
                      key=arm.call_key("C1", "anthropic"),
                      source_sha256=n2_source.sha256)  # another process, in flight
     transport = RecordingTransport(_anthropic_reply([]))
+    variant = _variant_source()
     with pytest.raises(arm.SpendRefused, match="reconcil"):
-        _run(config, _variant_source(), taxonomy, register, transport)
+        _run(config, variant, taxonomy, register, transport)
     assert transport.calls == []
 
 
 def test_source_sha256_is_kept_for_traceability(n2_source, taxonomy, register):
     config = _config("anthropic")
+    timeout = RecordingTransport(error=TimeoutError("synthetic"))
     with pytest.raises(TimeoutError):
-        _run(config, n2_source, taxonomy, register,
-             RecordingTransport(error=TimeoutError("synthetic")))
+        _run(config, n2_source, taxonomy, register, timeout)
     variant = _variant_source()
+    retry = RecordingTransport(_anthropic_reply([]))
     with pytest.raises(arm.SpendRefused):
-        _run(config, variant, taxonomy, register, RecordingTransport(_anthropic_reply([])))
+        _run(config, variant, taxonomy, register, retry)
     reserve, unknown, refused = register.events()
     assert reserve["key"] == "C1:anthropic"
     assert reserve["source_sha256"] == n2_source.sha256
