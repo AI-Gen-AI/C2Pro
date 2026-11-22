@@ -11,6 +11,10 @@ Safety rails:
   shape as ``real_ai_governor``) with a global USD cap and a per-call cap,
   checked BEFORE the request is sent; no SDK, no retries;
 * a truncated or tool-less reply is billed but never returned as a result;
+* an UNCERTAIN outcome (timeout, reset, 5xx, any error after sending) keeps
+  its worst-case reservation held (event ``unknown``) and blocks a retry of
+  the same contract/provider/source until reconciled; only a request proven
+  NOT sent or explicitly rejected by the provider releases its reservation;
 * invalid findings are reported, never silently dropped or repaired;
 * contracts are identified only by alias (C1..C6);
 * no CLI value ever builds a file path: inputs are SELECTED from the files
@@ -118,6 +122,30 @@ def _private_root(root: Path) -> Path:
 
 class SpendRefused(RuntimeError):
     """Refused BEFORE reaching the provider: nothing was sent or billed."""
+
+
+class RequestNotSent(RuntimeError):
+    """The request provably never reached the provider: nothing can be billed."""
+
+
+class ProviderRejected(RuntimeError):
+    """The provider explicitly rejected the request before generating (unbilled)."""
+
+    def __init__(self, status: int) -> None:
+        super().__init__(f"provider rejected the request with HTTP {status}")
+        self.status = status
+
+
+# HTTP statuses where the provider refuses BEFORE generating: not billed.
+# Everything else (5xx incl. 504, 408, unknown codes) is billing-UNCERTAIN.
+_UNBILLED_STATUS = frozenset({400, 401, 402, 403, 404, 413, 422, 429, 529})
+
+
+def call_key(contract_alias: str, provider: str, source: DirectArmSource) -> str:
+    """One paid effect per contract alias, provider and exact source."""
+    alias = _canonical(contract_alias, ALIASES, "contract alias")
+    vendor = _canonical(provider, PROVIDERS, "provider")
+    return f"{alias}:{vendor}:{source.kind}:{source.sha256}"
 
 
 class DirectArmOutputError(RuntimeError):
@@ -436,21 +464,40 @@ class JsonlSpendRegister:
         with open(self.path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, sort_keys=True) + "\n")
 
-    def _committed_usd(self) -> Decimal:
-        events = self.events()
+    @staticmethod
+    def _open_reserves(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Reservations not settled (done) nor provably released (fail).
+
+        In flight AND ``unknown`` ones stay open: their worst case is held.
+        """
         closed = {e["id"] for e in events if e["ev"] in ("done", "fail")}
+        return [e for e in events if e["ev"] == "reserve" and e["id"] not in closed]
+
+    def _committed_usd(self, events: list[dict[str, Any]] | None = None) -> Decimal:
+        events = self.events() if events is None else events
         spent = sum((Decimal(str(e["usd"])) for e in events if e["ev"] == "done"), Decimal(0))
-        open_ = sum((Decimal(str(e["est_usd"])) for e in events
-                     if e["ev"] == "reserve" and e["id"] not in closed), Decimal(0))
-        return spent + open_
+        held = sum((Decimal(str(e["est_usd"])) for e in self._open_reserves(events)), Decimal(0))
+        return spent + held
+
+    def committed_usd(self) -> Decimal:
+        return self._committed_usd()
 
     def refuse(self, reason: str, *, provider: str, model: str) -> None:
         with self._locked():
             self._append({"ev": "refused", "reason": reason, "provider": provider, "model": model})
 
-    def reserve(self, *, provider: str, model: str, est_usd: Decimal) -> str:
+    def reserve(self, *, provider: str, model: str, est_usd: Decimal, key: str) -> str:
+        if not key:
+            raise ValueError("a call key is required")
         with self._locked():
-            committed = self._committed_usd()
+            events = self.events()
+            if any(e.get("key") == key for e in self._open_reserves(events)):
+                reason = (f"B3_UNRECONCILED_CALL: {key} has an in-flight or billing-uncertain "
+                          "call; reconcile it before retrying (no second paid effect)")
+                self._append({"ev": "refused", "reason": reason,
+                              "provider": provider, "model": model})
+                raise SpendRefused(reason)
+            committed = self._committed_usd(events)
             if committed + est_usd > self.max_usd:
                 reason = (f"B3_BUDGET_CAP: committed {committed} + worst case {est_usd} "
                           f"would exceed the {self.max_usd} USD budget")
@@ -459,7 +506,7 @@ class JsonlSpendRegister:
                 raise SpendRefused(reason)
             call_id = uuid.uuid4().hex
             self._append({"ev": "reserve", "id": call_id, "model": model, "provider": provider,
-                          "est_usd": float(est_usd), "pid": os.getpid()})
+                          "est_usd": float(est_usd), "key": key, "pid": os.getpid()})
         return call_id
 
     def settle(self, call_id: str, *, provider: str, model: str, input_tokens: int,
@@ -471,8 +518,15 @@ class JsonlSpendRegister:
                           "message_id": message_id, "stop_reason": stop_reason})
 
     def fail(self, call_id: str, *, provider: str, error: BaseException) -> None:
+        """Release a reservation ONLY for a provably unbilled failure."""
         with self._locked():
             self._append({"ev": "fail", "id": call_id, "provider": provider,
+                          "error": type(error).__name__})
+
+    def unknown(self, call_id: str, *, provider: str, error: BaseException) -> None:
+        """Billing-uncertain outcome: the worst-case reservation stays held."""
+        with self._locked():
+            self._append({"ev": "unknown", "id": call_id, "provider": provider,
                           "error": type(error).__name__})
 
 
@@ -660,12 +714,19 @@ def run_direct_arm(
         reason = f"B3_PER_CALL_CAP: worst case {estimate} exceeds the per-call cap {config.max_usd_per_call}"
         register.refuse(reason, provider=config.provider, model=config.model)
         raise SpendRefused(reason)
-    call_id = register.reserve(provider=config.provider, model=config.model, est_usd=estimate)
+    call_id = register.reserve(
+        provider=config.provider, model=config.model, est_usd=estimate,
+        key=call_key(contract_alias, config.provider, source),
+    )
     started = datetime.now(UTC).isoformat()
     try:
         raw = transport(config.provider, body)
-    except BaseException as exc:
+    except (RequestNotSent, ProviderRejected) as exc:
         register.fail(call_id, provider=config.provider, error=exc)
+        raise
+    except BaseException as exc:
+        # Timeout, reset, 5xx, interruption...: the provider may have billed.
+        register.unknown(call_id, provider=config.provider, error=exc)
         raise
     reply = _parse_reply(config.provider, raw)
     usage_known = reply.billable_input_tokens is not None and reply.output_tokens is not None
@@ -744,10 +805,16 @@ class HttpxTransport:
             key = os.environ.get("OPENAI_API_KEY", "")
             headers = {"authorization": f"Bearer {key}"}
         if len(key) < 20:
-            raise RuntimeError(f"{provider} API key missing from the environment")
-        response = httpx.post(self._URLS[provider], json=body, headers=headers,
-                              timeout=self.timeout_s)
-        response.raise_for_status()
+            raise RequestNotSent(f"{provider} API key missing from the environment")
+        try:
+            response = httpx.post(self._URLS[provider], json=body, headers=headers,
+                                  timeout=self.timeout_s)
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+            # No connection was established: the request never left this host.
+            raise RequestNotSent(f"{provider} connection not established") from exc
+        if response.status_code in _UNBILLED_STATUS:
+            raise ProviderRejected(response.status_code)
+        response.raise_for_status()  # 5xx/other: billing-uncertain, propagated
         result: dict[str, Any] = response.json()
         return result
 

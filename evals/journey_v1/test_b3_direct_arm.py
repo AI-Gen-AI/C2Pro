@@ -7,6 +7,7 @@ These tests prove the CODE CONTRACT of the arm; they are not contract analysis.
 from __future__ import annotations
 
 import base64
+import contextlib
 import importlib.util
 import json
 import sys
@@ -492,10 +493,10 @@ def test_per_call_cap_refuses_before_any_provider_call(pdf_source, taxonomy, reg
     assert transport.calls == []
 
 
-def test_provider_error_is_recorded_as_failed_call(n2_source, taxonomy, register):
-    transport = RecordingTransport(error=TimeoutError("synthetic timeout"))
+def test_request_proven_not_sent_releases_the_reservation(n2_source, taxonomy, register):
+    transport = RecordingTransport(error=arm.RequestNotSent("synthetic: never sent"))
     config = _config("anthropic")
-    with pytest.raises(TimeoutError):
+    with pytest.raises(arm.RequestNotSent):
         _run(config, n2_source, taxonomy, register, transport)
     assert [e["ev"] for e in register.events()] == ["reserve", "fail"]
 
@@ -647,6 +648,8 @@ def test_non_text_optional_fields_are_rejected(taxonomy):
 
 
 class _FakeResponse:
+    status_code = 200
+
     def __init__(self, payload):
         self.payload = payload
 
@@ -701,8 +704,9 @@ def test_httpx_transport_refuses_to_send_without_a_key(monkeypatch, provider, en
 
 def test_cli_n2_source_requires_page_spans(private_root):
     argv = _cli_args("--source-n2", "c2.txt")
+    transport = RecordingTransport(_anthropic_reply([]))
     with pytest.raises(SystemExit):
-        arm.main(argv, transport=RecordingTransport(_anthropic_reply([])))
+        arm.main(argv, transport=transport)
     assert not (private_root / "results").exists()
 
 
@@ -721,3 +725,211 @@ def test_cli_runs_an_n2_projection_with_mock_transport(private_root):
     assert "temperature" not in body
     (written,) = (private_root / "results").glob("C2-openai-*.json")
     assert json.loads(written.read_text(encoding="utf-8"))["source"]["kind"] == "n2_text"
+
+
+# --- P0 (L0 GO 22/11): uncertain provider outcomes never release spend --------
+
+
+def _load_governor():
+    spec = importlib.util.spec_from_file_location("real_ai_governor", _GOVERNOR)
+    governor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(governor)
+    return governor
+
+
+@pytest.mark.parametrize("error", [
+    TimeoutError("synthetic read timeout"),
+    ConnectionResetError("synthetic reset after send"),
+    RuntimeError("synthetic 504 gateway timeout"),
+    KeyboardInterrupt(),
+])
+def test_uncertain_outcome_keeps_the_worst_case_reserved(error, n2_source, taxonomy, register):
+    transport = RecordingTransport(error=error)
+    config = _config("anthropic")
+    with pytest.raises(type(error)):
+        _run(config, n2_source, taxonomy, register, transport)
+    events = register.events()
+    assert [e["ev"] for e in events] == ["reserve", "unknown"]
+    reserved = Decimal(str(events[0]["est_usd"]))
+    assert register.committed_usd() == reserved
+    summary = _load_governor().summarize(events)  # what B5 would read: still held
+    assert summary["in_flight"] == 1
+    assert summary["reserved_open_usd"] == pytest.approx(float(reserved))
+    assert summary["failed"] == 0
+
+
+def test_uncertain_outcome_still_counts_against_the_budget(tmp_path, n2_source, taxonomy):
+    register = arm.JsonlSpendRegister(max_usd=Decimal("0.5"), root=tmp_path)
+    config = _config("anthropic", max_output_tokens=16000)  # worst case ~0.25 USD
+    timeout = RecordingTransport(error=TimeoutError("synthetic"))
+    with pytest.raises(TimeoutError):
+        _run(config, n2_source, taxonomy, register, timeout, alias="C1")
+    second = RecordingTransport(error=TimeoutError("synthetic"))
+    with pytest.raises(TimeoutError):
+        _run(config, n2_source, taxonomy, register, second, alias="C2")
+    third = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="budget"):
+        _run(config, n2_source, taxonomy, register, third, alias="C3")
+    assert third.calls == []
+
+
+def test_no_retry_while_an_uncertain_call_is_unreconciled(n2_source, taxonomy, register):
+    config = _config("anthropic")
+    timeout = RecordingTransport(error=TimeoutError("synthetic"))
+    with pytest.raises(TimeoutError):
+        _run(config, n2_source, taxonomy, register, timeout)
+    retry = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, n2_source, taxonomy, register, retry)
+    assert retry.calls == []
+
+
+def test_unreconciled_call_does_not_block_other_contracts_or_providers(
+    n2_source, taxonomy, register,
+):
+    timeout = RecordingTransport(error=TimeoutError("synthetic"))
+    config = _config("anthropic")
+    with pytest.raises(TimeoutError):
+        _run(config, n2_source, taxonomy, register, timeout)
+    other_alias = RecordingTransport(_anthropic_reply([]))
+    _run(config, n2_source, taxonomy, register, other_alias, alias="C2")
+    other_provider = RecordingTransport(_openai_reply([]))
+    _run(_config("openai"), n2_source, taxonomy, register, other_provider)
+    assert len(other_alias.calls) == 1
+    assert len(other_provider.calls) == 1
+
+
+def test_an_open_reservation_blocks_a_concurrent_duplicate(n2_source, taxonomy, register):
+    config = _config("anthropic")
+    key = arm.call_key("C1", "anthropic", n2_source)
+    register.reserve(provider="anthropic", model=config.model,
+                     est_usd=Decimal("0.01"), key=key)  # another process, in flight
+    transport = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, n2_source, taxonomy, register, transport)
+    assert transport.calls == []
+
+
+@pytest.mark.parametrize("error", [
+    arm.RequestNotSent("synthetic"), arm.ProviderRejected(429), arm.ProviderRejected(529),
+])
+def test_provably_unbilled_failures_release_and_allow_a_retry(
+    error, n2_source, taxonomy, register,
+):
+    config = _config("anthropic")
+    failing = RecordingTransport(error=error)
+    with pytest.raises(type(error)):
+        _run(config, n2_source, taxonomy, register, failing)
+    assert register.committed_usd() == 0
+    retry = RecordingTransport(_anthropic_reply([]))
+    _run(config, n2_source, taxonomy, register, retry)
+    assert len(retry.calls) == 1
+
+
+def test_a_successful_call_settles_and_does_not_block_a_later_run(n2_source, taxonomy, register):
+    config = _config("anthropic")
+    for _ in range(2):
+        _run(config, n2_source, taxonomy, register, RecordingTransport(_anthropic_reply([])))
+    assert [e["ev"] for e in register.events()] == ["reserve", "done", "reserve", "done"]
+
+
+@pytest.mark.parametrize("outcomes", [
+    ("ok", "timeout", "not_sent", "ok", "rejected", "timeout"),
+    ("timeout", "timeout", "timeout", "timeout"),
+    ("not_sent", "rejected", "ok", "ok", "ok", "ok", "ok"),
+])
+def test_spend_invariants_hold_for_any_sequence_of_outcomes(
+    outcomes, tmp_path, n2_source, taxonomy,
+):
+    """Committed spend never exceeds the cap; uncertain holds are never released."""
+    cap = Decimal("0.6")
+    register = arm.JsonlSpendRegister(max_usd=cap, root=tmp_path)
+    errors = {"timeout": TimeoutError("t"), "not_sent": arm.RequestNotSent("n"),
+              "rejected": arm.ProviderRejected(429)}
+    for index, outcome in enumerate(outcomes):
+        alias = arm.ALIASES[index % len(arm.ALIASES)]
+        transport = (RecordingTransport(_anthropic_reply([])) if outcome == "ok"
+                     else RecordingTransport(error=errors[outcome]))
+        with contextlib.suppress(
+            arm.SpendRefused, TimeoutError, arm.RequestNotSent, arm.ProviderRejected,
+        ):
+            _run(_config("anthropic"), n2_source, taxonomy, register, transport, alias=alias)
+        assert register.committed_usd() <= cap
+    events = register.events()
+    terminal = [e for e in events if e["ev"] in ("done", "fail", "unknown")]
+    assert len({e["id"] for e in terminal}) == len(terminal)  # one outcome per call
+    unknown = {e["id"] for e in events if e["ev"] == "unknown"}
+    released = {e["id"] for e in events if e["ev"] in ("done", "fail")}
+    assert not unknown & released
+
+
+# --- HttpxTransport: classification of what was (not) sent, no network ------
+
+
+def _httpx_response(status, payload=None):
+    import httpx
+
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    return httpx.Response(status, json=payload or {}, request=request)
+
+
+@pytest.fixture
+def anthropic_key(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-synthetic-key-for-tests-only")
+
+
+@pytest.mark.usefixtures("anthropic_key")
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 413, 422, 429, 529])
+def test_transport_maps_explicit_rejections_to_unbilled(monkeypatch, status):
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *_a, **_k: _httpx_response(status))
+    transport = arm.HttpxTransport()
+    with pytest.raises(arm.ProviderRejected) as caught:
+        transport("anthropic", {"model": "m"})
+    assert caught.value.status == status
+
+
+@pytest.mark.usefixtures("anthropic_key")
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
+def test_transport_keeps_server_errors_uncertain(monkeypatch, status):
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *_a, **_k: _httpx_response(status))
+    transport = arm.HttpxTransport()
+    with pytest.raises(httpx.HTTPStatusError) as caught:
+        transport("anthropic", {"model": "m"})
+    assert not isinstance(caught.value, (arm.ProviderRejected, arm.RequestNotSent))
+
+
+@pytest.mark.usefixtures("anthropic_key")
+def test_transport_maps_connection_failures_to_not_sent(monkeypatch):
+    import httpx
+
+    def refuse(*_a, **_k):
+        raise httpx.ConnectError("synthetic refused")
+
+    monkeypatch.setattr(httpx, "post", refuse)
+    transport = arm.HttpxTransport()
+    with pytest.raises(arm.RequestNotSent):
+        transport("anthropic", {"model": "m"})
+
+
+@pytest.mark.usefixtures("anthropic_key")
+def test_transport_keeps_read_timeouts_uncertain(monkeypatch):
+    import httpx
+
+    def slow(*_a, **_k):
+        raise httpx.ReadTimeout("synthetic read timeout")
+
+    monkeypatch.setattr(httpx, "post", slow)
+    transport = arm.HttpxTransport()
+    with pytest.raises(httpx.ReadTimeout):
+        transport("anthropic", {"model": "m"})
+
+
+def test_missing_key_is_a_request_not_sent(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    transport = arm.HttpxTransport()
+    with pytest.raises(arm.RequestNotSent, match="API key missing"):
+        transport("openai", {"model": "m"})
