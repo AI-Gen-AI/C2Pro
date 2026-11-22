@@ -324,15 +324,12 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
             update = await run_governed_n4_in_graph(state)
             cast(dict[str, Any], state).update(update)
             coverage = update.get("n4_coverage")
-            gapped = (
-                isinstance(coverage, dict)
-                and coverage.get("status") == "COMPLETE_WITH_GAPS"
-            )
-            if gapped:
+            node_result: NodeResult[object]
+            if isinstance(coverage, dict) and coverage.get("status") == "COMPLETE_WITH_GAPS":
                 # Reviewable partial: usable, degraded, never auto-approved.
                 state["human_approval_required"] = True
                 state["confidence_score"] = None
-                node_result = NodeResult(
+                node_result = NodeResult[object](
                     node="risk_extractor",
                     status=NodeStatus.DEGRADED,
                     degradation_reason="n4_complete_with_gaps",
@@ -342,7 +339,7 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
                     },
                 )
             else:
-                node_result = NodeResult(
+                node_result = NodeResult[object](
                     node="risk_extractor",
                     status=(
                         NodeStatus.OK if update["extracted_risks"]
