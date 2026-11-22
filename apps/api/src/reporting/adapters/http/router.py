@@ -7,7 +7,7 @@ stored; ``content_fingerprint`` lets two reports be compared for sameness.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
-from typing import Annotated
+from typing import Annotated, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -30,6 +30,8 @@ from src.reporting.application.build_journey_export import (
 )
 from src.reporting.application.ports import CurrentStateSources
 from src.reporting.domain.current_state_report import CurrentStateReport, ProjectIdentity
+
+PROJECT_NOT_FOUND_DETAIL: Final[str] = "Project not found"
 
 router = APIRouter(prefix="/projects", tags=["project-reports"])
 
@@ -83,7 +85,7 @@ async def get_current_state_report(
     tenant_id = require_tenant_id(current_user.tenant_id)
     project = await projects.get_by_id(project_id, tenant_id)
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PROJECT_NOT_FOUND_DETAIL)
 
     response.headers["Cache-Control"] = "no-store"
     identity = ProjectIdentity(
@@ -119,7 +121,7 @@ async def get_project_source_evidence(
     tenant_id = require_tenant_id(current_user.tenant_id)
     project = await projects.get_by_id(project_id, tenant_id)
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PROJECT_NOT_FOUND_DETAIL)
 
     response.headers["Cache-Control"] = "no-store"
     try:
@@ -165,7 +167,7 @@ async def get_journey_excel_report(
     tenant_id = require_tenant_id(current_user.tenant_id)
     project = await projects.get_by_id(project_id, tenant_id)
     if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PROJECT_NOT_FOUND_DETAIL)
 
     response.headers["Cache-Control"] = "no-store"
     use_case = BuildJourneyExportUseCase(sources=sources)

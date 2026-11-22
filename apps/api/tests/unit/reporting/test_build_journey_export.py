@@ -1,14 +1,3 @@
-"""Unit tests for Journey Excel export builder (WP JV1-A19).
-
-Verifies the generation of journey.xlsx with openpyxl:
-- Three sheets: Summary, Findings, Gaps & References.
-- Summary sheet: Global Score, 6 subscores, N4 coverage status and metrics.
-- Findings sheet: Title, AI Interpretation (labeled), Exact Quote, Page, Clause, Dimension, Severity, Decision, Reviewer, Date.
-- Gaps & References sheet: Gaps with ordinal, failure kind, reason, attempts, pages, resolution; References with target and status.
-- Opens cleanly in openpyxl without warnings.
-- Gracefully handles empty or partial read models.
-"""
-
 from __future__ import annotations
 
 import io
@@ -41,9 +30,9 @@ def _sample_journey_data() -> JourneyExportData:
         project_code="SPP-001",
         status="ACTIVE",
         global_score=82.5,
-        trusted_score=80.0,
-        projected_score=75.0,
-        score_reason="Validated score based on confirmed findings",
+        trusted_score=None,
+        projected_score=None,
+        score_reason="Raw coherence score from automated pipeline",
         sub_scores={
             "SCOPE": 85.0,
             "BUDGET": 70.0,
@@ -57,6 +46,11 @@ def _sample_journey_data() -> JourneyExportData:
         examined_windows=9,
         gap_windows_count=1,
         generated_at=now,
+        total_review_items_count=2,
+        exported_findings_count=2,
+        coherence_source_status="AVAILABLE",
+        coverage_source_status="AVAILABLE",
+        findings_source_status="AVAILABLE",
     )
 
     findings = [
@@ -135,22 +129,17 @@ def test_summary_sheet_contains_scores_subscores_and_coverage() -> None:
 
     text_values = [str(cell.value) for row in ws.iter_rows() for cell in row if cell.value is not None]
 
-    # Project metadata
     assert "Synthetic Solar Plant Project" in text_values
     assert "SPP-001" in text_values
-
-    # Global scores
     assert any("82.5" in v for v in text_values)
-    assert any("80" in v or "80.0" in v for v in text_values)
+    assert any("Pending A17/A26" in v or "Not Evaluated" in v for v in text_values)
 
-    # 6 Canonical subscores
     for category in ("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"):
         assert category in text_values
 
-    # Coverage metrics
     assert "COMPLETE_WITH_GAPS" in text_values
-    assert any("10" in v for v in text_values)  # total windows
-    assert any("9" in v for v in text_values)   # examined windows
+    assert any("10" in v for v in text_values)
+    assert any("9" in v for v in text_values)
 
 
 def test_findings_sheet_contains_all_required_columns_and_rows() -> None:
@@ -159,8 +148,6 @@ def test_findings_sheet_contains_all_required_columns_and_rows() -> None:
     ws = wb["Findings"]
 
     headers = [cell.value for cell in ws[1] if cell.value is not None]
-    # Required columns per plan §5 A19:
-    # título, interpretación IA etiquetada, cita exacta, página, cláusula, decisión, revisor, fecha
     header_str = " ".join(str(h).lower() for h in headers)
     assert "title" in header_str or "título" in header_str
     assert "interpretation" in header_str or "ia" in header_str
@@ -171,7 +158,6 @@ def test_findings_sheet_contains_all_required_columns_and_rows() -> None:
     assert "reviewer" in header_str or "revisor" in header_str
     assert "date" in header_str or "fecha" in header_str
 
-    # Values from finding rows
     findings_values = [str(cell.value) for row in ws.iter_rows(min_row=2) for cell in row if cell.value is not None]
     assert "Late Delivery Penalty Cap Exceeded" in findings_values
     assert any("Liquidated damages" in v for v in findings_values)
@@ -191,13 +177,11 @@ def test_gaps_and_references_sheet_contains_both_tables() -> None:
 
     values = [str(cell.value) for row in ws.iter_rows() for cell in row if cell.value is not None]
 
-    # Gaps content
     assert "OUTPUT_TRUNCATED" in values
     assert "CLOSED_MANUALLY" in values
     assert any("Manual human review" in v for v in values)
     assert "Alice Reviewer" in values
 
-    # References content
     assert "Clause 14.1" in values
     assert any("Annex B" in v for v in values)
     assert "UNRESOLVED" in values
@@ -210,7 +194,6 @@ def test_excel_bytes_can_be_reloaded_cleanly_without_warnings() -> None:
     assert isinstance(excel_bytes, bytes)
     assert len(excel_bytes) > 0
 
-    # Reload with openpyxl from buffer
     buffer = io.BytesIO(excel_bytes)
     wb = openpyxl.load_workbook(buffer, read_only=False, data_only=True)
 
@@ -245,6 +228,8 @@ def test_empty_read_models_generate_valid_workbook() -> None:
             examined_windows=0,
             gap_windows_count=0,
             generated_at=datetime.now(UTC),
+            total_review_items_count=0,
+            exported_findings_count=0,
         ),
         findings=[],
         gaps=[],
@@ -277,6 +262,76 @@ async def test_build_journey_export_use_case() -> None:
     assert wb.sheetnames == ["Summary", "Findings", "Gaps & References"]
 
 
+def test_formula_injection_prevention_in_all_untrusted_cells() -> None:
+    project_id = uuid4()
+    malicious_data = JourneyExportData(
+        summary=JourneySummaryData(
+            project_id=project_id,
+            project_name="=1+1",
+            project_code="+SUM(A1:B2)",
+            status="@ADMIN",
+            global_score=None,
+            trusted_score=None,
+            projected_score=None,
+            score_reason="-danger",
+            sub_scores=dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"), None),
+            coverage_status="COMPLETE",
+            total_windows=1,
+            examined_windows=1,
+            gap_windows_count=0,
+            generated_at=datetime.now(UTC),
+        ),
+        findings=[
+            JourneyFindingRow(
+                finding_id="f-inj-1",
+                title="=cmd|'/C calc'!A0",
+                ai_interpretation="+2+2",
+                exact_quote="-3*3",
+                page="@12",
+                clause="=HYPERLINK(\"http://evil.com\")",
+                dimension="BUDGET",
+                severity="HIGH",
+                decision="@CONFIRMED",
+                reviewer="+Bob",
+                decided_at="-2026-11-22",
+            )
+        ],
+        gaps=[
+            JourneyGapRow(
+                ordinal=1,
+                failure_kind="=MALICIOUS_KIND",
+                reason="+formula_reason",
+                attempts=1,
+                page_start=None,
+                page_end=None,
+                resolution="@OPEN",
+                closed_reason="-closed_formula",
+                closed_by="+Alice",
+                closed_at="=NOW()",
+            )
+        ],
+        references=[
+            JourneyReferenceRow(
+                source_identifier="=SourceClause",
+                target_reference="+TargetDoc",
+                status="@UNRESOLVED",
+                details="-detail_formula",
+            )
+        ],
+    )
+
+    wb = build_journey_workbook(malicious_data)
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is not None:
+                    assert cell.data_type != "f", (
+                        f"Formula injection found on sheet '{sheet_name}', cell {cell.coordinate}: "
+                        f"value={cell.value!r}, data_type={cell.data_type!r}"
+                    )
+
+
 class _MockQueryResult:
     def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
         self._rows = rows or []
@@ -296,6 +351,7 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
     project_id = uuid4()
     tenant_id = uuid4()
     run_id = uuid4()
+    finding_id = uuid4()
 
     class _MockAsyncSession:
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
@@ -319,32 +375,14 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
                         "score_reason": "High coherence validated",
                     }
                 ])
-            if "FROM public.n4_extraction_runs" in sql:
-                return _MockQueryResult([
-                    {"run_id": run_id, "status": "PARTIAL", "total_windows": 2}
-                ])
-            if "FROM public.n4_extraction_windows" in sql:
-                return _MockQueryResult([
-                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
-                    {"ordinal": 1, "status": "BLOCKED", "blocked_reason": "OUTPUT_TRUNCATED", "unresolved_refs": ["Clause 12.3", "Annex C"]},
-                ])
-            if "FROM public.review_items" in sql:
+            if "FROM public.document_revisions" in sql:
                 return _MockQueryResult([
                     {
                         "id": uuid4(),
-                        "current_status": "APPROVED",
-                        "approved_by": "Lead Auditor",
-                        "approved_at": datetime(2026, 11, 22, 14, 0, 0, tzinfo=UTC),
-                        "item_data": {
-                            "title": "A1 Conforming Finding",
-                            "risk_reason": "Liquidated damages cap exceeded",
-                            "source_quote": "Damages capped at 20%",
-                            "page_start": 12,
-                            "page_end": 14,
-                            "clause_ref": "Clause 8.2",
-                            "dimension": "BUDGET",
-                            "severity_proposed": "CRITICAL",
-                            "n4_coverage": {
+                        "document_id": uuid4(),
+                        "document_metadata": {
+                            "analysis_n4_run_id": str(run_id),
+                            "analysis_n4_coverage": {
                                 "status": "COMPLETE_WITH_GAPS",
                                 "total_windows": 10,
                                 "examined_windows": 9,
@@ -364,12 +402,43 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
                                     }
                                 ],
                             },
-                            "references": [
+                        },
+                    }
+                ])
+            if "SELECT COUNT(*)" in sql:
+                return _MockQueryResult([{"total_count": 3}])
+            if "FROM public.hitl_finding_decisions" in sql:
+                return _MockQueryResult([
+                    {
+                        "finding_id": str(finding_id),
+                        "action": "CONFIRMED",
+                        "reviewer_id": "Lead Auditor",
+                        "recorded_at": datetime(2026, 11, 22, 14, 0, 0, tzinfo=UTC),
+                    }
+                ])
+            if "FROM public.review_items" in sql:
+                return _MockQueryResult([
+                    {
+                        "id": finding_id,
+                        "current_status": "PROPOSED",
+                        "approved_by": None,
+                        "approved_at": None,
+                        "item_data": {
+                            "title": "A1 Conforming Finding",
+                            "risk_reason": "Liquidated damages cap exceeded",
+                            "source_quote": "Damages capped at 20%",
+                            "page_start": 12,
+                            "page_end": 14,
+                            "clause_ref": "Clause 8.2",
+                            "dimension": "BUDGET",
+                            "severity_proposed": "CRITICAL",
+                            "reference_register": [
                                 {
-                                    "source": "Clause 8.2",
-                                    "target": "Annex A - Penalty Matrix",
-                                    "status": "UNRESOLVED",
-                                    "details": "Penalty matrix not supplied in contract package",
+                                    "proposal": "Clause 8.2",
+                                    "label": "Annex A - Penalty Matrix",
+                                    "status": "IN_DOCUMENT",
+                                    "source_quote": "refer to Annex A",
+                                    "finding_keys": ["fk-1"],
                                 }
                             ],
                         },
@@ -399,13 +468,6 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
                             "page_number": 9,
                         },
                     },
-                    {
-                        "id": uuid4(),
-                        "current_status": "PROPOSED",
-                        "approved_by": None,
-                        "approved_at": None,
-                        "item_data": "invalid-non-dict-payload",
-                    },
                 ])
             return _MockQueryResult()
 
@@ -417,17 +479,20 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
     assert data.summary.project_name == "Wind Farm Beta"
     assert data.summary.project_code == "WFB-02"
     assert data.summary.global_score == 88.0
-    assert data.summary.sub_scores["SCOPE"] == 90.0
+    assert data.summary.trusted_score is None
+    assert data.summary.projected_score is None
     assert data.summary.coverage_status == "COMPLETE_WITH_GAPS"
     assert len(data.findings) == 3
-    assert data.findings[0].title == "A1 Conforming Finding"
+    assert data.findings[0].decision == "CONFIRMED"
+    assert data.findings[0].reviewer == "Lead Auditor"
     assert data.findings[0].page == "pp. 12–14"
     assert data.findings[0].severity == "CRITICAL"
-    assert data.findings[0].decision == "APPROVED"
     assert data.findings[1].page == "p. 5"
     assert data.findings[2].page == 9
     assert len(data.gaps) >= 1
     assert len(data.references) >= 1
+    assert data.references[0].target_reference == "Annex A - Penalty Matrix"
+    assert data.references[0].status == "IN_DOCUMENT"
 
 
 @pytest.mark.asyncio
@@ -451,6 +516,8 @@ async def test_sqlalchemy_journey_sources_fallback_to_analyses_when_coherence_re
                         "coherence_breakdown": {"SCOPE": 78.0, "TIME": 71.0},
                     }
                 ])
+            if "FROM public.document_revisions" in sql:
+                return _MockQueryResult([])
             if "FROM public.n4_extraction_runs" in sql:
                 return _MockQueryResult([
                     {"run_id": uuid4(), "status": "COMPLETE", "total_windows": 1}
@@ -459,9 +526,7 @@ async def test_sqlalchemy_journey_sources_fallback_to_analyses_when_coherence_re
                 return _MockQueryResult([
                     {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None}
                 ])
-            if "FROM public.review_items" in sql:
-                return _MockQueryResult([])
-            return _MockQueryResult()
+            return _MockQueryResult([])
 
     from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
 
@@ -471,6 +536,7 @@ async def test_sqlalchemy_journey_sources_fallback_to_analyses_when_coherence_re
     assert data.summary.project_name == "Hydro Plant Delta"
     assert data.summary.project_code is None
     assert data.summary.global_score == 74.5
+    assert data.summary.trusted_score is None
     assert data.summary.sub_scores["SCOPE"] == 78.0
     assert data.summary.coverage_status == "COMPLETE"
     assert data.findings == []
@@ -498,6 +564,9 @@ async def test_sqlalchemy_journey_sources_resilient_to_query_exceptions() -> Non
 
     assert data.summary.project_name == "Resilient Plant"
     assert data.summary.global_score is None
+    assert data.summary.coherence_source_status == "ERROR"
+    assert data.summary.coverage_source_status == "ERROR"
+    assert data.summary.findings_source_status == "ERROR"
     assert data.summary.coverage_status == "INCOMPLETE"
     assert data.findings == []
 
@@ -522,6 +591,8 @@ def test_build_journey_workbook_formatting_branches() -> None:
             examined_windows=3,
             gap_windows_count=0,
             generated_at=now,
+            total_review_items_count=10,
+            exported_findings_count=1,
         ),
         findings=[
             JourneyFindingRow(
@@ -555,7 +626,7 @@ def test_build_journey_workbook_formatting_branches() -> None:
                 ordinal=2,
                 failure_kind="INVALID_ENVELOPE",
                 reason="Schema error",
-                attempts=1,
+                attempts=None,
                 page_start=None,
                 page_end=None,
                 resolution="OPEN",
@@ -569,7 +640,12 @@ def test_build_journey_workbook_formatting_branches() -> None:
 
     wb = build_journey_workbook(data)
     assert wb.sheetnames == ["Summary", "Findings", "Gaps & References"]
+    ws_findings = wb["Findings"]
+    finding_texts = [str(c.value) for row in ws_findings.iter_rows() for c in row if c.value is not None]
+    assert any("Showing 1 of 10" in t for t in finding_texts)
+
     ws_gaps = wb["Gaps & References"]
     gap_values = [str(cell.value) for row in ws_gaps.iter_rows() for cell in row if cell.value is not None]
     assert "p. 15" in gap_values
     assert "Unmapped" in gap_values
+    assert "Unknown" in gap_values
