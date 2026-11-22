@@ -40,14 +40,14 @@ def build_reference_register(
     # findings. Only literal projection text is eligible for a proposal.
     source_items: list[Mapping[str, Any]] = list(items)
     for line in source_text.splitlines():
-        quote = line.strip()
-        if quote and (
-            _ATTACHMENT.search(quote) or _STANDARD.search(quote)
-            or _INTERNAL.search(quote)
+        source_line = line.strip()
+        if source_line and (
+            _ATTACHMENT.search(source_line) or _STANDARD.search(source_line)
+            or _INTERNAL.search(source_line)
         ):
             source_items.append({
-                "finding_key": "source-ref:" + sha256(quote.encode("utf-8")).hexdigest(),
-                "source_quote": quote,
+                "finding_key": "source-ref:" + sha256(source_line.encode("utf-8")).hexdigest(),
+                "source_quote": source_line,
             })
     for item in source_items:
         quote = item.get("source_quote")
