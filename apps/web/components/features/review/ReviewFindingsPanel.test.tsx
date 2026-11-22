@@ -960,3 +960,45 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     expect(record).not.toHaveBeenCalled();
   });
 });
+
+
+describe("JV1-A21 grouped business risk review (synthetic)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    list.mockResolvedValue(view({
+      findings: [
+        finding(0, { risk: {
+          title: "Synthetic schedule exposure", description: "Contractual delay",
+          category: "SCHEDULE", severity: "UNASSESSED", source_quote_status: "VERIFIED",
+          source_quote: "Synthetic clause on milestone timing.", page_number: 9,
+        } }),
+        finding(1, { risk: {
+          title: "Synthetic cost exposure", description: "Retention impact",
+          category: "BUDGET", severity: "UNASSESSED", source_quote_status: "NOT_FOUND_IN_DOCUMENT",
+          source_quote: "Never display this as an exact quote",
+        } }),
+      ],
+    }));
+  });
+
+  it("groups findings by proposed business area, while retaining individual decision controls", async () => {
+    renderPanel();
+    expect(await screen.findByRole("heading", { name: "Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
+    expect(screen.getByTestId("finding-0")).toHaveTextContent("Synthetic schedule exposure");
+    expect(screen.getByTestId("finding-1")).toHaveTextContent("Synthetic cost exposure");
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-1-DISMISSED")).toBeEnabled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("preserves proposed page as unverified and never promotes a missing quote", async () => {
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-original-location-0")).toHaveTextContent("page 9");
+    expect(screen.getByTestId("finding-trace-0")).toHaveTextContent(/original PDF\/page provenance still requires verification/i);
+    expect(screen.getByTestId("finding-quote-missing-1")).toBeInTheDocument();
+    expect(screen.queryByText("Never display this as an exact quote")).not.toBeInTheDocument();
+  });
+});
