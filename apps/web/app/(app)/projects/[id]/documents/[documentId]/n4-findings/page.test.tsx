@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@/src/tests/test-utils";
 
 const { apiGet, useParams } = vi.hoisted(() => ({
   apiGet: vi.fn(),
-  useParams: vi.fn(() => ({ id: "project-vs1", documentId: "doc-vs1" })),
+  useParams: vi.fn(() => ({ id: "project-synthetic", documentId: "document-synthetic" })),
 }));
 
 vi.mock("next/navigation", () => ({ useParams }));
@@ -12,15 +12,18 @@ vi.mock("@/lib/api/client", () => ({ apiClient: { get: apiGet } }));
 import N4FindingsPage from "./page";
 
 const proposed = (index: number, exact = true) => ({
-  finding_key: `risk-${index}`,
+  finding_key: "synthetic-risk-" + index,
   window_ordinal: index % 2,
-  title: `Risk ${index}`,
-  interpretation: `Interpretation ${index}`,
+  title: "Risk " + index,
+  interpretation: "This is a synthetic contract analysis " + index + ". " + "More detailed context. ".repeat(12),
   clause_ref: "2.5",
-  source_quote: exact ? `Exact N2 evidence ${index}` : null,
+  source_quote: exact ? "Exact N2 evidence " + index : "Unverified candidate text",
   n2_quote_status: exact ? "N2_EXACT_MATCH" : "NOT_LOCATED",
   severity: "UNASSESSED",
   review_state: "PROPOSED",
+  dimension: index % 2 === 0 ? "SCHEDULE" : "BUDGET",
+  consequences: "Possible contractual consequences " + index,
+  page_number: index === 0 ? 12 : null,
 });
 const response = (status = "PARTIAL_UNASSESSED") => ({
   status,
@@ -29,7 +32,7 @@ const response = (status = "PARTIAL_UNASSESSED") => ({
     total: 2, windows_with_result: 2, examined: 1, blocked: 1,
     windows: [
       { ordinal: 0, status: "BLOCKED", blocked_reason: "REFERENCES_UNRESOLVED",
-        unresolved_refs: ["Annex C"], has_result: true },
+        unresolved_refs: ["Synthetic Annex C"], has_result: true },
       { ordinal: 1, status: "EXAMINED", blocked_reason: null,
         unresolved_refs: [], has_result: true },
     ],
@@ -37,54 +40,71 @@ const response = (status = "PARTIAL_UNASSESSED") => ({
   findings: [proposed(0), proposed(1, false), proposed(2), proposed(3)],
 });
 
-describe("VS-1 provisional N4 evidence UI (no HITL)", () => {
+describe("JV1-A21 business-facing provisional findings (synthetic; no HITL)", () => {
   beforeEach(() => {
     apiGet.mockReset();
-    useParams.mockReturnValue({ id: "project-vs1", documentId: "doc-vs1" });
+    useParams.mockReturnValue({ id: "project-synthetic", documentId: "document-synthetic" });
   });
   afterEach(() => vi.clearAllMocks());
 
-  it("shows persisted/blocked coverage and all provisional candidates, with no approval or Retry", async () => {
+  it("groups proposed findings by business area, without claiming severity or approvals", async () => {
     apiGet.mockResolvedValue({ data: response() });
     render(<N4FindingsPage />);
-    expect(await screen.findByTestId("n4-coverage")).toHaveTextContent(
-      "2/2 windows with persisted results",
-    );
-    expect(screen.getByTestId("n4-coverage")).toHaveTextContent("1 examined");
-    expect(screen.getByTestId("n4-coverage")).toHaveTextContent("1 blocked");
-    expect(screen.getByTestId("n4-unresolved")).toHaveTextContent("Annex C");
-    expect(screen.getAllByTestId("n4-proposed-finding")).toHaveLength(4);
-    expect(screen.getByText("Exact N2 evidence 0")).toBeInTheDocument();
-    expect(screen.getByText("Interpretation 0", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText("Citation not located in the N2 text.")).toBeInTheDocument();
-    expect(screen.getAllByText("Quote located in N2; original PDF not verified.")).toHaveLength(3);
-    expect(screen.queryByRole("button", { name: /approve|reject|retry/i })).not.toBeInTheDocument();
+    expect(await screen.findAllByTestId("n4-proposed-finding")).toHaveLength(4);
+    expect(screen.getByRole("heading", { name: /schedule/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /budget/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/severity not evaluated/i)).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: /approve|reject/i })).not.toBeInTheDocument();
     expect(apiGet).toHaveBeenCalledWith(
-      "/projects/project-vs1/documents/doc-vs1/n4-findings",
+      "/projects/project-synthetic/documents/document-synthetic/n4-findings",
       { params: { offset: 0, limit: 100 } },
     );
   });
 
-  it("does not misrepresent an unexecuted analysis as zero risk", async () => {
+  it("exposes gaps clearly and never offers a fictitious retry or manual closure", async () => {
+    apiGet.mockResolvedValue({ data: response() });
+    render(<N4FindingsPage />);
+    const banner = await screen.findByTestId("n4-coverage");
+    expect(banner).toHaveTextContent(/1 section.*blocked/i);
+    expect(screen.getByTestId("n4-unresolved")).toHaveTextContent("Synthetic Annex C");
+    expect(screen.getByRole("button", { name: /retry failed sections/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /close gap manually/i })).toBeDisabled();
+    expect(screen.getByText(/these actions require a verified server workflow/i)).toBeInTheDocument();
+    expect(apiGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts source and full interpretation behind disclosure, and labels page as unverified", async () => {
+    apiGet.mockResolvedValue({ data: response() });
+    render(<N4FindingsPage />);
+    const cards = await screen.findAllByTestId("n4-proposed-finding");
+    expect(cards[0]).toHaveTextContent("Page 12");
+    expect(cards[0]).toHaveTextContent(/not independently verified/i);
+    expect(cards[1]).toHaveTextContent(/page not established/i);
+    expect(cards[1]).toHaveTextContent(/consequences/i);
+    expect(screen.queryByText("Exact N2 evidence 0")).not.toBeInTheDocument();
+    fireEvent.click(cards[0].querySelector("summary")!);
+    expect(screen.getByText("Exact N2 evidence 0")).toBeInTheDocument();
+    fireEvent.click(cards[1].querySelector("summary")!);
+    expect(screen.queryByText("Unverified candidate text")).not.toBeInTheDocument();
+    expect(cards[1]).toHaveTextContent(/quotation not verified/i);
+  });
+
+  it("does not misrepresent absent results as zero contractual risks", async () => {
     apiGet.mockResolvedValue({ data: { status: "RESULTS_NOT_AVAILABLE", findings: [],
       total_findings: null, coverage: null } });
     render(<N4FindingsPage />);
-    expect(await screen.findByTestId("n4-not-run")).toHaveTextContent(
-      "This does not mean zero risks",
-    );
+    expect(await screen.findByTestId("n4-not-run")).toHaveTextContent(/does not mean zero risks/i);
     expect(screen.queryByTestId("n4-proposed-finding")).not.toBeInTheDocument();
   });
 
-  it("fails visibly when source revision is superseded or the API denies access", async () => {
+  it("fails closed on a superseded revision or denied tenant access", async () => {
     apiGet.mockRejectedValue(new Error("404"));
     render(<N4FindingsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Findings unavailable or document revision superseded",
-    );
-    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/unavailable or document revision superseded/i);
+    expect(screen.queryByRole("button", { name: /approve|reject/i })).not.toBeInTheDocument();
   });
 
-  it("reloads its read-only evidence from the API when remounted", async () => {
+  it("reloads the read-only evidence on remount, preserving server authority", async () => {
     apiGet.mockResolvedValue({ data: response() });
     const first = render(<N4FindingsPage />);
     await screen.findByTestId("n4-coverage");
