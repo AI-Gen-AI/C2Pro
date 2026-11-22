@@ -6,6 +6,8 @@ Never calls a provider; all amounts and text are synthetic.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -38,6 +40,7 @@ from src.core.processing_authority import (
     ProcessingAuthorityLost,
     ProcessingStage,
 )
+from tests.integration.analysis.test_n4_incremental_store_pg import DB_PERIOD_QUERY
 
 _DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN", "")
 if _DSN:
@@ -48,7 +51,6 @@ pytestmark = [
     pytest.mark.skipif(not _DSN, reason="requires disposable upgraded *_test PostgreSQL"),
 ]
 
-_PERIOD = "2026-11"
 _CONFIG = "b" * 64
 _SOURCE = "The Contractor shall comply with clause 9.6 and Annex 4. " * 30
 
@@ -88,9 +90,10 @@ async def _seed(a: ProcessingAuthority, project: UUID, cap: str = "1.000000") ->
             INSERT INTO public.document_processing_operations
               (document_id, tenant_id, revision_id, generation, stage, phase,
                attempt_id, owner_token, fencing_token, lease_expires_at)
-            VALUES ($1, $2, $3, 1, 'ANALYSIS', 'RUNNING',
-                    $4, $5, 1, clock_timestamp() + interval '1 hour')
-        """, a.document_id, a.tenant_id, a.revision_id, a.attempt_id, a.owner_token)
+            VALUES ($1, $2, $3, $6, 'ANALYSIS', 'RUNNING',
+                    $4, $5, $7, clock_timestamp() + interval '1 hour')
+        """, a.document_id, a.tenant_id, a.revision_id, a.attempt_id, a.owner_token,
+            a.generation, a.fencing_token)
         for kind, scope in (
             ("TENANT", a.tenant_id), ("PROJECT", project), ("DOCUMENT", a.document_id),
         ):
@@ -98,14 +101,18 @@ async def _seed(a: ProcessingAuthority, project: UUID, cap: str = "1.000000") ->
                 INSERT INTO public.n4_budget_buckets
                   (tenant_id, scope_kind, scope_id, period_key, cap_usd)
                 VALUES ($1, $2, $3, $4, $5)
-            """, a.tenant_id, kind, scope, _PERIOD, Decimal(cap))
+            """, a.tenant_id, kind, scope, await conn.fetchval(DB_PERIOD_QUERY),
+                Decimal(cap))
     finally:
         await conn.close()
 
 
-async def _advance_generation(a: ProcessingAuthority) -> ProcessingAuthority:
+async def _advance_generation(
+    a: ProcessingAuthority, *, fencing_token: int | None = None,
+) -> ProcessingAuthority:
     new = replace(
-        a, generation=a.generation + 1, fencing_token=a.fencing_token + 1,
+        a, generation=a.generation + 1,
+        fencing_token=a.fencing_token + 1 if fencing_token is None else fencing_token,
         attempt_id=uuid4(), owner_token=uuid4(),
     )
     conn = await asyncpg.connect(_DSN)
@@ -164,7 +171,8 @@ async def _reserve(session, a, run_id, ordinal, key, amount="0.100000"):
     return await reserve_call(
         session, authority=a, run_id=run_id, window_ordinal=ordinal,
         idempotency_key=key, provider_model="synthetic-model",
-        estimated_max_usd=amount, period_key=_PERIOD,
+        estimated_max_usd=amount,
+        period_key=await session.scalar(text(DB_PERIOD_QUERY)),
     )
 
 
@@ -468,3 +476,171 @@ async def test_complete_run_is_never_adopted(engine):
         assert status == "COMPLETE"
     a2 = await _advance_generation(a)
     assert await _new_run(engine, a2, project) != run_id
+
+
+# --- JV1-A2 follow-up (L1 GO 22/11): guards and settlement concurrency -------
+
+_STORE_LOGGER = "src.analysis.adapters.persistence.n4_incremental_store"
+_PESSIMISTIC_EVENT = "n4_unknown_settled_pessimistically"
+
+
+async def _run_generation(a: ProcessingAuthority) -> tuple[int, int]:
+    conn = await asyncpg.connect(_DSN)
+    try:
+        row = await conn.fetchrow("""
+            SELECT generation, fencing_token FROM public.n4_extraction_runs
+             WHERE tenant_id=$1 AND document_revision_id=$2
+        """, a.tenant_id, a.revision_id)
+        return int(row["generation"]), int(row["fencing_token"])
+    finally:
+        await conn.close()
+
+
+async def _reservation_status(a: ProcessingAuthority, reservation_id: UUID) -> str:
+    conn = await asyncpg.connect(_DSN)
+    try:
+        return str(await conn.fetchval("""
+            SELECT status FROM public.n4_usage_reservations
+             WHERE tenant_id=$1 AND reservation_id=$2
+        """, a.tenant_id, reservation_id))
+    finally:
+        await conn.close()
+
+
+async def _start(engine, a: ProcessingAuthority, run_id: UUID) -> None:
+    """Move a fresh PREPARING run to RUNNING: only RUNNING/PARTIAL is adoptable."""
+    async with _tx(engine, a) as s:
+        first = await _reserve(s, a, run_id, 0, "a2-guard-start-01", amount="0.010000")
+        await account_call(s, authority=a, reservation_id=first.reservation_id,
+                           billed_usd="0.001000")
+        assert await commit_window(s, authority=a, run_id=run_id, window_ordinal=0,
+                                   findings=[_finding("start", a)]) == "RUNNING"
+
+
+@pytest.mark.parametrize("change", ["project", "windows", "budget"])
+async def test_adoption_refuses_a_run_with_changed_project_windows_or_budget(engine, change):
+    a, project = _authority(uuid4(), uuid4(), uuid4()), uuid4()
+    await _seed(a, project)
+    await _start(engine, a, await _new_run(engine, a, project))
+    a2 = await _advance_generation(a)
+    windows = _windows(a2)
+    project_id = uuid4() if change == "project" else project
+    windows = windows[:-1] if change == "windows" else windows
+    budget = "0.900000" if change == "budget" else "1.000000"
+    async with _tx(engine, a2, commit=False) as s:
+        with pytest.raises(N4LedgerError, match="cannot change project, windows or budget"):
+            await create_run(
+                s, authority=a2, project_id=project_id, config_sha256=_CONFIG,
+                windows=windows, budget_cap_usd=budget,
+            )
+    assert await _run_generation(a) == (1, 1)  # nothing adopted
+
+
+async def test_adoption_refuses_when_a_newer_fence_owns_the_run(engine):
+    a, project = replace(_authority(uuid4(), uuid4(), uuid4()), fencing_token=3), uuid4()
+    await _seed(a, project)
+    await _start(engine, a, await _new_run(engine, a, project))
+    stale = await _advance_generation(a, fencing_token=2)  # newer generation, older fence
+    async with _tx(engine, stale, commit=False) as s:
+        with pytest.raises(N4LedgerError, match="newer N4 fence"):
+            await create_run(
+                s, authority=stale, project_id=project, config_sha256=_CONFIG,
+                windows=_windows(stale), budget_cap_usd="1.000000",
+            )
+    assert await _run_generation(a) == (1, 3)
+
+
+async def _unknown_reservation(engine) -> tuple[ProcessingAuthority, UUID]:
+    a, project = _authority(uuid4(), uuid4(), uuid4()), uuid4()
+    await _seed(a, project)
+    run_id = await _new_run(engine, a, project)
+    async with _tx(engine, a) as s:
+        reserved = await _reserve(s, a, run_id, 0, "a2-unknown-race-01", amount="0.100000")
+        assert await account_call(
+            s, authority=a, reservation_id=reserved.reservation_id, billed_usd=None,
+        ) == "UNKNOWN"
+    return a, reserved.reservation_id
+
+
+async def test_settling_another_tenants_unknown_is_refused_without_side_effects(engine):
+    a, reservation_id = await _unknown_reservation(engine)
+    before = await _balances(a)
+    b, project_b = _authority(uuid4(), uuid4(), uuid4()), uuid4()
+    await _seed(b, project_b)
+    async with _tx(engine, b, commit=False) as s:
+        with pytest.raises(N4LedgerError, match="not visible to this tenant"):
+            await settle_unknown_pessimistically(
+                s, authority=b, reservation_id=reservation_id,
+                actual_provider="anthropic", reason="operator: cross-tenant attempt",
+            )
+    assert await _balances(a) == before
+    assert await _reservation_status(a, reservation_id) == "UNKNOWN"
+
+
+def _pessimistic_events(caplog) -> list:
+    return [r for r in caplog.records if r.getMessage() == _PESSIMISTIC_EVENT]
+
+
+async def _wait_blocked(task: asyncio.Task) -> None:
+    """The concurrent writer must be waiting on the processing-authority lock."""
+    await asyncio.sleep(0.5)
+    assert not task.done(), "concurrent settlement was not serialized"
+
+
+async def test_real_receipt_waits_for_pessimistic_settlement_without_double_charge(
+    engine, caplog,
+):
+    """Order 1: operator settles first; the late receipt of the same amount replays."""
+    caplog.set_level(logging.WARNING, logger=_STORE_LOGGER)
+    a, reservation_id = await _unknown_reservation(engine)
+    async with _tx(engine, a) as operator:
+        charged = await settle_unknown_pessimistically(
+            operator, authority=a, reservation_id=reservation_id,
+            actual_provider="anthropic", reason="operator: synthetic race order 1",
+        )
+
+        async def late_receipt() -> str:
+            async with _tx(engine, a) as s:
+                return await account_call(
+                    s, authority=a, reservation_id=reservation_id, billed_usd=charged,
+                )
+
+        task = asyncio.create_task(late_receipt())
+        await _wait_blocked(task)
+    assert await asyncio.wait_for(task, timeout=10) == "SETTLED"
+    buckets, tenant = await _balances(a)
+    assert all(Decimal(b["spent_usd"]) == Decimal("0.1") for b in buckets)
+    assert all(Decimal(b["reserved_usd"]) == 0 for b in buckets)
+    assert Decimal(str(tenant["ai_spend_current"])) == Decimal("0.1")
+    assert Decimal(str(tenant["ai_spend_reserved_usd"])) == 0
+    assert len(_pessimistic_events(caplog)) == 1  # the operator really settled it
+
+
+async def test_pessimistic_settlement_waits_for_real_receipt_and_is_not_logged(
+    engine, caplog,
+):
+    """Order 2: a real receipt (same amount) settles first; the operator call
+    waits on the authority lock, then sees SETTLED and refuses: no audit
+    label claims a pessimistic settlement and nothing is charged twice."""
+    caplog.set_level(logging.WARNING, logger=_STORE_LOGGER)
+    a, reservation_id = await _unknown_reservation(engine)
+    async with _tx(engine, a) as receipt:
+        assert await account_call(
+            receipt, authority=a, reservation_id=reservation_id, billed_usd="0.100000",
+        ) == "SETTLED"
+
+        async def operator() -> None:
+            async with _tx(engine, a, commit=False) as s:
+                await settle_unknown_pessimistically(
+                    s, authority=a, reservation_id=reservation_id,
+                    actual_provider="anthropic", reason="operator: synthetic race order 2",
+                )
+
+        task = asyncio.create_task(operator())
+        await _wait_blocked(task)
+    with pytest.raises(N4LedgerError, match="only an UNKNOWN"):
+        await asyncio.wait_for(task, timeout=10)
+    buckets, tenant = await _balances(a)
+    assert all(Decimal(b["spent_usd"]) == Decimal("0.1") for b in buckets)
+    assert Decimal(str(tenant["ai_spend_current"])) == Decimal("0.1")
+    assert _pessimistic_events(caplog) == []

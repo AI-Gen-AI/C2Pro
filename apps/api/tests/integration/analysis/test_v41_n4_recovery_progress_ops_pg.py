@@ -19,6 +19,7 @@ from src.analysis.application.n4_incremental_runner import N4IncrementalRunner
 from src.documents.adapters.persistence.models import DocumentORM
 from src.projects.adapters.persistence.models import ProjectORM
 from tests.integration.analysis.test_n4_incremental_store_pg import (
+    _db_period,
     _new_authority,
     _seed_caps,
 )
@@ -116,7 +117,7 @@ async def test_n4_progress_is_not_equivalent_to_billable_receipts(
         provider=provider, enabled=True,
         run_cap_usd=Decimal("1.000000"),
         per_window_reservation_usd=Decimal("0.040000"),
-        period_key="2026-11",
+        period_key=_db_period(dsn),
         max_context_chars=600, overlap_chars=50,
     )
     outcome = await runner.run(

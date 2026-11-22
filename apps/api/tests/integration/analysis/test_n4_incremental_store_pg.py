@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 import asyncpg
+import psycopg
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -37,6 +38,21 @@ from src.core.processing_authority import (
 _DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN", "")
 if _DSN:
     assert urlparse(_DSN).path.rstrip("/").endswith("_test"), "scratch DB must end with _test"
+
+# reserve_call only accepts the CURRENT PostgreSQL UTC month (store: "period
+# must equal current DB UTC month"). Fixtures follow that same clock instead of
+# a hard-coded month, so the suites keep working when the month changes.
+DB_MONTH_SQL = "to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM')"
+DB_PERIOD_QUERY = "SELECT " + DB_MONTH_SQL
+
+
+def _db_period(dsn: str | None = None) -> str:
+    """Current budget period according to the PostgreSQL clock."""
+    with psycopg.connect(dsn or _DSN) as conn:
+        row = conn.execute(DB_PERIOD_QUERY).fetchone()
+    assert row is not None
+    return str(row[0])
+
 
 pytestmark = [
     pytest.mark.asyncio,
@@ -101,8 +117,8 @@ async def _seed_caps(conn, tenant, project, document, amount):
         await conn.execute("""
             INSERT INTO public.n4_budget_buckets
               (tenant_id, scope_kind, scope_id, period_key, cap_usd)
-            VALUES ($1, $2, $3, '2026-11', $4)
-        """, tenant, kind, scope_id, Decimal(amount))
+            VALUES ($1, $2, $3, $4, $5)
+        """, tenant, kind, scope_id, await conn.fetchval(DB_PERIOD_QUERY), Decimal(amount))
 
 
 async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
@@ -157,21 +173,21 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                     session, authority=a, run_id=run_id,
                     window_ordinal=0, idempotency_key="n4-call-0000001",
                     provider_model="test-only", estimated_max_usd="0.40",
-                    period_key="2026-11",
+                    period_key=_db_period(),
                 )
                 assert first.status == "RESERVED" and not first.replay
                 again = await reserve_call(
                     session, authority=a, run_id=run_id,
                     window_ordinal=0, idempotency_key="n4-call-0000001",
                     provider_model="test-only", estimated_max_usd="0.40",
-                    period_key="2026-11",
+                    period_key=_db_period(),
                 )
                 assert again.replay and first.reservation_id == again.reservation_id
                 with pytest.raises(N4LedgerError, match="same attempt key"):
                     await reserve_call(
                         session, authority=a, run_id=run_id, window_ordinal=0,
                         idempotency_key="n4-call-0000001", provider_model="changed-model",
-                        estimated_max_usd="0.40", period_key="2026-11",
+                        estimated_max_usd="0.40", period_key=_db_period(),
                     )
 
                 with pytest.raises(N4BudgetError, match="unsettled"):
@@ -179,7 +195,7 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                         session, authority=a, run_id=run_id,
                         window_ordinal=0, idempotency_key="n4-call-different",
                         provider_model="test-only", estimated_max_usd="0.40",
-                        period_key="2026-11",
+                        period_key=_db_period(),
                     )
                 assert await account_call(
                     session, authority=a, reservation_id=first.reservation_id,
@@ -197,7 +213,7 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                         session, authority=a, run_id=run_id,
                         window_ordinal=0, idempotency_key="n4-call-different",
                         provider_model="test-only", estimated_max_usd="0.40",
-                        period_key="2026-11",
+                        period_key=_db_period(),
                     )
                 assert await account_call(
                     session, authority=a, reservation_id=first.reservation_id,
@@ -255,13 +271,13 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                         session, authority=a, run_id=run_id,
                         window_ordinal=1, idempotency_key="n4-call-too-large",
                         provider_model="test-only", estimated_max_usd="0.75",
-                        period_key="2026-11",
+                        period_key=_db_period(),
                     )
                 nxt = await reserve_call(
                     session, authority=a, run_id=run_id,
                     window_ordinal=1, idempotency_key="n4-call-0000002",
                     provider_model="test-only", estimated_max_usd="0.60",
-                    period_key="2026-11",
+                    period_key=_db_period(),
                 )
                 assert await account_call(
                     session, authority=a, reservation_id=nxt.reservation_id,
@@ -297,7 +313,7 @@ async def test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls():
                         session, authority=a, run_id=run_id,
                         window_ordinal=2, idempotency_key="n4-call-stale-003",
                         provider_model="test-only", estimated_max_usd="0.01",
-                        period_key="2026-11",
+                        period_key=_db_period(),
                     )
 
         # An ordinary NOBYPASSRLS role cannot view other tenant's N4 rows.
@@ -381,9 +397,10 @@ async def test_parallel_runs_cannot_oversubscribe_shared_tenant_budget():
         await conn.execute("""
             INSERT INTO public.n4_budget_buckets
                (tenant_id, scope_kind, scope_id, period_key, cap_usd)
-            VALUES ($1, 'PROJECT', $2, '2026-11', 1),
-                   ($1, 'DOCUMENT', $3, '2026-11', 1)
-        """, tenant, project_b, authority_b.document_id)
+            VALUES ($1, 'PROJECT', $2, $4, 1),
+                   ($1, 'DOCUMENT', $3, $4, 1)
+        """, tenant, project_b, authority_b.document_id,
+            await conn.fetchval(DB_PERIOD_QUERY))
     finally:
         await conn.close()
 
@@ -415,7 +432,7 @@ async def test_parallel_runs_cannot_oversubscribe_shared_tenant_budget():
                         session, authority=a, run_id=run,
                         window_ordinal=0, idempotency_key=key,
                         provider_model="test-only", estimated_max_usd="0.75",
-                        period_key="2026-11",
+                        period_key=_db_period(),
                     )
                 except N4BudgetExceeded:
                     return "DENIED"
@@ -435,8 +452,8 @@ async def test_parallel_runs_cannot_oversubscribe_shared_tenant_budget():
             row = await conn.fetchrow("""
                 SELECT reserved_usd, spent_usd FROM public.n4_budget_buckets
                  WHERE tenant_id=$1 AND scope_kind='TENANT'
-                   AND scope_id=$1 AND period_key='2026-11'
-            """, tenant)
+                   AND scope_id=$1 AND period_key=$2
+            """, tenant, await conn.fetchval(DB_PERIOD_QUERY))
             assert Decimal(row["reserved_usd"]) == Decimal("0.75")
             assert Decimal(row["spent_usd"]) == 0
         finally:

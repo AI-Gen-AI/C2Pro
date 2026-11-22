@@ -28,6 +28,7 @@ from src.analysis.adapters.persistence.n4_incremental_store import (
 )
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 from tests.integration.analysis.test_n4_incremental_store_pg import (
+    _db_period,
     _new_authority,
     _seed_identity,
 )
@@ -111,8 +112,8 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_e
         await conn.execute(
             """INSERT INTO public.n4_budget_buckets
                  (tenant_id, scope_kind, scope_id, period_key, cap_usd)
-               VALUES ($1, 'TENANT', $1, '2026-11', 5)""",
-            authority.tenant_id,
+               VALUES ($1, 'TENANT', $1, $2, 5)""",
+            authority.tenant_id, _db_period(dsn),
         )
     finally:
         await conn.close()
@@ -136,7 +137,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_e
                     session, authority=authority, run_id=run_id,
                     window_ordinal=0, idempotency_key="no-child-cap-001",
                     provider_model="test-model", estimated_max_usd="0.50",
-                    period_key="2026-11",
+                    period_key=_db_period(dsn),
                 )
             count = await session.scalar(text("""
                 SELECT count(*) FROM public.n4_budget_buckets
@@ -151,7 +152,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_e
                 session, authority=authority, run_id=run_id,
                 window_ordinal=0, idempotency_key="approved-child-cap-001",
                 provider_model="test-model", estimated_max_usd="0.50",
-                period_key="2026-11", inherit_approved_scopes=True,
+                period_key=_db_period(dsn), inherit_approved_scopes=True,
             )
             assert first.status == "RESERVED" and not first.replay
             balances = (await session.execute(text("""
@@ -178,7 +179,7 @@ async def test_inherited_caps_no_duplicate_credit_and_default_fail_closed(test_e
                     session, authority=authority, run_id=run_id,
                     window_ordinal=1, idempotency_key="over-tenant-cap-001",
                     provider_model="test-model", estimated_max_usd="5",
-                    period_key="2026-11", inherit_approved_scopes=True,
+                    period_key=_db_period(dsn), inherit_approved_scopes=True,
                 )
     finally:
         await engine.dispose()
@@ -223,7 +224,7 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
                     session, authority=authority, run_id=run_id,
                     window_ordinal=0, idempotency_key="no-tenant-budget-001",
                     provider_model="test-model", estimated_max_usd="0.2",
-                    period_key="2026-11", inherit_approved_scopes=True,
+                    period_key=_db_period(dsn), inherit_approved_scopes=True,
                 )
 
         conn = await asyncpg.connect(dsn)
@@ -231,9 +232,9 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
             await conn.execute(
                 """INSERT INTO public.n4_budget_buckets
                    (tenant_id,scope_kind,scope_id,period_key,cap_usd)
-                   VALUES ($1,'TENANT',$1,'2026-11',5),
-                          ($1,'PROJECT',$2,'2026-11',0.1)""",
-                authority.tenant_id, project,
+                   VALUES ($1,'TENANT',$1,$3,5),
+                          ($1,'PROJECT',$2,$3,0.1)""",
+                authority.tenant_id, project, _db_period(dsn),
             )
         finally:
             await conn.close()
@@ -245,7 +246,7 @@ async def test_inheritance_requires_explicit_tenant_cap_and_preserves_narrow_cap
                     session, authority=authority, run_id=run_id,
                     window_ordinal=0, idempotency_key="narrow-project-cap-001",
                     provider_model="test-model", estimated_max_usd="0.2",
-                    period_key="2026-11", inherit_approved_scopes=True,
+                    period_key=_db_period(dsn), inherit_approved_scopes=True,
                 )
     finally:
         await engine.dispose()
@@ -274,7 +275,7 @@ async def test_concurrent_inherited_reservations_share_one_tenant_cap(test_engin
         await conn.execute(
             """INSERT INTO public.n4_budget_buckets
                 (tenant_id,scope_kind,scope_id,period_key,cap_usd)
-               VALUES ($1,'TENANT',$1,'2026-11',5)""", authority.tenant_id,
+               VALUES ($1,'TENANT',$1,$2,5)""", authority.tenant_id, _db_period(dsn),
         )
     finally:
         await conn.close()
@@ -300,7 +301,7 @@ async def test_concurrent_inherited_reservations_share_one_tenant_cap(test_engin
                         window_ordinal=ordinal,
                         idempotency_key=f"concurrent-budget-{ordinal:04d}",
                         provider_model="test-model", estimated_max_usd="3",
-                        period_key="2026-11", inherit_approved_scopes=True,
+                        period_key=_db_period(dsn), inherit_approved_scopes=True,
                     )
                 return receipt.status
             except N4BudgetExceeded:
@@ -348,8 +349,8 @@ async def test_budget_blocked_zero_receipt_recovery_uses_new_fenced_generation(t
         await conn.execute(
             """INSERT INTO public.n4_budget_buckets
                 (tenant_id,scope_kind,scope_id,period_key,cap_usd)
-               VALUES ($1,'TENANT',$1,'2026-11',5)""",
-            first_authority.tenant_id,
+               VALUES ($1,'TENANT',$1,$2,5)""",
+            first_authority.tenant_id, _db_period(dsn),
         )
     finally:
         await conn.close()
@@ -407,7 +408,7 @@ async def test_budget_blocked_zero_receipt_recovery_uses_new_fenced_generation(t
                 session, authority=new_authority, run_id=new_run,
                 window_ordinal=0, idempotency_key="recovered-new-generation-01",
                 provider_model="test-model", estimated_max_usd="0.2",
-                period_key="2026-11", inherit_approved_scopes=True,
+                period_key=_db_period(dsn), inherit_approved_scopes=True,
             )
             assert reserved.status == "RESERVED"
             old_receipts = await session.scalar(text("""

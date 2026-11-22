@@ -19,6 +19,7 @@ from src.analysis.application.n4_incremental_runner import (
 )
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from tests.integration.analysis.test_n4_incremental_store_pg import (
+    _db_period,
     _new_authority,
     _seed_caps,
     _seed_identity,
@@ -100,7 +101,7 @@ def _runner(engine, provider, *, enabled=True):
         provider=provider, enabled=enabled,
         run_cap_usd=Decimal("1.000000"),
         per_window_reservation_usd=Decimal("0.040000"),
-        period_key="2026-11", max_context_chars=600, overlap_chars=50,
+        period_key=_db_period(), max_context_chars=600, overlap_chars=50,
     )
 
 
@@ -118,8 +119,8 @@ async def _balances(tenant):
         return await conn.fetchrow("""
             SELECT reserved_usd, spent_usd FROM public.n4_budget_buckets
              WHERE tenant_id=$1 AND scope_kind='TENANT' AND scope_id=$1
-               AND period_key='2026-11'
-        """, tenant)
+               AND period_key=$2
+        """, tenant, _db_period())
     finally:
         await conn.close()
 
@@ -322,7 +323,7 @@ async def test_persisted_reservation_replay_is_blocked_without_provider_call():
             reserved = await reserve_call(
                 session, authority=a, run_id=run_id, window_ordinal=0,
                 idempotency_key=call_key, provider_model=provider.model_name,
-                estimated_max_usd="0.04", period_key="2026-11",
+                estimated_max_usd="0.04", period_key=_db_period(),
             )
             assert not reserved.replay
 
