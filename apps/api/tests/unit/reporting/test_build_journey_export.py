@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import openpyxl
@@ -274,3 +275,301 @@ async def test_build_journey_export_use_case() -> None:
 
     wb = openpyxl.load_workbook(io.BytesIO(raw_bytes))
     assert wb.sheetnames == ["Summary", "Findings", "Gaps & References"]
+
+
+class _MockQueryResult:
+    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+        self._rows = rows or []
+
+    def mappings(self) -> _MockQueryResult:
+        return self
+
+    def one_or_none(self) -> dict[str, Any] | None:
+        return self._rows[0] if self._rows else None
+
+    def all(self) -> list[dict[str, Any]]:
+        return self._rows
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    run_id = uuid4()
+
+    class _MockAsyncSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([
+                    {"id": project_id, "name": "Wind Farm Beta", "code": "WFB-02", "status": "ACTIVE"}
+                ])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([
+                    {
+                        "global_score": 88.0,
+                        "category_scores": {
+                            "SCOPE": 90.0,
+                            "BUDGET": 85.0,
+                            "TIME": 82.0,
+                            "TECHNICAL": 91.0,
+                            "LEGAL": 80.0,
+                            "QUALITY": 89.0,
+                        },
+                        "score_reason": "High coherence validated",
+                    }
+                ])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([
+                    {"run_id": run_id, "status": "PARTIAL", "total_windows": 2}
+                ])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
+                    {"ordinal": 1, "status": "BLOCKED", "blocked_reason": "OUTPUT_TRUNCATED", "unresolved_refs": ["Clause 12.3", "Annex C"]},
+                ])
+            if "FROM public.review_items" in sql:
+                return _MockQueryResult([
+                    {
+                        "id": uuid4(),
+                        "current_status": "APPROVED",
+                        "approved_by": "Lead Auditor",
+                        "approved_at": datetime(2026, 11, 22, 14, 0, 0, tzinfo=UTC),
+                        "item_data": {
+                            "title": "A1 Conforming Finding",
+                            "risk_reason": "Liquidated damages cap exceeded",
+                            "source_quote": "Damages capped at 20%",
+                            "page_start": 12,
+                            "page_end": 14,
+                            "clause_ref": "Clause 8.2",
+                            "dimension": "BUDGET",
+                            "severity_proposed": "CRITICAL",
+                            "n4_coverage": {
+                                "status": "COMPLETE_WITH_GAPS",
+                                "total_windows": 10,
+                                "examined_windows": 9,
+                                "gap_windows": [4],
+                                "gaps": [
+                                    {
+                                        "ordinal": 4,
+                                        "failure_kind": "OUTPUT_TRUNCATED",
+                                        "reason": "Token budget hit",
+                                        "attempts": 2,
+                                        "page_start": 40,
+                                        "page_end": 45,
+                                        "resolution": "CLOSED_MANUALLY",
+                                        "closed_reason": "Audited manually",
+                                        "closed_by": "QA Reviewer",
+                                        "closed_at": "2026-11-22T12:00:00Z",
+                                    }
+                                ],
+                            },
+                            "references": [
+                                {
+                                    "source": "Clause 8.2",
+                                    "target": "Annex A - Penalty Matrix",
+                                    "status": "UNRESOLVED",
+                                    "details": "Penalty matrix not supplied in contract package",
+                                }
+                            ],
+                        },
+                    },
+                    {
+                        "id": uuid4(),
+                        "current_status": "PROPOSED",
+                        "approved_by": None,
+                        "approved_at": None,
+                        "item_data": {
+                            "title": "Single Page Finding",
+                            "risk_reason": "Single page issue",
+                            "source_quote": "Single quote",
+                            "page_start": 5,
+                            "page_end": None,
+                        },
+                    },
+                    {
+                        "id": uuid4(),
+                        "current_status": "ESCALATED",
+                        "approved_by": None,
+                        "approved_at": None,
+                        "item_data": {
+                            "title": "Legacy Page Finding",
+                            "risk_reason": "Legacy page property",
+                            "source_quote": "Legacy quote",
+                            "page_number": 9,
+                        },
+                    },
+                    {
+                        "id": uuid4(),
+                        "current_status": "PROPOSED",
+                        "approved_by": None,
+                        "approved_at": None,
+                        "item_data": "invalid-non-dict-payload",
+                    },
+                ])
+            return _MockQueryResult()
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    sources = SqlAlchemyJourneyExportSources(session=_MockAsyncSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.project_name == "Wind Farm Beta"
+    assert data.summary.project_code == "WFB-02"
+    assert data.summary.global_score == 88.0
+    assert data.summary.sub_scores["SCOPE"] == 90.0
+    assert data.summary.coverage_status == "COMPLETE_WITH_GAPS"
+    assert len(data.findings) == 3
+    assert data.findings[0].title == "A1 Conforming Finding"
+    assert data.findings[0].page == "pp. 12–14"
+    assert data.findings[0].severity == "CRITICAL"
+    assert data.findings[0].decision == "APPROVED"
+    assert data.findings[1].page == "p. 5"
+    assert data.findings[2].page == 9
+    assert len(data.gaps) >= 1
+    assert len(data.references) >= 1
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_journey_sources_fallback_to_analyses_when_coherence_results_absent() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+
+    class _MockAsyncSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([
+                    {"id": project_id, "name": "Hydro Plant Delta", "code": None, "status": "DRAFT"}
+                ])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([])
+            if "FROM public.analyses" in sql:
+                return _MockQueryResult([
+                    {
+                        "coherence_score": 74.5,
+                        "coherence_breakdown": {"SCOPE": 78.0, "TIME": 71.0},
+                    }
+                ])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([
+                    {"run_id": uuid4(), "status": "COMPLETE", "total_windows": 1}
+                ])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None}
+                ])
+            if "FROM public.review_items" in sql:
+                return _MockQueryResult([])
+            return _MockQueryResult()
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    sources = SqlAlchemyJourneyExportSources(session=_MockAsyncSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.project_name == "Hydro Plant Delta"
+    assert data.summary.project_code is None
+    assert data.summary.global_score == 74.5
+    assert data.summary.sub_scores["SCOPE"] == 78.0
+    assert data.summary.coverage_status == "COMPLETE"
+    assert data.findings == []
+    assert data.gaps == []
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_journey_sources_resilient_to_query_exceptions() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+
+    class _FailingSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([
+                    {"id": project_id, "name": "Resilient Plant", "code": "RP-1", "status": "ACTIVE"}
+                ])
+            raise RuntimeError("Database connection interrupted")
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    sources = SqlAlchemyJourneyExportSources(session=_FailingSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.project_name == "Resilient Plant"
+    assert data.summary.global_score is None
+    assert data.summary.coverage_status == "INCOMPLETE"
+    assert data.findings == []
+
+
+def test_build_journey_workbook_formatting_branches() -> None:
+    project_id = uuid4()
+    now = datetime(2026, 11, 22, 12, 0, 0, tzinfo=UTC)
+
+    data = JourneyExportData(
+        summary=JourneySummaryData(
+            project_id=project_id,
+            project_name="Branch Test Project",
+            project_code="BTP-01",
+            status="ACTIVE",
+            global_score=None,
+            trusted_score=None,
+            projected_score=None,
+            score_reason=None,
+            sub_scores=dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"), None),
+            coverage_status="COMPLETE",
+            total_windows=3,
+            examined_windows=3,
+            gap_windows_count=0,
+            generated_at=now,
+        ),
+        findings=[
+            JourneyFindingRow(
+                finding_id="f-branch-1",
+                title="Already Labeled Finding",
+                ai_interpretation="[IA Proposal] Already labeled proposal text",
+                exact_quote="Source quote here",
+                page="p. 15",
+                clause=None,
+                dimension=None,
+                severity=None,
+                decision="PENDING",
+                reviewer=None,
+                decided_at=None,
+            )
+        ],
+        gaps=[
+            JourneyGapRow(
+                ordinal=1,
+                failure_kind="PROVIDER_REJECTED",
+                reason="Transient refusal",
+                attempts=1,
+                page_start=15,
+                page_end=None,
+                resolution="OPEN",
+                closed_reason=None,
+                closed_by=None,
+                closed_at=None,
+            ),
+            JourneyGapRow(
+                ordinal=2,
+                failure_kind="INVALID_ENVELOPE",
+                reason="Schema error",
+                attempts=1,
+                page_start=None,
+                page_end=None,
+                resolution="OPEN",
+                closed_reason=None,
+                closed_by=None,
+                closed_at=None,
+            ),
+        ],
+        references=[],
+    )
+
+    wb = build_journey_workbook(data)
+    assert wb.sheetnames == ["Summary", "Findings", "Gaps & References"]
+    ws_gaps = wb["Gaps & References"]
+    gap_values = [str(cell.value) for row in ws_gaps.iter_rows() for cell in row if cell.value is not None]
+    assert "p. 15" in gap_values
+    assert "Unmapped" in gap_values

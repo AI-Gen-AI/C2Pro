@@ -624,7 +624,50 @@ class SqlAlchemyJourneyExportSources:
                 if not isinstance(item_data, dict):
                     continue
 
-                # Could be structured as action_item, risk, or candidate finding
+                # Interoperability with A1/A7 contract: check n4_coverage embedded in item_data
+                n4_cov = item_data.get("n4_coverage") or item_data.get("analysis_n4_coverage")
+                if isinstance(n4_cov, dict):
+                    if n4_cov.get("status"):
+                        coverage_status = str(n4_cov["status"])
+                    if n4_cov.get("total_windows") is not None:
+                        total_windows = int(n4_cov["total_windows"])
+                    if n4_cov.get("examined_windows") is not None:
+                        examined_windows = int(n4_cov["examined_windows"])
+                    if isinstance(n4_cov.get("gap_windows"), Sequence) and not isinstance(n4_cov["gap_windows"], str | bytes):
+                        gap_windows_count = len(n4_cov["gap_windows"])
+                    if isinstance(n4_cov.get("gaps"), Sequence) and not gaps:
+                        for g_dict in n4_cov["gaps"]:
+                            if isinstance(g_dict, dict):
+                                gaps.append(
+                                    JourneyGapRow(
+                                        ordinal=int(g_dict.get("ordinal", 0)),
+                                        failure_kind=str(g_dict.get("failure_kind") or "UNKNOWN_BLOCK"),
+                                        reason=str(g_dict.get("reason") or "Window gap"),
+                                        attempts=int(g_dict.get("attempts", 1)),
+                                        page_start=g_dict.get("page_start"),
+                                        page_end=g_dict.get("page_end"),
+                                        resolution=str(g_dict.get("resolution") or "OPEN"),
+                                        closed_reason=g_dict.get("closed_reason"),
+                                        closed_by=g_dict.get("closed_by"),
+                                        closed_at=g_dict.get("closed_at"),
+                                    )
+                                )
+
+                # Interoperability with A7 remisiones / references embedded in item_data
+                ref_items = item_data.get("references") or item_data.get("remisiones") or item_data.get("reference_register")
+                if isinstance(ref_items, Sequence) and not isinstance(ref_items, str | bytes):
+                    for ref_dict in ref_items:
+                        if isinstance(ref_dict, dict):
+                            references.append(
+                                JourneyReferenceRow(
+                                    source_identifier=str(ref_dict.get("source") or ref_dict.get("source_clause") or "Contract Section"),
+                                    target_reference=str(ref_dict.get("target") or ref_dict.get("target_reference") or ref_dict.get("reference") or ""),
+                                    status=str(ref_dict.get("status") or "UNRESOLVED"),
+                                    details=ref_dict.get("details") or ref_dict.get("reason"),
+                                )
+                            )
+
+                # Could be structured as action_item, risk, candidate finding, or N4SharedFinding
                 action_item = item_data.get("action_item") or item_data.get("risk") or item_data
                 title = str(action_item.get("title") or action_item.get("description") or "Finding")
                 interpretation = str(
@@ -640,10 +683,18 @@ class SqlAlchemyJourneyExportSources:
                     or action_item.get("quote")
                     or ""
                 )
-                page = action_item.get("page") or action_item.get("page_number")
+                p_start = action_item.get("page_start")
+                p_end = action_item.get("page_end")
+                if p_start is not None and p_end is not None and p_start != p_end:
+                    page: str | int | None = f"pp. {p_start}–{p_end}"
+                elif p_start is not None:
+                    page = f"p. {p_start}"
+                else:
+                    page = action_item.get("page") or action_item.get("page_number")
+
                 clause = action_item.get("clause") or action_item.get("clause_ref")
                 dimension = action_item.get("dimension") or action_item.get("category")
-                severity = action_item.get("severity") or action_item.get("impact_level")
+                severity = action_item.get("severity") or action_item.get("severity_proposed") or action_item.get("impact_level")
 
                 findings.append(
                     JourneyFindingRow(

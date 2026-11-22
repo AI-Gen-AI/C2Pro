@@ -191,3 +191,31 @@ async def test_get_journey_export_returns_404_for_unknown_project() -> None:
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
     assert len(sources.requested_projects) == 0
+
+
+
+@pytest.mark.asyncio
+async def test_get_journey_export_sources_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+    from contextlib import asynccontextmanager
+
+    from src.reporting.adapters.http import router as router_module
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    tenant_id = uuid4()
+    mock_session = object()
+
+    @asynccontextmanager
+    async def _mock_get_session(tid: UUID) -> AsyncGenerator[object, None]:
+        assert tid == tenant_id
+        yield mock_session
+
+    monkeypatch.setattr(router_module, "get_session_with_tenant", _mock_get_session)
+
+    user = SimpleNamespace(tenant_id=tenant_id, id=uuid4())
+    gen = get_journey_export_sources(current_user=user)  # type: ignore[arg-type]
+    sources_yielded = []
+    async for s in gen:
+        sources_yielded.append(s)
+
+    assert len(sources_yielded) == 1
+    assert isinstance(sources_yielded[0], SqlAlchemyJourneyExportSources)
