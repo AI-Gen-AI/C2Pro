@@ -2,6 +2,7 @@
 
 No network, no API keys, no real contracts: every source is synthetic text or
 a PDF generated on the fly; providers are replaced by a recording transport.
+These tests prove the CODE CONTRACT of the arm; they are not contract analysis.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import yaml
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -20,7 +22,13 @@ sys.path.insert(0, str(HERE))
 
 import direct_arm as arm  # noqa: E402
 
-from src.analysis.domain.n4_failure_kinds import N4SharedFinding  # noqa: E402
+from src.analysis.domain.n4_failure_kinds import (  # noqa: E402
+    N4_DIMENSIONS,
+    N4_SEVERITIES,
+    N4_SOURCE_QUOTE_MAX_CHARS,
+    N4_SUPPORTING_QUOTES_MAX,
+    N4SharedFinding,
+)
 
 _GOVERNOR = REPO / "apps/api/scripts/real_ai_governor/real_ai_governor.py"
 
@@ -31,12 +39,46 @@ controles:
 - {id: EPC-05, tipo: 'Penalizaciones por retraso: tasa y tope', critico: true, dimension: TIME}
 - {id: EPC-18, tipo: Ley aplicable y disputas, critico: false, dimension: LEGAL}
 """
+# Independent transcription of plan §6.2 in B1's YAML shape (B1 PR #1287):
+# (id, tipo, critico, dimension).
+B1_CONTROLS = [
+    ("EPC-01", "Precio y moneda", True, "BUDGET"),
+    ("EPC-02", "Hitos/calendario de pagos y condiciones", True, "BUDGET"),
+    ("EPC-03", "Retenciones, avales y garantías financieras", True, "BUDGET"),
+    ("EPC-04", "Plazo / fechas de terminación garantizadas", True, "TIME"),
+    ("EPC-05", "Penalizaciones por retraso: tasa y tope", True, "TIME"),
+    ("EPC-06", "Garantías y penalizaciones de rendimiento", True, "TECHNICAL"),
+    ("EPC-07", "Limitación de responsabilidad, daño consecuencial y excepciones", True, "LEGAL"),
+    ("EPC-08", "Indemnidades", True, "LEGAL"),
+    ("EPC-09", "Resolución (causas, consecuencias, plazos)", True, "LEGAL"),
+    ("EPC-10", "Suspensión", False, "LEGAL"),
+    ("EPC-11", "Fuerza mayor", True, "LEGAL"),
+    ("EPC-12", "Variaciones / órdenes de cambio y su valoración", True, "SCOPE"),
+    ("EPC-13", "Alcance, exclusiones e interfaces", True, "SCOPE"),
+    ("EPC-14", "Pruebas y recepción (provisional/definitiva)", True, "QUALITY"),
+    ("EPC-15", "Garantía y periodo de defectos", True, "QUALITY"),
+    ("EPC-16", "Seguros y límites", False, "LEGAL"),
+    ("EPC-17", "Confidencialidad y propiedad intelectual", False, "LEGAL"),
+    ("EPC-18", "Ley aplicable y disputas", False, "LEGAL"),
+    ("EPC-19", "Impuestos, aranceles, permisos y cambio de ley", False, "BUDGET"),
+    ("EPC-20", "Remisiones a anexos y orden de prelación", True, "SCOPE"),
+]
+B1_FIELDS = [
+    "id", "tipo", "critico", "presente", "clausula",
+    "pagina", "cita_ancla", "cifras_esperadas", "dimension",
+]
 N2_TEXT = (
     "1. Contract Price. The Contract Price is EUR 1,000,000 (synthetic).\n"
     "2. Delay damages. Delay damages are 0.5% per week capped at 10%.\n"
 )
 PAGE_SPANS = [(1, 0, 67), (2, 67, len(N2_TEXT))]
 PRICE = arm.ModelPrice(Decimal("3"), Decimal("15"))
+RESULT_KEYS = {
+    "schema", "prompt_version", "prompt_sha256", "contract_alias", "provider",
+    "model", "model_reported", "request_id", "source", "findings", "rejected",
+    "controls_not_found", "usage", "usage_known", "cost_usd", "started_at",
+    "finished_at",
+}
 
 
 def _finding(**overrides):
@@ -58,12 +100,12 @@ def _finding(**overrides):
     return item
 
 
-def _anthropic_reply(findings, *, not_found=(18,), stop="tool_use", tokens=(1000, 200)):
+def _anthropic_reply(findings, *, not_found=(18,), stop="tool_use", usage=None):
     return {
         "id": "msg_synthetic_001",
         "model": "claude-test-model",
         "stop_reason": stop,
-        "usage": {"input_tokens": tokens[0], "output_tokens": tokens[1]},
+        "usage": usage or {"input_tokens": 1000, "output_tokens": 200},
         "content": [{
             "type": "tool_use", "id": "toolu_1", "name": arm.TOOL_NAME,
             "input": {"findings": findings, "controls_not_found": list(not_found)},
@@ -102,11 +144,20 @@ class RecordingTransport:
         return self.reply
 
 
+def _write_pdf(path: Path, pages: list[str]) -> Path:
+    import pymupdf
+
+    doc = pymupdf.open()
+    for line in pages:
+        doc.new_page().insert_text((72, 72), line)
+    doc.save(path)
+    return path
+
+
 @pytest.fixture
 def taxonomy(tmp_path):
-    path = tmp_path / "taxonomy.yaml"
-    path.write_text(TAXONOMY_YAML, encoding="utf-8")
-    return arm.load_taxonomy(path)
+    (tmp_path / "taxonomy.yaml").write_text(TAXONOMY_YAML, encoding="utf-8")
+    return arm.load_taxonomy("taxonomy.yaml", root=tmp_path)
 
 
 @pytest.fixture
@@ -116,19 +167,13 @@ def n2_source():
 
 @pytest.fixture
 def pdf_source(tmp_path):
-    import pymupdf
-
-    doc = pymupdf.open()
-    for line in N2_TEXT.splitlines():
-        doc.new_page().insert_text((72, 72), line)
-    path = tmp_path / "synthetic.pdf"
-    doc.save(path)
-    return arm.DirectArmSource.from_pdf(path)
+    _write_pdf(tmp_path / "synthetic.pdf", N2_TEXT.splitlines())
+    return arm.DirectArmSource.from_pdf("synthetic.pdf", root=tmp_path)
 
 
 @pytest.fixture
 def register(tmp_path):
-    return arm.JsonlSpendRegister(tmp_path / "spend.jsonl", max_usd=Decimal("5"))
+    return arm.JsonlSpendRegister("spend.jsonl", max_usd=Decimal("5"), root=tmp_path)
 
 
 def _config(provider="anthropic", **kw):
@@ -136,7 +181,14 @@ def _config(provider="anthropic", **kw):
     return arm.ArmConfig(provider=provider, model=model, price=PRICE, **kw)
 
 
-# --- taxonomy, source and schema ------------------------------------------
+def _run(config, source, taxonomy, register, transport, alias="C1"):
+    return arm.run_direct_arm(
+        config=config, source=source, taxonomy=taxonomy, contract_alias=alias,
+        register=register, transport=transport,
+    )
+
+
+# --- B1 contract: taxonomy ---------------------------------------------------
 
 
 def test_taxonomy_maps_b1_ids_to_a1_integer_control_ids(taxonomy):
@@ -148,20 +200,42 @@ def test_taxonomy_maps_b1_ids_to_a1_integer_control_ids(taxonomy):
     assert arm.epc_control_label(5) == "EPC-05"
 
 
-def test_n2_source_is_rendered_with_page_markers_and_hashed(n2_source):
-    rendered = n2_source.text
-    assert rendered.index("<<<PAGE 1>>>") < rendered.index("Contract Price")
-    assert rendered.index("<<<PAGE 2>>>") < rendered.index("Delay damages")
-    assert n2_source.kind == "n2_text" and n2_source.page_count == 2
-    assert len(n2_source.sha256) == 64
+def test_full_b1_shaped_taxonomy_loads_all_twenty_controls(tmp_path):
+    document = {
+        "schema_version": 1,
+        "campos_oraculo": B1_FIELDS,
+        "controles": [
+            {"id": i, "tipo": t, "critico": c, "presente": None, "clausula": None,
+             "pagina": None, "cita_ancla": None, "cifras_esperadas": None, "dimension": d}
+            for i, t, c, d in B1_CONTROLS
+        ],
+    }
+    (tmp_path / "epc.yaml").write_text(
+        yaml.safe_dump(document, allow_unicode=True), encoding="utf-8",
+    )
+    controls = arm.load_taxonomy("epc.yaml", root=tmp_path)
+    assert [c.number for c in controls] == list(range(1, 21))
+    assert [(c.label, c.tipo, c.critical, c.dimension) for c in controls] == B1_CONTROLS
+    assert sum(c.critical for c in controls) == 15
+    assert {arm.epc_control_label(c.number) for c in controls} == {i for i, *_ in B1_CONTROLS}
 
 
-def test_page_spans_must_cover_the_projection_in_order():
-    with pytest.raises(ValueError, match="page spans"):
-        arm.DirectArmSource.from_n2_text(N2_TEXT, [(1, 0, 10), (2, 20, len(N2_TEXT))])
+@pytest.mark.parametrize("bad", [
+    "{id: EPC-1, tipo: x, critico: true, dimension: TIME}",
+    "{id: EPC-01, tipo: x, critico: si, dimension: TIME}",
+    "{id: EPC-01, tipo: x, critico: true, dimension: FINANCE}",
+    "{id: EPC-21, tipo: x, critico: true, dimension: TIME}",
+])
+def test_taxonomy_rejects_controls_outside_the_b1_contract(tmp_path, bad):
+    (tmp_path / "bad.yaml").write_text(f"controles:\n- {bad}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="EPC control"):
+        arm.load_taxonomy("bad.yaml", root=tmp_path)
 
 
-def test_tool_schema_matches_a1_shared_finding_keys():
+# --- A1 contract: finding schema --------------------------------------------
+
+
+def test_tool_schema_keys_match_a1_shared_finding():
     item = arm.tool_input_schema()["properties"]["findings"]["items"]
     assert set(item["properties"]) == (
         N4SharedFinding.__required_keys__ | N4SharedFinding.__optional_keys__
@@ -170,19 +244,91 @@ def test_tool_schema_matches_a1_shared_finding_keys():
     assert item["additionalProperties"] is False
 
 
+def test_tool_schema_limits_match_a1_constants():
+    props = arm.tool_input_schema()["properties"]["findings"]["items"]["properties"]
+    assert props["dimension"]["enum"] == list(N4_DIMENSIONS)
+    assert props["severity_proposed"]["enum"] == list(N4_SEVERITIES)
+    assert props["source_quote"]["maxLength"] == N4_SOURCE_QUOTE_MAX_CHARS
+    assert props["supporting_quotes"]["maxItems"] == N4_SUPPORTING_QUOTES_MAX
+    assert props["supporting_quotes"]["items"]["maxLength"] == N4_SOURCE_QUOTE_MAX_CHARS
+    assert props["epc_control_id"]["minimum"] == 1
+    assert props["epc_control_id"]["maximum"] == 20
+
+
+# --- source -----------------------------------------------------------------
+
+
+def test_n2_source_is_rendered_with_page_markers_and_hashed(n2_source):
+    rendered = n2_source.text
+    assert rendered.index("<<<PAGE 1>>>") < rendered.index("Contract Price")
+    assert rendered.index("<<<PAGE 2>>>") < rendered.index("Delay damages")
+    assert n2_source.kind == "n2_text"
+    assert n2_source.page_count == 2
+    assert len(n2_source.sha256) == 64
+
+
+def test_page_spans_must_cover_the_projection_in_order():
+    with pytest.raises(ValueError, match="page spans"):
+        arm.DirectArmSource.from_n2_text(N2_TEXT, [(1, 0, 10), (2, 20, len(N2_TEXT))])
+
+
+def test_n2_files_are_loaded_from_the_corpus_root(tmp_path):
+    (tmp_path / "c2.txt").write_text(N2_TEXT, encoding="utf-8")
+    (tmp_path / "c2.spans.json").write_text(json.dumps([
+        {"page": p, "start_offset": s, "end_offset": e} for p, s, e in PAGE_SPANS
+    ]), encoding="utf-8")
+    source = arm.DirectArmSource.from_n2_files("c2.txt", "c2.spans.json", root=tmp_path)
+    assert source == arm.DirectArmSource.from_n2_text(N2_TEXT, PAGE_SPANS)
+
+
+# --- path confinement (SonarCloud S8707) --------------------------------------
+
+
+@pytest.mark.parametrize("raw", ["../escape.yaml", "/etc/passwd", "sub/../../escape.yaml"])
+def test_paths_outside_the_allowed_root_are_refused(tmp_path, raw):
+    root = tmp_path / "root"
+    root.mkdir()
+    with pytest.raises(ValueError, match="outside the allowed root"):
+        arm.confined_path(raw, root)
+
+
+def test_symlink_escaping_the_root_is_refused(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    (tmp_path / "secret.txt").write_text("x", encoding="utf-8")
+    (root / "link.txt").symlink_to(tmp_path / "secret.txt")
+    with pytest.raises(ValueError, match="outside the allowed root"):
+        arm.confined_path("link.txt", root)
+
+
+def test_private_roots_cannot_live_inside_the_repository():
+    inside = REPO / "evals" / "journey_v1"
+    with pytest.raises(ValueError, match="outside the repository"):
+        arm.DirectArmSource.from_pdf("x.pdf", root=inside)
+
+
+def test_default_private_root_is_fixed_and_outside_the_repository():
+    for root in (arm.CORPUS_ROOT, arm.RESULTS_ROOT, arm.SPEND_ROOT):
+        assert root.is_relative_to(arm.PRIVATE_ROOT)
+        assert not root.resolve().is_relative_to(REPO)
+    assert arm.TAXONOMY_ROOT == HERE
+
+
 # --- provider requests (no network) ----------------------------------------
 
 
 def test_anthropic_request_sends_pdf_document_and_forces_tool(pdf_source, taxonomy):
     body = arm.build_request(_config("anthropic", max_output_tokens=4000), pdf_source, taxonomy)
     assert body["model"] == "claude-test-model"
-    assert body["max_tokens"] == 4000 and body["temperature"] == 0
+    assert body["max_tokens"] == 4000
+    assert body["temperature"] == 0
     assert body["tool_choice"] == {"type": "tool", "name": arm.TOOL_NAME}
     blocks = body["messages"][0]["content"]
     document = next(b for b in blocks if b["type"] == "document")
     assert document["source"]["media_type"] == "application/pdf"
     assert base64.b64decode(document["source"]["data"]).startswith(b"%PDF")
-    assert "EPC-05" in body["system"] and "untrusted" in body["system"].lower()
+    assert "EPC-05" in body["system"]
+    assert "untrusted" in body["system"].lower()
 
 
 def test_openai_request_sends_text_and_forces_function(n2_source, taxonomy):
@@ -200,6 +346,11 @@ def test_openai_request_sends_pdf_as_file_part(pdf_source, taxonomy):
     assert part["file"]["file_data"].startswith("data:application/pdf;base64,")
 
 
+def test_temperature_can_be_omitted_for_reasoning_models(n2_source, taxonomy):
+    body = arm.build_request(_config("openai", temperature=None), n2_source, taxonomy)
+    assert "temperature" not in body
+
+
 # --- validation into the A1 schema -----------------------------------------
 
 
@@ -215,87 +366,126 @@ def test_valid_findings_are_kept_in_a1_schema_and_invalid_ones_reported(taxonomy
         _finding(page_start=3, page_end=2),
         _finding(epc_control_id=7),
         _finding(unexpected="field"),
+        _finding(quote_omits_figures="no"),
+        _finding(page_start=True, page_end=True),
+        "not an object",
     ]
     valid, rejected = arm.validate_findings([good, *bad], taxonomy)
     assert valid == [good]
-    assert [r["index"] for r in rejected] == list(range(1, 10))
+    assert [r["index"] for r in rejected] == list(range(1, len(bad) + 1))
     assert all(r["reason"] for r in rejected)
 
 
-# --- full run: spend register, caps, failures -------------------------------
+# --- full run: result contract, spend register, caps, failures ---------------
 
 
-def test_anthropic_run_records_spend_and_returns_result_document(
-    n2_source, taxonomy, register,
-):
+def test_result_document_contract(n2_source, taxonomy, register):
     transport = RecordingTransport(_anthropic_reply([_finding(), _finding(dimension="X")]))
-    result = arm.run_direct_arm(
-        config=_config("anthropic"), source=n2_source, taxonomy=taxonomy,
-        contract_alias="C1", register=register, transport=transport,
-    )
+    result = _run(_config("anthropic"), n2_source, taxonomy, register, transport)
+    assert set(result) == RESULT_KEYS
     assert len(transport.calls) == 1
     assert result["schema"] == arm.RESULT_SCHEMA
     assert result["prompt_version"] == arm.PROMPT_VERSION
+    assert len(result["prompt_sha256"]) == 64
     assert result["contract_alias"] == "C1"
-    assert (result["provider"], result["model"]) == ("anthropic", "claude-test-model")
+    assert result["provider"] == "anthropic"
+    assert result["model"] == "claude-test-model"
     assert result["source"] == {"kind": "n2_text", "sha256": n2_source.sha256, "pages": 2}
     assert result["findings"] == [_finding()]
     assert len(result["rejected"]) == 1
     assert result["controls_not_found"] == [18]
+    assert result["usage"] == {"input_tokens": 1000, "output_tokens": 200}
+    assert result["usage_known"] is True
+    json.dumps(result)  # serialisable as written to disk
+
+
+def test_cost_is_tokens_times_explicit_price(n2_source, taxonomy, register):
+    result = _run(_config("anthropic"), n2_source, taxonomy, register,
+                  RecordingTransport(_anthropic_reply([_finding()])))
     # 1000 in * 3 USD/M + 200 out * 15 USD/M
     assert Decimal(result["cost_usd"]) == Decimal("0.006")
-    assert result["usage"] == {"input_tokens": 1000, "output_tokens": 200}
+
+
+def test_anthropic_cache_tokens_are_billed_pessimistically(n2_source, taxonomy, register):
+    usage = {"input_tokens": 1000, "output_tokens": 0,
+             "cache_creation_input_tokens": 100, "cache_read_input_tokens": 200}
+    result = _run(_config("anthropic"), n2_source, taxonomy, register,
+                  RecordingTransport(_anthropic_reply([], usage=usage)))
+    # cache writes at 1.25x, cache reads at full input price (never discounted)
+    assert Decimal(result["cost_usd"]) == Decimal("0.003975")
+    assert result["usage"]["input_tokens"] == 1300
+
+
+def test_unknown_usage_is_charged_at_the_worst_case(n2_source, taxonomy, register):
+    reply = _anthropic_reply([_finding()])
+    reply["usage"] = {}
+    result = _run(_config("anthropic"), n2_source, taxonomy, register, RecordingTransport(reply))
+    reserve = next(e for e in register.events() if e["ev"] == "reserve")
+    assert result["usage_known"] is False
+    assert Decimal(result["cost_usd"]) == Decimal(str(reserve["est_usd"]))
+
+
+def test_94_page_pdf_fits_the_default_per_call_cap(tmp_path, taxonomy):
+    _write_pdf(tmp_path / "long.pdf", [f"synthetic page {n}" for n in range(94)])
+    source = arm.DirectArmSource.from_pdf("long.pdf", root=tmp_path)
+    config = _config("anthropic")
+    estimate = arm.estimate_usd(config, source, arm.build_request(config, source, taxonomy))
+    # 94 pages x 3000 tokens x 3 USD/M + 16000 out x 15 USD/M = 1.086 USD
+    assert Decimal("1.086") <= estimate < Decimal("1.10")
+    assert estimate <= config.max_usd_per_call
 
 
 def test_spend_register_is_readable_by_the_governor_summary(n2_source, taxonomy, register):
-    arm.run_direct_arm(
-        config=_config("openai"), source=n2_source, taxonomy=taxonomy,
-        contract_alias="C2", register=register,
-        transport=RecordingTransport(_openai_reply([_finding()])),
-    )
+    _run(_config("openai"), n2_source, taxonomy, register,
+         RecordingTransport(_openai_reply([_finding()])), alias="C2")
     spec = importlib.util.spec_from_file_location("real_ai_governor", _GOVERNOR)
     governor = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(governor)
-    summary = governor.summarize(governor.read_events(register.path))
-    assert (summary["calls"], summary["completed"], summary["in_flight"]) == (1, 1, 0)
-    assert summary["spent_usd"] == pytest.approx(900 * 3e-6 + 150 * 15e-6)
     events = governor.read_events(register.path)
+    summary = governor.summarize(events)
+    assert summary["calls"] == 1
+    assert summary["completed"] == 1
+    assert summary["in_flight"] == 0
+    assert summary["spent_usd"] == pytest.approx(900 * 3e-6 + 150 * 15e-6)
     assert {e["provider"] for e in events} == {"openai"}
     assert all(e["arm"] == "B3" for e in events)
     assert not any("Delay damages" in json.dumps(e) for e in events)
 
 
 def test_global_budget_cap_refuses_before_any_provider_call(tmp_path, n2_source, taxonomy):
-    register = arm.JsonlSpendRegister(tmp_path / "spend.jsonl", max_usd=Decimal("0.01"))
+    register = arm.JsonlSpendRegister("spend.jsonl", max_usd=Decimal("0.01"), root=tmp_path)
     transport = RecordingTransport(_anthropic_reply([_finding()]))
+    config = _config("anthropic", max_output_tokens=16000)
     with pytest.raises(arm.SpendRefused, match="budget"):
-        arm.run_direct_arm(
-            config=_config("anthropic", max_output_tokens=16000), source=n2_source,
-            taxonomy=taxonomy, contract_alias="C1", register=register,
-            transport=transport,
-        )
+        _run(config, n2_source, taxonomy, register, transport)
     assert transport.calls == []
     assert [e["ev"] for e in register.events()] == ["refused"]
 
 
+def test_budget_counts_spend_already_in_the_register(tmp_path, n2_source, taxonomy):
+    register = arm.JsonlSpendRegister("spend.jsonl", max_usd=Decimal("0.5"), root=tmp_path)
+    config = _config("anthropic", max_output_tokens=16000)  # worst case ~0.25 USD
+    _run(config, n2_source, taxonomy, register,
+         RecordingTransport(_anthropic_reply([], usage={"input_tokens": 1, "output_tokens": 20000})))
+    transport = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="budget"):
+        _run(config, n2_source, taxonomy, register, transport)
+    assert transport.calls == []
+
+
 def test_per_call_cap_refuses_before_any_provider_call(pdf_source, taxonomy, register):
     transport = RecordingTransport(_anthropic_reply([_finding()]))
+    config = _config("anthropic", max_usd_per_call=Decimal("0.001"))
     with pytest.raises(arm.SpendRefused, match="per-call"):
-        arm.run_direct_arm(
-            config=_config("anthropic", max_usd_per_call=Decimal("0.001")),
-            source=pdf_source, taxonomy=taxonomy, contract_alias="C1",
-            register=register, transport=transport,
-        )
+        _run(config, pdf_source, taxonomy, register, transport)
     assert transport.calls == []
 
 
 def test_provider_error_is_recorded_as_failed_call(n2_source, taxonomy, register):
     transport = RecordingTransport(error=TimeoutError("synthetic timeout"))
+    config = _config("anthropic")
     with pytest.raises(TimeoutError):
-        arm.run_direct_arm(
-            config=_config("anthropic"), source=n2_source, taxonomy=taxonomy,
-            contract_alias="C1", register=register, transport=transport,
-        )
+        _run(config, n2_source, taxonomy, register, transport)
     assert [e["ev"] for e in register.events()] == ["reserve", "fail"]
 
 
@@ -306,29 +496,84 @@ def test_provider_error_is_recorded_as_failed_call(n2_source, taxonomy, register
 def test_truncated_output_is_billed_but_never_returned_as_a_result(
     provider, reply, n2_source, taxonomy, register,
 ):
+    config, transport = _config(provider), RecordingTransport(reply)
     with pytest.raises(arm.DirectArmOutputError, match="truncated"):
-        arm.run_direct_arm(
-            config=_config(provider), source=n2_source, taxonomy=taxonomy,
-            contract_alias="C1", register=register, transport=RecordingTransport(reply),
-        )
+        _run(config, n2_source, taxonomy, register, transport)
     assert [e["ev"] for e in register.events()] == ["reserve", "done"]
 
 
-def test_unknown_price_or_real_name_alias_is_refused(n2_source, taxonomy, register):
+def test_reply_without_tool_output_is_billed_but_not_a_result(n2_source, taxonomy, register):
+    reply = _openai_reply([])
+    reply["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] = "{not json"
+    config, transport = _config("openai"), RecordingTransport(reply)
+    with pytest.raises(arm.DirectArmOutputError, match="tool output"):
+        _run(config, n2_source, taxonomy, register, transport)
+    assert [e["ev"] for e in register.events()] == ["reserve", "done"]
+
+
+def test_non_positive_price_is_refused():
     with pytest.raises(ValueError, match="price"):
-        arm.ArmConfig(provider="anthropic", model="m", price=arm.ModelPrice(Decimal("0"), Decimal("1")))
+        arm.ModelPrice(Decimal("0"), Decimal("1"))
+
+
+def test_contract_names_are_refused_as_aliases(n2_source, taxonomy, register):
+    config, transport = _config("anthropic"), RecordingTransport(_anthropic_reply([]))
     with pytest.raises(ValueError, match="alias"):
-        arm.run_direct_arm(
-            config=_config("anthropic"), source=n2_source, taxonomy=taxonomy,
-            contract_alias="SolarMax", register=register,
-            transport=RecordingTransport(_anthropic_reply([])),
-        )
+        _run(config, n2_source, taxonomy, register, transport, alias="SolarMax")
+    assert transport.calls == []
 
 
-def test_result_cannot_be_written_inside_the_repository(tmp_path):
+def test_result_is_written_only_under_the_results_root(tmp_path):
     result = {"schema": arm.RESULT_SCHEMA}
-    with pytest.raises(ValueError, match="outside the repository"):
-        arm.write_result(result, REPO / "evals/journey_v1/out.json")
-    out = tmp_path / "c1-anthropic.json"
-    arm.write_result(result, out)
-    assert json.loads(out.read_text(encoding="utf-8")) == result
+    with pytest.raises(ValueError, match="outside the allowed root"):
+        arm.write_result(result, "../escape.json", root=tmp_path / "results")
+    target = arm.write_result(result, "c1-anthropic.json", root=tmp_path / "results")
+    assert json.loads(target.read_text(encoding="utf-8")) == result
+
+
+# --- CLI (mock transport, confined roots) -------------------------------------
+
+
+@pytest.fixture
+def private_root(tmp_path, monkeypatch):
+    root = tmp_path / "private"
+    monkeypatch.setattr(arm, "CORPUS_ROOT", root / "corpus")
+    monkeypatch.setattr(arm, "RESULTS_ROOT", root / "results")
+    monkeypatch.setattr(arm, "SPEND_ROOT", root / "spend")
+    monkeypatch.setattr(arm, "TAXONOMY_ROOT", root)
+    (root / "corpus").mkdir(parents=True)
+    (root / "taxonomy.yaml").write_text(TAXONOMY_YAML, encoding="utf-8")
+    _write_pdf(root / "corpus" / "c1.pdf", N2_TEXT.splitlines())
+    return root
+
+
+def _cli_args(*extra):
+    return [
+        "--provider", "anthropic", "--model", "claude-test-model",
+        "--price-in", "3", "--price-out", "15", "--contract-alias", "C1",
+        "--taxonomy", "taxonomy.yaml", "--max-usd", "5", *extra,
+    ]
+
+
+def test_cli_runs_with_mock_transport_and_writes_only_private_files(private_root):
+    transport = RecordingTransport(_anthropic_reply([_finding()]))
+    code = arm.main(_cli_args("--source-pdf", "c1.pdf", "--out", "c1-anthropic.json"),
+                    transport=transport)
+    assert code == 0
+    assert len(transport.calls) == 1
+    written = json.loads((private_root / "results/c1-anthropic.json").read_text(encoding="utf-8"))
+    assert written["findings"] == [_finding()]
+    assert (private_root / "spend" / arm.DEFAULT_LEDGER).exists()
+
+
+@pytest.mark.parametrize("extra", [
+    ("--source-pdf", "../../etc/passwd", "--out", "x.json"),
+    ("--source-pdf", "c1.pdf", "--out", "../../escape.json"),
+    ("--source-pdf", "c1.pdf", "--out", "x.json", "--ledger", "../escape.jsonl"),
+])
+@pytest.mark.usefixtures("private_root")
+def test_cli_refuses_paths_outside_private_roots(extra):
+    transport = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(ValueError, match="outside the allowed root"):
+        arm.main(_cli_args(*extra), transport=transport)
+    assert transport.calls == []

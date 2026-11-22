@@ -12,8 +12,10 @@ Safety rails:
   checked BEFORE the request is sent; no SDK, no retries;
 * a truncated or tool-less reply is billed but never returned as a result;
 * invalid findings are reported, never silently dropped or repaired;
-* contracts are identified only by alias (C1..C6) and results can only be
-  written OUTSIDE the repository.
+* contracts are identified only by alias (C1..C6);
+* every file path is confined to a fixed root: the taxonomy to this
+  directory; corpus, results and spend register to ``~/c2pro-jv1-private``,
+  outside the repository. No argument or env var can move those roots.
 """
 from __future__ import annotations
 
@@ -53,7 +55,14 @@ from src.analysis.domain.n4_failure_kinds import (  # noqa: E402
 PROMPT_VERSION = "b3-direct-arm-v1"
 RESULT_SCHEMA = "c2pro-jv1-direct-arm-v1"
 TOOL_NAME = "record_contract_findings"
-DEFAULT_TAXONOMY = Path(__file__).resolve().parent / "epc_control_taxonomy.yaml"
+DEFAULT_TAXONOMY = "epc_control_taxonomy.yaml"
+DEFAULT_LEDGER = "b3-spend.jsonl"
+
+TAXONOMY_ROOT = Path(__file__).resolve().parent
+PRIVATE_ROOT = Path.home() / "c2pro-jv1-private"
+CORPUS_ROOT = PRIVATE_ROOT / "corpus"
+RESULTS_ROOT = PRIVATE_ROOT / "results"
+SPEND_ROOT = PRIVATE_ROOT / "spend"
 
 Provider = Literal["anthropic", "openai"]
 _ALIAS = re.compile(r"^C[1-6]$")
@@ -64,6 +73,26 @@ _MICRO = Decimal("0.000001")
 _FINDING_KEYS = (
     N4SharedFinding.__required_keys__ | N4SharedFinding.__optional_keys__
 ) - {"window_ordinal"}
+
+
+def confined_path(raw: str | os.PathLike[str], root: Path) -> Path:
+    """Resolve ``raw`` (relative to ``root``, or absolute) and refuse escapes.
+
+    Symlinks and ``..`` are resolved first, so neither can leave ``root``.
+    """
+    base = os.path.realpath(root)
+    candidate = os.path.realpath(os.path.join(base, os.fspath(raw)))
+    if os.path.commonpath([base, candidate]) != base:
+        raise ValueError(f"path is outside the allowed root {base}")
+    return Path(candidate)
+
+
+def _private_root(root: Path) -> Path:
+    """Private corpus, results and spend never live inside the repository."""
+    resolved = Path(os.path.realpath(root))
+    if resolved.is_relative_to(REPO_ROOT):
+        raise ValueError("private files must stay outside the repository")
+    return resolved
 
 
 class SpendRefused(RuntimeError):
@@ -91,17 +120,29 @@ def epc_control_label(number: int) -> str:
     return f"EPC-{number:02d}"
 
 
-def load_taxonomy(path: Path = DEFAULT_TAXONOMY) -> tuple[EpcControl, ...]:
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    controls = []
-    for raw in data["controles"]:
-        match = _EPC_ID.fullmatch(str(raw["id"]))
-        if not match or raw["dimension"] not in N4_DIMENSIONS:
-            raise ValueError(f"invalid EPC control in taxonomy: {raw.get('id')!r}")
-        controls.append(EpcControl(
-            number=int(match.group(1)), label=str(raw["id"]), tipo=str(raw["tipo"]),
-            critical=bool(raw["critico"]), dimension=str(raw["dimension"]),
-        ))
+def _control(raw: dict[str, Any]) -> EpcControl:
+    match = _EPC_ID.fullmatch(str(raw.get("id")))
+    number = int(match.group(1)) if match else 0
+    if (
+        not 1 <= number <= 20
+        or raw.get("dimension") not in N4_DIMENSIONS
+        or type(raw.get("critico")) is not bool
+        or not str(raw.get("tipo") or "").strip()
+    ):
+        raise ValueError(f"invalid EPC control in taxonomy: {raw.get('id')!r}")
+    return EpcControl(
+        number=number, label=str(raw["id"]), tipo=str(raw["tipo"]),
+        critical=raw["critico"], dimension=str(raw["dimension"]),
+    )
+
+
+def load_taxonomy(
+    name: str | os.PathLike[str] = DEFAULT_TAXONOMY, *, root: Path | None = None,
+) -> tuple[EpcControl, ...]:
+    """Load B1's ``epc_control_taxonomy.yaml`` (confined to ``root``)."""
+    path = confined_path(name, root or TAXONOMY_ROOT)
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    controls = [_control(raw) for raw in data["controles"]]
     if not controls or len({c.number for c in controls}) != len(controls):
         raise ValueError("taxonomy must list unique EPC controls")
     return tuple(controls)
@@ -119,10 +160,12 @@ class DirectArmSource:
     pdf_bytes: bytes = b""
 
     @classmethod
-    def from_pdf(cls, path: Path) -> DirectArmSource:
+    def from_pdf(
+        cls, name: str | os.PathLike[str], *, root: Path | None = None,
+    ) -> DirectArmSource:
         import pymupdf
 
-        data = Path(path).read_bytes()
+        data = confined_path(name, _private_root(root or CORPUS_ROOT)).read_bytes()
         if not data.startswith(b"%PDF"):
             raise ValueError("source is not a PDF")
         with pymupdf.open(stream=data, filetype="pdf") as doc:  # type: ignore[no-untyped-call]
@@ -146,6 +189,19 @@ class DirectArmSource:
         return cls(kind="n2_text", sha256=sha256(text.encode("utf-8")).hexdigest(),
                    page_count=len(page_spans), text="\n".join(parts))
 
+    @classmethod
+    def from_n2_files(
+        cls, text_name: str | os.PathLike[str], spans_name: str | os.PathLike[str],
+        *, root: Path | None = None,
+    ) -> DirectArmSource:
+        """N2 projection (UTF-8) + JSON ``[{page,start_offset,end_offset}]``."""
+        base = _private_root(root or CORPUS_ROOT)
+        text = confined_path(text_name, base).read_text(encoding="utf-8")
+        spans = json.loads(confined_path(spans_name, base).read_text(encoding="utf-8"))
+        return cls.from_n2_text(text, [
+            (int(s["page"]), int(s["start_offset"]), int(s["end_offset"])) for s in spans
+        ])
+
 
 # --- configuration ----------------------------------------------------------
 
@@ -160,7 +216,7 @@ class ModelPrice:
             if not isinstance(value, Decimal) or not value.is_finite() or value <= 0:
                 raise ValueError("an explicit positive model price is required")
 
-    def usd(self, input_tokens: int, output_tokens: int) -> Decimal:
+    def usd(self, input_tokens: int | Decimal, output_tokens: int) -> Decimal:
         return (
             Decimal(input_tokens) * self.input_usd_per_mtok
             + Decimal(output_tokens) * self.output_usd_per_mtok
@@ -332,8 +388,11 @@ def estimate_usd(config: ArmConfig, source: DirectArmSource, body: dict[str, Any
 class JsonlSpendRegister:
     """Append-only spend ledger; event shape compatible with real_ai_governor."""
 
-    def __init__(self, path: Path, *, max_usd: Decimal) -> None:
-        self.path = Path(path)
+    def __init__(
+        self, name: str | os.PathLike[str] = DEFAULT_LEDGER, *, max_usd: Decimal,
+        root: Path | None = None,
+    ) -> None:
+        self.path = confined_path(name, _private_root(root or SPEND_ROOT))
         if self.path.suffix != ".jsonl":
             raise ValueError("spend register must be a .jsonl file")
         if not max_usd.is_finite() or max_usd <= 0:
@@ -412,43 +471,72 @@ def _page_ok(value: Any) -> bool:
     return type(value) is int and value >= 1
 
 
-def _finding_problem(item: Any, controls: set[int]) -> str | None:
-    if not isinstance(item, dict):
-        return "finding is not an object"
+def _shape_problem(item: dict[str, Any], _controls: set[int]) -> str | None:
     unknown = set(item) - _FINDING_KEYS
     if unknown:
         return f"unknown fields: {sorted(unknown)}"
     missing = N4SharedFinding.__required_keys__ - set(item)
-    if missing:
-        return f"missing fields: {sorted(missing)}"
-    for key in ("title", "category", "risk_reason"):
-        if not _text_ok(item[key]):
-            return f"{key} must be non-empty text"
+    return f"missing fields: {sorted(missing)}" if missing else None
+
+
+def _text_problem(item: dict[str, Any], _controls: set[int]) -> str | None:
+    bad = [k for k in ("title", "category", "risk_reason") if not _text_ok(item[k])]
+    return f"{bad[0]} must be non-empty text" if bad else None
+
+
+def _vocabulary_problem(item: dict[str, Any], _controls: set[int]) -> str | None:
     if item["dimension"] not in N4_DIMENSIONS:
         return "dimension outside the six dimensions"
     if item["severity_proposed"] not in N4_SEVERITIES:
         return "severity_proposed outside CRITICAL/HIGH/MEDIUM/LOW"
+    return None
+
+
+def _quote_problem(item: dict[str, Any], _controls: set[int]) -> str | None:
     if not _text_ok(item["source_quote"], N4_SOURCE_QUOTE_MAX_CHARS):
         return f"source_quote must be literal text of 1..{N4_SOURCE_QUOTE_MAX_CHARS} chars"
-    if not (_page_ok(item["page_start"]) and _page_ok(item["page_end"])):
-        return "page_start/page_end are required positive integers"
-    if item["page_end"] < item["page_start"]:
-        return "page_end precedes page_start"
-    if "epc_control_id" in item and (
-        type(item["epc_control_id"]) is not int or item["epc_control_id"] not in controls
-    ):
-        return "epc_control_id is not a taxonomy control"
     quotes = item.get("supporting_quotes", [])
     if not isinstance(quotes, list) or len(quotes) > N4_SUPPORTING_QUOTES_MAX or not all(
         _text_ok(q, N4_SOURCE_QUOTE_MAX_CHARS) for q in quotes
     ):
         return f"supporting_quotes must be at most {N4_SUPPORTING_QUOTES_MAX} literal quotes"
-    for key in ("clause_ref", "impact"):
-        if key in item and not isinstance(item[key], str):
-            return f"{key} must be text"
+    return None
+
+
+def _page_problem(item: dict[str, Any], _controls: set[int]) -> str | None:
+    if not (_page_ok(item["page_start"]) and _page_ok(item["page_end"])):
+        return "page_start/page_end are required positive integers"
+    return "page_end precedes page_start" if item["page_end"] < item["page_start"] else None
+
+
+def _control_problem(item: dict[str, Any], controls: set[int]) -> str | None:
+    control = item.get("epc_control_id")
+    if "epc_control_id" in item and (type(control) is not int or control not in controls):
+        return "epc_control_id is not a taxonomy control"
+    return None
+
+
+def _optional_problem(item: dict[str, Any], _controls: set[int]) -> str | None:
+    bad = [k for k in ("clause_ref", "impact") if k in item and not isinstance(item[k], str)]
+    if bad:
+        return f"{bad[0]} must be text"
     if "quote_omits_figures" in item and not isinstance(item["quote_omits_figures"], bool):
         return "quote_omits_figures must be boolean"
     return None
+
+
+_FINDING_CHECKS = (
+    _shape_problem, _text_problem, _vocabulary_problem, _quote_problem,
+    _page_problem, _control_problem, _optional_problem,
+)
+
+
+def _finding_problem(item: Any, controls: set[int]) -> str | None:
+    if not isinstance(item, dict):
+        return "finding is not an object"
+    return next(
+        (problem for check in _FINDING_CHECKS if (problem := check(item, controls))), None,
+    )
 
 
 def validate_findings(
@@ -471,39 +559,72 @@ class _Reply:
     tool_input: dict[str, Any] | None
     truncated: bool
     input_tokens: int | None
+    billable_input_tokens: Decimal | None
     output_tokens: int | None
     model: str | None
     message_id: str | None
     stop_reason: str | None
 
 
-def _parse_reply(provider: Provider, raw: dict[str, Any]) -> _Reply:
+def _count(value: Any) -> int | None:
+    return value if type(value) is int and value >= 0 else None
+
+
+def _anthropic_reply(raw: dict[str, Any]) -> _Reply:
     usage = raw.get("usage") or {}
-    if provider == "anthropic":
-        stop = raw.get("stop_reason")
-        tool = next((b.get("input") for b in raw.get("content") or []
-                     if b.get("type") == "tool_use" and b.get("name") == TOOL_NAME), None)
-        tokens = (usage.get("input_tokens"), usage.get("output_tokens"))
-        truncated = stop == "max_tokens"
-    else:
-        choice = (raw.get("choices") or [{}])[0]
-        stop = choice.get("finish_reason")
-        tool = None
-        for call in (choice.get("message") or {}).get("tool_calls") or []:
-            function = call.get("function") or {}
-            if function.get("name") == TOOL_NAME:
-                try:
-                    tool = json.loads(function.get("arguments") or "")
-                except json.JSONDecodeError:
-                    tool = None
-        tokens = (usage.get("prompt_tokens"), usage.get("completion_tokens"))
-        truncated = stop == "length"
-    return _Reply(
-        tool_input=tool if isinstance(tool, dict) else None, truncated=truncated,
-        input_tokens=tokens[0] if type(tokens[0]) is int else None,
-        output_tokens=tokens[1] if type(tokens[1]) is int else None,
-        model=raw.get("model"), message_id=raw.get("id"), stop_reason=stop,
+    tool = next((b.get("input") for b in raw.get("content") or []
+                 if b.get("type") == "tool_use" and b.get("name") == TOOL_NAME), None)
+    base, output = _count(usage.get("input_tokens")), _count(usage.get("output_tokens"))
+    # Cache writes cost 1.25x input; cache reads are billed at full input
+    # price here (never discounted): the register must not under-count.
+    created = _count(usage.get("cache_creation_input_tokens")) or 0
+    read = _count(usage.get("cache_read_input_tokens")) or 0
+    total = None if base is None else base + created + read
+    billable = (
+        None if base is None else Decimal(base + read) + Decimal(created) * Decimal("1.25")
     )
+    return _Reply(
+        tool_input=tool if isinstance(tool, dict) else None,
+        truncated=raw.get("stop_reason") == "max_tokens",
+        input_tokens=total,
+        billable_input_tokens=billable,
+        output_tokens=output, model=raw.get("model"), message_id=raw.get("id"),
+        stop_reason=raw.get("stop_reason"),
+    )
+
+
+def _openai_tool_input(message: dict[str, Any]) -> dict[str, Any] | None:
+    for call in message.get("tool_calls") or []:
+        function = call.get("function") or {}
+        if function.get("name") != TOOL_NAME:
+            continue
+        try:
+            parsed = json.loads(function.get("arguments") or "")
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
+def _openai_reply(raw: dict[str, Any]) -> _Reply:
+    usage = raw.get("usage") or {}
+    choice = (raw.get("choices") or [{}])[0]
+    # prompt_tokens already include cached tokens; completion_tokens include
+    # reasoning tokens. Both are billed at the explicit full price.
+    prompt = _count(usage.get("prompt_tokens"))
+    return _Reply(
+        tool_input=_openai_tool_input(choice.get("message") or {}),
+        truncated=choice.get("finish_reason") == "length",
+        input_tokens=prompt,
+        billable_input_tokens=Decimal(prompt) if prompt is not None else None,
+        output_tokens=_count(usage.get("completion_tokens")),
+        model=raw.get("model"), message_id=raw.get("id"),
+        stop_reason=choice.get("finish_reason"),
+    )
+
+
+def _parse_reply(provider: Provider, raw: dict[str, Any]) -> _Reply:
+    return _anthropic_reply(raw) if provider == "anthropic" else _openai_reply(raw)
 
 
 # --- run --------------------------------------------------------------------
@@ -532,9 +653,9 @@ def run_direct_arm(
         register.fail(call_id, provider=config.provider, error=exc)
         raise
     reply = _parse_reply(config.provider, raw)
-    usage_known = reply.input_tokens is not None and reply.output_tokens is not None
+    usage_known = reply.billable_input_tokens is not None and reply.output_tokens is not None
     cost = (
-        config.price.usd(reply.input_tokens or 0, reply.output_tokens or 0)
+        config.price.usd(reply.billable_input_tokens or Decimal(0), reply.output_tokens or 0)
         if usage_known else estimate  # unknown usage is charged at the worst case
     ).quantize(_MICRO)
     register.settle(
@@ -572,11 +693,11 @@ def run_direct_arm(
     }
 
 
-def write_result(result: dict[str, Any], out_path: Path) -> Path:
-    """Results may contain private quotes: never inside the repository."""
-    target = Path(out_path).resolve()
-    if target.is_relative_to(REPO_ROOT):
-        raise ValueError("results must be written outside the repository")
+def write_result(
+    result: dict[str, Any], name: str | os.PathLike[str], *, root: Path | None = None,
+) -> Path:
+    """Results may contain private quotes: only under the private results root."""
+    target = confined_path(name, _private_root(root or RESULTS_ROOT))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return target
@@ -611,54 +732,53 @@ class HttpxTransport:
         return result
 
 
-def _load_page_spans(path: Path) -> list[tuple[int, int, int]]:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    return [(int(s["page"]), int(s["start_offset"]), int(s["end_offset"])) for s in raw]
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=(__doc__ or "B3").splitlines()[0])
     parser.add_argument("--provider", choices=("anthropic", "openai"), required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--price-in", type=Decimal, required=True, help="USD per 1M input tokens")
     parser.add_argument("--price-out", type=Decimal, required=True, help="USD per 1M output tokens")
     parser.add_argument("--contract-alias", required=True, help="C1..C6")
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--source-pdf", type=Path)
-    source.add_argument("--source-n2", type=Path, help="N2 projection text (UTF-8)")
-    parser.add_argument("--page-spans", type=Path,
-                        help="JSON [{page,start_offset,end_offset}] for --source-n2")
-    parser.add_argument("--taxonomy", type=Path, default=DEFAULT_TAXONOMY)
-    parser.add_argument("--ledger", type=Path,
-                        default=os.environ.get("C2PRO_AI_GOVERNOR_LEDGER") or None)
-    parser.add_argument("--max-usd", type=Decimal,
-                        default=os.environ.get("C2PRO_AI_GOVERNOR_MAX_USD") or None)
+    source.add_argument("--source-pdf", help=f"PDF under {CORPUS_ROOT}")
+    source.add_argument("--source-n2", help=f"N2 projection text under {CORPUS_ROOT}")
+    parser.add_argument("--page-spans", help="JSON [{page,start_offset,end_offset}] for --source-n2")
+    parser.add_argument("--taxonomy", default=DEFAULT_TAXONOMY, help="file in evals/journey_v1")
+    parser.add_argument("--ledger", default=DEFAULT_LEDGER, help=f".jsonl under {SPEND_ROOT}")
+    parser.add_argument("--max-usd", type=Decimal, required=True, help="global B3 USD cap")
     parser.add_argument("--max-output-tokens", type=int, default=16_000)
     parser.add_argument("--max-usd-per-call", type=Decimal, default=Decimal("2"))
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--no-temperature", action="store_true",
+                        help="omit temperature (reasoning models)")
+    parser.add_argument("--out", required=True, help=f"result file under {RESULTS_ROOT}")
+    return parser
+
+
+def main(argv: Sequence[str] | None = None, *, transport: Transport | None = None) -> int:
+    parser = _parser()
     args = parser.parse_args(argv)
-    if args.ledger is None or args.max_usd is None:
-        parser.error("--ledger and --max-usd (or the governor env vars) are required")
     if args.source_n2 and not args.page_spans:
         parser.error("--page-spans is required with --source-n2")
+    # Resolve and confine EVERY path before anything is read, paid or written.
+    results_root = _private_root(RESULTS_ROOT)
+    out = confined_path(args.out, results_root)
+    register = JsonlSpendRegister(args.ledger, max_usd=args.max_usd, root=SPEND_ROOT)
+    taxonomy = load_taxonomy(args.taxonomy, root=TAXONOMY_ROOT)
     src = (
-        DirectArmSource.from_pdf(args.source_pdf) if args.source_pdf
-        else DirectArmSource.from_n2_text(
-            args.source_n2.read_text(encoding="utf-8"), _load_page_spans(args.page_spans),
-        )
+        DirectArmSource.from_pdf(args.source_pdf, root=CORPUS_ROOT) if args.source_pdf
+        else DirectArmSource.from_n2_files(args.source_n2, args.page_spans, root=CORPUS_ROOT)
     )
     result = run_direct_arm(
         config=ArmConfig(
             provider=args.provider, model=args.model,
             price=ModelPrice(args.price_in, args.price_out),
             max_output_tokens=args.max_output_tokens, max_usd_per_call=args.max_usd_per_call,
+            temperature=None if args.no_temperature else 0.0,
         ),
-        source=src, taxonomy=load_taxonomy(args.taxonomy),
-        contract_alias=args.contract_alias,
-        register=JsonlSpendRegister(Path(args.ledger), max_usd=Decimal(args.max_usd)),
-        transport=HttpxTransport(),
+        source=src, taxonomy=taxonomy, contract_alias=args.contract_alias,
+        register=register, transport=transport or HttpxTransport(),
     )
-    target = write_result(result, args.out)
+    target = write_result(result, out, root=results_root)
     print(json.dumps({
         "out": str(target), "findings": len(result["findings"]),
         "rejected": len(result["rejected"]), "cost_usd": result["cost_usd"],
