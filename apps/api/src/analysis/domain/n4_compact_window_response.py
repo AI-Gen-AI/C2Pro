@@ -178,7 +178,7 @@ def _numeric_markers(text: str) -> frozenset[str]:
         suffix = cursor
         while suffix < len(text) and text[suffix].isspace():
             suffix += 1
-        following = text[suffix:].lower()
+        following = text[suffix:suffix + 12].lower()
         is_percent = (
             following.startswith("%")
             or following.startswith("percent")
@@ -228,14 +228,8 @@ def _examined_clause_refs(
     return tuple(examined)
 
 
-def parse_n4_window_output(
-    raw: str | dict[str, Any], *, window: N4SourceWindow,
-) -> N4WindowParsed:
-    """Validate every candidate: malformed output is failure, never empty risk.
-
-    JSON truncation, non-array findings, invalid elements and missing
-    examined flag raise an explicit error. No candidate is silently skipped.
-    """
+def _validated_window_payload(raw: str | dict[str, Any]) -> dict[str, Any]:
+    """Decode one complete, typed envelope; never turn truncation into success."""
     if isinstance(raw, str):
         try:
             payload = json.loads(raw)
@@ -245,7 +239,6 @@ def parse_n4_window_output(
         payload = raw
     else:
         raise N4WindowContractError("N4 output must be a JSON object")
-
     if not isinstance(payload, dict):
         raise N4WindowContractError("N4 output must be a JSON object")
     if type(payload.get("window_examined")) is not bool:
@@ -254,126 +247,147 @@ def parse_n4_window_output(
         raise N4WindowContractError("N4 requires explicit findings array")
     external = payload.get("outstanding_references")
     if not isinstance(external, list) or not all(
-        isinstance(x, str) and bool(x.strip()) for x in external
+        isinstance(item, str) and item.strip() for item in external
     ):
         raise N4WindowContractError("N4 requires outstanding_references string array")
-    refs = tuple(x.strip() for x in external)
+    if payload.get("prompt_version") not in (None, N4_WINDOW_PROMPT_VERSION):
+        raise N4WindowContractError("N4 unknown prompt_version")
+    return payload
+
+
+def _category_control(
+    finding: dict[str, Any], *, v2: bool,
+) -> tuple[str, str, str | None]:
+    category = _required_text(finding, "category")
+    dimension = _DIMENSIONS.get(category.lower(), "UNCLASSIFIED")
+    if v2 and dimension == "UNCLASSIFIED":
+        raise N4WindowContractError("N4 v2 requires one of six EPC dimensions")
+    if v2 and "epc_control_id" not in finding:
+        raise N4WindowContractError("N4 v2 requires epc_control_id field")
+    control = _optional_text(finding, "epc_control_id")
+    if control is not None and control not in EPC_CONTROL_DIMENSIONS:
+        raise N4WindowContractError("unknown EPC control identifier")
+    if v2 and control is not None and EPC_CONTROL_DIMENSIONS[control] != dimension:
+        raise N4WindowContractError("EPC control and dimension mismatch")
+    return category, dimension, control
+
+
+def _source_reference(
+    quote: str | None, *, window: N4SourceWindow,
+    clause: str | None = None, primary: bool = False,
+) -> tuple[dict[str, Any], str | None, int | None]:
+    status, start, end = _evidence(quote, window=window)
+    anchored = start is not None and end is not None
+    source_ref: dict[str, Any] = {
+        "document_revision_id": window.revision_id,
+        "source_sha256": window.source_sha256,
+        "source_kind": "MODEL_SAFE_PROJECTION",
+        "analysis_span": [start, end] if anchored else None,
+        "evidence_status": status,
+    }
+    if not anchored:
+        if primary:
+            source_ref["reported_clause_ref"] = clause
+        source_ref["quote_sha256"] = sha256((quote or "").encode("utf-8")).hexdigest()
+    literal = (
+        window.context_text[
+            start - window.context_start:end - window.context_start
+        ] if start is not None and end is not None else None
+    )
+    return source_ref, literal, start
+
+
+def _supporting_references(
+    finding: dict[str, Any], *, window: N4SourceWindow,
+) -> tuple[list[dict[str, Any]], list[str | None]]:
+    quotes = finding.get("supporting_quotes", [])
+    if not isinstance(quotes, list) or len(quotes) > 2:
+        raise N4WindowContractError("N4 accepts at most 2 supporting quotes")
+    if not all(isinstance(quote, str) and quote.strip() for quote in quotes):
+        raise N4WindowContractError("N4 supporting quote must be nonempty text")
+    refs: list[dict[str, Any]] = []
+    literals: list[str | None] = []
+    for quote in quotes:
+        ref, literal, _ = _source_reference(quote, window=window)
+        refs.append(ref)
+        literals.append(literal)
+    return refs, literals
+
+
+def _finding_identity(
+    *, window: N4SourceWindow, category: str, title: str,
+    anchor: int | None, clause: str | None,
+) -> str:
+    identity = {
+        "source_sha256": window.source_sha256,
+        "revision": window.revision_id,
+        "category": category,
+        "title": title,
+        "quote_anchor": anchor,
+        "clause": clause if anchor is None else None,
+        "window": window.ordinal if anchor is None else None,
+    }
+    return sha256(json.dumps(
+        identity, sort_keys=True, ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+
+
+def _candidate_from_finding(
+    finding: dict[str, Any], *, window: N4SourceWindow, v2: bool,
+) -> dict[str, Any]:
+    title = _required_text(finding, "title")
+    reason = _required_text(finding, "risk_reason")
+    category, dimension, control = _category_control(finding, v2=v2)
+    severity = _optional_text(finding, "severity_proposed")
+    if severity is not None and severity not in _SEVERITIES:
+        raise N4WindowContractError("invalid N4 severity_proposed")
+    quote = _optional_text(finding, "source_quote")
+    clause = _optional_text(finding, "clause_ref")
+    impact = _optional_text(finding, "impact")
+    if v2 and quote is not None and len(quote) > 1200:
+        raise N4WindowContractError("N4 v2 source quote exceeds 1200 characters")
+    primary_ref, literal, anchor = _source_reference(
+        quote, window=window, clause=clause, primary=True,
+    )
+    additional_refs, supporting = _supporting_references(finding, window=window)
+    return {
+        "finding_key": _finding_identity(
+            window=window, category=category, title=title,
+            anchor=anchor, clause=clause,
+        ),
+        "source_refs": [primary_ref, *additional_refs],
+        "claim": {
+            "title": title,
+            "category": category,
+            "dimension": dimension,
+            "epc_control_id": control,
+            "severity_proposed": severity,
+            "quote_omits_figures": _quote_omits_figures(reason, literal),
+            "supporting_quotes": supporting,
+            "risk_reason": reason,
+            "clause_ref": clause,
+            "impact": impact,
+            "source_quote": literal,
+            "source_evidence_status": primary_ref["evidence_status"],
+            "review_status": "PROPOSED",
+        },
+    }
+
+
+def parse_n4_window_output(
+    raw: str | dict[str, Any], *, window: N4SourceWindow,
+) -> N4WindowParsed:
+    """Preserve all proposed findings; reject invalid envelopes without skips."""
+    payload = _validated_window_payload(raw)
+    refs = tuple(item.strip() for item in payload["outstanding_references"])
     examined = _examined_clause_refs(payload, window=window)
     v2 = payload.get("prompt_version") == N4_WINDOW_PROMPT_VERSION
     items: list[dict[str, Any]] = []
     for ordinal, finding in enumerate(payload["findings"]):
         if not isinstance(finding, dict):
             raise N4WindowContractError(f"N4 finding #{ordinal} is not an object")
-        title = _required_text(finding, "title")
-        reason = _required_text(finding, "risk_reason")
-        category = _required_text(finding, "category")
-        if v2 and _DIMENSIONS.get(category.lower(), "UNCLASSIFIED") == "UNCLASSIFIED":
-            raise N4WindowContractError("N4 v2 requires one of six EPC dimensions")
-        if v2 and "epc_control_id" not in finding:
-            raise N4WindowContractError("N4 v2 requires epc_control_id field")
-        epc_control_id = _optional_text(finding, "epc_control_id")
-        if epc_control_id is not None and epc_control_id not in EPC_CONTROL_DIMENSIONS:
-            raise N4WindowContractError("unknown EPC control identifier")
-        if (v2 and epc_control_id is not None
-                and EPC_CONTROL_DIMENSIONS[epc_control_id]
-                != _DIMENSIONS.get(category.lower(), "UNCLASSIFIED")):
-            raise N4WindowContractError("EPC control and dimension mismatch")
-        severity = _optional_text(finding, "severity_proposed")
-        if severity is not None and severity not in _SEVERITIES:
-            raise N4WindowContractError("invalid N4 severity_proposed")
-        supporting = finding.get("supporting_quotes", [])
-        if (not isinstance(supporting, list) or len(supporting) > 2
-                or not all(isinstance(x, str) and x.strip() for x in supporting)):
-            raise N4WindowContractError("N4 accepts at most 2 supporting quotes")
-        quote = _optional_text(finding, "source_quote")
-        clause = _optional_text(finding, "clause_ref")
-        impact = _optional_text(finding, "impact")
-        if v2 and quote is not None and len(quote) > 1200:
-            raise N4WindowContractError("N4 v2 source quote exceeds 1200 characters")
-        status, absolute_start, absolute_end = _evidence(quote, window=window)
-        literal_quote = (
-            window.context_text[
-                absolute_start - window.context_start:
-                absolute_end - window.context_start
-            ] if absolute_start is not None and absolute_end is not None else None
-        )
-
-        if status == "EXACT_MODEL_SAFE_MATCH":
-            # Only a literal span in the N2 projection counts as sourced.
-            refs_for_finding = [{
-                "document_revision_id": window.revision_id,
-                "source_sha256": window.source_sha256,
-                "source_kind": "MODEL_SAFE_PROJECTION",
-                "analysis_span": [absolute_start, absolute_end],
-                "evidence_status": status,
-            }]
-        else:
-            # Preserve an unverified risk hypothesis without presenting the
-            # hallucinated text as a literal quotation. Never discard it.
-            refs_for_finding = [{
-                "document_revision_id": window.revision_id,
-                "source_sha256": window.source_sha256,
-                "source_kind": "MODEL_SAFE_PROJECTION",
-                "analysis_span": None,
-                "evidence_status": status,
-                "reported_clause_ref": clause,
-                "quote_sha256": sha256((quote or "").encode()).hexdigest(),
-            }]
-
-        literal_supporting: list[str | None] = []
-        for supporting_quote in supporting:
-            sstatus, sstart, send = _evidence(supporting_quote, window=window)
-            verified = sstart is not None and send is not None
-            literal_supporting.append(
-                window.context_text[
-                    sstart - window.context_start:send - window.context_start
-                ] if sstart is not None and send is not None else None
-            )
-            supporting_ref: dict[str, Any] = {
-                "document_revision_id": window.revision_id,
-                "source_sha256": window.source_sha256,
-                "source_kind": "MODEL_SAFE_PROJECTION",
-                "analysis_span": [sstart, send] if verified else None,
-                "evidence_status": sstatus,
-            }
-            if not verified:
-                supporting_ref["quote_sha256"] = sha256(
-                    supporting_quote.encode("utf-8"),
-                ).hexdigest()
-            refs_for_finding.append(supporting_ref)
-
-        identity = {
-            "source_sha256": window.source_sha256,
-            "revision": window.revision_id,
-            "category": category,
-            "title": title,
-            "quote_anchor": absolute_start,
-            "clause": clause if absolute_start is None else None,
-            "window": window.ordinal if absolute_start is None else None,
-        }
-        key = sha256(json.dumps(
-            identity, sort_keys=True, ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")).hexdigest()
-        items.append({
-            "finding_key": key,
-            "source_refs": refs_for_finding,
-            "claim": {
-                "title": title,
-                "category": category,
-                "dimension": _DIMENSIONS.get(category.lower(), "UNCLASSIFIED"),
-                "epc_control_id": epc_control_id,
-                "severity_proposed": severity,
-                "quote_omits_figures": _quote_omits_figures(reason, literal_quote),
-                "supporting_quotes": literal_supporting,
-                "risk_reason": reason,
-                "clause_ref": clause,
-                "impact": impact,
-                "source_quote": literal_quote,
-                "source_evidence_status": status,
-                "review_status": "PROPOSED",
-            },
-        })
+        items.append(_candidate_from_finding(finding, window=window, v2=v2))
     return N4WindowParsed(
         window_ordinal=window.ordinal,
         reported_examined=payload["window_examined"],
@@ -381,8 +395,7 @@ def parse_n4_window_output(
         outstanding_references=refs,
         examined_clauses=examined,
         source_coverage_state=(
-            "EXAMINED_INPUT"
-            if payload["window_examined"] and not refs
+            "EXAMINED_INPUT" if payload["window_examined"] and not refs
             else "PARTIAL_OR_PENDING_REFERENCES"
         ),
     )
