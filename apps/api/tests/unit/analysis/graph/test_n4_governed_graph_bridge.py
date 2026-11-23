@@ -632,3 +632,56 @@ def test_a7_coverage_accepts_contiguous_complete_ledger():
     assert coverage["status"] == N4CoverageStatus.COMPLETE.value
     assert coverage["total_windows"] == 3
     assert coverage["examined_windows"] == 3
+
+
+@pytest.mark.asyncio
+async def test_a7_complete_outcome_must_reconcile_durable_window_snapshot(monkeypatch):
+    """Even a COMPLETE runner receipt cannot hide an absent persisted window."""
+    from types import SimpleNamespace
+
+    authority = SimpleNamespace(tenant_id=uuid4(), revision_id=uuid4())
+    run_id = uuid4()
+    monkeypatch.setenv("C2PRO_N4_GRAPH_LEDGER_ENABLED", "1")
+    monkeypatch.setenv("C2PRO_N4_GRAPH_PRIMARY_PROVIDER", "anthropic")
+    monkeypatch.delenv("C2PRO_AI_MOCK", raising=False)
+    monkeypatch.setattr(
+        bridge, "_identity",
+        lambda _state: (authority, uuid4(), "synthetic source text"),
+    )
+    monkeypatch.setattr(bridge, "_limits", lambda: (1, 0.04, 1000, 50))
+    monkeypatch.setattr(bridge, "_uat_inherited_scopes", lambda _: False)
+    monkeypatch.setattr(bridge, "AnthropicWrapper", lambda **_: object())
+    monkeypatch.setattr(bridge, "AnthropicN4WindowProvider", lambda **_: object())
+
+    class FakeRunner:
+        async def run(self, **_):
+            return N4RunOutcome(
+                run_id=run_id,
+                status="COMPLETE",
+                total_windows=3,
+                examined_windows=3,
+                persisted_result_windows=3,
+                settled_receipt_windows=3,
+            )
+
+    async def incomplete_snapshot(_tenant_id, _run_id):
+        return [_win(0, "EXAMINED"), _win(2, "EXAMINED")], []
+
+    sql_factory_calls = 0
+
+    def invalid_sql_read():
+        nonlocal sql_factory_calls
+        sql_factory_calls += 1
+        if sql_factory_calls > 1:
+            raise AssertionError("candidate query occurred before ledger validation")
+        return object()  # the fake runner never uses its injected session factory
+
+    monkeypatch.setattr(bridge, "N4IncrementalRunner", lambda **_: FakeRunner())
+    monkeypatch.setattr(bridge, "_load_run_ledger", incomplete_snapshot)
+    monkeypatch.setattr(bridge, "get_session_factory", invalid_sql_read)
+
+    with pytest.raises(bridge.N4RunIncomplete):
+        await bridge.run_governed_n4_in_graph({
+            "document_text": "synthetic source text",
+            "anonymized_text": "synthetic source text",
+        })
