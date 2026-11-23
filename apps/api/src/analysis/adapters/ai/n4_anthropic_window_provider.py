@@ -102,16 +102,14 @@ def _v2_provider_response(raw: str, raw_response: object) -> str:
     blocks = getattr(raw_response, "content", None)
     if not isinstance(blocks, (list, tuple)):
         return _INVALID_TOOL_RESPONSE
-    tools = [b for b in blocks if getattr(b, "type", None) == "tool_use"]
-    if len(tools) != 1 or getattr(tools[0], "name", None) != "record_window_findings":
+    # One and only one forced tool block: empty text/unknown blocks are not
+    # proof of a valid tool response and must not be silently ignored.
+    if len(blocks) != 1 or getattr(blocks[0], "type", None) != "tool_use":
         return _INVALID_TOOL_RESPONSE
-    if any(
-        getattr(b, "type", None) != "tool_use"
-        and bool(getattr(b, "text", "").strip())
-        for b in blocks
-    ):
+    tool_block = blocks[0]
+    if getattr(tool_block, "name", None) != "record_window_findings":
         return _INVALID_TOOL_RESPONSE
-    tool_input = getattr(tools[0], "input", None)
+    tool_input = getattr(tool_block, "input", None)
     if not isinstance(tool_input, dict):
         return _INVALID_TOOL_RESPONSE
     try:
