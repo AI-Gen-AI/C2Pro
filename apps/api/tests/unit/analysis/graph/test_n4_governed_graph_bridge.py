@@ -726,8 +726,7 @@ def _a11_a9_fixture():
          "end_offset": rows[1]["end_offset"]},
         {"page": 2, "start_offset": rows[2]["start_offset"],
          "end_offset": rows[2]["end_offset"]},
-        {"page": 4, "start_offset": rows[4]["start_offset"],
-         "end_offset": rows[4]["end_offset"]},
+
     ]
     common = {
         "revision_id": state["document_revision_id"],
@@ -749,7 +748,10 @@ def _a11_a9_fixture():
         **common, "schema_version": "a11-a9-physical-page-map-v1",
         "source_kind": "PDF_PHYSICAL_PAGE_OBSERVATION",
         "status": "PARTIAL", "spans": grouped,
-        "excluded_pages": [{"page": 3, "reason": "OCR_FAILED"}],
+        "excluded_pages": [
+            {"page": 3, "reason": "OCR_FAILED"},
+            {"page": 4, "reason": "OCR_REPLACED_SUSPECT"},
+        ],
         "original_document_completeness_certified": False,
     }
     return state, rows
@@ -907,3 +909,52 @@ def test_a7_source_ref_hint_must_match_exact_quote_before_disambiguation(monkeyp
     refs[0]["analysis_span"] = [second, len(source)]
     bridge._candidate_payload(claim, refs, source, page_spans=spans)
     assert candidates[-1] == second
+
+
+
+def test_new_a11_suspect_exclusion_does_not_poison_valid_pages():
+    """A11 8711b973 excludes p4 from its A9 spans but keeps p4 in raw lineage."""
+    state, raw_blocks = _a11_a9_fixture()
+    map_a9 = state["n4_source_identity"]["a9_physical_page_map"]
+    # A11 new safe projection excludes OCR_REPLACED_SUSPECT, not just OCR_FAILED.
+    assert {row["page"] for row in map_a9["spans"]} == {1, 2}
+    assert map_a9["excluded_pages"] == [
+        {"page": 3, "reason": "OCR_FAILED"},
+        {"page": 4, "reason": "OCR_REPLACED_SUSPECT"},
+    ]
+
+    spans, map_claimed = bridge._a11_a9_page_map(state)
+    assert map_claimed is True
+    assert [span.page for span in spans] == [1, 2]
+    assert raw_blocks[-1]["page"] == 4  # never delete suspect OCR from audit
+    assert state["n4_source_identity"]["physical_page_lineage"]["pages"][-1] == {
+        "page": 4, "status": "OCR_REPLACED_SUSPECT",
+    }
+    claim, refs = _claim_refs("The contractor shall notify the owner.")
+    valid_p1 = bridge._candidate_payload(
+        claim, refs, state["document_text"], page_spans=spans,
+        map_claimed=map_claimed,
+    )
+    assert valid_p1["page_verification_status"] != "PAGE_UNVERIFIED_NO_PAGE_MAP"
+    # Suspect OCR is never citable even when the same physical map is valid.
+    bad_quote = "Replaced suspect OCR words."
+    claim2, refs2 = _claim_refs(bad_quote)
+    rejected_p4 = bridge._candidate_payload(
+        claim2, refs2, state["document_text"], page_spans=spans,
+        map_claimed=map_claimed,
+    )
+    assert rejected_p4["page_verification_status"] == "PAGE_UNRESOLVED"
+    assert rejected_p4["page_number"] is None
+    assert rejected_p4["source_quote"] is None
+
+
+def test_new_a11_suspect_page_forged_into_spans_is_rejected():
+    state, raw_blocks = _a11_a9_fixture()
+    mapping = state["n4_source_identity"]["a9_physical_page_map"]
+    # Attack: move the unsafe page back into the signed consumer projection.
+    mapping["spans"].append({
+        "page": 4,
+        "start_offset": raw_blocks[-1]["start_offset"],
+        "end_offset": raw_blocks[-1]["end_offset"],
+    })
+    assert bridge._a11_a9_page_map(state) == ([], True)
