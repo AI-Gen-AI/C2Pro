@@ -147,6 +147,20 @@ function hasVerifiedLiteralSource(finding: ReviewFindingResponse): boolean {
     finding.risk.source_quote.trim().length > 0;
 }
 
+/** A historical reviewer decision is not proof of current source integrity.
+ * Never present a stale CONFIRMED as eligible for a separate final decision.
+ * This is only the *UI* predicate: the backend remains the final authority.
+ */
+function isSourceEligibleConfirmation(
+  view: ReviewFindingsResponse,
+  finding: ReviewFindingResponse,
+  scope: { orgId: string | null | undefined; userId: string | null | undefined; reviewRowId: string },
+): boolean {
+  return finding.current?.action === "CONFIRMED" &&
+    sourceComparisonIdentity(view, finding, scope) !== null &&
+    hasVerifiedLiteralSource(finding);
+}
+
 function newKey(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
@@ -322,9 +336,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     query.data &&
     query.data.findings.length > 0 &&
     query.data.findings.every((finding) =>
-      finding.current?.action === "CONFIRMED" &&
-      sourceComparisonIdentity(query.data, finding, { orgId, userId, reviewRowId }) !== null &&
-      hasVerifiedLiteralSource(finding),
+      isSourceEligibleConfirmation(query.data, finding, { orgId, userId, reviewRowId }),
     ),
   );
   useEffect(() => {
@@ -351,6 +363,12 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
   const groupedFindings = [...view.findings].sort((a, b) =>
     findingBusinessArea(a).localeCompare(findingBusinessArea(b)) || a.ordinal - b.ordinal,
   );
+  const recordedConfirmations = view.findings.filter(
+    (finding) => finding.current?.action === "CONFIRMED",
+  ).length;
+  const sourceEligibleConfirmations = view.findings.filter(
+    (finding) => isSourceEligibleConfirmation(view, finding, { orgId, userId, reviewRowId }),
+  ).length;
 
   return (
     <section
@@ -366,8 +384,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         separate final Approve all / Reject decision at the bottom. Approving a finding does not mean accepting the project risk.
       </p>
       <p className="mt-2 text-xs font-medium" role="status" data-testid={`review-findings-progress-${reviewRowId}`}>
-        {view.findings.filter((finding) => finding.current?.action === "CONFIRMED").length}/{view.findings.length} findings approved individually.
-        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked: each finding must be confirmed with a complete source identity and a VERIFIED literal quotation; rejected findings require a corrected candidate."}
+        {recordedConfirmations}/{view.findings.length} reviewer confirmations recorded.
+        {" "}{sourceEligibleConfirmations}/{view.findings.length} presently source-eligible; original PDF/page not independently verified.
+        {readyForFinalApproval ? " Eligible for separate final-approval checks, not a certification of the original source." : " Final approval remains blocked: each finding needs a current source identity and a VERIFIED literal quotation; rejected findings require a corrected candidate."}
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
@@ -424,7 +443,11 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                 {finding.risk.severity ? <Badge variant="outline">{String(finding.risk.severity)}</Badge> : null}
                 {finding.current ? (
                   <Badge data-testid={`finding-current-${finding.ordinal}`}>
-                    {RECORDED_LABEL[finding.current.action]} (provisional)
+                    {finding.current.action === "CONFIRMED"
+                      ? isSourceEligibleConfirmation(view, finding, { orgId, userId, reviewRowId })
+                        ? "Reviewer confirmation recorded (provisional; original PDF/page unverified)"
+                        : "Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)"
+                      : `${RECORDED_LABEL[finding.current.action]} (provisional)`}
                   </Badge>
                 ) : (
                   <Badge variant="outline" data-testid={`finding-current-${finding.ordinal}`}>

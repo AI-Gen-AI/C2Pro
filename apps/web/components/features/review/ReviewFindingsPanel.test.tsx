@@ -810,9 +810,38 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     const onReady = vi.fn();
     list.mockResolvedValue(complete(badPin));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-0")).toHaveTextContent("Confirmed (provisional)");
-    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-0")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes recorded approvals from presently source-eligible findings when evidence is incomplete", async () => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(complete({
+      findings: [
+        previouslyConfirmed(0),
+        previouslyConfirmed(1, {
+          risk: {
+            title: "Risk 1", description: "Unverified historical AI interpretation",
+            source_quote_status: "UNVERIFIED", source_quote: "Untrusted text", page_number: 12,
+          },
+        }),
+      ],
+    }));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent(
+      "Reviewer confirmation recorded (provisional; original PDF/page unverified)",
+    );
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent(
+      "Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)",
+    );
+    const summary = screen.getByTestId(`review-findings-progress-${ROW}`);
+    expect(summary).toHaveTextContent("2/2 reviewer confirmations recorded");
+    expect(summary).toHaveTextContent("1/2 presently source-eligible");
+    expect(screen.getByTestId("finding-original-location-1")).toHaveTextContent(/not independently verified/i);
+    expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
     expect(record).not.toHaveBeenCalled();
   });
@@ -829,7 +858,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
       ],
     }));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-1")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
     expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
@@ -839,7 +868,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
   it("allows readiness with nonempty VERIFIED quotations, complete pins and individually CONFIRMED findings", async () => {
     const onReady = vi.fn();
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Reviewer confirmation recorded (provisional; original PDF/page unverified)");
     expect(screen.getByTestId("finding-quote-1")).toHaveTextContent("Contract clause 1");
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
     expect(record).not.toHaveBeenCalled();
@@ -904,8 +933,8 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     list.mockResolvedValue(complete(invalid));
     renderPanel(onReady);
     await screen.findByTestId("finding-0");
-    expect(screen.getByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
-    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId("finding-current-0")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
     expect(screen.getByTestId("finding-action-0-NEEDS_INFO")).toBeEnabled();
@@ -954,7 +983,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     const onReady = vi.fn();
     list.mockResolvedValue(complete(good));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Reviewer confirmation recorded (provisional; original PDF/page unverified)");
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
     expect(record).not.toHaveBeenCalled();
   });
@@ -983,7 +1012,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
       })],
     }));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Reviewer confirmation recorded (provisional; original PDF/page unverified)");
     expect(screen.getByTestId("finding-current-1")).toHaveTextContent("No decision yet");
     expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
     expect(screen.getByTestId("finding-action-1-NEEDS_INFO")).toBeEnabled();
