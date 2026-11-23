@@ -170,7 +170,7 @@ def test_confined_path_symmetric_parentheses_rejected():
 # Tests de salida CLI --out (JV1-B3 confinamiento)
 # ──────────────────────────────────────────────────────────────────
 def test_cli_out_outside_repo_succeeds():
-    """--out con ruta fuera del reposorio debe exitoar y escribir archivo real."""
+    """--out debe crear un fichero nuevo, privado y fuera del repositorio."""
     import subprocess
     import tempfile
     from pathlib import Path
@@ -179,31 +179,41 @@ def test_cli_out_outside_repo_succeeds():
     # Derivar REPO_ROOT de forma autocontenida, sin rutas VPS fijas
     REPO_ROOT = Path(__file__).resolve().parents[5]
     # Usar tmp_path de pytest para ruta portable fuera del repo
-    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
-        tmp_path = tmp.name
-    try:
+    with tempfile.TemporaryDirectory(prefix="jv1-b0-cli-") as outside_dir:
+        output = Path(outside_dir) / "b0-export.json"
+        assert output.is_absolute()
+        assert not output.is_relative_to(REPO_ROOT)
+        assert not output.exists()
+        args = [
+            sys.executable,
+            "-m",
+            "apps.api.scripts.journey_v1_n2_export",
+            "--text",
+            "Texto de prueba de salida confinada.",
+            "--out",
+            str(output),
+        ]
         result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "apps.api.scripts.journey_v1_n2_export",
-                "--text",
-                "Texto de prueba de salida confinada.",
-                "--out",
-                tmp_path,
-            ],
-            capture_output=True,
-            text=True,
-            cwd=REPO_ROOT,
+            args, capture_output=True, text=True, cwd=REPO_ROOT,
         )
-        assert result.returncode == 0, f"Expected success, got: {result.stderr}"
-        # Verificar que el archivo fue creado fuera del reposorio
-        assert Path(tmp_path).exists(), "Output file should exist"
-        content = Path(tmp_path).read_text(encoding="utf-8")
-        assert "sha256" in content
+        assert result.returncode == 0, result.stderr
+        assert output.exists()
+        assert (output.stat().st_mode & 0o777) == 0o600
+        content = output.read_text(encoding="utf-8")
+        assert '"sha256"' in content
         assert "Texto de prueba de salida confinada." in content
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+
+        # No sobrescribir datos existentes ni reabrir sus permisos.
+        retry_args = args.copy()
+        retry_args[retry_args.index("Texto de prueba de salida confinada.")] = (
+            "Contenido distinto que no debe reemplazar el original."
+        )
+        retry = subprocess.run(
+            retry_args, capture_output=True, text=True, cwd=REPO_ROOT,
+        )
+        assert retry.returncode != 0
+        assert "cannot create private output file" in retry.stderr
+        assert output.read_text(encoding="utf-8") == content
 
 
 def test_cli_out_inside_repo_rejected():

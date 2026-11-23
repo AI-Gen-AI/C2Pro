@@ -236,12 +236,16 @@ def main() -> int:
             if out_file_resolved != out_path and not str(out_path).startswith(str(REPO_ROOT)):
                 print("ERROR: symlink traversal detected", file=sys.stderr)
                 return 1
-            # Escribir archivo de salida (fail-closed con contexto)
+            # Escribir archivo de salida (NO_OVERWRITE + 0600 + fail-closed)
+            # O_EXCL: falla si el archivo ya existe; O_NOFOLLOW: evita symlinks
+            # getattr(os, "O_NOFOLLOW", 0) para compatibilidad multiplataforma
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
             try:
-                with open(out_path, 'w', encoding='utf-8') as f:
+                fd = os.open(out_path, flags, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(output_json + "\n")
             except OSError as e:
-                print(f"ERROR: cannot open output file: {e}", file=sys.stderr)
+                print(f"ERROR: cannot create private output file: {e}", file=sys.stderr)
                 return 1
         else:
             # Rutas relativas: error — debe ser absoluta y fuera del repo
