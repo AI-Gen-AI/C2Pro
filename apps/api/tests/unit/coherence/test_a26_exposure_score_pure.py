@@ -210,7 +210,11 @@ def test_invalid_or_unlocated_fact_fails_closed(cfg, bad):
 @pytest.mark.parametrize(
     "bad",
     [
-        {"dimension_weights": dict.fromkeys(("SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL"), 1)},
+        {
+            "dimension_weights": dict.fromkeys(
+                ("SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL"), 1
+            )
+        },
         {"severity": {"LOW": 0.1, "MEDIUM": 0.4, "HIGH": 0.2, "CRITICAL": 0.6}},
         {"severity": {"LOW": 0.1, "MEDIUM": 0.2, "HIGH": 0.3}},
         {"materiality_scale": nan},
@@ -225,13 +229,25 @@ def test_verified_mitigation_at_zero_and_full_boundary(cfg):
     confirmed = fact(state="CONFIRMED")
     base = calculate_exposure_score([confirmed], cfg)
     no_discount = calculate_exposure_score(
-        [replace(confirmed, mitigation_fraction=0.0, mitigation_verified=True,
-                 mitigation_evidence_id="synthetic-verification")],
+        [
+            replace(
+                confirmed,
+                mitigation_fraction=0.0,
+                mitigation_verified=True,
+                mitigation_evidence_id="synthetic-verification",
+            )
+        ],
         cfg,
     )
     full_discount = calculate_exposure_score(
-        [replace(confirmed, mitigation_fraction=1.0, mitigation_verified=True,
-                 mitigation_evidence_id="synthetic-verification")],
+        [
+            replace(
+                confirmed,
+                mitigation_fraction=1.0,
+                mitigation_verified=True,
+                mitigation_evidence_id="synthetic-verification",
+            )
+        ],
         cfg,
     )
     assert no_discount == base
@@ -254,3 +270,57 @@ def test_rejected_and_pending_to_confirmed_transition(cfg):
     assert dismissed.global_score.validated is None
     assert dismissed.global_score.projected is None
     assert dismissed.pending_fact_count == 0
+
+
+@pytest.mark.parametrize("dimension", ("SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL"))
+def test_matrix_six_dimensions_individually_evaluable(cfg, dimension):
+    item = fact(dimension=dimension, state="CONFIRMED")
+    observed = calculate_exposure_score([item], cfg)
+    assert observed.dimensions[dimension].validated == observed.dimensions[dimension].projected
+    assert observed.dimensions[dimension].validated is not None
+    assert observed.validated_fact_count == 1
+    assert observed.pending_fact_count == 0
+    for other in {"SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL"} - {dimension}:
+        assert observed.dimensions[other].validated is None
+        assert observed.dimensions[other].projected is None
+
+
+def test_matrix_typed_key_is_dimension_scoped(cfg):
+    budget = fact(state="CONFIRMED", dimension="BUDGET")
+    legal = replace(budget, dimension="LEGAL", evidence_id="synthetic-legal-evidence")
+    scored = calculate_exposure_score([budget, legal], cfg)
+    assert scored.validated_fact_count == 2
+    assert scored.pending_fact_count == 0
+    assert scored.dimensions["BUDGET"].validated is not None
+    assert scored.dimensions["LEGAL"].validated is not None
+
+
+def test_matrix_pending_acceptance_is_not_confirmation(cfg):
+    pending = fact(state="PENDING")
+    accepted = replace(pending, accepted_risk=True)
+    assert calculate_exposure_score([pending], cfg) == calculate_exposure_score([accepted], cfg)
+    assert calculate_exposure_score([accepted], cfg).global_score.validated is None
+
+
+def test_matrix_all_rejected_stays_null(cfg):
+    dismissed = [
+        fact(canonical_key=f"dismissed-{dim}", dimension=dim, state="REJECTED")
+        for dim in ("SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL")
+    ]
+    observed = calculate_exposure_score(dismissed, cfg)
+    assert observed.validated_fact_count == 0
+    assert observed.pending_fact_count == 0
+    assert observed.global_score.validated is None
+    assert observed.global_score.projected is None
+    assert all(item.validated is None for item in observed.dimensions.values())
+    assert all(item.projected is None for item in observed.dimensions.values())
+
+
+@pytest.mark.parametrize("state", ("PENDING", "CONFIRMED"))
+def test_matrix_duplicate_rejected_permutation_is_deterministic(cfg, state):
+    current = fact(state=state, severity="MEDIUM")
+    duplicate = replace(current, evidence_id="synthetic-second-source")
+    dismissed = replace(current, state="REJECTED", evidence_id="synthetic-dismissal")
+    expected = calculate_exposure_score([current], cfg)
+    assert calculate_exposure_score([dismissed, duplicate, current], cfg) == expected
+    assert calculate_exposure_score([current, duplicate, dismissed], cfg) == expected
