@@ -172,9 +172,10 @@ def test_confined_path_symmetric_parentheses_rejected():
 def test_cli_out_outside_repo_succeeds():
     """--out con ruta fuera del reposorio debe exitoar y escribir archivo real."""
     import subprocess
-    import sys
     import tempfile
     from pathlib import Path
+    # Infer repo root desde __file__ para portabilidad en CI (igual que linea 18)
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
     # Usar tmp_path de pytest para ruta portable fuera del repo
     with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
         tmp_path = tmp.name
@@ -205,8 +206,8 @@ def test_cli_out_outside_repo_succeeds():
 def test_cli_out_inside_repo_rejected():
     """--out con ruta dentro del reposorio debe ser rechazado (fail-closed)."""
     import subprocess
-    import sys
-    # Usar ruta relativa evals/journey_v1/export_test.json relative al repo root
+    # Infer repo root desde __file__ para portabilidad CI
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
     # No especificar cwd: el test runner determinará el directorio actual
     result = subprocess.run(
         [
@@ -228,7 +229,8 @@ def test_cli_out_inside_repo_rejected():
 def test_cli_out_no_out_uses_stdout():
     """Sin --out, debe usar stdout (comportamiento por defecto)."""
     import subprocess
-    import sys
+    # Infer repo root desde __file__ para portabilidad CI
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
     result = subprocess.run(
         [
             sys.executable,
