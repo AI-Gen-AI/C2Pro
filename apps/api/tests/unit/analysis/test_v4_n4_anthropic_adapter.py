@@ -72,9 +72,65 @@ def test_adapter_refuses_hidden_retries_or_caches(kwargs):
         AnthropicN4WindowProvider(wrapper=_FakeWrapper(**kwargs))
 
 
-@pytest.mark.parametrize("max_output", [1, 255, 4097, 10000])
+@pytest.mark.parametrize("max_output", [1, 255, 16385, 20000])
 def test_excessive_or_inadequate_output_caps_rejected(max_output):
     with pytest.raises(ValueError):
         AnthropicN4WindowProvider(
             wrapper=_FakeWrapper(), max_output_tokens=max_output,
         )
+
+
+
+@pytest.mark.asyncio
+async def test_v2_forced_tool_and_versioned_clause_inventory_without_network():
+    from src.analysis.domain.n4_compact_window_response import (
+        N4_WINDOW_PROMPT_VERSION,
+    )
+    wrapper = _FakeWrapper()
+    provider = AnthropicN4WindowProvider(wrapper=wrapper)
+    w = plan_n4_source_windows(
+        "SECTION 1 Payment terms\n"
+        "1.1 The contractor shall provide a performance guarantee.\n"
+        "SECCIÓN 2 Plazos\n"
+        "2.1 La entrega deberá ser puntual.\n"
+        "SEÇÃO 3 Condições\n"
+        "3.1 O pagamento deverá ocorrer após aceitação.\n",
+        revision_id="synthetic-no-private-data",
+    )[0]
+    await provider.generate(
+        window=w, tenant_id=uuid4(), request_id="a5-attempt-1", attempt=1,
+    )
+    await provider.generate(
+        window=w, tenant_id=uuid4(), request_id="a5-attempt-2", attempt=2,
+    )
+    first, second = wrapper.calls
+    assert provider.prompt_version == N4_WINDOW_PROMPT_VERSION
+    assert first.max_tokens == 8192
+    assert second.max_tokens == 16384
+    assert first.tool_choice == {"type": "tool", "name": "record_window_findings"}
+    assert first.tools[0]["name"] == "record_window_findings"
+    required = first.tools[0]["input_schema"]["required"]
+    assert "examined_clauses" in required and "findings" in required
+    assert first.metadata["prompt_version"] == N4_WINDOW_PROMPT_VERSION
+    assert first.metadata["inventory_clause_count"] >= 3
+    assert "SECCIÓN 2" in first.prompt and "SEÇÃO 3" in first.prompt
+    assert first.prompt.find("BEGIN UNTRUSTED SOURCE WINDOW") >= 0
+
+
+@pytest.mark.asyncio
+async def test_v2_provider_does_not_fabricate_missing_clause_examination():
+    from src.analysis.domain.n4_compact_window_response import (
+        N4WindowContractError,
+        parse_n4_window_output,
+    )
+    wrapper = _FakeWrapper()  # its mock has no examined_clauses
+    provider = AnthropicN4WindowProvider(wrapper=wrapper)
+    w = plan_n4_source_windows(
+        "9.6 The contractor shall provide insurance.",
+        revision_id="synthetic-revision",
+    )[0]
+    response = await provider.generate(
+        window=w, tenant_id=uuid4(), request_id="a5-missing-clauses",
+    )
+    with pytest.raises(N4WindowContractError, match="examined_clauses"):
+        parse_n4_window_output(response.content, window=w)
