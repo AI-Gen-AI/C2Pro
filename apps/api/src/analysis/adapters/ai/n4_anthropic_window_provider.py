@@ -29,7 +29,6 @@ from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
 from src.core.ai.direct_provider_fallback import approved_routes
 from src.core.ai.model_router import AITaskType, ModelTier
 
-
 _N4_TOOL = {
     "name": "record_window_findings",
     "description": "Record all candidates and every examined clause.",
