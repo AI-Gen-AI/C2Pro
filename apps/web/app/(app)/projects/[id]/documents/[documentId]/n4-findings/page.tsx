@@ -116,6 +116,7 @@ export default function N4FindingsPage() {
 
   const blocked = data?.coverage?.blocked ?? 0;
   const gaps = data?.coverage?.windows.filter((window) =>
+    window.status === "BLOCKED" || !window.has_result ||
     Boolean(window.blocked_reason || window.unresolved_refs.length > 0),
   ) ?? [];
 
@@ -155,7 +156,8 @@ export default function N4FindingsPage() {
                 <h2 className="font-medium">Sections requiring attention</h2>
                 {gaps.map((window) => (
                   <p key={window.ordinal} className="text-sm" data-testid="n4-unresolved">
-                    Section {window.ordinal + 1}: {window.blocked_reason ? "Analysis blocked" : "Reference pending"}.
+                    Section {window.ordinal + 1}: {window.status === "BLOCKED" || window.blocked_reason
+                      ? "Analysis blocked" : !window.has_result ? "Result missing" : "Reference pending"}.
                     {" "}{window.unresolved_refs.join("; ") || "Details not available"}.
                   </p>
                 ))}

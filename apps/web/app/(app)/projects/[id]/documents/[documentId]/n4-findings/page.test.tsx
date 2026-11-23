@@ -73,6 +73,25 @@ describe("JV1-A21 business-facing provisional findings (synthetic; no HITL)", ()
     expect(apiGet).toHaveBeenCalledTimes(1);
   });
 
+  it("lists a BLOCKED section even without a reason or reference metadata", async () => {
+    const incomplete = response();
+    incomplete.coverage.windows[0] = {
+      ordinal: 0, status: "BLOCKED", blocked_reason: null,
+      unresolved_refs: [], has_result: true,
+    };
+    apiGet.mockResolvedValue({ data: incomplete });
+    render(<N4FindingsPage />);
+
+    const banner = await screen.findByTestId("n4-coverage");
+    expect(banner).toHaveTextContent(/1 section.*blocked/i);
+    const pending = screen.getAllByTestId("n4-unresolved");
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toHaveTextContent("Section 1: Analysis blocked");
+    expect(pending[0]).toHaveTextContent(/details not available/i);
+    expect(screen.getByRole("button", { name: /retry failed sections/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /close gap manually/i })).toBeDisabled();
+  });
+
   it("puts source and full interpretation behind disclosure, and labels page as unverified", async () => {
     apiGet.mockResolvedValue({ data: response() });
     render(<N4FindingsPage />);

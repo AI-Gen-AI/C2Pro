@@ -388,6 +388,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         {groupedFindings.map((finding, index) => {
           const draft = drafts[finding.ordinal];
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
+          const accessibleFinding = `Finding ${finding.ordinal + 1}: ${title}`;
           const brief = shortAnalysis(finding.risk.description);
           const consequence = [finding.risk.consequences, finding.risk.consequence].map(readable).find(Boolean);
           // RiskItem.impact is a legacy severity label: do not report it as quantified business impact.
@@ -455,7 +456,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   : "No specific mitigation supplied. Verify the contractual basis before deciding."}
               </p>
               <details className="mt-2 rounded border border-dashed p-2" data-testid={`finding-evidence-${finding.ordinal}`}>
-                <summary className="cursor-pointer text-sm font-medium">View evidence and full AI analysis</summary>
+                <summary className="cursor-pointer text-sm font-medium" aria-label={`View evidence and full AI analysis — ${accessibleFinding}`}>View evidence and full AI analysis</summary>
                 {finding.risk.description ? (
                   <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
                     <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
@@ -489,6 +490,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                           setSourceReviewed((current) => ({ ...current, [sourceComparisonKey]: event.target.checked }));
                         }}
                         data-testid={`finding-source-reviewed-${finding.ordinal}`}
+                        aria-label={`Source quotation compared — ${accessibleFinding}`}
                       />
                       I have compared the AI claim with the full visible quote for this candidate; confirmation records provisional intent only.
                     </label>
@@ -524,6 +526,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     disabled={record.isPending || query.isFetching || !mayReview || (action === "CONFIRMED" && !mayConfirmFinding)}
                     title={action === "CONFIRMED" && !mayConfirmFinding ? "VERIFIED literal evidence, complete source identity and your comparison are required; otherwise choose Needs info or Propose correction." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
+                    aria-label={`${ACTION_LABEL[action]} — ${accessibleFinding}`}
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
@@ -569,6 +572,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     data-testid={`finding-reason-${finding.ordinal}`}
                     className="w-full rounded border bg-background p-2"
                     rows={2}
+                    aria-label={`Reason for ${ACTION_LABEL[draft.action]} — ${accessibleFinding}`}
                     value={draft.reason}
                     disabled={record.isPending}
                     onChange={(event) => {
@@ -594,6 +598,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         data-testid={`finding-text-${finding.ordinal}`}
                         className="w-full rounded border bg-background p-2"
                         rows={2}
+                        aria-label={`Proposed replacement text — ${accessibleFinding}`}
                         value={draft.proposedText}
                         disabled={record.isPending}
                         onChange={(event) => {
@@ -615,6 +620,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     size="sm"
                     disabled={!valid || record.isPending}
                     data-testid={`finding-submit-${finding.ordinal}`}
+                    aria-label={`Record provisional decision — ${accessibleFinding}`}
                     onClick={() => {
                       // A background refetch may have advanced the visible ledger after an
                       // ambiguous response. Replaying with new CAS but old key is invalid.

@@ -71,6 +71,39 @@ describe("ReviewFindingsPanel", () => {
     record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
   });
 
+  it("provides unique accessible names and keyboard decisions for multiple findings", async () => {
+    renderPanel();
+    await screen.findByTestId("finding-0");
+
+    for (const [ordinal, title] of [[0, "Risk 0"], [1, "Risk 1"]] as const) {
+      const context = `Finding ${ordinal + 1}: ${title}`;
+      expect(screen.getByRole("button", { name: `Approve finding — ${context}` })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: `Reject finding — ${context}` })).toBeEnabled();
+      expect(screen.getByRole("button", { name: `Needs info — ${context}` })).toBeEnabled();
+      expect(screen.getByRole("button", { name: `Propose correction — ${context}` })).toBeEnabled();
+      expect(screen.getByRole("checkbox", {
+        name: `Source quotation compared — ${context}`,
+      })).toBeInTheDocument();
+    }
+
+    const rejectFirst = screen.getByRole("button", {
+      name: "Reject finding — Finding 1: Risk 0",
+    });
+    const quoteCompared = screen.getByRole("checkbox", {
+      name: "Source quotation compared — Finding 1: Risk 0",
+    });
+    quoteCompared.focus();
+    await userEvent.tab();
+    expect(rejectFirst).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByTestId("finding-reason-0")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: "Record provisional decision — Finding 1: Risk 0",
+    })).toBeDisabled();
+    expect(screen.queryByTestId("finding-reason-1")).not.toBeInTheDocument();
+    expect(record).not.toHaveBeenCalled();
+  });
+
   it("blocks final approval until every risk is individually confirmed and reports readiness", async () => {
     const onReady = vi.fn();
     const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
