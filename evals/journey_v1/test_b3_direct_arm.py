@@ -1040,10 +1040,12 @@ def test_every_event_carries_the_ledger_schema_version(n2_source, taxonomy, regi
     config = _config("anthropic")
     _run(config, n2_source, taxonomy, register, RecordingTransport(_anthropic_reply([])))
     other = _config("openai")
+    timeout = RecordingTransport(error=TimeoutError("t"))
     with pytest.raises(TimeoutError):
-        _run(other, n2_source, taxonomy, register, RecordingTransport(error=TimeoutError("t")))
+        _run(other, n2_source, taxonomy, register, timeout)
+    retry = RecordingTransport(_openai_reply([]))
     with pytest.raises(arm.SpendRefused):
-        _run(other, n2_source, taxonomy, register, RecordingTransport(_openai_reply([])))
+        _run(other, n2_source, taxonomy, register, retry)
     events = register.events()
     assert {e["ev"] for e in events} == {"reserve", "done", "unknown", "refused"}
     assert {e["schema"] for e in events} == {arm.LEDGER_SCHEMA}
@@ -1051,9 +1053,9 @@ def test_every_event_carries_the_ledger_schema_version(n2_source, taxonomy, regi
 
 def test_release_records_the_not_sent_evidence(n2_source, taxonomy, register):
     config = _config("anthropic")
+    not_sent = RecordingTransport(error=arm.RequestNotSent("synthetic: no connection"))
     with pytest.raises(arm.RequestNotSent):
-        _run(config, n2_source, taxonomy, register,
-             RecordingTransport(error=arm.RequestNotSent("synthetic: no connection")))
+        _run(config, n2_source, taxonomy, register, not_sent)
     fail = register.events()[-1]
     assert fail["ev"] == "fail"
     assert fail["release"] == "request_not_sent"
@@ -1084,8 +1086,9 @@ def test_legacy_key_with_source_sha_blocks_its_alias_and_provider(n2_source, tax
         {"ev": "unknown", "id": "l1", "provider": "anthropic", "error": "TimeoutError"},
     )
     blocked = RecordingTransport(_anthropic_reply([]))
+    anthropic = _config("anthropic")
     with pytest.raises(arm.SpendRefused, match="reconcil"):
-        _run(_config("anthropic"), n2_source, taxonomy, register, blocked)
+        _run(anthropic, n2_source, taxonomy, register, blocked)
     assert blocked.calls == []
     other = RecordingTransport(_anthropic_reply([]))
     _run(_config("anthropic"), n2_source, taxonomy, register, other, alias="C2")
@@ -1099,8 +1102,9 @@ def test_legacy_reservation_without_key_blocks_every_call(n2_source, taxonomy, r
         transport = RecordingTransport(
             _anthropic_reply([]) if provider == "anthropic" else _openai_reply([])
         )
+        config = _config(provider)
         with pytest.raises(arm.SpendRefused, match="reconcil"):
-            _run(_config(provider), n2_source, taxonomy, register, transport, alias=alias)
+            _run(config, n2_source, taxonomy, register, transport, alias=alias)
         assert transport.calls == []
 
 
@@ -1113,8 +1117,9 @@ def test_legacy_fail_does_not_release_a_possibly_billed_call(n2_source, taxonomy
     )
     assert register.committed_usd() == Decimal("0.25")
     blocked = RecordingTransport(_anthropic_reply([]))
+    anthropic = _config("anthropic")
     with pytest.raises(arm.SpendRefused, match="reconcil"):
-        _run(_config("anthropic"), n2_source, taxonomy, register, blocked)
+        _run(anthropic, n2_source, taxonomy, register, blocked)
     assert blocked.calls == []
 
 
@@ -1168,15 +1173,17 @@ def test_unversioned_release_marker_is_not_trusted(n2_source, taxonomy, register
     )
     assert register.committed_usd() == Decimal("0.25")
     transport = RecordingTransport(_anthropic_reply([]))
+    config = _config("anthropic")
     with pytest.raises(arm.SpendRefused, match="reconcil"):
-        _run(_config("anthropic"), n2_source, taxonomy, register, transport)
+        _run(config, n2_source, taxonomy, register, transport)
     assert transport.calls == []
 
 
 def test_register_refuses_to_release_without_not_sent_evidence(register):
     call_id = register.reserve(provider="anthropic", model="m", est_usd=Decimal("0.1"),
                                key="C1:anthropic", source_sha256="a" * 64)
+    not_evidence = TimeoutError("synthetic")
     with pytest.raises(TypeError, match="RequestNotSent"):
-        register.fail(call_id, provider="anthropic", error=TimeoutError("synthetic"))
+        register.fail(call_id, provider="anthropic", error=not_evidence)
     assert [e["ev"] for e in register.events()] == ["reserve"]
     assert register.committed_usd() == Decimal("0.1")
