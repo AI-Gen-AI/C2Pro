@@ -911,3 +911,136 @@ async def test_n4_coverage_failclosed_terminal_run_with_pending_window() -> None
     data = await sources.load_journey_data(project_id, tenant_id)
 
     assert data.summary.coverage_status == "INCOMPLETE"
+
+
+# JV1 L6: regression/negative tests for exact-SHA review observations.
+@pytest.mark.asyncio
+async def test_sql_backed_unavailable_is_distinct_from_sql_error_and_empty_findings() -> None:
+    """No coherence or N4 rows after tenant-scoped SQL => UNAVAILABLE, not ERROR/AVAILABLE."""
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    project_id = uuid4()
+    tenant_id = uuid4()
+    observed: list[tuple[str, dict[str, Any]]] = []
+
+    class _NoSourceRowsSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            bound = dict(params or {})
+            observed.append((sql, bound))
+            assert bound.get("tenant_id") == str(tenant_id), "all reads must be tenant-scoped"
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([
+                    {"id": project_id, "name": "Synthetic SQL Missing Sources", "code": "SS-1", "status": "ACTIVE"}
+                ])
+            if "SELECT COUNT(*)" in sql:
+                return _MockQueryResult([{"total_count": 0}])
+            return _MockQueryResult([])
+
+    sources = SqlAlchemyJourneyExportSources(session=_NoSourceRowsSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+    assert data.summary.coherence_source_status == "UNAVAILABLE"
+    assert data.summary.coverage_source_status == "UNAVAILABLE"
+    assert data.summary.findings_source_status == "AVAILABLE"  # SQL proved count=0
+    assert data.summary.coverage_status == "INCOMPLETE"
+    assert data.summary.global_score is None
+    assert data.summary.trusted_score is None
+    assert data.summary.projected_score is None
+    assert any("FROM public.coherence_results" in s for s, _ in observed)
+    assert any("FROM public.analyses" in s for s, _ in observed)
+    assert any("FROM public.n4_extraction_runs" in s for s, _ in observed)
+
+    wb = build_journey_workbook(data)
+    summary_text = [str(c.value) for row in wb["Summary"].iter_rows() for c in row if c.value is not None]
+    gaps_text = [str(c.value) for row in wb["Gaps & References"].iter_rows() for c in row if c.value is not None]
+    assert any("[UNAVAILABLE] No coherence evaluation" in item for item in summary_text)
+    assert any("[UNAVAILABLE] No N4 extraction run" in item for item in summary_text)
+    assert any("[UNAVAILABLE] No N4 extraction run" in item for item in gaps_text)
+    assert not any("[ERROR]" in item for item in summary_text)
+
+
+@pytest.mark.asyncio
+async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timestamps() -> None:
+    """Two pages sharing created_at must have a total unique order, not SQL-dependent ties."""
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    project_id, tenant_id = uuid4(), uuid4()
+    created_at = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
+    rows = [
+        {"id": UUID(int=i + 1), "current_status": "PROPOSED",
+         "item_data": {"title": f"F-{i}"}, "created_at": created_at}
+        for i in reversed(range(501))
+    ]
+    observed_offsets: list[int] = []
+
+    class _TiedTimestampRows:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            assert "ORDER BY created_at ASC, id ASC" in sql, "id is required for deterministic tie ordering"
+            assert params and params["tenant_id"] == str(tenant_id)
+            offset, limit = int(params["offset"]), int(params["limit"])
+            observed_offsets.append(offset)
+            ordered = sorted(rows, key=lambda r: (r["created_at"], r["id"]))
+            return _MockQueryResult(ordered[offset:offset + limit])
+
+    sources = SqlAlchemyJourneyExportSources(session=_TiedTimestampRows())  # type: ignore[arg-type]
+    fetched = await sources._fetch_review_items_paginated(project_id, tenant_id)
+    ids = [r["id"] for r in fetched]
+    assert len(ids) == 501 and len(set(ids)) == 501
+    assert ids == sorted(ids)
+    assert observed_offsets == [0, 500]
+
+
+@pytest.mark.parametrize(
+    ("raw", "total", "expected"),
+    [
+        (None, 3, None), (True, 3, None), (False, 3, None),
+        (-1, 3, None), (3, 3, None), (1000, 3, None),
+        ("bad", 3, None), ("1.5", 3, None), ("-1", 3, None),
+        (0, 3, 0), (1, 3, 1), ("2", 3, 2),
+    ],
+)
+def test_invalid_window_ordinal_never_aliases_real_window_zero(
+    raw: Any, total: int, expected: int | None
+) -> None:
+    from src.reporting.application.build_journey_export import _validated_window_ordinal
+
+    assert _validated_window_ordinal(raw, total) == expected
+
+
+def test_bad_sql_window_ordinal_remains_unknown_in_gap_and_reference_exports() -> None:
+    from dataclasses import replace
+
+    from src.reporting.application.build_journey_export import _parse_windows_for_run
+
+    status, exam, count, gaps, references = _parse_windows_for_run(
+        [
+            {"ordinal": 0, "status": "EXAMINED", "unresolved_refs": None},
+            {"ordinal": "not-an-ordinal", "status": "BLOCKED", "blocked_reason": "TOKEN_LIMIT",
+             "unresolved_refs": ["Annex Z"]},
+        ], total_w=2, run_status="COMPLETE"
+    )
+    assert status == "INCOMPLETE"
+    assert exam == 1 and count == 1
+    assert len(gaps) == 1 and gaps[0].ordinal is None
+    assert references[0].source_identifier == "Window Unknown"
+    book = build_journey_workbook(replace(_sample_journey_data(), gaps=gaps))
+    assert book["Gaps & References"]["A3"].value == "Unknown (invalid ordinal)"
+
+
+def test_invalid_metadata_gap_ordinal_downgrades_claim_of_complete_coverage() -> None:
+    from src.reporting.application.build_journey_export import _parse_metadata_coverage
+
+    parsed = _parse_metadata_coverage({
+        "analysis_n4_coverage": {
+            "status": "COMPLETE_WITH_GAPS",
+            "total_windows": 2,
+            "examined_windows": 1,
+            "gap_windows": ["invalid"],
+            "gaps": [{"ordinal": "not-an-ordinal", "failure_kind": "BLOCKED", "reason": "No page"}],
+        }
+    })
+    assert parsed is not None
+    status, total, examined, gap_count, gaps = parsed
+    assert (status, total, examined, gap_count) == ("INCOMPLETE", 2, 1, 1)
+    assert len(gaps) == 1 and gaps[0].ordinal is None
