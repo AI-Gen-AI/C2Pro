@@ -15,6 +15,7 @@ from src.reporting.application.build_journey_export import (
     JourneyGapRow,
     JourneyReferenceRow,
     JourneySummaryData,
+    _derive_window_run_coverage_status,
     build_journey_excel_bytes,
     build_journey_workbook,
 )
@@ -649,3 +650,264 @@ def test_build_journey_workbook_formatting_branches() -> None:
     assert "p. 15" in gap_values
     assert "Unmapped" in gap_values
     assert "Unknown" in gap_values
+
+
+@pytest.mark.asyncio
+async def test_n4_coverage_fallback_status_partial_not_complete() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+    run_id = uuid4()
+
+    class _MockAsyncSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([{"id": project_id, "name": "Partial Run Project", "code": "PRP", "status": "ACTIVE"}])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([])
+            if "FROM public.document_revisions" in sql:
+                return _MockQueryResult([])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([{"run_id": run_id, "status": "PARTIAL", "total_windows": 2}])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
+                    {"ordinal": 1, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
+                ])
+            return _MockQueryResult([])
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+    sources = SqlAlchemyJourneyExportSources(session=_MockAsyncSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.coverage_status == "PARTIAL"
+    assert data.summary.coverage_status != "COMPLETE"
+
+
+def test_source_status_error_and_unavailable_visible_in_workbook() -> None:
+    project_id = uuid4()
+    data = JourneyExportData(
+        summary=JourneySummaryData(
+            project_id=project_id,
+            project_name="Error Sources Project",
+            project_code="ESP-1",
+            status="ACTIVE",
+            global_score=None,
+            trusted_score=None,
+            projected_score=None,
+            score_reason="Database timeout during coherence evaluation",
+            sub_scores=dict.fromkeys(("SCOPE", "BUDGET", "TIME", "TECHNICAL", "LEGAL", "QUALITY"), None),
+            coverage_status="INCOMPLETE",
+            total_windows=0,
+            examined_windows=0,
+            gap_windows_count=0,
+            generated_at=datetime.now(UTC),
+            coherence_source_status="ERROR",
+            coverage_source_status="UNAVAILABLE",
+            findings_source_status="ERROR",
+        ),
+        findings=[],
+        gaps=[],
+        references=[],
+    )
+
+    wb = build_journey_workbook(data)
+
+    ws_summary = wb["Summary"]
+    summary_text = [str(c.value) for row in ws_summary.iter_rows() for c in row if c.value is not None]
+    assert any("[ERROR]" in t for t in summary_text), "Summary sheet must explicitly indicate [ERROR] source status"
+    assert any("[UNAVAILABLE]" in t for t in summary_text), "Summary sheet must explicitly indicate [UNAVAILABLE] source status"
+
+    ws_findings = wb["Findings"]
+    findings_text = [str(c.value) for row in ws_findings.iter_rows() for c in row if c.value is not None]
+    assert not any(t == "No findings recorded for this project." for t in findings_text), "Findings must not claim no findings when there is an error"
+    assert any("[ERROR]" in t for t in findings_text), "Findings sheet must explicitly indicate [ERROR] source status"
+
+    ws_gaps = wb["Gaps & References"]
+    gaps_text = [str(c.value) for row in ws_gaps.iter_rows() for c in row if c.value is not None]
+    assert any("[UNAVAILABLE]" in t for t in gaps_text), "Gaps sheet must explicitly indicate [UNAVAILABLE] source status"
+
+
+@pytest.mark.asyncio
+async def test_pagination_fetches_multiple_batches() -> None:
+    project_id = uuid4()
+    tenant_id = uuid4()
+
+    class _MockPagedSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([{"id": project_id, "name": "Paged Project", "code": "PP", "status": "ACTIVE"}])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([])
+            if "FROM public.document_revisions" in sql:
+                return _MockQueryResult([])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([])
+            if "SELECT COUNT(*)" in sql:
+                return _MockQueryResult([{"total_count": 600}])
+            if "FROM public.hitl_finding_decisions" in sql:
+                return _MockQueryResult([])
+            if "FROM public.review_items" in sql:
+                offset = params.get("offset", 0) if params else 0
+                if offset == 0:
+                    # First page of 500 items
+                    return _MockQueryResult([{"id": uuid4(), "current_status": "PROPOSED", "item_data": {"title": f"F-{i}"}} for i in range(500)])
+                elif offset == 500:
+                    # Second page of 100 items
+                    return _MockQueryResult([{"id": uuid4(), "current_status": "PROPOSED", "item_data": {"title": f"F-{500+i}"}} for i in range(100)])
+                return _MockQueryResult([])
+            return _MockQueryResult([])
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+    sources = SqlAlchemyJourneyExportSources(session=_MockPagedSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.total_review_items_count == 600
+    assert data.summary.exported_findings_count == 600
+    assert len(data.findings) == 600
+
+
+@pytest.mark.parametrize(
+    ("total_w", "seen_ordinals", "exam_w", "gap_count", "non_terminal", "unknown_count", "run_status", "expected"),
+    [
+        # 1. PARTIAL + BLOCKED -> PARTIAL (never COMPLETE_WITH_GAPS!)
+        (2, {0, 1}, 1, 1, 0, 0, "PARTIAL", "PARTIAL"),
+        # 2. PARTIAL + EXAMINED -> PARTIAL (never COMPLETE!)
+        (2, {0, 1}, 2, 0, 0, 0, "PARTIAL", "PARTIAL"),
+        # 3. PARTIAL + PENDING -> PARTIAL
+        (2, {0, 1}, 1, 0, 1, 0, "PARTIAL", "PARTIAL"),
+        # 4. Run terminal + missing ordinal (0, 2 present; 1 missing) -> INCOMPLETE
+        (3, {0, 2}, 1, 1, 0, 0, "COMPLETE", "INCOMPLETE"),
+        # 5. Examined + Blocked + Pending -> INCOMPLETE
+        (3, {0, 1, 2}, 1, 1, 1, 0, "COMPLETE", "INCOMPLETE"),
+        # 6. Unknown run status -> INCOMPLETE
+        (2, {0, 1}, 2, 0, 0, 0, "UNKNOWN_STATUS", "INCOMPLETE"),
+        # 7. Unknown window status -> INCOMPLETE
+        (2, {0, 1}, 1, 0, 0, 1, "COMPLETE", "INCOMPLETE"),
+        # 8. Valid terminal COMPLETE (all examined, no gaps) -> COMPLETE
+        (2, {0, 1}, 2, 0, 0, 0, "COMPLETE", "COMPLETE"),
+        # 9. Valid terminal COMPLETE_WITH_GAPS (all accounted, gaps > 0) -> COMPLETE_WITH_GAPS
+        (2, {0, 1}, 1, 1, 0, 0, "COMPLETE", "COMPLETE_WITH_GAPS"),
+    ],
+)
+def test_derive_window_run_coverage_status_parametrized_failclosed(
+    total_w: int,
+    seen_ordinals: set[int],
+    exam_w: int,
+    gap_count: int,
+    non_terminal: int,
+    unknown_count: int,
+    run_status: str,
+    expected: str,
+) -> None:
+    result = _derive_window_run_coverage_status(
+        total_w=total_w,
+        seen_ordinals=seen_ordinals,
+        exam_w=exam_w,
+        gap_count=gap_count,
+        non_terminal_count=non_terminal,
+        unknown_status_count=unknown_count,
+        run_status=run_status,
+    )
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_n4_coverage_failclosed_partial_plus_blocked_end_to_end() -> None:
+    """End-to-end: run_status PARTIAL with gap window must return PARTIAL, not COMPLETE_WITH_GAPS."""
+    project_id = uuid4()
+    tenant_id = uuid4()
+    run_id = uuid4()
+
+    class _MockSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([{"id": project_id, "name": "P+B Project", "code": "PB", "status": "ACTIVE"}])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([])
+            if "FROM public.document_revisions" in sql:
+                return _MockQueryResult([])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([{"run_id": run_id, "status": "PARTIAL", "total_windows": 2}])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
+                    {"ordinal": 1, "status": "BLOCKED", "blocked_reason": "OUTPUT_TRUNCATED", "unresolved_refs": None},
+                ])
+            return _MockQueryResult([])
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+    sources = SqlAlchemyJourneyExportSources(session=_MockSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.coverage_status == "PARTIAL"
+    assert data.summary.coverage_status != "COMPLETE_WITH_GAPS"
+    assert data.summary.coverage_status != "COMPLETE"
+
+
+@pytest.mark.asyncio
+async def test_n4_coverage_failclosed_terminal_run_with_missing_ordinal() -> None:
+    """End-to-end: run_status COMPLETE but ordinal 1 missing out of total 3 -> INCOMPLETE."""
+    project_id = uuid4()
+    tenant_id = uuid4()
+    run_id = uuid4()
+
+    class _MockSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([{"id": project_id, "name": "Missing Ordinal Project", "code": "MO", "status": "ACTIVE"}])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([])
+            if "FROM public.document_revisions" in sql:
+                return _MockQueryResult([])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([{"run_id": run_id, "status": "COMPLETE", "total_windows": 3}])
+            if "FROM public.n4_extraction_windows" in sql:
+                # Ordinals 0 and 2 are present, but ordinal 1 is missing
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
+                    {"ordinal": 2, "status": "BLOCKED", "blocked_reason": "OUTPUT_TRUNCATED", "unresolved_refs": None},
+                ])
+            return _MockQueryResult([])
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+    sources = SqlAlchemyJourneyExportSources(session=_MockSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.coverage_status == "INCOMPLETE"
+
+
+@pytest.mark.asyncio
+async def test_n4_coverage_failclosed_terminal_run_with_pending_window() -> None:
+    """End-to-end: run_status COMPLETE but window 2 is PENDING -> INCOMPLETE."""
+    project_id = uuid4()
+    tenant_id = uuid4()
+    run_id = uuid4()
+
+    class _MockSession:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.projects" in sql:
+                return _MockQueryResult([{"id": project_id, "name": "Pending Window Project", "code": "PW", "status": "ACTIVE"}])
+            if "FROM public.coherence_results" in sql:
+                return _MockQueryResult([])
+            if "FROM public.document_revisions" in sql:
+                return _MockQueryResult([])
+            if "FROM public.n4_extraction_runs" in sql:
+                return _MockQueryResult([{"run_id": run_id, "status": "COMPLETE", "total_windows": 3}])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED", "blocked_reason": None, "unresolved_refs": None},
+                    {"ordinal": 1, "status": "BLOCKED", "blocked_reason": "OUTPUT_TRUNCATED", "unresolved_refs": None},
+                    {"ordinal": 2, "status": "PENDING", "blocked_reason": None, "unresolved_refs": None},
+                ])
+            return _MockQueryResult([])
+
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+    sources = SqlAlchemyJourneyExportSources(session=_MockSession())  # type: ignore[arg-type]
+    data = await sources.load_journey_data(project_id, tenant_id)
+
+    assert data.summary.coverage_status == "INCOMPLETE"
