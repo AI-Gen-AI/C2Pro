@@ -815,7 +815,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: detect-changes
-    if: needs.detect-changes.outputs.migrations == 'true'
+    if: needs.detect-changes.outputs.migrations == 'true' || needs.detect-changes.outputs.backend == 'true'
     # alembic/env.py (and the single-head regression test) import
     # src.config.settings, whose only required field is JWT_SECRET_KEY. Without
     # it, `alembic upgrade head` aborts at Settings validation before applying
