@@ -66,6 +66,10 @@ from src.documents.application.document_source import (
     fetch_source_file,
     resolve_source_revision,
 )
+from src.documents.application.page_span_lineage import (
+    read_revision_page_spans,
+    record_revision_page_spans,
+)
 from src.documents.application.parse_document_use_case import (
     _extract_budget_currencies,
     _extract_budget_stated_total,
@@ -197,6 +201,7 @@ def _build_text_block_index(text_blocks: list[dict[str, Any]]) -> list[dict[str,
                 if has_bbox
                 else False,
                 "text": txt,
+                "ocr": block.get("ocr") is True,
             }
         )
         pos = end
@@ -998,6 +1003,7 @@ def _extract_contract_clauses(
 
                 if (
                     exact_block_span
+                    and entry.get("ocr") is not True
                     and isinstance(raw_bbox, (list, tuple))
                     and len(raw_bbox) == 4
                     and all(isinstance(value, (int, float)) for value in raw_bbox)
@@ -1226,6 +1232,16 @@ async def _run_analysis_graph_best_effort(
             tenant_id=tenant_id, project_id=document.project_id,
             document_id=document_id,
         )
+        if n4_identity is not None:
+            page_lineage = read_revision_page_spans(
+                getattr(document, "document_metadata", None),
+                parsed_text=parsed_text,
+                revision=source_revision,
+            )
+            if page_lineage is not None:
+                # This key already belongs to ProjectState. L3 owns its
+                # schema; provenance is supplied without changing its files.
+                n4_identity["physical_page_lineage"] = page_lineage
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "n4_source_identity": n4_identity,
@@ -2229,6 +2245,12 @@ async def _ingest_owned(
             revision_id=source_revision.revision_id if source_revision else None,
             blob_hash=source_revision.blob_hash if source_revision else None,
         )
+    record_revision_page_spans(
+        metadata, parsed_payload=parsed_payload,
+        parsed_text=parsed_text,
+        revision_id=source_revision.revision_id if source_revision else None,
+        blob_hash=source_revision.blob_hash if source_revision else None,
+    )
     if parsed_text:
         metadata["parsed_text"] = parsed_text
         record_revision_parsed_text_digest(
