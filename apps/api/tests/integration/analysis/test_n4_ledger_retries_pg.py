@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from decimal import Decimal
@@ -18,9 +19,10 @@ from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from src.analysis.adapters.persistence import n4_incremental_store as ledger_store
 from src.analysis.adapters.persistence.n4_incremental_store import (
     N4BudgetError,
     N4LedgerError,
@@ -562,17 +564,46 @@ async def _unknown_reservation(engine) -> tuple[ProcessingAuthority, UUID]:
     return a, reserved.reservation_id
 
 
-async def test_settling_another_tenants_unknown_is_refused_without_side_effects(engine):
+async def test_settling_another_tenants_unknown_is_refused_without_side_effects(
+    engine, monkeypatch,
+):
     a, reservation_id = await _unknown_reservation(engine)
     before = await _balances(a)
     b, project_b = _authority(uuid4(), uuid4(), uuid4()), uuid4()
     await _seed(b, project_b)
-    async with _tx(engine, b, commit=False) as s:
-        with pytest.raises(N4LedgerError, match="not visible to this tenant"):
-            await settle_unknown_pessimistically(
-                s, authority=b, reservation_id=reservation_id,
-                actual_provider="anthropic", reason="operator: cross-tenant attempt",
-            )
+
+    # Inspect the SQL actually sent to PostgreSQL, not only the final exception:
+    # account_call has its own tenant filter and RLS may independently hide a
+    # foreign row. Neither protection proves THIS pre-delegation guard exists.
+    reservation_reads = []
+
+    def record_reservation_select(conn, cursor, statement, parameters, context, many):
+        sql = " ".join(statement.lower().split())
+        if ("select status, reserved_usd, model_name, actual_model_name" in sql
+                and "from public.n4_usage_reservations" in sql):
+            reservation_reads.append((statement, parameters))
+
+    async def forbidden_delegation(*args, **kwargs):
+        pytest.fail("cross-tenant UNKNOWN must be rejected before account_call")
+
+    monkeypatch.setattr(ledger_store, "account_call", forbidden_delegation)
+    event.listen(engine.sync_engine, "before_cursor_execute", record_reservation_select)
+    try:
+        async with _tx(engine, b, commit=False) as s:
+            with pytest.raises(N4LedgerError, match="not visible to this tenant"):
+                await settle_unknown_pessimistically(
+                    s, authority=b, reservation_id=reservation_id,
+                    actual_provider="anthropic", reason="operator: cross-tenant attempt",
+                )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record_reservation_select)
+
+    assert len(reservation_reads) == 1, "expected the UNKNOWN pre-delegation SELECT"
+    executed_sql, bound_parameters = reservation_reads[0]
+    assert re.search(r"\bwhere\s+tenant_id\s*=\s*cast\s*\(", executed_sql, re.I)
+    assert re.search(r"\band\s+reservation_id\s*=\s*cast\s*\(", executed_sql, re.I)
+    assert str(b.tenant_id) in {str(v) for v in bound_parameters}
+    assert str(reservation_id) in {str(v) for v in bound_parameters}
     assert await _balances(a) == before
     assert await _reservation_status(a, reservation_id) == "UNKNOWN"
 
