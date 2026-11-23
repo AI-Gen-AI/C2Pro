@@ -210,7 +210,7 @@ def test_invalid_or_unlocated_fact_fails_closed(cfg, bad):
 @pytest.mark.parametrize(
     "bad",
     [
-        {"dimension_weights": {d: 1 for d in ("SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL")}},
+        {"dimension_weights": dict.fromkeys(("SCOPE", "BUDGET", "LEGAL", "TIME", "QUALITY", "TECHNICAL"), 1)},
         {"severity": {"LOW": 0.1, "MEDIUM": 0.4, "HIGH": 0.2, "CRITICAL": 0.6}},
         {"severity": {"LOW": 0.1, "MEDIUM": 0.2, "HIGH": 0.3}},
         {"materiality_scale": nan},
