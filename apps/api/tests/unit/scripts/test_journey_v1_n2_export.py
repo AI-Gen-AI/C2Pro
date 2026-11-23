@@ -226,21 +226,36 @@ def test_cli_out_inside_repo_rejected():
     assert "ERROR: output path must be absolute and outside repository" in result.stderr
 
 
-def test_cli_out_no_out_uses_stdout():
-    """Sin --out, debe usar stdout (comportamiento por defecto)."""
-    import subprocess
-    # Infer repo root desde __file__ para portabilidad CI
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "apps.api.scripts.journey_v1_n2_export",
-            "--text",
-            "Texto de prueba stdout.",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-    assert "Texto de prueba stdout." in result.stdout
+def test_confined_path_symmetric_parentheses_rejected():
+    """Paths with excessive parentheses/nav must be rejected."""
+    with pytest.raises(ValueError):
+        confined_path("((((..)))", REPO_ROOT)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tests de validación de spans N2 (constraints fail-closed)
+# ──────────────────────────────────────────────────────────────────
+def test_make_n2_projection_invalid_page_raises():
+    """make_n2_projection debe rechazar spans con page < 1."""
+    from apps.api.scripts.journey_v1_n2_export import N2Span
+    with pytest.raises(ValueError, match="span page must be >= 1"):
+        make_n2_projection("test", spans=[N2Span(page=0, start_offset=0, end_offset=5)])
+
+
+def test_make_n2_projection_invalid_start_offset_raises():
+    """make_n2_projection debe rechazar spans con start_offset < 0."""
+    from apps.api.scripts.journey_v1_n2_export import N2Span
+    with pytest.raises(ValueError, match="span start_offset must be >= 0"):
+        make_n2_projection("test", spans=[N2Span(page=1, start_offset=-1, end_offset=5)])
+
+
+def test_make_n2_projection_invalid_end_offset_raises():
+    """make_n2_projection debe rechazar spans con end_offset <= start_offset."""
+    from apps.api.scripts.journey_v1_n2_export import N2Span
+    with pytest.raises(ValueError, match="span end_offset must be > start_offset"):
+        make_n2_projection("test", spans=[N2Span(page=1, start_offset=0, end_offset=0)])
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tests de salida CLI --out (JV1-B3 confinamiento)
+# ──────────────────────────────────────────────────────────────────

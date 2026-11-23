@@ -63,6 +63,14 @@ def make_n2_projection(text: str, spans: list[N2Span] | None = None) -> N2Projec
         page_count = 1
     else:
         sorted_spans = sorted(spans, key=lambda s: s.start_offset)
+        # Validación fail-closed de constraints de span
+        for s in sorted_spans:
+            if s.page < 1:
+                raise ValueError(f"span page must be >= 1, got {s.page}")
+            if s.start_offset < 0:
+                raise ValueError(f"span start_offset must be >= 0, got {s.start_offset}")
+            if s.end_offset <= s.start_offset:
+                raise ValueError(f"span end_offset must be > start_offset, got end={s.end_offset}, start={s.start_offset}")
         span_tuple = tuple(
             N2Span(page=s.page, start_offset=s.start_offset, end_offset=s.end_offset)
             for s in sorted_spans
