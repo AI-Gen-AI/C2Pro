@@ -9,6 +9,7 @@ import pytest
 
 from src.analysis.adapters.ai.n4_anthropic_window_provider import (
     AnthropicN4WindowProvider,
+    _v2_provider_response,
 )
 from src.analysis.domain.n4_source_windows import plan_n4_source_windows
 from src.core.ai.model_router import AITaskType, ModelTier
@@ -212,3 +213,70 @@ async def test_prompt_version_drift_rejected_before_any_provider_call():
             window=window, tenant_id=uuid4(), request_id="version-drift",
         )
     assert wrapper.calls == []
+
+
+
+@pytest.mark.parametrize("extra_type", ["text", "thinking", "server_tool_use"])
+def test_tool_envelope_rejects_additional_blocks_even_when_empty(extra_type):
+    """A valid forced tool is not enough when the envelope also has other blocks."""
+    payload = {
+        "window_examined": True, "findings": [], "outstanding_references": [],
+        "examined_clauses": [],
+    }
+    raw = SimpleNamespace(
+        stop_reason="tool_use",
+        content=[
+            SimpleNamespace(
+                type="tool_use", name="record_window_findings", input=payload,
+            ),
+            SimpleNamespace(type=extra_type, text=""),
+        ],
+    )
+    actual = _v2_provider_response(json.dumps(payload), raw)
+    assert json.loads(actual) == {"error": "INVALID_N4_TOOL_ENVELOPE"}
+
+
+def test_tool_envelope_rejects_duplicate_matching_tools():
+    payload = {"window_examined": True, "findings": []}
+    tool = SimpleNamespace(
+        type="tool_use", name="record_window_findings", input=payload,
+    )
+    raw = SimpleNamespace(stop_reason="tool_use", content=[tool, tool])
+    assert json.loads(_v2_provider_response(json.dumps(payload), raw)) == {
+        "error": "INVALID_N4_TOOL_ENVELOPE",
+    }
+
+
+@pytest.mark.parametrize("untrusted_content", [
+    "{",
+    "[]",
+    "null",
+    '{"window_examined":false}',
+    '{"window_examined":true,"findings":[],"unexpected":true}',
+])
+def test_tool_envelope_rejects_truncation_or_mismatched_json(untrusted_content):
+    """Do not use a syntactically valid JSON body to impersonate tool output."""
+    payload = {"window_examined": True, "findings": []}
+    tool = SimpleNamespace(
+        type="tool_use", name="record_window_findings", input=payload,
+    )
+    raw = SimpleNamespace(stop_reason="tool_use", content=[tool])
+    assert json.loads(_v2_provider_response(untrusted_content, raw)) == {
+        "error": "INVALID_N4_TOOL_ENVELOPE",
+    }
+
+
+def test_exact_tool_input_preserves_v2_identity_without_semantic_approval():
+    payload = {
+        "window_examined": True,
+        "findings": [],
+        "examined_clauses": [],
+        "outstanding_references": [],
+    }
+    raw = SimpleNamespace(stop_reason="tool_use", content=[
+        SimpleNamespace(type="tool_use", name="record_window_findings", input=payload),
+    ])
+    normalized = json.loads(_v2_provider_response(json.dumps(payload), raw))
+    assert normalized["prompt_version"] == "n4-compact-window-v2"
+    assert normalized["findings"] == []
+    assert normalized["window_examined"] is True
