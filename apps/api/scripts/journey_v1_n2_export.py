@@ -247,7 +247,7 @@ def main() -> int:
             # getattr(os, "O_NOFOLLOW", 0) para compatibilidad multiplataforma
             flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
             try:
-                fd = os.open(out_path, flags, 0o600)
+                fd = os.open(out_path, flags | getattr(os, "O_NOFOLLOW", 0), 0o600)
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(output_json + "\n")
             except OSError as e:
