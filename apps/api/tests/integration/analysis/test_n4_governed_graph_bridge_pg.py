@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import os
 from hashlib import sha256
+from uuid import UUID
 
 import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from src.analysis.adapters.graph import n4_governed_bridge as bridge
-from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
+from src.analysis.application.n4_incremental_runner import N4ProviderReceipt, N4RunOutcome
 from src.core.processing_authority import bound_authority
 from tests.integration.analysis.test_n4_window_runner_pg import (
     _prepare,
@@ -142,6 +143,70 @@ async def test_graph_bridge_persists_retrieves_exact_revision_candidates_without
             """, authority.tenant_id)
             assert result["total"] == len(provider.calls)
             assert result["settled"] == result["total"]
+
+            # test_pg_missing_ordinal: corrupt ONLY the private *_test database
+            # after a real, fully settled N4 run. A stale COMPLETE receipt must
+            # not conceal a physically missing window when the ledger is read.
+            run_id = UUID(first["n4_incremental_run_id"])
+            expected_total = first["n4_coverage"]["total_windows"]
+            assert expected_total >= 2
+            before = await conn.fetch("""
+                SELECT ordinal FROM public.n4_extraction_windows
+                 WHERE tenant_id=$1 AND run_id=$2 ORDER BY ordinal
+            """, authority.tenant_id, run_id)
+            assert [r["ordinal"] for r in before] == list(range(expected_total))
+
+            # The private test schema uses ON DELETE RESTRICT on reservations;
+            # remove that one settled synthetic receipt, then the window.
+            removed_receipts = await conn.execute("""
+                DELETE FROM public.n4_usage_reservations
+                 WHERE tenant_id=$1 AND run_id=$2 AND window_ordinal=1
+            """, authority.tenant_id, run_id)
+            assert removed_receipts == "DELETE 1"
+            removed_window = await conn.execute("""
+                DELETE FROM public.n4_extraction_windows
+                 WHERE tenant_id=$1 AND run_id=$2 AND ordinal=1
+            """, authority.tenant_id, run_id)
+            assert removed_window == "DELETE 1"
+
+            persisted, reservations = await bridge._load_run_ledger(
+                authority.tenant_id, run_id,
+            )
+            assert len(persisted) == expected_total - 1
+            assert [w["ordinal"] for w in persisted] == [
+                i for i in range(expected_total) if i != 1
+            ]
+            recorded_complete = N4RunOutcome(
+                run_id=run_id, status="COMPLETE",
+                total_windows=expected_total,
+                examined_windows=expected_total,
+                settled_receipt_windows=expected_total,
+                persisted_result_windows=expected_total,
+            )
+            with pytest.raises(bridge.N4RunIncomplete):
+                bridge.assess_n4_run(
+                    outcome=recorded_complete,
+                    windows=persisted,
+                    reservations=reservations,
+                    source_sha256=first["n4_coverage"]["source_sha256"],
+                )
+
+            # Re-evaluate the production graph seam using the historic complete
+            # receipt: the bridge must reconcile the PostgreSQL snapshot BEFORE
+            # reading/proposing candidates, and make no additional provider call.
+            class CompletedRunner:
+                def __init__(self, **kwargs):
+                    pass
+
+                async def run(self, **kwargs):
+                    return recorded_complete
+
+            monkeypatch.setattr(bridge, "N4IncrementalRunner", CompletedRunner)
+            calls_before = len(provider.calls)
+            with bound_authority(authority):
+                with pytest.raises(bridge.N4RunIncomplete):
+                    await bridge.run_governed_n4_in_graph(state)
+            assert len(provider.calls) == calls_before
         finally:
             await conn.close()
     finally:
