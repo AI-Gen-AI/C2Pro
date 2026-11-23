@@ -1,0 +1,16 @@
+# JV1-A26: coefficients deliberately NOT calibrated; cannot score production data.
+revision: JV1-A26-DRAFT
+calibrated: false
+severity:
+  LOW: null
+  MEDIUM: null
+  HIGH: null
+  CRITICAL: null
+materiality_scale: null
+dimension_weights:
+  SCOPE: 0.20
+  BUDGET: 0.20
+  LEGAL: 0.15
+  TIME: 0.15
+  QUALITY: 0.15
+  TECHNICAL: 0.15
