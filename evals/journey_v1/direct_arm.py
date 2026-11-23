@@ -486,9 +486,18 @@ class JsonlSpendRegister:
     def _open_reserves(cls, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Reservations not settled nor provably released: worst case held.
 
-        In flight, ``unknown`` and legacy-``fail`` ones all stay open.
+        In flight, ``unknown`` and legacy-``fail`` ones all stay open. Release
+        evidence only applies to a v2 reservation: a v2 ``fail`` can never
+        release a legacy (unversioned) hold.
         """
-        closed = {e.get("id") for e in events if cls._closes(e)}
+        v2_reserves = {
+            e.get("id") for e in events
+            if e.get("ev") == "reserve" and e.get("schema") == LEDGER_SCHEMA
+        }
+        closed = {
+            e.get("id") for e in events
+            if cls._closes(e) and (e.get("ev") == "done" or e.get("id") in v2_reserves)
+        }
         return [e for e in events if e.get("ev") == "reserve" and e.get("id") not in closed]
 
     @staticmethod
@@ -505,7 +514,14 @@ class JsonlSpendRegister:
 
     def _committed_usd(self, events: list[dict[str, Any]] | None = None) -> Decimal:
         events = self.events() if events is None else events
-        spent = sum((Decimal(str(e["usd"])) for e in events if e["ev"] == "done"), Decimal(0))
+        # One settlement per reservation: a replayed/duplicated "done" is
+        # counted once, at its LARGEST amount (the larger liability prevails).
+        settled: dict[Any, Decimal] = {}
+        for e in events:
+            if e.get("ev") == "done":
+                usd = Decimal(str(e["usd"]))
+                settled[e.get("id")] = max(usd, settled.get(e.get("id"), usd))
+        spent = sum(settled.values(), Decimal(0))
         held = sum((Decimal(str(e["est_usd"])) for e in self._open_reserves(events)), Decimal(0))
         return spent + held
 

@@ -1187,3 +1187,95 @@ def test_register_refuses_to_release_without_not_sent_evidence(register):
         register.fail(call_id, provider="anthropic", error=not_evidence)
     assert [e["ev"] for e in register.events()] == ["reserve"]
     assert register.committed_usd() == Decimal("0.1")
+
+
+# --- L0 23/11 (7101807816): larger liability prevails, no double count, -------
+# --- no false release; B3 view must never be below the legacy governor view --
+
+
+def _settled(rid, usd, **extra):
+    return {"ev": "done", "id": rid, "provider": "anthropic", "model": "synthetic",
+            "in": 1, "out": 1, "usd": usd, "message_id": "m", "stop_reason": "tool_use", **extra}
+
+
+@pytest.mark.parametrize("amounts", [(0.05, 0.07), (0.07, 0.05)])
+def test_duplicate_settlements_of_one_reservation_count_once(register, amounts):
+    """A replayed/duplicated settlement must not double-count spend; the larger wins."""
+    first, second = amounts
+    _write_legacy(register, _legacy_reserve("d1", key="C1:anthropic"),
+                  _settled("d1", first), _settled("d1", second))
+    assert register.committed_usd() == Decimal("0.07")
+
+
+def test_settlement_is_not_reopened_by_a_later_legacy_fail(n2_source, taxonomy, register):
+    _write_legacy(register, _legacy_reserve("d2", key="C1:anthropic"), _settled("d2", 0.07),
+                  {"ev": "fail", "id": "d2", "provider": "anthropic", "error": "TimeoutError"})
+    assert register.committed_usd() == Decimal("0.07")
+    transport = RecordingTransport(_anthropic_reply([]))
+    _run(_config("anthropic"), n2_source, taxonomy, register, transport)
+    assert len(transport.calls) == 1
+
+
+def test_v2_release_cannot_close_a_legacy_reservation(n2_source, taxonomy, register):
+    """No false release: release evidence only applies to a v2 reservation."""
+    _write_legacy(
+        register,
+        _legacy_reserve("d3", key="C1:anthropic"),
+        {"ev": "fail", "id": "d3", "provider": "anthropic", "error": "RequestNotSent",
+         "release": "request_not_sent", "schema": arm.LEDGER_SCHEMA},
+    )
+    assert register.committed_usd() == Decimal("0.25")
+    transport = RecordingTransport(_anthropic_reply([]))
+    config = _config("anthropic")
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, n2_source, taxonomy, register, transport)
+    assert transport.calls == []
+
+
+def test_blocked_retry_after_legacy_timeout_never_charges_twice(n2_source, taxonomy, register):
+    _write_legacy(register, _legacy_reserve("d4", key="C1:anthropic"),
+                  {"ev": "fail", "id": "d4", "provider": "anthropic", "error": "TimeoutError"})
+    transport = RecordingTransport(_anthropic_reply([]))
+    config = _config("anthropic")
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, n2_source, taxonomy, register, transport)
+    assert transport.calls == []
+    assert register.committed_usd() == Decimal("0.25")  # held once, not 0.25 x 2
+    assert [e["ev"] for e in register.events()][-1] == "refused"
+
+
+def test_releasing_one_call_never_releases_another(n2_source, taxonomy, register):
+    _write_legacy(register, _legacy_reserve("d5", key="C1:anthropic"),
+                  {"ev": "fail", "id": "d5", "provider": "anthropic", "error": "TimeoutError"})
+    not_sent = RecordingTransport(error=arm.RequestNotSent("synthetic"))
+    config = _config("anthropic")
+    with pytest.raises(arm.RequestNotSent):
+        _run(config, n2_source, taxonomy, register, not_sent, alias="C2")
+    assert register.committed_usd() == Decimal("0.25")
+
+
+_LEGACY_FIXTURES = {
+    "reserve+fail(timeout)": [
+        _legacy_reserve("f1", key="C1:anthropic"),
+        {"ev": "fail", "id": "f1", "provider": "anthropic", "error": "TimeoutError"}],
+    "reserve+unknown": [
+        _legacy_reserve("f2", key="C1:anthropic:n2_text:abc"),
+        {"ev": "unknown", "id": "f2", "provider": "anthropic", "error": "TimeoutError"}],
+    "keyless reserve": [_legacy_reserve("f3")],
+    "reserve+done": [_legacy_reserve("f4", key="C1:anthropic"), _settled("f4", 0.07)],
+    "duplicate done": [_legacy_reserve("f5", key="C1:anthropic"),
+                       _settled("f5", 0.07), _settled("f5", 0.05)],
+    "v2 release of legacy id": [
+        _legacy_reserve("f6", key="C1:anthropic"),
+        {"ev": "fail", "id": "f6", "provider": "anthropic", "error": "RequestNotSent",
+         "release": "request_not_sent", "schema": "b3-ledger-v2"}],
+}
+
+
+@pytest.mark.parametrize("name", sorted(_LEGACY_FIXTURES))
+def test_b3_liability_is_never_below_the_legacy_governor_view(register, name):
+    """L0: the larger exposure prevails; B3 must never under-report vs governor."""
+    _write_legacy(register, *_LEGACY_FIXTURES[name])
+    summary = _load_governor().summarize(register.events())
+    governor = Decimal(str(summary["spent_usd"])) + Decimal(str(summary["reserved_open_usd"]))
+    assert register.committed_usd() >= governor
