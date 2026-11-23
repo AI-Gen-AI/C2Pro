@@ -166,14 +166,15 @@ def _page_spans(raw: Sequence[Any] | None) -> list[_page_locator.PageSpan]:
     return spans
 
 
-# A11 includes OCR_REPLACED_SUSPECT in its observed-page projection. A7
-# deliberately cannot publish citation evidence from suspicious OCR output.
+# A11 excludes OCR_REPLACED_SUSPECT from its A9 map, retaining raw audit blocks.
+# A7 must reject unsafe OCR without invalidating unaffected physical pages.
 _A11_A9_OBSERVED_STATES = frozenset({
     "NATIVE_TEXT", "OCR_ONLY", "OCR_AUGMENTED",
-    "OCR_REPLACED_SUSPECT", "OCR_DUPLICATE_IGNORED",
+    "OCR_DUPLICATE_IGNORED",
 })
 _A7_CITABLE_PAGE_STATES = _A11_A9_OBSERVED_STATES - {"OCR_REPLACED_SUSPECT"}
 _A11_PAGE_DIAGNOSTICS = _A11_A9_OBSERVED_STATES | {
+    "OCR_REPLACED_SUSPECT",
     "OCR_UNAVAILABLE", "OCR_FAILED", "OCR_EMPTY_RESULT", "OCR_UNCLASSIFIED",
     "SPARSE_TEXT_UNVERIFIED", "SPARSE_OCR_FAILED", "SPARSE_OCR_EMPTY",
     "NO_TEXT_UNASSESSED", "SUSPECT_NATIVE_TEXT_UNVERIFIED",
