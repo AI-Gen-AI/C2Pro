@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 
 from src.coherence.application import project_evaluation as subject
 from src.modules.hitl.domain.entities import ReviewStatus
@@ -177,3 +177,102 @@ def test_lock_key_is_deterministic_and_scoped():
     assert k != subject._approval_lock_key(t, p, uuid4())
     assert k != subject._approval_lock_key(t, uuid4(), r)
     assert 0 <= k < (1 << 63)
+
+
+@pytest.mark.asyncio
+async def test_missing_clauses_withholds_score_but_not_hitl_response(monkeypatch):
+    """A known document-404 after response start is NOT an HTTP error from HITL."""
+    tenant, project, actor, review = uuid4(), uuid4(), uuid4(), uuid4()
+    db = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(side_effect=[None, None, project]))
+    recorded = AsyncMock()
+
+    @asynccontextmanager
+    async def session_factory(tid):
+        assert tid == tenant
+        yield db
+
+    monkeypatch.setattr(subject, "get_session_with_tenant", session_factory)
+    monkeypatch.setattr(
+        subject,
+        "_run_evaluation",
+        AsyncMock(
+            side_effect=HTTPException(
+                status_code=404,
+                detail="No document clauses found. Please upload and parse documents first.",
+            )
+        ),
+    )
+    monkeypatch.setattr(subject, "_record_approval_withheld", recorded)
+    assert (
+        await subject.run_project_evaluation_after_approval(
+            tenant_id=tenant, project_id=project, actor_user_id=actor, review_id=review
+        )
+        is None
+    )
+    recorded.assert_awaited_once()
+    data = recorded.await_args.kwargs
+    assert data["tenant_id"] == tenant and data["project_id"] == project
+    assert data["approval_id"] == str(review)
+    assert data["reason"] == "no_document_clauses"
+    assert data["score_version"] is None
+    assert len(data["missing_dimensions"]) == 6
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    [
+        RuntimeError("synthetic graph outage"),
+        HTTPException(status_code=404, detail="Other missing resource"),
+    ],
+)
+async def test_unexpected_evaluation_error_does_not_break_hitl_or_fake_withheld(
+    monkeypatch, failure
+):
+    tenant, project, actor, review = uuid4(), uuid4(), uuid4(), uuid4()
+    db = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=None))
+    recorded = AsyncMock()
+
+    @asynccontextmanager
+    async def session_factory(tid):
+        assert tid == tenant
+        yield db
+
+    monkeypatch.setattr(subject, "get_session_with_tenant", session_factory)
+    monkeypatch.setattr(subject, "_run_evaluation", AsyncMock(side_effect=failure))
+    monkeypatch.setattr(subject, "_record_approval_withheld", recorded)
+    assert (
+        await subject.run_project_evaluation_after_approval(
+            tenant_id=tenant, project_id=project, actor_user_id=actor, review_id=review
+        )
+        is None
+    )
+    recorded.assert_not_awaited()
+    assert db.scalar.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_public_coherence_endpoint_still_returns_404_for_missing_clauses(monkeypatch):
+    """The public endpoint retains its contract; only A17 background adapts it."""
+    from src.coherence import router as coherence_http
+
+    tenant_id, project_id = uuid4(), uuid4()
+    no_contract_review = AsyncMock(return_value=False)
+    missing_clauses = AsyncMock(return_value=[])
+    monkeypatch.setattr(coherence_http, "_contracts_awaiting_approval", no_contract_review)
+    monkeypatch.setattr(coherence_http, "get_clauses_from_rag", missing_clauses)
+    payload = coherence_http.CoherenceEvaluateRequest(
+        project_id=project_id, low_budget_mode=True, include_rag_similarity=False
+    )
+    with pytest.raises(HTTPException) as exc:
+        await coherence_http.evaluate_project_coherence(
+            payload=payload,
+            include_diagnostics=False,
+            db=SimpleNamespace(),
+            current_user=SimpleNamespace(tenant_id=tenant_id, id=uuid4()),
+            flags_service=None,
+        )
+    assert exc.value.status_code == 404
+    assert exc.value.detail == subject.NO_DOCUMENT_CLAUSES_DETAIL
+    no_contract_review.assert_awaited_once()
+    missing_clauses.assert_awaited_once()

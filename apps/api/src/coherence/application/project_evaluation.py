@@ -34,6 +34,20 @@ from src.temporal.adapters.persistence.models import ProjectEventORM
 
 logger = structlog.get_logger()
 
+# Keep the public /coherence/evaluate 404 contract. Only the matching 404
+# means "missing source documents"; unrelated HTTP errors must not be
+# converted into a successful evaluation or a spurious withheld event.
+NO_DOCUMENT_CLAUSES_DETAIL = "No document clauses found. Please upload and parse documents first."
+NO_DOCUMENT_CLAUSES_REASON = "no_document_clauses"
+NO_DOCUMENT_CLAUSES_DIMENSIONS = (
+    "SCOPE",
+    "BUDGET",
+    "TIME",
+    "TECHNICAL",
+    "LEGAL",
+    "QUALITY",
+)
+
 
 def queue_post_approval_evaluation(
     background_tasks: BackgroundTasks,
@@ -221,12 +235,59 @@ async def run_project_evaluation_after_approval(
                 return
             # The extracted service must leave commit to the outer transaction,
             # otherwise the advisory lock would be released before the marker.
-            await _run_evaluation(payload, db, actor, review_id=review_id)
+            try:
+                await _run_evaluation(payload, db, actor, review_id=review_id)
+            except HTTPException as exc:
+                if (
+                    exc.status_code != status.HTTP_404_NOT_FOUND
+                    or exc.detail != NO_DOCUMENT_CLAUSES_DETAIL
+                ):
+                    raise
+                # A real 404 in the *public* evaluation endpoint is preserved.
+                # After a completed HITL approval there is no HTTP response left
+                # to change: commit the missing-document reason instead. Verify
+                # the project/tenant in SQL before writing the withheld event.
+                project_exists = await db.scalar(
+                    select(ProjectORM.id).where(
+                        ProjectORM.id == project_id,
+                        ProjectORM.tenant_id == tenant_id,
+                    )
+                )
+                if project_exists is None:
+                    raise RuntimeError("A17 project not found in the approval tenant") from exc
+                await _record_approval_withheld(
+                    db,
+                    project_id=project_id,
+                    tenant_id=tenant_id,
+                    actor_user_id=actor_user_id,
+                    approval_id=str(review_id),
+                    reason=NO_DOCUMENT_CLAUSES_REASON,
+                    missing_dimensions=list(NO_DOCUMENT_CLAUSES_DIMENSIONS),
+                    score_version=None,
+                    alert_count=0,
+                )
+                logger.warning(
+                    "a17_postapproval_no_document_clauses",
+                    tenant_id=str(tenant_id),
+                    project_id=str(project_id),
+                    review_id=str(review_id),
+                    score_persisted=False,
+                )
             # Commit is executed by get_session_with_tenant's context manager
             # after all pending rows and their approval marker are durable.
     except Exception:
-        logger.exception("a17_postapproval_evaluation_failed")
-        raise
+        # A background task executes AFTER the HITL HTTP response has begun.
+        # Re-raising here breaks an otherwise correctly authorized human
+        # decision ("response already started"). Leave any SQL effects rolled
+        # back by get_session_with_tenant and let a later retry re-evaluate.
+        # Never persist success, fake Score, or a terminal idempotency marker.
+        logger.exception(
+            "a17_postapproval_evaluation_failed_retryable",
+            tenant_id=str(tenant_id),
+            project_id=str(project_id),
+            review_id=str(review_id),
+        )
+        return
     logger.info("a17_postapproval_evaluation_completed")
 
 
@@ -303,7 +364,7 @@ async def evaluate_coherence_in_application(
         if not clauses:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No document clauses found. Please upload and parse documents first.",
+                detail=NO_DOCUMENT_CLAUSES_DETAIL,
             )
     else:
         raise HTTPException(
