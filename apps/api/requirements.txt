@@ -65,8 +65,7 @@ spacy==3.7.2
 # anonymization silently.
 
 # Observability
-# JV1 guard: keep SDK v2 while legacy push_scope instrumentation is migrated/tested.
-sentry-sdk[fastapi]>=2.0.0,<3.0.0
+sentry-sdk[fastapi]>=2.0.0
 structlog==24.1.0
 prometheus-client==0.26.0
 
