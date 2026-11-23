@@ -445,7 +445,7 @@ async def approve_item(
     current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
     resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
-    background_tasks: BackgroundTasks = None,  # type: ignore[assignment] - direct-call compatibility
+    background_tasks: BackgroundTasks = None,  # type: ignore[assignment]
 ) -> ReviewItemResponse:
     # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to the
     # authenticated session, never to client-supplied values — otherwise any
@@ -750,7 +750,7 @@ async def resume_workflow(
     tenant_id: CurrentTenantId,
     current_user: Annotated[User, Depends(get_current_user)],
     use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
-    background_tasks: BackgroundTasks = None,  # type: ignore[assignment] - direct-call compatibility
+    background_tasks: BackgroundTasks = None,  # type: ignore[assignment]
 ) -> ResumeWorkflowResponse:
     """
     Resume a LangGraph workflow after HITL review decision.
