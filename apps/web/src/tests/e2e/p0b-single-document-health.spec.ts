@@ -130,7 +130,9 @@ async function approveP0bReview(page: Page, projectId: string, reviewItemId: str
   await expect(confirmFinding).toBeEnabled();
   await confirmFinding.click();
   await expect(card.getByTestId(`review-findings-progress-${reviewRowId}`))
-    .toContainText('1/1 findings approved individually.', { timeout: 30_000 });
+    .toContainText('1/1 reviewer confirmations recorded.', { timeout: 30_000 });
+  await expect(card.getByTestId(`review-findings-progress-${reviewRowId}`))
+    .toContainText('1/1 presently source-eligible; original PDF/page not independently verified.', { timeout: 30_000 });
   const approveAll = card.getByTestId(`approve-${reviewItemId}`);
   await expect(approveAll).toBeEnabled({ timeout: 30_000 });
   await approveAll.click();
