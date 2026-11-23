@@ -17,6 +17,21 @@ from src.analysis.domain.n4_source_windows import N4SourceWindow
 
 N4_WINDOW_PROMPT_VERSION = "n4-compact-window-v2"
 
+# Mirrors the 20 control IDs and six dimensions in B1 oracle taxonomy (§6.2).
+# No oracle results, answer keys or data from any private contract are included.
+EPC_CONTROL_DIMENSIONS: dict[str, str] = {
+    "EPC-01": "BUDGET", "EPC-02": "BUDGET", "EPC-03": "BUDGET",
+    "EPC-04": "TIME", "EPC-05": "TIME",
+    "EPC-06": "TECHNICAL",
+    "EPC-07": "LEGAL", "EPC-08": "LEGAL", "EPC-09": "LEGAL",
+    "EPC-10": "LEGAL", "EPC-11": "LEGAL",
+    "EPC-12": "SCOPE", "EPC-13": "SCOPE",
+    "EPC-14": "QUALITY", "EPC-15": "QUALITY",
+    "EPC-16": "LEGAL", "EPC-17": "LEGAL", "EPC-18": "LEGAL",
+    "EPC-19": "BUDGET", "EPC-20": "SCOPE",
+}
+
+
 # Keep this identifier in sync with the forced tool schema and evidence rules.
 # L1 must consume provider.prompt_version in config_sha; A5 cannot edit runner.
 N4_WINDOW_SYSTEM_PROMPT = """You are reviewing project-document risks, not approving them.
@@ -29,6 +44,14 @@ Give at most 2 additional literal supporting quotes. Do not invent figures.
 Separate verbatim citation from risk_reason (your interpretation).
 Classify each risk into one of LEGAL, TIME, BUDGET, TECHNICAL, SCOPE, QUALITY.
 Provide severity_proposed (CRITICAL/HIGH/MEDIUM/LOW), for human confirmation.
+Classify the risk against the B1 EPC controls (or null if none applies):
+EPC-01 price/currency; 02 payments; 03 securities; 04 dates; 05 delay LDs;
+06 performance; 07 liability; 08 indemnities; 09 termination; 10 suspension;
+11 force majeure; 12 variations; 13 scope/interfaces; 14 acceptance tests;
+15 defects warranty; 16 insurance; 17 confidentiality/IP; 18 disputes;
+19 taxes/permits; 20 annexes/precedence. The control must match the
+LEGAL/TIME/BUDGET/TECHNICAL/SCOPE/QUALITY dimension. Never assume presence
+of a control or invent an unquoted obligation.
 Inventory sections are aids, not substitutes for reading all source text.
 For EVERY inventoried clause, declare it examined, even if it has no risk.
 If a clause cannot be examined, return window_examined=false.
@@ -223,6 +246,15 @@ def parse_n4_window_output(
         category = _required_text(finding, "category")
         if v2 and _DIMENSIONS.get(category.lower(), "UNCLASSIFIED") == "UNCLASSIFIED":
             raise N4WindowContractError("N4 v2 requires one of six EPC dimensions")
+        if v2 and "epc_control_id" not in finding:
+            raise N4WindowContractError("N4 v2 requires epc_control_id field")
+        epc_control_id = _optional_text(finding, "epc_control_id")
+        if epc_control_id is not None and epc_control_id not in EPC_CONTROL_DIMENSIONS:
+            raise N4WindowContractError("unknown EPC control identifier")
+        if (v2 and epc_control_id is not None
+                and EPC_CONTROL_DIMENSIONS[epc_control_id]
+                != _DIMENSIONS.get(category.lower(), "UNCLASSIFIED")):
+            raise N4WindowContractError("EPC control and dimension mismatch")
         severity = _optional_text(finding, "severity_proposed")
         if severity is not None and severity not in _SEVERITIES:
             raise N4WindowContractError("invalid N4 severity_proposed")
@@ -307,6 +339,7 @@ def parse_n4_window_output(
                 "title": title,
                 "category": category,
                 "dimension": _DIMENSIONS.get(category.lower(), "UNCLASSIFIED"),
+                "epc_control_id": epc_control_id,
                 "severity_proposed": severity,
                 "quote_omits_figures": _quote_omits_figures(reason, literal_quote),
                 "supporting_quotes": literal_supporting,
