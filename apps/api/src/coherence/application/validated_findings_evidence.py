@@ -66,8 +66,14 @@ class ExposureBands:
 def _exposure(fact: ExposureFact, cfg: ExposureBands) -> float:
     if fact.dimension not in DIMENSIONS or fact.state not in STATES:
         raise ValueError("unsupported dimension/review state")
-    if not fact.canonical_key.strip() or fact.severity not in cfg.severity:
-        raise ValueError("missing typed fact key or severity")
+    if not isinstance(fact.canonical_key, str) or not fact.canonical_key.strip():
+        raise ValueError("missing typed fact key")
+    if fact.severity not in cfg.severity:
+        raise ValueError("unsupported severity")
+    if fact.evidence_id is not None and (
+        not isinstance(fact.evidence_id, str) or not fact.evidence_id.strip()
+    ):
+        raise ValueError("invalid evidence provenance")
     if fact.materiality is not None and (not isfinite(fact.materiality) or fact.materiality < 0):
         raise ValueError("invalid materiality")
     if not isfinite(fact.mitigation_fraction) or not 0 <= fact.mitigation_fraction <= 1:
@@ -76,7 +82,7 @@ def _exposure(fact: ExposureFact, cfg: ExposureBands) -> float:
     if fact.materiality is not None:
         value *= 1 + fact.materiality / cfg.materiality_scale
     if fact.mitigation_verified:
-        if not fact.mitigation_evidence_id:
+        if not isinstance(fact.mitigation_evidence_id, str) or not fact.mitigation_evidence_id.strip():
             raise ValueError("verified mitigation requires evidence")
         value *= 1 - fact.mitigation_fraction
     # accepted_risk has intentionally no effect: human acceptance is not mitigation.
@@ -114,13 +120,22 @@ def calculate_exposure_score(facts: Sequence[ExposureFact], cfg: ExposureBands) 
         target[key] = max(target.get(key, 0), value)
     projected = dict(validated)
     for key, val in pending.items():
-        projected[key] = max(projected.get(key, 0), val)
+        # A newer validated disposition overrides any stale pending replica of
+        # the same canonical fact. It must not be counted twice or keep a
+        # superseded severity alive in the projection.
+        if key not in validated:
+            projected[key] = val
     v = {dim: _category(validated, dim) for dim in DIMENSIONS}
     p = {dim: _category(projected, dim) for dim in DIMENSIONS}
+    validated_global = _global(v, cfg.dimension_weights)
+    projected_global = _global(p, cfg.dimension_weights)
+    # Adding pending evidence in a previously unassessed dimension can
+    # increase a renormalized mean despite adding exposure. Keep the
+    # projection conservative while preserving assessable-only normalization.
+    if validated_global is not None and projected_global is not None:
+        projected_global = min(projected_global, validated_global)
     return ExposureScore(
-        global_score=ScorePair(
-            _global(v, cfg.dimension_weights), _global(p, cfg.dimension_weights)
-        ),
+        global_score=ScorePair(validated_global, projected_global),
         dimensions={d: ScorePair(v[d], p[d]) for d in DIMENSIONS},
         validated_fact_count=len(validated),
         pending_fact_count=len(set(pending) - set(validated)),
