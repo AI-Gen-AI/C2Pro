@@ -251,7 +251,7 @@ def _render_summary_scores(ws: Worksheet, summary: JourneySummaryData, styles: _
     if summary.coherence_source_status in ("ERROR", "UNAVAILABLE"):
         score_rows.append((
             "Coherence Data Source Status",
-            (f"[UNAVAILABLE] No coherence evaluation recorded in queried SQL sources"
+            ("[UNAVAILABLE] No coherence evaluation recorded in queried SQL sources"
              if summary.coherence_source_status == "UNAVAILABLE"
              else "[ERROR] Coherence evaluation SQL read failed"),
             "Recorded data absence or SQL read failure (distinct states)",
@@ -337,7 +337,7 @@ def _render_summary_coverage(ws: Worksheet, summary: JourneySummaryData, styles:
     if summary.coverage_source_status in ("ERROR", "UNAVAILABLE"):
         cov_rows.append((
             "Contract Analysis Source Status",
-            (f"[UNAVAILABLE] No N4 extraction run recorded in queried SQL sources"
+            ("[UNAVAILABLE] No N4 extraction run recorded in queried SQL sources"
              if summary.coverage_source_status == "UNAVAILABLE"
              else "[ERROR] N4 coverage SQL read failed"),
         ))
