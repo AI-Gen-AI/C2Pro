@@ -25,9 +25,11 @@ from src.analysis.domain.enums import AlertSeverity, AlertStatus, AlertType, Ana
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.adapters.persistence.withheld_evaluation import (
     latest_withheld_evaluation,
-    record_withheld_evaluation,
 )
-from src.coherence.application.disposition_review import build_scoring_snapshot
+from src.coherence.application.project_evaluation import (
+    EvaluationPorts,
+    evaluate_coherence_in_application,
+)
 from src.coherence.domain.score_reasons import (
     CONTRACT_PENDING_APPROVAL,
     CONTRACT_REJECTED,
@@ -38,7 +40,6 @@ from src.coherence.feature_flags import (
     coherence_llm_crosscheck_enabled_for_tenant,
     coherence_v2_enabled_for_tenant,
 )
-from src.coherence.graph.nodes import v1_unassessed_reasons
 from src.coherence.models import structured_source_refs
 from src.coherence.services.alerts.generator import AlertGeneratorService
 from src.coherence.structured_source_binding import (
@@ -69,7 +70,7 @@ from .canonical.live_rescore import (
     canonical_category_name,
     canonical_rescore,
 )
-from .domain.v2_constants import SCORE_VERSION_V1, SCORE_VERSION_V2
+from .domain.v2_constants import SCORE_VERSION_V2
 from .graph.graph import evaluate_coherence_async
 from .graph.nodes import _build_category_breakdown
 from .graph.state import EvaluationConfig
@@ -104,6 +105,7 @@ async def _v2_enabled_for(tenant_id: UUID, flags_service: TenantFlagsService | N
 
         return getattr(get_settings(), "coherence_v2_enabled", False)
     return await coherence_v2_enabled_for_tenant(tenant_id, flags_service=flags_service)
+
 
 router = APIRouter(
     prefix="/coherence",
@@ -214,8 +216,25 @@ def _infer_category_from_clause(clause: Clause) -> str:
     text_lower = clause.text.lower()
 
     # Check data fields first
-    budget_keywords = {"budget", "cost", "amount", "price", "planned", "current", "total", "payment"}
-    time_keywords = {"deadline", "schedule", "date", "duration", "milestone", "end_date", "start_date"}
+    budget_keywords = {
+        "budget",
+        "cost",
+        "amount",
+        "price",
+        "planned",
+        "current",
+        "total",
+        "payment",
+    }
+    time_keywords = {
+        "deadline",
+        "schedule",
+        "date",
+        "duration",
+        "milestone",
+        "end_date",
+        "start_date",
+    }
     legal_keywords = {"contract", "legal", "warranty", "notice", "penalty", "insurance", "term"}
     technical_keywords = {"specification", "bom", "material", "lead_time", "spec", "standard"}
     quality_keywords = {"inspection", "quality", "standard", "testing", "review"}
@@ -268,12 +287,56 @@ def _convert_enriched_to_coherence_result(enriched: EnrichedCoherenceResult) -> 
 
 
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
-    "LEGAL":     ["penalty", "notice", "terminat", "warrant", "liabilit", "indemnif", "arbitrat", "dispute", "insurance"],
-    "TIME":      ["completion", "milestone", "delay", "deadline", "schedule", "float", "duration", "commencement"],
-    "BUDGET":    ["payment", "price", "invoice", "retention", "advance", "contract sum", "contract price", "lump sum"],
-    "TECHNICAL": ["specification", "standard", "iso", "astm", "equipment", "bom", "engineering", "design"],
-    "QUALITY":   ["inspection", "test", "commissioning", "defect", "quality", "acceptance"],
-    "SCOPE":     ["deliverable", "scope of work", "scope of supply", "shall supply", "shall provide", "shall design"],
+    "LEGAL": [
+        "penalty",
+        "notice",
+        "terminat",
+        "warrant",
+        "liabilit",
+        "indemnif",
+        "arbitrat",
+        "dispute",
+        "insurance",
+    ],
+    "TIME": [
+        "completion",
+        "milestone",
+        "delay",
+        "deadline",
+        "schedule",
+        "float",
+        "duration",
+        "commencement",
+    ],
+    "BUDGET": [
+        "payment",
+        "price",
+        "invoice",
+        "retention",
+        "advance",
+        "contract sum",
+        "contract price",
+        "lump sum",
+    ],
+    "TECHNICAL": [
+        "specification",
+        "standard",
+        "iso",
+        "astm",
+        "equipment",
+        "bom",
+        "engineering",
+        "design",
+    ],
+    "QUALITY": ["inspection", "test", "commissioning", "defect", "quality", "acceptance"],
+    "SCOPE": [
+        "deliverable",
+        "scope of work",
+        "scope of supply",
+        "shall supply",
+        "shall provide",
+        "shall design",
+    ],
 }
 
 # Clauses per category on targeted pass; fallback fills remainder up to max_chunks.
@@ -330,9 +393,8 @@ def _build_clause(row: Sequence[object]) -> Clause | None:
         # Metadata for N8 CategoryRouter is intentionally technical-only:
         # do NOT reclassify any contract, budget, or schedule in this S3 PR.
         clause_data["document_type"] = doc_type
-    if (
-        doc_type in {"technical_spec", "specification"}
-        and isinstance(extracted_dict.get("technical_requirement"), dict)
+    if doc_type in {"technical_spec", "specification"} and isinstance(
+        extracted_dict.get("technical_requirement"), dict
     ):
         # An approved SOURCE allows citation but does not prove the building
         # meets that requirement. The deterministic extraction records only
@@ -386,9 +448,7 @@ async def get_clauses_from_rag(
     _CLAUSES_PER_CATEGORY hits each, deduplicate, then fill remaining budget
     with a chronological fallback so boilerplate clauses are still present.
     """
-    targeted_clauses = await _get_persisted_clause_candidates(
-        db, project_id, tenant_id, max_chunks
-    )
+    targeted_clauses = await _get_persisted_clause_candidates(db, project_id, tenant_id, max_chunks)
     targeted_clauses = await _with_budget_clause_candidates(
         targeted_clauses, db, project_id, tenant_id
     )
@@ -474,9 +534,7 @@ async def _get_persisted_clause_candidates(
     remaining = max(0, max_chunks - len(targeted_clauses))
     if remaining > 0:
         targeted_clauses.extend(
-            await _load_fallback_clause_candidates(
-                db, project_id, tenant_id, remaining, seen_ids
-            )
+            await _load_fallback_clause_candidates(db, project_id, tenant_id, remaining, seen_ids)
         )
 
     return targeted_clauses
@@ -562,8 +620,7 @@ async def _get_rag_chunk_clauses(
         LIMIT :limit
     """)
     result = await db.execute(
-        stmt,
-        {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": max_chunks}
+        stmt, {"project_id": str(project_id), "tenant_id": str(tenant_id), "limit": max_chunks}
     )
     rows = result.fetchall()
 
@@ -664,6 +721,7 @@ def _uuid_or_none(value: object) -> UUID | None:
     except (TypeError, ValueError, AttributeError):
         return None
 
+
 def _split_clause_locators(value: object) -> list[str]:
     """Split detector locators that encode multiple clause identities."""
 
@@ -681,9 +739,7 @@ def _coherence_alert_to_create(
     persisted_clause_documents: dict[UUID, UUID],
 ) -> AlertCreate:
     evidence = getattr(alert, "evidence", None)
-    source_locator = (
-        str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
-    )
+    source_locator = str(getattr(evidence, "source_clause_id", "") or "") if evidence else ""
     # The caller's clause payload is diagnostic data, not provenance authority.
     # Preserve the call contract, but never infer document identity from its metadata.
     _ = clauses
@@ -751,9 +807,7 @@ def _coherence_alert_to_create(
     return AlertCreate(
         project_id=project_id,
         analysis_id=None,
-        severity=_COHERENCE_ALERT_SEVERITY.get(
-            severity_key, AlertSeverity.MEDIUM
-        ),
+        severity=_COHERENCE_ALERT_SEVERITY.get(severity_key, AlertSeverity.MEDIUM),
         alert_type=AlertType.COHERENCE,
         rule_id=getattr(alert, "rule_id", None),
         category=_coherence_alert_category(getattr(alert, "category", None)),
@@ -767,9 +821,14 @@ def _coherence_alert_to_create(
         alert_metadata={
             "source": "coherence_evaluate",
             "detection_evidence": detection_evidence,
-            **({"economic_discrepancy_key": evidence.economic_discrepancy_key,
-                "severity_qualification": "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS"}
-               if evidence is not None and evidence.economic_discrepancy_key else {}),
+            **(
+                {
+                    "economic_discrepancy_key": evidence.economic_discrepancy_key,
+                    "severity_qualification": "NUMERIC_MATERIALITY_NOT_VERIFIED_CONTRACTUAL_LOSS",
+                }
+                if evidence is not None and evidence.economic_discrepancy_key
+                else {}
+            ),
         },
     )
 
@@ -792,9 +851,7 @@ async def _verified_persisted_clause_documents(
         evidence = getattr(alert, "evidence", None)
         if evidence is None:
             continue
-        for locator in _split_clause_locators(
-            getattr(evidence, "source_clause_id", None)
-        ):
+        for locator in _split_clause_locators(getattr(evidence, "source_clause_id", None)):
             candidate = _uuid_or_none(locator)
             if candidate is not None:
                 candidate_set.add(candidate)
@@ -804,12 +861,10 @@ async def _verified_persisted_clause_documents(
         return {}
 
     candidate_params = {
-        f"candidate_{index}": str(candidate)
-        for index, candidate in enumerate(candidates)
+        f"candidate_{index}": str(candidate) for index, candidate in enumerate(candidates)
     }
     candidate_sql = ", ".join(
-        f"CAST(:candidate_{index} AS uuid)"
-        for index in range(len(candidates))
+        f"CAST(:candidate_{index} AS uuid)" for index in range(len(candidates))
     )
     statement = text(
         f"""
@@ -859,12 +914,14 @@ _DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL = text(f"""
 """)
 
 
-async def _documents_excluded_from_evaluation(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
+async def _documents_excluded_from_evaluation(
+    db: AsyncSession, project_id: UUID, tenant_id: UUID
+) -> bool:
     count = await db.scalar(
-        _DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+        _DOCUMENTS_EXCLUDED_FROM_EVALUATION_SQL,
+        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
     )
     return bool(count)
-
 
 
 # Contract documents that are not canonical input: awaiting a human decision (or without a usable
@@ -882,7 +939,8 @@ _CONTRACTS_AWAITING_APPROVAL_SQL = text(f"""
 
 async def _contracts_awaiting_approval(db: AsyncSession, project_id: UUID, tenant_id: UUID) -> bool:
     count = await db.scalar(
-        _CONTRACTS_AWAITING_APPROVAL_SQL, {"project_id": str(project_id), "tenant_id": str(tenant_id)}
+        _CONTRACTS_AWAITING_APPROVAL_SQL,
+        {"project_id": str(project_id), "tenant_id": str(tenant_id)},
     )
     return bool(count)
 
@@ -906,7 +964,9 @@ _CONTRACTS_ALL_REJECTED_SQL = text(f"""
 """)
 
 
-async def _contract_withheld_reason(db: AsyncSession | None, project_id: UUID, tenant_id: UUID) -> str:
+async def _contract_withheld_reason(
+    db: AsyncSession | None, project_id: UUID, tenant_id: UUID
+) -> str:
     """Given that the contract blocks a Score: REJECTED by a human, or still awaiting a decision.
 
     Called only after ``_contracts_awaiting_approval`` answered True. Without a session the state cannot be
@@ -984,7 +1044,10 @@ async def _mirror_coherence_alerts_to_alerts_table(
     # Resolve original XLSX rows against CURRENT tenant-scoped revisions.
     # This is source navigation only: never grants clause/HITL approval.
     await resolve_alert_original_rows(
-        db, tenant_id=tenant_id, project_id=project_id, payloads=payloads,
+        db,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        payloads=payloads,
     )
     annotate_related_economic_alerts(payloads)
     service = AlertGeneratorService(SqlAlchemyAlertRepository(db))
@@ -1013,7 +1076,9 @@ async def _mirror_coherence_alerts_to_alerts_table(
 def _is_validated_false_positive(record: Any | None) -> bool:
     if record is None:
         return False
-    status_value = str(getattr(getattr(record, "status", None), "value", getattr(record, "status", "")))
+    status_value = str(
+        getattr(getattr(record, "status", None), "value", getattr(record, "status", ""))
+    )
     if status_value != AlertStatus.DISMISSED.value:
         return False
     metadata = dict(getattr(record, "alert_metadata", None) or {})
@@ -1074,9 +1139,8 @@ def _apply_disposition_aware_rescore(
         eligible_signals.append(signal)
         eligible_alert_indexes.append(index)
 
-    changed = (
-        len(eligible_signals) != len(result.finding_signals)
-        or len(seen_families) != len(result.finding_signals)
+    changed = len(eligible_signals) != len(result.finding_signals) or len(seen_families) != len(
+        result.finding_signals
     )
     if not changed:
         return result
@@ -1166,9 +1230,7 @@ def _annotate_missing_technical_hint(
         "specifications pliego (prescripciones técnicas) that was not provided. "
         "Upload the Pliego de prescripciones técnicas for a technical coherence score."
     )
-    result.score_reason = (
-        f"{result.score_reason} {hint}".strip() if result.score_reason else hint
-    )
+    result.score_reason = f"{result.score_reason} {hint}".strip() if result.score_reason else hint
 
 
 # ---- API Endpoint ----
@@ -1195,288 +1257,42 @@ def _annotate_missing_technical_hint(
 async def evaluate_project_coherence(
     payload: CoherenceEvaluateRequest,
     include_diagnostics: bool = Query(
-        default=False,
-        description="Include detailed diagnostics in response",
+        default=False, description="Include detailed diagnostics in response"
     ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
     flags_service: TenantFlagsService = Depends(get_flags_service),
 ) -> CoherenceResult | EnrichedCoherenceResult:
-    """
-    Evaluates the coherence of a project based on its context using v0.3 scoring engine.
-
-    TASK-REV-004: Added current_user for tenant isolation.
-
-    - **payload**: Contains project_id (to fetch from RAG) OR explicit clauses
-    - **include_diagnostics**: If True, returns EnrichedCoherenceResult with diagnostics
-
-    Returns the evaluation result, including alerts and a granular score (5-97 range).
-    """
-    # Determine clauses source
-    if payload.clauses:
-        clauses = payload.clauses
-    elif payload.project_id:
-        # S3: a contract that has no canonical/approved current input blocks any
-        # relational Coherence Score, even if Budget/Schedule clauses are already
-        # searchable. The old check only ran when *no* RAG clauses existed, so it
-        # could score unrelated documents before a human approved the contract.
-        # A trusted revision A with proposed revision B remains canonical via
-        # current_revision_lateral, so normal S6 revision continuity is preserved.
-        if await _contracts_awaiting_approval(
-            db, payload.project_id, current_user.tenant_id
-        ):
-            # Pending (or rejected) is not an evaluation result: do not persist a Score or
-            # change the alert register before this human authority decision.
-            return _contract_pending_approval_result(
-                include_diagnostics,
-                await _contract_withheld_reason(db, payload.project_id, current_user.tenant_id),
-            )
-        clauses = await get_clauses_from_rag(
-            db, payload.project_id, current_user.tenant_id, payload.max_chunks
-        )
-        if not clauses:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No document clauses found. Please upload and parse documents first.",
-            )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Either project_id or clauses must be provided.",
-        )
-
-    logger.info(
-        "coherence_evaluate_start",
-        clauses_count=len(clauses),
-        low_budget_mode=payload.low_budget_mode,
-        include_rag_similarity=payload.include_rag_similarity,
+    """Evaluate through the application service; public endpoint contract unchanged."""
+    return await evaluate_coherence_in_application(
+        payload,
         include_diagnostics=include_diagnostics,
+        db=db,
+        current_user=current_user,
+        flags_service=flags_service,
+        ports=_coherence_evaluation_ports(),
     )
 
-    # Resolve the LLM cross-clause depth flag per tenant (default off). Adds a bounded LLM
-    # call to detect semantic contradictions between clause pairs; the deterministic floor
-    # is always on regardless. Resolved here so the graph node stays free of the flags service.
-    llm_crosscheck_enabled = False
-    if flags_service is not None:
-        try:
-            llm_crosscheck_enabled = await coherence_llm_crosscheck_enabled_for_tenant(
-                current_user.tenant_id, flags_service=flags_service
-            )
-        except Exception:
-            logger.warning("coherence_llm_crosscheck_flag_resolution_failed", exc_info=True)
 
-    # Load the project name for the project-identity (LOC-MISMATCH) comparator. Best-effort +
-    # RLS-scoped (the session carries the tenant), so it only resolves the caller's own project.
-    project_name: str | None = None
-    if payload.project_id:
-        with suppress(Exception):
-            project_name = await db.scalar(
-                select(ProjectORM.name).where(ProjectORM.id == payload.project_id)
-            )
-
-    # The schedule's observed planned finish (with its document/revision/row identity) for the
-    # contract-completion comparator. Best-effort: a failure leaves the comparison absent.
-    schedule_planned_finish: dict[str, Any] | None = None
-    schedule_assessable = True
-    if payload.project_id:
-        try:
-            schedule_planned_finish = await load_schedule_planned_finish(
-                db, payload.project_id, current_user.tenant_id
-            )
-        except Exception:
-            logger.warning("coherence_schedule_planned_finish_load_failed", exc_info=True)
-            schedule_assessable = False
-        # A schedule the comparison could not read (stale revision stamp, several schedules, malformed
-        # observation) was not evaluated: that is not "fixed", so nothing may be auto-resolved.
-        if isinstance(schedule_planned_finish, dict) and "reason" in schedule_planned_finish:
-            schedule_assessable = False
-
-    # Create evaluation config
-    config = EvaluationConfig(
-        low_budget_mode=payload.low_budget_mode,
-        include_rag_similarity=payload.include_rag_similarity,
-        llm_crosscheck_enabled=llm_crosscheck_enabled,
-        tenant_id=str(current_user.tenant_id),
-        project_id=str(payload.project_id) if payload.project_id else None,
-        project_name=project_name,
-        schedule_planned_finish=schedule_planned_finish,
+def _coherence_evaluation_ports() -> EvaluationPorts:
+    """Late-binding preserves test patch points and existing HTTP semantics."""
+    return EvaluationPorts(
+        contracts_pending=_contracts_awaiting_approval,
+        contract_withheld_reason=_contract_withheld_reason,
+        contract_pending_result=_contract_pending_approval_result,
+        get_clauses=get_clauses_from_rag,
+        schedule_finish=load_schedule_planned_finish,
+        llm_crosscheck_enabled=coherence_llm_crosscheck_enabled_for_tenant,
+        run_graph=evaluate_coherence_async,
+        mirror_alerts=_mirror_coherence_alerts_to_alerts_table,
+        reconciliation_type=_CoherenceAlertReconciliation,
+        rescore=_apply_disposition_aware_rescore,
+        annotate_hint=_annotate_missing_technical_hint,
+        canonical_canary=_maybe_apply_canonical_canary,
+        v2_shadow=_run_v2_shadow_on_evaluate,
+        v2_enabled=_v2_enabled_for,
+        convert_result=_convert_enriched_to_coherence_result,
     )
-
-    # Evaluate using LangGraph subgraph
-    enriched_result = await evaluate_coherence_async(
-        clauses=clauses,
-        project_id=str(payload.project_id) if payload.project_id else "manual",
-        config=config,
-    )
-
-    logger.info(
-        "coherence_detection_complete",
-        alerts_count=len(enriched_result.alerts),
-        overall_score=enriched_result.overall_score,
-    )
-    detected_result = enriched_result
-    reconciliation: _CoherenceAlertReconciliation | None = None
-
-    # B1-09: durable human disposition is part of the scoring input authority.
-    # Reconcile first (same transaction), then re-score the complete FindingSignals.
-    # A validated false positive is excluded; ACKNOWLEDGED/accepted variance remains.
-    # An incomplete audit may still surface evidence-backed findings. Preserve those
-    # in the Alert ledger without inventing a score or auto-resolving older findings
-    # that cannot be reassessed from the incomplete evidence.
-    if payload.project_id and (
-        enriched_result.overall_score is not None or enriched_result.alerts
-    ):
-        reconciliation = await _mirror_coherence_alerts_to_alerts_table(
-            db=db,
-            project_id=payload.project_id,
-            tenant_id=current_user.tenant_id,
-            alerts=enriched_result.alerts,
-            clauses=clauses,
-            auto_resolve=enriched_result.overall_score is not None,
-            evaluation_complete=schedule_assessable,
-        )
-        if enriched_result.overall_score is not None and isinstance(
-            reconciliation, _CoherenceAlertReconciliation
-        ):
-            enriched_result = _apply_disposition_aware_rescore(
-                enriched_result,
-                reconciliation,
-                clauses=clauses,
-                config=config,
-            )
-
-    # Referenced-but-missing hint: if the technical dimension was withheld for lack
-    # of evidence but the documents reference a technical specifications pliego, tell
-    # the user what to upload — honest and actionable, never a fabricated score.
-    _annotate_missing_technical_hint(enriched_result, clauses)
-
-    # ADR-017 canary runs only after B1 disposition filtering so both scorers see
-    # the same eligible finding set.
-    enriched_result = await _maybe_apply_canonical_canary(
-        enriched_result, tenant_id=current_user.tenant_id, flags_service=flags_service
-    )
-
-    logger.info(
-        "coherence_evaluate_complete",
-        alerts_count=len(enriched_result.alerts),
-        findings_count=len(enriched_result.finding_signals),
-        overall_score=enriched_result.overall_score,
-        score_version=enriched_result.score_version,
-    )
-
-    # Persist result so the dashboard always reflects the latest evaluation.
-    # Keep the exact detected FindingSignals and their identity basis so a later
-    # validated false-positive review can replay the same scorer/version.
-    if payload.project_id and enriched_result.overall_score is not None:
-        scoring_snapshot = None
-        if isinstance(reconciliation, _CoherenceAlertReconciliation):
-            scoring_snapshot = build_scoring_snapshot(
-                detected_result=detected_result,
-                finding_keys_by_alert_index=reconciliation.finding_keys_by_alert_index,
-                records_by_finding_key=reconciliation.records_by_finding_key,
-                clauses=list(clauses),
-                config=config,
-                score_version=enriched_result.score_version or SCORE_VERSION_V1,
-            )
-        # Normalize legacy "SCHEDULE"→"TIME" so dashboard sub_scores keys match COHERENCE_CATEGORIES
-        _CAT_ALIAS = {"SCHEDULE": "TIME", "FINANCIAL": "BUDGET", "GENERAL": "SCOPE"}
-
-        def _norm_cat(cat: str) -> str:
-            key = cat.upper()
-            return _CAT_ALIAS.get(key, key)
-
-        category_scores = {
-            _norm_cat(item.category): item.score
-            for item in enriched_result.category_breakdown
-        }
-        category_details = [
-            {
-                "category": _norm_cat(item.category),
-                "score": item.score,
-                "alert_count": item.alert_count,
-                "severity_breakdown": dict(item.severity_breakdown) if item.severity_breakdown else {},
-                "impact_percentage": item.impact_percentage,
-            }
-            for item in enriched_result.category_breakdown
-        ]
-        alerts_data = [
-            {
-                "rule_id": a.rule_id,
-                "severity": a.severity,
-                "category": a.category,
-                "message": a.message,
-                "evidence": (
-                    {
-                        "source_clause_id": a.evidence.source_clause_id,
-                        "claim": a.evidence.claim,
-                        "quote": a.evidence.quote,
-                    }
-                    if a.evidence
-                    else None
-                ),
-            }
-            for a in enriched_result.alerts
-        ]
-        db.add(
-            CoherenceResultORM(
-                project_id=payload.project_id,
-                tenant_id=current_user.tenant_id,
-                global_score=round(enriched_result.overall_score),
-                category_scores=category_scores,
-                category_details=category_details,
-                alerts=alerts_data,
-                score_version=enriched_result.score_version or SCORE_VERSION_V1,
-                score_reason=enriched_result.score_reason,
-                score_missing_dimensions=enriched_result.score_missing_dimensions,
-                scoring_snapshot=scoring_snapshot,
-            )
-        )
-        # Alert lifecycle was reconciled before scoring with commit=False.
-        # This one commit makes the disposition-aware score and Alert state durable together.
-        await db.commit()
-    elif payload.project_id and (reconciliation is not None or enriched_result.score_reason):
-        # A scoreless evaluation can still contain actionable findings. Persist the
-        # alert ledger without creating a fake CoherenceResult or changing trusted
-        # score authority. auto_resolve=False preserves older human dispositions.
-        # S3: its REASON is kept as an append-only withheld-evaluation event so the persisted
-        # dashboard can repeat it after a reload or a new login (never a number in its place).
-        await record_withheld_evaluation(
-            db,
-            project_id=payload.project_id,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=getattr(current_user, "id", None),
-            reason=enriched_result.score_reason,
-            missing_dimensions=list(enriched_result.score_missing_dimensions or []),
-            score_version=enriched_result.score_version,
-            alert_count=len(enriched_result.alerts),
-        )
-        await db.commit()
-
-    # V2 shadow: run real CoherenceV2Orchestrator and emit delta event.
-    # Guard mirrors _maybe_add_v2_dashboard: only fires when both flags are True.
-    # Never raises — failures are caught so the V1 response is unaffected.
-    # TASK-COH-V2-WIRE-ORCHESTRATOR
-    if payload.project_id:
-        from src.config import get_settings  # local import — avoids circular dep
-        _settings = get_settings()
-        if (
-            await _v2_enabled_for(current_user.tenant_id, flags_service)
-            and getattr(_settings, "coherence_v2_shadow_mode", True)
-        ):
-            await _run_v2_shadow_on_evaluate(
-                v1_result=enriched_result,
-                project_id=payload.project_id,
-                tenant_id=current_user.tenant_id,
-                db=db,
-                withheld_categories=v1_unassessed_reasons(clauses, enriched_result),
-            )
-
-    # Return diagnostics if requested (Task 7.4)
-    if include_diagnostics:
-        return enriched_result
-
-    # Otherwise return backward-compatible response (Task 7.3)
-    return _convert_enriched_to_coherence_result(enriched_result)
 
 
 async def _maybe_apply_canonical_canary(
@@ -1757,14 +1573,12 @@ async def get_coherence_dashboard(
 
     # 2. Optimized counts and latest timestamps
     document_count_result = await db.execute(
-        select(func.count(DocumentORM.id))
-        .where(DocumentORM.project_id == project_id)
+        select(func.count(DocumentORM.id)).where(DocumentORM.project_id == project_id)
     )
     document_count = document_count_result.scalar() or 0
 
     alert_count_result = await db.execute(
-        select(func.count(AlertORM.id))
-        .where(AlertORM.project_id == project_id)
+        select(func.count(AlertORM.id)).where(AlertORM.project_id == project_id)
     )
     alert_count = alert_count_result.scalar() or 0
 
@@ -1805,14 +1619,12 @@ async def get_coherence_dashboard(
 
     # Fetch latest metadata for last_updated
     latest_doc_at_result = await db.execute(
-        select(func.max(DocumentORM.updated_at))
-        .where(DocumentORM.project_id == project_id)
+        select(func.max(DocumentORM.updated_at)).where(DocumentORM.project_id == project_id)
     )
     latest_doc_at = latest_doc_at_result.scalar()
 
     latest_alert_at_result = await db.execute(
-        select(func.max(AlertORM.updated_at))
-        .where(AlertORM.project_id == project_id)
+        select(func.max(AlertORM.updated_at)).where(AlertORM.project_id == project_id)
     )
     latest_alert_at = latest_alert_at_result.scalar()
 
@@ -1930,10 +1742,14 @@ async def get_coherence_dashboard(
         document_count=document_count,
         methodology_version="3.0",
         score_version=(
-            withheld.score_version if withheld else (metadata_source.score_version if metadata_source else None)
+            withheld.score_version
+            if withheld
+            else (metadata_source.score_version if metadata_source else None)
         ),
         score_reason=(
-            withheld.reason if withheld else (metadata_source.score_reason if metadata_source else None)
+            withheld.reason
+            if withheld
+            else (metadata_source.score_reason if metadata_source else None)
         ),
         score_missing_dimensions=(
             withheld.missing_dimensions
@@ -2031,11 +1847,17 @@ async def _attach_trusted_projection(
             # Use exactly the production revision-bound, tenant-scoped resolver.
             # An empty/error binding never grants scoring authority to proposals.
             binding = await load_trusted_risk_source_clause_ids(
-                db, tenant_id=scoped, project_id=project_id,
-                artifacts=artifacts, strict_on_error=True,
+                db,
+                tenant_id=scoped,
+                project_id=project_id,
+                artifacts=artifacts,
+                strict_on_error=True,
             )
             return await evaluate_artifact_set(
-                artifacts, project_id=project_id, tenant_id=scoped, llm_on=llm_on,
+                artifacts,
+                project_id=project_id,
+                tenant_id=scoped,
+                llm_on=llm_on,
                 risk_source_clause_ids=binding,
                 risk_source_binding_status="AVAILABLE" if binding else "EMPTY",
             )

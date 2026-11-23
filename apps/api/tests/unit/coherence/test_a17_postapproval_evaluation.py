@@ -17,6 +17,7 @@ from src.modules.hitl.domain.entities import ReviewStatus
 
 def _review(*, project_id=None, tenant_id=None, status=ReviewStatus.APPROVED):
     return SimpleNamespace(
+        item_id=uuid4(),
         current_status=status,
         metadata={
             "project_id": str(project_id or uuid4()),
@@ -44,6 +45,7 @@ def test_successful_final_approval_enqueues_one_tenant_scoped_task():
         "tenant_id": tenant_id,
         "project_id": project_id,
         "actor_user_id": actor_id,
+        "review_id": review.item_id,
     }
 
 
@@ -112,7 +114,8 @@ def test_conflicting_project_ids_fail_closed():
 @pytest.mark.asyncio
 async def test_background_scoring_uses_fresh_tenant_scoped_session_and_low_budget(monkeypatch):
     tenant_id, project_id, actor_id = uuid4(), uuid4(), uuid4()
-    session = object()
+    review_id = uuid4()
+    session = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=None))
     tracked = []
 
     @asynccontextmanager
@@ -127,6 +130,7 @@ async def test_background_scoring_uses_fresh_tenant_scoped_session_and_low_budge
         tenant_id=tenant_id,
         project_id=project_id,
         actor_user_id=actor_id,
+        review_id=review_id,
     )
     assert tracked == [("session", tenant_id)]
     score.assert_awaited_once()
@@ -136,3 +140,39 @@ async def test_background_scoring_uses_fresh_tenant_scoped_session_and_low_budge
     assert payload.low_budget_mode is True
     assert payload.include_rag_similarity is False
     assert user.tenant_id == tenant_id and user.id == actor_id
+    assert score.await_args.kwargs["review_id"] == review_id
+    session.execute.assert_awaited_once()
+    session.scalar.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_persisted_approval_prevents_duplicate_evaluation(monkeypatch):
+    tenant_id, project_id, actor_id, review_id = uuid4(), uuid4(), uuid4(), uuid4()
+    session = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=uuid4()))
+
+    @asynccontextmanager
+    async def session_factory(tid):
+        assert tid == tenant_id
+        yield session
+
+    score = AsyncMock(side_effect=AssertionError("duplicate must not be recalculated"))
+    monkeypatch.setattr(subject, "get_session_with_tenant", session_factory)
+    monkeypatch.setattr(subject, "_run_evaluation", score)
+    await subject.run_project_evaluation_after_approval(
+        tenant_id=tenant_id,
+        project_id=project_id,
+        actor_user_id=actor_id,
+        review_id=review_id,
+    )
+    score.assert_not_awaited()
+    session.execute.assert_awaited_once()
+    session.scalar.assert_awaited_once()
+
+
+def test_lock_key_is_deterministic_and_scoped():
+    t, p, r = uuid4(), uuid4(), uuid4()
+    k = subject._approval_lock_key(t, p, r)
+    assert k == subject._approval_lock_key(t, p, r)
+    assert k != subject._approval_lock_key(t, p, uuid4())
+    assert k != subject._approval_lock_key(t, uuid4(), r)
+    assert 0 <= k < (1 << 63)
