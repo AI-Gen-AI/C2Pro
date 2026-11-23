@@ -55,9 +55,9 @@ def test_yaml_taxonomy_matches_epc_plan_and_is_unassessed():
     assert len(controls) == 20
     for control, expected in zip(controls, EXPECTED, strict=True):
         assert list(control) == FIELDS
-        assert (
+        assert expected == (
             control["id"], control["tipo"], control["dimension"], control["critico"]
-        ) == expected
+        )
         assert all(control[field] is None for field in BLANK_FIELDS)
     assert sum(control["critico"] for control in controls) == 15
     assert {control["dimension"] for control in controls} == {
