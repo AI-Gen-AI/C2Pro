@@ -133,3 +133,101 @@ def test_untrusted_source_in_prompt_is_whole_window_without_keyword_filter():
     assert all(w.context_text in n4_window_source_message(w) for w in windows)
     assert all("UNTRUSTED SOURCE WINDOW" in n4_window_source_message(w) for w in windows)
     assert any("exception 2.5.5" in w.context_text for w in windows)
+
+
+
+def _v2_payload(*, quote, reason, examined=True, supporting=None):
+    return {
+        "prompt_version": "n4-compact-window-v2",
+        "window_examined": examined,
+        "findings": [{
+            "title": "Synthetic exposure", "category": "LEGAL",
+            "risk_reason": reason, "source_quote": quote,
+            "clause_ref": "9.6", "severity_proposed": "HIGH",
+            "supporting_quotes": [] if supporting is None else supporting,
+        }],
+        "examined_clauses": [{
+            "clause_ref": "9.6", "examined": True, "has_risk": True,
+        }],
+        "outstanding_references": [],
+    }
+
+
+def test_v2_multiline_quote_matches_source_whitespace_with_exact_offsets():
+    source = (
+        "9.6 The contractor shall pay 10 % of the price\n"
+        "if the delivery milestone is late.\n"
+    )
+    normalized = (
+        "9.6 The contractor shall pay 10 % of the price "
+        "if the delivery milestone is late."
+    )
+    parsed = parse_n4_window_output(
+        _v2_payload(
+            quote=normalized,
+            reason="The 10 % penalty creates a conditional exposure.",
+        ),
+        window=_window(source),
+    )
+    claim = parsed.proposed_findings[0]["claim"]
+    ref = parsed.proposed_findings[0]["source_refs"][0]
+    assert parsed.can_commit_as_examined
+    assert parsed.examined_clauses == ("9.6",)
+    assert ref["evidence_status"] == "EXACT_MODEL_SAFE_MATCH"
+    assert source[slice(*ref["analysis_span"])] == claim["source_quote"]
+    assert "\n" in claim["source_quote"]
+    assert not claim["quote_omits_figures"]
+    assert claim["dimension"] == "LEGAL"
+    assert claim["severity_proposed"] == "HIGH"
+
+
+def test_v2_numeric_figure_missing_in_quote_is_flagged_not_invented():
+    source = (
+        "9.6 The contractor shall pay damages if completion is late.\n"
+        "The daily rate equals 10 % of the contract value."
+    )
+    parsed = parse_n4_window_output(
+        _v2_payload(
+            quote="The contractor shall pay damages if completion is late.",
+            reason="Exposure includes 10 % of value.",
+        ),
+        window=_window(source),
+    )
+    claim = parsed.proposed_findings[0]["claim"]
+    assert claim["quote_omits_figures"]
+    assert claim["review_status"] == "PROPOSED"
+
+
+def test_v2_requires_explicit_examination_of_all_detected_clauses():
+    source = "9.6 First clause.\n10.1 Second clause."
+    payload = _v2_payload(
+        quote="First clause.",
+        reason="A qualitative consequence may arise.",
+    )
+    with pytest.raises(N4WindowContractError, match="missing examined clause"):
+        parse_n4_window_output(payload, window=_window(source))
+    payload["examined_clauses"].append({
+        "clause_ref": "10.1", "examined": True, "has_risk": False,
+    })
+    parsed = parse_n4_window_output(payload, window=_window(source))
+    assert parsed.can_commit_as_examined
+
+
+def test_v2_supporting_quotes_are_independently_anchored_and_bounded():
+    source = (
+        "9.6 The contractor shall pay the delay penalty.\n"
+        "This does not apply to delays caused by the Employer."
+    )
+    payload = _v2_payload(
+        quote="The contractor shall pay the delay penalty.",
+        reason="The penalty has a contractual exception.",
+        supporting=["This does not apply to delays caused by the Employer."],
+    )
+    parsed = parse_n4_window_output(payload, window=_window(source))
+    candidate = parsed.proposed_findings[0]
+    assert len(candidate["source_refs"]) == 2
+    assert all(ref["evidence_status"] == "EXACT_MODEL_SAFE_MATCH"
+               for ref in candidate["source_refs"])
+    payload["findings"][0]["supporting_quotes"] = ["a", "b", "c"]
+    with pytest.raises(N4WindowContractError, match="at most 2"):
+        parse_n4_window_output(payload, window=_window(source))
