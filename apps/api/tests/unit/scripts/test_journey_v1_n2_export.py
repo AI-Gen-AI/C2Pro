@@ -164,3 +164,74 @@ def test_confined_path_symmetric_parentheses_rejected():
     """Paths with excessive parentheses/nav must be rejected."""
     with pytest.raises(ValueError):
         confined_path("((((..)))", REPO_ROOT)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Tests de salida CLI --out (JV1-B3 confinamiento)
+# ──────────────────────────────────────────────────────────────────
+def test_cli_out_outside_repo_succeeds():
+    """--out con ruta fuera del reposorio debe exitoar y escribir archivo real."""
+    import subprocess
+    result = subprocess.run(
+        [
+            "/home/aigenadmin/c2pro-jv1-a1-20261121/apps/api/.venv/bin/python",
+            "-m",
+            "apps.api.scripts.journey_v1_n2_export",
+            "--text",
+            "Texto de prueba de salida confinada.",
+            "--out",
+            "/tmp/jv1_n2_export_test.json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd="/home/aigenadmin/repos/C2Pro",
+        env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "/home/aigenadmin/repos/C2Pro"},
+    )
+    assert result.returncode == 0, f"Expected success, got: {result.stderr}"
+    # Verificar que el archivo fue creado fuera del reposorio
+    assert Path("/tmp/jv1_n2_export_test.json").exists(), "Output file should exist"
+    content = Path("/tmp/jv1_n2_export_test.json").read_text(encoding="utf-8")
+    assert "sha256" in content
+    assert "Texto de prueba de salida confinada." in content
+
+
+def test_cli_out_inside_repo_rejected():
+    """--out con ruta dentro del reposorio debe ser rechazado (fail-closed)."""
+    import subprocess
+    result = subprocess.run(
+        [
+            "/home/aigenadmin/c2pro-jv1-a1-20261121/apps/api/.venv/bin/python",
+            "-m",
+            "apps.api.scripts.journey_v1_n2_export",
+            "--text",
+            "Texto de prueba dentro del repo.",
+            "--out",
+            "evals/journey_v1/export_test.json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd="/home/aigenadmin/repos/C2Pro",
+        env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "/home/aigenadmin/repos/C2Pro"},
+    )
+    assert result.returncode != 0, "Expected failure for inside-repo output path"
+    assert "ERROR: output path must be absolute and outside repository" in result.stderr
+
+
+def test_cli_out_no_out_uses_stdout():
+    """Sin --out, debe usar stdout (comportamiento por defecto)."""
+    import subprocess
+    result = subprocess.run(
+        [
+            "/home/aigenadmin/c2pro-jv1-a1-20261121/apps/api/.venv/bin/python",
+            "-m",
+            "apps.api.scripts.journey_v1_n2_export",
+            "--text",
+            "Texto de prueba stdout.",
+        ],
+        capture_output=True,
+        text=True,
+        cwd="/home/aigenadmin/repos/C2Pro",
+        env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "/home/aigenadmin/repos/C2Pro"},
+    )
+    assert result.returncode == 0
+    assert "Texto de prueba stdout." in result.stdout
