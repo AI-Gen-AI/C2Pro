@@ -94,7 +94,7 @@ class JourneyFindingRow:
 
 @dataclass(frozen=True)
 class JourneyGapRow:
-    ordinal: int
+    ordinal: int | None  # Preserve missing/invalid source ordinal, never fabricate window 0
     failure_kind: str
     reason: str
     attempts: int | None
@@ -251,8 +251,10 @@ def _render_summary_scores(ws: Worksheet, summary: JourneySummaryData, styles: _
     if summary.coherence_source_status in ("ERROR", "UNAVAILABLE"):
         score_rows.append((
             "Coherence Data Source Status",
-            f"[{summary.coherence_source_status}] Coherence evaluation data could not be retrieved",
-            "Data source connection or evaluation error",
+            (f"[UNAVAILABLE] No coherence evaluation recorded in queried SQL sources"
+             if summary.coherence_source_status == "UNAVAILABLE"
+             else "[ERROR] Coherence evaluation SQL read failed"),
+            "Recorded data absence or SQL read failure (distinct states)",
         ))
 
     for metric, score_val, desc in score_rows:
@@ -321,7 +323,7 @@ def _render_summary_coverage(ws: Worksheet, summary: JourneySummaryData, styles:
     total_w = summary.total_windows
     exam_w = summary.examined_windows
     gap_w = summary.gap_windows_count
-    cov_pct = f"{round((exam_w / total_w) * 100, 1)}%" if total_w > 0 else "0.0%"
+    cov_pct = f"{round((exam_w / total_w) * 100, 1)}%" if total_w > 0 else "Not Evaluated"
 
     cov_rows: list[tuple[str, Any]] = [
         ("N4 Coverage Status", summary.coverage_status or "INCOMPLETE"),
@@ -335,7 +337,9 @@ def _render_summary_coverage(ws: Worksheet, summary: JourneySummaryData, styles:
     if summary.coverage_source_status in ("ERROR", "UNAVAILABLE"):
         cov_rows.append((
             "Contract Analysis Source Status",
-            f"[{summary.coverage_source_status}] N4 coverage data could not be retrieved",
+            (f"[UNAVAILABLE] No N4 extraction run recorded in queried SQL sources"
+             if summary.coverage_source_status == "UNAVAILABLE"
+             else "[ERROR] N4 coverage SQL read failed"),
         ))
 
     if summary.findings_source_status in ("ERROR", "UNAVAILABLE"):
@@ -479,7 +483,12 @@ def _render_gaps_table(ws: Worksheet, gaps: list[JourneyGapRow], cov_source_stat
     gap_row_idx = 3
     if cov_source_status in ("ERROR", "UNAVAILABLE"):
         cell_err = ws.cell(row=gap_row_idx, column=1)
-        safe_set_cell_value(cell_err, f"[{cov_source_status}] Unable to load contract coverage gaps due to data source error.")
+        message = (
+            "[UNAVAILABLE] No N4 extraction run exists for the selected revision"
+            if cov_source_status == "UNAVAILABLE"
+            else "[ERROR] N4 coverage SQL read failed"
+        )
+        safe_set_cell_value(cell_err, message)
         cell_err.font = styles.font_alert
         return gap_row_idx + 1
 
@@ -493,7 +502,7 @@ def _render_gaps_table(ws: Worksheet, gaps: list[JourneyGapRow], cov_source_stat
         pages = _format_gap_page_range(g.page_start, g.page_end)
         attempts_val = g.attempts if g.attempts is not None else "Unknown"
         g_vals: list[Any] = [
-            g.ordinal,
+            g.ordinal if g.ordinal is not None else "Unknown (invalid ordinal)",
             g.failure_kind,
             g.reason,
             attempts_val,
@@ -639,6 +648,19 @@ def _extract_analysis_fallback(an_row: Any, sub_scores: dict[str, float | None])
     return global_score
 
 
+def _validated_window_ordinal(raw: Any, total_windows: int) -> int | None:
+    """Return a real in-range ordinal or None; do not invent window zero."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        ordinal = raw
+    elif isinstance(raw, str) and raw.isascii() and raw.isdecimal():
+        ordinal = int(raw)
+    else:
+        return None
+    return ordinal if 0 <= ordinal < total_windows else None
+
+
 def _parse_metadata_coverage(meta: dict[str, Any]) -> tuple[str, int, int, int, list[JourneyGapRow]] | None:
     cov_meta = meta.get("analysis_n4_coverage") or meta.get("n4_coverage")
     if not isinstance(cov_meta, dict):
@@ -653,9 +675,12 @@ def _parse_metadata_coverage(meta: dict[str, Any]) -> tuple[str, int, int, int, 
     if isinstance(cov_meta.get("gaps"), Sequence):
         for g_item in cov_meta["gaps"]:
             if isinstance(g_item, dict):
+                ordinal = _validated_window_ordinal(g_item.get("ordinal"), total_w)
+                if ordinal is None:
+                    cov_status = "INCOMPLETE"  # invalid metadata cannot attest complete coverage
                 gaps.append(
                     JourneyGapRow(
-                        ordinal=int(g_item.get("ordinal", 0)),
+                        ordinal=ordinal,
                         failure_kind=str(g_item.get("failure_kind") or "UNKNOWN_BLOCK"),
                         reason=str(g_item.get("reason") or "Window gap"),
                         attempts=int(g_item["attempts"]) if g_item.get("attempts") is not None else None,
@@ -750,11 +775,8 @@ def _parse_windows_for_run(
     references: list[JourneyReferenceRow] = []
 
     for w in window_rows:
-        try:
-            ord_val = int(w.get("ordinal", -1))
-        except (ValueError, TypeError):
-            ord_val = -1
-        if ord_val >= 0:
+        ord_val = _validated_window_ordinal(w.get("ordinal"), total_w)
+        if ord_val is not None:
             seen_ordinals.add(ord_val)
 
         w_status = str(w.get("status") or "").strip().upper()
@@ -764,7 +786,7 @@ def _parse_windows_for_run(
             gap_count += 1
             gaps.append(
                 JourneyGapRow(
-                    ordinal=ord_val if ord_val >= 0 else 0,
+                    ordinal=ord_val,
                     failure_kind=str(w.get("blocked_reason") or "UNKNOWN_BLOCK"),
                     reason=str(w.get("blocked_reason") or "Window could not be examined"),
                     attempts=None,
@@ -786,7 +808,7 @@ def _parse_windows_for_run(
             for ref in unres:
                 references.append(
                     JourneyReferenceRow(
-                        source_identifier=f"Window {ord_val if ord_val >= 0 else 'Unknown'}",
+                        source_identifier=f"Window {ord_val if ord_val is not None else 'Unknown'}",
                         target_reference=str(ref),
                         status="UNRESOLVED",
                         details="Unresolved reference recorded during extraction",
@@ -942,7 +964,8 @@ class SqlAlchemyJourneyExportSources:
                 global_score = _extract_analysis_fallback(an_row, sub_scores)
                 return global_score, None, sub_scores, "AVAILABLE"
 
-            return None, None, sub_scores, "AVAILABLE"
+            # Both SQL sources were queried: no result is absence, not failure.
+            return None, None, sub_scores, "UNAVAILABLE"
         except Exception:
             logger.exception("journey_export_coherence_read_failed", project_id=str(project_id))
             return None, None, sub_scores, "ERROR"
@@ -995,7 +1018,8 @@ class SqlAlchemyJourneyExportSources:
 
             run_row = (await self._session.execute(run_query, params)).mappings().one_or_none()
             if run_row is None:
-                return "INCOMPLETE", 0, 0, 0, [], [], "AVAILABLE"
+                # Absence established by a tenant-scoped SQL query, not inferred from empty workbook.
+                return "INCOMPLETE", 0, 0, 0, [], [], "UNAVAILABLE"
 
             active_run_id = run_row["run_id"]
             run_status = str(run_row.get("status") or "")
@@ -1026,7 +1050,7 @@ class SqlAlchemyJourneyExportSources:
                   FROM public.review_items
                  WHERE project_id = CAST(:project_id AS uuid)
                    AND tenant_id = CAST(:tenant_id AS uuid)
-                 ORDER BY created_at
+                 ORDER BY created_at ASC, id ASC
                  LIMIT :limit OFFSET :offset
             """), {
                 "project_id": str(project_id),
