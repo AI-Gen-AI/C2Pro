@@ -958,3 +958,54 @@ def test_new_a11_suspect_page_forged_into_spans_is_rejected():
         "end_offset": raw_blocks[-1]["end_offset"],
     })
     assert bridge._a11_a9_page_map(state) == ([], True)
+
+@pytest.mark.parametrize("anchor_kind", ["excluded", "absent", "conflicting"])
+def test_a7_never_relocates_duplicate_excluded_occurrence(monkeypatch, anchor_kind):
+    from src.documents.domain import quote_page_locator as loc
+
+    quote = "Contractor shall report progress weekly."
+    source = quote + "\n\n" + quote
+    second = len(quote) + 2
+    # A9 may return its single remaining locatable occurrence even if the
+    # selected source ref points to the excluded twin.
+    monkeypatch.setattr(
+        loc, "locate_quote_page",
+        lambda *_args, **_kwargs: loc.QuotePageLocation(1, 1, 0, len(quote)),
+    )
+    claim, refs = _claim_refs(quote)
+    if anchor_kind == "excluded":
+        refs[0]["analysis_span"] = [second, len(source)]
+    elif anchor_kind == "absent":
+        refs[0].pop("analysis_span")
+    else:
+        refs.append({**refs[0], "analysis_span": [second, len(source)]})
+    risk = bridge._candidate_payload(
+        claim, refs, source, page_spans=[loc.PageSpan(1, 0, len(quote))],
+        map_claimed=True,
+    )
+    assert risk["source_quote"] is None
+    assert risk["page_number"] is None
+    assert risk["page_verification_status"] == "PAGE_UNRESOLVED"
+
+
+@pytest.mark.parametrize("alternate_whitespace", [False, True])
+def test_a7_duplicate_reference_register_does_not_invent_occurrence_anchor(
+    monkeypatch, alternate_whitespace,
+):
+    from src.documents.domain import quote_page_locator as loc
+
+    quote = "Delivery obligations are defined in Annex X."
+    duplicate = quote.replace("defined in", "defined\nin") if alternate_whitespace else quote
+    source = quote + "\n\n" + duplicate
+    monkeypatch.setattr(
+        loc, "locate_quote_page",
+        lambda *_args, **_kwargs: loc.QuotePageLocation(1, 1, 0, len(quote)),
+    )
+    risks, provenance = bridge._reference_proposals(
+        [{"status": "MISSING_EXTERNAL", "label": "Annex X", "source_quote": quote}],
+        source=source, source_sha256="a" * 64, revision_id="test-revision",
+        page_spans=[loc.PageSpan(1, 0, len(quote))], map_claimed=True,
+    )
+    assert risks[0]["page_verification_status"] == "PAGE_UNRESOLVED"
+    assert risks[0]["source_quote"] is None
+    assert "analysis_span" not in provenance[0]["source_refs"][0]
