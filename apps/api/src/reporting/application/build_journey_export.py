@@ -655,6 +655,9 @@ def _validated_window_ordinal(raw: Any, total_windows: int) -> int | None:
     if isinstance(raw, int):
         ordinal = raw
     elif isinstance(raw, str) and raw.isascii() and raw.isdecimal():
+        # Guard against oversized untrusted numeric strings (Python int digit limit).
+        if len(raw) > 20:
+            return None
         ordinal = int(raw)
     else:
         return None
