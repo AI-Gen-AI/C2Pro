@@ -85,16 +85,44 @@ _N4_TOOL = {
 }
 
 
-def _v2_provider_response(raw: str) -> str:
-    """Pin parser contract without fabricating examination or source evidence."""
+_INVALID_TOOL_RESPONSE = '{"error":"INVALID_N4_TOOL_ENVELOPE"}'
+
+
+def _v2_provider_response(raw: str, raw_response: object) -> str:
+    """Fail closed unless exactly the intended Anthropic tool was invoked.
+
+    LLMClient serializes tool *input* to content without the tool name, but
+    AnthropicWrapper preserves the original Message in raw_response. Use that
+    envelope as the source of identity; never infer tool identity from JSON.
+    Return an invalid parser envelope (rather than raising) so the runner can
+    settle already-accounted token usage and mark the window BLOCKED.
+    """
+    if getattr(raw_response, "stop_reason", None) != "tool_use":
+        return _INVALID_TOOL_RESPONSE
+    blocks = getattr(raw_response, "content", None)
+    if not isinstance(blocks, (list, tuple)):
+        return _INVALID_TOOL_RESPONSE
+    tools = [b for b in blocks if getattr(b, "type", None) == "tool_use"]
+    if len(tools) != 1 or getattr(tools[0], "name", None) != "record_window_findings":
+        return _INVALID_TOOL_RESPONSE
+    if any(
+        getattr(b, "type", None) != "tool_use"
+        and bool(getattr(b, "text", "").strip())
+        for b in blocks
+    ):
+        return _INVALID_TOOL_RESPONSE
+    tool_input = getattr(tools[0], "input", None)
+    if not isinstance(tool_input, dict):
+        return _INVALID_TOOL_RESPONSE
     try:
-        payload = json.loads(raw)
+        content = json.loads(raw)
     except (TypeError, ValueError):
-        return raw
-    if not isinstance(payload, dict):
-        return raw
-    payload["prompt_version"] = N4_WINDOW_PROMPT_VERSION
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        return _INVALID_TOOL_RESPONSE
+    if not isinstance(content, dict) or content != tool_input:
+        return _INVALID_TOOL_RESPONSE
+    normalized = dict(content)
+    normalized["prompt_version"] = N4_WINDOW_PROMPT_VERSION
+    return json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
 
 
 class AnthropicN4WindowProvider:
@@ -200,7 +228,7 @@ class AnthropicN4WindowProvider:
             # Runner will record the calculated cost and stop before
             # candidate acceptance; never mask rerouting to an unexpected model.
             return N4ProviderReceipt(
-                content=_v2_provider_response(response.content),
+                content=_v2_provider_response(response.content, getattr(response, "raw_response", None)),
                 model_used=response.model_used,
                 reported_cost_usd=str(response.cost_usd),
                 input_tokens=response.input_tokens,
@@ -208,7 +236,7 @@ class AnthropicN4WindowProvider:
                 provider_request_id=getattr(response, "request_id", None) or request_id,
             )
         return N4ProviderReceipt(
-            content=_v2_provider_response(response.content),
+            content=_v2_provider_response(response.content, getattr(response, "raw_response", None)),
             model_used=self.model_name,
             reported_cost_usd=str(Decimal(str(response.cost_usd))),
             input_tokens=response.input_tokens,
