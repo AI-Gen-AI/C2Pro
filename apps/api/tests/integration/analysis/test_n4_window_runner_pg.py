@@ -19,6 +19,7 @@ from src.analysis.application.n4_incremental_runner import (
 )
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from tests.integration.analysis.test_n4_incremental_store_pg import (
+    _db_period,
     _new_authority,
     _seed_caps,
     _seed_identity,
@@ -100,7 +101,7 @@ def _runner(engine, provider, *, enabled=True):
         provider=provider, enabled=enabled,
         run_cap_usd=Decimal("1.000000"),
         per_window_reservation_usd=Decimal("0.040000"),
-        period_key="2026-11", max_context_chars=600, overlap_chars=50,
+        period_key=_db_period(), max_context_chars=600, overlap_chars=50,
     )
 
 
@@ -118,8 +119,8 @@ async def _balances(tenant):
         return await conn.fetchrow("""
             SELECT reserved_usd, spent_usd FROM public.n4_budget_buckets
              WHERE tenant_id=$1 AND scope_kind='TENANT' AND scope_id=$1
-               AND period_key='2026-11'
-        """, tenant)
+               AND period_key=$2
+        """, tenant, _db_period())
     finally:
         await conn.close()
 
@@ -222,7 +223,7 @@ async def test_malformed_output_is_charged_but_not_accepted_as_no_risk():
         await engine.dispose()
 
 
-async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
+async def test_unresolved_reference_keeps_candidates_proposed_without_blocking_window():
     a, project, engine = await _prepare()
     provider = StubProvider(missing_at=0)
     runner = _runner(engine, provider)
@@ -231,11 +232,12 @@ async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
             authority=a, project_id=project,
             model_safe_text=_source(), n2_projection_attested=True,
         )
-        assert partial.status == "PARTIAL"
-        assert partial.examined_windows == partial.total_windows - 1
+        # JV1-A2: references no longer block; the window was examined.
+        assert partial.status == "COMPLETE"
+        assert partial.examined_windows == partial.total_windows
         assert partial.settled_receipt_windows == partial.total_windows
         assert partial.persisted_result_windows == partial.total_windows
-        assert partial.blocked_result_windows == 1
+        assert partial.blocked_result_windows == 0
         conn = await asyncpg.connect(_DSN)
         try:
             row = await conn.fetchrow("""
@@ -243,9 +245,9 @@ async def test_unresolved_reference_keeps_candidates_proposed_and_run_partial():
                   FROM public.n4_extraction_windows
                  WHERE tenant_id=$1 AND run_id=$2 AND ordinal=0
             """, a.tenant_id, partial.run_id)
-            assert row["status"] == "BLOCKED"
+            assert row["status"] == "EXAMINED"
             assert json.loads(row["unresolved_refs"]) == ["Annex 21 not uploaded"]
-            assert row["blocked_reason"] == "REFERENCES_UNRESOLVED"
+            assert row["blocked_reason"] is None
             assert await conn.fetchval("""
                 SELECT count(*) FROM public.n4_candidate_findings
                  WHERE tenant_id=$1 AND run_id=$2
@@ -321,7 +323,7 @@ async def test_persisted_reservation_replay_is_blocked_without_provider_call():
             reserved = await reserve_call(
                 session, authority=a, run_id=run_id, window_ordinal=0,
                 idempotency_key=call_key, provider_model=provider.model_name,
-                estimated_max_usd="0.04", period_key="2026-11",
+                estimated_max_usd="0.04", period_key=_db_period(),
             )
             assert not reserved.replay
 

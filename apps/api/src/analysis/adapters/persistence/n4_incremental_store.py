@@ -10,6 +10,7 @@ usage reservation / window. This is intentionally separate from HITL V3.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -30,6 +31,7 @@ from src.core.processing_authority import (
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 _ALLOWED_KINDS = frozenset({"TENANT", "PROJECT", "DOCUMENT", "RUN"})
 _SCALE = Decimal("0.000001")
+_log = logging.getLogger(__name__)
 
 
 class N4LedgerError(RuntimeError):
@@ -192,6 +194,13 @@ async def create_run(
     if budget <= 0:
         raise ValueError("N4 run budget must be greater than zero")
     await _verify(session, authority)
+    adopted = await _adopt_open_run(
+        session, authority=authority, project_id=project_id,
+        source_sha256=source_sha256, config_sha256=config_sha256,
+        windows=windows, budget=budget,
+    )
+    if adopted is not None:
+        return adopted
     run_id = uuid4()
     inserted = (await session.execute(text("""
         INSERT INTO public.n4_extraction_runs
@@ -266,6 +275,82 @@ async def create_run(
     await _locked_run(
         session, tenant_id=authority.tenant_id, run_id=run_id, authority=authority,
     )
+    await _verify_window_mapping(
+        session, tenant_id=authority.tenant_id, run_id=run_id, windows=windows,
+    )
+    return run_id
+
+
+async def _adopt_open_run(
+    session: AsyncSession, *, authority: ProcessingAuthority, project_id: UUID,
+    source_sha256: str, config_sha256: str,
+    windows: tuple[N4SourceWindow, ...], budget: Decimal,
+) -> UUID | None:
+    """JV1-A2: a newer generation continues the SAME unfinished run.
+
+    Only a RUNNING/PARTIAL run with identical tenant, revision, model-safe
+    source and config is adopted; its generation and fence move to the
+    caller. EXAMINED windows and every receipt (SETTLED, RESERVED, UNKNOWN)
+    stay attached to the run, so nothing is paid twice and no liability is
+    forgiven. COMPLETE/FAILED runs and different configs are never adopted;
+    a new run for them still meets the cross-generation receipt gate.
+    """
+    candidate = (await session.execute(text("""
+        SELECT run_id, project_id, generation, fencing_token,
+               total_windows, budget_cap_usd
+          FROM public.n4_extraction_runs
+         WHERE tenant_id = CAST(:tenant AS uuid)
+           AND document_revision_id = CAST(:revision AS uuid)
+           AND source_sha256 = :source AND config_sha256 = :config
+           AND generation < :generation
+           AND status IN ('RUNNING', 'PARTIAL')
+           AND NOT EXISTS (
+             SELECT 1 FROM public.n4_extraction_runs same_generation
+              WHERE same_generation.tenant_id = CAST(:tenant AS uuid)
+                AND same_generation.document_revision_id = CAST(:revision AS uuid)
+                AND same_generation.source_sha256 = :source
+                AND same_generation.config_sha256 = :config
+                AND same_generation.generation = :generation
+           )
+         ORDER BY generation DESC
+         LIMIT 1
+         FOR UPDATE
+    """), {
+        "tenant": _uuid(authority.tenant_id),
+        "revision": _uuid(authority.revision_id),
+        "source": source_sha256, "config": config_sha256,
+        "generation": authority.generation,
+    })).mappings().one_or_none()
+    if candidate is None:
+        return None
+    if (
+        str(candidate["project_id"]) != _uuid(project_id)
+        or int(candidate["total_windows"]) != len(windows)
+        or Decimal(candidate["budget_cap_usd"]) != budget
+    ):
+        raise N4LedgerError("adopted run cannot change project, windows or budget")
+    if int(candidate["fencing_token"]) > authority.fencing_token:
+        raise N4LedgerError("newer N4 fence owns this run")
+    run_id = UUID(str(candidate["run_id"]))
+    await session.execute(text("""
+        UPDATE public.n4_extraction_runs
+           SET generation = :generation, fencing_token = :fence,
+               updated_at = clock_timestamp()
+         WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+    """), {
+        "generation": authority.generation, "fence": authority.fencing_token,
+        "tenant": _uuid(authority.tenant_id), "run": str(run_id),
+    })
+    await _verify_window_mapping(
+        session, tenant_id=authority.tenant_id, run_id=run_id, windows=windows,
+    )
+    return run_id
+
+
+async def _verify_window_mapping(
+    session: AsyncSession, *, tenant_id: UUID, run_id: UUID,
+    windows: tuple[N4SourceWindow, ...],
+) -> None:
     for w in windows:
         old = (await session.execute(text("""
             SELECT core_start, core_end, context_start, context_end, context_sha256
@@ -273,7 +358,7 @@ async def create_run(
              WHERE tenant_id = CAST(:tenant AS uuid)
                AND run_id = CAST(:run AS uuid) AND ordinal = :ordinal
         """), {
-            "tenant": _uuid(authority.tenant_id),
+            "tenant": _uuid(tenant_id),
             "run": str(run_id), "ordinal": w.ordinal,
         })).mappings().one_or_none()
         if old is None or (
@@ -284,7 +369,6 @@ async def create_run(
             or old["context_sha256"] != w.context_sha256
         ):
             raise N4LedgerError("source window mapping drift on resume")
-    return run_id
 
 
 def _bucket_scopes(
@@ -428,16 +512,21 @@ async def reserve_call(
     )
     if run["status"] in ("COMPLETE", "FAILED"):
         raise N4LedgerError("cannot reserve a completed or failed N4 run")
-    window = (await session.execute(text("""
-        SELECT status FROM public.n4_extraction_windows
+    window_row = (await session.execute(text("""
+        SELECT status, findings_sha256 FROM public.n4_extraction_windows
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND run_id = CAST(:run AS uuid) AND ordinal = :ordinal FOR UPDATE
     """), {
         "tenant": _uuid(authority.tenant_id), "run": str(run_id),
         "ordinal": window_ordinal,
-    })).scalar_one_or_none()
+    })).mappings().one_or_none()
+    window = None if window_row is None else str(window_row["status"])
     if window is None or window == "EXAMINED":
         raise N4LedgerError("source window unavailable or already examined")
+    if window == "BLOCKED" and window_row is not None and window_row["findings_sha256"]:
+        # A blocked window that already persisted a model result cannot be
+        # re-examined by paying again; only failed attempts are retryable.
+        raise N4LedgerError("blocked window has a committed result; not retryable")
     old = (await session.execute(text("""
         SELECT reservation_id, status, reserved_usd, window_ordinal, model_name
           FROM public.n4_usage_reservations
@@ -554,6 +643,21 @@ async def reserve_call(
             for kind, scope_id, period in scopes
         ]), "amount": amount, "model": provider_model,
     })
+    if window == "BLOCKED":
+        # JV1-A2 retry: the new paid attempt reopens a failed window. The
+        # previous attempt's receipt stays on the ledger and is summed.
+        await session.execute(text("""
+            UPDATE public.n4_extraction_windows
+               SET status = 'PENDING', blocked_reason = NULL
+             WHERE tenant_id = CAST(:tenant AS uuid)
+               AND run_id = CAST(:run AS uuid) AND ordinal = :ordinal
+        """), {
+            "tenant": _uuid(authority.tenant_id), "run": str(run_id),
+            "ordinal": window_ordinal,
+        })
+        await _refresh_run_status(
+            session, tenant_id=authority.tenant_id, run_id=run_id,
+        )
     return N4Reservation(reservation_id, "RESERVED", False)
 
 
@@ -795,6 +899,19 @@ async def commit_window(
     })).scalar_one_or_none()
     if receipt is None:
         raise N4LedgerError("window cannot be examined before a settled provider receipt")
+    open_attempt = (await session.execute(text("""
+        SELECT 1 FROM public.n4_usage_reservations
+         WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
+           AND window_ordinal = :ordinal AND status IN ('RESERVED', 'UNKNOWN')
+         LIMIT 1
+    """), {
+        "tenant": _uuid(authority.tenant_id),
+        "run": str(run_id), "ordinal": window_ordinal,
+    })).scalar_one_or_none()
+    if open_attempt:
+        # An earlier SETTLED receipt (e.g. a failed first attempt) must not
+        # stand in for the current, still unsettled, retry.
+        raise N4LedgerError("window has an unsettled provider attempt")
     for finding in findings:
         key = str(finding.get("finding_key", ""))
         refs, claim = finding.get("source_refs"), finding.get("claim")
@@ -826,7 +943,9 @@ async def commit_window(
             "run": str(run_id), "ordinal": window_ordinal,
             "key": key, "refs": json.dumps(refs), "claim": json.dumps(claim),
         })
-    blocked = bool(unresolved_refs or incomplete_reason)
+    # JV1-A2: unresolved references are stored for the reference register and
+    # review, but no longer block the window: the supplied text was examined.
+    blocked = bool(incomplete_reason)
     next_window_status = "BLOCKED" if blocked else "EXAMINED"
     await session.execute(text("""
         UPDATE public.n4_extraction_windows
@@ -839,8 +958,17 @@ async def commit_window(
         "tenant": _uuid(authority.tenant_id), "run": str(run_id),
         "ordinal": window_ordinal, "digest": digest,
         "status": next_window_status, "refs": json.dumps(unresolved_refs),
-        "reason": incomplete_reason or ("REFERENCES_UNRESOLVED" if unresolved_refs else None),
+        "reason": incomplete_reason,
     })
+    return await _refresh_run_status(
+        session, tenant_id=authority.tenant_id, run_id=run_id,
+    )
+
+
+async def _refresh_run_status(
+    session: AsyncSession, *, tenant_id: UUID, run_id: UUID,
+) -> str:
+    """Derive RUNNING/PARTIAL/COMPLETE from windows; caller holds the run lock."""
     status_totals = (await session.execute(text("""
         SELECT
           count(*) FILTER (WHERE status != 'EXAMINED') AS incomplete,
@@ -849,7 +977,7 @@ async def commit_window(
          WHERE tenant_id = CAST(:tenant AS uuid)
            AND run_id = CAST(:run AS uuid)
     """), {
-        "tenant": _uuid(authority.tenant_id), "run": str(run_id),
+        "tenant": _uuid(tenant_id), "run": str(run_id),
     })).mappings().one()
     next_status = (
         "PARTIAL" if status_totals["blocked"] else
@@ -860,7 +988,7 @@ async def commit_window(
                 updated_at = clock_timestamp()
          WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
     """), {
-        "tenant": _uuid(authority.tenant_id),
+        "tenant": _uuid(tenant_id),
         "run": str(run_id), "status": next_status,
     })
     return next_status
@@ -938,3 +1066,90 @@ async def block_window(
            SET status = 'PARTIAL', updated_at = clock_timestamp()
          WHERE tenant_id = CAST(:tenant AS uuid) AND run_id = CAST(:run AS uuid)
     """), {"tenant": _uuid(authority.tenant_id), "run": str(run_id)})
+
+
+
+async def retryable_windows(
+    session: AsyncSession, *, tenant_id: UUID, run_id: UUID, max_attempts: int,
+) -> tuple[int, ...]:
+    """JV1-A2: failed windows that may be paid for again, in source order.
+
+    Retryable = BLOCKED without a committed result, no RESERVED/UNKNOWN
+    attempt open (UNKNOWN needs explicit pessimistic settlement first) and
+    fewer than ``max_attempts`` non-canceled attempts so far.
+    """
+    if type(max_attempts) is not int or max_attempts < 1:
+        raise ValueError("max_attempts must be a positive integer")
+    rows = (await session.execute(text("""
+        SELECT w.ordinal
+          FROM public.n4_extraction_windows w
+         WHERE w.tenant_id = CAST(:tenant AS uuid)
+           AND w.run_id = CAST(:run AS uuid)
+           AND w.status = 'BLOCKED' AND w.findings_sha256 IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM public.n4_usage_reservations open_attempt
+              WHERE open_attempt.tenant_id = w.tenant_id
+                AND open_attempt.run_id = w.run_id
+                AND open_attempt.window_ordinal = w.ordinal
+                AND open_attempt.status IN ('RESERVED', 'UNKNOWN')
+           )
+           AND (
+             SELECT count(*) FROM public.n4_usage_reservations attempt
+              WHERE attempt.tenant_id = w.tenant_id
+                AND attempt.run_id = w.run_id
+                AND attempt.window_ordinal = w.ordinal
+                AND attempt.status <> 'CANCELED'
+           ) < :max_attempts
+         ORDER BY w.ordinal
+    """), {
+        "tenant": _uuid(tenant_id), "run": str(run_id),
+        "max_attempts": max_attempts,
+    })).all()
+    return tuple(int(ordinal) for (ordinal,) in rows)
+
+
+async def settle_unknown_pessimistically(
+    session: AsyncSession, *, authority: ProcessingAuthority,
+    reservation_id: UUID, actual_provider: str, reason: str,
+) -> Decimal:
+    """JV1-A2: explicitly settle an UNKNOWN attempt at its full reservation.
+
+    The only way, apart from a late real receipt, to release an UNKNOWN
+    liability. It charges the whole reserved maximum (never zero, never an
+    estimate below the hold), moves it to spent in every bucket and in the
+    tenant counter, and leaves the window retryable. The operator reason is
+    logged; the caller records it in its own audit trail.
+    """
+    if not reason or not reason.strip() or len(reason) > 200:
+        raise ValueError("a bounded operator reason is required")
+    await _verify(session, authority)
+    row = (await session.execute(text("""
+        SELECT status, reserved_usd, model_name, actual_model_name
+          FROM public.n4_usage_reservations
+         WHERE tenant_id = CAST(:tenant AS uuid)
+           AND reservation_id = CAST(:reservation AS uuid)
+    """), {
+        "tenant": _uuid(authority.tenant_id), "reservation": str(reservation_id),
+    })).mappings().one_or_none()
+    if row is None:
+        raise N4LedgerError("reservation absent or not visible to this tenant")
+    if str(row["status"]) != "UNKNOWN":
+        raise N4LedgerError("only an UNKNOWN reservation can be settled pessimistically")
+    charge = _amount(row["reserved_usd"])
+    # account_call re-reads the reservation under the global lock order and
+    # rejects any concurrent receipt that differs from this charge.
+    await account_call(
+        session, authority=authority, reservation_id=reservation_id,
+        billed_usd=charge,
+        actual_model_name=str(row["actual_model_name"] or row["model_name"]),
+        actual_provider=actual_provider,
+    )
+    _log.warning(
+        "n4_unknown_settled_pessimistically",
+        extra={
+            "tenant_id": _uuid(authority.tenant_id),
+            "reservation_id": str(reservation_id),
+            "charged_usd": str(charge), "reason": reason.strip(),
+        },
+    )
+    return charge
