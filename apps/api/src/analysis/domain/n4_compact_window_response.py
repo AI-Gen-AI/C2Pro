@@ -149,29 +149,52 @@ _DIMENSIONS: dict[str, str] = {
     "other": "UNCLASSIFIED",
 }
 _SEVERITIES = frozenset(("CRITICAL", "HIGH", "MEDIUM", "LOW"))
-_NUMBER_TOKEN = re.compile(r"(?<!\w)\d+(?:[.,]\d+)?\s*%?")
-_PERCENT_TOKEN = re.compile(
-    r"(?<!\w)\d+(?:[.,]\d+)?\s*(?:%|percent(?:age)?|por ciento|por cento)",
-    re.IGNORECASE,
-)
+def _numeric_markers(text: str) -> frozenset[str]:
+    """Collect figures in linear time without a backtracking numeric regex.
+
+    Normalize decimal separators and the optional percent unit. This is an
+    advisory check only; it cannot establish the semantics of an amount.
+    """
+    found: set[str] = set()
+    cursor = 0
+    while cursor < len(text):
+        if not text[cursor].isdigit() or (
+            cursor > 0 and (text[cursor - 1].isalpha() or text[cursor - 1] == "_")
+        ):
+            cursor += 1
+            continue
+        start = cursor
+        while cursor < len(text) and text[cursor].isdigit():
+            cursor += 1
+        if (
+            cursor + 1 < len(text)
+            and text[cursor] in ",."
+            and text[cursor + 1].isdigit()
+        ):
+            cursor += 1
+            while cursor < len(text) and text[cursor].isdigit():
+                cursor += 1
+        figure = text[start:cursor].replace(",", ".")
+        suffix = cursor
+        while suffix < len(text) and text[suffix].isspace():
+            suffix += 1
+        following = text[suffix:].lower()
+        is_percent = (
+            following.startswith("%")
+            or following.startswith("percent")
+            or following.startswith("por ciento")
+            or following.startswith("por cento")
+        )
+        found.add(figure + ("%" if is_percent else ""))
+    return frozenset(found)
 
 
 def _quote_omits_figures(reason: str, quote: str | None) -> bool:
-    """Advisory flag only: never infer a monetary effect or numeric severity."""
+    """Flag model-explained figures absent from a literal quote, not quantify risk."""
+    reason_figures = _numeric_markers(reason)
     if not quote:
-        return bool(_NUMBER_TOKEN.search(reason))
-    figures = {
-        re.sub(r"\s+", "", value).replace(",", ".").lower()
-        for value in _NUMBER_TOKEN.findall(quote)
-    }
-    reason_figures = {
-        re.sub(r"\s+", "", value).replace(",", ".").lower()
-        for value in _NUMBER_TOKEN.findall(reason)
-    }
-    if reason_figures - figures:
-        return True
-    # Literal percentages spelled out are also meaningful evidence.
-    return bool(_PERCENT_TOKEN.search(reason) and not _PERCENT_TOKEN.search(quote))
+        return bool(reason_figures)
+    return not reason_figures.issubset(_numeric_markers(quote))
 
 
 def _examined_clause_refs(
