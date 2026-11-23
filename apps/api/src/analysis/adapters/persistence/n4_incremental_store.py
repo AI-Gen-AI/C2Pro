@@ -288,7 +288,7 @@ async def _adopt_open_run(
 ) -> UUID | None:
     """JV1-A2: a newer generation continues the SAME unfinished run.
 
-    Only a RUNNING/PARTIAL run with identical tenant, revision, model-safe
+    Only a PREPARING/RUNNING/PARTIAL run with identical tenant, revision, model-safe
     source and config is adopted; its generation and fence move to the
     caller. EXAMINED windows and every receipt (SETTLED, RESERVED, UNKNOWN)
     stay attached to the run, so nothing is paid twice and no liability is
@@ -303,7 +303,7 @@ async def _adopt_open_run(
            AND document_revision_id = CAST(:revision AS uuid)
            AND source_sha256 = :source AND config_sha256 = :config
            AND generation < :generation
-           AND status IN ('RUNNING', 'PARTIAL')
+           AND status IN ('PREPARING', 'RUNNING', 'PARTIAL')
            AND NOT EXISTS (
              SELECT 1 FROM public.n4_extraction_runs same_generation
               WHERE same_generation.tenant_id = CAST(:tenant AS uuid)

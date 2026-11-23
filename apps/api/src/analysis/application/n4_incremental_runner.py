@@ -23,19 +23,24 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.analysis.adapters.persistence.n4_incremental_store import (
     N4BudgetError,
+    N4LedgerError,
     account_call,
     block_window,
     commit_window,
     create_run,
     progress,
     reserve_call,
+    retryable_windows,
     window_statuses,
 )
 from src.analysis.domain.n4_compact_window_response import (
     N4WindowContractError,
     parse_n4_window_output,
 )
-from src.analysis.domain.n4_failure_kinds import N4CoverageStatus
+from src.analysis.domain.n4_failure_kinds import (
+    N4CoverageStatus,
+    derive_n4_coverage_status,
+)
 from src.analysis.domain.n4_source_windows import (
     N4SourceWindow,
     plan_n4_source_windows,
@@ -55,6 +60,8 @@ class N4ProviderReceipt:
 
 class N4WindowProvider(Protocol):
     model_name: str
+    # prompt_version is checked fail-closed at runtime; the legacy direct
+    # adapter remains a separate owner until its v1 attribute is published.
 
     async def generate(
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
@@ -96,6 +103,7 @@ class N4IncrementalRunner:
         inherit_approved_scopes: bool = False,
         max_context_chars: int = 12_000,
         overlap_chars: int = 400,
+        max_attempts: int = 3,
     ) -> None:
         self.sessions = session_factory
         self.provider = provider
@@ -111,12 +119,34 @@ class N4IncrementalRunner:
         self.inherit_approved_scopes = inherit_approved_scopes
         self.context_limit = max_context_chars
         self.overlap = overlap_chars
+        if type(max_attempts) is not int or not 1 <= max_attempts <= 10:
+            raise ValueError("N4 max_attempts must be an integer in [1,10]")
+        self.max_attempts = max_attempts
+        version = getattr(provider, "prompt_version", None)
+        if (
+            not isinstance(version, str)
+            or not version.strip()
+            or version != version.strip()
+            or len(version) > 128
+        ):
+            raise ValueError("provider.prompt_version must be pinned before reservation")
+        self.prompt_version = version
+        self.model_id = provider.model_name
+        self.config_sha256 = sha256(json.dumps(
+            {
+                "prompt": version,
+                "model": self.model_id,
+                "window_chars": self.context_limit,
+                "overlap": self.overlap,
+            },
+            sort_keys=True, separators=(",", ":"),
+        ).encode()).hexdigest()
         if (
             not self.run_cap.is_finite() or self.run_cap <= 0
             or not self.call_reservation.is_finite()
             or self.call_reservation <= 0
             or self.call_reservation > self.run_cap
-            or not provider.model_name.strip()
+            or not self.model_id.strip()
         ):
             raise ValueError("explicit positive run/call caps and pinned model required")
 
@@ -168,6 +198,15 @@ class N4IncrementalRunner:
                 "tenant": str(authority.tenant_id),
                 "run": str(run_id),
             })).mappings().one()
+            gap_rows = (await session.execute(text("""
+                SELECT ordinal FROM public.n4_extraction_windows
+                 WHERE tenant_id = CAST(:tenant AS uuid)
+                   AND run_id = CAST(:run AS uuid) AND status = 'BLOCKED'
+                 ORDER BY ordinal
+            """), {
+                "tenant": str(authority.tenant_id), "run": str(run_id),
+            })).scalars().all()
+            gaps = tuple(int(ordinal) for ordinal in gap_rows)
             return N4RunOutcome(
                 run_id=run_id, status=str(current["status"]),
                 examined_windows=int(current["examined_windows"]),
@@ -176,6 +215,12 @@ class N4IncrementalRunner:
                 settled_receipt_windows=int(evidence["settled_windows"]),
                 persisted_result_windows=int(evidence["persisted_windows"]),
                 blocked_result_windows=int(evidence["blocked_results"]),
+                coverage_status=derive_n4_coverage_status(
+                    total_windows=int(current["total_windows"]),
+                    examined_windows=int(current["examined_windows"]),
+                    gap_windows=gaps,
+                ),
+                gap_windows=gaps,
             )
 
     async def _account_and_block(
@@ -216,21 +261,20 @@ class N4IncrementalRunner:
             raise PermissionError("N2-safe source provenance is mandatory")
         if authority.revision_id is None:
             raise ValueError("document revision must be pinned before N4")
+        # A mutable provider cannot switch prompt/model after a runner was
+        # initialized; a new runner/config digest is mandatory for v2.
+        if (
+            getattr(self.provider, "prompt_version", None) != self.prompt_version
+            or self.provider.model_name != self.model_id
+        ):
+            raise ValueError("N4 provider identity changed; rebuild pinned runner")
 
         windows = plan_n4_source_windows(
             model_safe_text, revision_id=str(authority.revision_id),
             max_context_chars=self.context_limit,
             overlap_chars=self.overlap,
         )
-        config = {
-            "prompt": "n4-compact-window-v1",
-            "model": self.provider.model_name,
-            "window_chars": self.context_limit,
-            "overlap": self.overlap,
-        }
-        config_digest = sha256(json.dumps(
-            config, sort_keys=True, separators=(",", ":"),
-        ).encode()).hexdigest()
+        config_digest = self.config_sha256
         async with self.sessions() as session, session.begin():
             await self._tenant_context(session, authority.tenant_id)
             run_id = await create_run(
@@ -247,12 +291,56 @@ class N4IncrementalRunner:
                     statuses = await window_statuses(
                         session, tenant_id=authority.tenant_id, run_id=run_id,
                     )
-                    if statuses.get(window.ordinal) in ("EXAMINED", "BLOCKED"):
+                    status = statuses.get(window.ordinal)
+                    if set(statuses) != {w.ordinal for w in windows}:
+                        raise N4LedgerError("source window ordinals missing on resume")
+                    if status == "EXAMINED":
                         continue
-                    # Stable across retries/restarts. Replay MUST NOT hit provider.
+                    if status not in ("PENDING", "BLOCKED"):
+                        raise N4LedgerError("invalid N4 window state on resume")
+                    # Count every durable attempt, including canceled entries,
+                    # so each paid retry has a distinct, stable idempotency key.
+                    prior = (await session.execute(text("""
+                        SELECT status FROM public.n4_usage_reservations
+                         WHERE tenant_id = CAST(:tenant AS uuid)
+                           AND run_id = CAST(:run AS uuid)
+                           AND window_ordinal = :ordinal
+                         ORDER BY created_at, reservation_id
+                    """), {
+                        "tenant": str(authority.tenant_id),
+                        "run": str(run_id), "ordinal": window.ordinal,
+                    })).scalars().all()
+                    if status == "BLOCKED":
+                        retryable = await retryable_windows(
+                            session, tenant_id=authority.tenant_id,
+                            run_id=run_id, max_attempts=self.max_attempts,
+                        )
+                        if window.ordinal not in retryable:
+                            if any(str(s) in ("UNKNOWN", "RESERVED") for s in prior):
+                                return await self._outcome(
+                                    authority, run_id,
+                                    "OPEN_LIABILITY_REQUIRES_RECONCILIATION",
+                                )
+                            # Terminal gap, or bounded retries exhausted.
+                            # Preserve BLOCKED rather than claiming coverage.
+                            continue
+                    elif prior:
+                        # PENDING + any old attempt (even SETTLED) means a
+                        # crash/interleaving may have occurred before findings.
+                        # Never charge or send again without a deliberate
+                        # BLOCKED transition and a settled ledger entry.
+                        return await self._outcome(
+                            authority, run_id,
+                            "EXISTING_RESERVATION_REQUIRES_RECONCILIATION",
+                        )
+                    attempt_no = len(prior) + 1
+                    # Preserve the original A2 first-attempt key exactly.
+                    # Different paid attempts need distinct keys; if the
+                    # current one is already RESERVED, we stop above.
+                    attempt_suffix = "" if attempt_no == 1 else f":{attempt_no}"
                     call_key = sha256(
                         f"n4:{run_id}:{window.ordinal}:{window.context_sha256}:"
-                        f"{self.provider.model_name}".encode()
+                        f"{self.model_id}{attempt_suffix}".encode()
                     ).hexdigest()
                     reserved = await reserve_call(
                         session, authority=authority,
@@ -285,10 +373,19 @@ class N4IncrementalRunner:
                     authority, run_id, "EXISTING_RESERVATION_REQUIRES_RECONCILIATION",
                 )
             try:
-                response = await self.provider.generate(
-                    window=window, tenant_id=authority.tenant_id,
-                    request_id=str(reserved.reservation_id),
-                )
+                if attempt_no == 1:
+                    # The frozen interface defaults attempt to 1. Keep the
+                    # first-call compatibility of older providers; explicit
+                    # paid retries require the v2-capable attempt argument.
+                    response = await self.provider.generate(
+                        window=window, tenant_id=authority.tenant_id,
+                        request_id=str(reserved.reservation_id),
+                    )
+                else:
+                    response = await self.provider.generate(
+                        window=window, tenant_id=authority.tenant_id,
+                        request_id=str(reserved.reservation_id), attempt=attempt_no,
+                    )
             except Exception as exc:
                 # Partial provider exceptions may carry a billable usage
                 # estimate. Missing usage is UNKNOWN, not zero.
