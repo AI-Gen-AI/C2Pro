@@ -1,0 +1,18 @@
+A3=49870fdb6567c9b53ed8886d1d006509a0861e33
+A5=6dd63bb9aae540432e0d592025f82785f6769c07
+BASE=49870fdb6567c9b53ed8886d1d006509a0861e33
+PYTHON=Python 3.11.16
+CHANGED FILES:
+ M apps/api/src/analysis/adapters/ai/n4_anthropic_window_provider.py
+ M apps/api/src/analysis/domain/n4_clause_inventory.py
+ M apps/api/src/analysis/domain/n4_compact_window_response.py
+ M apps/api/tests/unit/analysis/test_v4_n4_anthropic_adapter.py
+ M apps/api/tests/unit/analysis/test_v4_n4_compact_response.py
+?? apps/api/tests/unit/analysis/test_n4_clause_inventory.py
+A5 BLOB CHECK:
+30593fcc4badcbe7cbdb6bd9848553a645e860d8
+bbb865ffcd2f81b4aa53243b842ded44bed83ca6
+8eed8d6e80cab235617a602f7e3179f9a4abddb7
+b3f98ac2e7aeb60334ab96a8b0f495cfd7a1271d
+6718b30127ac38269ede1fd15223248e35246418
+55612929b7b4947d7afd1c5eae99e9b2b61e0617
