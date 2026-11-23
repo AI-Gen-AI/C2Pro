@@ -142,6 +142,7 @@ def _v2_payload(*, quote, reason, examined=True, supporting=None):
         "window_examined": examined,
         "findings": [{
             "title": "Synthetic exposure", "category": "LEGAL",
+            "epc_control_id": "EPC-07",
             "risk_reason": reason, "source_quote": quote,
             "clause_ref": "9.6", "severity_proposed": "HIGH",
             "supporting_quotes": [] if supporting is None else supporting,
@@ -178,6 +179,7 @@ def test_v2_multiline_quote_matches_source_whitespace_with_exact_offsets():
     assert "\n" in claim["source_quote"]
     assert not claim["quote_omits_figures"]
     assert claim["dimension"] == "LEGAL"
+    assert claim["epc_control_id"] == "EPC-07"
     assert claim["severity_proposed"] == "HIGH"
 
 
@@ -231,3 +233,21 @@ def test_v2_supporting_quotes_are_independently_anchored_and_bounded():
     payload["findings"][0]["supporting_quotes"] = ["a", "b", "c"]
     with pytest.raises(N4WindowContractError, match="at most 2"):
         parse_n4_window_output(payload, window=_window(source))
+
+
+
+def test_v2_rejects_wrong_epc_dimension_and_unknown_control():
+    source = "9.6 The supplier shall comply with governing law."
+    payload = _v2_payload(
+        quote="The supplier shall comply with governing law.",
+        reason="The provision may require legal review.",
+    )
+    payload["findings"][0]["epc_control_id"] = "EPC-05"  # TIME, not LEGAL
+    with pytest.raises(N4WindowContractError, match="EPC control and dimension"):
+        parse_n4_window_output(payload, window=_window(source))
+    payload["findings"][0]["epc_control_id"] = "EPC-99"
+    with pytest.raises(N4WindowContractError, match="unknown EPC control"):
+        parse_n4_window_output(payload, window=_window(source))
+    payload["findings"][0]["epc_control_id"] = "EPC-07"
+    parsed = parse_n4_window_output(payload, window=_window(source))
+    assert parsed.proposed_findings[0]["claim"]["epc_control_id"] == "EPC-07"
