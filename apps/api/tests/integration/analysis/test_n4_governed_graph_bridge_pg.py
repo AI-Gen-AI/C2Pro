@@ -30,6 +30,8 @@ pytestmark = [
 
 class MockSourceWindowProvider:
     model_name = "mock-source-window-model"
+    # Synthetic and immutable: A3 must include this value in config_sha.
+    prompt_version = "jv1-a7-synthetic-window-v1"
     fallback_reservation_usd = None
     approved_fallback_models = frozenset()
     fallback_routes = ()
