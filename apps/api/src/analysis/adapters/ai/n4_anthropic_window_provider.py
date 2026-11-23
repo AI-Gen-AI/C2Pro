@@ -185,6 +185,8 @@ class AnthropicN4WindowProvider:
         self, *, window: N4SourceWindow, tenant_id: UUID, request_id: str,
         attempt: int = 1,  # noqa: ARG002 - frozen by JV1-A1, used from A5
     ) -> N4ProviderReceipt:
+        if self.prompt_version != N4_WINDOW_PROMPT_VERSION:
+            raise ValueError("N4 provider prompt version differs from v2 contract")
         if attempt < 1:
             raise ValueError("N4 attempt must be positive and 1-based")
         output_cap = self.max_output_tokens if attempt == 1 else 16384
