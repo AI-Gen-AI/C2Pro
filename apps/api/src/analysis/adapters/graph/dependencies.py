@@ -51,3 +51,32 @@ def get_hitl_service_for_graph(
         notification_service=LogNotificationService(),
         confidence_router=ConfidenceRouter(),
     )
+
+
+
+def build_omniroute_pilot_ai_service(
+    tenant_id: str | None,
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+) -> AIService:
+    """Explicit C2Pro graph DI seam for isolated OmniRoute pilot evaluations.
+
+    The existing get_ai_service() path is deliberately unchanged. Call this
+    factory only from synthetic/staging QA; it does not auto-select an external
+    model for a real tenant or replace production Anthropic routing.
+    """
+    from src.config import settings
+    from src.analysis.adapters.ai.omniroute_pilot import OmniRoutePilotClient
+
+    if settings.environment == "production":
+        raise RuntimeError("OmniRoute pilot requires a non-production environment")
+    return AIService(
+        tenant_id=tenant_id,
+        wrapper=OmniRoutePilotClient(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+        ),
+    )
