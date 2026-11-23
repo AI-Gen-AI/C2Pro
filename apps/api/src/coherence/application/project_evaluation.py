@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from hashlib import blake2b
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from fastapi import BackgroundTasks, HTTPException, status
@@ -22,12 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.coherence.adapters.persistence.models import CoherenceResultORM
 from src.coherence.adapters.persistence.withheld_evaluation import record_withheld_evaluation
 from src.coherence.application.disposition_review import build_scoring_snapshot
+from src.coherence.domain.score_reasons import WITHHELD_EVALUATION_EVENT
 from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.graph.nodes import v1_unassessed_reasons
 from src.coherence.graph.state import EvaluationConfig
 from src.core.database import get_session_with_tenant
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
+from src.temporal.adapters.persistence.models import ProjectEventORM
 
 logger = structlog.get_logger()
 
@@ -119,6 +122,45 @@ async def _run_evaluation(payload: Any, db: AsyncSession, user: Any, *, review_i
     )
 
 
+async def _record_approval_withheld(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    project_id: UUID,
+    actor_user_id: UUID | None,
+    approval_id: str,
+    reason: str,
+    missing_dimensions: list[str],
+    score_version: str | None,
+    alert_count: int,
+) -> None:
+    """Write a durable, approval-keyed NO-SCORE outcome in the same DB transaction.
+
+    The regular public /evaluate route uses record_withheld_evaluation. The A17
+    branch needs the *same* event plus a durable idempotency key: a score is
+    deliberately never fabricated when evidence is insufficient.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    db.add(
+        ProjectEventORM(
+            event_id=uuid4(),
+            project_id=project_id,
+            tenant_id=tenant_id,
+            event_type=WITHHELD_EVALUATION_EVENT,
+            payload={
+                "score_reason": reason,
+                "score_missing_dimensions": missing_dimensions,
+                "score_version": score_version,
+                "alert_count": alert_count,
+                "a17_approval_id": approval_id,
+            },
+            actor=f"user:{actor_user_id}" if actor_user_id else None,
+            occurred_at=now,
+            created_at=now,
+        )
+    )
+
+
 def _approval_lock_key(tenant_id: UUID, project_id: UUID, review_id: UUID) -> int:
     identity = f"jv1-a17:{tenant_id}:{project_id}:{review_id}".encode()
     return int.from_bytes(blake2b(identity, digest_size=8).digest(), "big") & ((1 << 63) - 1)
@@ -160,6 +202,22 @@ async def run_project_evaluation_after_approval(
             )
             if committed is not None:
                 logger.info("a17_evaluation_skipped_already_persisted")
+                return
+            # A valid human approval may result in an unassessed/withheld Score.
+            # That outcome must also be idempotent: no repeated graph calls or
+            # duplicate append-only events after relogin or worker retry.
+            withheld = await db.scalar(
+                select(ProjectEventORM.event_id)
+                .where(
+                    ProjectEventORM.tenant_id == tenant_id,
+                    ProjectEventORM.project_id == project_id,
+                    ProjectEventORM.event_type == WITHHELD_EVALUATION_EVENT,
+                    ProjectEventORM.payload["a17_approval_id"].astext == str(review_id),
+                )
+                .limit(1)
+            )
+            if withheld is not None:
+                logger.info("a17_evaluation_skipped_already_withheld")
                 return
             # The extracted service must leave commit to the outer transaction,
             # otherwise the advisory lock would be released before the marker.
@@ -371,6 +429,17 @@ async def evaluate_coherence_in_application(
     )
 
     # Persist result so the dashboard always reflects the latest evaluation.
+    # A successful post-approval evaluation must produce either a persisted
+    # Score or an explicit, reasoned withheld outcome. An empty model response
+    # cannot be recorded as successful and must remain retryable.
+    if (
+        approval_id is not None
+        and payload.project_id
+        and enriched_result.overall_score is None
+        and not enriched_result.score_reason
+    ):
+        raise ValueError("A17 evaluation has neither Score nor withheld reason")
+
     # Keep the exact detected FindingSignals and their identity basis so a later
     # validated false-positive review can replay the same scorer/version.
     if payload.project_id and enriched_result.overall_score is not None:
@@ -451,16 +520,31 @@ async def evaluate_coherence_in_application(
         # score authority. auto_resolve=False preserves older human dispositions.
         # S3: its REASON is kept as an append-only withheld-evaluation event so the persisted
         # dashboard can repeat it after a reload or a new login (never a number in its place).
-        await record_withheld_evaluation(
-            db,
-            project_id=payload.project_id,
-            tenant_id=current_user.tenant_id,
-            actor_user_id=getattr(current_user, "id", None),
-            reason=enriched_result.score_reason,
-            missing_dimensions=list(enriched_result.score_missing_dimensions or []),
-            score_version=enriched_result.score_version,
-            alert_count=len(enriched_result.alerts),
-        )
+        if approval_id is not None:
+            if not enriched_result.score_reason:
+                raise ValueError("A17 scoreless evaluation lacks a withheld reason")
+            await _record_approval_withheld(
+                db,
+                project_id=payload.project_id,
+                tenant_id=current_user.tenant_id,
+                actor_user_id=getattr(current_user, "id", None),
+                approval_id=approval_id,
+                reason=enriched_result.score_reason,
+                missing_dimensions=list(enriched_result.score_missing_dimensions or []),
+                score_version=enriched_result.score_version,
+                alert_count=len(enriched_result.alerts),
+            )
+        else:
+            await record_withheld_evaluation(
+                db,
+                project_id=payload.project_id,
+                tenant_id=current_user.tenant_id,
+                actor_user_id=getattr(current_user, "id", None),
+                reason=enriched_result.score_reason,
+                missing_dimensions=list(enriched_result.score_missing_dimensions or []),
+                score_version=enriched_result.score_version,
+                alert_count=len(enriched_result.alerts),
+            )
         if auto_commit:
             await db.commit()
 

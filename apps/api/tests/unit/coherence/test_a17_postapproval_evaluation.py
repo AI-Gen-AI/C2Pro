@@ -142,7 +142,8 @@ async def test_background_scoring_uses_fresh_tenant_scoped_session_and_low_budge
     assert user.tenant_id == tenant_id and user.id == actor_id
     assert score.await_args.kwargs["review_id"] == review_id
     session.execute.assert_awaited_once()
-    session.scalar.assert_awaited_once()
+    # Check scored and explicit withheld outcomes before a new evaluation.
+    assert session.scalar.await_count == 2
 
 
 @pytest.mark.asyncio

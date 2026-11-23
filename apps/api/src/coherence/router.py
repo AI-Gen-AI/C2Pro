@@ -1615,7 +1615,10 @@ async def get_coherence_dashboard(
             CoherenceResultORM.score_reason,
             CoherenceResultORM.score_missing_dimensions,
         )
-        .where(CoherenceResultORM.project_id == project_id)
+        .where(
+            CoherenceResultORM.project_id == project_id,
+            CoherenceResultORM.tenant_id == tenant_id,
+        )
         .order_by(CoherenceResultORM.calculated_at.desc())
         .limit(1)
     )
