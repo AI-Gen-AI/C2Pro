@@ -18,14 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.analysis.adapters.persistence.n4_incremental_store import (
     N4LedgerError,
+    create_run,
     settle_unknown_pessimistically,
 )
+from src.analysis.application import n4_incremental_runner as runner_module
 from src.analysis.application.n4_incremental_runner import (
     N4IncrementalRunner,
     N4ProviderReceipt,
 )
 from src.analysis.domain.n4_failure_kinds import N4CoverageStatus
-from src.analysis.domain.n4_source_windows import N4SourceWindow
+from src.analysis.domain.n4_source_windows import N4SourceWindow, plan_n4_source_windows
 from src.core.processing_authority import ProcessingAuthorityLost
 from tests.integration.analysis.test_n4_incremental_store_pg import (
     _db_period,
@@ -136,6 +138,162 @@ async def _balances(tenant):
         """, tenant, _db_period())
     finally:
         await conn.close()
+
+
+async def _reservation_count(tenant):
+    conn = await asyncpg.connect(_DSN)
+    try:
+        return await conn.fetchval("""
+            SELECT count(*) FROM public.n4_usage_reservations
+             WHERE tenant_id=$1
+        """, tenant)
+    finally:
+        await conn.close()
+
+
+async def _create_pending_run(*, engine, authority, project, runner):
+    """Create a durable, provider-free prior run for resume rejection tests."""
+    windows = plan_n4_source_windows(
+        _source(), revision_id=str(authority.revision_id),
+        max_context_chars=runner.context_limit, overlap_chars=runner.overlap,
+    )
+    async with AsyncSession(engine) as session, session.begin():
+        await session.execute(text(
+            "SELECT set_config('app.current_tenant', :tenant, true)"
+        ), {"tenant": str(authority.tenant_id)})
+        run_id = await create_run(
+            session, authority=authority, project_id=project,
+            config_sha256=runner.config_sha256, windows=windows,
+            budget_cap_usd=runner.run_cap,
+        )
+    return run_id
+
+
+async def test_a3_provider_identity_mutation_rejects_before_session_or_reservation():
+    """A reused runner cannot reserve against a changed prompt/model identity."""
+    authority, project, engine = await _prepare()
+    provider = StubProvider()
+    runner = _runner(engine, provider)
+    try:
+        before_balance = await _balances(authority.tenant_id)
+        before_reservations = await _reservation_count(authority.tenant_id)
+
+        def unexpected_session():
+            raise AssertionError("provider identity drift must fail before opening a session")
+
+        runner.sessions = unexpected_session
+        for attribute, changed_value in (
+            ("prompt_version", "n4-compact-window-v2"),
+            ("model_name", "other-synthetic-model"),
+        ):
+            original_value = getattr(provider, attribute)
+            setattr(provider, attribute, changed_value)
+            with pytest.raises(ValueError, match="provider identity changed"):
+                await runner.run(
+                    authority=authority, project_id=project,
+                    model_safe_text=_source(), n2_projection_attested=True,
+                )
+            setattr(provider, attribute, original_value)
+
+        assert provider.calls == []
+        assert before_reservations == 0
+        assert await _reservation_count(authority.tenant_id) == before_reservations
+        assert await _balances(authority.tenant_id) == before_balance
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_missing_resume_source_window_raises_before_provider_or_reservation(monkeypatch):
+    """Simulate a committed lost ordinal after create_run validates the map."""
+    authority, project, engine = await _prepare()
+    provider = StubProvider()
+    runner = _runner(engine, provider)
+    try:
+        run_id = await _create_pending_run(
+            engine=engine, authority=authority, project=project, runner=runner,
+        )
+        original_statuses = runner_module.window_statuses
+        observed = []
+
+        async def lose_ordinal_after_create(session, *, tenant_id, run_id):
+            assert tenant_id == authority.tenant_id
+            assert run_id == expected_run_id
+            # The runner has committed create_run and its mapping check.
+            # Inject a real, committed loss between that check and status read.
+            conn = await asyncpg.connect(_DSN)
+            try:
+                deleted = await conn.fetchval("""
+                    DELETE FROM public.n4_extraction_windows
+                     WHERE tenant_id=$1 AND run_id=$2 AND ordinal=0
+                     RETURNING ordinal
+                """, tenant_id, run_id)
+                assert deleted == 0
+            finally:
+                await conn.close()
+            statuses = await original_statuses(
+                session, tenant_id=tenant_id, run_id=run_id,
+            )
+            observed.append(statuses)
+            assert 0 not in statuses
+            return statuses
+
+        expected_run_id = run_id
+        monkeypatch.setattr(runner_module, "window_statuses", lose_ordinal_after_create)
+        before_balance = await _balances(authority.tenant_id)
+        before_reservations = await _reservation_count(authority.tenant_id)
+
+        with pytest.raises(N4LedgerError, match="source window ordinals missing on resume"):
+            await runner.run(
+                authority=authority, project_id=project,
+                model_safe_text=_source(), n2_projection_attested=True,
+            )
+
+        assert len(observed) == 1
+        assert provider.calls == []
+        assert before_reservations == 0
+        assert await _reservation_count(authority.tenant_id) == before_reservations
+        assert await _balances(authority.tenant_id) == before_balance
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_claimed_or_failed_window_cannot_resume_or_charge():
+    """Only PENDING/BLOCKED windows are resumable; stale states cannot spend."""
+    for state in ("CLAIMED", "FAILED"):
+        authority, project, engine = await _prepare()
+        provider = StubProvider()
+        runner = _runner(engine, provider)
+        try:
+            run_id = await _create_pending_run(
+                engine=engine, authority=authority, project=project, runner=runner,
+            )
+            async with AsyncSession(engine) as session, session.begin():
+                await session.execute(text(
+                    "SELECT set_config('app.current_tenant', :tenant, true)"
+                ), {"tenant": str(authority.tenant_id)})
+                await session.execute(text("""
+                    UPDATE public.n4_extraction_windows SET status = :state
+                     WHERE tenant_id = CAST(:tenant AS uuid)
+                       AND run_id = CAST(:run AS uuid) AND ordinal = 0
+                """), {
+                    "tenant": str(authority.tenant_id), "run": str(run_id),
+                    "state": state,
+                })
+            before_balance = await _balances(authority.tenant_id)
+            before_reservations = await _reservation_count(authority.tenant_id)
+
+            with pytest.raises(N4LedgerError, match="invalid N4 window state"):
+                await runner.run(
+                    authority=authority, project_id=project,
+                    model_safe_text=_source(), n2_projection_attested=True,
+                )
+
+            assert provider.calls == []
+            assert before_reservations == 0
+            assert await _reservation_count(authority.tenant_id) == before_reservations
+            assert await _balances(authority.tenant_id) == before_balance
+        finally:
+            await engine.dispose()
 
 
 async def test_successful_multiwindow_resume_never_calls_provider_twice():
