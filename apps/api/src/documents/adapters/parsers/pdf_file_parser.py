@@ -172,12 +172,14 @@ class PDFFileParser:
                 except Exception:
                     # Unknown page-image inventory cannot justify sparse OCR.
                     has_images = False
-                reason = (
-                    "no_native_text" if not page_text_blocks
-                    else "suspect_native_text" if _is_low_quality_text_layer(page_text)
-                    else "sparse_native_text" if native_chars < 200 and has_images
-                    else None
-                )
+                if not page_text_blocks:
+                    reason = "no_native_text"
+                elif _is_low_quality_text_layer(page_text):
+                    reason = "suspect_native_text"
+                elif native_chars < 200 and has_images:
+                    reason = "sparse_native_text"
+                else:
+                    reason = None
                 status = "NATIVE_TEXT"
                 ocr_chars = 0
                 if reason is not None:

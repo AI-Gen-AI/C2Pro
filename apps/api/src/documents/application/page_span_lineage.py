@@ -152,7 +152,7 @@ def read_revision_page_spans(
 # they preserve source offsets, including native text on OCR-failed pages.
 _A9_LOCATABLE_PAGE_STATES = frozenset({
     "NATIVE_TEXT", "OCR_ONLY", "OCR_AUGMENTED",
-    "OCR_REPLACED_SUSPECT", "OCR_DUPLICATE_IGNORED",
+    "OCR_DUPLICATE_IGNORED",
 })
 
 
@@ -206,6 +206,7 @@ def read_a9_physical_page_map(
     cursor = 0
     previous_page = 0
     page_rows: list[dict[str, int]] = []
+    page_methods: dict[int, set[str]] = {}
     for block in blocks:
         if not isinstance(block, dict):
             return None
@@ -242,10 +243,26 @@ def read_a9_physical_page_map(
                 "start_offset": start,
                 "end_offset": end,
             })
+        page_methods.setdefault(page, set()).add(method)
         previous_page = page
         cursor = end
     if parsed_text[cursor:].strip():
         return None
+
+    # Validate the diagnostic against all physical blocks before filtering.
+    # An OCR page cannot be reported as failed while carrying successful OCR
+    # text; an augmented page must retain BOTH native and OCR evidence.
+    for page, methods in page_methods.items():
+        status = page_status[page]
+        if (
+            (status == "NATIVE_TEXT" and methods != {"NATIVE"})
+            or (status == "OCR_DUPLICATE_IGNORED" and methods != {"NATIVE"})
+            or (status in {"OCR_ONLY", "OCR_REPLACED_SUSPECT"} and methods != {"OCR"})
+            or (status == "OCR_AUGMENTED" and methods != {"NATIVE", "OCR"})
+            or (status not in _A9_LOCATABLE_PAGE_STATES
+                and status != "OCR_REPLACED_SUSPECT" and "OCR" in methods)
+        ):
+            return None
 
     excluded = [
         {"page": page, "reason": page_status[page]}

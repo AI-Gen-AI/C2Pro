@@ -233,3 +233,40 @@ def test_unicode_offsets_and_whitespace_are_original_unmodified_characters() -> 
     raw = metadata["parsed_text_page_spans_by_revision"][str(revision.revision_id)]
     assert len(raw["spans"]) == 3
     assert "Cláusula 1:" in metadata["parsed_text"]
+
+
+
+def test_ocr_replaced_suspect_keeps_original_raw_page_but_not_a9_page() -> None:
+    blocks = [{"text": "OCR sobre página sospechosa, sin validar.", "page": 9, "ocr": True}]
+    metadata, source, revision = _fixture(
+        blocks, {9: "OCR_REPLACED_SUSPECT"}, source_pages=9,
+    )
+    raw = metadata["parsed_text_page_spans_by_revision"][str(revision.revision_id)]
+    assert raw["spans"][0]["method"] == "OCR"
+    assert source.startswith("OCR sobre página")
+    projection = _projection(metadata, source, revision)
+    assert projection is not None
+    assert projection["spans"] == []
+    assert projection["status"] == "NO_LOCATABLE_PAGES"
+    assert {"page": 9, "reason": "OCR_REPLACED_SUSPECT"} in projection["excluded_pages"]
+
+
+@pytest.mark.parametrize("state,blocks", [
+    ("OCR_AUGMENTED", [{"text": "Solo texto nativo.", "page": 9}]),
+    ("OCR_ONLY", [
+        {"text": "Nativo no esperado.", "page": 9},
+        {"text": "OCR esperado.", "page": 9, "ocr": True},
+    ]),
+    ("NATIVE_TEXT", [{"text": "OCR no esperado.", "page": 9, "ocr": True}]),
+    ("OCR_FAILED", [{"text": "OCR no puede ser exitoso y fallido.",
+                      "page": 9, "ocr": True}]),
+    ("OCR_REPLACED_SUSPECT", [
+        {"text": "OCR reemplazado declarado pero nativo.",
+         "page": 9},
+    ]),
+])
+def test_inconsistent_ocr_diagnostics_fail_closed(state: str, blocks: list[dict]) -> None:
+    metadata, source, revision = _fixture(
+        blocks, {9: state}, source_pages=9,
+    )
+    assert _projection(metadata, source, revision) is None
