@@ -16,6 +16,7 @@ Version: 1.2.0
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import time
 from dataclasses import dataclass
@@ -143,6 +144,7 @@ class LLMRequest:
     task_type: str | None = None
     bypass_cache: bool = False
     tools: list[dict[str, Any]] | None = None
+    tool_choice: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.request_id is None:
@@ -331,8 +333,9 @@ class LLMClient:
 
         # TS-AI-FLASH-001: Check flash cache first
         tenant_id_str = str(request.tenant_id) if request.tenant_id else ""
+        cache_enabled = not request.bypass_cache and request.tool_choice is None
         cached_entry = None
-        if not request.bypass_cache:
+        if cache_enabled:
             cached_entry = await self.flash_cache.get(
                 model_id=request.model,
                 system_prompt=request.system,
@@ -367,7 +370,7 @@ class LLMClient:
             )
 
         # Explicit full-document runs bypass old caches, not a cache miss.
-        if not request.bypass_cache:
+        if cache_enabled:
             record_ai_cache_miss(tenant_id_str, request.model)
 
         # Pre-execution token counting and cost estimation
@@ -423,6 +426,8 @@ class LLMClient:
                     api_kwargs["top_k"] = request.top_k
                 if request.tools is not None:
                     api_kwargs["tools"] = request.tools
+                if request.tool_choice is not None:
+                    api_kwargs["tool_choice"] = request.tool_choice
 
                 (
                     raw_response,
@@ -485,7 +490,7 @@ class LLMClient:
                 )
 
                 # TS-AI-FLASH-001: Cache the response for future use
-                if not request.bypass_cache:
+                if cache_enabled:
                     await self.flash_cache.set(
                         model_id=request.model,
                         system_prompt=request.system,
@@ -499,7 +504,7 @@ class LLMClient:
                         execution_time_ms=execution_time_ms,
                         request_id=request.request_id or str(uuid4()),
                     )
-                if not request.bypass_cache:
+                if cache_enabled:
                     record_ai_cache_size(self.flash_cache.size)
 
                 return LLMResponse(
@@ -688,7 +693,26 @@ class LLMClient:
                 raise
             stop = getattr(response, "stop_reason", None)
             if stop == "max_tokens" and not full_source:
-                raise ValueError("LLM output incomplete: stop_reason=max_tokens")
+                usage = getattr(response, "usage", None)
+                input_count = getattr(usage, "input_tokens", None)
+                output_count = getattr(usage, "output_tokens", None)
+                if (
+                    type(input_count) is not int
+                    or type(output_count) is not int
+                    or input_count < 0
+                    or output_count < 0
+                ):
+                    # A failed provider turn may be billable; never invent usage
+                    # or cost when the provider did not supply a valid receipt.
+                    raise ValueError(
+                        "LLM output incomplete: stop_reason=max_tokens (usage unavailable)"
+                    )
+                raise self._partial_generation_error(
+                    request,
+                    "LLM output incomplete: stop_reason=max_tokens",
+                    input_count,
+                    output_count,
+                )
             if full_source and stop not in {"max_tokens", "end_turn"}:
                 if getattr(response, "usage", None):
                     input_tokens += response.usage.input_tokens
@@ -790,7 +814,16 @@ class LLMClient:
 
     def _extract_content(self, message: Message) -> str:
         """Extrae contenido de texto de la respuesta."""
-        return "".join(block.text for block in message.content if hasattr(block, "text"))
+        content: list[str] = []
+        for block in message.content:
+            if getattr(block, "type", None) == "tool_use":
+                tool_input = getattr(block, "input", None)
+                if not isinstance(tool_input, dict):
+                    raise ValueError("LLM tool_use input must be a JSON object")
+                content.append(json.dumps(tool_input))
+            elif hasattr(block, "text"):
+                content.append(block.text)
+        return "".join(content)
 
     @staticmethod
     def _error_chain(error: Exception) -> list[Exception]:

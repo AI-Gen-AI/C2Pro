@@ -1,0 +1,21 @@
+id,tipo,critico,presente,clausula,pagina,cita_ancla,cifras_esperadas,dimension
+EPC-01,Precio y moneda,si,,,,,,BUDGET
+EPC-02,Hitos/calendario de pagos y condiciones,si,,,,,,BUDGET
+EPC-03,"Retenciones, avales y garantías financieras",si,,,,,,BUDGET
+EPC-04,Plazo / fechas de terminación garantizadas,si,,,,,,TIME
+EPC-05,Penalizaciones por retraso: tasa y tope,si,,,,,,TIME
+EPC-06,Garantías y penalizaciones de rendimiento,si,,,,,,TECHNICAL
+EPC-07,"Limitación de responsabilidad, daño consecuencial y excepciones",si,,,,,,LEGAL
+EPC-08,Indemnidades,si,,,,,,LEGAL
+EPC-09,"Resolución (causas, consecuencias, plazos)",si,,,,,,LEGAL
+EPC-10,Suspensión,no,,,,,,LEGAL
+EPC-11,Fuerza mayor,si,,,,,,LEGAL
+EPC-12,Variaciones / órdenes de cambio y su valoración,si,,,,,,SCOPE
+EPC-13,"Alcance, exclusiones e interfaces",si,,,,,,SCOPE
+EPC-14,Pruebas y recepción (provisional/definitiva),si,,,,,,QUALITY
+EPC-15,Garantía y periodo de defectos,si,,,,,,QUALITY
+EPC-16,Seguros y límites,no,,,,,,LEGAL
+EPC-17,Confidencialidad y propiedad intelectual,no,,,,,,LEGAL
+EPC-18,Ley aplicable y disputas,no,,,,,,LEGAL
+EPC-19,"Impuestos, aranceles, permisos y cambio de ley",no,,,,,,BUDGET
+EPC-20,Remisiones a anexos y orden de prelación,si,,,,,,SCOPE
