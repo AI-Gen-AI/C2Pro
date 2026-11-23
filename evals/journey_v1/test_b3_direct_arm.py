@@ -812,7 +812,7 @@ def test_an_open_reservation_blocks_a_concurrent_duplicate(n2_source, taxonomy, 
 
 
 @pytest.mark.parametrize("error", [
-    arm.RequestNotSent("synthetic"), arm.ProviderRejected(429),
+    arm.RequestNotSent("synthetic"),
 ])
 def test_provably_unbilled_failures_release_and_allow_a_retry(
     error, n2_source, taxonomy, register,
@@ -846,13 +846,13 @@ def test_spend_invariants_hold_for_any_sequence_of_outcomes(
     cap = Decimal("0.6")
     register = arm.JsonlSpendRegister(max_usd=cap, root=tmp_path)
     errors = {"timeout": TimeoutError("t"), "not_sent": arm.RequestNotSent("n"),
-              "rejected": arm.ProviderRejected(429)}
+              "rejected": RuntimeError("synthetic HTTP 429")}
     for index, outcome in enumerate(outcomes):
         alias = arm.ALIASES[index % len(arm.ALIASES)]
         transport = (RecordingTransport(_anthropic_reply([])) if outcome == "ok"
                      else RecordingTransport(error=errors[outcome]))
         with contextlib.suppress(
-            arm.SpendRefused, TimeoutError, arm.RequestNotSent, arm.ProviderRejected,
+            arm.SpendRefused, TimeoutError, arm.RequestNotSent, RuntimeError,
         ):
             _run(_config("anthropic"), n2_source, taxonomy, register, transport, alias=alias)
         assert register.committed_usd() <= cap
@@ -880,27 +880,19 @@ def anthropic_key(monkeypatch):
 
 
 @pytest.mark.usefixtures("anthropic_key")
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 413, 422, 429])
-def test_transport_maps_explicit_rejections_to_unbilled(monkeypatch, status):
-    import httpx
-
-    monkeypatch.setattr(httpx, "post", lambda *_a, **_k: _httpx_response(status))
-    transport = arm.HttpxTransport()
-    with pytest.raises(arm.ProviderRejected) as caught:
-        transport("anthropic", {"model": "m"})
-    assert caught.value.status == status
-
-
-@pytest.mark.usefixtures("anthropic_key")
-@pytest.mark.parametrize("status", [500, 502, 503, 504, 529])
-def test_transport_keeps_server_errors_uncertain(monkeypatch, status):
+@pytest.mark.parametrize(
+    "status", [400, 401, 402, 403, 404, 408, 413, 422, 429, 500, 502, 503, 504, 529],
+)
+def test_transport_keeps_every_http_error_billing_uncertain(monkeypatch, status):
+    """Policy A: a response came back, so no-charge is not demonstrable."""
     import httpx
 
     monkeypatch.setattr(httpx, "post", lambda *_a, **_k: _httpx_response(status))
     transport = arm.HttpxTransport()
     with pytest.raises(httpx.HTTPStatusError) as caught:
         transport("anthropic", {"model": "m"})
-    assert not isinstance(caught.value, (arm.ProviderRejected, arm.RequestNotSent))
+    assert not isinstance(caught.value, arm.RequestNotSent)
+    assert not hasattr(arm, "ProviderRejected")
 
 
 @pytest.mark.usefixtures("anthropic_key")
@@ -966,12 +958,6 @@ def test_529_overloaded_is_billing_uncertain_and_blocks_retry(
     assert retry.calls == []
 
 
-def test_provider_rejected_only_accepts_documented_unbilled_statuses():
-    with pytest.raises(ValueError, match="529"):
-        arm.ProviderRejected(529)
-    assert arm.ProviderRejected(429).status == 429
-
-
 def test_unknown_blocks_the_same_contract_and_provider_even_with_another_source(
     n2_source, taxonomy, register,
 ):
@@ -1027,3 +1013,170 @@ def test_after_a_settled_call_a_new_source_revision_may_run(n2_source, taxonomy,
     second = RecordingTransport(_anthropic_reply([]))
     _run(config, _variant_source(), taxonomy, register, second)
     assert len(second.calls) == 1
+
+
+# --- Policy A (L0 23/11): no HTTP response is provably unbilled ---------------
+
+
+@pytest.mark.usefixtures("anthropic_key")
+def test_429_is_billing_uncertain_and_blocks_retry(monkeypatch, n2_source, taxonomy, register):
+    import httpx
+
+    monkeypatch.setattr(httpx, "post", lambda *_a, **_k: _httpx_response(429))
+    config = _config("anthropic")
+    transport = arm.HttpxTransport()
+    with pytest.raises(httpx.HTTPStatusError):
+        _run(config, n2_source, taxonomy, register, transport)
+    events = register.events()
+    assert [e["ev"] for e in events] == ["reserve", "unknown"]
+    assert register.committed_usd() == Decimal(str(events[0]["est_usd"]))
+    retry = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(config, n2_source, taxonomy, register, retry)
+    assert retry.calls == []
+
+
+def test_every_event_carries_the_ledger_schema_version(n2_source, taxonomy, register):
+    config = _config("anthropic")
+    _run(config, n2_source, taxonomy, register, RecordingTransport(_anthropic_reply([])))
+    other = _config("openai")
+    with pytest.raises(TimeoutError):
+        _run(other, n2_source, taxonomy, register, RecordingTransport(error=TimeoutError("t")))
+    with pytest.raises(arm.SpendRefused):
+        _run(other, n2_source, taxonomy, register, RecordingTransport(_openai_reply([])))
+    events = register.events()
+    assert {e["ev"] for e in events} == {"reserve", "done", "unknown", "refused"}
+    assert {e["schema"] for e in events} == {arm.LEDGER_SCHEMA}
+
+
+def test_release_records_the_not_sent_evidence(n2_source, taxonomy, register):
+    config = _config("anthropic")
+    with pytest.raises(arm.RequestNotSent):
+        _run(config, n2_source, taxonomy, register,
+             RecordingTransport(error=arm.RequestNotSent("synthetic: no connection")))
+    fail = register.events()[-1]
+    assert fail["ev"] == "fail"
+    assert fail["release"] == "request_not_sent"
+    assert fail["schema"] == arm.LEDGER_SCHEMA
+
+
+# --- legacy ledgers (no schema): read as written, interpreted fail-closed -----
+
+
+def _write_legacy(register, *events):
+    register.path.parent.mkdir(parents=True, exist_ok=True)
+    with register.path.open("a", encoding="utf-8") as handle:
+        for event in events:
+            handle.write(json.dumps({"t": 0.0, "arm": "B3", **event}) + "\n")
+    return register.path.read_bytes()
+
+
+def _legacy_reserve(rid, **extra):
+    return {"ev": "reserve", "id": rid, "provider": "anthropic", "model": "synthetic",
+            "est_usd": 0.25, "pid": 1, **extra}
+
+
+def test_legacy_key_with_source_sha_blocks_its_alias_and_provider(n2_source, taxonomy, register):
+    """c91c60a0 ledgers used key alias:provider:kind:sha."""
+    _write_legacy(
+        register,
+        _legacy_reserve("l1", key=f"C1:anthropic:n2_text:{n2_source.sha256}"),
+        {"ev": "unknown", "id": "l1", "provider": "anthropic", "error": "TimeoutError"},
+    )
+    blocked = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(_config("anthropic"), n2_source, taxonomy, register, blocked)
+    assert blocked.calls == []
+    other = RecordingTransport(_anthropic_reply([]))
+    _run(_config("anthropic"), n2_source, taxonomy, register, other, alias="C2")
+    assert len(other.calls) == 1
+
+
+def test_legacy_reservation_without_key_blocks_every_call(n2_source, taxonomy, register):
+    """dbb71fe6 ledgers wrote reservations without any key."""
+    _write_legacy(register, _legacy_reserve("l2"))
+    for provider, alias in (("anthropic", "C1"), ("anthropic", "C2"), ("openai", "C3")):
+        transport = RecordingTransport(
+            _anthropic_reply([]) if provider == "anthropic" else _openai_reply([])
+        )
+        with pytest.raises(arm.SpendRefused, match="reconcil"):
+            _run(_config(provider), n2_source, taxonomy, register, transport, alias=alias)
+        assert transport.calls == []
+
+
+def test_legacy_fail_does_not_release_a_possibly_billed_call(n2_source, taxonomy, register):
+    """Old versions wrote 'fail' for timeouts/429/529: not evidence of no charge."""
+    _write_legacy(
+        register,
+        _legacy_reserve("l3", key="C1:anthropic"),
+        {"ev": "fail", "id": "l3", "provider": "anthropic", "error": "TimeoutError"},
+    )
+    assert register.committed_usd() == Decimal("0.25")
+    blocked = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(_config("anthropic"), n2_source, taxonomy, register, blocked)
+    assert blocked.calls == []
+
+
+def test_legacy_settled_call_neither_blocks_nor_is_forgotten(n2_source, taxonomy, register):
+    _write_legacy(
+        register,
+        _legacy_reserve("l4", key=f"C1:anthropic:n2_text:{n2_source.sha256}"),
+        {"ev": "done", "id": "l4", "provider": "anthropic", "model": "synthetic",
+         "in": 10, "out": 10, "usd": 0.07, "message_id": "m", "stop_reason": "tool_use"},
+    )
+    transport = RecordingTransport(_anthropic_reply([]))
+    _run(_config("anthropic"), n2_source, taxonomy, register, transport)
+    assert len(transport.calls) == 1
+    assert register.committed_usd() == Decimal("0.07") + Decimal("0.006")
+
+
+def test_legacy_lines_are_never_rewritten_and_stay_governor_readable(
+    n2_source, taxonomy, register,
+):
+    before = _write_legacy(
+        register,
+        _legacy_reserve("l5", key=f"C1:anthropic:n2_text:{n2_source.sha256}"),
+        {"ev": "unknown", "id": "l5", "provider": "anthropic", "error": "TimeoutError"},
+    )
+    _run(_config("openai"), n2_source, taxonomy, register,
+         RecordingTransport(_openai_reply([])), alias="C2")
+    assert register.path.read_bytes().startswith(before)  # append-only, no migration
+    summary = _load_governor().summarize(register.events())
+    assert summary["in_flight"] == 1
+    assert summary["completed"] == 1
+
+
+def test_legacy_holds_count_against_the_budget(tmp_path, n2_source, taxonomy):
+    register = arm.JsonlSpendRegister(max_usd=Decimal("0.4"), root=tmp_path)
+    _write_legacy(register, _legacy_reserve("l6", key="C2:openai:pdf:abc"),
+                  {"ev": "fail", "id": "l6", "provider": "openai", "error": "ProviderRejected"})
+    transport = RecordingTransport(_anthropic_reply([]))
+    config = _config("anthropic", max_output_tokens=16000)  # worst case ~0.25 USD
+    with pytest.raises(arm.SpendRefused, match="budget"):
+        _run(config, n2_source, taxonomy, register, transport)
+    assert transport.calls == []
+
+
+def test_unversioned_release_marker_is_not_trusted(n2_source, taxonomy, register):
+    """A 'fail' that claims request_not_sent but lacks the schema is not evidence."""
+    _write_legacy(
+        register,
+        _legacy_reserve("l7", key="C1:anthropic"),
+        {"ev": "fail", "id": "l7", "provider": "anthropic", "error": "RequestNotSent",
+         "release": "request_not_sent"},
+    )
+    assert register.committed_usd() == Decimal("0.25")
+    transport = RecordingTransport(_anthropic_reply([]))
+    with pytest.raises(arm.SpendRefused, match="reconcil"):
+        _run(_config("anthropic"), n2_source, taxonomy, register, transport)
+    assert transport.calls == []
+
+
+def test_register_refuses_to_release_without_not_sent_evidence(register):
+    call_id = register.reserve(provider="anthropic", model="m", est_usd=Decimal("0.1"),
+                               key="C1:anthropic", source_sha256="a" * 64)
+    with pytest.raises(TypeError, match="RequestNotSent"):
+        register.fail(call_id, provider="anthropic", error=TimeoutError("synthetic"))
+    assert [e["ev"] for e in register.events()] == ["reserve"]
+    assert register.committed_usd() == Decimal("0.1")

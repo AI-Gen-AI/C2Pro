@@ -11,11 +11,14 @@ Safety rails:
   shape as ``real_ai_governor``) with a global USD cap and a per-call cap,
   checked BEFORE the request is sent; no SDK, no retries;
 * a truncated or tool-less reply is billed but never returned as a result;
-* an UNCERTAIN outcome (timeout, reset, 5xx, any error after sending) keeps
-  its worst-case reservation held (event ``unknown``) and blocks any new
-  call for the same contract alias and provider, whatever the source bytes,
-  until reconciled; only a request proven NOT sent or explicitly rejected
-  before generation releases its reservation (529 overloaded is uncertain);
+* policy A (L0 23/11): any outcome after the request may have reached the
+  provider (ANY HTTP status incl. 4xx/429/5xx/504/529, timeout, reset,
+  interruption) keeps its worst-case reservation held (event ``unknown``)
+  and blocks any new call for the same contract alias and provider, whatever
+  the source bytes, until reconciled; ONLY a request proven NOT sent
+  (``RequestNotSent``) releases its reservation;
+* every event carries ``schema`` (``LEDGER_SCHEMA``); legacy events without
+  it are read as written (never rewritten) and interpreted fail-closed;
 * invalid findings are reported, never silently dropped or repaired;
 * contracts are identified only by alias (C1..C6);
 * no CLI value ever builds a file path: inputs are SELECTED from the files
@@ -129,20 +132,12 @@ class RequestNotSent(RuntimeError):
     """The request provably never reached the provider: nothing can be billed."""
 
 
-class ProviderRejected(RuntimeError):
-    """The provider explicitly rejected the request before generating (unbilled)."""
-
-    def __init__(self, status: int) -> None:
-        if status not in _UNBILLED_STATUS:
-            raise ValueError(f"HTTP {status} is not a documented unbilled rejection")
-        super().__init__(f"provider rejected the request with HTTP {status}")
-        self.status = status
-
-
-# HTTP statuses where the provider refuses BEFORE generating: not billed.
-# Everything else is billing-UNCERTAIN: 5xx incl. 504, 408, unknown codes and
-# 529 overloaded (no documented guarantee that it is never charged).
-_UNBILLED_STATUS = frozenset({400, 401, 402, 403, 404, 413, 422, 429})
+# Ledger event schema. Events without "schema" were written by earlier B3
+# versions (dbb71fe6: reservations without key; c91c60a0: key
+# alias:provider:kind:sha, and "fail" also for 429/529). They are never
+# rewritten; they are read fail-closed (see JsonlSpendRegister).
+LEDGER_SCHEMA = "b3-ledger-v2"
+_RELEASE_NOT_SENT = "request_not_sent"
 
 
 def call_key(contract_alias: str, provider: str) -> str:
@@ -468,18 +463,45 @@ class JsonlSpendRegister:
                 if line.strip()]
 
     def _append(self, event: dict[str, Any]) -> None:
-        event = {**event, "t": time.time(), "arm": "B3"}
+        event = {**event, "t": time.time(), "arm": "B3", "schema": LEDGER_SCHEMA}
         with open(self.path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, sort_keys=True) + "\n")
 
     @staticmethod
-    def _open_reserves(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Reservations not settled (done) nor provably released (fail).
+    def _closes(event: dict[str, Any]) -> bool:
+        """A settlement closes a reservation; a release only with v2 evidence.
 
-        In flight AND ``unknown`` ones stay open: their worst case is held.
+        Legacy "fail" events are NOT evidence of no charge (earlier versions
+        wrote them for timeouts, 429 and 529), so they keep the hold.
         """
-        closed = {e["id"] for e in events if e["ev"] in ("done", "fail")}
-        return [e for e in events if e["ev"] == "reserve" and e["id"] not in closed]
+        if event.get("ev") == "done":
+            return True
+        return (
+            event.get("ev") == "fail"
+            and event.get("schema") == LEDGER_SCHEMA
+            and event.get("release") == _RELEASE_NOT_SENT
+        )
+
+    @classmethod
+    def _open_reserves(cls, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Reservations not settled nor provably released: worst case held.
+
+        In flight, ``unknown`` and legacy-``fail`` ones all stay open.
+        """
+        closed = {e.get("id") for e in events if cls._closes(e)}
+        return [e for e in events if e.get("ev") == "reserve" and e.get("id") not in closed]
+
+    @staticmethod
+    def _blocks(reservation: dict[str, Any], key: str) -> bool:
+        """Does an open reservation forbid a new paid call for ``key``?
+
+        v2 and c91c60a0 keys start with alias:provider; a reservation
+        without any key (dbb71fe6) cannot be attributed, so it blocks all.
+        """
+        held = reservation.get("key")
+        if not held:
+            return True
+        return ":".join(str(held).split(":")[:2]) == key
 
     def _committed_usd(self, events: list[dict[str, Any]] | None = None) -> Decimal:
         events = self.events() if events is None else events
@@ -503,7 +525,7 @@ class JsonlSpendRegister:
         trace = {"key": key, "source_sha256": source_sha256, "source_kind": source_kind}
         with self._locked():
             events = self.events()
-            if any(e.get("key") == key for e in self._open_reserves(events)):
+            if any(self._blocks(e, key) for e in self._open_reserves(events)):
                 reason = (f"B3_UNRECONCILED_CALL: {key} has an in-flight or billing-uncertain "
                           "call; reconcile it before retrying (no second paid effect)")
                 self._append({"ev": "refused", "reason": reason,
@@ -529,11 +551,13 @@ class JsonlSpendRegister:
                           "in": input_tokens, "out": output_tokens, "usd": float(usd),
                           "message_id": message_id, "stop_reason": stop_reason})
 
-    def fail(self, call_id: str, *, provider: str, error: BaseException) -> None:
-        """Release a reservation ONLY for a provably unbilled failure."""
+    def fail(self, call_id: str, *, provider: str, error: RequestNotSent) -> None:
+        """Release a reservation ONLY when the request provably was not sent."""
+        if not isinstance(error, RequestNotSent):
+            raise TypeError("only RequestNotSent is evidence that nothing was billed")
         with self._locked():
             self._append({"ev": "fail", "id": call_id, "provider": provider,
-                          "error": type(error).__name__})
+                          "error": type(error).__name__, "release": _RELEASE_NOT_SENT})
 
     def unknown(self, call_id: str, *, provider: str, error: BaseException) -> None:
         """Billing-uncertain outcome: the worst-case reservation stays held."""
@@ -734,11 +758,11 @@ def run_direct_arm(
     started = datetime.now(UTC).isoformat()
     try:
         raw = transport(config.provider, body)
-    except (RequestNotSent, ProviderRejected) as exc:
+    except RequestNotSent as exc:
         register.fail(call_id, provider=config.provider, error=exc)
         raise
     except BaseException as exc:
-        # Timeout, reset, 5xx, interruption...: the provider may have billed.
+        # Any HTTP status, timeout, reset, interruption: the provider may have billed.
         register.unknown(call_id, provider=config.provider, error=exc)
         raise
     reply = _parse_reply(config.provider, raw)
@@ -825,9 +849,10 @@ class HttpxTransport:
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
             # No connection was established: the request never left this host.
             raise RequestNotSent(f"{provider} connection not established") from exc
-        if response.status_code in _UNBILLED_STATUS:
-            raise ProviderRejected(response.status_code)
-        response.raise_for_status()  # 5xx/other: billing-uncertain, propagated
+        # Policy A: a response came back, so no-charge is not demonstrable for
+        # ANY error status (4xx incl. 429, 5xx incl. 504/529): propagate it and
+        # let run_direct_arm keep the reservation as UNKNOWN.
+        response.raise_for_status()
         result: dict[str, Any] = response.json()
         return result
 
