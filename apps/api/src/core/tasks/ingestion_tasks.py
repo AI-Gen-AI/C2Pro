@@ -688,7 +688,8 @@ _NUMERIC_LINE_START = re.compile(r"(?m)^[ \t]*(?=\d)")
 _CLAUSE_BOUNDARY = re.compile(
     r"(?m)^[ \t]*(?:"
     r"\d{1,3}(?:\.\d{1,3}){0,6}[ \t]*\.[ \t]*[-–]"
-    r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION))\w*"
+    r"|(?i:(?:CL[ÁA]USULA|ESTIPULACI[ÓO]N|ART[ÍI]CULO|CLAUSE|ARTICLE|SECTION|"
+    r"ARTIGO|ANEXO|SE(?:C[ÇC]?|Ç)[AÃ]O))\w*"
     r"|(?i:(?:PRIMERA|SEGUNDA|TERCERA|CUARTA|QUINTA|SEXTA|S[ÉE]PTIMA|OCTAVA|NOVENA|D[ÉE]CIMA))\b"
     r")"
 )
@@ -729,10 +730,84 @@ def _trimmed_clause_span(
     return parsed_text[start:end], start, end
 
 
-def _split_contract_clause_spans(
+def _merge_short_clause_spans(
     parsed_text: str,
+    spans: list[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """Keep every non-whitespace source character in a persisted clause row."""
+    merged: list[tuple[int, int]] = []
+    cursor = 0
+    while cursor < len(spans):
+        start, end = spans[cursor]
+        trimmed = _trimmed_clause_span(parsed_text, start, end)
+        if trimmed is not None and len(trimmed[0]) < 40 and cursor + 1 < len(spans):
+            next_start, next_end = spans[cursor + 1]
+            next_trimmed = _trimmed_clause_span(parsed_text, next_start, next_end)
+            next_is_clause_boundary = next_trimmed is not None and (
+                _CLAUSE_BOUNDARY.match(next_trimmed[0]) is not None
+                or _soft_source_heading_code(next_trimmed[0].split("\n", 1)[0]) is not None
+            )
+            if next_is_clause_boundary:
+                # A short preamble/heading must not hide the next clause's
+                # source code. Preserve it as a row instead of merging across
+                # an explicit contractual boundary.
+                merged.append((start, end))
+            else:
+                spans[cursor + 1] = (start, next_end)
+        else:
+            merged.append((start, end))
+        cursor += 1
+
+    if len(merged) > 1:
+        last = _trimmed_clause_span(parsed_text, *merged[-1])
+        last_is_clause_boundary = last is not None and (
+            _CLAUSE_BOUNDARY.match(last[0]) is not None
+            or _soft_source_heading_code(last[0].split("\n", 1)[0]) is not None
+        )
+        if last is not None and len(last[0]) < 40 and not last_is_clause_boundary:
+            previous_start, _ = merged[-2]
+            merged[-2:] = [(previous_start, merged[-1][1])]
+    return merged
+
+
+def _long_clause_split_offset(text: str, start: int, end: int) -> int:
+    """Prefer paragraph then sentence endings; always leave a bounded source row."""
+    candidates: list[int] = []
+    for pattern in (r"\n[ \t]*\n[ \t]*", r"(?<=[.!?])\s+"):
+        candidates.extend(match.end() for match in re.finditer(pattern, text[start:end]))
+    absolute = [start + candidate for candidate in candidates if start < start + candidate <= end]
+    if absolute:
+        return max(absolute)
+
+    whitespace = [start + match.end() for match in re.finditer(r"\s+", text[start:end])]
+    fitting_whitespace = [offset for offset in whitespace if start < offset <= end]
+    return max(fitting_whitespace) if fitting_whitespace else end
+
+
+def _split_clause_span_to_limit(
+    parsed_text: str,
+    start_offset: int,
+    end_offset: int,
 ) -> list[tuple[str, int, int]]:
-    """Split contract text while preserving exact source offsets."""
+    """Split a source clause into at-most-4,000-character rows without truncation."""
+    rows: list[tuple[str, int, int]] = []
+    cursor = start_offset
+    while end_offset - cursor > 4000:
+        cut = _long_clause_split_offset(parsed_text, cursor, cursor + 4000)
+        trimmed = _trimmed_clause_span(parsed_text, cursor, cut)
+        if trimmed is not None:
+            rows.append(trimmed)
+        cursor = cut
+    trimmed = _trimmed_clause_span(parsed_text, cursor, end_offset)
+    if trimmed is not None:
+        rows.append(trimmed)
+    return rows
+
+
+def _split_contract_clause_rows(
+    parsed_text: str,
+) -> list[tuple[str, int, int, str | None, int]]:
+    """Build bounded source rows with their source code and continuation ordinal."""
     # Hard structural markers and soft recognizable titles share one source
     # identity predicate. Purely numeric prose must not split clause bodies.
     boundaries = {match.start() for match in _CLAUSE_BOUNDARY.finditer(parsed_text)}
@@ -759,12 +834,24 @@ def _split_contract_clause_spans(
             cursor = separator.end()
         spans.append((cursor, len(parsed_text)))
 
-    result: list[tuple[str, int, int]] = []
-    for start, end in spans:
+    result: list[tuple[str, int, int, str | None, int]] = []
+    for start, end in _merge_short_clause_spans(parsed_text, spans):
         trimmed = _trimmed_clause_span(parsed_text, start, end)
         if trimmed is not None:
-            result.append(trimmed)
+            source_code = _explicit_source_clause_heading_code(trimmed[0])
+            for continuation, row in enumerate(
+                _split_clause_span_to_limit(parsed_text, trimmed[1], trimmed[2]),
+                start=1,
+            ):
+                result.append((*row, source_code, continuation))
     return result
+
+
+def _split_contract_clause_spans(
+    parsed_text: str,
+) -> list[tuple[str, int, int]]:
+    """Compatibility view over bounded contract rows with exact source offsets."""
+    return [(segment, start, end) for segment, start, end, _, _ in _split_contract_clause_rows(parsed_text)]
 
 
 def _split_contract_into_clauses(parsed_text: str) -> list[str]:
@@ -772,27 +859,63 @@ def _split_contract_into_clauses(parsed_text: str) -> list[str]:
     return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
 
 
-def _contract_clause_coverage_omissions(parsed_text: str) -> list[dict[str, int | str]]:
-    """Expose known clause omissions without storing contractual source text."""
+def _contract_clause_coverage_omissions(
+    parsed_text: str,
+    *,
+    rows: list[tuple[str, int, int]] | None = None,
+) -> list[dict[str, int | str]]:
+    """Check actual persistible source spans; never assume a splitter is lossless.
+
+    Only non-whitespace gaps and overlaps are material. Keep observations
+    as offsets and stable codes: contract text must not enter metadata.
+    """
+    source_rows = _split_contract_clause_spans(parsed_text) if rows is None else rows
     omissions: list[dict[str, int | str]] = []
-    for segment, start_offset, end_offset in _split_contract_clause_spans(parsed_text):
-        if len(segment) < 40:
+    valid_spans: list[tuple[int, int]] = []
+    source_length = len(parsed_text)
+
+    for segment, start, end in source_rows:
+        if not (0 <= start < end <= source_length):
             omissions.append(
-                {
-                    "kind": "contract_clause_discarded_short",
-                    "start_offset": start_offset,
-                    "end_offset": end_offset,
-                }
+                {"kind": "contract_clause_invalid_span", "start_offset": start, "end_offset": end}
             )
-        elif len(segment) > 4000:
+            continue
+        valid_spans.append((start, end))
+        if parsed_text[start:end] != segment:
             omissions.append(
-                {
-                    "kind": "contract_clause_truncated",
-                    "start_offset": start_offset,
-                    "end_offset": end_offset,
-                    "omitted_chars": len(segment) - 4000,
-                }
+                {"kind": "contract_clause_text_mismatch", "start_offset": start, "end_offset": end}
             )
+        if end - start > 4000:
+            omissions.append(
+                {"kind": "contract_clause_oversized_row", "start_offset": start, "end_offset": end}
+            )
+
+    def record_gap(start: int, end: int) -> None:
+        gap = parsed_text[start:end]
+        if not gap.strip():
+            return
+        first = start + len(gap) - len(gap.lstrip())
+        last = start + len(gap.rstrip())
+        omissions.append(
+            {"kind": "contract_clause_uncovered_text", "start_offset": first, "end_offset": last}
+        )
+
+    cursor = 0
+    for start, end in sorted(valid_spans):
+        if start > cursor:
+            record_gap(cursor, start)
+        elif start < cursor:
+            overlap_end = min(cursor, end)
+            if parsed_text[start:overlap_end].strip():
+                omissions.append(
+                    {
+                        "kind": "contract_clause_duplicate_text",
+                        "start_offset": start,
+                        "end_offset": overlap_end,
+                    }
+                )
+        cursor = max(cursor, end)
+    record_gap(cursor, source_length)
     return omissions
 
 
@@ -811,9 +934,10 @@ def _explicit_source_clause_heading_code(segment: str) -> str | None:
     )
     if separated:
         return separated.group(1)
-    # A keyword-labeled source header ('Clause 5.2', 'Artículo 6.3').
+    # A keyword-labeled source header ('Clause 5.2', 'Artigo 6.3').
     labelled = re.match(
-        r"^(?:CLAUSE|SECTION|ARTICLE|CL[ÁA]USULA|ART[ÍI]CULO)[ \t]+"
+        r"^(?:CLAUSE|SECTION|ARTICLE|CL[ÁA]USULA|ART[ÍI]CULO|ARTIGO|ANEXO|"
+        r"SE(?:C[ÇC]?|Ç)[AÃ]O)[ \t]+"
         r"(\d{1,3}(?:\.\d{1,3}){0,6})(?=\b|\.)",
         heading,
         re.IGNORECASE,
@@ -835,17 +959,14 @@ def _extract_contract_clauses(
     revision_id: UUID | None = None,
 ) -> list[Clause]:
     clauses: list[Clause] = []
+    persistible_rows: list[tuple[str, int, int]] = []
     # Build offset index from text blocks if available
     text_blocks = parsed_payload.get("text_blocks", []) if isinstance(parsed_payload, dict) else []
     block_index = _build_text_block_index(text_blocks) if text_blocks else []
-    for index, (segment, start_offset, source_end_offset) in enumerate(
-        _split_contract_clause_spans(parsed_text),
+    for index, (segment, start_offset, end_offset, source_code, continuation) in enumerate(
+        _split_contract_clause_rows(parsed_text),
         start=1,
     ):
-        if len(segment) < 40:
-            continue
-        segment = segment[:4000]  # keep a clause clause-sized; guard OCR blobs
-        end_offset = min(source_end_offset, start_offset + len(segment))
         clause_type = _infer_contract_clause_type(segment)
         # Resolve overlapping blocks
         pages: list[int] = []
@@ -926,7 +1047,9 @@ def _extract_contract_clauses(
                 document_id=document_id,
                 # Numeric source headers survive ingestion for N4→N13 exact
                 # persisted-code matching; prose/unlabeled spans keep AUTO.
-                clause_code=_explicit_source_clause_heading_code(segment) or f"AUTO-{index:03d}",
+                clause_code=(source_code or f"AUTO-{index:03d}")
+                if continuation == 1
+                else f"{source_code or f'AUTO-{index:03d}'}~{continuation}",
                 clause_type=clause_type,
                 title=segment[:80],
                 full_text=segment,
@@ -937,6 +1060,13 @@ def _extract_contract_clauses(
                 extraction_model="deterministic-contract-ingestion",
             )
         )
+        persistible_rows.append((segment, start_offset, end_offset))
+
+    omissions = _contract_clause_coverage_omissions(parsed_text, rows=persistible_rows)
+    if omissions:
+        # A partial/duplicated source row is an ingestion error, not a
+        # successful extraction with silently missing contractual evidence.
+        raise ValueError(f"contract_clause_coverage_failed:{omissions[0]['kind']}")
     return clauses
 
 
