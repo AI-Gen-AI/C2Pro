@@ -9,6 +9,12 @@ Fuente: plan #1285, §6.3; alineado a n4_typed_evidence_v2.py y JV1-B3.
 No se admiten datos de contratos reales, PII real ni APIs pagadas.
 Solo sintético bajo PYTHONPATH=apps/api/src.
 """
+
+# BLOCKED_BY_N2_CONTRACT: la paridad N2 canónica y los recibos de recepción
+# están gestionados por el contrato N2 externo. Este módulo no afirma equivalencia
+# canónica ni genera recibos de recepción sin contrato firmado del propietario N2.
+# Cualquier afirmación de paridad N2 o recibos must ser solicitada al propietario
+# del contrato N2 y queda fuera del alcance de este archivo autorizado §4.
 from __future__ import annotations
 
 import hashlib
