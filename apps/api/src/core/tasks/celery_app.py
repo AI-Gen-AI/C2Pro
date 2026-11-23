@@ -52,6 +52,7 @@ celery_app = Celery(
         "src.core.tasks.snapshot_tasks",
         "src.core.tasks.snapshot_retention",
         "src.core.tasks.hitl_resume_reconciler",
+        "src.core.tasks.coherence_reconciler",
         "src.core.tasks.document_recovery",
     ],
 )
@@ -98,6 +99,12 @@ celery_app.conf.update(
         # still being renewed.
         "hitl-resume-reconcile": {
             "task": "hitl_resume.reconcile",
+            "schedule": 60.0,
+        },
+        # A17: the approval transaction leaves a DB obligation. Redis/Beat
+        # only supplies bounded at-least-once delivery after lost dispatch.
+        "coherence-postapproval-reconcile": {
+            "task": "coherence.reconcile_postapproval",
             "schedule": 60.0,
         },
         # #795: trusted HITL finalization writes a durable GRAPH_COMPLETED

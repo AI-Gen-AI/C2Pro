@@ -143,7 +143,7 @@ async def test_background_scoring_uses_fresh_tenant_scoped_session_and_low_budge
     assert score.await_args.kwargs["review_id"] == review_id
     session.execute.assert_awaited_once()
     # Check scored and explicit withheld outcomes before a new evaluation.
-    assert session.scalar.await_count == 2
+    assert session.scalar.await_count == 3  # existing results + durable marker lookup
 
 
 @pytest.mark.asyncio
@@ -167,7 +167,7 @@ async def test_persisted_approval_prevents_duplicate_evaluation(monkeypatch):
     )
     score.assert_not_awaited()
     session.execute.assert_awaited_once()
-    session.scalar.assert_awaited_once()
+    assert session.scalar.await_count == 2
 
 
 def test_lock_key_is_deterministic_and_scoped():

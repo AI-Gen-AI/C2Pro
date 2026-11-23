@@ -28,6 +28,7 @@ from src.coherence.domain.v2_constants import SCORE_VERSION_V1
 from src.coherence.graph.nodes import v1_unassessed_reasons
 from src.coherence.graph.state import EvaluationConfig
 from src.core.database import get_session_with_tenant
+from src.modules.hitl.adapters.persistence.models import ReviewItemORM
 from src.modules.hitl.domain.entities import ReviewStatus
 from src.projects.adapters.persistence.models import ProjectORM
 from src.temporal.adapters.persistence.models import ProjectEventORM
@@ -175,13 +176,84 @@ async def _record_approval_withheld(
     )
 
 
+async def _finish_durable_obligation(
+    db: AsyncSession,
+    *,
+    tenant_id: UUID,
+    project_id: UUID,
+    review_id: UUID,
+    recovery: bool,
+) -> None:
+    """Mark a DB-stamped approval obligation done only with durable evidence.
+
+    The Score/withheld row and the marker commit together under the existing
+    advisory lock. If the graph returns without either, leave the obligation
+    pending (rollback) so restart recovery can safely retry.
+    """
+    metadata = await db.scalar(
+        select(ReviewItemORM.review_metadata).where(
+            ReviewItemORM.id == review_id,
+            ReviewItemORM.tenant_id == tenant_id,
+            ReviewItemORM.project_id == project_id,
+            ReviewItemORM.current_status == ReviewStatus.APPROVED,
+        )
+    )
+    job = (metadata or {}).get("a17_score_obligation") if isinstance(metadata, dict) else None
+    if not isinstance(job, dict) or job.get("review_id") != str(review_id):
+        if recovery:
+            raise RuntimeError("A17 recovery has no authorized durable approval")
+        # Transitional tasks created before this additive migration are
+        # permitted to complete; they cannot be mislabelled as recovered.
+        return
+    await db.flush()
+    scored = await db.scalar(
+        select(CoherenceResultORM.id)
+        .where(
+            CoherenceResultORM.tenant_id == tenant_id,
+            CoherenceResultORM.project_id == project_id,
+            CoherenceResultORM.scoring_snapshot["a17_approval_id"].astext == str(review_id),
+        )
+        .limit(1)
+    )
+    withheld = await db.scalar(
+        select(ProjectEventORM.event_id)
+        .where(
+            ProjectEventORM.tenant_id == tenant_id,
+            ProjectEventORM.project_id == project_id,
+            ProjectEventORM.event_type == WITHHELD_EVALUATION_EVENT,
+            ProjectEventORM.payload["a17_approval_id"].astext == str(review_id),
+        )
+        .limit(1)
+    )
+    if scored is None and withheld is None:
+        raise RuntimeError("A17 evaluator returned without a persisted Score/withheld outcome")
+    await db.execute(
+        text("""
+        UPDATE review_items
+           SET review_metadata = jsonb_set(
+               review_metadata,
+               '{a17_score_obligation,state}', '"done"'::jsonb, true
+           )
+         WHERE id = :review_id AND tenant_id = :tenant_id
+           AND project_id = :project_id AND current_status = 'APPROVED'
+           AND review_metadata -> 'a17_score_obligation' ->> 'review_id' = :review_key
+        """),
+        {
+            "review_id": review_id,
+            "tenant_id": tenant_id,
+            "project_id": project_id,
+            "review_key": str(review_id),
+        },
+    )
+
+
 def _approval_lock_key(tenant_id: UUID, project_id: UUID, review_id: UUID) -> int:
     identity = f"jv1-a17:{tenant_id}:{project_id}:{review_id}".encode()
     return int.from_bytes(blake2b(identity, digest_size=8).digest(), "big") & ((1 << 63) - 1)
 
 
 async def run_project_evaluation_after_approval(
-    *, tenant_id: UUID, project_id: UUID, actor_user_id: UUID, review_id: UUID
+    *, tenant_id: UUID, project_id: UUID, actor_user_id: UUID | None, review_id: UUID
 ) -> None:
     """Transaction-fenced exactly-once persistence for an approved review row.
 
@@ -215,6 +287,13 @@ async def run_project_evaluation_after_approval(
                 .limit(1)
             )
             if committed is not None:
+                await _finish_durable_obligation(
+                    db,
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    review_id=review_id,
+                    recovery=actor_user_id is None,
+                )
                 logger.info("a17_evaluation_skipped_already_persisted")
                 return
             # A valid human approval may result in an unassessed/withheld Score.
@@ -231,6 +310,13 @@ async def run_project_evaluation_after_approval(
                 .limit(1)
             )
             if withheld is not None:
+                await _finish_durable_obligation(
+                    db,
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    review_id=review_id,
+                    recovery=actor_user_id is None,
+                )
                 logger.info("a17_evaluation_skipped_already_withheld")
                 return
             # The extracted service must leave commit to the outer transaction,
@@ -273,6 +359,13 @@ async def run_project_evaluation_after_approval(
                     review_id=str(review_id),
                     score_persisted=False,
                 )
+            await _finish_durable_obligation(
+                db,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                review_id=review_id,
+                recovery=actor_user_id is None,
+            )
             # Commit is executed by get_session_with_tenant's context manager
             # after all pending rows and their approval marker are durable.
     except Exception:
