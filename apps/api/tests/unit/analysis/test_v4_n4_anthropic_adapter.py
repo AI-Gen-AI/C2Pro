@@ -196,3 +196,19 @@ async def test_missing_raw_tool_attestation_fails_closed(raw_available, stop_rea
         window=window, tenant_id=uuid4(), request_id="missing-tool",
     )
     assert json.loads(receipt.content)["error"] == "INVALID_N4_TOOL_ENVELOPE"
+
+
+
+@pytest.mark.asyncio
+async def test_prompt_version_drift_rejected_before_any_provider_call():
+    wrapper = _FakeWrapper()
+    provider = AnthropicN4WindowProvider(wrapper=wrapper)
+    provider.prompt_version = "n4-compact-window-obsolete"
+    window = plan_n4_source_windows(
+        "9.6 Synthetic clause.", revision_id="synthetic-version-drift",
+    )[0]
+    with pytest.raises(ValueError, match="prompt version differs"):
+        await provider.generate(
+            window=window, tenant_id=uuid4(), request_id="version-drift",
+        )
+    assert wrapper.calls == []
