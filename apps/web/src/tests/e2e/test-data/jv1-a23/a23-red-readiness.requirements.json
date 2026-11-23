@@ -1,0 +1,149 @@
+{
+  "schema": "c2pro-jv1-a23-red-readiness-requirements-v1",
+  "scope": "L8/A23 only; specification, not an evidence receipt",
+  "owner": "L8 (test); preflight provisioning and certification: L0/DevOps",
+  "state": "INFRA_BLOCKED",
+  "global_gate": "JV1_GLOBAL=NO_GO",
+  "preflight_status": "NOT_PROVEN",
+  "is_preflight_pass": false,
+  "allowed_execution": "one explicit L0-approved functional RED run after independently verified PREFLIGHT_PASS",
+  "source_pr": "https://github.com/AI-Gen-AI/C2Pro/pull/1294",
+  "test_spec": "apps/web/src/tests/e2e/journey-v1-contract-to-export.spec.ts",
+  "evidence_contract": {
+    "receipt_location": "outside tracked source and outside public GitHub",
+    "required_metadata": [
+      "backend_exact_sha",
+      "frontend_exact_sha",
+      "fixture_manifest_sha256",
+      "test_environment_fingerprint_redacted",
+      "migration_revision",
+      "worker_and_queue_identity_redacted",
+      "provider_egress_denial_probe",
+      "zero_paid_calls_evidence",
+      "L0_explicit_authorization_reference"
+    ],
+    "prohibited": [
+      "Clerk keys or tokens",
+      "email addresses and user/org identifiers",
+      "DSN/password",
+      "pilot resources",
+      "private contracts",
+      "provider billing credentials"
+    ]
+  },
+  "checks": [
+    {
+      "id": "L8-01",
+      "owner": "L8",
+      "requirement": "PR HEAD and isolated worktree exact SHA, clean checkout; only L8-owned E2E spec touched",
+      "proof": "PR/commit and git status",
+      "state": "RECHECK_BEFORE_EXECUTION"
+    },
+    {
+      "id": "OPS-01",
+      "owner": "L0/DevOps",
+      "requirement": "Disposal and isolation: dedicated localhost web+API, no production/pilot endpoints or identity",
+      "proof": "sanitized service probes, endpoint routing, isolated runtime fingerprint",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-02",
+      "owner": "L0/DevOps",
+      "requirement": "Clerk Development pk_test identity with disposable user, organization and active tenant; JWT checked against Dev JWKS",
+      "proof": "sanitized auth probe and 401/403 cross-tenant negatives",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-03",
+      "owner": "L0/DevOps",
+      "requirement": "Dedicated migrated PostgreSQL database named *_test, unique DSN fingerprint, isolated tenant and RLS",
+      "proof": "migration head, DB scope/tenant probes and cross-tenant denial",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-04",
+      "owner": "L0/DevOps",
+      "requirement": "Redis plus Celery worker bound to the same test database/queue/tenant, processing a synthetic test task",
+      "proof": "queue/worker readiness and persisted synthetic task receipts",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-05",
+      "owner": "L0/DevOps",
+      "requirement": "Synthetic provider C2PRO_AI_MOCK=1 AND verified denial of all billable LLM outbound traffic; never test charges",
+      "proof": "network egress denial and provider invocation/billing baseline counters, no secrets",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-06",
+      "owner": "L0/DevOps + A3/A7 owners",
+      "requirement": "Persisted COMPLETE run tied to synthetic contract PDF and literal physical PDF pages, plus budget and schedule XLSX hashes",
+      "proof": "run/document/source SHA-256, page provenance, distinct document IDs, worker persistence",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-07",
+      "owner": "L0/DevOps + A3/A7 owners",
+      "requirement": "Persisted n4-coverage-v1 COMPLETE_WITH_GAPS: three windows, examined ordinal 1 and 3, ordinal 2 OPEN OUTPUT_TRUNCATED, attempts=2, nonblank reason, source SHA pinned",
+      "proof": "DB-backed coverage/ledger record; examined + gaps = total; no invented successful extraction",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-08",
+      "owner": "L0/DevOps",
+      "requirement": "Read-only ledger baseline and replay snapshot; no new paid calls or billable settlements, including after Clerk re-login",
+      "proof": "before/after counts of reservation, attempt, settlement, billed amount and invocation count",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-09",
+      "owner": "L0/DevOps",
+      "requirement": "Both E2E scenarios use correct Clerk test auth initialization and a real persisted backend; no intercepted PASS responses",
+      "proof": "runner setup probe; health/auth/fixture/source probes; sanitized receipts",
+      "state": "REQUIRED"
+    },
+    {
+      "id": "OPS-10",
+      "owner": "L0/DevOps",
+      "requirement": "PREFLIGHT_PASS signed by L0/DevOps for exact SHA and fixtures, followed by explicit one-off authorization to L8",
+      "proof": "GitHub review/coordination refs without secrets",
+      "state": "REQUIRED"
+    }
+  ],
+  "run_protocol": {
+    "if_any_check_missing": "STOP; INFRA_BLOCKED; do not run functional Playwright or modify infrastructure",
+    "on_all_verified": "L8 obtains explicit one-off L0 authorization and independently re-verifies exact SHA/preflight; then executes only L8 E2E",
+    "cases": [
+      "COMPLETE: synthetic contract+budget+schedule -> quotes/pages -> per-finding review -> score -> actual XLSX/PDF -> fresh Clerk login, no regasto",
+      "COMPLETE_WITH_GAPS: persisted OPEN gap -> final approval blocked -> validated score null -> persisted review after reload"
+    ],
+    "assertion_record_fields": [
+      "case",
+      "assertion_id",
+      "request_or_ui_path_sanitized",
+      "observed_status",
+      "expected_status",
+      "result",
+      "trace_or_junit_artifact_digest",
+      "head_sha",
+      "runtime_receipt_digest"
+    ],
+    "classification": "FUNCTIONAL_RED only after true PREFLIGHT_PASS and genuine failing product assertion; failures of Clerk, worker, fixture, flags or dependencies remain INFRA_BLOCKED",
+    "deliverables": [
+      "JUnit XML",
+      "sanitized Playwright traces/screenshots",
+      "API/DB and worker ledger evidence",
+      "per-assertion results",
+      "exact SHA, CI/check status, risk verdict posted in PR #1294 and #1285"
+    ],
+    "prohibitions": [
+      "no automatic trigger",
+      "no GREEN until all integration dependencies and L0 decision",
+      "no merge",
+      "no deployment",
+      "no private data",
+      "no billable provider calls",
+      "no modifying other lanes"
+    ]
+  }
+}
