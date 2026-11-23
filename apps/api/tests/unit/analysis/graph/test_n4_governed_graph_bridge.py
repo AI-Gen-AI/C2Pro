@@ -588,3 +588,47 @@ def test_a7_page_fields_serialize_only_when_present_in_risk_artifact():
     assert updated_risk["page_number"] == 7
     assert updated_risk["source_locator"] == "pdf-page-7"
     assert updated_risk["page_verification_status"] == "PAGE_LOCATED"
+
+
+# A7-LV-001: fail closed on an inconsistent ledger snapshot.
+@pytest.mark.parametrize(
+    "scenario,ordinals,reported_total,reported_examined",
+    [
+        ("missing_row", [0, 2], 3, 2),
+        ("ordinal_gap", [0, 1, 3], 3, 3),
+        ("duplicate_ordinal", [0, 1, 1], 3, 3),
+        ("examined_counter_mismatch", [0, 1, 2], 3, 2),
+    ],
+)
+def test_a7_coverage_rejects_inconsistent_window_ledger(
+    scenario, ordinals, reported_total, reported_examined,
+):
+    """Never report COMPLETE when ledger ordinals or counters are inconsistent."""
+    outcome = _outcome(
+        examined=reported_examined, total=reported_total,
+        persisted=reported_examined, status="PARTIAL",
+    )
+    windows = [
+        _win(ordinal, "EXAMINED", core=(ordinal * 100, ordinal * 100 + 50))
+        for ordinal in ordinals
+    ]
+    with pytest.raises(bridge.N4RunIncomplete):
+        bridge.assess_n4_run(
+            outcome=outcome,
+            windows=windows,
+            reservations=[],
+            source_sha256=_SHA,
+        )
+
+
+def test_a7_coverage_accepts_contiguous_complete_ledger():
+    outcome = _outcome(examined=3, total=3, persisted=3, status="COMPLETE")
+    coverage = bridge.assess_n4_run(
+        outcome=outcome,
+        windows=[_win(i, "EXAMINED") for i in range(3)],
+        reservations=[],
+        source_sha256=_SHA,
+    )
+    assert coverage["status"] == N4CoverageStatus.COMPLETE.value
+    assert coverage["total_windows"] == 3
+    assert coverage["examined_windows"] == 3
