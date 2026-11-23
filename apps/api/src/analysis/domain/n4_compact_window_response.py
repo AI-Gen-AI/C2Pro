@@ -304,7 +304,7 @@ def parse_n4_window_output(
             literal_supporting.append(
                 window.context_text[
                     sstart - window.context_start:send - window.context_start
-                ] if verified else None
+                ] if sstart is not None and send is not None else None
             )
             supporting_ref: dict[str, Any] = {
                 "document_revision_id": window.revision_id,
