@@ -201,12 +201,16 @@ def assess_n4_run(
     # The returned rows must represent the *entire* planned source. Counting
     # only rows fetched from the ledger can silently hide a missing window.
     expected_total = outcome.total_windows
-    ordinals = [w.get("ordinal") for w in windows]
+    ordinal_values = [w.get("ordinal") for w in windows]
+    valid_ordinals = [
+        ordinal for ordinal in ordinal_values
+        if isinstance(ordinal, int) and not isinstance(ordinal, bool)
+    ]
     ledger_consistent = (
         isinstance(expected_total, int) and not isinstance(expected_total, bool)
         and expected_total > 0 and len(windows) == expected_total
-        and all(type(ordinal) is int for ordinal in ordinals)
-        and sorted(ordinals) == list(range(expected_total))
+        and len(valid_ordinals) == expected_total
+        and sorted(valid_ordinals) == list(range(expected_total))
         and outcome.examined_windows == len(examined)
     )
     terminal = bool(windows) and len(examined) + len(blocked) == len(windows)
