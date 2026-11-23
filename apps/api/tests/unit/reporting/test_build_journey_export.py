@@ -336,6 +336,9 @@ def test_formula_injection_prevention_in_all_untrusted_cells() -> None:
 class _MockQueryResult:
     def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
         self._rows = rows or []
+        for row in self._rows:
+            if "item_data" in row and "id" in row:
+                row.setdefault("total_count", len(self._rows))
 
     def mappings(self) -> _MockQueryResult:
         return self
@@ -353,6 +356,7 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
     tenant_id = uuid4()
     run_id = uuid4()
     finding_id = uuid4()
+    revision_id = uuid4()
 
     class _MockAsyncSession:
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
@@ -379,11 +383,14 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
             if "FROM public.document_revisions" in sql:
                 return _MockQueryResult([
                     {
-                        "id": uuid4(),
+                        "revision_id": revision_id,
                         "document_id": uuid4(),
                         "document_metadata": {
                             "analysis_n4_run_id": str(run_id),
+                            "analysis_n4_revision_id": str(revision_id),
                             "analysis_n4_coverage": {
+                                "run_id": str(run_id),
+                                "source_sha256": "a" * 64,
                                 "status": "COMPLETE_WITH_GAPS",
                                 "total_windows": 10,
                                 "examined_windows": 9,
@@ -406,8 +413,16 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
                         },
                     }
                 ])
-            if "SELECT COUNT(*)" in sql:
-                return _MockQueryResult([{"total_count": 3}])
+            if "FROM public.n4_extraction_runs" in sql:
+                assert params is not None
+                assert params["run_id"] == str(run_id)
+                assert params["revision_id"] == str(revision_id)
+                return _MockQueryResult([{"run_id": run_id, "status": "COMPLETE", "total_windows": 10, "source_sha256": "a" * 64}])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": i, "status": "BLOCKED" if i == 4 else "EXAMINED", "blocked_reason": "OUTPUT_TRUNCATED"}
+                    for i in range(10)
+                ])
             if "FROM public.hitl_finding_decisions" in sql:
                 return _MockQueryResult([
                     {
@@ -729,7 +744,7 @@ def test_source_status_error_and_unavailable_visible_in_workbook() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pagination_fetches_multiple_batches() -> None:
+async def test_bounded_snapshot_fetches_more_than_one_former_batch() -> None:
     project_id = uuid4()
     tenant_id = uuid4()
 
@@ -749,14 +764,11 @@ async def test_pagination_fetches_multiple_batches() -> None:
             if "FROM public.hitl_finding_decisions" in sql:
                 return _MockQueryResult([])
             if "FROM public.review_items" in sql:
-                offset = params.get("offset", 0) if params else 0
-                if offset == 0:
-                    # First page of 500 items
-                    return _MockQueryResult([{"id": uuid4(), "current_status": "PROPOSED", "item_data": {"title": f"F-{i}"}} for i in range(500)])
-                elif offset == 500:
-                    # Second page of 100 items
-                    return _MockQueryResult([{"id": uuid4(), "current_status": "PROPOSED", "item_data": {"title": f"F-{500+i}"}} for i in range(100)])
-                return _MockQueryResult([])
+                assert params is not None
+                assert params["limit"] == 5000
+                assert "OFFSET" not in sql
+                assert "COUNT(*) OVER ()" in sql
+                return _MockQueryResult([{"id": uuid4(), "current_status": "PROPOSED", "item_data": {"title": f"F-{i}"}} for i in range(600)])
             return _MockQueryResult([])
 
     from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
@@ -971,7 +983,7 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
          "item_data": {"title": f"F-{i}"}, "created_at": created_at}
         for i in reversed(range(501))
     ]
-    observed_offsets: list[int] = []
+    observed_limits: list[int] = []
 
     class _TiedTimestampRows:
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
@@ -979,10 +991,12 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
             assert "ORDER BY created_at ASC, id ASC" in sql, "id is required for deterministic tie ordering"
             assert params is not None
             assert params["tenant_id"] == str(tenant_id)
-            offset, limit = int(params["offset"]), int(params["limit"])
-            observed_offsets.append(offset)
+            assert "OFFSET" not in sql
+            assert "COUNT(*) OVER ()" in sql
+            limit = int(params["limit"])
+            observed_limits.append(limit)
             ordered = sorted(rows, key=lambda r: (r["created_at"], r["id"]))
-            return _MockQueryResult(ordered[offset:offset + limit])
+            return _MockQueryResult(ordered[:limit])
 
     sources = SqlAlchemyJourneyExportSources(session=_TiedTimestampRows())  # type: ignore[arg-type]
     fetched = await sources._fetch_review_items_paginated(project_id, tenant_id)
@@ -990,7 +1004,7 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
     assert len(ids) == 501
     assert len(set(ids)) == 501
     assert ids == sorted(ids)
-    assert observed_offsets == [0, 500]
+    assert observed_limits == [5000]
 
 
 @pytest.mark.parametrize(
@@ -1049,3 +1063,80 @@ def test_invalid_metadata_gap_ordinal_downgrades_claim_of_complete_coverage() ->
     assert (status, total, examined, gap_count) == ("INCOMPLETE", 2, 1, 1)
     assert len(gaps) == 1
     assert gaps[0].ordinal is None
+
+
+@pytest.mark.asyncio
+async def test_cached_complete_cannot_override_partial_ledger() -> None:
+    from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
+
+    project_id, tenant_id, revision_id, run_id = uuid4(), uuid4(), uuid4(), uuid4()
+
+    class _ContradictorySources:
+        async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
+            sql = str(statement)
+            if "FROM public.document_revisions" in sql:
+                assert "r.revision_id" in sql
+                assert "JOIN public.documents" in sql
+                return _MockQueryResult([{
+                    "revision_id": revision_id,
+                    "document_id": uuid4(),
+                    "document_metadata": {
+                        "analysis_n4_revision_id": str(revision_id),
+                        "analysis_n4_run_id": str(run_id),
+                        "analysis_n4_coverage": {
+                            "run_id": str(run_id), "source_sha256": "a" * 64,
+                            "status": "COMPLETE", "total_windows": 2,
+                            "examined_windows": 2, "gap_windows": [], "gaps": [],
+                        },
+                    },
+                }])
+            if "FROM public.n4_extraction_runs" in sql:
+                assert params is not None
+                assert params["run_id"] == str(run_id)
+                assert params["revision_id"] == str(revision_id)
+                assert params["project_id"] == str(project_id)
+                return _MockQueryResult([{"run_id": run_id, "status": "PARTIAL", "total_windows": 2, "source_sha256": "a" * 64}])
+            if "FROM public.n4_extraction_windows" in sql:
+                return _MockQueryResult([
+                    {"ordinal": 0, "status": "EXAMINED"},
+                    {"ordinal": 1, "status": "EXAMINED"},
+                ])
+            raise AssertionError(sql)
+
+    sources = SqlAlchemyJourneyExportSources(session=_ContradictorySources())  # type: ignore[arg-type]
+    result = await sources._load_n4_coverage_and_gaps(project_id, tenant_id)
+    assert result[:4] == ("PARTIAL", 2, 2, 0)
+    assert result[-1] == "AVAILABLE"
+
+
+def test_reference_retains_ledger_run_identity_without_fabricating_ordinal() -> None:
+    from src.reporting.application.build_journey_export import _parse_windows_for_run
+
+    run_id = uuid4()
+    _, _, _, _, references = _parse_windows_for_run(
+        [
+            {"ordinal": 0, "status": "EXAMINED", "unresolved_refs": ["Annex A"]},
+            {"ordinal": -1, "status": "BLOCKED", "unresolved_refs": ["Annex B"]},
+        ],
+        2, "PARTIAL", run_id=run_id,
+    )
+    assert references[0].source_identifier == f"Run {run_id} / Window 0"
+    assert references[1].source_identifier == f"Run {run_id} / Window Unknown"
+    assert references[1].status == "UNRESOLVED"
+    assert "cannot be verified" in str(references[1].details)
+
+
+def test_a7_canonical_reference_register_keeps_proposal_and_quote() -> None:
+    from src.reporting.application.build_journey_export import _parse_review_item_references
+
+    refs: list[Any] = []
+    _parse_review_item_references({
+        "n4_reference_register": [
+            {"label": "Annex A", "status": "MISSING_EXTERNAL",
+             "proposal": "Referenced document not provided", "source_quote": "See Annex A."},
+        ],
+    }, refs)
+    assert len(refs) == 1
+    assert refs[0].target_reference == "Annex A"
+    assert refs[0].status == "MISSING_EXTERNAL"
+    assert refs[0].details == "See Annex A."

@@ -50,7 +50,6 @@ DIMENSION_WEIGHTS: dict[str, float] = {
 }
 
 FORMULA_PREFIXES: tuple[str, ...] = ("=", "+", "-", "@", "\t", "\r")
-REVIEW_ITEMS_BATCH_SIZE = 500
 REVIEW_ITEMS_MAX_EXPORT = 5000
 
 
@@ -534,7 +533,7 @@ def _render_references_table(ws: Worksheet, references: list[JourneyReferenceRow
     ref_headers = [
         "Source Element / Proposal",
         "Target Reference (Remisión / Label)",
-        "Resolution Status",
+        "Resolution Status (proposal)",
         "Details / Context Quote",
     ]
     for col_idx, h in enumerate(ref_headers, start=1):
@@ -767,7 +766,7 @@ def _derive_window_run_coverage_status(
 
 
 def _parse_windows_for_run(
-    window_rows: Sequence[Any], total_w: int, run_status: str
+    window_rows: Sequence[Any], total_w: int, run_status: str, *, run_id: UUID | str | None = None
 ) -> tuple[str, int, int, list[JourneyGapRow], list[JourneyReferenceRow]]:
     exam_w = 0
     gap_count = 0
@@ -809,12 +808,19 @@ def _parse_windows_for_run(
         unres = w.get("unresolved_refs")
         if isinstance(unres, Sequence) and not isinstance(unres, str | bytes):
             for ref in unres:
+                if not isinstance(ref, str) or not ref.strip():
+                    continue
+                window_label = f"Window {ord_val if ord_val is not None else 'Unknown'}"
+                source_identifier = f"Run {run_id} / {window_label}" if run_id is not None else window_label
+                details = "Unresolved reference recorded during extraction"
+                if ord_val is None:
+                    details += "; invalid ordinal, source window cannot be verified"
                 references.append(
                     JourneyReferenceRow(
-                        source_identifier=f"Window {ord_val if ord_val is not None else 'Unknown'}",
-                        target_reference=str(ref),
+                        source_identifier=source_identifier,
+                        target_reference=ref,
                         status="UNRESOLVED",
-                        details="Unresolved reference recorded during extraction",
+                        details=details,
                     )
                 )
 
@@ -842,7 +848,8 @@ def _extract_page_span(action_item: dict[str, Any]) -> str | int | None:
 
 def _parse_review_item_references(item_data: dict[str, Any], references_collector: list[JourneyReferenceRow]) -> None:
     ref_items = (
-        item_data.get("reference_register")
+        item_data.get("n4_reference_register")
+        or item_data.get("reference_register")
         or item_data.get("references")
         or item_data.get("remisiones")
     )
@@ -973,61 +980,69 @@ class SqlAlchemyJourneyExportSources:
             logger.exception("journey_export_coherence_read_failed", project_id=str(project_id))
             return None, None, sub_scores, "ERROR"
 
-    async def _fetch_pinned_revision_meta(self, project_id: UUID, tenant_id: UUID) -> tuple[str | None, dict[str, Any]]:
+    async def _fetch_pinned_revision_meta(
+        self, project_id: UUID, tenant_id: UUID
+    ) -> tuple[str | None, str | None, dict[str, Any]]:
+        # The revision's PK is revision_id; analysis metadata belongs to documents.
         rev_row = (await self._session.execute(text("""
-            SELECT id, document_id, document_metadata
-              FROM public.document_revisions
-             WHERE project_id = CAST(:project_id AS uuid)
-               AND tenant_id = CAST(:tenant_id AS uuid)
-             ORDER BY created_at DESC
+            SELECT r.revision_id, r.document_id, d.document_metadata
+              FROM public.document_revisions AS r
+              JOIN public.documents AS d
+                ON d.id = r.document_id AND d.project_id = r.project_id
+               AND d.tenant_id = r.tenant_id
+             WHERE r.project_id = CAST(:project_id AS uuid)
+               AND r.tenant_id = CAST(:tenant_id AS uuid)
+               AND r.valid_to IS NULL
+             ORDER BY r.created_at DESC, r.revision_id DESC
              LIMIT 1
         """), {"project_id": str(project_id), "tenant_id": str(tenant_id)})).mappings().one_or_none()
 
-        raw_meta = rev_row.get("document_metadata") if rev_row else None
+        if rev_row is None:
+            return None, None, {}
+        revision_id = str(rev_row["revision_id"])
+        raw_meta = rev_row.get("document_metadata")
         meta: dict[str, Any] = dict(raw_meta) if isinstance(raw_meta, dict) else {}
-        pinned_run_id = meta.get("analysis_n4_run_id") or meta.get("n4_run_id")
-        return pinned_run_id, meta
+        # Never bind a document-wide metadata pin to a different revision.
+        pinned_run_id = None
+        if str(meta.get("analysis_n4_revision_id") or "") == revision_id:
+            raw_pin = meta.get("analysis_n4_run_id")
+            if raw_pin:
+                pinned_run_id = str(UUID(str(raw_pin)))
+        return pinned_run_id, revision_id, meta
 
     async def _load_n4_coverage_and_gaps(
         self, project_id: UUID, tenant_id: UUID
     ) -> tuple[str, int, int, int, list[JourneyGapRow], list[JourneyReferenceRow], str]:
         try:
-            pinned_run_id, meta = await self._fetch_pinned_revision_meta(project_id, tenant_id)
-
-            parsed = _parse_metadata_coverage(meta)
-            if parsed is not None:
-                cov_status, total_w, exam_w, gap_count, gaps = parsed
-                return cov_status, total_w, exam_w, gap_count, gaps, [], "AVAILABLE"
-
-            if pinned_run_id:
-                run_query = text("""
-                    SELECT run_id, status, total_windows
-                      FROM public.n4_extraction_runs
-                     WHERE run_id = CAST(:run_id AS uuid)
-                       AND tenant_id = CAST(:tenant_id AS uuid)
-                     LIMIT 1
-                """)
-                params = {"run_id": str(pinned_run_id), "tenant_id": str(tenant_id)}
-            else:
-                run_query = text("""
-                    SELECT run_id, status, total_windows
-                      FROM public.n4_extraction_runs
-                     WHERE project_id = CAST(:project_id AS uuid)
-                       AND tenant_id = CAST(:tenant_id AS uuid)
-                     ORDER BY created_at DESC
-                     LIMIT 1
-                """)
-                params = {"project_id": str(project_id), "tenant_id": str(tenant_id)}
-
+            pinned_run_id, revision_id, meta = await self._fetch_pinned_revision_meta(project_id, tenant_id)
+            # The ledger, not cached metadata, is the authority for coverage status.
+            run_query = text("""
+                SELECT n.run_id, n.status, n.total_windows, n.source_sha256
+                  FROM public.n4_extraction_runs AS n
+                  JOIN public.document_revisions AS r
+                    ON r.revision_id = n.document_revision_id
+                   AND r.document_id = n.document_id
+                   AND r.project_id = n.project_id AND r.tenant_id = n.tenant_id
+                 WHERE n.project_id = CAST(:project_id AS uuid)
+                   AND n.tenant_id = CAST(:tenant_id AS uuid)
+                   AND r.valid_to IS NULL
+                   AND (CAST(:revision_id AS uuid) IS NULL
+                        OR n.document_revision_id = CAST(:revision_id AS uuid))
+                   AND (CAST(:run_id AS uuid) IS NULL OR n.run_id = CAST(:run_id AS uuid))
+                 ORDER BY n.created_at DESC, n.run_id DESC
+                 LIMIT 1
+            """)
+            params = {
+                "project_id": str(project_id), "tenant_id": str(tenant_id),
+                "revision_id": revision_id, "run_id": pinned_run_id,
+            }
             run_row = (await self._session.execute(run_query, params)).mappings().one_or_none()
             if run_row is None:
-                # Absence established by a tenant-scoped SQL query, not inferred from empty workbook.
                 return "INCOMPLETE", 0, 0, 0, [], [], "UNAVAILABLE"
 
             active_run_id = run_row["run_id"]
             run_status = str(run_row.get("status") or "")
             total_w = int(run_row.get("total_windows") or 0)
-
             window_rows = (await self._session.execute(text("""
                 SELECT ordinal, status, blocked_reason, unresolved_refs
                   FROM public.n4_extraction_windows
@@ -1036,7 +1051,30 @@ class SqlAlchemyJourneyExportSources:
                  ORDER BY ordinal
             """), {"run_id": str(active_run_id), "tenant_id": str(tenant_id)})).mappings().all()
 
-            cov_status, exam_w, gap_count, gaps, refs = _parse_windows_for_run(window_rows, total_w, run_status)
+            cov_status, exam_w, gap_count, gaps, refs = _parse_windows_for_run(
+                window_rows, total_w, run_status, run_id=active_run_id
+            )
+            # Cached gap details may enrich the ledger only for the same revision,
+            # run and source hash, with identical coverage and gap identities.
+            cov_meta = meta.get("analysis_n4_coverage") or meta.get("n4_coverage")
+            if (
+                isinstance(cov_meta, dict)
+                and str(meta.get("analysis_n4_revision_id") or "") == revision_id
+                and str(cov_meta.get("run_id") or "") == str(active_run_id)
+                and run_row.get("source_sha256")
+                and cov_meta.get("source_sha256") == run_row["source_sha256"]
+            ):
+                parsed = _parse_metadata_coverage(meta)
+                if parsed is not None:
+                    cached_status, cached_total, cached_examined, cached_count, cached_gaps = parsed
+                    if (
+                        (cached_status, cached_total, cached_examined, cached_count)
+                        == (cov_status, total_w, exam_w, gap_count)
+                        and len(cached_gaps) == len(gaps)
+                        and {g.ordinal for g in cached_gaps} == {g.ordinal for g in gaps}
+                        and all(g.ordinal is not None for g in gaps)
+                    ):
+                        gaps = cached_gaps
             return cov_status, total_w, exam_w, gap_count, gaps, refs, "AVAILABLE"
         except Exception:
             logger.exception("journey_export_n4_read_failed", project_id=str(project_id))
@@ -1045,44 +1083,28 @@ class SqlAlchemyJourneyExportSources:
     async def _fetch_review_items_paginated(
         self, project_id: UUID, tenant_id: UUID
     ) -> list[Any]:
-        all_rows: list[Any] = []
-        offset = 0
-        while offset < REVIEW_ITEMS_MAX_EXPORT:
-            batch = (await self._session.execute(text("""
-                SELECT id, current_status, approved_by, approved_at, item_data
-                  FROM public.review_items
-                 WHERE project_id = CAST(:project_id AS uuid)
-                   AND tenant_id = CAST(:tenant_id AS uuid)
-                 ORDER BY created_at ASC, id ASC
-                 LIMIT :limit OFFSET :offset
-            """), {
-                "project_id": str(project_id),
-                "tenant_id": str(tenant_id),
-                "limit": REVIEW_ITEMS_BATCH_SIZE,
-                "offset": offset,
-            })).mappings().all()
-
-            if not batch:
-                break
-            all_rows.extend(batch)
-            if len(batch) < REVIEW_ITEMS_BATCH_SIZE:
-                break
-            offset += len(batch)
-        return all_rows
+        # One bounded statement = one PostgreSQL MVCC snapshot. OFFSET across
+        # statements can repeat or skip findings when another transaction writes.
+        # COUNT(*) OVER () reports the total from precisely that same snapshot.
+        return list((await self._session.execute(text("""
+            SELECT id, current_status, approved_by, approved_at, item_data,
+                   COUNT(*) OVER () AS total_count
+              FROM public.review_items
+             WHERE project_id = CAST(:project_id AS uuid)
+               AND tenant_id = CAST(:tenant_id AS uuid)
+             ORDER BY created_at ASC, id ASC
+             LIMIT :limit
+        """), {
+            "project_id": str(project_id),
+            "tenant_id": str(tenant_id),
+            "limit": REVIEW_ITEMS_MAX_EXPORT,
+        })).mappings().all())
 
     async def _load_findings_and_decisions(
         self, project_id: UUID, tenant_id: UUID, references_collector: list[JourneyReferenceRow]
     ) -> tuple[list[JourneyFindingRow], int, int, str]:
         findings: list[JourneyFindingRow] = []
         try:
-            count_row = (await self._session.execute(text("""
-                SELECT COUNT(*) AS total_count
-                  FROM public.review_items
-                 WHERE project_id = CAST(:project_id AS uuid)
-                   AND tenant_id = CAST(:tenant_id AS uuid)
-            """), {"project_id": str(project_id), "tenant_id": str(tenant_id)})).mappings().one_or_none()
-            total_items = int(count_row["total_count"]) if count_row and count_row.get("total_count") is not None else 0
-
             ledger_rows = (await self._session.execute(text("""
                 SELECT DISTINCT ON (finding_id) finding_id, action, reviewer_id, recorded_at
                   FROM public.hitl_finding_decisions
@@ -1096,6 +1118,7 @@ class SqlAlchemyJourneyExportSources:
             }
 
             review_rows = await self._fetch_review_items_paginated(project_id, tenant_id)
+            total_items = int(review_rows[0]["total_count"]) if review_rows else 0
 
             for r in review_rows:
                 row_obj = _build_finding_row(r, decisions_by_finding, references_collector)
@@ -1103,8 +1126,6 @@ class SqlAlchemyJourneyExportSources:
                     findings.append(row_obj)
 
             exported_count = len(findings)
-            if total_items == 0:
-                total_items = exported_count
             return findings, total_items, exported_count, "AVAILABLE"
         except Exception:
             logger.exception("journey_export_findings_read_failed", project_id=str(project_id))
