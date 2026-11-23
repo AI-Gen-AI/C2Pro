@@ -313,11 +313,16 @@ def test_candidate_payload_uses_page_locator_when_map_available(monkeypatch):
     assert value["source_locator"] == "pp. 4–5"
 
 
-def test_candidate_payload_locator_stub_unimplemented_is_not_verified():
-    from src.documents.domain.quote_page_locator import PageSpan
+def test_candidate_payload_locator_unavailable_is_not_verified(monkeypatch):
+    from src.documents.domain import quote_page_locator as loc
     quote = "The contractor shall notify within 12 days."
+
+    def unavailable(*_args, **_kwargs):
+        raise NotImplementedError("A9 unavailable")
+
+    monkeypatch.setattr(loc, "locate_quote_page", unavailable)
     value = bridge._candidate_payload(
-        *_claim_refs(quote), quote, page_spans=[PageSpan(1, 0, 100)],
+        *_claim_refs(quote), quote, page_spans=[loc.PageSpan(1, 0, 100)],
     )
     assert value["page_number"] is None
     # Page map present but A9 locator unimplemented: no page => not VERIFIED.
@@ -685,3 +690,220 @@ async def test_a7_complete_outcome_must_reconcile_durable_window_snapshot(monkey
             "document_text": "synthetic source text",
             "anonymized_text": "synthetic source text",
         })
+
+
+# JV1 L3: consume a revision-pinned A11 physical page projection, not
+# arbitrary legacy parsed_text_page_spans or OCR-failed page metadata.
+def _a11_a9_fixture():
+    from hashlib import sha256
+
+    state, _ = _state()
+    entries = [
+        (1, "NATIVE", "The contractor shall notify the owner."),
+        (1, "NATIVE", "Annex B contains the schedule."),
+        (2, "OCR", "The contractor shall notify the owner."),
+        (3, "NATIVE", "Original native text with failed OCR."),
+        (4, "OCR", "Replaced suspect OCR words."),
+    ]
+    source = "\n\n".join(row[2] for row in entries)
+    state["document_text"] = source
+    state["anonymized_text"] = source
+    identity = state["n4_source_identity"]
+    identity["parser_origin"] = "pdf_file_parser"
+    digest = sha256(source.encode("utf-8")).hexdigest()
+    identity["parsed_text_sha256"] = digest
+    rows = []
+    position = 0
+    for index, (page, method, content) in enumerate(entries):
+        end = position + len(content)
+        rows.append({
+            "block_index": index, "page": page, "start_offset": position,
+            "end_offset": end, "method": method, "page_verified": True,
+        })
+        position = end + 2
+    grouped = [
+        {"page": 1, "start_offset": rows[0]["start_offset"],
+         "end_offset": rows[1]["end_offset"]},
+        {"page": 2, "start_offset": rows[2]["start_offset"],
+         "end_offset": rows[2]["end_offset"]},
+        {"page": 4, "start_offset": rows[4]["start_offset"],
+         "end_offset": rows[4]["end_offset"]},
+    ]
+    common = {
+        "revision_id": state["document_revision_id"],
+        "blob_hash": identity["blob_hash"],
+        "parsed_text_sha256": digest,
+        "source_pages": 4,
+    }
+    identity["physical_page_lineage"] = {
+        **common, "origin": "pdf_file_parser", "status": "OBSERVED_ONLY",
+        "spans": rows,
+        "pages": [
+            {"page": 1, "status": "NATIVE_TEXT"},
+            {"page": 2, "status": "OCR_ONLY"},
+            {"page": 3, "status": "OCR_FAILED"},
+            {"page": 4, "status": "OCR_REPLACED_SUSPECT"},
+        ],
+    }
+    identity["a9_physical_page_map"] = {
+        **common, "schema_version": "a11-a9-physical-page-map-v1",
+        "source_kind": "PDF_PHYSICAL_PAGE_OBSERVATION",
+        "status": "PARTIAL", "spans": grouped,
+        "excluded_pages": [{"page": 3, "reason": "OCR_FAILED"}],
+        "original_document_completeness_certified": False,
+    }
+    return state, rows
+
+
+def test_a7_consumes_only_revision_pinned_a11_map_and_coalesced_pages():
+    state, _ = _a11_a9_fixture()
+    spans, claimed = bridge._a11_a9_page_map(state)
+    assert claimed is True
+    assert [row.page for row in spans] == [1, 2]
+    assert spans[0].start_offset == 0
+    assert spans[0].end_offset > state["document_text"].index("Annex B")
+    assert 3 not in [row.page for row in spans]  # OCR_FAILED
+    assert 4 not in [row.page for row in spans]  # OCR_REPLACED_SUSPECT
+    # A forged legacy field must never supersede A11's verified map.
+    state["parsed_text_page_spans"] = [
+        {"page": 999, "start_offset": 0, "end_offset": len(state["document_text"])}
+    ]
+    assert [row.page for row in bridge._grounded_page_spans(state)] == [1, 2]
+
+
+@pytest.mark.parametrize("corruption", [
+    "schema", "revision", "blob", "digest", "identity_digest", "wrong_source",
+    "source_kind", "certified", "page_count", "map_duplicate", "map_overlap",
+    "map_offset", "map_exclusion", "map_status", "raw_duplicate",
+    "raw_overlap", "raw_missing", "raw_revision", "raw_blob", "raw_digest",
+    "raw_method", "raw_missing_page", "ocr_failed_promoted",
+    "missing_lineage", "unhashable_status", "unhashable_method",
+])
+def test_a7_rejects_stale_tampered_or_incomplete_a11_maps(corruption):
+    state, _ = _a11_a9_fixture()
+    identity = state["n4_source_identity"]
+    mapping = identity["a9_physical_page_map"]
+    raw = identity["physical_page_lineage"]
+    if corruption == "schema":
+        mapping["schema_version"] = "unknown"
+    elif corruption == "revision":
+        mapping["revision_id"] = str(uuid4())
+    elif corruption == "blob":
+        mapping["blob_hash"] = "f" * 64
+    elif corruption == "digest":
+        mapping["parsed_text_sha256"] = "0" * 64
+    elif corruption == "identity_digest":
+        identity["parsed_text_sha256"] = "f" * 64
+    elif corruption == "wrong_source":
+        state["anonymized_text"] = state["document_text"] + " [REDACTED]"
+    elif corruption == "source_kind":
+        mapping["source_kind"] = "DOCX_FAKE_PAGE"
+    elif corruption == "certified":
+        mapping["original_document_completeness_certified"] = True
+    elif corruption == "page_count":
+        mapping["source_pages"] = 5
+    elif corruption == "map_duplicate":
+        mapping["spans"].insert(1, dict(mapping["spans"][0]))
+    elif corruption == "map_overlap":
+        mapping["spans"][1]["start_offset"] = 0
+    elif corruption == "map_offset":
+        mapping["spans"][0]["end_offset"] += 1
+    elif corruption == "map_exclusion":
+        mapping["excluded_pages"] = []
+    elif corruption == "map_status":
+        mapping["status"] = "OBSERVED_ONLY"
+    elif corruption == "raw_duplicate":
+        raw["spans"].append(dict(raw["spans"][1]))
+    elif corruption == "raw_overlap":
+        raw["spans"][1]["start_offset"] = 0
+    elif corruption == "raw_missing":
+        raw["spans"].pop(0)
+    elif corruption == "raw_revision":
+        raw["revision_id"] = str(uuid4())
+    elif corruption == "raw_blob":
+        raw["blob_hash"] = "b" * 64
+    elif corruption == "raw_digest":
+        raw["parsed_text_sha256"] = "f" * 64
+    elif corruption == "raw_method":
+        raw["spans"][2]["method"] = "NATIVE"
+    elif corruption == "raw_missing_page":
+        raw["pages"].pop()
+    elif corruption == "ocr_failed_promoted":
+        mapping["spans"].append({
+            "page": 3, "start_offset": raw["spans"][3]["start_offset"],
+            "end_offset": raw["spans"][3]["end_offset"],
+        })
+    elif corruption == "missing_lineage":
+        identity.pop("physical_page_lineage")
+    elif corruption == "unhashable_status":
+        raw["pages"][1]["status"] = {}
+    elif corruption == "unhashable_method":
+        raw["spans"][1]["method"] = {}
+    spans, claimed = bridge._a11_a9_page_map(state)
+    assert claimed is True
+    assert spans == []
+    claim, refs = _claim_refs("The contractor shall notify the owner.")
+    proposal = bridge._candidate_payload(
+        claim, refs, state["anonymized_text"],
+        page_spans=spans, map_claimed=claimed,
+    )
+    assert proposal["page_verification_status"] == "PAGE_UNRESOLVED"
+    assert proposal["source_quote"] is None
+    assert proposal["page_number"] is None
+
+
+def test_a7_no_page_map_never_trusts_unpinned_legacy_spans():
+    state, _ = _a11_a9_fixture()
+    state["n4_source_identity"].pop("a9_physical_page_map")
+    state["parsed_text_page_spans"] = [
+        {"page": 777, "start_offset": 0, "end_offset": len(state["document_text"])}
+    ]
+    spans, claimed = bridge._a11_a9_page_map(state)
+    assert claimed is False and spans == []
+    assert bridge._grounded_page_spans(state) == []
+
+
+def test_a7_map_with_no_safe_pages_cannot_verify_quote():
+    state, _ = _a11_a9_fixture()
+    lineage = state["n4_source_identity"]["physical_page_lineage"]
+    mapping = state["n4_source_identity"]["a9_physical_page_map"]
+    for page in lineage["pages"]:
+        page["status"] = "OCR_FAILED"
+    mapping["spans"] = []
+    mapping["excluded_pages"] = [
+        {"page": i, "reason": "OCR_FAILED"} for i in range(1, 5)
+    ]
+    mapping["status"] = "NO_LOCATABLE_PAGES"
+    spans, claimed = bridge._a11_a9_page_map(state)
+    assert claimed is True and spans == []
+    claim, refs = _claim_refs("The contractor shall notify the owner.")
+    proposed = bridge._candidate_payload(
+        claim, refs, state["document_text"], page_spans=spans,
+        map_claimed=claimed,
+    )
+    assert proposed["page_verification_status"] == "PAGE_UNRESOLVED"
+    assert proposed["source_quote"] is None
+
+
+def test_a7_source_ref_hint_must_match_exact_quote_before_disambiguation(monkeypatch):
+    from src.documents.domain import quote_page_locator as loc
+
+    quote = "Repeat the same contractual notice."
+    source = quote + "\\n\\nDifferent wording here.\\n\\n" + quote
+    second = source.rfind(quote)
+    spans = [loc.PageSpan(1, 0, len(quote)),
+             loc.PageSpan(2, second, len(source))]
+    candidates = []
+
+    def spy(_quote, *, source_text, page_spans, near_offset):
+        candidates.append(near_offset)
+        return None
+
+    monkeypatch.setattr(loc, "locate_quote_page", spy)
+    claim, refs = _claim_refs(quote)
+    refs[0]["analysis_span"] = [len(quote) + 2, len(quote) + 10]
+    bridge._candidate_payload(claim, refs, source, page_spans=spans)
+    assert candidates == [None]
+    refs[0]["analysis_span"] = [second, len(source)]
+    bridge._candidate_payload(claim, refs, source, page_spans=spans)
+    assert candidates[-1] == second
