@@ -1,0 +1,197 @@
+# B1 · Taxonomía EPC Journey V1 — plantilla sin datos contractuales.
+# Fuente: PR #1285, §6.2, transcripción estática de los 20 controles.
+# presente=null implica PENDIENTE DE EVALUAR (no 'ausente').
+# El evaluador humano cumplimenta cláusula, página, cita literal y cifras esperadas.
+# critico=true corresponde al indicador C del plan.
+schema_version: 1
+campos_oraculo:
+- id
+- tipo
+- critico
+- presente
+- clausula
+- pagina
+- cita_ancla
+- cifras_esperadas
+- dimension
+controles:
+- id: EPC-01
+  tipo: Precio y moneda
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: BUDGET
+- id: EPC-02
+  tipo: Hitos/calendario de pagos y condiciones
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: BUDGET
+- id: EPC-03
+  tipo: Retenciones, avales y garantías financieras
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: BUDGET
+- id: EPC-04
+  tipo: Plazo / fechas de terminación garantizadas
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: TIME
+- id: EPC-05
+  tipo: 'Penalizaciones por retraso: tasa y tope'
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: TIME
+- id: EPC-06
+  tipo: Garantías y penalizaciones de rendimiento
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: TECHNICAL
+- id: EPC-07
+  tipo: Limitación de responsabilidad, daño consecuencial y excepciones
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-08
+  tipo: Indemnidades
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-09
+  tipo: Resolución (causas, consecuencias, plazos)
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-10
+  tipo: Suspensión
+  critico: false
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-11
+  tipo: Fuerza mayor
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-12
+  tipo: Variaciones / órdenes de cambio y su valoración
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: SCOPE
+- id: EPC-13
+  tipo: Alcance, exclusiones e interfaces
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: SCOPE
+- id: EPC-14
+  tipo: Pruebas y recepción (provisional/definitiva)
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: QUALITY
+- id: EPC-15
+  tipo: Garantía y periodo de defectos
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: QUALITY
+- id: EPC-16
+  tipo: Seguros y límites
+  critico: false
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-17
+  tipo: Confidencialidad y propiedad intelectual
+  critico: false
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-18
+  tipo: Ley aplicable y disputas
+  critico: false
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: LEGAL
+- id: EPC-19
+  tipo: Impuestos, aranceles, permisos y cambio de ley
+  critico: false
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: BUDGET
+- id: EPC-20
+  tipo: Remisiones a anexos y orden de prelación
+  critico: true
+  presente: null
+  clausula: null
+  pagina: null
+  cita_ancla: null
+  cifras_esperadas: null
+  dimension: SCOPE
