@@ -859,10 +859,64 @@ def _split_contract_into_clauses(parsed_text: str) -> list[str]:
     return [segment for segment, _, _ in _split_contract_clause_spans(parsed_text)]
 
 
-def _contract_clause_coverage_omissions(parsed_text: str) -> list[dict[str, int | str]]:
-    """Contract clause rows preserve all source text, so none are omitted."""
-    del parsed_text
-    return []
+def _contract_clause_coverage_omissions(
+    parsed_text: str,
+    *,
+    rows: list[tuple[str, int, int]] | None = None,
+) -> list[dict[str, int | str]]:
+    """Check actual persistible source spans; never assume a splitter is lossless.
+
+    Only non-whitespace gaps and overlaps are material. Keep observations
+    as offsets and stable codes: contract text must not enter metadata.
+    """
+    source_rows = _split_contract_clause_spans(parsed_text) if rows is None else rows
+    omissions: list[dict[str, int | str]] = []
+    valid_spans: list[tuple[int, int]] = []
+    source_length = len(parsed_text)
+
+    for segment, start, end in source_rows:
+        if not (0 <= start < end <= source_length):
+            omissions.append(
+                {"kind": "contract_clause_invalid_span", "start_offset": start, "end_offset": end}
+            )
+            continue
+        valid_spans.append((start, end))
+        if parsed_text[start:end] != segment:
+            omissions.append(
+                {"kind": "contract_clause_text_mismatch", "start_offset": start, "end_offset": end}
+            )
+        if end - start > 4000:
+            omissions.append(
+                {"kind": "contract_clause_oversized_row", "start_offset": start, "end_offset": end}
+            )
+
+    def record_gap(start: int, end: int) -> None:
+        gap = parsed_text[start:end]
+        if not gap.strip():
+            return
+        first = start + len(gap) - len(gap.lstrip())
+        last = start + len(gap.rstrip())
+        omissions.append(
+            {"kind": "contract_clause_uncovered_text", "start_offset": first, "end_offset": last}
+        )
+
+    cursor = 0
+    for start, end in sorted(valid_spans):
+        if start > cursor:
+            record_gap(cursor, start)
+        elif start < cursor:
+            overlap_end = min(cursor, end)
+            if parsed_text[start:overlap_end].strip():
+                omissions.append(
+                    {
+                        "kind": "contract_clause_duplicate_text",
+                        "start_offset": start,
+                        "end_offset": overlap_end,
+                    }
+                )
+        cursor = max(cursor, end)
+    record_gap(cursor, source_length)
+    return omissions
 
 
 def _explicit_source_clause_heading_code(segment: str) -> str | None:
@@ -905,6 +959,7 @@ def _extract_contract_clauses(
     revision_id: UUID | None = None,
 ) -> list[Clause]:
     clauses: list[Clause] = []
+    persistible_rows: list[tuple[str, int, int]] = []
     # Build offset index from text blocks if available
     text_blocks = parsed_payload.get("text_blocks", []) if isinstance(parsed_payload, dict) else []
     block_index = _build_text_block_index(text_blocks) if text_blocks else []
@@ -1005,6 +1060,13 @@ def _extract_contract_clauses(
                 extraction_model="deterministic-contract-ingestion",
             )
         )
+        persistible_rows.append((segment, start_offset, end_offset))
+
+    omissions = _contract_clause_coverage_omissions(parsed_text, rows=persistible_rows)
+    if omissions:
+        # A partial/duplicated source row is an ingestion error, not a
+        # successful extraction with silently missing contractual evidence.
+        raise ValueError(f"contract_clause_coverage_failed:{omissions[0]['kind']}")
     return clauses
 
 
