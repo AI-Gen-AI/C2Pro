@@ -855,6 +855,18 @@ jobs:
           C2PRO_REQUIRE_MIGRATED_TEST_DSN: "1"
         run: python -m pytest tests/integration/persistence tests/integration/product_control -q
 
+      # JV1-A0c: the N4 ledger/bridge PostgreSQL suites (C2PRO_N4_SCRATCH_DSN) were
+      # silently skipped in every CI lane. Run them against the Alembic-migrated
+      # *_test database prepared above so ledger changes (A2/A3/A7/A16) get real
+      # evidence instead of SKIP.
+      - name: N4 ledger PostgreSQL suites (JV1-A0c)
+        working-directory: apps/api
+        env:
+          C2PRO_N4_SCRATCH_DSN: postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test
+        run: >-
+          python -m pytest -q -rs
+          $(ls tests/integration/analysis/test_n4_*_pg.py tests/unit/analysis/test_*n4*_pg.py 2>/dev/null)
+
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.test.yml down -v
