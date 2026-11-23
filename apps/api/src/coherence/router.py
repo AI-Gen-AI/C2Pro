@@ -8,6 +8,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from typing import cast as type_cast
 from uuid import UUID
 
 import structlog
@@ -1264,13 +1265,16 @@ async def evaluate_project_coherence(
     flags_service: TenantFlagsService = Depends(get_flags_service),
 ) -> CoherenceResult | EnrichedCoherenceResult:
     """Evaluate through the application service; public endpoint contract unchanged."""
-    return await evaluate_coherence_in_application(
-        payload,
-        include_diagnostics=include_diagnostics,
-        db=db,
-        current_user=current_user,
-        flags_service=flags_service,
-        ports=_coherence_evaluation_ports(),
+    return type_cast(
+        CoherenceResult | EnrichedCoherenceResult,
+        await evaluate_coherence_in_application(
+            payload,
+            include_diagnostics=include_diagnostics,
+            db=db,
+            current_user=current_user,
+            flags_service=flags_service,
+            ports=_coherence_evaluation_ports(),
+        ),
     )
 
 

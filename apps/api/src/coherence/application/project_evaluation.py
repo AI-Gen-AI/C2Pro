@@ -137,6 +137,8 @@ async def run_project_evaluation_after_approval(
 
     payload = CoherenceEvaluateRequest(
         project_id=project_id,
+        analysis_id=None,
+        clauses=None,
         low_budget_mode=True,
         include_rag_similarity=False,
     )
@@ -321,7 +323,7 @@ async def evaluate_coherence_in_application(
         overall_score=enriched_result.overall_score,
     )
     detected_result = enriched_result
-    reconciliation: _CoherenceAlertReconciliation | None = None
+    reconciliation: Any | None = None
 
     # B1-09: durable human disposition is part of the scoring input authority.
     # Reconcile first (same transaction), then re-score the complete FindingSignals.
