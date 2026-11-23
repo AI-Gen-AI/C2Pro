@@ -477,30 +477,28 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     )
     source_sha256 = sha256(source_text.encode("utf-8")).hexdigest()
     spans = _grounded_page_spans(state)
+    # Always reconcile the persisted ledger, including on the fast COMPLETE
+    # path. Runner counters alone cannot prove that every ordinal still exists.
+    windows, reservations = await _load_run_ledger(
+        authority.tenant_id, outcome.run_id,
+    )
+    coverage = assess_n4_run(
+        outcome=outcome, windows=windows, reservations=reservations,
+        source_sha256=source_sha256, page_spans=spans,
+    )
     if outcome.status == "COMPLETE" and (
-        outcome.examined_windows == outcome.total_windows
-        and outcome.settled_receipt_windows == outcome.total_windows
-        and outcome.persisted_result_windows == outcome.total_windows
+        coverage["status"] != N4CoverageStatus.COMPLETE.value
+        or outcome.settled_receipt_windows != outcome.total_windows
+        or outcome.persisted_result_windows != outcome.total_windows
     ):
-        coverage: dict[str, Any] = {
-            "schema_version": N4_COVERAGE_SCHEMA_VERSION,
-            "status": N4CoverageStatus.COMPLETE.value,
-            "run_id": str(outcome.run_id),
-            "source_sha256": source_sha256,
-            "total_windows": outcome.total_windows,
-            "examined_windows": outcome.examined_windows,
-            "gap_windows": [],
-            "gaps": [],
-        }
-    else:
-        # Any other terminal state is reviewable only as an explicit, open-gap
-        # COMPLETE_WITH_GAPS; in-flight/UNKNOWN or zero results still block.
-        windows, reservations = await _load_run_ledger(
-            authority.tenant_id, outcome.run_id,
-        )
-        coverage = assess_n4_run(
-            outcome=outcome, windows=windows, reservations=reservations,
-            source_sha256=source_sha256, page_spans=spans,
+        raise N4RunIncomplete(
+            run_id=outcome.run_id, status=outcome.status,
+            examined_windows=outcome.examined_windows,
+            total_windows=outcome.total_windows,
+            persisted_result_windows=outcome.persisted_result_windows,
+            blocked_result_windows=outcome.blocked_result_windows,
+            stopped_reason="INCONSISTENT_COMPLETE_LEDGER",
+            source_sha256=source_sha256,
         )
 
     # Tenant RLS and an exact run_id: never import another document's candidates.
