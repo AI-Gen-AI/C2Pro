@@ -49,41 +49,43 @@ _LANG_MARKERS: dict[str, N4ClauseLanguage] = {
 }
 
 
-def build_n4_clause_inventory(projection_text: str) -> tuple[N4InventoryClause, ...]:
-    """Detect EN/ES/PT clause headings and retain exact N2 character offsets.
+def _detected_heading(
+    raw_line: str, cursor: int,
+) -> tuple[int, str, str, N4ClauseLanguage | None] | None:
+    """Parse one N2 heading without consuming or truncating the source text."""
+    line = raw_line.rstrip("\r\n")
+    labelled = _LABEL.fullmatch(line)
+    match = labelled or _NUMBERED.fullmatch(line)
+    if match is None:
+        return None
+    heading = (match.group("heading") or "").strip()
+    if not heading or not any(char.isalpha() for char in heading):
+        return None
+    language = (
+        _LANG_MARKERS.get(labelled.group("word").lower())
+        if labelled is not None else None
+    )
+    start = cursor + len(line) - len(line.lstrip())
+    return start, match.group("ref"), heading[:180], language
 
-    Heading recognition is heuristic: unnumbered or unusual headings are not
-    certified as absent. The entire text remains in the source window.
+
+def build_n4_clause_inventory(projection_text: str) -> tuple[N4InventoryClause, ...]:
+    """Detect EN/ES/PT headings, preserving exact N2 character offsets.
+
+    This heading heuristic cannot attest to missing or unusual clauses.
+    Source windows still pass ALL N2 text through to the model.
     """
     if not isinstance(projection_text, str):
         raise TypeError("N2 projection must be text")
     headings: list[tuple[int, str, str, N4ClauseLanguage | None]] = []
     cursor = 0
     for raw_line in projection_text.splitlines(keepends=True):
-        line = raw_line.rstrip("\r\n")
-        labelled = _LABEL.fullmatch(line)
-        numbered = _NUMBERED.fullmatch(line) if labelled is None else None
-        match = labelled or numbered
-        if match is not None:
-            heading = (match.group("heading") or "").strip()
-            if heading and any(ch.isalpha() for ch in heading):
-                ref = match.group("ref")
-                lang = (
-                    _LANG_MARKERS.get(labelled.group("word").lower())
-                    if labelled is not None else None
-                )
-                # Preserve the heading's true start; paragraph bodies remain
-                # present in the window, not copied into this short inventory.
-                start = cursor + len(line) - len(line.lstrip())
-                headings.append((start, ref, heading[:180], lang))
+        if heading := _detected_heading(raw_line, cursor):
+            headings.append(heading)
         cursor += len(raw_line)
-
     clauses: list[N4InventoryClause] = []
     for index, (start, ref, heading, language) in enumerate(headings):
-        end = (
-            headings[index + 1][0]
-            if index + 1 < len(headings) else len(projection_text)
-        )
+        end = headings[index + 1][0] if index + 1 < len(headings) else len(projection_text)
         clauses.append(N4InventoryClause(
             clause_ref=ref, heading=heading, start_offset=start,
             end_offset=end, language=language,
