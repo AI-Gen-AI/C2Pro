@@ -14,14 +14,14 @@ from decimal import Decimal
 from uuid import UUID
 
 from src.analysis.application.n4_incremental_runner import N4ProviderReceipt
+from src.analysis.domain.n4_clause_inventory import (
+    build_n4_clause_inventory,
+    render_n4_clause_inventory_messages,
+)
 from src.analysis.domain.n4_compact_window_response import (
     N4_WINDOW_PROMPT_VERSION,
     N4_WINDOW_SYSTEM_PROMPT,
     n4_window_source_message,
-)
-from src.analysis.domain.n4_clause_inventory import (
-    build_n4_clause_inventory,
-    render_n4_clause_inventory_messages,
 )
 from src.analysis.domain.n4_source_windows import N4SourceWindow
 from src.core.ai.anthropic_wrapper import AIRequest, AnthropicWrapper
