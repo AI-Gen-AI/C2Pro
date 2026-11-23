@@ -212,12 +212,11 @@ def main() -> int:
         return 1
 
     output_json = json.dumps(result, indent=2, sort_keys=False, ensure_ascii=False)
-    
+
     # Validación de ruta de salida confinada JV1-B3
     # El archivo debe escribirse fuera del reposorio, sin symlink traversal
     if args.out:
         from pathlib import Path
-        import os
         out_path = Path(args.out)
         # Si la ruta es absoluta y fuera del repositorio, permitirla
         if out_path.is_absolute():
@@ -229,9 +228,10 @@ def main() -> int:
             if out_file_resolved != out_path and not str(out_path).startswith(str(REPO_ROOT)):
                 print("ERROR: symlink traversal detected", file=sys.stderr)
                 return 1
-            # Abrir el archivo para escritura
+            # Escribir archivo de salida (fail-closed con contexto)
             try:
-                opened_file = open(out_path, 'w', encoding='utf-8')
+                with open(out_path, 'w', encoding='utf-8') as f:
+                    f.write(output_json + "\n")
             except OSError as e:
                 print(f"ERROR: cannot open output file: {e}", file=sys.stderr)
                 return 1
@@ -240,9 +240,8 @@ def main() -> int:
             print("ERROR: output path must be absolute and outside repository (JV1-B3 confined)", file=sys.stderr)
             return 1
     else:
-        opened_file = sys.stdout
-    
-    opened_file.write(output_json + "\n")
+        # Sin --out: usar stdout
+        print(output_json + "\n")
     return 0
 
 
