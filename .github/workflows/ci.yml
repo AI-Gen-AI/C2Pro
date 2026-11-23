@@ -753,7 +753,7 @@ jobs:
     name: Backend Combined Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [detect-changes, backend-unit, backend-core, backend-coherence, backend-modules, backend-security]
+    needs: [detect-changes, backend-unit, backend-core, backend-coherence, backend-modules, backend-security, backend-migrations]
     if: needs.detect-changes.outputs.backend == 'true'
     steps:
       - name: Checkout
@@ -785,6 +785,11 @@ jobs:
         with:
           name: c25-c26-security-coverage
           path: apps/api/coverage-data/c25-c26-security
+      - name: Download N4 PostgreSQL coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: n4-pg-coverage
+          path: apps/api/coverage-data/n4-pg
       - name: Merge and enforce backend coverage ratchet
         working-directory: apps/api
         run: |
@@ -793,6 +798,7 @@ jobs:
           cp coverage-data/coherence/.coverage .coverage.coherence
           cp coverage-data/modules/.coverage .coverage.modules
           cp coverage-data/c25-c26-security/.coverage.c25_c26* .
+          cp coverage-data/n4-pg/.coverage.n4pg .coverage.n4pg
           coverage combine
           coverage report --fail-under=70
           coverage xml -o merged-coverage.xml
@@ -888,6 +894,11 @@ jobs:
           # Tests collected from tests/integration/analysis/test_n4_*_pg.py before A2
           # (29). Raise it when suites are added; never lower it to pass.
           N4_MIN_TESTS: "29"
+          # A3 DevOps: the N4 PG suites are the only CI lane that executes the
+          # ledger/runner against real PostgreSQL; collect their coverage so
+          # backend-coverage (and Codecov) see it. Only this step uses --cov in
+          # this job, so no other source is mixed in.
+          COVERAGE_FILE: .coverage.n4pg
         run: |
           set -euo pipefail
           schema=$(psql "$C2PRO_N4_SCRATCH_DSN" -v ON_ERROR_STOP=1 -Atc \
@@ -898,7 +909,8 @@ jobs:
           fi
           status=0
           python -m pytest tests/integration/analysis/test_n4_*_pg.py -q -rs \
-            --junit-xml=n4-pg-results.xml -o junit_family=xunit2 || status=$?
+            --junit-xml=n4-pg-results.xml -o junit_family=xunit2 \
+            --cov=src --cov-report= || status=$?
           python - <<'PY'
           import os
           import pathlib
@@ -966,6 +978,13 @@ jobs:
           if errors:
               raise SystemExit(1)
           PY
+          # Fail closed if the PG coverage data is missing or does not include the
+          # N4 ledger/runner it exists to measure.
+          if ! python -m coverage report --data-file=.coverage.n4pg \
+              --include='src/analysis/application/n4_incremental_runner.py,src/analysis/adapters/persistence/n4_incremental_store.py'; then
+            echo "::error::N4 PostgreSQL coverage data missing or without the N4 runner/store"
+            exit 1
+          fi
           exit "$status"
 
       - name: Upload N4 PostgreSQL results
@@ -976,6 +995,15 @@ jobs:
           name: n4-pg-results
           path: apps/api/n4-pg-results.xml
           if-no-files-found: ignore
+
+      - name: Upload N4 PostgreSQL coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          retention-days: 3
+          name: n4-pg-coverage
+          path: apps/api/.coverage.n4pg
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Cleanup
         if: always()
