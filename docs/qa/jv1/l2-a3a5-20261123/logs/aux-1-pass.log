@@ -1,0 +1,13 @@
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../../../../home/aigenadmin/.cache/c2pro-local-ci/venv-py3.11/lib/python3.11/site-packages/_pytest/config/__init__.py:885
+  /home/aigenadmin/.cache/c2pro-local-ci/venv-py3.11/lib/python3.11/site-packages/_pytest/config/__init__.py:885: PytestAssertRewriteWarning: Module already imported so cannot be rewritten; tests._bootstrap
+    self.import_plugin(import_spec)
+
+../../../../../home/aigenadmin/.cache/c2pro-local-ci/venv-py3.11/lib/python3.11/site-packages/_pytest/config/__init__.py:1464
+  /home/aigenadmin/.cache/c2pro-local-ci/venv-py3.11/lib/python3.11/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 2 warnings in 8.68s
