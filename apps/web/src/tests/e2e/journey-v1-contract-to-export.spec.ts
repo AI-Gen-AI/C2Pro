@@ -12,6 +12,7 @@
  * Explicit opt-in: JV1_A23_RED_RUN=1. Preflight fails closed unless the operator
  * certifies the disposable runtime; the ordinary Chromium suite skips these tests.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -28,6 +29,16 @@ const SYNTHETIC_TEXT = readFileSync(
   path.join(process.cwd(), "src/tests/e2e/test-data/pj01/contract-a.source.txt"),
   "utf8",
 );
+const TRIPLET_DIR = path.join(process.cwd(), "src/tests/e2e/test-data/triplet");
+const TRIPLET = JSON.parse(readFileSync(path.join(TRIPLET_DIR, "triplet.manifest.json"), "utf8")) as {
+  sha256: Record<string, string>;
+  budget: { stated_total_eur: number };
+  schedule: { planned_finish: string };
+};
+const SYNTHETIC_SUPPORTING = [
+  { filename: "triplet-budget.xlsx", documentType: "budget" },
+  { filename: "triplet-schedule.xlsx", documentType: "schedule" },
+] as const;
 const DIMENSIONS = ["SCOPE", "BUDGET", "TIME", "LEGAL", "QUALITY", "TECHNICAL"];
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 const GAP_FAILURES = [
@@ -151,6 +162,27 @@ test.describe("JV1-A23 RED: synthetic contract → decisions → score → expor
       });
       expect(taskId, "real disposable worker accepted the synthetic upload").toBeTruthy();
 
+      // Contract, budget and schedule must all be persisted in one project. The
+      // budget and schedule are committed SYNTHETIC triplet inputs: their total
+      // and finish date deliberately differ from the PJ-01 contract. They are
+      // not a claim that the triplet manifest describes this separate PDF.
+      expect(TRIPLET.budget.stated_total_eur).toBe(1_500_000);
+      expect(TRIPLET.schedule.planned_finish).toBe("2027-09-30");
+      const sourceDocumentIds = [documentId];
+      for (const source of SYNTHETIC_SUPPORTING) {
+        const bytes = readFileSync(path.join(TRIPLET_DIR, source.filename));
+        const actualHash = createHash("sha256").update(bytes).digest("hex");
+        expect(actualHash, `${source.filename}: pinned synthetic bytes, not external corpus`)
+          .toBe(TRIPLET.sha256[source.filename]);
+        const uploaded = await uploadDocumentThroughUi(page, recorder, {
+          projectId, filePath: path.join(TRIPLET_DIR, source.filename),
+          documentType: source.documentType,
+        });
+        expect(uploaded.taskId, `${source.filename}: disposable worker must be queued`).toBeTruthy();
+        sourceDocumentIds.push(uploaded.documentId);
+      }
+      expect(new Set(sourceDocumentIds).size, "three independent persisted source identities").toBe(3);
+
       const processing = await observeProcessingWithoutReload(page, recorder, {
         projectId, documentId, settlement: "review_required", budgetMs: 180_000,
         label: "A23 synthetic contract (without reload)",
@@ -195,7 +227,16 @@ test.describe("JV1-A23 RED: synthetic contract → decisions → score → expor
       }
       const decided = await documentFindings(page, projectId, documentId);
       expect(rows(decided.findings).filter((item) => item.review_state === "PROPOSED")).toHaveLength(0);
-      await page.getByRole("button", { name: /final approval|finalize review|approve all/i }).click();
+      const approveAll = page.getByRole("button", { name: /approve all/i });
+      await expect(approveAll, "Approve all is available only as a final action").toHaveCount(1);
+      expect(await page.evaluate(() => {
+        const cards = Array.from(document.querySelectorAll('[data-testid="n4-proposed-finding"]'));
+        const button = Array.from(document.querySelectorAll("button"))
+          .find((element) => /approve all/i.test(element.textContent ?? ""));
+        return Boolean(cards.length && button &&
+          (cards[cards.length - 1].compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING));
+      }), "Approve all must appear after the final finding, never in the header").toBe(true);
+      await approveAll.click();
 
       const scoreUrl = `/api/v1/coherence/dashboard/${projectId}`;
       await expect.poll(async () => {
@@ -280,6 +321,11 @@ test.describe("JV1-A23 RED: synthetic contract → decisions → score → expor
       const gaps = rows(coverage.gaps);
       expect(gaps.length).toBeGreaterThan(0);
       expect(coverage.gap_windows).toEqual(gaps.map((gap) => gap.ordinal));
+      expect(Number(coverage.examined_windows) + gaps.length,
+        "A1 terminal coverage accounts for every ordinal without silent loss")
+        .toBe(coverage.total_windows);
+      expect(coverage.source_sha256, "coverage is tied to the seeded synthetic source, not another revision")
+        .toBe(fixture.source_sha256);
       for (const gap of gaps) {
         expect(GAP_FAILURES).toContain(gap.failure_kind);
         expect(gap.resolution).toBe("OPEN");
