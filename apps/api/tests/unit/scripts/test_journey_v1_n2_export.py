@@ -176,6 +176,8 @@ def test_cli_out_outside_repo_succeeds():
     from pathlib import Path
     # Infer repo root desde __file__ para portabilidad en CI (igual que linea 18)
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
+    # Derivar REPO_ROOT de forma autocontenida, sin rutas VPS fijas
+    REPO_ROOT = Path(__file__).resolve().parents[5]
     # Usar tmp_path de pytest para ruta portable fuera del repo
     with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
         tmp_path = tmp.name
@@ -192,6 +194,7 @@ def test_cli_out_outside_repo_succeeds():
             ],
             capture_output=True,
             text=True,
+            cwd=REPO_ROOT,
         )
         assert result.returncode == 0, f"Expected success, got: {result.stderr}"
         # Verificar que el archivo fue creado fuera del reposorio
@@ -208,7 +211,10 @@ def test_cli_out_inside_repo_rejected():
     import subprocess
     # Infer repo root desde __file__ para portabilidad CI
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
+    # Derivar REPO_ROOT de forma autocontenida, sin rutas VPS fijas
+    REPO_ROOT = Path(__file__).resolve().parents[5]
     # No especificar cwd: el test runner determinará el directorio actual
+    # Usamos cwd=REPO_ROOT para que Python encuentre el módulo 'apps'
     result = subprocess.run(
         [
             sys.executable,
@@ -221,6 +227,7 @@ def test_cli_out_inside_repo_rejected():
         ],
         capture_output=True,
         text=True,
+        cwd=REPO_ROOT,
     )
     assert result.returncode != 0, "Expected failure for inside-repo output path"
     assert "ERROR: output path must be absolute and outside repository" in result.stderr
