@@ -73,6 +73,11 @@ interface ReviewQueueRead {
   status: number;
   total: number | null;
   ids: string[];
+  reviewRows: string[];
+  types: string[];
+  statuses: string[];
+  resumableCount: number;
+  decisionReadyCount: number;
 }
 
 async function readReviewQueue(
@@ -84,7 +89,8 @@ async function readReviewQueue(
     headers: { Authorization: "Bearer " + bearer },
   });
   const status = response.status();
-  if (status !== 200) return { status, total: null, ids: [] };
+  if (status !== 200) return { status, total: null, ids: [], reviewRows: [], types: [], statuses: [],
+    resumableCount: 0, decisionReadyCount: 0 };
   const parsed: unknown = await response.json();
   expect(parsed && typeof parsed === "object" && !Array.isArray(parsed),
     "HITL queue must return a structured read model").toBeTruthy();
@@ -96,7 +102,26 @@ async function readReviewQueue(
     typeof item.item_id === "string" ? item.item_id : "",
   ).filter(Boolean);
   expect(ids.length, "HITL queue items require canonical item_id").toBe((body.items as unknown[]).length);
-  return { status, total: body.total as number, ids };
+  const reviewRows = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "row_id" in item &&
+    typeof item.row_id === "string" ? item.row_id : "",
+  ).filter(Boolean);
+  const types = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "item_type" in item &&
+    typeof item.item_type === "string" ? item.item_type : "UNKNOWN",
+  );
+  const statuses = (body.items as unknown[]).map(item =>
+    item && typeof item === "object" && "current_status" in item &&
+    typeof item.current_status === "string" ? item.current_status : "UNKNOWN",
+  );
+  const resumableCount = (body.items as unknown[]).filter(item =>
+    item && typeof item === "object" && "resumable" in item &&
+    item.resumable === true).length;
+  const decisionReadyCount = (body.items as unknown[]).filter(item =>
+    item && typeof item === "object" && "decision_ready" in item &&
+    item.decision_ready === true).length;
+  return { status, total: body.total as number, ids, reviewRows, types, statuses,
+    resumableCount, decisionReadyCount };
 }
 
 test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project reads", async ({ browser, request }) => {
@@ -173,6 +198,73 @@ test("Railway PILOT accepts distinct Clerk DEV A/B and denies foreign project re
     expect(checkedReviewIsolation, "HITL isolation requires a non-colliding foreign item in a complete queue")
       .toBeGreaterThan(0);
     console.log("PILOT_HITL_CROSS_TENANT=PASS checked=" + checkedReviewIsolation);
+
+    // Read a REAL pending graph review's per-finding model when it exists.
+    // This does not create, approve or dismiss any finding. Absence/403/404 is
+    // reported as non-UAT rather than mistaken for an approved workflow.
+    let foundActionable = 0;
+    let readableFindings = 0;
+    let crossTenantRowsDenied = 0;
+    let reviewCanApprove = 0;
+    let denied403 = 0;
+    let notFound404 = 0;
+    for (const [owner, outsider, rows] of [
+      [a, b, reviewsA.reviewRows],
+      [b, a, reviewsB.reviewRows],
+    ] as const) {
+      for (const rowId of rows) {
+        foundActionable += 1;
+        const url = PILOT_API + "/api/v1/hitl/reviews/" + encodeURIComponent(rowId) + "/findings";
+        const own = await request.get(url, {
+          failOnStatusCode: false,
+          headers: { Authorization: "Bearer " + owner.token },
+        });
+        expect([200, 403, 404], "HITL review read must not fail with server error")
+          .toContain(own.status());
+        if (own.status() === 403) denied403 += 1;
+        if (own.status() === 404) notFound404 += 1;
+        if (own.status() !== 200) continue;
+        const body: unknown = await own.json();
+        expect(body && typeof body === "object" && !Array.isArray(body)).toBeTruthy();
+        const data = body as {
+          findings?: unknown;
+          decision_scope?: unknown;
+          final_approval?: unknown;
+          capabilities?: { approve_candidate?: unknown } | null;
+        };
+        expect(Array.isArray(data.findings), "individual HITL findings must be an array").toBe(true);
+        expect(data.decision_scope).toBe("PROVISIONAL_REVIEWER_INTENT");
+        expect(data.final_approval).toBe("SEPARATE_ACT");
+        readableFindings += 1;
+        if (data.capabilities?.approve_candidate === true) reviewCanApprove += 1;
+        const foreign = await request.get(url, {
+          failOnStatusCode: false,
+          headers: { Authorization: "Bearer " + outsider.token },
+        });
+        expect([401, 403, 404], "foreign tenant must not read review findings")
+          .toContain(foreign.status());
+        crossTenantRowsDenied += 1;
+      }
+    }
+    console.log("PILOT_HITL_FINDINGS_READONLY rows=" + foundActionable +
+      " readable=" + readableFindings +
+      " approval_capable=" + reviewCanApprove +
+      " foreign_denied=" + crossTenantRowsDenied +
+      " denied403=" + denied403 + " not_found404=" + notFound404 +
+      " A_types=" + [...new Set(reviewsA.types)].join(",") +
+      " B_types=" + [...new Set(reviewsB.types)].join(",") +
+      " A_statuses=" + [...new Set(reviewsA.statuses)].join(",") +
+      " B_statuses=" + [...new Set(reviewsB.statuses)].join(",") +
+      " A_resumable=" + reviewsA.resumableCount +
+      " B_resumable=" + reviewsB.resumableCount +
+      " A_decision_ready=" + reviewsA.decisionReadyCount +
+      " B_decision_ready=" + reviewsB.decisionReadyCount +
+      " UAT=NOT_TESTED");
+    // This is a separate readiness gate: a green queue GET is insufficient.
+    expect(readableFindings, "PILOT_HITL_MODEL_UNAVAILABLE: zero actionable per-finding reviews")
+      .toBeGreaterThan(0);
+    expect(crossTenantRowsDenied, "HITL findings isolation was not exercised")
+      .toBeGreaterThan(0);
 
     if (!projectsA.ids.length || !projectsB.ids.length) {
       console.log("PILOT_G1_CROSS_TENANT=PARTIAL: no pre-existing project in at least one test tenant; no seed created");
