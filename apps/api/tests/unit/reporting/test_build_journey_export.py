@@ -977,7 +977,8 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             assert "ORDER BY created_at ASC, id ASC" in sql, "id is required for deterministic tie ordering"
-            assert params and params["tenant_id"] == str(tenant_id)
+            assert params is not None
+            assert params["tenant_id"] == str(tenant_id)
             offset, limit = int(params["offset"]), int(params["limit"])
             observed_offsets.append(offset)
             ordered = sorted(rows, key=lambda r: (r["created_at"], r["id"]))
@@ -986,7 +987,8 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
     sources = SqlAlchemyJourneyExportSources(session=_TiedTimestampRows())  # type: ignore[arg-type]
     fetched = await sources._fetch_review_items_paginated(project_id, tenant_id)
     ids = [r["id"] for r in fetched]
-    assert len(ids) == 501 and len(set(ids)) == 501
+    assert len(ids) == 501
+    assert len(set(ids)) == 501
     assert ids == sorted(ids)
     assert observed_offsets == [0, 500]
 
@@ -996,7 +998,7 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
     [
         (None, 3, None), (True, 3, None), (False, 3, None),
         (-1, 3, None), (3, 3, None), (1000, 3, None),
-        ("bad", 3, None), ("1.5", 3, None), ("-1", 3, None),
+        ("bad", 3, None), ("1.5", 3, None), ("-1", 3, None), ("9" * 5000, 3, None),
         (0, 3, 0), (1, 3, 1), ("2", 3, 2),
     ],
 )
@@ -1021,8 +1023,10 @@ def test_bad_sql_window_ordinal_remains_unknown_in_gap_and_reference_exports() -
         ], total_w=2, run_status="COMPLETE"
     )
     assert status == "INCOMPLETE"
-    assert exam == 1 and count == 1
-    assert len(gaps) == 1 and gaps[0].ordinal is None
+    assert exam == 1
+    assert count == 1
+    assert len(gaps) == 1
+    assert gaps[0].ordinal is None
     assert references[0].source_identifier == "Window Unknown"
     book = build_journey_workbook(replace(_sample_journey_data(), gaps=gaps))
     assert book["Gaps & References"]["A3"].value == "Unknown (invalid ordinal)"
@@ -1043,4 +1047,5 @@ def test_invalid_metadata_gap_ordinal_downgrades_claim_of_complete_coverage() ->
     assert parsed is not None
     status, total, examined, gap_count, gaps = parsed
     assert (status, total, examined, gap_count) == ("INCOMPLETE", 2, 1, 1)
-    assert len(gaps) == 1 and gaps[0].ordinal is None
+    assert len(gaps) == 1
+    assert gaps[0].ordinal is None
