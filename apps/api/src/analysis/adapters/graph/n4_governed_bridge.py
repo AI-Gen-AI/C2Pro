@@ -198,9 +198,20 @@ def assess_n4_run(
     examined = [w for w in windows if w["status"] == "EXAMINED"]
     blocked = [w for w in windows if w["status"] == "BLOCKED"]
     inflight = any(r["status"] in _INFLIGHT_RESERVATIONS for r in reservations)
+    # The returned rows must represent the *entire* planned source. Counting
+    # only rows fetched from the ledger can silently hide a missing window.
+    expected_total = outcome.total_windows
+    ordinals = [w.get("ordinal") for w in windows]
+    ledger_consistent = (
+        isinstance(expected_total, int) and not isinstance(expected_total, bool)
+        and expected_total > 0 and len(windows) == expected_total
+        and all(type(ordinal) is int for ordinal in ordinals)
+        and sorted(ordinals) == list(range(expected_total))
+        and outcome.examined_windows == len(examined)
+    )
     terminal = bool(windows) and len(examined) + len(blocked) == len(windows)
     if (
-        not terminal or inflight or not examined
+        not ledger_consistent or not terminal or inflight or not examined
         or int(outcome.persisted_result_windows) < 1
     ):
         raise N4RunIncomplete(
@@ -232,7 +243,7 @@ def assess_n4_run(
         })
     gap_windows = [g["ordinal"] for g in gaps]
     status = derive_n4_coverage_status(
-        total_windows=len(windows), examined_windows=len(examined),
+        total_windows=expected_total, examined_windows=len(examined),
         gap_windows=gap_windows,
     )
     if status is N4CoverageStatus.INCOMPLETE:  # defensive: unreachable if terminal
@@ -249,7 +260,7 @@ def assess_n4_run(
         "status": status.value,
         "run_id": str(outcome.run_id),
         "source_sha256": source_sha256,
-        "total_windows": len(windows),
+        "total_windows": expected_total,
         "examined_windows": len(examined),
         "gap_windows": gap_windows,
         "gaps": gaps,
