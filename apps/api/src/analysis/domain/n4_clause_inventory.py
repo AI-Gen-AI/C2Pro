@@ -80,8 +80,9 @@ def build_n4_clause_inventory(projection_text: str) -> tuple[N4InventoryClause, 
     headings: list[tuple[int, str, str, N4ClauseLanguage | None]] = []
     cursor = 0
     for raw_line in projection_text.splitlines(keepends=True):
-        if heading := _detected_heading(raw_line, cursor):
-            headings.append(heading)
+        detected = _detected_heading(raw_line, cursor)
+        if detected is not None:
+            headings.append(detected)
         cursor += len(raw_line)
     clauses: list[N4InventoryClause] = []
     for index, (start, ref, heading, language) in enumerate(headings):
