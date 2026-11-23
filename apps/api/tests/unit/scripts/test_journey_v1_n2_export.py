@@ -172,15 +172,16 @@ def test_confined_path_symmetric_parentheses_rejected():
 def test_cli_out_outside_repo_succeeds():
     """--out con ruta fuera del reposorio debe exitoar y escribir archivo real."""
     import subprocess
+    import sys
     import tempfile
     from pathlib import Path
     # Usar tmp_path de pytest para ruta portable fuera del repo
-    with tempfile.NamedTemporaryFile(suffix='.json', delete=False, dir='/tmp') as tmp:
+    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
         tmp_path = tmp.name
     try:
         result = subprocess.run(
             [
-                "/home/aigenadmin/c2pro-jv1-a1-20261121/apps/api/.venv/bin/python",
+                sys.executable,
                 "-m",
                 "apps.api.scripts.journey_v1_n2_export",
                 "--text",
@@ -190,8 +191,6 @@ def test_cli_out_outside_repo_succeeds():
             ],
             capture_output=True,
             text=True,
-            cwd="/home/aigenadmin/repos/C2Pro",
-            env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "/home/aigenadmin/repos/C2Pro"},
         )
         assert result.returncode == 0, f"Expected success, got: {result.stderr}"
         # Verificar que el archivo fue creado fuera del reposorio
@@ -206,10 +205,12 @@ def test_cli_out_outside_repo_succeeds():
 def test_cli_out_inside_repo_rejected():
     """--out con ruta dentro del reposorio debe ser rechazado (fail-closed)."""
     import subprocess
-    # Usar una ruta relativa que al resolverse termine dentro del repo
+    import sys
+    # Usar ruta relativa evals/journey_v1/export_test.json relative al repo root
+    # No especificar cwd: el test runner determinará el directorio actual
     result = subprocess.run(
         [
-            "/home/aigenadmin/c2pro-jv1-a1-20261121/apps/api/.venv/bin/python",
+            sys.executable,
             "-m",
             "apps.api.scripts.journey_v1_n2_export",
             "--text",
@@ -219,8 +220,6 @@ def test_cli_out_inside_repo_rejected():
         ],
         capture_output=True,
         text=True,
-        cwd="/home/aigenadmin/repos/C2Pro",
-        env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "/home/aigenadmin/repos/C2Pro"},
     )
     assert result.returncode != 0, "Expected failure for inside-repo output path"
     assert "ERROR: output path must be absolute and outside repository" in result.stderr
@@ -229,9 +228,10 @@ def test_cli_out_inside_repo_rejected():
 def test_cli_out_no_out_uses_stdout():
     """Sin --out, debe usar stdout (comportamiento por defecto)."""
     import subprocess
+    import sys
     result = subprocess.run(
         [
-            "/home/aigenadmin/c2pro-jv1-a1-20261121/apps/api/.venv/bin/python",
+            sys.executable,
             "-m",
             "apps.api.scripts.journey_v1_n2_export",
             "--text",
@@ -239,8 +239,6 @@ def test_cli_out_no_out_uses_stdout():
         ],
         capture_output=True,
         text=True,
-        cwd="/home/aigenadmin/repos/C2Pro",
-        env={**__import__("os").environ, "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "/home/aigenadmin/repos/C2Pro"},
     )
     assert result.returncode == 0
     assert "Texto de prueba stdout." in result.stdout
