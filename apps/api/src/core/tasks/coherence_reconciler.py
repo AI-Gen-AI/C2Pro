@@ -110,7 +110,7 @@ async def reconcile_pending_postapproval(
     # Never scan review_items without an RLS tenant. The global ceiling
     # limits work, not visibility; a retrying tenant cannot make other
     # organizations inaccessible.
-    rows = []
+    rows: list[Any] = []
     for raw_tenant in tenant_ids:
         tenant_id = UUID(str(raw_tenant))
         if len(rows) >= batch_size:
