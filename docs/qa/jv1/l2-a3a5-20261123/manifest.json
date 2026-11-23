@@ -1,0 +1,78 @@
+{
+  "schema": "c2pro-jv1-a3a5-compatibility-evidence-v1",
+  "pr_a3": 1304,
+  "sha_a3": "49870fdb6567c9b53ed8886d1d006509a0861e33",
+  "pr_a5": 1301,
+  "sha_a5": "6dd63bb9aae540432e0d592025f82785f6769c07",
+  "integration_kind": "disposable A3 detached checkout with six byte-identical A5 files",
+  "source_modified_in_github": false,
+  "merge_or_deploy": false,
+  "test_runner": "Python 3.11.16 / pytest",
+  "postgresql": "16.15",
+  "postgresql_port": "55513 (loopback-only, temporary)",
+  "migration_head": "20261118_0001",
+  "main_db": "c2pro_l2_compat_main_test",
+  "aux_db": "c2pro_l2_compat_aux_test",
+  "why_aux": "test_n4_partial_ledger_sql_pg.py uses db fixture; tests/_bootstrap.py test_engine resets schema. Must not run it interleaved with Alembic-dependent N4 PG suites in same database.",
+  "tests_distinct": 154,
+  "tests_passed": 154,
+  "tests_failed": 0,
+  "tests_skipped": 0,
+  "a3_pg_tests": 49,
+  "cross_integrated_tests": 3,
+  "unit_contract_tests": 102,
+  "provider": "synthetic wrapper only; no paid API calls",
+  "n2_scope": "projection-only; source attestation/semantic contract UAT NOT established",
+  "independent_lv": "pending separate reviewer; author's local execution is not independently audited",
+  "artifacts": [
+    {
+      "name": "main",
+      "junit_file": "a3a5-main-isolated-junit.xml",
+      "junit_sha256": "5e2fa3e58372868160ed08db6839b10bc6622b1307f16d93319c3843a777219d",
+      "log_file": "a3a5-main-isolated-pytest.log",
+      "log_sha256": "0f5daf7d56696258713f48f153c4cc68fa543d5d57c6b3a7624b47e659cc101f",
+      "counts": {
+        "tests": 153,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "aux",
+      "junit_file": "a3a5-aux-isolated-junit.xml",
+      "junit_sha256": "663bb4066a720be9166524007ee10f31b0475a785def20730335a46659748701",
+      "log_file": "a3a5-aux-isolated-pytest.log",
+      "log_sha256": "b9a5dc1d1b222ef0ce5e24aac6743bd1aae354835d737d8a7393d79d9c3b01e9",
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "cross_final",
+      "junit_file": "a3a5-cross-final-junit.xml",
+      "junit_sha256": "cec08d574c7481854d5a4f37736f0dc9c2bb7fce5fbdc9b55d1fba94504be4e8",
+      "log_file": "a3a5-cross-final-pytest.log",
+      "log_sha256": "26cf51c18608f6648c014b3c05ce7affcf7635a45de41b6b4935ae217c632484",
+      "counts": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    }
+  ],
+  "historical_attempts": [
+    {
+      "path": "a3a5-cross-junit.xml",
+      "summary": "2 PASS 1 FAIL, temporary test referred to nonexistent findings_json column; corrected only scratch test"
+    },
+    {
+      "path": "a3a5-full-junit.xml",
+      "summary": "131 PASS 23 FAIL, destructive fixture reset same DB; resolved by explicit main/aux database separation"
+    }
+  ]
+}
