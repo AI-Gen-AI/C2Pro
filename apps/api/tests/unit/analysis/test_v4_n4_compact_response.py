@@ -251,3 +251,39 @@ def test_v2_rejects_wrong_epc_dimension_and_unknown_control():
     payload["findings"][0]["epc_control_id"] = "EPC-07"
     parsed = parse_n4_window_output(payload, window=_window(source))
     assert parsed.proposed_findings[0]["claim"]["epc_control_id"] == "EPC-07"
+
+
+
+@pytest.mark.parametrize("raw", [
+    "{",
+    '["not an object"]',
+    '{"prompt_version":"n4-compact-window-v2","window_examined":true,',
+])
+def test_v2_truncated_or_wrong_shape_never_marks_window_examined(raw):
+    with pytest.raises(N4WindowContractError):
+        parse_n4_window_output(raw, window=_window())
+
+
+def test_v2_invented_quote_is_only_a_proposed_unanchored_hypothesis():
+    payload = _v2_payload(
+        quote="9.6 Invented contractual penalty of 42 EUR.",
+        reason="An alleged penalty of 42 EUR needs source verification.",
+    )
+    parsed = parse_n4_window_output(payload, window=_window())
+    finding = parsed.proposed_findings[0]
+    assert finding["claim"]["review_status"] == "PROPOSED"
+    assert finding["claim"]["source_quote"] is None
+    assert finding["source_refs"][0]["analysis_span"] is None
+    assert finding["source_refs"][0]["evidence_status"] == "NOT_FOUND_IN_MODEL_SAFE_SOURCE"
+    assert finding["claim"]["quote_omits_figures"]
+    # EXAMINED_INPUT reports window visitation, never authenticity of invented data.
+    assert parsed.source_coverage_state == "EXAMINED_INPUT"
+
+
+def test_v2_oversized_quote_rejected_instead_of_truncating_it():
+    payload = _v2_payload(
+        quote="9.6 " + "A" * 1200,
+        reason="The synthetic item must not be silently shortened.",
+    )
+    with pytest.raises(N4WindowContractError, match="1200 characters"):
+        parse_n4_window_output(payload, window=_window())
