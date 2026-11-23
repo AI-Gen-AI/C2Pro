@@ -447,7 +447,7 @@ def _page_evidence(
     # A source-ref offset is useful to disambiguate identical quotes ONLY
     # if it directly anchors the same literal source text. A distant or forged
     # hint must not select the wrong physical page.
-    near: int | None = None
+    anchors: set[tuple[int, int]] = set()
     for ref in refs:
         if not isinstance(ref, dict):
             continue
@@ -462,9 +462,15 @@ def _page_evidence(
                 and ref["source_sha256"] != sha256(source.encode("utf-8")).hexdigest())
         ):
             continue
-        if " ".join(source[span[0]:span[1]].split()) == " ".join(quote.split()):
-            near = span[0]
-            break
+        excerpt = source[span[0]:span[1]]
+        if " ".join(excerpt.split()) == " ".join(quote.split()):
+            start = span[0] + len(excerpt) - len(excerpt.lstrip())
+            end = span[1] - (len(excerpt) - len(excerpt.rstrip()))
+            anchors.add((start, end))
+    if len(anchors) > 1:
+        return None, None, "PAGE_UNRESOLVED"
+    anchor = next(iter(anchors), None)
+    near = anchor[0] if anchor is not None else None
     try:
         location = _page_locator.locate_quote_page(
             quote, source_text=source, page_spans=spans, near_offset=near,
@@ -473,6 +479,18 @@ def _page_evidence(
         return None, None, "PAGE_UNRESOLVED"
     if location is None:
         return None, None, "PAGE_UNRESOLVED"
+    # A9 filters excluded pages before resolving matches. Do not let a
+    # duplicate on a safe page silently replace the anchored occurrence
+    # on an excluded page, or become unique merely by excluding its twin.
+    if anchor is not None:
+        if (location.start_offset, location.end_offset) != anchor:
+            return None, None, "PAGE_UNRESOLVED"
+    else:
+        normalized_source = " ".join(source.split())
+        normalized_quote = " ".join(quote.split())
+        first = normalized_source.find(normalized_quote)
+        if first < 0 or normalized_source.find(normalized_quote, first + 1) >= 0:
+            return None, None, "PAGE_UNRESOLVED"
     locator = (
         f"p. {location.page_start}" if location.page_start == location.page_end
         else f"pp. {location.page_start}\u2013{location.page_end}"
@@ -565,13 +583,19 @@ def _reference_proposals(
         key = sha256(
             (source_sha256 + ":" + label + ":" + quote).encode("utf-8")
         ).hexdigest()
-        refs = [{
+        refs: list[dict[str, Any]] = [{
             "document_revision_id": revision_id,
             "source_sha256": source_sha256,
             "source_kind": "MODEL_SAFE_PROJECTION",
             "evidence_status": "EXACT_MODEL_SAFE_MATCH",
-            "analysis_span": [start, start + len(quote)],
         }]
+        # The register only proves a literal occurrence; it does not retain
+        # a unique occurrence's offset. Never invent a disambiguating anchor.
+        normalized_source = " ".join(source.split())
+        normalized_quote = " ".join(quote.split())
+        first = normalized_source.find(normalized_quote)
+        if first >= 0 and normalized_source.find(normalized_quote, first + 1) < 0:
+            refs[0]["analysis_span"] = [start, start + len(quote)]
         risk = _candidate_payload({
             "title": "Referenced document not provided",
             "risk_reason": (
