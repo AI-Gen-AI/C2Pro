@@ -76,19 +76,41 @@ UPDATE review_items
 """)
 
 
+async def _resolve_candidate_tenants(
+    tenant_id: UUID | None,
+    scan_factory: Any,
+) -> list[UUID]:
+    """Resolve a trusted single tenant or fail visibly on empty global discovery.
+
+    This does NOT authorize global discovery: the legacy unscoped query remains
+    blocked under non-owner RLS. An approved routing index is still required.
+    """
+    if tenant_id is not None:
+        return [UUID(str(tenant_id))]
+    async with scan_factory() as scan:
+        rows = (await scan.execute(text("SELECT id FROM tenants ORDER BY id"))).scalars().all()
+    if not rows:
+        logger.error("a17_recovery_discovery_unavailable_rls")
+        raise RuntimeError("A17_RECOVERY_TENANT_DISCOVERY_UNAVAILABLE")
+    return [UUID(str(raw)) for raw in rows]
+
+
 async def reconcile_pending_postapproval(
     batch_size: int = DEFAULT_BATCH_SIZE,
     *,
+    tenant_id: UUID | None = None,
     scan_factory: Any = None,
     tenant_factory: Any = None,
     evaluator: Any = None,
 ) -> dict[str, int]:
-    """Reconcile bounded obligations using only tenant-scoped review reads.
+    """Reconcile only confirmed tenant-scoped obligations.
 
-    The existing unscoped session enumerates tenant identities from the
-    canonical tenants table, whose SELECT policy explicitly supports this.
-    Review/Score/ProjectEvent queries and writes are ALL tenant scoped:
-    review_items may have FORCE RLS and must not be globally scanned.
+    For a known, internally trusted tenant_id, all reads and writes run under
+    tenant RLS; no cross-tenant discovery is needed. The global compatibility
+    route remains HOLD: tenant enumeration without a GUC can return *zero*
+    with a non-owner PostgreSQL login. An empty global result MUST raise rather
+    than lie that recovery is complete. DBA approval is required to replace
+    the global discovery source with an authorized durable routing index.
     """
     from src.coherence.application.project_evaluation import (
         run_project_evaluation_after_approval,
@@ -102,17 +124,15 @@ async def reconcile_pending_postapproval(
     evaluator = evaluator or run_project_evaluation_after_approval
 
     batch_size = max(1, min(int(batch_size), DEFAULT_BATCH_SIZE))
-    async with scan_factory() as scan:
-        tenant_ids = (
-            (await scan.execute(text("SELECT id FROM tenants ORDER BY id"))).scalars().all()
-        )
+    # Only an authenticated internal caller may supply tenant_id. A database
+    # scoped to that tenant never needs a global lookup, even to recover.
+    tenant_ids = await _resolve_candidate_tenants(tenant_id, scan_factory)
 
     # Never scan review_items without an RLS tenant. The global ceiling
     # limits work, not visibility; a retrying tenant cannot make other
     # organizations inaccessible.
     rows: list[Any] = []
-    for raw_tenant in tenant_ids:
-        tenant_id = UUID(str(raw_tenant))
+    for tenant_id in tenant_ids:
         if len(rows) >= batch_size:
             break
         async with tenant_factory(tenant_id) as scoped_scan:

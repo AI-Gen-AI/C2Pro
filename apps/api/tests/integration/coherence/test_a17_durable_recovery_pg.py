@@ -392,3 +392,60 @@ async def test_approval_rollback_does_not_leave_pending_obligation(
     assert "a17_score_obligation" not in persisted.review_metadata
     outcome = await reconcile_pending_postapproval(scan_factory=scan, tenant_factory=scoped)
     assert outcome["scanned"] == 0
+
+
+@pytest.mark.asyncio
+async def test_tenant_scoped_postcommit_recovery_avoids_unscoped_discovery(
+    db: AsyncSession,
+    test_tenant,
+    a17_pg_trigger,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A tenant-scoped PG session recovers approval without global enumeration."""
+    tenant = test_tenant.id
+    project, review, scoped, _ = await _approval_fixture(db, tenant)
+    monkeypatch.setattr(subject, "get_session_with_tenant", scoped)
+
+    @asynccontextmanager
+    async def unscoped_forbidden():
+        raise AssertionError("unscoped tenant discovery must not run")
+        yield
+
+    async def no_clauses(*args, **kwargs):
+        raise HTTPException(404, subject.NO_DOCUMENT_CLAUSES_DETAIL)
+
+    monkeypatch.setattr(subject, "_run_evaluation", no_clauses)
+    recovered = await reconcile_pending_postapproval(
+        tenant_id=tenant,
+        scan_factory=unscoped_forbidden,
+        tenant_factory=scoped,
+        evaluator=subject.run_project_evaluation_after_approval,
+    )
+    assert recovered == {"scanned": 1, "completed": 1, "retry": 0, "operator_required": 0}
+    async with scoped(tenant) as session:
+        review_row = await session.scalar(
+            select(ReviewItemORM).where(
+                ReviewItemORM.id == review, ReviewItemORM.tenant_id == tenant
+            )
+        )
+        score = await session.scalar(
+            select(CoherenceResultORM.id).where(
+                CoherenceResultORM.project_id == project,
+                CoherenceResultORM.tenant_id == tenant,
+            )
+        )
+        events = (
+            await session.scalars(
+                select(ProjectEventORM).where(
+                    ProjectEventORM.tenant_id == tenant,
+                    ProjectEventORM.project_id == project,
+                    ProjectEventORM.event_type == WITHHELD_EVALUATION_EVENT,
+                    ProjectEventORM.payload["a17_approval_id"].astext == str(review),
+                )
+            )
+        ).all()
+    assert review_row.current_status == ReviewStatus.APPROVED
+    assert review_row.review_metadata["a17_score_obligation"]["state"] == "done"
+    assert score is None
+    assert len(events) == 1
+    assert events[0].payload["score_reason"] == "no_document_clauses"
