@@ -194,6 +194,12 @@ async def test_a11_graph_receives_revision_bound_page_lineage_without_l3_schema_
     identity = states[-1]["n4_source_identity"]
     assert identity["physical_page_lineage"]["spans"][1]["page"] == 21
     assert identity["physical_page_lineage"]["pages"][-1]["status"] == "OCR_UNAVAILABLE"
+    a9_map = identity["a9_physical_page_map"]
+    assert a9_map["schema_version"] == "a11-a9-physical-page-map-v1"
+    assert [row["page"] for row in a9_map["spans"]] == [9, 21]
+    assert any(row["page"] == 55 and row["reason"] == "OCR_UNAVAILABLE"
+               for row in a9_map["excluded_pages"])
+    assert a9_map["original_document_completeness_certified"] is False
     await ingestion_tasks._run_analysis_graph_best_effort(
         orchestrator=Orchestrator(), document=document, parsed_text=text,
         tenant_id=tenant, document_id=docid,

@@ -144,3 +144,134 @@ def read_revision_page_spans(
             or metadata.get("parsed_text") != parsed_text):
         return None
     return entry
+
+
+
+# A9 takes exactly one PageSpan per page, in strictly increasing physical
+# ordinal order. A11's canonical spans are per block, never change them:
+# they preserve source offsets, including native text on OCR-failed pages.
+_A9_LOCATABLE_PAGE_STATES = frozenset({
+    "NATIVE_TEXT", "OCR_ONLY", "OCR_AUGMENTED",
+    "OCR_REPLACED_SUSPECT", "OCR_DUPLICATE_IGNORED",
+})
+
+
+def read_a9_physical_page_map(
+    metadata: dict[str, Any] | None,
+    *,
+    parsed_text: str,
+    revision: Any,
+) -> dict[str, Any] | None:
+    """Return A9-compatible page rows, only from an authenticated A11 PDF map.
+
+    Page observations remain UNVERIFIED against full PDF contents. This
+    projection never certifies legal evidence or an OCR word bounding box.
+    A9 locates observed parser text, not the underlying document image.
+
+    None = invalid/stale map (fail closed); a non-None map with an empty
+    spans list = valid lineage but no safely locatable page.
+    """
+    raw = read_revision_page_spans(
+        metadata, parsed_text=parsed_text, revision=revision,
+    )
+    if raw is None:
+        return None
+
+    count = raw.get("source_pages")
+    pages = raw.get("pages")
+    blocks = raw.get("spans")
+    if (
+        type(count) is not int or count < 1 or count > 10_000
+        or not isinstance(pages, list) or len(pages) != count
+        or not isinstance(blocks, list)
+    ):
+        return None
+
+    page_status: dict[int, str] = {}
+    for item in pages:
+        if not isinstance(item, dict):
+            return None
+        page = item.get("page")
+        status = item.get("status")
+        if (
+            type(page) is not int or not 1 <= page <= count
+            or page in page_status or not isinstance(status, str)
+        ):
+            return None
+        page_status[page] = status
+
+    # Audit the FULL block map before excluding unsafe pages. Any overlap,
+    # misalignment, missing non-whitespace characters, unlocated page, or
+    # out-of-order physical page invalidates the entire projection.
+    cursor = 0
+    previous_page = 0
+    page_rows: list[dict[str, int]] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            return None
+        page = block.get("page")
+        start = block.get("start_offset")
+        end = block.get("end_offset")
+        method = block.get("method")
+        if (
+            type(page) is not int or not 1 <= page <= count
+            or block.get("page_verified") is not True
+            or type(start) is not int or type(end) is not int
+            or not 0 <= cursor <= start < end <= len(parsed_text)
+            or page < previous_page
+            or not isinstance(method, str)
+            or method not in {"OCR", "NATIVE"}
+            or parsed_text[cursor:start].strip()
+            or not parsed_text[start:end].strip()
+        ):
+            return None
+        status = page_status[page]
+        if (
+            (status in {"OCR_ONLY", "OCR_REPLACED_SUSPECT"} and method != "OCR")
+            or (status in {"NATIVE_TEXT", "OCR_DUPLICATE_IGNORED"} and method != "NATIVE")
+        ):
+            return None
+
+        if page_rows and page_rows[-1]["page"] == page:
+            # The inter-block separator is already part of parsed_text,
+            # so extending the span does not rewrite any original offsets.
+            page_rows[-1]["end_offset"] = end
+        else:
+            page_rows.append({
+                "page": page,
+                "start_offset": start,
+                "end_offset": end,
+            })
+        previous_page = page
+        cursor = end
+    if parsed_text[cursor:].strip():
+        return None
+
+    excluded = [
+        {"page": page, "reason": page_status[page]}
+        for page in range(1, count + 1)
+        if page_status[page] not in _A9_LOCATABLE_PAGE_STATES
+    ]
+    safe_rows = [
+        row for row in page_rows
+        if page_status[row["page"]] in _A9_LOCATABLE_PAGE_STATES
+    ]
+    if not safe_rows:
+        projection_status = "NO_LOCATABLE_PAGES"
+    elif excluded:
+        projection_status = "PARTIAL"
+    else:
+        projection_status = "OBSERVED_ONLY"
+
+    return {
+        "schema_version": "a11-a9-physical-page-map-v1",
+        "revision_id": raw["revision_id"],
+        "blob_hash": raw["blob_hash"],
+        "parsed_text_sha256": raw["parsed_text_sha256"],
+        "source_pages": count,
+        "source_kind": "PDF_PHYSICAL_PAGE_OBSERVATION",
+        "status": projection_status,
+        "spans": safe_rows,
+        "excluded_pages": excluded,
+        "original_document_completeness_certified": False,
+    }

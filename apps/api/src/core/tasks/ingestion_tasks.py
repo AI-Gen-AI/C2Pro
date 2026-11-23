@@ -67,6 +67,7 @@ from src.documents.application.document_source import (
     resolve_source_revision,
 )
 from src.documents.application.page_span_lineage import (
+    read_a9_physical_page_map,
     read_revision_page_spans,
     record_revision_page_spans,
 )
@@ -1242,6 +1243,16 @@ async def _run_analysis_graph_best_effort(
                 # This key already belongs to ProjectState. L3 owns its
                 # schema; provenance is supplied without changing its files.
                 n4_identity["physical_page_lineage"] = page_lineage
+                # Contract for L3/L4b: already coalesced, fail-closed,
+                # revision/digest-bound A9 PageSpan dictionaries. L3 owns
+                # the graph consumer; never silently claim it is connected.
+                a9_projection = read_a9_physical_page_map(
+                    getattr(document, "document_metadata", None),
+                    parsed_text=parsed_text,
+                    revision=source_revision,
+                )
+                if a9_projection is not None:
+                    n4_identity["a9_physical_page_map"] = a9_projection
     initial_state: dict[str, Any] = {
         "document_text": parsed_text,
         "n4_source_identity": n4_identity,
