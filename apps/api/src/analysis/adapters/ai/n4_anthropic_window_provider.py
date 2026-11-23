@@ -19,6 +19,7 @@ from src.analysis.domain.n4_clause_inventory import (
     render_n4_clause_inventory_messages,
 )
 from src.analysis.domain.n4_compact_window_response import (
+    EPC_CONTROL_DIMENSIONS,
     N4_WINDOW_PROMPT_VERSION,
     N4_WINDOW_SYSTEM_PROMPT,
     n4_window_source_message,
@@ -43,7 +44,7 @@ _N4_TOOL = {
                     "type": "object",
                     "required": [
                         "title", "category", "risk_reason", "source_quote",
-                        "supporting_quotes", "severity_proposed",
+                        "supporting_quotes", "severity_proposed", "epc_control_id",
                     ],
                     "properties": {
                         "title": {"type": "string"},
@@ -57,6 +58,10 @@ _N4_TOOL = {
                                               "items": {"type": "string"}},
                         "severity_proposed": {"type": "string",
                                               "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]},
+                        "epc_control_id": {
+                            "type": ["string", "null"],
+                            "enum": [*EPC_CONTROL_DIMENSIONS, None],
+                        },
                         "clause_ref": {"type": ["string", "null"]},
                         "impact": {"type": ["string", "null"]},
                     },
