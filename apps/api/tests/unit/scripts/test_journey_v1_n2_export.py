@@ -22,8 +22,11 @@ from pathlib import Path
 
 import pytest
 from apps.api.scripts.journey_v1_n2_export import (
+    BLOCKED_BY_N2_CONTRACT,
     REPO_ROOT,
     N2Projection,
+    N2Span,
+    _create_private_output,
     confined_path,
     export_n2_j1,
     make_n2_projection,
@@ -83,19 +86,15 @@ def test_make_n2_projection_basic():
 
 
 def test_make_n2_projection_with_spans():
-    """make_n2_projection debe aceptar spans y ordenarlos."""
-    from apps.api.scripts.journey_v1_n2_export import N2Span
+    """Well-formed local spans still lack the required N2 page receipt."""
 
     spans = [
-        N2Span(page=2, start_offset=50, end_offset=100),
-        N2Span(page=1, start_offset=5, end_offset=15),
         N2Span(page=1, start_offset=0, end_offset=3),
+        N2Span(page=1, start_offset=5, end_offset=15),
+        N2Span(page=2, start_offset=16, end_offset=20),
     ]
-    p = make_n2_projection("test text with spans", spans=spans)
-    offsets = [s.start_offset for s in p.spans]
-    assert offsets == sorted(offsets), "Spans must be sorted by start_offset"
-    assert p.spans[0].start_offset == 0
-    assert p.page_count == 2
+    with pytest.raises(ValueError, match=BLOCKED_BY_N2_CONTRACT):
+        make_n2_projection("test text with spans", spans=spans)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -115,22 +114,18 @@ def test_export_n2_j1_basic():
     assert "exported_at" in result
     # export_root debe estar FUERA del repositorio (JV1-B3)
     assert not Path(result["export_root"]).is_relative_to(str(REPO_ROOT))
+    assert result["n2_contract_state"] == BLOCKED_BY_N2_CONTRACT
+    assert "anonymous" not in result
+    assert "valid" not in result
 
 
 def test_export_n2_j1_with_spans():
-    """Export with spans: mapa de páginas rastreable."""
-    from apps.api.scripts.journey_v1_n2_export import N2Span
-
-    result = export_n2_j1(
-        "Texto de contrato con spans de página.",
-        spans=[N2Span(page=1, start_offset=0, end_offset=20)],
-    )
-    assert result["page_count"] == 1
-    assert len(result["spans"]) == 1
-    span = result["spans"][0]
-    assert span["page"] == 1
-    assert span["start_offset"] == 0
-    assert span["end_offset"] == 20
+    """Export cannot manufacture N2 page facts from locally supplied spans."""
+    with pytest.raises(ValueError, match=BLOCKED_BY_N2_CONTRACT):
+        export_n2_j1(
+            "Texto de contrato con spans de página.",
+            spans=[N2Span(page=1, start_offset=0, end_offset=20)],
+        )
 
 
 def test_export_n2_j1_deterministic_sha():
@@ -273,6 +268,82 @@ def test_make_n2_projection_invalid_end_offset_raises():
         make_n2_projection("test", spans=[N2Span(page=1, start_offset=0, end_offset=0)])
 
 
-# ──────────────────────────────────────────────────────────────────
-# Tests de salida CLI --out (JV1-B3 confinamiento)
-# ──────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize(
+    ("text", "spans", "message"),
+    [
+        ("short", [N2Span(page=1, start_offset=0, end_offset=6)], "exceeds normalized"),
+        (
+            "abcdef",
+            [N2Span(page=1, start_offset=0, end_offset=4), N2Span(page=1, start_offset=3, end_offset=6)],
+            "must not overlap",
+        ),
+        (
+            "abcdef",
+            [N2Span(page=2, start_offset=0, end_offset=3), N2Span(page=1, start_offset=3, end_offset=6)],
+            "page order must not be reversed",
+        ),
+        ("\uff21BC", [N2Span(page=1, start_offset=0, end_offset=3)], "require NFKC-normalized"),
+    ],
+)
+def test_make_n2_projection_rejects_untrusted_span_coordinates(text, spans, message):
+    """Never fabricate canonical page facts from invalid or changed offsets."""
+    with pytest.raises(ValueError, match=message):
+        make_n2_projection(text, spans=spans)
+
+
+def test_default_home_inside_repository_fails_closed(monkeypatch):
+    """A hostile HOME cannot make the exporter choose a silent /opt fallback."""
+    from apps.api.scripts import journey_v1_n2_export as subject
+
+    monkeypatch.setattr(subject.Path, "home", classmethod(lambda cls: REPO_ROOT))
+    with pytest.raises(ValueError, match="outside the repository"):
+        subject.export_n2_j1("synthetic only")
+
+
+def test_anchored_output_creation_survives_parent_symlink_switch(monkeypatch):
+    """A parent renamed to a symlink after opening stays anchored to its dirfd."""
+    from apps.api.scripts import journey_v1_n2_export as subject
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="jv1-n2-toctou-") as directory:
+        tmp_path = Path(directory)
+        guarded_parent = tmp_path / "guarded"
+        guarded_parent.mkdir()
+        attacker_parent = tmp_path / "attacker"
+        attacker_parent.mkdir()
+        original_parent = tmp_path / "guarded-before-switch"
+        target = guarded_parent / "export.json"
+        real_open = os.open
+        switched = False
+
+        def switch_after_parent_open(path, flags, mode=0o777, *, dir_fd=None):
+            nonlocal switched
+            fd = real_open(path, flags, mode, dir_fd=dir_fd)
+            if path == "guarded" and flags & os.O_DIRECTORY and not switched:
+                switched = True
+                guarded_parent.rename(original_parent)
+                guarded_parent.symlink_to(attacker_parent, target_is_directory=True)
+            return fd
+
+        monkeypatch.setattr(subject.os, "open", switch_after_parent_open)
+        _create_private_output(target, "synthetic\n")
+
+        assert switched
+        assert (original_parent / "export.json").read_text(encoding="utf-8") == "synthetic\n"
+        assert not (attacker_parent / "export.json").exists()
+
+
+def test_preexisting_parent_symlink_is_rejected():
+    """Traversal starts at / and refuses every symlinked parent component."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="jv1-n2-symlink-") as directory:
+        tmp_path = Path(directory)
+        safe_parent = tmp_path / "safe"
+        safe_parent.mkdir()
+        link_parent = tmp_path / "link"
+        link_parent.symlink_to(safe_parent, target_is_directory=True)
+
+        with pytest.raises(OSError):
+            _create_private_output(link_parent / "export.json", "synthetic\n")

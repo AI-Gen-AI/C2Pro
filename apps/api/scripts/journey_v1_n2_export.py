@@ -1,4 +1,4 @@
-"""B0 · JV1-N2-EXPORT: exportador N2 canónico para Journey V1, sintético, offline, sin PII.
+"""B0 · JV1-N2-EXPORT: proyección N2 sintética para Journey V1, offline, sin PII.
 
 Exporta proyección N2 (texto UTF-8 + spans JSON de página) con confinamiento
 de rutas (confined_path per JV1-B3), SHA-256 reproducible, inventario de
@@ -10,11 +10,10 @@ No se admiten datos de contratos reales, PII real ni APIs pagadas.
 Solo sintético bajo PYTHONPATH=apps/api/src.
 """
 
-# BLOCKED_BY_N2_CONTRACT: la paridad N2 canónica y los recibos de recepción
-# están gestionados por el contrato N2 externo. Este módulo no afirma equivalencia
-# canónica ni genera recibos de recepción sin contrato firmado del propietario N2.
-# Cualquier afirmación de paridad N2 o recibos must ser solicitada al propietario
-# del contrato N2 y queda fuera del alcance de este archivo autorizado §4.
+# La paridad N2 canónica y los recibos de recepción están gestionados por el
+# contrato N2 externo. Esta proyección sintética no puede afirmar equivalencia
+# canónica, recepción, tenant, documento, revisión ni anonimización sin esa
+# prueba firmada del propietario N2.
 from __future__ import annotations
 
 import hashlib
@@ -34,6 +33,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[3]  # C2Pro raíz real; parents[2]=/apps (dentro repo)
 JO1_ROOT = REPO_ROOT / "evals" / "journey_v1"  # taxonomy y óracle sintéticos
 PRIVATE_ROOT = Path.home() / "c2pro-jv1-private"  # JV1-B3: fuera del repo
+BLOCKED_BY_N2_CONTRACT = "BLOCKED_BY_N2_CONTRACT"
 
 # Rutas canónicas (nuevas, sin esperar a que existan)
 SCRIPT_PATH = REPO_ROOT / "apps" / "api" / "scripts" / "journey_v1_n2_export.py"
@@ -52,7 +52,7 @@ class N2Span:
 
 @dataclass(frozen=True)
 class N2Projection:
-    """Proyección N2 canónica e inmutable."""
+    """Proyección N2 sintética e inmutable; no es una afirmación canónica."""
     sha256: str              # hash SHA-256 determinista, 64 hex
     page_count: int          # mínimo 1
     spans: tuple[N2Span, ...]  # tupla ordenada por start_offset
@@ -68,20 +68,35 @@ def make_n2_projection(text: str, spans: list[N2Span] | None = None) -> N2Projec
         span_tuple: tuple[N2Span, ...] = ()
         page_count = 1
     else:
-        sorted_spans = sorted(spans, key=lambda s: s.start_offset)
-        # Validación fail-closed de constraints de span
-        for s in sorted_spans:
+        # Offsets submitted for pre-normalized text cannot be safely reused: NFKC
+        # can change both characters and length.  Do not invent a remapping.
+        if text != normalized:
+            raise ValueError("spans require NFKC-normalized text; offset remapping is unavailable")
+
+        previous: N2Span | None = None
+        for s in spans:
             if s.page < 1:
                 raise ValueError(f"span page must be >= 1, got {s.page}")
             if s.start_offset < 0:
                 raise ValueError(f"span start_offset must be >= 0, got {s.start_offset}")
             if s.end_offset <= s.start_offset:
                 raise ValueError(f"span end_offset must be > start_offset, got end={s.end_offset}, start={s.start_offset}")
-        span_tuple = tuple(
-            N2Span(page=s.page, start_offset=s.start_offset, end_offset=s.end_offset)
-            for s in sorted_spans
+            if s.end_offset > len(normalized):
+                raise ValueError("span end_offset exceeds normalized text length")
+            if previous is not None:
+                if s.page < previous.page:
+                    raise ValueError("span page order must not be reversed")
+                if s.start_offset < previous.start_offset:
+                    raise ValueError("span offsets must be in input order")
+                if s.start_offset < previous.end_offset:
+                    raise ValueError("span offsets must not overlap")
+            previous = s
+        # Page identity is an N2 fact.  This module has no signed N2 receipt
+        # tying a tenant/document/revision to these spans, so it must not emit
+        # a page map merely because local offsets look well formed.
+        raise ValueError(
+            f"{BLOCKED_BY_N2_CONTRACT}: trusted N2 receipt is required for page spans"
         )
-        page_count = max((s.page for s in sorted_spans), default=1)
     return N2Projection(sha256=sha, page_count=page_count, spans=span_tuple, text=normalized)
 
 
@@ -107,10 +122,54 @@ def confined_path(raw: str | os.PathLike[str], root: Path) -> Path:
 
 def _private_root(root: Path) -> Path:
     """Private files must stay outside the repository."""
+    if not root.is_absolute():
+        raise ValueError("private files root must be absolute")
+    if root.is_relative_to(REPO_ROOT):
+        raise ValueError("private files must stay outside the repository")
     resolved = Path(os.path.realpath(str(root)))
-    if resolved.is_relative_to(str(REPO_ROOT)):
+    if resolved.is_relative_to(REPO_ROOT):
         raise ValueError("private files must stay outside the repository")
     return resolved
+
+
+def _create_private_output(path: Path, content: str) -> None:
+    """Create ``path`` using descriptor-anchored, no-symlink traversal.
+
+    Every parent directory is opened relative to the preceding directory
+    descriptor.  Therefore a symlink substituted after an earlier check cannot
+    redirect the final creation to another directory.
+    """
+    if not path.is_absolute():
+        raise ValueError("output path must be absolute")
+    if path.is_relative_to(REPO_ROOT):
+        raise ValueError("output path must be outside repository (JV1-B3 confined)")
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+        raise ValueError("secure no-symlink output creation is unavailable")
+
+    components = path.parts[1:]
+    if not components or any(component in ("", ".", "..") for component in components):
+        raise ValueError("output path contains unsafe components")
+
+    directory_fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for component in components[:-1]:
+            next_fd = os.open(
+                component,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=directory_fd,
+            )
+            os.close(directory_fd)
+            directory_fd = next_fd
+        file_fd = os.open(
+            components[-1],
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=directory_fd,
+        )
+        with os.fdopen(file_fd, "w", encoding="utf-8") as output:
+            output.write(content)
+    finally:
+        os.close(directory_fd)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -121,13 +180,14 @@ def export_n2_j1(
     spans: list[N2Span] | None = None,
     export_root: str | None = None,
 ) -> dict[str, Any]:
-    """Export N2 journey V1 offline: proyección canónica sintética, sin red.
+    """Export N2 journey V1 offline: proyección sintética, sin red.
 
     Garantías:
     - Rutas confinadas vía ``confined_path()`` (rechaza symlinks, ``..``, fuga repo)
     - SHA-256 reproducible, determinista, solo texto sintético NFKC-normalized
-    - Mapa de spans por página, rastreable e inmutable (tuple frozen)
-    - Texto nunca sale del entorno sintético; PII es nulo por diseño (NFKC)
+    - Sin recibo N2 firmado, no acepta spans/página que afirmen identidad documental
+    - Sin prueba N2 firmada, el resultado queda ejecutablemente bloqueado y no
+      afirma canonicalidad, recepción, tenant, documento, revisión ni anonimización
     - export_root SIEMPRE fuera del repositorio (JV1-B3); NO fall-open a /tmp
     - output JSON con schema estable: sha256, page_count, spans, text, exported_at, export_root
 
@@ -148,25 +208,11 @@ def export_n2_j1(
 
     # Determinar export_root: SIEMPRE fuera del repositorio (JV1-B3)
     if export_root is None:
-        # Nunca dentro del repo; usar path home privado simulado
-        private = Path.home() / "c2pro-jv1-private"
-        try:
-            _private_root(private)
-        except ValueError:
-            private = Path("/opt/c2pro-jv1-private-offline")
-        if Path(private).is_relative_to(str(REPO_ROOT)):
-            private = Path("/opt/c2pro-jv1-private-offline")
-        export_root_str = str(private)
+        # HOME is the only default.  If it points into the repo, refuse rather
+        # than silently publishing a different root such as /opt.
+        export_root_str = str(_private_root(Path.home() / "c2pro-jv1-private"))
     else:
-        try:
-            _private_root(Path(export_root))
-            export_root_str = str(Path(export_root).resolve())
-        except ValueError:
-            # export_root inside repo (ej. <repo>/evals) es inválido — error forzado
-            raise
-        # Asegurar que no es relativo al repo
-        if Path(export_root_str).is_relative_to(str(REPO_ROOT)):
-            export_root_str = "/opt/c2pro-jv1-private-offline"
+        export_root_str = str(_private_root(Path(export_root)))
 
     exported_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -177,9 +223,10 @@ def export_n2_j1(
         "text": projection.text,
         "exported_at": exported_at,
         "export_root": export_root_str,
+        "n2_contract_state": BLOCKED_BY_N2_CONTRACT,
     }
 
-    # Validación: text exportado debe ser NFKC-normalized y sin PII real
+    # Defensa heurística adicional; no es evidencia de anonimización N2.
     import re as re_mod
     real_pii_patterns = [
         r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
@@ -237,20 +284,9 @@ def main() -> int:
             if out_path.is_relative_to(str(REPO_ROOT)):
                 print("ERROR: output path must be outside repository (JV1-B3 confined)", file=sys.stderr)
                 return 1
-            # Verificar symlink traversal para rutas absolutas
-            out_file_resolved = out_path.resolve()
-            if out_file_resolved != out_path and not str(out_path).startswith(str(REPO_ROOT)):
-                print("ERROR: symlink traversal detected", file=sys.stderr)
-                return 1
-            # Escribir archivo de salida (NO_OVERWRITE + 0600 + fail-closed)
-            # O_EXCL: falla si el archivo ya existe; O_NOFOLLOW: evita symlinks
-            # getattr(os, "O_NOFOLLOW", 0) para compatibilidad multiplataforma
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
             try:
-                fd = os.open(out_path, flags | getattr(os, "O_NOFOLLOW", 0), 0o600)
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    f.write(output_json + "\n")
-            except OSError as e:
+                _create_private_output(out_path, output_json + "\n")
+            except (OSError, ValueError) as e:
                 print(f"ERROR: cannot create private output file: {e}", file=sys.stderr)
                 return 1
         else:
