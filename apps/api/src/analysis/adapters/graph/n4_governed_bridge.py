@@ -166,12 +166,153 @@ def _page_spans(raw: Sequence[Any] | None) -> list[_page_locator.PageSpan]:
     return spans
 
 
-def _grounded_page_spans(state: Mapping[str, Any]) -> list[_page_locator.PageSpan]:
-    """Page map offsets address parser text; valid for N2 projection only if unchanged."""
-    if state.get("anonymized_text") != state.get("document_text"):
-        return []
-    return _page_spans(state.get("parsed_text_page_spans"))
+# A11 includes OCR_REPLACED_SUSPECT in its observed-page projection. A7
+# deliberately cannot publish citation evidence from suspicious OCR output.
+_A11_A9_OBSERVED_STATES = frozenset({
+    "NATIVE_TEXT", "OCR_ONLY", "OCR_AUGMENTED",
+    "OCR_REPLACED_SUSPECT", "OCR_DUPLICATE_IGNORED",
+})
+_A7_CITABLE_PAGE_STATES = _A11_A9_OBSERVED_STATES - {"OCR_REPLACED_SUSPECT"}
+_A11_PAGE_DIAGNOSTICS = _A11_A9_OBSERVED_STATES | {
+    "OCR_UNAVAILABLE", "OCR_FAILED", "OCR_EMPTY_RESULT", "OCR_UNCLASSIFIED",
+    "SPARSE_TEXT_UNVERIFIED", "SPARSE_OCR_FAILED", "SPARSE_OCR_EMPTY",
+    "NO_TEXT_UNASSESSED", "SUSPECT_NATIVE_TEXT_UNVERIFIED",
+    "TEXT_OBSERVED_UNASSESSED", "NO_DIAGNOSTIC",
+}
 
+
+def _a11_a9_page_map(state: Mapping[str, Any]) -> tuple[list[_page_locator.PageSpan], bool]:
+    """Consume only A11's revision-bound PDF projection, never arbitrary spans.
+
+    The second value records that a physical map was supplied, including if it
+    was malformed: a rejected map must yield PAGE_UNRESOLVED, not VERIFIED.
+    A11's full block lineage is checked independently to prevent selective
+    deletion of unsafe OCR rows or offsets in the compact A9 view.
+    """
+    identity = state.get("n4_source_identity")
+    if not isinstance(identity, Mapping) or "a9_physical_page_map" not in identity:
+        return [], False
+    raw_map = identity["a9_physical_page_map"]
+    lineage = identity.get("physical_page_lineage")
+    parsed = state.get("document_text")
+    if (
+        not isinstance(raw_map, Mapping) or not isinstance(lineage, Mapping)
+        or not isinstance(parsed, str) or not parsed
+        or state.get("anonymized_text") != parsed
+        or identity.get("parser_origin") != "pdf_file_parser"
+        or not is_n4_source_identity_valid(state, parsed_text=parsed)
+    ):
+        return [], True
+
+    digest = sha256(parsed.encode("utf-8")).hexdigest()
+    revision = state.get("document_revision_id")
+    blob_hash = identity.get("blob_hash")
+    count = raw_map.get("source_pages")
+    if (
+        not isinstance(blob_hash, str) or len(blob_hash) != 64
+        or any(ch not in "0123456789abcdefABCDEF" for ch in blob_hash)
+        or type(count) is not int or not 1 <= count <= 10_000
+        or raw_map.get("schema_version") != "a11-a9-physical-page-map-v1"
+        or raw_map.get("source_kind") != "PDF_PHYSICAL_PAGE_OBSERVATION"
+        or raw_map.get("original_document_completeness_certified") is not False
+        or raw_map.get("revision_id") != revision
+        or raw_map.get("blob_hash") != blob_hash
+        or raw_map.get("parsed_text_sha256") != digest
+        or lineage.get("revision_id") != revision
+        or lineage.get("blob_hash") != blob_hash
+        or lineage.get("parsed_text_sha256") != digest
+        or lineage.get("status") != "OBSERVED_ONLY"
+        or lineage.get("origin") != "pdf_file_parser"
+        or lineage.get("source_pages") != count
+    ):
+        return [], True
+
+    pages = lineage.get("pages")
+    blocks = lineage.get("spans")
+    encoded = raw_map.get("spans")
+    excluded = raw_map.get("excluded_pages")
+    if (
+        not isinstance(pages, list) or len(pages) != count
+        or not isinstance(blocks, list)
+        or not isinstance(encoded, list) or not isinstance(excluded, list)
+    ):
+        return [], True
+
+    diagnoses: dict[int, str] = {}
+    for expected_page, item in enumerate(pages, start=1):
+        if not isinstance(item, Mapping):
+            return [], True
+        number, status = item.get("page"), item.get("status")
+        if (
+            type(number) is not int or number != expected_page
+            or not isinstance(status, str)
+            or status not in _A11_PAGE_DIAGNOSTICS
+        ):
+            return [], True
+        diagnoses[number] = status
+    if len(diagnoses) != count:
+        return [], True
+
+    # Reconstruct exactly A11's grouped-by-page spans from source-aligned
+    # blocks. Every non-whitespace character must belong to some raw block;
+    # unsafe pages are deliberately retained here for coverage verification.
+    cursor = 0
+    prior_page = 0
+    grouped: list[dict[str, int]] = []
+    for block in blocks:
+        if not isinstance(block, Mapping):
+            return [], True
+        page = block.get("page")
+        start, end = block.get("start_offset"), block.get("end_offset")
+        method = block.get("method")
+        if (
+            type(page) is not int or not 1 <= page <= count
+            or block.get("page_verified") is not True
+            or type(start) is not int or type(end) is not int
+            or not 0 <= cursor <= start < end <= len(parsed)
+            or page < prior_page or not isinstance(method, str)
+            or method not in {"NATIVE", "OCR"}
+            or parsed[cursor:start].strip() or not parsed[start:end].strip()
+            or (diagnoses[page] in {"OCR_ONLY", "OCR_REPLACED_SUSPECT"}
+                and method != "OCR")
+            or (diagnoses[page] in {"NATIVE_TEXT", "OCR_DUPLICATE_IGNORED"}
+                and method != "NATIVE")
+        ):
+            return [], True
+        if grouped and grouped[-1]["page"] == page:
+            grouped[-1]["end_offset"] = end
+        else:
+            grouped.append({"page": page, "start_offset": start, "end_offset": end})
+        cursor, prior_page = end, page
+    if parsed[cursor:].strip():
+        return [], True
+
+    expected = [row for row in grouped if diagnoses[row["page"]] in _A11_A9_OBSERVED_STATES]
+    expected_excluded = [
+        {"page": number, "reason": diagnoses[number]}
+        for number in range(1, count + 1)
+        if diagnoses[number] not in _A11_A9_OBSERVED_STATES
+    ]
+    expected_status = (
+        "NO_LOCATABLE_PAGES" if not expected
+        else "PARTIAL" if expected_excluded else "OBSERVED_ONLY"
+    )
+    if (
+        encoded != expected or excluded != expected_excluded
+        or raw_map.get("status") != expected_status
+    ):
+        return [], True
+
+    # Only non-suspect, nonfailed OCR/native pages can reach the A9 locator.
+    return [
+        _page_locator.PageSpan(row["page"], row["start_offset"], row["end_offset"])
+        for row in expected if diagnoses[row["page"]] in _A7_CITABLE_PAGE_STATES
+    ], True
+
+
+def _grounded_page_spans(state: Mapping[str, Any]) -> list[_page_locator.PageSpan]:
+    """A7 never falls back to unpinned legacy parsed_text_page_spans."""
+    return _a11_a9_page_map(state)[0]
 
 def _approx_pages(
     spans: Sequence[_page_locator.PageSpan], start: int, end: int,
@@ -295,16 +436,34 @@ async def _load_run_ledger(
 
 def _page_evidence(
     quote: str, source: str, refs: list[dict[str, Any]],
-    spans: Sequence[_page_locator.PageSpan],
+    spans: Sequence[_page_locator.PageSpan], *, map_claimed: bool = False,
 ) -> tuple[int | None, str | None, str]:
     """(page_number, source_locator, page_verification_status) for a verified quote."""
     if not spans:
-        return None, None, "PAGE_UNVERIFIED_NO_PAGE_MAP"
-    near = next((
-        int(ref["analysis_span"][0]) for ref in refs
-        if isinstance(ref, dict) and isinstance(ref.get("analysis_span"), list)
-        and ref["analysis_span"]
-    ), None)
+        return None, None, (
+            "PAGE_UNRESOLVED" if map_claimed else "PAGE_UNVERIFIED_NO_PAGE_MAP"
+        )
+    # A source-ref offset is useful to disambiguate identical quotes ONLY
+    # if it directly anchors the same literal source text. A distant or forged
+    # hint must not select the wrong physical page.
+    near: int | None = None
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        span = ref.get("analysis_span")
+        if (
+            ref.get("source_kind") != "MODEL_SAFE_PROJECTION"
+            or ref.get("evidence_status") != "EXACT_MODEL_SAFE_MATCH"
+            or not isinstance(span, list) or len(span) != 2
+            or type(span[0]) is not int or type(span[1]) is not int
+            or not 0 <= span[0] < span[1] <= len(source)
+            or (isinstance(ref.get("source_sha256"), str)
+                and ref["source_sha256"] != sha256(source.encode("utf-8")).hexdigest())
+        ):
+            continue
+        if " ".join(source[span[0]:span[1]].split()) == " ".join(quote.split()):
+            near = span[0]
+            break
     try:
         location = _page_locator.locate_quote_page(
             quote, source_text=source, page_spans=spans, near_offset=near,
@@ -322,7 +481,7 @@ def _page_evidence(
 
 def _candidate_payload(
     claim: Mapping[str, Any], refs: list[dict[str, Any]], source: str,
-    *, page_spans: Sequence[Any] | None = None,
+    *, page_spans: Sequence[Any] | None = None, map_claimed: bool = False,
 ) -> dict[str, Any]:
     if not isinstance(claim, dict) or not isinstance(refs, list) or not refs:
         raise N4GraphBridgeBlocked("N4 candidate lacks persisted claim and source reference")
@@ -355,7 +514,7 @@ def _candidate_payload(
     unresolved = False
     if quote:
         page_number, locator, page_status = _page_evidence(
-            quote, source, refs, _page_spans(page_spans),
+            quote, source, refs, _page_spans(page_spans), map_claimed=map_claimed,
         )
         unresolved = page_status == "PAGE_UNRESOLVED"
         if unresolved:
@@ -383,6 +542,7 @@ def _candidate_payload(
 def _reference_proposals(
     register: Sequence[Mapping[str, Any]], *, source: str,
     source_sha256: str, revision_id: str, page_spans: Sequence[Any] | None = None,
+    map_claimed: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Turn verified literal missing-external references into PROPOSED risks.
 
@@ -421,7 +581,7 @@ def _reference_proposals(
             "clause_ref": label,
             "source_quote": quote,
             "source_evidence_status": "EXACT_MODEL_SAFE_MATCH",
-        }, refs, source, page_spans=page_spans)
+        }, refs, source, page_spans=page_spans, map_claimed=map_claimed)
         risks.append(risk)
         provenance.append({
             "finding_key": key,
@@ -480,7 +640,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
         model_safe_text=source_text, n2_projection_attested=True,
     )
     source_sha256 = sha256(source_text.encode("utf-8")).hexdigest()
-    spans = _grounded_page_spans(state)
+    spans, map_claimed = _a11_a9_page_map(state)
     # Always reconcile the persisted ledger, including on the fast COMPLETE
     # path. Runner counters alone cannot prove that every ordinal still exists.
     windows, reservations = await _load_run_ledger(
@@ -534,6 +694,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     for row in rows:
         payload = _candidate_payload(
             row["claim"], row["source_refs"], source_text, page_spans=spans,
+            map_claimed=map_claimed,
         )
         candidates.append({
             **payload,
@@ -559,6 +720,7 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     reference_risks, reference_provenance = _reference_proposals(
         register, source=source_text, source_sha256=source_sha256,
         revision_id=str(authority.revision_id), page_spans=spans,
+        map_claimed=map_claimed,
     )
     risks.extend(reference_risks)
     provenance.extend(reference_provenance)
