@@ -144,13 +144,8 @@ class N4CoverageGapsError(Exception):
         )
 
 
-def _n4_uncovered_windows(coverage: Any) -> int:
-    """Validate persisted JV1-A1 coverage; unknown evidence fails closed.
-
-    The ledger's original gap_windows preserves failed-section identities.
-    A16 may mark individual gaps CLOSED_MANUALLY after documented human
-    review; only that explicit resolution counts as coverage.
-    """
+def _n4_coverage_identity(coverage: Any) -> dict[str, Any]:
+    """Reject unknown N4 runs before interpreting gap counters."""
     if not isinstance(coverage, dict) or coverage.get("schema_version") != N4_COVERAGE_SCHEMA_VERSION:
         raise N4CoverageGapsError(pending_windows=0)
     if coverage.get("status") not in {status.value for status in N4CoverageStatus}:
@@ -164,7 +159,11 @@ def _n4_uncovered_windows(coverage: Any) -> int:
         raise N4CoverageGapsError(pending_windows=0)
     if not isinstance(coverage.get("source_sha256"), str) or not coverage["source_sha256"]:
         raise N4CoverageGapsError(pending_windows=0)
+    return coverage
 
+
+def _n4_coverage_shape(coverage: dict[str, Any]) -> tuple[int, int, list[Any], list[Any]]:
+    """Read counters and evidence lists without coercing invalid types."""
     total, examined = coverage.get("total_windows"), coverage.get("examined_windows")
     if (
         type(total) is not int or type(examined) is not int
@@ -174,42 +173,58 @@ def _n4_uncovered_windows(coverage: Any) -> int:
     gap_windows, gaps = coverage.get("gap_windows"), coverage.get("gaps")
     if not isinstance(gap_windows, list) or not isinstance(gaps, list):
         raise N4CoverageGapsError(pending_windows=0)
-    if any(type(ordinal) is not int or ordinal < 0 or ordinal > total for ordinal in gap_windows):
-        raise N4CoverageGapsError(pending_windows=0)
+    return total, examined, gap_windows, gaps
 
+
+def _n4_checked_ordinal(ordinal: Any, total: int) -> int:
+    """Accept only persisted integer ordinals, never bool or a coerced value."""
+    if type(ordinal) is not int or ordinal < 0 or ordinal > total:
+        raise N4CoverageGapsError(pending_windows=0)
+    return ordinal
+
+
+def _n4_gap_resolution_sets(
+    gap_windows: list[Any], gaps: list[Any], total: int,
+) -> tuple[set[int], set[int]]:
+    """Resolve only original ledger gaps; OPEN dominates conflicting closure."""
+    original_gaps = {_n4_checked_ordinal(ordinal, total) for ordinal in gap_windows}
     open_gaps: set[int] = set()
     closed_gaps: set[int] = set()
     for gap in gaps:
         if not isinstance(gap, dict):
             raise N4CoverageGapsError(pending_windows=0)
-        ordinal = gap.get("ordinal")
-        if type(ordinal) is not int or ordinal < 0 or ordinal > total:
-            raise N4CoverageGapsError(pending_windows=0)
+        ordinal = _n4_checked_ordinal(gap.get("ordinal"), total)
         resolution = gap.get("resolution")
         if resolution == N4GapResolution.OPEN:
             open_gaps.add(ordinal)
         elif resolution == N4GapResolution.CLOSED_MANUALLY:
-            # A16 manual review is an explicit, attributable, audited act.
-            # Missing evidence must never be treated as a silent gap closure.
-            if any(not isinstance(gap.get(field), str) or not gap[field].strip()
-                   for field in ("closed_reason", "closed_by", "closed_at")):
+            if any(
+                not isinstance(gap.get(field), str) or not gap[field].strip()
+                for field in ("closed_reason", "closed_by", "closed_at")
+            ):
                 raise N4CoverageGapsError(pending_windows=1)
             closed_gaps.add(ordinal)
         else:
             raise N4CoverageGapsError(pending_windows=0)
 
-    # A manual closure can resolve only an ordinal recorded in the original
-    # gap ledger. Otherwise forged/unrelated closure rows could subtract from
-    # (total - examined) and accidentally permit final approval.
-    if closed_gaps - set(gap_windows):
+    # Forged manual closures must never reduce a missing-window deficit.
+    if closed_gaps - original_gaps:
         raise N4CoverageGapsError(pending_windows=0)
-
-    # An OPEN record wins over a conflicting CLOSED_MANUALLY record. A listed
-    # failed ordinal without a closure record remains open, not silently safe.
     closed_gaps.difference_update(open_gaps)
-    open_gaps.update(set(gap_windows) - closed_gaps)
-    uncovered = max(len(open_gaps), total - examined - len(closed_gaps))
-    return max(0, uncovered)
+    open_gaps.update(original_gaps - closed_gaps)
+    return open_gaps, closed_gaps
+
+
+def _n4_uncovered_windows(coverage: Any) -> int:
+    """Validate persisted JV1-A1 coverage; unknown evidence fails closed.
+
+    The original gap ledger remains authoritative. A16 may close only its
+    entries with attributable, auditable CLOSED_MANUALLY evidence.
+    """
+    identified = _n4_coverage_identity(coverage)
+    total, examined, gap_windows, gaps = _n4_coverage_shape(identified)
+    open_gaps, closed_gaps = _n4_gap_resolution_sets(gap_windows, gaps, total)
+    return max(0, len(open_gaps), total - examined - len(closed_gaps))
 
 
 def require_n4_coverage_ready(review_item: Any, *, approve: bool) -> None:
