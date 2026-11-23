@@ -1,6 +1,8 @@
 """N4 Anthropic adapter contract: no real provider called in unit tests."""
 from __future__ import annotations
 
+import json
+
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -14,7 +16,8 @@ from src.core.ai.model_router import AITaskType, ModelTier
 
 
 class _FakeWrapper:
-    def __init__(self, *, retries=0, cache=False):
+    def __init__(self, *, retries=0, cache=False, tool_name="record_window_findings",
+                 raw_available=True, stop_reason="tool_use"):
         self.llm_client = SimpleNamespace(max_retries=retries)
         self.enable_cache = cache
         self.cache_service = object() if cache else None
@@ -22,12 +25,24 @@ class _FakeWrapper:
             configs={ModelTier.STANDARD: SimpleNamespace(name="unit-model")}
         )
         self.calls = []
+        self.tool_name = tool_name
+        self.raw_available = raw_available
+        self.stop_reason = stop_reason
 
     async def generate(self, request):
         self.calls.append(request)
+        content = ('{"window_examined":true,"findings":[],'
+                   '"outstanding_references":[]}')
+        tool_use = SimpleNamespace(
+            type="tool_use", name=self.tool_name, input=json.loads(content),
+        )
+        raw_response = (
+            SimpleNamespace(
+                stop_reason=self.stop_reason, content=[tool_use],
+            ) if self.raw_available else None
+        )
         return SimpleNamespace(
-            content='{"window_examined":true,"findings":[],'
-                    '"outstanding_references":[]}',
+            content=content, raw_response=raw_response,
             model_used="unit-model",
             cost_usd=0.012345, input_tokens=107, output_tokens=61,
         )
@@ -110,10 +125,12 @@ async def test_v2_forced_tool_and_versioned_clause_inventory_without_network():
     assert first.tool_choice == {"type": "tool", "name": "record_window_findings"}
     assert first.tools[0]["name"] == "record_window_findings"
     required = first.tools[0]["input_schema"]["required"]
-    assert "examined_clauses" in required and "findings" in required
+    assert "examined_clauses" in required
+    assert "findings" in required
     assert first.metadata["prompt_version"] == N4_WINDOW_PROMPT_VERSION
     assert first.metadata["inventory_clause_count"] >= 3
-    assert "SECCIÓN 2" in first.prompt and "SEÇÃO 3" in first.prompt
+    assert "SECCIÓN 2" in first.prompt
+    assert "SEÇÃO 3" in first.prompt
     assert first.prompt.find("BEGIN UNTRUSTED SOURCE WINDOW") >= 0
 
 
@@ -134,3 +151,49 @@ async def test_v2_provider_does_not_fabricate_missing_clause_examination():
     )
     with pytest.raises(N4WindowContractError, match="examined_clauses"):
         parse_n4_window_output(response.content, window=w)
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_tool", [
+    "unexpected_tool", "record_other_contract", "",
+])
+async def test_unexpected_tool_name_fails_closed_even_with_valid_json(bad_tool):
+    """Forced tool_choice alone must NOT attest that the tool was respected."""
+    from src.analysis.domain.n4_compact_window_response import (
+        N4WindowContractError,
+        parse_n4_window_output,
+    )
+
+    wrapper = _FakeWrapper(tool_name=bad_tool)
+    provider = AnthropicN4WindowProvider(wrapper=wrapper)
+    window = plan_n4_source_windows(
+        "9.6 The supplier shall provide the project schedule.",
+        revision_id="synthetic-tool-identity",
+    )[0]
+    receipt = await provider.generate(
+        window=window, tenant_id=uuid4(), request_id="unexpected-tool",
+    )
+    assert json.loads(receipt.content)["error"] == "INVALID_N4_TOOL_ENVELOPE"
+    assert receipt.reported_cost_usd == "0.012345"
+    with pytest.raises(N4WindowContractError):
+        parse_n4_window_output(receipt.content, window=window)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw_available, stop_reason", [
+    (False, "tool_use"), (True, "end_turn"),
+])
+async def test_missing_raw_tool_attestation_fails_closed(raw_available, stop_reason):
+    wrapper = _FakeWrapper(
+        raw_available=raw_available, stop_reason=stop_reason,
+    )
+    provider = AnthropicN4WindowProvider(wrapper=wrapper)
+    window = plan_n4_source_windows(
+        "8.1 This synthetic clause remains unverified.",
+        revision_id="synthetic-no-tool",
+    )[0]
+    receipt = await provider.generate(
+        window=window, tenant_id=uuid4(), request_id="missing-tool",
+    )
+    assert json.loads(receipt.content)["error"] == "INVALID_N4_TOOL_ENVELOPE"
