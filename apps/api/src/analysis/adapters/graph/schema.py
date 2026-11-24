@@ -40,6 +40,10 @@ class ProjectState(TypedDict):
     n4_incremental_run_id: str | None
     n4_incremental_source_sha256: str | None
     n4_incremental_window_coverage: dict[str, Any] | None
+    # JV1-A7: N4Coverage (n4-coverage-v1) incl. open gaps, and the literal
+    # cross-reference register. Proposals for human review, never certificates.
+    n4_coverage: dict[str, Any] | None
+    n4_reference_register: list[dict[str, Any]]
     n4_candidate_provenance: list[dict[str, Any]]
     # Pre-HITL literal source matching in the N2 analysis projection, not
     # original PDF authenticity or legal-semantic validation.

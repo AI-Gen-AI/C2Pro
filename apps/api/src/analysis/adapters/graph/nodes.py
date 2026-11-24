@@ -323,9 +323,23 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
         try:
             update = await run_governed_n4_in_graph(state)
             cast(dict[str, Any], state).update(update)
-            state["node_results"] = [
-                *state.get("node_results", []),
-                NodeResult(
+            coverage = update.get("n4_coverage")
+            node_result: NodeResult[object]
+            if isinstance(coverage, dict) and coverage.get("status") == "COMPLETE_WITH_GAPS":
+                # Reviewable partial: usable, degraded, never auto-approved.
+                state["human_approval_required"] = True
+                state["confidence_score"] = None
+                node_result = NodeResult[object](
+                    node="risk_extractor",
+                    status=NodeStatus.DEGRADED,
+                    degradation_reason="n4_complete_with_gaps",
+                    data={
+                        "coverage_gaps": list(coverage.get("gaps") or []),
+                        "run_id": coverage.get("run_id"),
+                    },
+                )
+            else:
+                node_result = NodeResult[object](
                     node="risk_extractor",
                     status=(
                         NodeStatus.OK if update["extracted_risks"]
@@ -335,8 +349,8 @@ async def risk_extractor_node(state: ProjectState) -> ProjectState:
                         None if update["extracted_risks"]
                         else "zero_findings_unassessed"
                     ),
-                ),
-            ]
+                )
+            state["node_results"] = [*state.get("node_results", []), node_result]
             _append_risk_extraction_summary(state)
             return state
         except Exception as exc:  # noqa: BLE001
@@ -563,6 +577,11 @@ def _stamp_pre_hitl_contract_risk_evidence(state: ProjectState) -> None:
             "clause_ref": str(risk.get("clause_ref") or "")[:80],
             "found_in_analysis_text": found,
             "source_quote": normalized if found else None,
+            **(
+                {"page_number": risk.get("page_number"),
+                 "page_verification_status": risk.get("page_verification_status")}
+                if risk.get("page_verification_status") else {}
+            ),
         })
         citations.append({
             "type": "risk", "item": str(title),
@@ -588,7 +607,13 @@ def _contract_risk_review_summary(state: ProjectState) -> dict[str, Any]:
     rows = state.get("risk_pre_hitl_evidence_rows")
     entries = rows if isinstance(rows, list) else []
     verified = sum(1 for r in entries if r.get("found_in_analysis_text") is True)
+    n4_extra: dict[str, Any] = {}
+    if isinstance(state.get("n4_coverage"), dict):
+        n4_extra["n4_coverage"] = state["n4_coverage"]
+    if isinstance(state.get("n4_reference_register"), list):
+        n4_extra["n4_reference_register"] = state["n4_reference_register"]
     return {
+        **n4_extra,
         "risk_source_evidence": entries,
         "risk_source_evidence_total": len(entries),
         "risk_source_evidence_verified": verified,
@@ -758,6 +783,31 @@ async def critique_node(
             ),
         ]
         state["messages"].append(AIMessage(content="Critique mock mode: not assessed; human review required."))
+        return state
+
+    if os.getenv("C2PRO_N12_MODE", "").strip().lower() == "off":
+        # Explicit operator bypass of the N12 LLM: no model call, no assessed
+        # confidence, and the human gate is always required.
+        state["confidence_score"] = None
+        state["retry_count"] = 0
+        state["critique_notes"] = "N12 critique disabled (C2PRO_N12_MODE=off): not assessed; human review required."
+        state["human_approval_required"] = True
+        await _apply_temporal_review_gate(state)
+        state["human_approval_required"] = True
+        state["node_results"] = [
+            *state.get("node_results", []),
+            _ok_node_result(
+                "critique",
+                {
+                    "confidence": None,
+                    "retry_count": 0,
+                    "human_approval_required": True,
+                    "mode": "off",
+                },
+                confidence=None,
+            ),
+        ]
+        state["messages"].append(AIMessage(content="Critique off: not assessed; human review required."))
         return state
 
     source_text = llm_document_text(state)
@@ -992,6 +1042,14 @@ def _technical_wbs_review_summary(state: ProjectState) -> dict[str, Any]:
     }
 
 
+def _n4_coverage_review_metadata(state: ProjectState) -> dict[str, Any]:
+    """Bind exact N4 coverage to the HITL review's durable metadata."""
+    coverage = state.get("n4_coverage")
+    if isinstance(coverage, dict):
+        return {"analysis_n4_coverage": dict(coverage)}
+    return {}
+
+
 async def human_interrupt_node(state: ProjectState) -> ProjectState:
     """N13 — Route through HITL service and raise LangGraph Interrupt.
 
@@ -1031,6 +1089,7 @@ async def human_interrupt_node(state: ProjectState) -> ProjectState:
                     # C2PRO #714: no decision until the exact candidate is
                     # persisted and bound (see document_artifact_completion).
                     "trust_candidate_required": True,
+                    **_n4_coverage_review_metadata(state),
                 }
                 thread_id = state.get("thread_id")
                 if thread_id:
