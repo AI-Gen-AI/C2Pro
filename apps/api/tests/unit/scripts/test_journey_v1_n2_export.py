@@ -368,9 +368,9 @@ def test_contract_blocked_even_if_export_unexpectedly_returns(
     monkeypatch, capsys, with_output
 ):
     """CLI must not expose or write any payload before a trusted N2 contract."""
-    from apps.api.scripts import journey_v1_n2_export as subject
-
     import tempfile
+
+    from apps.api.scripts import journey_v1_n2_export as subject
 
     with tempfile.TemporaryDirectory(prefix="b0-contract-") as directory:
         target = Path(directory) / "forbidden.json"
