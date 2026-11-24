@@ -165,7 +165,12 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "calls": len(snapshot.receipts),
         "completed": len(done),
         "failed": len(failed),
-        "in_flight": sum(r.state == "RESERVED" for r in snapshot.receipts),
+        # Failed calls stay financially exposed but are terminal in historical telemetry.
+        "in_flight": sum(
+            r.state in ("RESERVED", "UNKNOWN")
+            and (r.tenant_id, r.reservation_id) not in failed
+            for r in snapshot.receipts
+        ),
         "spent_usd": float(settled),
         "reserved_open_usd": float(held),
         "spent_usd_exact": str(settled),
