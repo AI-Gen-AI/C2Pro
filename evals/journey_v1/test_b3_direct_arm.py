@@ -1279,3 +1279,28 @@ def test_b3_liability_is_never_below_the_legacy_governor_view(register, name):
     summary = _load_governor().summarize(register.events())
     governor = Decimal(str(summary["spent_usd"])) + Decimal(str(summary["reserved_open_usd"]))
     assert register.committed_usd() >= governor
+
+
+@pytest.mark.parametrize("schema", [{}, {"schema": arm.LEDGER_SCHEMA}], ids=["legacy", "v2"])
+def test_identical_reservation_replay_is_idempotent(register, schema):
+    event = _legacy_reserve("replay", key="C1:anthropic", **schema)
+    before = _write_legacy(register, event, dict(event), dict(event))
+    assert register.committed_usd() == Decimal("0.25")
+    assert len(register._open_reserves(register.events())) == 1
+    assert register.path.read_bytes() == before
+
+
+def test_distinct_reservations_are_not_deduplicated(register):
+    _write_legacy(register, _legacy_reserve("r1"), _legacy_reserve("r2"))
+    assert register.committed_usd() == Decimal("0.50")
+
+
+def test_conflicting_reservation_replay_preserves_conservative_hold(register):
+    _write_legacy(register, _legacy_reserve("r1"), _legacy_reserve("r1", est_usd=0.35))
+    assert register.committed_usd() == Decimal("0.60")
+
+
+def test_unattributed_reserves_are_not_deduplicated(register):
+    event = _legacy_reserve(None)
+    _write_legacy(register, event, dict(event))
+    assert register.committed_usd() == Decimal("0.50")

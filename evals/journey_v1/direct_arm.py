@@ -498,7 +498,16 @@ class JsonlSpendRegister:
             e.get("id") for e in events
             if cls._closes(e) and (e.get("ev") == "done" or e.get("id") in v2_reserves)
         }
-        return [e for e in events if e.get("ev") == "reserve" and e.get("id") not in closed]
+        open_reserves: list[dict[str, Any]] = []
+        for e in events:
+            if e.get("ev") != "reserve" or e.get("id") in closed:
+                continue
+            # Only an identical replay with an explicit identity is redundant.
+            # Preserve contradictory or unattributed holds conservatively.
+            if e.get("id") and e in open_reserves:
+                continue
+            open_reserves.append(e)
+        return open_reserves
 
     @staticmethod
     def _blocks(reservation: dict[str, Any], key: str) -> bool:
