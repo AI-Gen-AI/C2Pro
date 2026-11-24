@@ -7,13 +7,14 @@ from typing import Annotated, Any
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from src.analysis.domain.trust import (
     BoundReviewRequiresTrustDecision,
     ensure_legacy_decision_allowed,
     review_decision_ready,
 )
+from src.coherence.application.project_evaluation import queue_post_approval_evaluation
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
 from src.core.observability.monitoring import record_hitl_decision
@@ -444,6 +445,7 @@ async def approve_item(
     current_user: Annotated[User, Depends(get_current_user)],
     service: HumanInTheLoopService = Depends(get_hitl_service),
     resume_use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
+    background_tasks: BackgroundTasks = None,  # type: ignore[assignment]
 ) -> ReviewItemResponse:
     # SECURITY (EPIC-OPS-DOCFLOW Stream C): reviewer identity is bound to the
     # authenticated session, never to client-supplied values — otherwise any
@@ -453,6 +455,7 @@ async def approve_item(
     # decided BEFORE any review state is read.
     decider = _final_decider(current_user, _tenant_id)
     existing = await _resolve_decision_row(service, item_id, payload.row_id)
+    was_pending = getattr(existing, "current_status", None) in AWAITING_DECISION_STATUSES
 
     if existing.metadata.get("thread_id"):
         # Graph-gated review (analysis_critique): approval must resume the
@@ -503,6 +506,11 @@ async def approve_item(
             tenant_id=_tenant_id,
             decision=item.current_status,
             reviewer=item.approved_by,
+        )
+    if background_tasks is not None:
+        queue_post_approval_evaluation(
+            background_tasks, review=item, tenant_id=_tenant_id,
+            actor_user_id=current_user.id, newly_approved=was_pending,
         )
     logger.info("hitl_item_approved", item_id=str(item_id), reviewer=current_user.full_name)
     return _to_review_item_response(item)
@@ -742,6 +750,7 @@ async def resume_workflow(
     tenant_id: CurrentTenantId,
     current_user: Annotated[User, Depends(get_current_user)],
     use_case: ResumeWorkflowUseCase = Depends(get_resume_workflow_use_case),
+    background_tasks: BackgroundTasks = None,  # type: ignore[assignment]
 ) -> ResumeWorkflowResponse:
     """
     Resume a LangGraph workflow after HITL review decision.
@@ -792,6 +801,26 @@ async def resume_workflow(
             decision=payload.decision,
             status=result.status,
         )
+
+        # A17: only a fresh successful final APPROVE schedules the async
+        # evaluation; never a reject, provisional decision or idempotent replay.
+        if (
+            background_tasks is not None
+            and decision is WorkflowDecision.APPROVE
+            and result.status == "resumed"
+            and "idempotent replay" not in str(result.message or "").lower()
+        ):
+            try:
+                review = await use_case.review_queue_repo.get_review_item(review_id)
+                if review is not None:
+                    queue_post_approval_evaluation(
+                        background_tasks, review=review, tenant_id=tenant_id,
+                        actor_user_id=current_user.id, newly_approved=True,
+                    )
+            except Exception:
+                # The approved decision must remain successful even if the
+                # asynchronous scoring trigger is unavailable.
+                logger.warning("a17_postapproval_trigger_failed", exc_info=True)
 
         return ResumeWorkflowResponse(
             review_id=result.review_id,
