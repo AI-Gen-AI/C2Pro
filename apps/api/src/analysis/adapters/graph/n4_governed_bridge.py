@@ -437,38 +437,47 @@ async def _load_run_ledger(
 
 def _page_evidence(
     quote: str, source: str, refs: list[dict[str, Any]],
-    spans: Sequence[_page_locator.PageSpan], *, map_claimed: bool = False,
+    spans: Sequence[_page_locator.PageSpan], *, revision_id: str,
+    map_claimed: bool = False,
 ) -> tuple[int | None, str | None, str]:
     """(page_number, source_locator, page_verification_status) for a verified quote."""
+    # Validate the persisted identity before any locator or no-map fallback.
+    # Only an absent span on an identity-bound reference is an unanchored
+    # literal; an explicitly malformed or mismatched span is not.
+    digest = sha256(source.encode("utf-8")).hexdigest()
+    normalized_quote = " ".join(quote.split())
+    anchors: set[tuple[int, int]] = set()
+    for ref in refs:
+        if (
+            not isinstance(ref, dict)
+            or ref.get("source_kind") != "MODEL_SAFE_PROJECTION"
+            or ref.get("evidence_status") != "EXACT_MODEL_SAFE_MATCH"
+            or ref.get("source_sha256") != digest
+            or ref.get("document_revision_id") != revision_id
+            or not revision_id
+        ):
+            return None, None, "PAGE_UNRESOLVED"
+        if "analysis_span" not in ref:
+            continue
+        span = ref["analysis_span"]
+        if (
+            not isinstance(span, list) or len(span) != 2
+            or type(span[0]) is not int or type(span[1]) is not int
+            or not 0 <= span[0] < span[1] <= len(source)
+        ):
+            return None, None, "PAGE_UNRESOLVED"
+        excerpt = source[span[0]:span[1]]
+        if " ".join(excerpt.split()) != normalized_quote:
+            return None, None, "PAGE_UNRESOLVED"
+        start = span[0] + len(excerpt) - len(excerpt.lstrip())
+        end = span[1] - (len(excerpt) - len(excerpt.rstrip()))
+        anchors.add((start, end))
+    if len(anchors) > 1:
+        return None, None, "PAGE_UNRESOLVED"
     if not spans:
         return None, None, (
             "PAGE_UNRESOLVED" if map_claimed else "PAGE_UNVERIFIED_NO_PAGE_MAP"
         )
-    # A source-ref offset is useful to disambiguate identical quotes ONLY
-    # if it directly anchors the same literal source text. A distant or forged
-    # hint must not select the wrong physical page.
-    anchors: set[tuple[int, int]] = set()
-    for ref in refs:
-        if not isinstance(ref, dict):
-            continue
-        span = ref.get("analysis_span")
-        if (
-            ref.get("source_kind") != "MODEL_SAFE_PROJECTION"
-            or ref.get("evidence_status") != "EXACT_MODEL_SAFE_MATCH"
-            or not isinstance(span, list) or len(span) != 2
-            or type(span[0]) is not int or type(span[1]) is not int
-            or not 0 <= span[0] < span[1] <= len(source)
-            or (isinstance(ref.get("source_sha256"), str)
-                and ref["source_sha256"] != sha256(source.encode("utf-8")).hexdigest())
-        ):
-            continue
-        excerpt = source[span[0]:span[1]]
-        if " ".join(excerpt.split()) == " ".join(quote.split()):
-            start = span[0] + len(excerpt) - len(excerpt.lstrip())
-            end = span[1] - (len(excerpt) - len(excerpt.rstrip()))
-            anchors.add((start, end))
-    if len(anchors) > 1:
-        return None, None, "PAGE_UNRESOLVED"
     anchor = next(iter(anchors), None)
     near = anchor[0] if anchor is not None else None
     try:
@@ -500,7 +509,8 @@ def _page_evidence(
 
 def _candidate_payload(
     claim: Mapping[str, Any], refs: list[dict[str, Any]], source: str,
-    *, page_spans: Sequence[Any] | None = None, map_claimed: bool = False,
+    *, revision_id: str, page_spans: Sequence[Any] | None = None,
+    map_claimed: bool = False,
 ) -> dict[str, Any]:
     if not isinstance(claim, dict) or not isinstance(refs, list) or not refs:
         raise N4GraphBridgeBlocked("N4 candidate lacks persisted claim and source reference")
@@ -533,7 +543,8 @@ def _candidate_payload(
     unresolved = False
     if quote:
         page_number, locator, page_status = _page_evidence(
-            quote, source, refs, _page_spans(page_spans), map_claimed=map_claimed,
+            quote, source, refs, _page_spans(page_spans), revision_id=revision_id,
+            map_claimed=map_claimed,
         )
         unresolved = page_status == "PAGE_UNRESOLVED"
         if unresolved:
@@ -606,7 +617,8 @@ def _reference_proposals(
             "clause_ref": label,
             "source_quote": quote,
             "source_evidence_status": "EXACT_MODEL_SAFE_MATCH",
-        }, refs, source, page_spans=page_spans, map_claimed=map_claimed)
+        }, refs, source, revision_id=revision_id, page_spans=page_spans,
+            map_claimed=map_claimed)
         risks.append(risk)
         provenance.append({
             "finding_key": key,
@@ -718,7 +730,8 @@ async def run_governed_n4_in_graph(state: Mapping[str, Any]) -> dict[str, Any]:
     candidates: list[dict[str, Any]] = []
     for row in rows:
         payload = _candidate_payload(
-            row["claim"], row["source_refs"], source_text, page_spans=spans,
+            row["claim"], row["source_refs"], source_text,
+            revision_id=str(authority.revision_id), page_spans=spans,
             map_claimed=map_claimed,
         )
         candidates.append({
