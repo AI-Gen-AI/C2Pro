@@ -193,29 +193,58 @@ async def test_get_journey_export_returns_404_for_unknown_project() -> None:
     assert len(sources.requested_projects) == 0
 
 
-
 @pytest.mark.asyncio
-async def test_get_journey_export_sources_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("exit_mode", ["exhausted", "closed", "error"])
+async def test_get_journey_export_sources_dependency(
+    monkeypatch: pytest.MonkeyPatch, exit_mode: str
+) -> None:
     from contextlib import asynccontextmanager
 
     from src.reporting.adapters.http import router as router_module
     from src.reporting.application.build_journey_export import SqlAlchemyJourneyExportSources
 
     tenant_id = uuid4()
+    mock_factory = object()
     mock_session = object()
+    events: list[str] = []
+
+    def _mock_get_factory() -> object:
+        events.append("factory")
+        return mock_factory
 
     @asynccontextmanager
-    async def _mock_get_session(tid: UUID) -> AsyncGenerator[object, None]:
+    async def _mock_journey_read_session(factory: object, tid: UUID) -> AsyncGenerator[object, None]:
+        assert factory is mock_factory
         assert tid == tenant_id
-        yield mock_session
+        events.append("enter")
+        try:
+            yield mock_session
+        finally:
+            events.append("close")
 
-    monkeypatch.setattr(router_module, "get_session_with_tenant", _mock_get_session)
+    monkeypatch.setattr(router_module, "get_session_factory", _mock_get_factory)
+    monkeypatch.setattr(router_module, "journey_read_session", _mock_journey_read_session)
 
     user = SimpleNamespace(tenant_id=tenant_id, id=uuid4())
     gen = get_journey_export_sources(current_user=user)  # type: ignore[arg-type]
-    sources_yielded = []
-    async for s in gen:
-        sources_yielded.append(s)
+    try:
+        sources = await anext(gen)
+        assert isinstance(sources, SqlAlchemyJourneyExportSources)
+        assert sources._session is mock_session
+        assert events == ["factory", "enter"]
 
-    assert len(sources_yielded) == 1
-    assert isinstance(sources_yielded[0], SqlAlchemyJourneyExportSources)
+        if exit_mode == "exhausted":
+            with pytest.raises(StopAsyncIteration):
+                await anext(gen)
+        elif exit_mode == "closed":
+            await gen.aclose()
+        else:
+            failure = RuntimeError("request failed")
+            with pytest.raises(RuntimeError, match="request failed") as caught:
+                await gen.athrow(failure)
+            assert caught.value is failure
+
+        assert events == ["factory", "enter", "close"]
+    finally:
+        await gen.aclose()
+    assert events == ["factory", "enter", "close"]
