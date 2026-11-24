@@ -254,14 +254,16 @@ def test_v2_rejects_wrong_epc_dimension_and_unknown_control():
 
 
 
-@pytest.mark.parametrize("raw", [
-    "{",
-    '["not an object"]',
-    '{"prompt_version":"n4-compact-window-v2","window_examined":true,',
+@pytest.mark.parametrize(("raw", "expected_message"), [
+    ("{", "N4 returned incomplete or invalid JSON"),
+    ('["not an object"]', "N4 output must be a JSON object"),
+    ('{"prompt_version":"n4-compact-window-v2","window_examined":true,',
+     "N4 returned incomplete or invalid JSON"),
 ])
-def test_v2_truncated_or_wrong_shape_never_marks_window_examined(raw):
-    with pytest.raises(N4WindowContractError):
-        parse_n4_window_output(raw, window=_window())
+def test_v2_truncated_or_wrong_shape_never_marks_window_examined(raw, expected_message):
+    window = _window()
+    with pytest.raises(N4WindowContractError, match=expected_message):
+        parse_n4_window_output(raw, window=window)
 
 
 def test_v2_invented_quote_is_only_a_proposed_unanchored_hypothesis():
