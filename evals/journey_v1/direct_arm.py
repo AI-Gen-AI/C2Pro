@@ -53,6 +53,8 @@ _API = REPO_ROOT / "apps" / "api"
 if str(_API) not in sys.path:
     sys.path.insert(0, str(_API))
 
+from b3_liability import LiabilitySnapshotV1, liability_snapshot, money  # noqa: E402
+
 from src.analysis.domain.n4_failure_kinds import (  # noqa: E402
     N4_DIMENSIONS,
     N4_SEVERITIES,
@@ -467,72 +469,27 @@ class JsonlSpendRegister:
         with open(self.path, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, sort_keys=True) + "\n")
 
-    @staticmethod
-    def _closes(event: dict[str, Any]) -> bool:
-        """A settlement closes a reservation; a release only with v2 evidence.
-
-        Legacy "fail" events are NOT evidence of no charge (earlier versions
-        wrote them for timeouts, 429 and 529), so they keep the hold.
-        """
-        if event.get("ev") == "done":
-            return True
-        return (
-            event.get("ev") == "fail"
-            and event.get("schema") == LEDGER_SCHEMA
-            and event.get("release") == _RELEASE_NOT_SENT
-        )
+    def liability_snapshot(self, events: list[dict[str, Any]] | None = None) -> LiabilitySnapshotV1:
+        if events is None:
+            with self._locked():
+                return liability_snapshot(self.events(), ledger_scope="B3")
+        return liability_snapshot(events, ledger_scope="B3")
 
     @classmethod
     def _open_reserves(cls, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Reservations not settled nor provably released: worst case held.
-
-        In flight, ``unknown`` and legacy-``fail`` ones all stay open. Release
-        evidence only applies to a v2 reservation: a v2 ``fail`` can never
-        release a legacy (unversioned) hold.
-        """
-        v2_reserves = {
-            e.get("id") for e in events
-            if e.get("ev") == "reserve" and e.get("schema") == LEDGER_SCHEMA
-        }
-        closed = {
-            e.get("id") for e in events
-            if cls._closes(e) and (e.get("ev") == "done" or e.get("id") in v2_reserves)
-        }
-        open_reserves: list[dict[str, Any]] = []
-        for e in events:
-            if e.get("ev") != "reserve" or e.get("id") in closed:
-                continue
-            # Only an identical replay with an explicit identity is redundant.
-            # Preserve contradictory or unattributed holds conservatively.
-            if e.get("id") and e in open_reserves:
-                continue
-            open_reserves.append(e)
-        return open_reserves
+        """Compatibility projection, not a second financial reducer."""
+        snapshot = liability_snapshot(events, ledger_scope="B3")
+        return [{"id": r.reservation_id, "est_usd": r.exposure_usd,
+                 "key": f"{r.alias}:{r.provider}" if r.alias and r.provider else None}
+                for r in snapshot.receipts if r.blocking_reason]
 
     @staticmethod
     def _blocks(reservation: dict[str, Any], key: str) -> bool:
-        """Does an open reservation forbid a new paid call for ``key``?
-
-        v2 and c91c60a0 keys start with alias:provider; a reservation
-        without any key (dbb71fe6) cannot be attributed, so it blocks all.
-        """
         held = reservation.get("key")
-        if not held:
-            return True
-        return ":".join(str(held).split(":")[:2]) == key
+        return not held or held == key
 
     def _committed_usd(self, events: list[dict[str, Any]] | None = None) -> Decimal:
-        events = self.events() if events is None else events
-        # One settlement per reservation: a replayed/duplicated "done" is
-        # counted once, at its LARGEST amount (the larger liability prevails).
-        settled: dict[Any, Decimal] = {}
-        for e in events:
-            if e.get("ev") == "done":
-                usd = Decimal(str(e["usd"]))
-                settled[e.get("id")] = max(usd, settled.get(e.get("id"), usd))
-        spent = sum(settled.values(), Decimal(0))
-        held = sum((Decimal(str(e["est_usd"])) for e in self._open_reserves(events)), Decimal(0))
-        return spent + held
+        return self.liability_snapshot(events).exposure_usd
 
     def committed_usd(self) -> Decimal:
         return self._committed_usd()
@@ -550,13 +507,14 @@ class JsonlSpendRegister:
         trace = {"key": key, "source_sha256": source_sha256, "source_kind": source_kind}
         with self._locked():
             events = self.events()
-            if any(self._blocks(e, key) for e in self._open_reserves(events)):
+            snapshot = self.liability_snapshot(events)
+            if any(r.blocks(key) for r in snapshot.receipts):
                 reason = (f"B3_UNRECONCILED_CALL: {key} has an in-flight or billing-uncertain "
                           "call; reconcile it before retrying (no second paid effect)")
                 self._append({"ev": "refused", "reason": reason,
                               "provider": provider, "model": model, **trace})
                 raise SpendRefused(reason)
-            committed = self._committed_usd(events)
+            committed = snapshot.exposure_usd
             if committed + est_usd > self.max_usd:
                 reason = (f"B3_BUDGET_CAP: committed {committed} + worst case {est_usd} "
                           f"would exceed the {self.max_usd} USD budget")
@@ -565,7 +523,7 @@ class JsonlSpendRegister:
                 raise SpendRefused(reason)
             call_id = uuid.uuid4().hex
             self._append({"ev": "reserve", "id": call_id, "model": model, "provider": provider,
-                          "est_usd": float(est_usd), "pid": os.getpid(), **trace})
+                          "est_usd": str(money(est_usd)), "pid": os.getpid(), **trace})
         return call_id
 
     def settle(self, call_id: str, *, provider: str, model: str, input_tokens: int,
@@ -573,7 +531,7 @@ class JsonlSpendRegister:
                stop_reason: str | None) -> None:
         with self._locked():
             self._append({"ev": "done", "id": call_id, "model": model, "provider": provider,
-                          "in": input_tokens, "out": output_tokens, "usd": float(usd),
+                          "in": input_tokens, "out": output_tokens, "usd": str(money(usd)),
                           "message_id": message_id, "stop_reason": stop_reason})
 
     def fail(self, call_id: str, *, provider: str, error: RequestNotSent) -> None:

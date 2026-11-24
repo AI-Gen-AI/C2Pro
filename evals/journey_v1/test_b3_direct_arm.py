@@ -1154,7 +1154,7 @@ def test_legacy_lines_are_never_rewritten_and_stay_governor_readable(
 
 def test_legacy_holds_count_against_the_budget(tmp_path, n2_source, taxonomy):
     register = arm.JsonlSpendRegister(max_usd=Decimal("0.4"), root=tmp_path)
-    _write_legacy(register, _legacy_reserve("l6", key="C2:openai:pdf:abc"),
+    _write_legacy(register, _legacy_reserve("l6", key="C2:openai:pdf:abc", provider="openai"),
                   {"ev": "fail", "id": "l6", "provider": "openai", "error": "ProviderRejected"})
     transport = RecordingTransport(_anthropic_reply([]))
     config = _config("anthropic", max_output_tokens=16000)  # worst case ~0.25 USD
@@ -1297,7 +1297,8 @@ def test_distinct_reservations_are_not_deduplicated(register):
 
 def test_conflicting_reservation_replay_preserves_conservative_hold(register):
     _write_legacy(register, _legacy_reserve("r1"), _legacy_reserve("r1", est_usd=0.35))
-    assert register.committed_usd() == Decimal("0.60")
+    assert register.committed_usd() == Decimal("0.35")  # agreed v1: maximum, block conflict
+    assert register.liability_snapshot().receipts[0].blocking_reason == "CONFLICTING_RESERVATION"
 
 
 def test_unattributed_reserves_are_not_deduplicated(register):
