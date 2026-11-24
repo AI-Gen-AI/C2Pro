@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -333,6 +334,12 @@ def test_formula_injection_prevention_in_all_untrusted_cells() -> None:
                     )
 
 
+class _SavepointSession:
+    @asynccontextmanager
+    async def begin_nested(self):
+        yield
+
+
 class _MockQueryResult:
     def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
         self._rows = rows or []
@@ -358,7 +365,7 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
     finding_id = uuid4()
     revision_id = uuid4()
 
-    class _MockAsyncSession:
+    class _MockAsyncSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -499,12 +506,14 @@ async def test_sqlalchemy_journey_sources_full_data_and_a1_a7_contract() -> None
     assert data.summary.projected_score is None
     assert data.summary.coverage_status == "COMPLETE_WITH_GAPS"
     assert len(data.findings) == 3
-    assert data.findings[0].decision == "CONFIRMED"
-    assert data.findings[0].reviewer == "Lead Auditor"
-    assert data.findings[0].page == "pp. 12–14"
+    assert data.findings[0].decision == "PROPOSED"
+    assert data.findings[0].reviewer is None
+    assert data.findings[0].finding_id is None
+    assert data.findings[0].page is None
+    assert not data.findings[0].exact_quote
     assert data.findings[0].severity == "CRITICAL"
-    assert data.findings[1].page == "p. 5"
-    assert data.findings[2].page == 9
+    assert data.findings[1].page is None
+    assert data.findings[2].page is None
     assert len(data.gaps) >= 1
     assert len(data.references) >= 1
     assert data.references[0].target_reference == "Annex A - Penalty Matrix"
@@ -516,7 +525,7 @@ async def test_sqlalchemy_journey_sources_fallback_to_analyses_when_coherence_re
     project_id = uuid4()
     tenant_id = uuid4()
 
-    class _MockAsyncSession:
+    class _MockAsyncSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -564,7 +573,7 @@ async def test_sqlalchemy_journey_sources_resilient_to_query_exceptions() -> Non
     project_id = uuid4()
     tenant_id = uuid4()
 
-    class _FailingSession:
+    class _FailingSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -673,7 +682,7 @@ async def test_n4_coverage_fallback_status_partial_not_complete() -> None:
     tenant_id = uuid4()
     run_id = uuid4()
 
-    class _MockAsyncSession:
+    class _MockAsyncSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -748,7 +757,7 @@ async def test_bounded_snapshot_fetches_more_than_one_former_batch() -> None:
     project_id = uuid4()
     tenant_id = uuid4()
 
-    class _MockPagedSession:
+    class _MockPagedSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -832,7 +841,7 @@ async def test_n4_coverage_failclosed_partial_plus_blocked_end_to_end() -> None:
     tenant_id = uuid4()
     run_id = uuid4()
 
-    class _MockSession:
+    class _MockSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -866,7 +875,7 @@ async def test_n4_coverage_failclosed_terminal_run_with_missing_ordinal() -> Non
     tenant_id = uuid4()
     run_id = uuid4()
 
-    class _MockSession:
+    class _MockSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -899,7 +908,7 @@ async def test_n4_coverage_failclosed_terminal_run_with_pending_window() -> None
     tenant_id = uuid4()
     run_id = uuid4()
 
-    class _MockSession:
+    class _MockSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.projects" in sql:
@@ -935,7 +944,7 @@ async def test_sql_backed_unavailable_is_distinct_from_sql_error_and_empty_findi
     tenant_id = uuid4()
     observed: list[tuple[str, dict[str, Any]]] = []
 
-    class _NoSourceRowsSession:
+    class _NoSourceRowsSession(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             bound = dict(params or {})
@@ -985,7 +994,7 @@ async def test_review_pagination_uses_unique_id_tiebreaker_for_identical_timesta
     ]
     observed_limits: list[int] = []
 
-    class _TiedTimestampRows:
+    class _TiedTimestampRows(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             assert "ORDER BY created_at ASC, id ASC" in sql, "id is required for deterministic tie ordering"
@@ -1071,7 +1080,7 @@ async def test_cached_complete_cannot_override_partial_ledger() -> None:
 
     project_id, tenant_id, revision_id, run_id = uuid4(), uuid4(), uuid4(), uuid4()
 
-    class _ContradictorySources:
+    class _ContradictorySources(_SavepointSession):
         async def execute(self, statement: Any, params: dict[str, Any] | None = None) -> _MockQueryResult:
             sql = str(statement)
             if "FROM public.document_revisions" in sql:
@@ -1140,3 +1149,43 @@ def test_a7_canonical_reference_register_keeps_proposal_and_quote() -> None:
     assert refs[0].target_reference == "Annex A"
     assert refs[0].status == "MISSING_EXTERNAL"
     assert refs[0].details == "See Annex A."
+
+def test_unbound_a7_summary_preserves_ordinal_and_never_promotes_legacy_evidence():
+    from src.reporting.application.build_journey_export import _unbound_findings
+
+    review_id = uuid4()
+    rows = _unbound_findings({
+        "id": review_id, "current_status": "APPROVED",
+        "item_data": {"risk_source_evidence": [
+            {"index": 0, "title": "Eligible", "found_in_analysis_text": True,
+             "source_quote": "Literal projection quote"},
+            {"index": 1, "title": "Withheld", "found_in_analysis_text": True,
+             "source_quote": "Must not escape", "page_number": 2,
+             "page_verification_status": "PAGE_UNRESOLVED"},
+        ]},
+    })
+    assert [row.source_ordinal for row in rows] == [0, 1]
+    assert all(row.finding_id is None and row.review_row_id == str(review_id) for row in rows)
+    assert all(row.decision == "PROPOSED" for row in rows)
+    assert rows[0].exact_quote == "Literal projection quote"
+    assert rows[0].evidence_status == "REPORTED_N2_PROJECTION"
+    assert not rows[1].exact_quote
+    assert rows[1].page is None
+
+
+def test_bound_confirmation_does_not_upgrade_withheld_evidence():
+    from src.reporting.application.build_journey_export import _project_finding
+
+    result = _project_finding(
+        {"title": "Withheld", "source_quote": "Not eligible",
+         "source_quote_status": "VERIFIED", "page_verification_status": "PAGE_UNRESOLVED",
+         "page_number": 3},
+        review_row_id=str(uuid4()), ordinal=1, finding_id="a" * 64,
+        decision={"action": "CONFIRMED", "reviewer_id": "reviewer"},
+    )
+    assert result is not None
+    assert result.decision == "CONFIRMED"
+    assert result.finding_id == "a" * 64
+    assert result.exact_quote == ""
+    assert result.page is None
+    assert result.evidence_status == "PAGE_UNRESOLVED"

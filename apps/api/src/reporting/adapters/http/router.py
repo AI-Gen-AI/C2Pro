@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from src.analysis.application.project_source_evidence import read_project_source_evidence
 from src.core.auth.dependencies import get_current_user
 from src.core.auth.models import User
-from src.core.database import get_session_with_tenant
+from src.core.database import get_session_factory, get_session_with_tenant
 from src.core.tenants.types import require_tenant_id
 from src.projects.adapters.persistence.project_repository import SQLAlchemyProjectRepository
 from src.projects.ports.project_repository import ProjectRepository
@@ -27,6 +27,7 @@ from src.reporting.application.build_journey_export import (
     BuildJourneyExportUseCase,
     JourneyExportSources,
     SqlAlchemyJourneyExportSources,
+    journey_read_session,
 )
 from src.reporting.application.ports import CurrentStateSources
 from src.reporting.domain.current_state_report import CurrentStateReport, ProjectIdentity
@@ -52,7 +53,7 @@ def get_current_state_sources(
 async def get_journey_export_sources(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> AsyncGenerator[JourneyExportSources, None]:
-    async with get_session_with_tenant(current_user.tenant_id) as session:
+    async with journey_read_session(get_session_factory(), require_tenant_id(current_user.tenant_id)) as session:
         yield SqlAlchemyJourneyExportSources(session)
 
 

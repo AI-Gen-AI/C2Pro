@@ -14,7 +14,8 @@ Generates journey.xlsx with openpyxl:
 from __future__ import annotations
 
 import io
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -27,7 +28,15 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from src.analysis.domain.trust import artifact_digest
+from src.modules.hitl.domain.finding_decision import (
+    CandidateReviewIdentity,
+    FindingDecisionKind,
+    stable_finding_id,
+)
+from src.modules.hitl.domain.finding_source_membership import risk_source_item_id
 
 logger = structlog.get_logger(__name__)
 
@@ -74,6 +83,7 @@ class JourneySummaryData:
     coherence_source_status: str = "AVAILABLE"
     coverage_source_status: str = "AVAILABLE"
     findings_source_status: str = "AVAILABLE"
+    review_rows_read_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +99,9 @@ class JourneyFindingRow:
     decision: str
     reviewer: str | None
     decided_at: datetime | str | None
+    review_row_id: str | None = None
+    source_ordinal: int | None = None
+    evidence_status: str = "UNVERIFIED"
 
 
 @dataclass(frozen=True)
@@ -330,7 +343,8 @@ def _render_summary_coverage(ws: Worksheet, summary: JourneySummaryData, styles:
         ("Examined Windows", exam_w),
         ("Gap Windows", gap_w),
         ("Examined Window Ratio", cov_pct),
-        ("Findings Exported", f"{summary.exported_findings_count} of {summary.total_review_items_count} recorded items"),
+        ("Findings Exported", summary.exported_findings_count),
+        ("Review Rows Recorded", summary.total_review_items_count),
     ]
 
     if summary.coverage_source_status in ("ERROR", "UNAVAILABLE"):
@@ -341,7 +355,7 @@ def _render_summary_coverage(ws: Worksheet, summary: JourneySummaryData, styles:
              else "[ERROR] N4 coverage SQL read failed"),
         ))
 
-    if summary.findings_source_status in ("ERROR", "UNAVAILABLE"):
+    if summary.findings_source_status in ("ERROR", "UNAVAILABLE", "PARTIAL"):
         cov_rows.append((
             "Findings Data Source Status",
             f"[{summary.findings_source_status}] Review items could not be retrieved",
@@ -384,6 +398,10 @@ def _render_findings_header(ws: Worksheet, styles: _ReportStyles) -> None:
         "Human Decision",
         "Reviewer",
         "Decision Date",
+        "Finding ID (bound candidate)",
+        "Review Row ID",
+        "Source Ordinal",
+        "Evidence Status",
     ]
     for col_idx, h in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col_idx)
@@ -411,6 +429,10 @@ def _render_single_finding_row(ws: Worksheet, row_idx: int, f: JourneyFindingRow
         f.decision,
         f.reviewer or "Unassigned",
         _format_date(f.decided_at),
+        f.finding_id or "UNBOUND",
+        f.review_row_id or "Unspecified",
+        f.source_ordinal,
+        f.evidence_status,
     ]
     for col_idx, val in enumerate(row_data, start=1):
         cell = ws.cell(row=row_idx, column=col_idx)
@@ -428,17 +450,20 @@ def _render_findings_sheet(ws: Worksheet, findings: list[JourneyFindingRow], sum
     _render_findings_header(ws, styles)
 
     start_row = 2
-    if summary.total_review_items_count > summary.exported_findings_count:
+    rows_read = summary.review_rows_read_count if summary.review_rows_read_count is not None else summary.exported_findings_count
+    if summary.total_review_items_count > rows_read:
         cell_warn = ws.cell(row=2, column=1)
-        safe_set_cell_value(cell_warn, f"[NOTICE] Showing {summary.exported_findings_count} of {summary.total_review_items_count} findings recorded for this project (maximum export limit reached).")
+        safe_set_cell_value(cell_warn, f"[NOTICE] Showing {rows_read} of {summary.total_review_items_count} review rows (maximum export limit reached).")
         cell_warn.font = styles.font_alert
         start_row = 3
 
-    if summary.findings_source_status in ("ERROR", "UNAVAILABLE"):
+    if summary.findings_source_status in ("ERROR", "UNAVAILABLE", "PARTIAL"):
         cell_err = ws.cell(row=start_row, column=1)
-        safe_set_cell_value(cell_err, f"[{summary.findings_source_status}] Unable to load findings due to data source error.")
+        safe_set_cell_value(cell_err, ("[PARTIAL] One or more candidate bindings could not be verified." if summary.findings_source_status == "PARTIAL" else f"[{summary.findings_source_status}] Unable to load findings due to data source error."))
         cell_err.font = styles.font_alert
-        return
+        if summary.findings_source_status != "PARTIAL":
+            return
+        start_row += 1
 
     if not findings:
         cell_empty = ws.cell(row=start_row, column=1)
@@ -866,61 +891,82 @@ def _parse_review_item_references(item_data: dict[str, Any], references_collecto
                 )
 
 
-def _build_finding_row(
-    r: Any,
-    decisions_by_finding: dict[str, dict[str, Any]],
-    references_collector: list[JourneyReferenceRow],
+def _project_finding(
+    risk: dict[str, Any], *, review_row_id: str, ordinal: int,
+    finding_id: str | None = None, decision: dict[str, Any] | None = None,
+    summary_only: bool = False,
 ) -> JourneyFindingRow | None:
-    item_data = r.get("item_data") or {}
-    if not isinstance(item_data, dict):
+    """Project only explicit evidence; human intent never upgrades provenance."""
+    title = risk.get("title") or risk.get("description")
+    if not isinstance(title, str) or not title.strip():
         return None
-
-    _parse_review_item_references(item_data, references_collector)
-
-    action_item = item_data.get("action_item") or item_data.get("risk") or item_data
-    title = str(action_item.get("title") or action_item.get("description") or "Finding")
-    interpretation = str(
-        action_item.get("ai_interpretation")
-        or action_item.get("interpretation")
-        or action_item.get("risk_reason")
-        or action_item.get("recommended_action")
-        or ""
+    page_status = risk.get("page_verification_status")
+    quote = risk.get("source_quote")
+    verified = (
+        risk.get("found_in_analysis_text") is True if summary_only
+        else risk.get("source_quote_status") == "VERIFIED"
     )
-    exact_quote = str(
-        action_item.get("exact_quote")
-        or action_item.get("source_quote")
-        or action_item.get("quote")
-        or ""
+    eligible = bool(verified and isinstance(quote, str) and quote and page_status != "PAGE_UNRESOLVED")
+    evidence_status = (
+        "PAGE_UNRESOLVED" if page_status == "PAGE_UNRESOLVED"
+        else ("VERIFIED_N2_PROJECTION" if finding_id else "REPORTED_N2_PROJECTION") if eligible
+        else "UNVERIFIED"
     )
-    page = _extract_page_span(action_item)
-    clause = action_item.get("clause") or action_item.get("clause_ref")
-    dimension = action_item.get("dimension") or action_item.get("category")
-    severity = action_item.get("severity") or action_item.get("severity_proposed") or action_item.get("impact_level")
-
-    finding_str_id = str(r["id"])
-    ledger_dec = decisions_by_finding.get(finding_str_id)
-    if ledger_dec is not None:
-        decision_val = str(ledger_dec.get("action") or r.get("current_status") or "PROPOSED")
-        reviewer_val = str(ledger_dec.get("reviewer_id")) if ledger_dec.get("reviewer_id") else None
-        decided_at_val = ledger_dec.get("recorded_at") or r.get("approved_at")
-    else:
-        decision_val = str(r.get("current_status") or "PROPOSED")
-        reviewer_val = str(r.get("approved_by")) if r.get("approved_by") else None
-        decided_at_val = r.get("approved_at")
-
+    page = risk.get("page_number")
+    page = page if eligible and page_status == "PAGE_LOCATED" and type(page) is int and page > 0 else None
+    decision = decision or {}
     return JourneyFindingRow(
-        finding_id=finding_str_id,
-        title=title,
-        ai_interpretation=interpretation,
-        exact_quote=exact_quote,
+        finding_id=finding_id, title=title.strip(),
+        ai_interpretation=str(risk.get("risk_reason") or risk.get("description") or risk.get("ai_interpretation") or ""),
+        exact_quote=str(quote) if eligible else "",
         page=page,
-        clause=clause,
-        dimension=str(dimension) if dimension else None,
-        severity=str(severity) if severity else None,
-        decision=decision_val,
-        reviewer=reviewer_val,
-        decided_at=decided_at_val,
+        clause=risk.get("clause_ref") or risk.get("clause"),
+        dimension=risk.get("dimension") or risk.get("category"),
+        severity=risk.get("severity") or risk.get("severity_proposed"),
+        decision=str(decision.get("action") or "PROPOSED"),
+        reviewer=str(decision["reviewer_id"]) if decision.get("reviewer_id") else None,
+        decided_at=decision.get("recorded_at"),
+        review_row_id=review_row_id, source_ordinal=ordinal,
+        evidence_status=evidence_status,
     )
+
+
+def _unbound_findings(row: Any) -> list[JourneyFindingRow]:
+    """A7 summary is reviewable but has no authoritative stable finding ID."""
+    item = row.get("item_data")
+    if not isinstance(item, dict):
+        return []
+    review_id = str(row["id"])
+    entries = item.get("risk_source_evidence")
+    if isinstance(entries, list):
+        result = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            ordinal = entry.get("index")
+            if type(ordinal) is not int or ordinal < 0:
+                continue
+            finding = _project_finding(entry, review_row_id=review_id, ordinal=ordinal, summary_only=True)
+            if finding is not None:
+                result.append(finding)
+        return result
+    # Historical flat rows are proposals, not proof of candidate membership.
+    risk = item.get("action_item") or item.get("risk") or item
+    if not isinstance(risk, dict):
+        return []
+    finding = _project_finding({**risk, "source_quote_status": "UNVERIFIED"}, review_row_id=review_id, ordinal=0)
+    return [finding] if finding else []
+
+
+@asynccontextmanager
+async def journey_read_session(
+    factory: async_sessionmaker[AsyncSession], tenant_id: UUID,
+) -> AsyncIterator[AsyncSession]:
+    """Dedicated read-only transaction; set isolation BEFORE tenant context or any read."""
+    async with factory() as session, session.begin():
+        await session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
+        await session.execute(text("SELECT set_config('app.current_tenant', :tenant, true)"), {"tenant": str(tenant_id)})
+        yield session
 
 
 class SqlAlchemyJourneyExportSources:
@@ -929,8 +975,13 @@ class SqlAlchemyJourneyExportSources:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def _read(self, statement: Any, params: dict[str, Any]) -> Any:
+        # Exit/rollback the savepoint before callers classify the SQL error.
+        async with self._session.begin_nested():
+            return await self._session.execute(statement, params)
+
     async def _load_project_identity(self, project_id: UUID, tenant_id: UUID) -> tuple[str, str | None, str]:
-        row = (await self._session.execute(text("""
+        row = (await self._read(text("""
             SELECT id, name, code, status
               FROM public.projects
              WHERE id = CAST(:project_id AS uuid)
@@ -947,7 +998,7 @@ class SqlAlchemyJourneyExportSources:
     ) -> tuple[float | None, str | None, dict[str, float | None], str]:
         sub_scores: dict[str, float | None] = dict.fromkeys(CANONICAL_DIMENSIONS, None)
         try:
-            coh_row = (await self._session.execute(text("""
+            coh_row = (await self._read(text("""
                 SELECT global_score, category_scores, score_reason
                   FROM public.coherence_results
                  WHERE project_id = CAST(:project_id AS uuid)
@@ -960,12 +1011,12 @@ class SqlAlchemyJourneyExportSources:
                 global_score, score_reason = _extract_coherence_result(coh_row, sub_scores)
                 return global_score, score_reason, sub_scores, "AVAILABLE"
 
-            an_row = (await self._session.execute(text("""
+            an_row = (await self._read(text("""
                 SELECT coherence_score, coherence_breakdown
                   FROM public.analyses
                  WHERE project_id = CAST(:project_id AS uuid)
                    AND tenant_id = CAST(:tenant_id AS uuid)
-                   AND status = 'COMPLETED'
+                   AND status = 'completed'
                  ORDER BY completed_at DESC NULLS LAST, created_at DESC
                  LIMIT 1
             """), {"project_id": str(project_id), "tenant_id": str(tenant_id)})).mappings().one_or_none()
@@ -984,7 +1035,7 @@ class SqlAlchemyJourneyExportSources:
         self, project_id: UUID, tenant_id: UUID
     ) -> tuple[str | None, str | None, dict[str, Any]]:
         # The revision's PK is revision_id; analysis metadata belongs to documents.
-        rev_row = (await self._session.execute(text("""
+        rev_row = (await self._read(text("""
             SELECT r.revision_id, r.document_id, d.document_metadata
               FROM public.document_revisions AS r
               JOIN public.documents AS d
@@ -1036,14 +1087,14 @@ class SqlAlchemyJourneyExportSources:
                 "project_id": str(project_id), "tenant_id": str(tenant_id),
                 "revision_id": revision_id, "run_id": pinned_run_id,
             }
-            run_row = (await self._session.execute(run_query, params)).mappings().one_or_none()
+            run_row = (await self._read(run_query, params)).mappings().one_or_none()
             if run_row is None:
                 return "INCOMPLETE", 0, 0, 0, [], [], "UNAVAILABLE"
 
             active_run_id = run_row["run_id"]
             run_status = str(run_row.get("status") or "")
             total_w = int(run_row.get("total_windows") or 0)
-            window_rows = (await self._session.execute(text("""
+            window_rows = (await self._read(text("""
                 SELECT ordinal, status, blocked_reason, unresolved_refs
                   FROM public.n4_extraction_windows
                  WHERE run_id = CAST(:run_id AS uuid)
@@ -1086,9 +1137,10 @@ class SqlAlchemyJourneyExportSources:
         # One bounded statement = one PostgreSQL MVCC snapshot. OFFSET across
         # statements can repeat or skip findings when another transaction writes.
         # COUNT(*) OVER () reports the total from precisely that same snapshot.
-        return list((await self._session.execute(text("""
+        return list((await self._read(text("""
             SELECT id, current_status, approved_by, approved_at, item_data,
-                   COUNT(*) OVER () AS total_count
+                   document_id, review_metadata, thread_id, checkpoint_id,
+                   lineage_generation, lineage_fencing_token, COUNT(*) OVER () AS total_count
               FROM public.review_items
              WHERE project_id = CAST(:project_id AS uuid)
                AND tenant_id = CAST(:tenant_id AS uuid)
@@ -1100,42 +1152,139 @@ class SqlAlchemyJourneyExportSources:
             "limit": REVIEW_ITEMS_MAX_EXPORT,
         })).mappings().all())
 
+    async def _bound_candidate(
+        self, row: Any, project_id: UUID, tenant_id: UUID,
+    ) -> tuple[CandidateReviewIdentity, list[Any]] | None:
+        metadata = row.get("review_metadata")
+        binding = metadata.get("candidate_binding") if isinstance(metadata, dict) else None
+        if not isinstance(binding, dict):
+            return None
+        if metadata.get("trust_candidate_required") is not True or metadata.get("trust_kind") == "structured_source":
+            return None
+        if binding.get("document_id") != str(row.get("document_id")):
+            return None
+        try:
+            artifact_id = UUID(str(binding.get("artifact_id")))
+            version = int(str(binding.get("artifact_version")))
+            digest = str(binding.get("artifact_hash") or "")
+        except (TypeError, ValueError):
+            return None
+        candidate = (await self._read(text("""
+            SELECT a.document_revision_id, a.payload, o.generation, o.fencing_token
+              FROM public.document_artifacts a
+              JOIN public.document_processing_operations o
+                ON o.document_id=a.document_id AND o.tenant_id=a.tenant_id
+               AND o.revision_id=a.document_revision_id AND o.stage='ANALYSIS'
+              JOIN public.document_revisions r
+                ON r.revision_id=a.document_revision_id AND r.document_id=a.document_id
+               AND r.tenant_id=a.tenant_id AND r.project_id=a.project_id AND r.valid_to IS NULL
+             WHERE a.artifact_id=CAST(:artifact_id AS uuid)
+               AND a.tenant_id=CAST(:tenant_id AS uuid)
+               AND a.project_id=CAST(:project_id AS uuid)
+               AND a.document_id=CAST(:document_id AS uuid)
+               AND a.artifact_version=:version AND a.artifact_hash=:digest
+               AND a.trust_state IN ('proposed','trusted')
+        """), {
+            "artifact_id": str(artifact_id), "tenant_id": str(tenant_id),
+            "project_id": str(project_id), "document_id": str(row["document_id"]),
+            "version": version, "digest": digest,
+        })).mappings().one_or_none()
+        payload = candidate.get("payload") if candidate else None
+        if not isinstance(payload, dict) or artifact_digest(payload) != digest:
+            return None
+        if candidate["generation"] != row.get("lineage_generation") or candidate["fencing_token"] != row.get("lineage_fencing_token"):
+            return None
+        try:
+            identity = CandidateReviewIdentity(
+                tenant_id=tenant_id, review_row_id=row["id"], document_id=row["document_id"],
+                document_revision_id=candidate["document_revision_id"], artifact_id=artifact_id,
+                artifact_version=version, artifact_hash=digest, generation=candidate["generation"],
+                fencing_token=candidate["fencing_token"], thread_id=row.get("thread_id"),
+                checkpoint_id=row.get("checkpoint_id"),
+            )
+        except ValueError:
+            return None
+        risks = payload.get("extracted_risks")
+        return (identity, risks) if isinstance(risks, list) else None
+
+    async def _candidate_decisions(
+        self, identity: CandidateReviewIdentity, project_id: UUID,
+    ) -> dict[str, dict[str, Any]]:
+        rows = (await self._read(text("""
+            SELECT DISTINCT ON (finding_id) finding_id, source_item_id, source_ordinal,
+                   action, reviewer_id, recorded_at
+              FROM public.hitl_finding_decisions
+             WHERE tenant_id=CAST(:tenant_id AS uuid) AND project_id=CAST(:project_id AS uuid)
+               AND review_row_id=CAST(:review_row_id AS uuid)
+               AND document_id=CAST(:document_id AS uuid)
+               AND document_revision_id=CAST(:document_revision_id AS uuid)
+               AND artifact_id=CAST(:artifact_id AS uuid)
+               AND artifact_version=:artifact_version AND artifact_hash=:artifact_hash
+               AND generation=:generation AND fencing_token=:fencing_token
+               AND thread_id=:thread_id AND checkpoint_id=:checkpoint_id AND finding_kind='RISK'
+             ORDER BY finding_id, ledger_revision DESC, event_id DESC
+        """), {**identity.model_dump(mode="json"), "project_id": str(project_id)})).mappings().all()
+        return {str(r["finding_id"]): dict(r) for r in rows}
+
+    async def _project_bound_findings(
+        self, identity: CandidateReviewIdentity, risks: list[Any], project_id: UUID,
+    ) -> list[JourneyFindingRow]:
+        decisions = await self._candidate_decisions(identity, project_id)
+        result = []
+        for ordinal, risk in enumerate(risks):
+            if not isinstance(risk, dict) or not risk:
+                continue
+            source_id = risk_source_item_id(risk)
+            finding_id = stable_finding_id(identity, FindingDecisionKind.RISK, source_item_id=source_id, ordinal=ordinal)
+            decision = decisions.get(finding_id)
+            if decision and (decision["source_item_id"] != source_id or decision["source_ordinal"] != ordinal):
+                decision = None
+            finding = _project_finding(
+                risk, review_row_id=str(identity.review_row_id), ordinal=ordinal,
+                finding_id=finding_id, decision=decision,
+            )
+            if finding is not None:
+                result.append(finding)
+        return result
+
     async def _load_findings_and_decisions(
         self, project_id: UUID, tenant_id: UUID, references_collector: list[JourneyReferenceRow]
-    ) -> tuple[list[JourneyFindingRow], int, int, str]:
+    ) -> tuple[list[JourneyFindingRow], int, int, str, int]:
         findings: list[JourneyFindingRow] = []
+        references: list[JourneyReferenceRow] = []
         try:
-            ledger_rows = (await self._session.execute(text("""
-                SELECT DISTINCT ON (finding_id) finding_id, action, reviewer_id, recorded_at
-                  FROM public.hitl_finding_decisions
-                 WHERE project_id = CAST(:project_id AS uuid)
-                   AND tenant_id = CAST(:tenant_id AS uuid)
-                 ORDER BY finding_id, recorded_at DESC
-            """), {"project_id": str(project_id), "tenant_id": str(tenant_id)})).mappings().all()
-
-            decisions_by_finding: dict[str, dict[str, Any]] = {
-                str(row["finding_id"]): dict(row) for row in ledger_rows if row.get("finding_id")
-            }
-
             review_rows = await self._fetch_review_items_paginated(project_id, tenant_id)
             total_items = int(review_rows[0]["total_count"]) if review_rows else 0
-
-            for r in review_rows:
-                row_obj = _build_finding_row(r, decisions_by_finding, references_collector)
-                if row_obj is not None:
-                    findings.append(row_obj)
-
-            exported_count = len(findings)
-            return findings, total_items, exported_count, "AVAILABLE"
+            partial = False
+            for row in review_rows:
+                item = row.get("item_data")
+                metadata = row.get("review_metadata")
+                requires_binding = (
+                    isinstance(metadata, dict) and (
+                        metadata.get("trust_candidate_required") is True or "candidate_binding" in metadata
+                    )
+                ) or (isinstance(item, dict) and "candidate_binding" in item)
+                if requires_binding:
+                    bound = await self._bound_candidate(row, project_id, tenant_id)
+                    if bound is None:
+                        partial = True
+                        continue  # Never fall back to a stale summary after a broken pin.
+                    findings.extend(await self._project_bound_findings(*bound, project_id))
+                else:
+                    findings.extend(_unbound_findings(row))
+                if isinstance(item, dict):
+                    _parse_review_item_references(item, references)
+            references_collector.extend(references)
+            return findings, total_items, len(findings), "PARTIAL" if partial else "AVAILABLE", len(review_rows)
         except Exception:
             logger.exception("journey_export_findings_read_failed", project_id=str(project_id))
-            return [], 0, 0, "ERROR"
+            return [], 0, 0, "ERROR", 0
 
     async def load_journey_data(self, project_id: UUID, tenant_id: UUID) -> JourneyExportData:
         proj_name, proj_code, proj_status = await self._load_project_identity(project_id, tenant_id)
         global_score, score_reason, sub_scores, coh_status = await self._load_coherence_scores(project_id, tenant_id)
         cov_status, total_w, exam_w, gap_w, gaps, references, cov_status_src = await self._load_n4_coverage_and_gaps(project_id, tenant_id)
-        findings, total_items, exported_count, findings_status = await self._load_findings_and_decisions(project_id, tenant_id, references)
+        findings, total_items, exported_count, findings_status, rows_read = await self._load_findings_and_decisions(project_id, tenant_id, references)
 
         summary = JourneySummaryData(
             project_id=project_id,
@@ -1157,6 +1306,7 @@ class SqlAlchemyJourneyExportSources:
             coherence_source_status=coh_status,
             coverage_source_status=cov_status_src,
             findings_source_status=findings_status,
+            review_rows_read_count=rows_read,
         )
 
         return JourneyExportData(
