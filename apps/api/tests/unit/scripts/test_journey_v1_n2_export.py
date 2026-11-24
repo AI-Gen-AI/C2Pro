@@ -361,3 +361,26 @@ def test_writer_detects_parent_swap_at_final_open(monkeypatch):
         assert swapped
         assert not (outside / "artifact.json").exists()
         assert not (original / "artifact.json").exists()
+
+
+@pytest.mark.parametrize("with_output", [False, True])
+def test_contract_blocked_even_if_export_unexpectedly_returns(
+    monkeypatch, capsys, tmp_path, with_output
+):
+    """CLI must not expose or write any payload before a trusted N2 contract."""
+    from apps.api.scripts import journey_v1_n2_export as subject
+
+    target = tmp_path / "forbidden.json"
+    argv = ["export", "--text", "synthetic"]
+    if with_output:
+        argv += ["--out", str(target)]
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(subject, "export_n2_j1", lambda *a: {"text": "synthetic"})
+    def forbidden_writer(*args, **kwargs):
+        pytest.fail("blocked CLI reached the private writer")
+    monkeypatch.setattr(subject, "_create_private_output", forbidden_writer)
+    assert subject.main() == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert BLOCKED_BY_N2_CONTRACT in captured.err
+    assert not target.exists()

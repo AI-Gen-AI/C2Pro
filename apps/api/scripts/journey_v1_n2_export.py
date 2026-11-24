@@ -244,35 +244,16 @@ def main() -> int:
             print("ERROR: output path must be absolute and outside repository (JV1-B3 confined)", file=sys.stderr)
             return 1
     try:
-        result = export_n2_j1(args.text, spans_list, args.export_root)
+        export_n2_j1(args.text, spans_list, args.export_root)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
-    output_json = json.dumps(result, indent=2, sort_keys=False, ensure_ascii=False)
-
-    # Future verified exports must use the confined local writer.
-    # El archivo debe escribirse fuera del reposorio, sin symlink traversal
-    if args.out:
-        out_path = Path(args.out)
-        # Si la ruta es absoluta y fuera del repositorio, permitirla
-        if out_path.is_absolute():
-            if out_path.is_relative_to(str(REPO_ROOT)):
-                print("ERROR: output path must be outside repository (JV1-B3 confined)", file=sys.stderr)
-                return 1
-            try:
-                _create_private_output(out_path, output_json + "\n")
-            except (OSError, ValueError, TypeError, NotImplementedError) as e:
-                print(f"ERROR: cannot create private output file: {e}", file=sys.stderr)
-                return 1
-        else:
-            # Rutas relativas: error — debe ser absoluta y fuera del repo
-            print("ERROR: output path must be absolute and outside repository (JV1-B3 confined)", file=sys.stderr)
-            return 1
-    else:
-        # Sin --out: usar stdout
-        print(output_json + "\n")
-    return 0
+    # No CLI-to-writer capability exists until a canonical receipt verifier
+    # is implemented. Even an unexpected successful return cannot authorize
+    # output. The local writer remains directly tested, not CLI reachable.
+    print(f"ERROR: {BLOCKED_BY_N2_CONTRACT}", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
