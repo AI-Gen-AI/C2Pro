@@ -50,6 +50,7 @@ class FindingResolution(StrEnum):
 
 
 class BlockerCode(StrEnum):
+    SOURCE_EVIDENCE_UNVERIFIED = "SOURCE_EVIDENCE_UNVERIFIED"
     NO_REVIEWABLE_FINDINGS = "NO_REVIEWABLE_FINDINGS"  # zero findings is not proof of complete analysis
     NEEDS_INFO = "NEEDS_INFO"
     UNDECIDED_FINDING = "UNDECIDED_FINDING"
@@ -140,6 +141,7 @@ class ReconciliationInput:
     ledger: Sequence[LedgerEvent]  # EVERY row of the review (any candidate it ever gated), in any order
     critiques: Sequence[CritiqueObservation] = ()
     critique_coverage: CritiqueCoverage = CritiqueCoverage.NONE_PRESENT
+    source_ineligible_finding_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -326,6 +328,14 @@ def reconcile(data: ReconciliationInput) -> ReconciliationResult:
         blockers.append(Blocker(
             BlockerCode.NO_REVIEWABLE_FINDINGS, None,
             "the candidate has no reviewable findings; analysis coverage must be established before final approval",
+        ))
+
+    # Eligibility comes from the immutable, hash-checked candidate payload,
+    # never from a human decision or a client-supplied evidence flag.
+    for finding_id in sorted(set(data.source_ineligible_finding_ids)):
+        blockers.append(Blocker(
+            BlockerCode.SOURCE_EVIDENCE_UNVERIFIED, finding_id,
+            "the retained source must have a nonempty VERIFIED literal",
         ))
 
     if not inconsistencies:

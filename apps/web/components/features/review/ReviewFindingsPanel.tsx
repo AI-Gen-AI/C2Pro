@@ -11,7 +11,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,20 @@ import type {
 } from "@/lib/api/generated/models";
 import type { FindingDecisionAction } from "@/lib/api/generated/models/findingDecisionAction";
 import { reviewFindingsKey } from "./useReviewCapabilities";
+
+/** Present category as an AI-proposed business area, never as a validated classification. */
+function findingBusinessArea(finding: ReviewFindingResponse): string {
+  const raw = finding.risk.category;
+  const code = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+  const labels: Record<string, string> = {
+    TIME: "Schedule", SCHEDULE: "Schedule",
+    COST: "Budget", BUDGET: "Budget",
+    SCOPE: "Scope", QUALITY: "Quality",
+    LEGAL: "Contract conditions", CONTRACTUAL: "Contract conditions",
+    PROCUREMENT: "Supply chain", SUPPLY_CHAIN: "Supply chain",
+  };
+  return labels[code] ?? "Area not evaluated";
+}
 
 const ACTION_LABEL: Record<FindingDecisionAction, string> = {
   CONFIRMED: "Approve finding",
@@ -131,6 +145,20 @@ function hasVerifiedLiteralSource(finding: ReviewFindingResponse): boolean {
   return finding.risk.source_quote_status === "VERIFIED" &&
     typeof finding.risk.source_quote === "string" &&
     finding.risk.source_quote.trim().length > 0;
+}
+
+/** A historical reviewer decision is not proof of current source integrity.
+ * Never present a stale CONFIRMED as eligible for a separate final decision.
+ * This is only the *UI* predicate: the backend remains the final authority.
+ */
+function isSourceEligibleConfirmation(
+  view: ReviewFindingsResponse,
+  finding: ReviewFindingResponse,
+  scope: { orgId: string | null | undefined; userId: string | null | undefined; reviewRowId: string },
+): boolean {
+  return finding.current?.action === "CONFIRMED" &&
+    sourceComparisonIdentity(view, finding, scope) !== null &&
+    hasVerifiedLiteralSource(finding);
 }
 
 function newKey(): string {
@@ -308,9 +336,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     query.data &&
     query.data.findings.length > 0 &&
     query.data.findings.every((finding) =>
-      finding.current?.action === "CONFIRMED" &&
-      sourceComparisonIdentity(query.data, finding, { orgId, userId, reviewRowId }) !== null &&
-      hasVerifiedLiteralSource(finding),
+      isSourceEligibleConfirmation(query.data, finding, { orgId, userId, reviewRowId }),
     ),
   );
   useEffect(() => {
@@ -334,6 +360,16 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
     (finding) => finding.current?.action === "DISMISSED" || finding.current?.action === "CORRECTION_PROPOSED",
   );
 
+  const groupedFindings = [...view.findings].sort((a, b) =>
+    findingBusinessArea(a).localeCompare(findingBusinessArea(b)) || a.ordinal - b.ordinal,
+  );
+  const recordedConfirmations = view.findings.filter(
+    (finding) => finding.current?.action === "CONFIRMED",
+  ).length;
+  const sourceEligibleConfirmations = view.findings.filter(
+    (finding) => isSourceEligibleConfirmation(view, finding, { orgId, userId, reviewRowId }),
+  ).length;
+
   return (
     <section
       className="mt-3 rounded-md border bg-muted/30 p-3 text-sm"
@@ -348,8 +384,9 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         separate final Approve all / Reject decision at the bottom. Approving a finding does not mean accepting the project risk.
       </p>
       <p className="mt-2 text-xs font-medium" role="status" data-testid={`review-findings-progress-${reviewRowId}`}>
-        {view.findings.filter((finding) => finding.current?.action === "CONFIRMED").length}/{view.findings.length} findings approved individually.
-        {readyForFinalApproval ? " Ready for separate final approval." : " Final approval remains blocked: each finding must be confirmed with a complete source identity and a VERIFIED literal quotation; rejected findings require a corrected candidate."}
+        {recordedConfirmations}/{view.findings.length} reviewer confirmations recorded.
+        {" "}{sourceEligibleConfirmations}/{view.findings.length} presently source-eligible; original PDF/page not independently verified.
+        {readyForFinalApproval ? " Eligible for separate final-approval checks, not a certification of the original source." : " Final approval remains blocked: each finding needs a current source identity and a VERIFIED literal quotation; rejected findings require a corrected candidate."}
       </p>
       {view.findings.length === 0 ? (
         <p className="mt-2 text-muted-foreground" data-testid={`review-findings-empty-${reviewRowId}`}>
@@ -367,9 +404,10 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
         </p>
       ) : null}
       <ul className="mt-2 space-y-3">
-        {view.findings.map((finding) => {
+        {groupedFindings.map((finding, index) => {
           const draft = drafts[finding.ordinal];
           const title = String(finding.risk.title ?? `Finding ${finding.ordinal + 1}`);
+          const accessibleFinding = `Finding ${finding.ordinal + 1}: ${title}`;
           const brief = shortAnalysis(finding.risk.description);
           const consequence = [finding.risk.consequences, finding.risk.consequence].map(readable).find(Boolean);
           // RiskItem.impact is a legacy severity label: do not report it as quantified business impact.
@@ -388,15 +426,28 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
             draft !== undefined &&
             (!needsReason(draft.action) || draft.reason.trim().length > 0) &&
             (draft.action !== "CORRECTION_PROPOSED" || draft.proposedText.trim().length > 0);
+          const area = findingBusinessArea(finding);
+          const newArea = index === 0 || findingBusinessArea(groupedFindings[index - 1]) !== area;
           return (
-            <li key={finding.finding_id} className="rounded border bg-background p-2" data-testid={`finding-${finding.ordinal}`}>
+            <Fragment key={finding.finding_id}>
+              {newArea ? (
+                <li role="presentation" className="pt-2">
+                  <h3 className="font-semibold">{area}</h3>
+                  <p className="text-xs text-muted-foreground">Business area proposed by AI, not yet validated.</p>
+                </li>
+              ) : null}
+              <li className="rounded border bg-background p-2" data-testid={ `finding-${finding.ordinal}` }>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{title}</span>
                 {finding.risk.category ? <Badge variant="outline">{String(finding.risk.category)}</Badge> : null}
                 {finding.risk.severity ? <Badge variant="outline">{String(finding.risk.severity)}</Badge> : null}
                 {finding.current ? (
                   <Badge data-testid={`finding-current-${finding.ordinal}`}>
-                    {RECORDED_LABEL[finding.current.action]} (provisional)
+                    {finding.current.action === "CONFIRMED"
+                      ? isSourceEligibleConfirmation(view, finding, { orgId, userId, reviewRowId })
+                        ? "Reviewer confirmation recorded (provisional; original PDF/page unverified)"
+                        : "Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)"
+                      : `${RECORDED_LABEL[finding.current.action]} (provisional)`}
                   </Badge>
                 ) : (
                   <Badge variant="outline" data-testid={`finding-current-${finding.ordinal}`}>
@@ -428,7 +479,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   : "No specific mitigation supplied. Verify the contractual basis before deciding."}
               </p>
               <details className="mt-2 rounded border border-dashed p-2" data-testid={`finding-evidence-${finding.ordinal}`}>
-                <summary className="cursor-pointer text-sm font-medium">View evidence and full AI analysis</summary>
+                <summary className="cursor-pointer text-sm font-medium" aria-label={`View evidence and full AI analysis — ${accessibleFinding}`}>View evidence and full AI analysis</summary>
                 {finding.risk.description ? (
                   <p className="mt-2 whitespace-pre-wrap text-muted-foreground" data-testid={`finding-description-${finding.ordinal}`}>
                     <span className="mr-1 text-xs font-medium uppercase tracking-wide">Analysis (AI-generated):</span>{" "}
@@ -462,6 +513,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                           setSourceReviewed((current) => ({ ...current, [sourceComparisonKey]: event.target.checked }));
                         }}
                         data-testid={`finding-source-reviewed-${finding.ordinal}`}
+                        aria-label={`Source quotation compared — ${accessibleFinding}`}
                       />
                       I have compared the AI claim with the full visible quote for this candidate; confirmation records provisional intent only.
                     </label>
@@ -497,6 +549,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     disabled={record.isPending || query.isFetching || !mayReview || (action === "CONFIRMED" && !mayConfirmFinding)}
                     title={action === "CONFIRMED" && !mayConfirmFinding ? "VERIFIED literal evidence, complete source identity and your comparison are required; otherwise choose Needs info or Propose correction." : undefined}
                     data-testid={`finding-action-${finding.ordinal}-${action}`}
+                    aria-label={`${ACTION_LABEL[action]} — ${accessibleFinding}`}
                     onClick={() => {
                       setRefusal(null);
                       if (action === "CONFIRMED") {
@@ -542,6 +595,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     data-testid={`finding-reason-${finding.ordinal}`}
                     className="w-full rounded border bg-background p-2"
                     rows={2}
+                    aria-label={`Reason for ${ACTION_LABEL[draft.action]} — ${accessibleFinding}`}
                     value={draft.reason}
                     disabled={record.isPending}
                     onChange={(event) => {
@@ -567,6 +621,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                         data-testid={`finding-text-${finding.ordinal}`}
                         className="w-full rounded border bg-background p-2"
                         rows={2}
+                        aria-label={`Proposed replacement text — ${accessibleFinding}`}
                         value={draft.proposedText}
                         disabled={record.isPending}
                         onChange={(event) => {
@@ -588,6 +643,7 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                     size="sm"
                     disabled={!valid || record.isPending}
                     data-testid={`finding-submit-${finding.ordinal}`}
+                    aria-label={`Record provisional decision — ${accessibleFinding}`}
                     onClick={() => {
                       // A background refetch may have advanced the visible ledger after an
                       // ambiguous response. Replaying with new CAS but old key is invalid.
@@ -607,7 +663,8 @@ export function ReviewFindingsPanel({ reviewRowId, onReadinessChange }: { review
                   </Button>
                 </div>
               ) : null}
-            </li>
+              </li>
+            </Fragment>
           );
         })}
       </ul>

@@ -28,9 +28,11 @@ from uuid import UUID
 import structlog
 from sqlalchemy import text
 
+from src.analysis.domain.trust import artifact_digest
 from src.modules.hitl.application.finding_reconciliation_service import (
     FindingReconciliationService,
     ReconciliationStale,
+    has_verified_literal_source,
 )
 from src.modules.hitl.application.finding_review_authorization import FindingReviewerNotAuthorized
 from src.modules.hitl.application.project_review_authorization import (
@@ -39,7 +41,9 @@ from src.modules.hitl.application.project_review_authorization import (
     ProjectCapability,
     ProjectReviewAuthorizer,
 )
+from src.modules.hitl.application.review_findings_view import ReviewFindingsUnavailable
 from src.modules.hitl.domain.finding_reconciliation import (
+    BlockerCode,
     ReconciliationReceipt,
     ReconciliationResult,
 )
@@ -209,13 +213,19 @@ async def require_reconciled_approval(
         return None
     mode = await authorizer.mode(tenant_id)
     service = FindingReconciliationService(authorizer.session, authorizer)
-    result = await service.reconcile_for_member(
-        tenant_id=tenant_id, user_id=user_id, review_row_id=review_row_id, capability=ProjectCapability.APPROVE_CANDIDATE
-    )
+    try:
+        result = await service.reconcile_for_member(
+            tenant_id=tenant_id, user_id=user_id, review_row_id=review_row_id,
+            capability=ProjectCapability.APPROVE_CANDIDATE,
+        )
+    except ReviewFindingsUnavailable as exc:
+        raise ReconciliationStale("the candidate or its processing authority is no longer current") from exc
     # SEC-04: even the transitional OFF/AUDIT modes cannot treat an empty
     # candidate as proof that its extraction covered the source. Keep their
     # existing handling of nonempty/undecided candidates otherwise unchanged.
-    if not result.outcomes:
+    if not result.outcomes or any(
+        b.code is BlockerCode.SOURCE_EVIDENCE_UNVERIFIED for b in result.blockers
+    ):
         raise ReconciliationBlocksApproval(result)
     if mode is AuthorizationMode.OFF:
         return None
@@ -248,7 +258,7 @@ _AUTHORITY = text(
     "WHERE review_row_id = cast(:r as uuid) AND tenant_id = cast(:t as uuid)"
 )
 _TRUST_STATE = text(
-    "SELECT a.trust_state FROM public.document_artifacts a "
+    "SELECT a.trust_state, a.payload, a.artifact_hash FROM public.document_artifacts a "
     "WHERE a.artifact_id = cast(:a as uuid) AND a.tenant_id = cast(:t as uuid)"
 )
 
@@ -261,12 +271,28 @@ async def revalidate_at_promotion(
     A candidate that is already TRUSTED (committed by N17 of this same operation) is not a first promotion: its
     own transaction already revalidated, and finalization must stay idempotent.
     """
-    trust_state = (await session.execute(_TRUST_STATE, {"a": str(artifact_id), "t": str(tenant_id)})).scalar_one_or_none()
-    if str(trust_state or "").lower() != "proposed":
+    artifact = (await session.execute(_TRUST_STATE, {"a": str(artifact_id), "t": str(tenant_id)})).first()
+    if artifact is None or str(artifact[0]).lower() != "proposed":
         return
     review = (await session.execute(_REVIEW_FOR_PROMOTION, {"r": str(review_row_id), "t": str(tenant_id)})).first()
     if review is None or not is_reconcilable(review[1]):
         return
+    # The source gate is mandatory even for a previously claimed legacy-mode
+    # operation. The promotion transaction uses the persisted exact artifact,
+    # not the request or a historical human confirmation.
+    payload, digest = artifact[1], artifact[2]
+    bound = review[1]["candidate_binding"]
+    risks = payload.get("extracted_risks") if isinstance(payload, dict) else None
+    if (
+        str(bound.get("artifact_id")) != str(artifact_id)
+        or bound.get("artifact_hash") != digest
+        or not isinstance(payload, dict)
+        or artifact_digest(payload) != digest
+        or not isinstance(risks, list)
+        or not risks
+        or any(not has_verified_literal_source(risk) for risk in risks)
+    ):
+        raise PromotionNotAuthorized("the exact candidate lacks verified literal source evidence")
     authorizer = ProjectReviewAuthorizer(session)
     mode = await authorizer.mode(tenant_id)
     if mode is not AuthorizationMode.ENFORCE:

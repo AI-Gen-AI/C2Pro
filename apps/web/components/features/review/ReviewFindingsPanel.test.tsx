@@ -71,6 +71,39 @@ describe("ReviewFindingsPanel", () => {
     record.mockResolvedValue({ event_id: "e", ledger_revision: 1, replayed: false });
   });
 
+  it("provides unique accessible names and keyboard decisions for multiple findings", async () => {
+    renderPanel();
+    await screen.findByTestId("finding-0");
+
+    for (const [ordinal, title] of [[0, "Risk 0"], [1, "Risk 1"]] as const) {
+      const context = `Finding ${ordinal + 1}: ${title}`;
+      expect(screen.getByRole("button", { name: `Approve finding — ${context}` })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: `Reject finding — ${context}` })).toBeEnabled();
+      expect(screen.getByRole("button", { name: `Needs info — ${context}` })).toBeEnabled();
+      expect(screen.getByRole("button", { name: `Propose correction — ${context}` })).toBeEnabled();
+      expect(screen.getByRole("checkbox", {
+        name: `Source quotation compared — ${context}`,
+      })).toBeInTheDocument();
+    }
+
+    const rejectFirst = screen.getByRole("button", {
+      name: "Reject finding — Finding 1: Risk 0",
+    });
+    const quoteCompared = screen.getByRole("checkbox", {
+      name: "Source quotation compared — Finding 1: Risk 0",
+    });
+    quoteCompared.focus();
+    await userEvent.tab();
+    expect(rejectFirst).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByTestId("finding-reason-0")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: "Record provisional decision — Finding 1: Risk 0",
+    })).toBeDisabled();
+    expect(screen.queryByTestId("finding-reason-1")).not.toBeInTheDocument();
+    expect(record).not.toHaveBeenCalled();
+  });
+
   it("blocks final approval until every risk is individually confirmed and reports readiness", async () => {
     const onReady = vi.fn();
     const confirmed = { action: "CONFIRMED", reason: null, proposed_text: null };
@@ -777,9 +810,38 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     const onReady = vi.fn();
     list.mockResolvedValue(complete(badPin));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-0")).toHaveTextContent("Confirmed (provisional)");
-    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-0")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
+    await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes recorded approvals from presently source-eligible findings when evidence is incomplete", async () => {
+    const onReady = vi.fn();
+    list.mockResolvedValue(complete({
+      findings: [
+        previouslyConfirmed(0),
+        previouslyConfirmed(1, {
+          risk: {
+            title: "Risk 1", description: "Unverified historical AI interpretation",
+            source_quote_status: "UNVERIFIED", source_quote: "Untrusted text", page_number: 12,
+          },
+        }),
+      ],
+    }));
+    renderPanel(onReady);
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent(
+      "Reviewer confirmation recorded (provisional; original PDF/page unverified)",
+    );
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent(
+      "Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)",
+    );
+    const summary = screen.getByTestId(`review-findings-progress-${ROW}`);
+    expect(summary).toHaveTextContent("2/2 reviewer confirmations recorded");
+    expect(summary).toHaveTextContent("1/2 presently source-eligible");
+    expect(screen.getByTestId("finding-original-location-1")).toHaveTextContent(/not independently verified/i);
+    expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
     expect(record).not.toHaveBeenCalled();
   });
@@ -796,7 +858,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
       ],
     }));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-1")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
     expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
@@ -806,7 +868,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
   it("allows readiness with nonempty VERIFIED quotations, complete pins and individually CONFIRMED findings", async () => {
     const onReady = vi.fn();
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Reviewer confirmation recorded (provisional; original PDF/page unverified)");
     expect(screen.getByTestId("finding-quote-1")).toHaveTextContent("Contract clause 1");
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
     expect(record).not.toHaveBeenCalled();
@@ -871,8 +933,8 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     list.mockResolvedValue(complete(invalid));
     renderPanel(onReady);
     await screen.findByTestId("finding-0");
-    expect(screen.getByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
-    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Confirmed (provisional)");
+    expect(screen.getByTestId("finding-current-0")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
+    expect(screen.getByTestId("finding-current-1")).toHaveTextContent("Earlier reviewer confirmation recorded (evidence incomplete; final approval blocked)");
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("2/2");
     expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
     expect(screen.getByTestId("finding-action-0-NEEDS_INFO")).toBeEnabled();
@@ -921,7 +983,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     const onReady = vi.fn();
     list.mockResolvedValue(complete(good));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Reviewer confirmation recorded (provisional; original PDF/page unverified)");
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
     expect(record).not.toHaveBeenCalled();
   });
@@ -950,7 +1012,7 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
       })],
     }));
     renderPanel(onReady);
-    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Confirmed (provisional)");
+    expect(await screen.findByTestId("finding-current-0")).toHaveTextContent("Reviewer confirmation recorded (provisional; original PDF/page unverified)");
     expect(screen.getByTestId("finding-current-1")).toHaveTextContent("No decision yet");
     expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
     expect(screen.getByTestId("finding-action-1-NEEDS_INFO")).toBeEnabled();
@@ -958,5 +1020,47 @@ describe("CORE evidence policy — validated confirmation and final readiness", 
     expect(screen.getByTestId(`review-findings-progress-${ROW}`)).toHaveTextContent("1/2");
     await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(false));
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("JV1-A21 grouped business risk review (synthetic)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    list.mockResolvedValue(view({
+      findings: [
+        finding(0, { risk: {
+          title: "Synthetic schedule exposure", description: "Contractual delay",
+          category: "SCHEDULE", severity: "UNASSESSED", source_quote_status: "VERIFIED",
+          source_quote: "Synthetic clause on milestone timing.", page_number: 9,
+        } }),
+        finding(1, { risk: {
+          title: "Synthetic cost exposure", description: "Retention impact",
+          category: "BUDGET", severity: "UNASSESSED", source_quote_status: "NOT_FOUND_IN_DOCUMENT",
+          source_quote: "Never display this as an exact quote",
+        } }),
+      ],
+    }));
+  });
+
+  it("groups findings by proposed business area, while retaining individual decision controls", async () => {
+    renderPanel();
+    expect(await screen.findByRole("heading", { name: "Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
+    expect(screen.getByTestId("finding-0")).toHaveTextContent("Synthetic schedule exposure");
+    expect(screen.getByTestId("finding-1")).toHaveTextContent("Synthetic cost exposure");
+    expect(screen.getByTestId("finding-action-0-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-1-CONFIRMED")).toBeDisabled();
+    expect(screen.getByTestId("finding-action-1-DISMISSED")).toBeEnabled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("preserves proposed page as unverified and never promotes a missing quote", async () => {
+    renderPanel();
+    await screen.findByTestId("finding-0");
+    expect(screen.getByTestId("finding-original-location-0")).toHaveTextContent("page 9");
+    expect(screen.getByTestId("finding-trace-0")).toHaveTextContent(/original PDF\/page provenance still requires verification/i);
+    expect(screen.getByTestId("finding-quote-missing-1")).toBeInTheDocument();
+    expect(screen.queryByText("Never display this as an exact quote")).not.toBeInTheDocument();
   });
 });
