@@ -1,13 +1,12 @@
-"""B0 · JV1-N2-EXPORT: proyección N2 sintética para Journey V1, offline, sin PII.
+"""B0 · JV1-N2-EXPORT: offline; canonical export blocked pending N2 contract.
 
-Exporta proyección N2 (texto UTF-8 + spans JSON de página) con confinamiento
-de rutas (confined_path per JV1-B3), SHA-256 reproducible, inventario de
-fuentes y mapa de páginas trazable. Todo fuera del repositorio, sin symlinks,
-sin rutas relativas, sin fuga de PII por campos auxiliares.
+Local synthetic validation and descriptor-anchored output helpers only.
+The public exporter refuses every request until a trusted N2 contract
+provides verifiable source provenance and anonymization evidence.
 
 Fuente: plan #1285, §6.3; alineado a n4_typed_evidence_v2.py y JV1-B3.
 No se admiten datos de contratos reales, PII real ni APIs pagadas.
-Solo sintético bajo PYTHONPATH=apps/api/src.
+No canonical N2 export is enabled.
 """
 
 # La paridad N2 canónica y los recibos de recepción están gestionados por el
@@ -19,11 +18,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -56,11 +53,11 @@ class N2Projection:
     sha256: str              # hash SHA-256 determinista, 64 hex
     page_count: int          # mínimo 1
     spans: tuple[N2Span, ...]  # tupla ordenada por start_offset
-    text: str                # NFKC-normalized, sin PII real
+    text: str                # Local normalization only; not anonymization
 
 
 def make_n2_projection(text: str, spans: list[N2Span] | None = None) -> N2Projection:
-    """Construye N2Projection sintético, offline, reproducible."""
+    """Local synthetic projection helper; not a receipt or export authorization."""
     import unicodedata
     normalized = unicodedata.normalize("NFKC", text)
     sha = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
@@ -75,6 +72,8 @@ def make_n2_projection(text: str, spans: list[N2Span] | None = None) -> N2Projec
 
         previous: N2Span | None = None
         for s in spans:
+            if any(type(value) is not int for value in (s.page, s.start_offset, s.end_offset)):
+                raise ValueError("span page and offsets must be integers")
             if s.page < 1:
                 raise ValueError(f"span page must be >= 1, got {s.page}")
             if s.start_offset < 0:
@@ -132,44 +131,62 @@ def _private_root(root: Path) -> Path:
     return resolved
 
 
-def _create_private_output(path: Path, content: str) -> None:
-    """Create ``path`` using descriptor-anchored, no-symlink traversal.
+def _verify_directory_chain(fds: list[int], components: tuple[str, ...]) -> None:
+    """Check that the anchored directories still match the named chain."""
+    for index, component in enumerate(components):
+        named = os.stat(component, dir_fd=fds[index], follow_symlinks=False)
+        held = os.fstat(fds[index + 1])
+        if not stat.S_ISDIR(named.st_mode) or (
+            named.st_dev, named.st_ino
+        ) != (held.st_dev, held.st_ino):
+            raise ValueError("output parent directory changed during creation")
 
-    Every parent directory is opened relative to the preceding directory
-    descriptor.  Therefore a symlink substituted after an earlier check cannot
-    redirect the final creation to another directory.
+
+def _create_private_output(path: Path, content: str) -> None:
+    """Create via anchored descriptors; reject substituted parents.
+
+    Parent symlinks cannot redirect descriptor-relative open. A changed
+    named chain observed before or after creation causes refusal. This is
+    a local filesystem primitive, not authority to export untrusted text.
     """
-    if not path.is_absolute():
-        raise ValueError("output path must be absolute")
-    if path.is_relative_to(REPO_ROOT):
-        raise ValueError("output path must be outside repository (JV1-B3 confined)")
+    if path.anchor != "/" or path.is_relative_to(REPO_ROOT):
+        raise ValueError("output path must be absolute and outside repository (JV1-B3 confined)")
     if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
         raise ValueError("secure no-symlink output creation is unavailable")
-
     components = path.parts[1:]
     if not components or any(component in ("", ".", "..") for component in components):
         raise ValueError("output path contains unsafe components")
 
-    directory_fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fds = [os.open("/", flags)]
+    created_fd: int | None = None
+    created = False
     try:
         for component in components[:-1]:
-            next_fd = os.open(
-                component,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                dir_fd=directory_fd,
-            )
-            os.close(directory_fd)
-            directory_fd = next_fd
-        file_fd = os.open(
+            fds.append(os.open(component, flags, dir_fd=fds[-1]))
+        _verify_directory_chain(fds, components[:-1])
+        created_fd = os.open(
             components[-1],
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
             0o600,
-            dir_fd=directory_fd,
+            dir_fd=fds[-1],
         )
-        with os.fdopen(file_fd, "w", encoding="utf-8") as output:
+        created = True
+        _verify_directory_chain(fds, components[:-1])
+        os.fchmod(created_fd, 0o600)
+        with os.fdopen(created_fd, "w", encoding="utf-8") as output:
+            created_fd = None
             output.write(content)
+        _verify_directory_chain(fds, components[:-1])
+    except (OSError, ValueError, TypeError, NotImplementedError):
+        if created:
+            os.unlink(components[-1], dir_fd=fds[-1])
+        raise
     finally:
-        os.close(directory_fd)
+        if created_fd is not None:
+            os.close(created_fd)
+        for fd in reversed(fds):
+            os.close(fd)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -180,73 +197,28 @@ def export_n2_j1(
     spans: list[N2Span] | None = None,
     export_root: str | None = None,
 ) -> dict[str, Any]:
-    """Export N2 journey V1 offline: proyección sintética, sin red.
+    """Reject export until N2 provides verified provenance and anonymization.
 
-    Garantías:
-    - Rutas confinadas vía ``confined_path()`` (rechaza symlinks, ``..``, fuga repo)
-    - SHA-256 reproducible, determinista, solo texto sintético NFKC-normalized
-    - Sin recibo N2 firmado, no acepta spans/página que afirmen identidad documental
-    - Sin prueba N2 firmada, el resultado queda ejecutablemente bloqueado y no
-      afirma canonicalidad, recepción, tenant, documento, revisión ni anonimización
-    - export_root SIEMPRE fuera del repositorio (JV1-B3); NO fall-open a /tmp
-    - output JSON con schema estable: sha256, page_count, spans, text, exported_at, export_root
-
-    Args:
-        text: Texto de entrada sintético (sin PII real).
-        spans: Lista opcional de ``N2Span``. Si es ``None``, tupla vacía.
-        export_root: Ruta raíz donde se "exportaría" el archivo. Si es ``None``,
-            se usa el raíz calculado internamente (siempre fuera del repo).
-            Si se provee, se valida que esté fuera del repo.
-
-    Returns:
-        Dict con el esquema JV1-N2-EXPORT v1.
-
-    Raises:
-        ValueError: Si export_root está dentro del repositorio.
+    This interface cannot verify a canonical N2 receipt yet. Raw text and
+    a locally computed hash are insufficient. Reject every caller input
+    without emitting a payload, including synthetic text. Local synthetic
+    helper tests do not confer export permission.
     """
-    projection = make_n2_projection(text, spans)
-
-    # Determinar export_root: SIEMPRE fuera del repositorio (JV1-B3)
-    if export_root is None:
-        # HOME is the only default.  If it points into the repo, refuse rather
-        # than silently publishing a different root such as /opt.
-        export_root_str = str(_private_root(Path.home() / "c2pro-jv1-private"))
-    else:
-        export_root_str = str(_private_root(Path(export_root)))
-
-    exported_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-    result: dict[str, Any] = {
-        "sha256": projection.sha256,
-        "page_count": projection.page_count,
-        "spans": [asdict(s) for s in projection.spans],  # list para JSON
-        "text": projection.text,
-        "exported_at": exported_at,
-        "export_root": export_root_str,
-        "n2_contract_state": BLOCKED_BY_N2_CONTRACT,
-    }
-
-    # Defensa heurística adicional; no es evidencia de anonimización N2.
-    import re as re_mod
-    real_pii_patterns = [
-        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-        r"\+\d{2}\s\d{3}\s\d{3}\s\d{3}",
-        r"\b[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\b",
-    ]
-    for pattern in real_pii_patterns:
-        if re_mod.search(pattern, projection.text):
-            raise ValueError("text contains real PII patterns (design error)")
-
-    return result
+    private = Path.home() / "c2pro-jv1-private" if export_root is None else Path(export_root)
+    _private_root(private)
+    make_n2_projection(text, spans)
+    raise ValueError(
+        f"{BLOCKED_BY_N2_CONTRACT}: verified canonical N2 provenance and anonymization required"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────
 # CLI principal
 # ──────────────────────────────────────────────────────────────────
 def main() -> int:
-    """CLI: exporta proyección N2 para Journey V1, sintético, offline."""
+    """Reject unverified export requests without emitting their contents."""
     import argparse
-    parser = argparse.ArgumentParser(description="JV1-N2-EXPORT: exportador N2 canónico sintético")
+    parser = argparse.ArgumentParser(description="JV1-N2-EXPORT: blocked pending canonical N2 receipt")
     parser.add_argument("--text", required=True, help="Texto sintético de entrada")
     parser.add_argument("--spans", default=None, help="JSON list de spans [page,start_offset,end_offset]")
     parser.add_argument("--export-root", default=None, help="Ruta raíz export (fuera del repo)")
@@ -262,10 +234,15 @@ def main() -> int:
                 N2Span(page=s[0], start_offset=s[1], end_offset=s[2])
                 for s in spans_data
             ]
-        except (json.JSONDecodeError, IndexError, TypeError) as e:
-            print(f"ERROR: spans inválidos: {e}", file=sys.stderr)
+        except (json.JSONDecodeError, IndexError, TypeError, KeyError):
+            print("ERROR: spans inválidos", file=sys.stderr)
             return 1
 
+    if args.out:
+        out_path = Path(args.out)
+        if out_path.anchor != "/" or out_path.is_relative_to(REPO_ROOT):
+            print("ERROR: output path must be absolute and outside repository (JV1-B3 confined)", file=sys.stderr)
+            return 1
     try:
         result = export_n2_j1(args.text, spans_list, args.export_root)
     except ValueError as e:
@@ -274,10 +251,9 @@ def main() -> int:
 
     output_json = json.dumps(result, indent=2, sort_keys=False, ensure_ascii=False)
 
-    # Validación de ruta de salida confinada JV1-B3
+    # Future verified exports must use the confined local writer.
     # El archivo debe escribirse fuera del reposorio, sin symlink traversal
     if args.out:
-        from pathlib import Path
         out_path = Path(args.out)
         # Si la ruta es absoluta y fuera del repositorio, permitirla
         if out_path.is_absolute():
@@ -286,7 +262,7 @@ def main() -> int:
                 return 1
             try:
                 _create_private_output(out_path, output_json + "\n")
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError, TypeError, NotImplementedError) as e:
                 print(f"ERROR: cannot create private output file: {e}", file=sys.stderr)
                 return 1
         else:

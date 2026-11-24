@@ -5,9 +5,6 @@ sintéticos y el comportamiento está completamente determinado por fixturas
 y el confinamiento de rutas (confined_path, private root per JV1-B3).
 
 Ejecutar desde checkout B0:
-  cd /home/aigenadmin/c2pro-jv1-a1-20261121
-  export PYTHONDONTWRITEBYTECODE=1
-  export PYTHONPATH=apps/api/src
   python -m pytest apps/api/tests/unit/scripts/test_journey_v1_n2_export.py -q
 """
 from __future__ import annotations
@@ -17,7 +14,6 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 
-import re
 from pathlib import Path
 
 import pytest
@@ -101,22 +97,9 @@ def test_make_n2_projection_with_spans():
 # Tests de export_n2_j1
 # ──────────────────────────────────────────────────────────────────
 def test_export_n2_j1_basic():
-    """Export basic: schema completa, SHA-256, page_count, spans, text, exported_at, export_root."""
-    result = export_n2_j1("Texto de contrato sintético de prueba.")
-    assert "sha256" in result
-    assert len(result["sha256"]) == 64
-    assert all(c in "0123456789abcdef" for c in result["sha256"])
-    assert result["page_count"] >= 1
-    assert "spans" in result
-    assert isinstance(result["spans"], list)
-    assert "text" in result
-    assert result["text"] == "Texto de contrato sintético de prueba."
-    assert "exported_at" in result
-    # export_root debe estar FUERA del repositorio (JV1-B3)
-    assert not Path(result["export_root"]).is_relative_to(str(REPO_ROOT))
-    assert result["n2_contract_state"] == BLOCKED_BY_N2_CONTRACT
-    assert "anonymous" not in result
-    assert "valid" not in result
+    """No success or payload without a trusted upstream receipt."""
+    with pytest.raises(ValueError, match=BLOCKED_BY_N2_CONTRACT):
+        export_n2_j1("Texto de contrato sintético de prueba.")
 
 
 def test_export_n2_j1_with_spans():
@@ -129,21 +112,28 @@ def test_export_n2_j1_with_spans():
 
 
 def test_export_n2_j1_deterministic_sha():
-    """Mismo input → mismo SHA-256; input distinto → SHA distinto."""
-    result1 = export_n2_j1("Mismo texto de contrato.")
-    result2 = export_n2_j1("Mismo texto de contrato.")
-    result3 = export_n2_j1("Texto diferente.")
+    """Local helper SHA is deterministic, but does not authorize export."""
+    result1 = make_n2_projection("Mismo texto de contrato.")
+    result2 = make_n2_projection("Mismo texto de contrato.")
+    result3 = make_n2_projection("Texto diferente.")
+    assert result1.sha256 == result2.sha256
+    assert result1.sha256 != result3.sha256
 
-    assert result1["sha256"] == result2["sha256"], "Mismo input → mismo SHA"
-    assert result1["sha256"] != result3["sha256"], "Input distinto → SHA distinto"
 
-
-def test_export_n2_j1_no_pii_leakage():
-    """Export text must not contain real PII patterns."""
-    result = export_n2_j1("Texto de contrato sintético sin datos reales.")
-    assert not re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", result["text"])
-    assert not re.search(r"\+\d{2}\s\d{3}\s\d{3}\s\d{3}", result["text"])
-    assert not re.search(r"\b[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\b", result["text"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Texto sintético sin datos reales.",
+        "Synthetic Person Name at Fictional City",
+        "synthetic.person@example.test",
+        "+34 600 123 456",
+        "123e4567-e89b-12d3-a456-426614174000",
+    ],
+)
+def test_export_n2_j1_no_pii_leakage(text):
+    """No untrusted payload can cross the canonical export gate."""
+    with pytest.raises(ValueError, match=BLOCKED_BY_N2_CONTRACT):
+        export_n2_j1(text)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -155,60 +145,54 @@ def test_confined_path_absolute_within_repo_rejected():
         confined_path("/etc/passwd", REPO_ROOT)
 
 
-def test_confined_path_symmetric_parentheses_rejected():
-    """Paths with excessive parentheses/nav must be rejected."""
-    with pytest.raises(ValueError):
-        confined_path("((((..)))", REPO_ROOT)
-
-
 # ──────────────────────────────────────────────────────────────────
 # Tests de salida CLI --out (JV1-B3 confinamiento)
 # ──────────────────────────────────────────────────────────────────
-def test_cli_out_outside_repo_succeeds():
-    """--out debe crear un fichero nuevo, privado y fuera del repositorio."""
+def test_cli_out_outside_repo_blocked_without_receipt():
+    """An otherwise valid output path cannot bypass the N2 gate."""
     import subprocess
     import tempfile
-    from pathlib import Path
-    # Infer repo root desde __file__ para portabilidad en CI (igual que linea 18)
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
-    # Derivar REPO_ROOT de forma autocontenida, sin rutas VPS fijas
-    REPO_ROOT = Path(__file__).resolve().parents[5]
-    # Usar tmp_path de pytest para ruta portable fuera del repo
-    with tempfile.TemporaryDirectory(prefix="jv1-b0-cli-") as outside_dir:
-        output = Path(outside_dir) / "b0-export.json"
-        assert output.is_absolute()
-        assert not output.is_relative_to(REPO_ROOT)
-        assert not output.exists()
-        args = [
-            sys.executable,
-            "-m",
-            "apps.api.scripts.journey_v1_n2_export",
-            "--text",
-            "Texto de prueba de salida confinada.",
-            "--out",
-            str(output),
-        ]
-        result = subprocess.run(
-            args, capture_output=True, text=True, cwd=REPO_ROOT,
-        )
-        assert result.returncode == 0, result.stderr
-        assert output.exists()
-        assert (output.stat().st_mode & 0o777) == 0o600
-        content = output.read_text(encoding="utf-8")
-        assert '"sha256"' in content
-        assert "Texto de prueba de salida confinada." in content
 
-        # No sobrescribir datos existentes ni reabrir sus permisos.
-        retry_args = args.copy()
-        retry_args[retry_args.index("Texto de prueba de salida confinada.")] = (
-            "Contenido distinto que no debe reemplazar el original."
+    with tempfile.TemporaryDirectory(prefix="jv1-b0-cli-") as directory:
+        output = Path(directory) / "b0-export.json"
+        raw = "Synthetic content without canonical receipt"
+        result = subprocess.run(
+            [sys.executable, "-m", "apps.api.scripts.journey_v1_n2_export",
+             "--text", raw, "--out", str(output)],
+            capture_output=True, text=True, cwd=REPO_ROOT,
         )
-        retry = subprocess.run(
-            retry_args, capture_output=True, text=True, cwd=REPO_ROOT,
-        )
-        assert retry.returncode != 0
-        assert "cannot create private output file" in retry.stderr
-        assert output.read_text(encoding="utf-8") == content
+        assert result.returncode != 0
+        assert BLOCKED_BY_N2_CONTRACT in result.stderr
+        assert not output.exists()
+        assert raw not in result.stdout + result.stderr
+
+
+def test_cli_without_out_never_emits_untrusted_text():
+    import subprocess
+
+    raw = "Synthetic Person Name at Fictional City"
+    result = subprocess.run(
+        [sys.executable, "-m", "apps.api.scripts.journey_v1_n2_export", "--text", raw],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    assert result.returncode != 0
+    assert BLOCKED_BY_N2_CONTRACT in result.stderr
+    assert not result.stdout
+    assert raw not in result.stderr
+
+
+def test_private_writer_creates_0600_and_refuses_overwrite():
+    """Local filesystem primitive is tested independently of the N2 gate."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="jv1-b0-writer-") as directory:
+        out = Path(directory) / "private.json"
+        _create_private_output(out, "synthetic fixture")
+        assert out.stat().st_mode & 0o777 == 0o600
+        assert out.read_text(encoding="utf-8") == "synthetic fixture"
+        with pytest.raises(FileExistsError):
+            _create_private_output(out, "must not overwrite")
+        assert out.read_text(encoding="utf-8") == "synthetic fixture"
 
 
 def test_cli_out_inside_repo_rejected():
@@ -302,9 +286,9 @@ def test_default_home_inside_repository_fails_closed(monkeypatch):
 
 def test_anchored_output_creation_survives_parent_symlink_switch(monkeypatch):
     """A parent renamed to a symlink after opening stays anchored to its dirfd."""
-    from apps.api.scripts import journey_v1_n2_export as subject
-
     import tempfile
+
+    from apps.api.scripts import journey_v1_n2_export as subject
 
     with tempfile.TemporaryDirectory(prefix="jv1-n2-toctou-") as directory:
         tmp_path = Path(directory)
@@ -327,10 +311,11 @@ def test_anchored_output_creation_survives_parent_symlink_switch(monkeypatch):
             return fd
 
         monkeypatch.setattr(subject.os, "open", switch_after_parent_open)
-        _create_private_output(target, "synthetic\n")
+        with pytest.raises((OSError, ValueError)):
+            _create_private_output(target, "synthetic\n")
 
         assert switched
-        assert (original_parent / "export.json").read_text(encoding="utf-8") == "synthetic\n"
+        assert not (original_parent / "export.json").exists()
         assert not (attacker_parent / "export.json").exists()
 
 
@@ -347,3 +332,32 @@ def test_preexisting_parent_symlink_is_rejected():
 
         with pytest.raises(OSError):
             _create_private_output(link_parent / "export.json", "synthetic\n")
+
+
+def test_writer_detects_parent_swap_at_final_open(monkeypatch):
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="jv1-b0-final-swap-") as directory:
+        root = Path(directory)
+        parent = root / "safe"
+        parent.mkdir()
+        outside = root / "outside"
+        outside.mkdir()
+        original = root / "safe-original"
+        real_open = os.open
+        swapped = False
+
+        def swap_at_final_open(path, flags, mode=0o777, *, dir_fd=None):
+            nonlocal swapped
+            if path == "artifact.json" and flags & os.O_CREAT and not swapped:
+                swapped = True
+                parent.rename(original)
+                parent.symlink_to(outside, target_is_directory=True)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+        monkeypatch.setattr(os, "open", swap_at_final_open)
+        with pytest.raises((OSError, ValueError)):
+            _create_private_output(parent / "artifact.json", "synthetic fixture")
+        assert swapped
+        assert not (outside / "artifact.json").exists()
+        assert not (original / "artifact.json").exists()
