@@ -97,6 +97,16 @@ class MetadataCritiqueSource:
         return (), CritiqueCoverage.NONE_PRESENT
 
 
+def has_verified_literal_source(risk: Any) -> bool:
+    """Match the review UI's literal-source gate, using persisted candidate data."""
+    return (
+        isinstance(risk, dict)
+        and risk.get("source_quote_status") == "VERIFIED"
+        and isinstance(risk.get("source_quote"), str)
+        and bool(risk["source_quote"].strip())
+    )
+
+
 class FindingReconciliationService:
     def __init__(
         self,
@@ -205,6 +215,7 @@ class FindingReconciliationService:
             checkpoint_id=str(review["checkpoint_id"]),
         )
         findings: list[CandidateFinding] = []
+        source_ineligible: list[str] = []
         risks = payload.get("extracted_risks")
         for ordinal, risk in enumerate(risks if isinstance(risks, list) else []):
             if not isinstance(risk, dict) or not risk:
@@ -216,6 +227,8 @@ class FindingReconciliationService:
                     stable_finding_id(identity, FindingDecisionKind.RISK, source_item_id=source_item_id, ordinal=ordinal),
                 )
             )
+            if not has_verified_literal_source(risk):
+                source_ineligible.append(findings[-1].finding_id)
         rows = (
             await self._session.execute(_LEDGER, {"tenant_id": actor.tenant_id, "review_row_id": review_row_id})
         ).mappings().all()
@@ -224,6 +237,7 @@ class FindingReconciliationService:
             ReconciliationInput(
                 identity=identity, project_id=review["project_id"], findings=tuple(findings),
                 ledger=events_from_rows([dict(r) for r in rows]), critiques=critiques, critique_coverage=coverage,
+                source_ineligible_finding_ids=tuple(source_ineligible),
             )
         )
 

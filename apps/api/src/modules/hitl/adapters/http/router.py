@@ -44,6 +44,7 @@ from src.modules.hitl.application.final_decision_authorization import (
     FinalDecisionNotAuthorized,
     authorize_final_decider,
 )
+from src.modules.hitl.application.finding_reconciliation_service import ReconciliationStale
 from src.modules.hitl.application.ports import HumanInTheLoopService
 from src.modules.hitl.application.project_review_authorization import (
     ProjectAuthorizationDenied,
@@ -173,13 +174,19 @@ async def _require_project_approval_for_legacy_row(
         )
     except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
         raise _project_refusal(exc) from exc
-    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized, ReconciliationStale) as exc:
         raise _reconciliation_refusal(exc) from exc
 
 
-def _reconciliation_refusal(exc: ReconciliationBlocksApproval | PromotionNotAuthorized) -> HTTPException:
+def _reconciliation_refusal(
+    exc: ReconciliationBlocksApproval | PromotionNotAuthorized | ReconciliationStale,
+) -> HTTPException:
     """S5-04 / S5-05. 409 when the candidate cannot be approved as it stands; 403 when the approver's authority is
     gone at the moment of the promotion (the whole promotion transaction was rolled back)."""
+    if isinstance(exc, ReconciliationStale):
+        return HTTPException(
+            status.HTTP_409_CONFLICT, detail={"code": "reconciliation_stale", "message": str(exc)}
+        )
     if isinstance(exc, ReconciliationBlocksApproval):
         return HTTPException(
             status.HTTP_409_CONFLICT,
@@ -370,7 +377,7 @@ async def _approve_and_resume_workflow(
         ) from exc
     except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
         raise _project_refusal(exc) from exc
-    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized, ReconciliationStale) as exc:
         raise _reconciliation_refusal(exc) from exc
     except Exception as exc:  # noqa: BLE001
         # C2PRO P0b true-resume hotfix: a genuine resume failure now RAISES
@@ -525,7 +532,7 @@ async def reject_item(
             ) from exc
         except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
             raise _project_refusal(exc) from exc
-        except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+        except (ReconciliationBlocksApproval, PromotionNotAuthorized, ReconciliationStale) as exc:
             raise _reconciliation_refusal(exc) from exc
         except ValueError as exc:
             error_msg = str(exc)
@@ -786,7 +793,7 @@ async def resume_workflow(
         ) from exc
     except (ProjectAuthorizationDenied, ProjectAuthorizationUnavailable) as exc:
         raise _project_refusal(exc) from exc
-    except (ReconciliationBlocksApproval, PromotionNotAuthorized) as exc:
+    except (ReconciliationBlocksApproval, PromotionNotAuthorized, ReconciliationStale) as exc:
         raise _reconciliation_refusal(exc) from exc
     except ValueError as exc:
         error_msg = str(exc)
