@@ -12,7 +12,7 @@ services:
   # PostgreSQL Test Database
   # ===========================================
   postgres-test:
-    image: pgvector/pgvector:pg15
+    image: ${C2PRO_TEST_PG_IMAGE:-pgvector/pgvector:pg15}
     container_name: c2pro-postgres-test
     restart: unless-stopped
     ports:

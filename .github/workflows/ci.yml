@@ -30,6 +30,11 @@ on:
   pull_request:
     branches: [main, develop, "integration/**"]
   workflow_dispatch:
+    inputs:
+      a23_preflight_only:
+        description: 'A23 isolated physical controls only (not a Journey or merge gate)'
+        type: boolean
+        default: false
 
 # Cancel superseded PR runs; never cancel main/develop pushes.
 concurrency:
@@ -45,10 +50,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      backend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
-      frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
-      migrations: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
-      backend_docker: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend_docker }}
+      backend: ${{ inputs.a23_preflight_only == true && 'false' || github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend }}
+      frontend: ${{ inputs.a23_preflight_only == true && 'false' || github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
+      migrations: ${{ inputs.a23_preflight_only == true && 'false' || github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
+      backend_docker: ${{ inputs.a23_preflight_only == true && 'false' || github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend_docker }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1335,7 +1340,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true' || inputs.a23_preflight_only == true
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
@@ -1418,6 +1423,8 @@ jobs:
         uses: ./.github/actions/setup-python-backend
 
       - name: Bootstrap infrastructure (PostgreSQL + Redis)
+        env:
+          C2PRO_TEST_PG_IMAGE: ${{ inputs.a23_preflight_only == true && 'pgvector/pgvector:pg16' || 'pgvector/pgvector:pg15' }}
         run: C2PRO_REDIS_TEST_PORT=6379 python apps/api/scripts/bootstrap_test_infra.py --start-services --require-redis --recreate-db
 
       # The E2E identity had ZERO Clerk Organization memberships, so C2Pro could
@@ -1462,6 +1469,94 @@ jobs:
       - name: Verify Clerk <-> local tenant linkage
         working-directory: apps/api
         run: python scripts/verify_e2e_tenant_link.py
+
+      # L8/DevOps diagnostic only: the existing P0b runner, no browser or billable call.
+      # Never treat this partial run as PREFLIGHT_PASS or alter the normal P0b gate.
+      - name: A23 PG16 and physical offline probe
+        if: inputs.a23_preflight_only == true
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/a23-physical-preflight"
+          mkdir -p "$evidence"
+          python - <<'PY'
+          import json, os, pathlib, psycopg
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          target = pathlib.Path(os.environ["RUNNER_TEMP"])/"a23-physical-preflight"/"pg16.json"
+          with psycopg.connect(os.environ["TEST_DATABASE_URL"]) as conn:
+              version, db = conn.execute("SELECT current_setting('server_version_num')::int, current_database()").fetchone()
+              revision, = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+          expected = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
+          ok = 160000 <= version < 170000 and db.endswith("_test") and revision == expected
+          target.write_text(json.dumps({"server_version_num": version, "test_database": db.endswith("_test"),
+                                        "revision": revision, "expected": expected, "pass": ok}))
+          assert ok, "PG16 migrated exact head required"
+          PY
+          # A separate migrated scratch DB preserves the P0b auth tenancy and avoids
+          # test-engine schema reset. The canonical migration/bootstrap remains unchanged.
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE c2pro_a23_n4_scratch_test'
+          scratch="${TEST_DATABASE_URL%/*}/c2pro_a23_n4_scratch_test"
+          DATABASE_URL="$scratch" TEST_DATABASE_URL="$scratch" python -m alembic upgrade head
+          # Run only the focused existing PostgreSQL probes inside an OS-level
+          # IPAddressDeny scope, with localhost permitted. No provider credentials.
+          cat > "$evidence/probe.py" <<'PY'
+          import errno, json, os, pathlib, secrets, socket, subprocess, sys
+          os.environ["JWT_SECRET_KEY"] = secrets.token_hex(32)
+          root = pathlib.Path(sys.argv[1])
+          with socket.create_connection(("127.0.0.1", 5433), timeout=3):
+              pass
+          with socket.create_connection(("127.0.0.1", 6379), timeout=3):
+              pass
+          # RFC 5737 documentation IP, TCP only, no provider traffic or credentials.
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.settimeout(2)
+              try:
+                  code = sock.connect_ex(("192.0.2.1", 443))
+              except TimeoutError:
+                  code = errno.ETIMEDOUT
+          denied = code in (errno.EPERM, errno.EACCES)
+          (root/"egress-probe.json").write_text(json.dumps({"scope": "transient probe process only",
+              "postgres_loopback": True, "redis_loopback": True, "external_errno": code,
+              "kernel_permission_denied": denied, "api_worker_proof": False}))
+          assert denied, "kernel-denied connect required, timeout/unreachable is not proof"
+          subprocess.run([sys.executable, "-m", "pytest",
+              "tests/integration/analysis/test_n4_incremental_store_pg.py::test_real_postgres_n4_idempotency_budget_resume_fencing_and_rls",
+              "tests/integration/analysis/test_n4_window_runner_pg.py::test_successful_multiwindow_resume_never_calls_provider_twice",
+              "-q", "-rs", "--junitxml="+str(root/"n4-component.junit.xml")], check=True)
+          import xml.etree.ElementTree as ET
+          cases = ET.parse(root/"n4-component.junit.xml").findall(".//testcase")
+          assert len(cases) == 2 and all(not any(c.find(x) is not None for x in ("failure","error","skipped")) for c in cases)
+          PY
+          python_bin="$(command -v python)"
+          # systemd starts the same Python process as the unprivileged runner user;
+          # no Clerk or provider credentials are forwarded to the scope.
+          sudo systemd-run --wait --pipe --collect --unit="a23-probe-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            -p "User=$(id -un)" -p IPAddressDeny=any -p IPAddressAllow=localhost \
+            -p "WorkingDirectory=$PWD" \
+            --setenv="PATH=$PATH" --setenv="HOME=$HOME" --setenv="ENVIRONMENT=test" \
+            --setenv="C2PRO_AI_MOCK=1" --setenv="C2PRO_EMBEDDINGS_MOCK=1" \
+            --setenv="C2PRO_N4_SCRATCH_DSN=$scratch" \
+            --setenv="DATABASE_URL=$TEST_DATABASE_URL" --setenv="TEST_DATABASE_URL=$TEST_DATABASE_URL" \
+            "$python_bin" "$evidence/probe.py" "$evidence"
+
+      - name: Upload A23 physical preflight evidence (partial, no Journey)
+        if: always() && inputs.a23_preflight_only == true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: a23-physical-preflight-only
+          path: |
+            ${{ runner.temp }}/a23-physical-preflight/pg16.json
+            ${{ runner.temp }}/a23-physical-preflight/egress-probe.json
+            ${{ runner.temp }}/a23-physical-preflight/n4-component.junit.xml
+          retention-days: 3
+          if-no-files-found: warn
+
+      - name: A23 diagnostic must not certify the full Journey
+        if: always() && inputs.a23_preflight_only == true
+        run: |
+          echo "::error::A23 diagnostic only: API/worker role and egress + A3/A7 browser fixtures still require physical receipts. RED/GREEN NOT RUN."
+          exit 2
 
       # The async seam that failed in production. Not mocked away.
       - name: Start Celery worker (document_parsing)
