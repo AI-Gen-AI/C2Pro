@@ -11,13 +11,18 @@ Percentages are fractions (``0.001`` is 0.1%), the unit the LEGAL evaluators alr
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 
 from src.coherence.models import Clause
 from src.coherence.rules_engine.base import ApplicabilityState
 from src.coherence.rules_engine.deterministic import PenaltyCapEvaluator
+from src.core.tasks import ingestion_tasks
 from src.core.tasks.ingestion_tasks import (
     _build_contract_clause_data,
+    _contract_clause_coverage_omissions,
+    _extract_contract_clauses,
     _infer_contract_clause_type,
 )
 from src.documents.domain.contract_clause_reader import extract_percentages, penalty_rate_and_cap
@@ -296,3 +301,183 @@ def test_spanish_delivery_clauses_do_not_become_at_risk() -> None:
 
 def test_english_delivery_clauses_keep_their_existing_at_risk_status() -> None:
     assert _data("The final deadline is 30 June 2027.")["status"] == "at_risk"
+
+
+def test_contract_coverage_detects_missing_middle_row() -> None:
+    """A missing persistible row must not be reported as complete coverage."""
+    text = (
+        "1.- Primera obligación documentada con un importe de EUR 125000.\n\n"
+        "2.- Segunda obligación sobre el cronograma y sus condiciones.\n\n"
+        "3.- Tercera obligación con una fecha de entrega definida."
+    )
+    rows = ingestion_tasks._split_contract_clause_spans(text)
+    assert len(rows) == 3
+    omissions = _contract_clause_coverage_omissions(text, rows=[rows[0], rows[2]])
+    assert len(omissions) == 1
+    assert omissions[0]["kind"] == "contract_clause_uncovered_text"
+    assert "2.- Segunda obligación" in text[
+        int(omissions[0]["start_offset"]):int(omissions[0]["end_offset"])
+    ]
+
+
+def test_contract_coverage_rejects_corrupted_source_text_and_duplicate_span() -> None:
+    """Offsets alone must not allow altered text or duplicate source evidence."""
+    text = "1.- Obligación de pago y certificación con documentos justificativos."
+    changed = _contract_clause_coverage_omissions(
+        text, rows=[("1.- Obligación ALTERADA", 0, len(text))]
+    )
+    assert any(item["kind"] == "contract_clause_text_mismatch" for item in changed)
+
+    overlap = _contract_clause_coverage_omissions(
+        text,
+        rows=[(text[:30], 0, 30), (text[15:], 15, len(text))],
+    )
+    assert any(item["kind"] == "contract_clause_duplicate_text" for item in overlap)
+
+
+def test_real_clause_extraction_fails_closed_on_dropped_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Simulated row-loss in the actual splitter must prevent silent staging."""
+    text = (
+        "1.- Obligación inicial con alcance, precio y plazo verificables.\n\n"
+        "2.- Obligación final con penalidad y garantías exigibles."
+    )
+    real_split = ingestion_tasks._split_contract_clause_rows
+
+    def drop_final_clause(source: str) -> list[tuple[str, int, int, str | None, int]]:
+        return real_split(source)[:-1]
+
+    monkeypatch.setattr(ingestion_tasks, "_split_contract_clause_rows", drop_final_clause)
+    with pytest.raises(ValueError, match="contract_clause_coverage_failed"):
+        _extract_contract_clauses(
+            document_id=UUID("00000000-0000-4000-8000-000000000001"),
+            project_id=UUID("00000000-0000-4000-8000-000000000002"),
+            tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+            parsed_text=text,
+        )
+
+
+def test_long_numbered_clause_keeps_every_non_whitespace_character_in_continuations() -> None:
+    """Removing a continuation or restoring the 4,000-character truncation loses source evidence."""
+    paragraphs = [
+        f"Parágrafo sintético {index}: " + "obrigação contratual verificável " * 45
+        for index in range(1, 6)
+    ]
+    text = "Cláusula 7.2 Preço e prazo\n\n" + "\n\n".join(paragraphs)
+
+    clauses = _extract_contract_clauses(
+        document_id=UUID("00000000-0000-4000-8000-000000000001"),
+        project_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+        parsed_text=text,
+    )
+
+    assert len(clauses) > 1
+    assert [clause.clause_code for clause in clauses] == [
+        "7.2",
+        *[f"7.2~{index}" for index in range(2, len(clauses) + 1)],
+    ]
+    assert all(len(clause.full_text or "") <= 4000 for clause in clauses)
+    assert "".join("".join(clause.full_text or "" for clause in clauses).split()) == "".join(
+        text.split()
+    )
+    assert all(
+        text[clause.text_start_offset : clause.text_end_offset] == clause.full_text
+        for clause in clauses
+    )
+    assert _contract_clause_coverage_omissions(text) == []
+
+
+def test_short_prefix_is_joined_to_the_next_clause_row() -> None:
+    """Dropping a sub-40-character prefix loses source text that a reviewer may need."""
+    text = "Nota breve.\n\n" + "A obrigação contratual permanece aplicável. " * 3
+
+    clauses = _extract_contract_clauses(
+        document_id=UUID("00000000-0000-4000-8000-000000000001"),
+        project_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+        parsed_text=text,
+    )
+
+    assert [clause.full_text for clause in clauses] == [text.strip()]
+
+
+def test_portuguese_headings_split_and_preserve_their_source_codes() -> None:
+    """Removing PT labels from the heading regex joins independent clauses into one row."""
+    text = "\n".join(
+        [
+            "Artigo 1 Preço do Contrato",
+            "O preço total do contrato é EUR 125000.",
+            "Secção 2 Prazo de Execução",
+            "A conclusão contratual ocorre em 30 de junho de 2028.",
+            "Anexo 3 Garantias",
+            "A garantia financeira permanece válida durante doze meses.",
+        ]
+    )
+
+    clauses = _extract_contract_clauses(
+        document_id=UUID("00000000-0000-4000-8000-000000000001"),
+        project_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+        parsed_text=text,
+    )
+
+    assert [clause.clause_code for clause in clauses] == ["1", "2", "3"]
+
+def test_short_structural_separator_preserves_following_numbered_clause_boundary() -> None:
+    """A short heading cannot consume the first numbered clause's source identity."""
+    text = (
+        "Contrato sintético de obra con obligaciones documentales exigibles.\n\n"
+        "ESTIPULACIONES\n\n"
+        "1.- El proveedor entregará los trabajos con la documentación prevista. "
+        "La dirección comprobará las evidencias contractuales.\n\n"
+        "2.- El plazo máximo será de treinta días desde la orden de inicio. "
+        "El retraso tendrá las consecuencias previstas en el contrato."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=UUID("00000000-0000-4000-8000-000000000001"),
+        project_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+        parsed_text=text,
+    )
+    assert [c.clause_code for c in clauses if c.clause_code in {"1", "2"}] == [
+        "1",
+        "2",
+    ]
+    assert any(c.full_text.startswith("1.-") for c in clauses)
+    assert any(c.full_text.startswith("2.-") for c in clauses)
+    assert "".join("".join(c.full_text.split()) for c in clauses) == "".join(text.split())
+
+
+def test_short_numbered_clause_is_not_merged_into_next_numbered_clause() -> None:
+    """A short clause remains distinguishable from the next structural heading."""
+    text = (
+        "1.- Pago breve.\n\n"
+        "2.- La parte contratante realizará la recepción y certificación de "
+        "los trabajos conforme al calendario escrito y los anexos vigentes."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=UUID("00000000-0000-4000-8000-000000000001"),
+        project_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+        parsed_text=text,
+    )
+    assert [c.clause_code for c in clauses] == ["1", "2"]
+    assert "".join("".join(c.full_text.split()) for c in clauses) == "".join(text.split())
+
+def test_short_final_numbered_clause_retains_its_source_code() -> None:
+    """The tail merge cannot erase a short numbered clause's separate identity."""
+    text = (
+        "1.- La primera obligación incluye documentación, certificaciones y "
+        "entregables contractuales según el calendario previsto.\n\n"
+        "2.- Pago breve."
+    )
+    clauses = _extract_contract_clauses(
+        document_id=UUID("00000000-0000-4000-8000-000000000001"),
+        project_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000003"),
+        parsed_text=text,
+    )
+    assert [c.clause_code for c in clauses] == ["1", "2"]
+    assert "".join("".join(c.full_text.split()) for c in clauses) == "".join(text.split())

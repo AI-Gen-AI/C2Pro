@@ -16,13 +16,13 @@ def test_record_auth_failure_sends_event_when_dsn_is_set(monkeypatch):
     monkeypatch.setattr("src.core.observability.sentry_alerts.settings", mock_settings)
 
     # Mock sentry_sdk
-    mock_push_scope = MagicMock()
+    mock_new_scope = MagicMock()
     mock_capture_event = MagicMock()
 
-    with patch("src.core.observability.sentry_alerts.sentry_sdk.push_scope", mock_push_scope) as _p1, \
+    with patch("src.core.observability.sentry_alerts.sentry_sdk.new_scope", mock_new_scope) as _p1, \
          patch("src.core.observability.sentry_alerts.sentry_sdk.capture_event", mock_capture_event) as _p2:
 
-        scope_manager = mock_push_scope.return_value.__enter__.return_value
+        scope_manager = mock_new_scope.return_value.__enter__.return_value
 
         tenant_id = uuid.uuid4()
         reason_code = "test_reason"
@@ -37,7 +37,7 @@ def test_record_auth_failure_sends_event_when_dsn_is_set(monkeypatch):
         )
 
         # Assertions
-        mock_push_scope.assert_called_once()
+        mock_new_scope.assert_called_once()
 
         scope_manager.set_tag.assert_any_call("auth.reason", reason_code)
         scope_manager.set_tag.assert_any_call("tenant.id", str(tenant_id))
@@ -77,3 +77,11 @@ def test_record_auth_failure_is_noop_when_dsn_is_not_set(monkeypatch):
         )
 
         mock_capture_event.assert_not_called()
+
+
+def test_new_scope_sdk_api_is_available_without_network():
+    """Exercise the real SDK scope API; mocked calls alone can hide removals."""
+    import sentry_sdk
+
+    with sentry_sdk.new_scope() as scope:
+        scope.set_tag("observability.scope.compat", "ok")

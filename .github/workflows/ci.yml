@@ -753,7 +753,7 @@ jobs:
     name: Backend Combined Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [detect-changes, backend-unit, backend-core, backend-coherence, backend-modules, backend-security]
+    needs: [detect-changes, backend-unit, backend-core, backend-coherence, backend-modules, backend-security, backend-migrations]
     if: needs.detect-changes.outputs.backend == 'true'
     steps:
       - name: Checkout
@@ -785,6 +785,11 @@ jobs:
         with:
           name: c25-c26-security-coverage
           path: apps/api/coverage-data/c25-c26-security
+      - name: Download N4 PostgreSQL coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: n4-pg-coverage
+          path: apps/api/coverage-data/n4-pg
       - name: Merge and enforce backend coverage ratchet
         working-directory: apps/api
         run: |
@@ -793,6 +798,7 @@ jobs:
           cp coverage-data/coherence/.coverage .coverage.coherence
           cp coverage-data/modules/.coverage .coverage.modules
           cp coverage-data/c25-c26-security/.coverage.c25_c26* .
+          cp coverage-data/n4-pg/.coverage.n4pg .coverage.n4pg
           coverage combine
           coverage report --fail-under=70
           coverage xml -o merged-coverage.xml
@@ -815,7 +821,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: detect-changes
-    if: needs.detect-changes.outputs.migrations == 'true'
+    if: needs.detect-changes.outputs.migrations == 'true' || needs.detect-changes.outputs.backend == 'true'
     # alembic/env.py (and the single-head regression test) import
     # src.config.settings, whose only required field is JWT_SECRET_KEY. Without
     # it, `alembic upgrade head` aborts at Settings validation before applying
@@ -854,6 +860,150 @@ jobs:
           C2PRO_MIGRATION_SCRATCH_DSN: postgresql://postgres:postgres@127.0.0.1:5433/c2pro_adr025_migration_test
           C2PRO_REQUIRE_MIGRATED_TEST_DSN: "1"
         run: python -m pytest tests/integration/persistence tests/integration/product_control -q
+
+      # JV1-A0c: the N4 ledger/bridge PostgreSQL suites (C2PRO_N4_SCRATCH_DSN) were
+      # silently skipped in every CI lane. They need their OWN fresh Alembic-migrated
+      # *_test database: the step above leaves c2pro_test EMPTY, because test_engine
+      # users without the alembic_schema marker run reset_test_schemas on
+      # TEST_DATABASE_URL (reproduced: 81 tables before, only checkpoint* after).
+      # The N4 scratch DB is therefore never TEST_DATABASE_URL, so no test_engine
+      # user (e.g. the `db` fixture in test_n4_partial_ledger_sql_pg) can reset it.
+      # tests/unit/**/*_pg.py need ephemeral PostgreSQL 16 binaries, a different
+      # contract that is NOT part of this step.
+      - name: Prepare private migrated N4 scratch database (JV1-A0c)
+        working-directory: apps/api
+        env:
+          N4_ADMIN_DSN: postgresql://postgres:postgres@127.0.0.1:5433/postgres
+          N4_SCRATCH_DSN: postgresql://postgres:postgres@127.0.0.1:5433/c2pro_n4_scratch_test
+        run: |
+          set -euo pipefail
+          psql "$N4_ADMIN_DSN" -v ON_ERROR_STOP=1 -q \
+            -c 'DROP DATABASE IF EXISTS c2pro_n4_scratch_test' \
+            -c 'CREATE DATABASE c2pro_n4_scratch_test'
+          # TEST_DATABASE_URL has precedence over DATABASE_URL in Settings.
+          DATABASE_URL="$N4_SCRATCH_DSN" TEST_DATABASE_URL="$N4_SCRATCH_DSN" \
+            python -m alembic upgrade head
+
+      - name: N4 ledger PostgreSQL suites (JV1-A0c, no skips, A2 IDs)
+        working-directory: apps/api
+        env:
+          C2PRO_N4_SCRATCH_DSN: postgresql://postgres:postgres@127.0.0.1:5433/c2pro_n4_scratch_test
+          # test_engine users reset THIS sacrificial database, never the N4 scratch DB.
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5433/c2pro_test
+          # Tests collected from tests/integration/analysis/test_n4_*_pg.py before A2
+          # (29). Raise it when suites are added; never lower it to pass.
+          N4_MIN_TESTS: "29"
+          # A3 DevOps: the N4 PG suites are the only CI lane that executes the
+          # ledger/runner against real PostgreSQL; collect their coverage so
+          # backend-coverage (and Codecov) see it. Only this step uses --cov in
+          # this job, so no other source is mixed in.
+          COVERAGE_FILE: .coverage.n4pg
+        run: |
+          set -euo pipefail
+          schema=$(psql "$C2PRO_N4_SCRATCH_DSN" -v ON_ERROR_STOP=1 -Atc \
+            "SELECT to_regclass('public.tenants') IS NOT NULL AND to_regclass('public.n4_budget_buckets') IS NOT NULL")
+          if [ "$schema" != "t" ]; then
+            echo "::error::N4 scratch database is not migrated right before the run"
+            exit 1
+          fi
+          status=0
+          python -m pytest tests/integration/analysis/test_n4_*_pg.py -q -rs \
+            --junit-xml=n4-pg-results.xml -o junit_family=xunit2 \
+            --cov=src --cov-report= || status=$?
+          python - <<'PY'
+          import os
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          # A2 #1292 acceptance cases: all must RUN and PASS once A2 is on this ref
+          # (its test module or its retryable_windows ledger code is present).
+          A2_MODULE = "test_n4_ledger_retries_pg"
+          A2_REQUIRED = [
+              "test_retry_after_failed_attempt_sums_spend_and_releases_holds",
+              "test_window_with_committed_result_is_neither_retryable_nor_reservable",
+              "test_unresolved_references_are_stored_without_blocking_the_window",
+              "test_unknown_is_released_only_by_explicit_pessimistic_settlement",
+              "test_pessimistic_settlement_refuses_reserved_attempt",
+              "test_new_generation_with_same_config_adopts_run_without_rereserving",
+              "test_new_generation_with_different_config_stays_blocked",
+              "test_complete_run_is_never_adopted",
+              "test_adoption_refuses_a_run_with_changed_project_windows_or_budget[project]",
+              "test_adoption_refuses_a_run_with_changed_project_windows_or_budget[windows]",
+              "test_adoption_refuses_a_run_with_changed_project_windows_or_budget[budget]",
+              "test_adoption_refuses_when_a_newer_fence_owns_the_run",
+              "test_settling_another_tenants_unknown_is_refused_without_side_effects",
+              "test_real_receipt_waits_for_pessimistic_settlement_without_double_charge",
+              "test_pessimistic_settlement_waits_for_real_receipt_and_is_not_logged",
+          ]
+
+          def outcome(case):
+              if case.find("skipped") is not None:
+                  return "skipped"
+              if case.find("failure") is not None or case.find("error") is not None:
+                  return "failed"
+              return "passed"
+
+          results = {}
+          for case in ET.parse("n4-pg-results.xml").getroot().iter("testcase"):
+              module = case.get("classname", "").rsplit(".", 1)[-1]
+              results[f"{module}::{case.get('name')}"] = outcome(case)
+
+          counts = {k: sum(v == k for v in results.values()) for k in ("passed", "skipped", "failed")}
+          minimum = int(os.environ["N4_MIN_TESTS"])
+          a2_present = (
+              pathlib.Path(f"tests/integration/analysis/{A2_MODULE}.py").exists()
+              or "def retryable_windows(" in pathlib.Path(
+                  "src/analysis/adapters/persistence/n4_incremental_store.py"
+              ).read_text(encoding="utf-8")
+          )
+          a2_missing = [n for n in A2_REQUIRED if results.get(f"{A2_MODULE}::{n}") != "passed"]
+          summary = (
+              f"N4 PostgreSQL gate: tests={len(results)} passed={counts['passed']} "
+              f"skipped={counts['skipped']} failed={counts['failed']} minimum={minimum}; "
+              f"A2 on ref={a2_present} A2 passed={len(A2_REQUIRED) - len(a2_missing)}/{len(A2_REQUIRED)}"
+          )
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write(f"### {summary}\n")
+          errors = []
+          if len(results) < minimum:
+              errors.append(f"only {len(results)} N4 PostgreSQL tests ran (< {minimum})")
+          if counts["skipped"] or counts["failed"]:
+              errors.append("N4 PostgreSQL suites must run with 0 skips and 0 failures")
+          if a2_present and a2_missing:
+              errors.append(f"A2 acceptance cases not executed+passed: {a2_missing}")
+          for error in errors:
+              print(f"::error::{error}")
+          if errors:
+              raise SystemExit(1)
+          PY
+          # Fail closed if the PG coverage data is missing or does not include the
+          # N4 ledger/runner it exists to measure.
+          if ! python -m coverage report --data-file=.coverage.n4pg \
+              --include='src/analysis/application/n4_incremental_runner.py,src/analysis/adapters/persistence/n4_incremental_store.py'; then
+            echo "::error::N4 PostgreSQL coverage data missing or without the N4 runner/store"
+            exit 1
+          fi
+          exit "$status"
+
+      - name: Upload N4 PostgreSQL results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          retention-days: 3
+          name: n4-pg-results
+          path: apps/api/n4-pg-results.xml
+          if-no-files-found: ignore
+
+      - name: Upload N4 PostgreSQL coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          retention-days: 3
+          name: n4-pg-coverage
+          path: apps/api/.coverage.n4pg
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Cleanup
         if: always()
