@@ -16,6 +16,12 @@ from src.core.processing_authority import (
     bound_authority,
 )
 
+_TEST_REVISION = "00000000-0000-0000-0000-000000000001"
+
+
+def _payload(claim, refs, source, **kwargs):
+    return bridge._candidate_payload(claim, refs, source, revision_id=_TEST_REVISION, **kwargs)
+
 
 def _state():
     tenant, document, revision, project = uuid4(), uuid4(), uuid4(), uuid4()
@@ -91,18 +97,19 @@ def test_graph_ledger_keeps_provisional_quote_and_unknown_severity():
         "source_evidence_status": "EXACT_MODEL_SAFE_MATCH",
     }
     refs = [{
-        "document_revision_id": str(uuid4()),
+        "document_revision_id": _TEST_REVISION,
+        "source_sha256": sha256(quote.encode()).hexdigest(),
         "source_kind": "MODEL_SAFE_PROJECTION",
         "evidence_status": "EXACT_MODEL_SAFE_MATCH",
         "analysis_span": [0, len(quote)],
     }]
-    value = bridge._candidate_payload(claim, refs, quote)
+    value = _payload(claim, refs, quote)
     assert value["source_quote"] == quote
     assert value["source_quote_status"] == "VERIFIED"
     assert value["severity"] is None
     assert value["likelihood"] is None
     refs[0]["evidence_status"] = "NOT_FOUND_IN_MODEL_SAFE_SOURCE"
-    value = bridge._candidate_payload(claim, refs, quote)
+    value = _payload(claim, refs, quote)
     assert value["source_quote"] is None
     assert value["source_quote_status"] == "NOT_FOUND_IN_DOCUMENT"
 
@@ -286,17 +293,22 @@ def test_page_number_and_locator_are_optional_and_never_fabricated():
     assert item.page_number == 3
 
 
-def _claim_refs(quote):
+def _claim_refs(quote, source=None):
+    source = quote if source is None else source
+    start = source.index(quote)
     claim = {"title": "T", "risk_reason": "R", "category": "contractual",
              "source_quote": quote, "source_evidence_status": "EXACT_MODEL_SAFE_MATCH"}
     refs = [{"source_kind": "MODEL_SAFE_PROJECTION",
-             "evidence_status": "EXACT_MODEL_SAFE_MATCH", "analysis_span": [0, len(quote)]}]
+             "document_revision_id": _TEST_REVISION,
+             "source_sha256": sha256(source.encode()).hexdigest(),
+             "evidence_status": "EXACT_MODEL_SAFE_MATCH",
+             "analysis_span": [start, start + len(quote)]}]
     return claim, refs
 
 
 def test_candidate_payload_without_page_map_has_no_page_and_stays_verified():
     quote = "The contractor shall notify within 12 days."
-    value = bridge._candidate_payload(*_claim_refs(quote), quote)
+    value = _payload(*_claim_refs(quote), quote)
     assert value["page_number"] is None and value["source_locator"] is None
     # Exact N2-projection match only; explicitly not a page-verified citation.
     assert value["source_quote_status"] == "VERIFIED"
@@ -308,7 +320,7 @@ def test_candidate_payload_uses_page_locator_when_map_available(monkeypatch):
     quote = "The contractor shall notify within 12 days."
     monkeypatch.setattr(loc, "locate_quote_page", lambda q, **kw: loc.QuotePageLocation(4, 5, 0, len(q)))
     spans = [loc.PageSpan(4, 0, 100)]
-    value = bridge._candidate_payload(*_claim_refs(quote), quote, page_spans=spans)
+    value = _payload(*_claim_refs(quote), quote, page_spans=spans)
     assert value["page_number"] == 4
     assert value["source_locator"] == "pp. 4–5"
 
@@ -321,7 +333,7 @@ def test_candidate_payload_locator_unavailable_is_not_verified(monkeypatch):
         raise NotImplementedError("A9 unavailable")
 
     monkeypatch.setattr(loc, "locate_quote_page", unavailable)
-    value = bridge._candidate_payload(
+    value = _payload(
         *_claim_refs(quote), quote, page_spans=[loc.PageSpan(1, 0, 100)],
     )
     assert value["page_number"] is None
@@ -335,7 +347,7 @@ def test_candidate_payload_not_verified_when_map_available_but_page_missing(monk
     from src.documents.domain import quote_page_locator as loc
     quote = "The contractor shall notify within 12 days."
     monkeypatch.setattr(loc, "locate_quote_page", lambda q, **kw: None)
-    value = bridge._candidate_payload(
+    value = _payload(
         *_claim_refs(quote), quote, page_spans=[loc.PageSpan(1, 0, 100)],
     )
     assert value["source_quote_status"] != "VERIFIED"
@@ -486,7 +498,8 @@ def test_missing_external_reference_becomes_proposed_risk_with_literal_evidence(
 
     register = build_reference_register(_DOC, [])
     risks, provenance = bridge._reference_proposals(
-        register, source=_DOC, source_sha256=_SHA, revision_id="test-revision",
+        register, source=_DOC, source_sha256=sha256(_DOC.encode()).hexdigest(),
+        revision_id="test-revision",
     )
     assert len(risks) >= 1
     candidate = next(r for r in risks if r["clause_ref"] == "Annex B")
@@ -844,8 +857,8 @@ def test_a7_rejects_stale_tampered_or_incomplete_a11_maps(corruption):
     spans, claimed = bridge._a11_a9_page_map(state)
     assert claimed is True
     assert spans == []
-    claim, refs = _claim_refs("The contractor shall notify the owner.")
-    proposal = bridge._candidate_payload(
+    claim, refs = _claim_refs("The contractor shall notify the owner.", state["document_text"])
+    proposal = _payload(
         claim, refs, state["anonymized_text"],
         page_spans=spans, map_claimed=claimed,
     )
@@ -878,8 +891,8 @@ def test_a7_map_with_no_safe_pages_cannot_verify_quote():
     mapping["status"] = "NO_LOCATABLE_PAGES"
     spans, claimed = bridge._a11_a9_page_map(state)
     assert claimed is True and spans == []
-    claim, refs = _claim_refs("The contractor shall notify the owner.")
-    proposed = bridge._candidate_payload(
+    claim, refs = _claim_refs("The contractor shall notify the owner.", state["document_text"])
+    proposed = _payload(
         claim, refs, state["document_text"], page_spans=spans,
         map_claimed=claimed,
     )
@@ -902,12 +915,14 @@ def test_a7_source_ref_hint_must_match_exact_quote_before_disambiguation(monkeyp
         return None
 
     monkeypatch.setattr(loc, "locate_quote_page", spy)
-    claim, refs = _claim_refs(quote)
+    claim, refs = _claim_refs(quote, source)
     refs[0]["analysis_span"] = [len(quote) + 2, len(quote) + 10]
-    bridge._candidate_payload(claim, refs, source, page_spans=spans)
-    assert candidates == [None]
+    invalid = _payload(claim, refs, source, page_spans=spans)
+    assert candidates == []
+    assert invalid["page_verification_status"] == "PAGE_UNRESOLVED"
+    assert invalid["source_quote"] is None
     refs[0]["analysis_span"] = [second, len(source)]
-    bridge._candidate_payload(claim, refs, source, page_spans=spans)
+    _payload(claim, refs, source, page_spans=spans)
     assert candidates[-1] == second
 
 
@@ -930,16 +945,16 @@ def test_new_a11_suspect_exclusion_does_not_poison_valid_pages():
     assert state["n4_source_identity"]["physical_page_lineage"]["pages"][-1] == {
         "page": 4, "status": "OCR_REPLACED_SUSPECT",
     }
-    claim, refs = _claim_refs("The contractor shall notify the owner.")
-    valid_p1 = bridge._candidate_payload(
+    claim, refs = _claim_refs("The contractor shall notify the owner.", state["document_text"])
+    valid_p1 = _payload(
         claim, refs, state["document_text"], page_spans=spans,
         map_claimed=map_claimed,
     )
     assert valid_p1["page_verification_status"] != "PAGE_UNVERIFIED_NO_PAGE_MAP"
     # Suspect OCR is never citable even when the same physical map is valid.
     bad_quote = "Replaced suspect OCR words."
-    claim2, refs2 = _claim_refs(bad_quote)
-    rejected_p4 = bridge._candidate_payload(
+    claim2, refs2 = _claim_refs(bad_quote, state["document_text"])
+    rejected_p4 = _payload(
         claim2, refs2, state["document_text"], page_spans=spans,
         map_claimed=map_claimed,
     )
@@ -972,14 +987,14 @@ def test_a7_never_relocates_duplicate_excluded_occurrence(monkeypatch, anchor_ki
         loc, "locate_quote_page",
         lambda *_args, **_kwargs: loc.QuotePageLocation(1, 1, 0, len(quote)),
     )
-    claim, refs = _claim_refs(quote)
+    claim, refs = _claim_refs(quote, source)
     if anchor_kind == "excluded":
         refs[0]["analysis_span"] = [second, len(source)]
     elif anchor_kind == "absent":
         refs[0].pop("analysis_span")
     else:
         refs.append({**refs[0], "analysis_span": [second, len(source)]})
-    risk = bridge._candidate_payload(
+    risk = _payload(
         claim, refs, source, page_spans=[loc.PageSpan(1, 0, len(quote))],
         map_claimed=True,
     )
@@ -1003,9 +1018,79 @@ def test_a7_duplicate_reference_register_does_not_invent_occurrence_anchor(
     )
     risks, provenance = bridge._reference_proposals(
         [{"status": "MISSING_EXTERNAL", "label": "Annex X", "source_quote": quote}],
-        source=source, source_sha256="a" * 64, revision_id="test-revision",
+        source=source, source_sha256=sha256(source.encode()).hexdigest(),
+        revision_id="test-revision",
         page_spans=[loc.PageSpan(1, 0, len(quote))], map_claimed=True,
     )
     assert risks[0]["page_verification_status"] == "PAGE_UNRESOLVED"
     assert risks[0]["source_quote"] is None
     assert "analysis_span" not in provenance[0]["source_refs"][0]
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("global_duplicate_whitespace", "PAGE_UNRESOLVED"),
+        ("unique_whitespace", "PAGE_LOCATED"),
+        ("missing_hash", "PAGE_UNRESOLVED"),
+        ("wrong_revision", "PAGE_UNRESOLVED"),
+        ("wrong_hash_unique", "PAGE_UNRESOLVED"),
+        ("invalid_span_unique", "PAGE_UNRESOLVED"),
+    ],
+)
+def test_a7_provenance_p0_six_original_probes(monkeypatch, case, expected):
+    from src.documents.domain import quote_page_locator as loc
+
+    quote = "The contractor shall submit the report."
+    source = quote
+    if case == "global_duplicate_whitespace":
+        source += "\n\n" + quote.replace("submit the", "submit\nthe")
+    elif case == "unique_whitespace":
+        source = quote.replace("submit the", "submit\nthe")
+    elif case in {"missing_hash", "wrong_revision"}:
+        source += "\n\n" + quote
+    safe_end = source.index("\n\n") if "\n\n" in source else len(source)
+    claim, refs = _claim_refs(quote)
+    refs[0]["source_sha256"] = sha256(source.encode()).hexdigest()
+    if case in {"global_duplicate_whitespace", "unique_whitespace"}:
+        refs[0].pop("analysis_span")
+    elif case == "missing_hash":
+        refs[0].pop("source_sha256")
+    elif case == "wrong_revision":
+        refs[0]["document_revision_id"] = str(uuid4())
+    elif case == "wrong_hash_unique":
+        refs[0]["source_sha256"] = "f" * 64
+    elif case == "invalid_span_unique":
+        refs[0]["analysis_span"] = [2, 7]
+    calls = []
+
+    def locate(*_args, **_kwargs):
+        calls.append(True)
+        return loc.QuotePageLocation(1, 1, 0, safe_end)
+
+    monkeypatch.setattr(loc, "locate_quote_page", locate)
+    result = _payload(
+        claim, refs, source, page_spans=[loc.PageSpan(1, 0, safe_end)],
+        map_claimed=True,
+    )
+    assert result["page_verification_status"] == expected
+    if expected == "PAGE_UNRESOLVED":
+        assert result["source_quote"] is None
+        assert result["source_quote_status"] == "PAGE_UNRESOLVED"
+        assert result["page_number"] is None
+        assert result["source_locator"] is None
+        if case != "global_duplicate_whitespace":
+            assert not calls
+    else:
+        assert result["page_number"] == 1
+        assert result["source_quote"] == quote
+
+
+@pytest.mark.parametrize("invalid", [None, [False, 8], [0, 99999], [3, 2]])
+def test_a7_invalid_explicit_span_cannot_fall_back_without_map(invalid):
+    quote = "The contractor shall submit the report."
+    claim, refs = _claim_refs(quote)
+    refs[0]["analysis_span"] = invalid
+    risk = _payload(claim, refs, quote)
+    assert risk["page_verification_status"] == "PAGE_UNRESOLVED"
+    assert risk["source_quote"] is None
+    assert risk["source_quote_status"] == "PAGE_UNRESOLVED"
