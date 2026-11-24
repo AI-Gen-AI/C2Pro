@@ -49,6 +49,7 @@ jobs:
       frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
       migrations: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.migrations }}
       backend_docker: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.backend_docker }}
+      evals_journey_v1: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.evals_journey_v1 }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,6 +84,14 @@ jobs:
             backend_docker:
               - "apps/api/**"
               - ".github/workflows/ci.yml"
+            # JV1-B3: evals/journey_v1 code and the backend contracts it imports.
+            evals_journey_v1:
+              - "evals/journey_v1/**"
+              - "apps/api/src/analysis/domain/n4_failure_kinds.py"
+              - "apps/api/scripts/real_ai_governor/**"
+              - "apps/api/requirements.txt"
+              - ".github/workflows/ci.yml"
+              - ".github/actions/setup-python-backend/**"
 
   # ──────────────────────────── Backend lane ────────────────────────────
 
@@ -1793,6 +1802,66 @@ jobs:
   # The ONLY check that branch protection should require. Skipped lanes are
   # fine (path filtering); failed or cancelled required lanes are not.
 
+  # JV1-B3 (Journey V1 direct analysis arm): mock-only contract tests of
+  # evals/journey_v1. No network and no provider keys: the job has no
+  # ANTHROPIC/OPENAI secrets. Required gate: every collected test must run
+  # and pass (no skips, at least MIN_TESTS) and the non-test evals code keeps
+  # its measured branch-coverage floor. Raise MIN_TESTS when tests are added;
+  # never lower it or the floor to make a change pass.
+  evals-journey-v1:
+    name: Evals Journey V1 (mock contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: detect-changes
+    if: needs.detect-changes.outputs.evals_journey_v1 == 'true'
+    env:
+      MIN_TESTS: "65"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup backend environment
+        uses: ./.github/actions/setup-python-backend
+      - name: Run evals/journey_v1 tests with branch coverage
+        run: |
+          python -m pytest evals/journey_v1 -q -p no:cacheprovider --tb=short \
+            --junit-xml=evals-journey-v1-results.xml \
+            --cov=evals/journey_v1 --cov-branch --cov-report=
+      - name: Enforce evals coverage floor (non-test code)
+        run: |
+          coverage report --omit='evals/journey_v1/test_*.py' --show-missing --fail-under=97
+          coverage xml --omit='evals/journey_v1/test_*.py' -o evals-journey-v1-coverage.xml
+      - name: Every evals test must run (no skips, no silent drops)
+        shell: python
+        run: |
+          import os
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("evals-journey-v1-results.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else root.findall(".//testsuite")
+          tests = sum(int(s.get("tests", 0) or 0) for s in suites)
+          skipped = sum(int(s.get("skipped", 0) or 0) for s in suites)
+          broken = sum(int(s.get("failures", 0) or 0) + int(s.get("errors", 0) or 0) for s in suites)
+          minimum = int(os.environ["MIN_TESTS"])
+          print(f"evals/journey_v1: tests={tests} skipped={skipped} failed={broken} minimum={minimum}")
+          if skipped or broken or tests < minimum:
+              raise SystemExit("evals/journey_v1 must run every test: no skips, no failures, >= MIN_TESTS")
+      - name: Upload evals test results and coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          retention-days: 3
+          name: evals-journey-v1-results
+          path: |
+            evals-journey-v1-results.xml
+            evals-journey-v1-coverage.xml
+      - name: Upload evals coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: evals-journey-v1-coverage.xml
+          flags: evals-journey-v1
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
@@ -1817,6 +1886,7 @@ jobs:
       - p0b-acceptance
       - p0b-real-hitl
       - frontend-build
+      - evals-journey-v1
     if: always()
     permissions:
       contents: read
@@ -1920,6 +1990,7 @@ jobs:
           RESULT_FRONTEND_BUILD: ${{ needs.frontend-build.result }}
           RESULT_P0B_ACCEPTANCE: ${{ needs.p0b-acceptance.result }}
           RESULT_P0B_REAL_HITL: ${{ needs.p0b-real-hitl.result }}
+          RESULT_EVALS_JOURNEY_V1: ${{ needs.evals-journey-v1.result }}
         run: |
           set -euo pipefail
 
@@ -1945,6 +2016,7 @@ jobs:
             "frontend-build:$RESULT_FRONTEND_BUILD"
             "p0b-acceptance:$RESULT_P0B_ACCEPTANCE"
             "p0b-real-hitl:$RESULT_P0B_REAL_HITL"
+            "evals-journey-v1:$RESULT_EVALS_JOURNEY_V1"
           )
           ADVISORY_JOBS=()
 
