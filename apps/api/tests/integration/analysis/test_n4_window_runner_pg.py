@@ -5,25 +5,37 @@ evidence of model quality or a genuine billable model call. No production DSN.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+from contextlib import suppress
 from decimal import Decimal
 
 import asyncpg
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.analysis.adapters.persistence.n4_incremental_store import (
+    N4LedgerError,
+    create_run,
+    settle_unknown_pessimistically,
+)
+from src.analysis.application import n4_incremental_runner as runner_module
 from src.analysis.application.n4_incremental_runner import (
     N4IncrementalRunner,
     N4ProviderReceipt,
 )
-from src.analysis.domain.n4_source_windows import N4SourceWindow
+from src.analysis.domain.n4_failure_kinds import N4CoverageStatus
+from src.analysis.domain.n4_source_windows import N4SourceWindow, plan_n4_source_windows
+from src.core.processing_authority import ProcessingAuthorityLost
 from tests.integration.analysis.test_n4_incremental_store_pg import (
     _db_period,
     _new_authority,
     _seed_caps,
     _seed_identity,
 )
+from tests.integration.analysis.test_n4_ledger_retries_pg import _advance_generation
 
 _DSN = os.environ.get("C2PRO_N4_SCRATCH_DSN", "")
 
@@ -37,17 +49,20 @@ class StubProvider:
     """Controlled responses ONLY for circuit tests; not a real provider."""
 
     model_name = "test-only-model"
+    prompt_version = "n4-compact-window-v1"
 
     def __init__(self, *, error_at=None, malformed_at=None, missing_at=None):
         self.calls: list[int] = []
+        self.attempts: list[int] = []
         self.error_at = error_at
         self.malformed_at = malformed_at
         self.missing_at = missing_at
 
     async def generate(
-        self, *, window: N4SourceWindow, tenant_id, request_id,
+        self, *, window: N4SourceWindow, tenant_id, request_id, attempt=1,
     ) -> N4ProviderReceipt:
         self.calls.append(window.ordinal)
+        self.attempts.append(attempt)
         assert tenant_id is not None and request_id
         if window.ordinal == self.error_at:
             raise TimeoutError("synthetic unknown provider receipt")
@@ -123,6 +138,162 @@ async def _balances(tenant):
         """, tenant, _db_period())
     finally:
         await conn.close()
+
+
+async def _reservation_count(tenant):
+    conn = await asyncpg.connect(_DSN)
+    try:
+        return await conn.fetchval("""
+            SELECT count(*) FROM public.n4_usage_reservations
+             WHERE tenant_id=$1
+        """, tenant)
+    finally:
+        await conn.close()
+
+
+async def _create_pending_run(*, engine, authority, project, runner):
+    """Create a durable, provider-free prior run for resume rejection tests."""
+    windows = plan_n4_source_windows(
+        _source(), revision_id=str(authority.revision_id),
+        max_context_chars=runner.context_limit, overlap_chars=runner.overlap,
+    )
+    async with AsyncSession(engine) as session, session.begin():
+        await session.execute(text(
+            "SELECT set_config('app.current_tenant', :tenant, true)"
+        ), {"tenant": str(authority.tenant_id)})
+        run_id = await create_run(
+            session, authority=authority, project_id=project,
+            config_sha256=runner.config_sha256, windows=windows,
+            budget_cap_usd=runner.run_cap,
+        )
+    return run_id
+
+
+async def test_a3_provider_identity_mutation_rejects_before_session_or_reservation():
+    """A reused runner cannot reserve against a changed prompt/model identity."""
+    authority, project, engine = await _prepare()
+    provider = StubProvider()
+    runner = _runner(engine, provider)
+    try:
+        before_balance = await _balances(authority.tenant_id)
+        before_reservations = await _reservation_count(authority.tenant_id)
+
+        def unexpected_session():
+            raise AssertionError("provider identity drift must fail before opening a session")
+
+        runner.sessions = unexpected_session
+        for attribute, changed_value in (
+            ("prompt_version", "n4-compact-window-v2"),
+            ("model_name", "other-synthetic-model"),
+        ):
+            original_value = getattr(provider, attribute)
+            setattr(provider, attribute, changed_value)
+            with pytest.raises(ValueError, match="provider identity changed"):
+                await runner.run(
+                    authority=authority, project_id=project,
+                    model_safe_text=_source(), n2_projection_attested=True,
+                )
+            setattr(provider, attribute, original_value)
+
+        assert provider.calls == []
+        assert before_reservations == 0
+        assert await _reservation_count(authority.tenant_id) == before_reservations
+        assert await _balances(authority.tenant_id) == before_balance
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_missing_resume_source_window_raises_before_provider_or_reservation(monkeypatch):
+    """Simulate a committed lost ordinal after create_run validates the map."""
+    authority, project, engine = await _prepare()
+    provider = StubProvider()
+    runner = _runner(engine, provider)
+    try:
+        run_id = await _create_pending_run(
+            engine=engine, authority=authority, project=project, runner=runner,
+        )
+        original_statuses = runner_module.window_statuses
+        observed = []
+
+        async def lose_ordinal_after_create(session, *, tenant_id, run_id):
+            assert tenant_id == authority.tenant_id
+            assert run_id == expected_run_id
+            # The runner has committed create_run and its mapping check.
+            # Inject a real, committed loss between that check and status read.
+            conn = await asyncpg.connect(_DSN)
+            try:
+                deleted = await conn.fetchval("""
+                    DELETE FROM public.n4_extraction_windows
+                     WHERE tenant_id=$1 AND run_id=$2 AND ordinal=0
+                     RETURNING ordinal
+                """, tenant_id, run_id)
+                assert deleted == 0
+            finally:
+                await conn.close()
+            statuses = await original_statuses(
+                session, tenant_id=tenant_id, run_id=run_id,
+            )
+            observed.append(statuses)
+            assert 0 not in statuses
+            return statuses
+
+        expected_run_id = run_id
+        monkeypatch.setattr(runner_module, "window_statuses", lose_ordinal_after_create)
+        before_balance = await _balances(authority.tenant_id)
+        before_reservations = await _reservation_count(authority.tenant_id)
+
+        with pytest.raises(N4LedgerError, match="source window ordinals missing on resume"):
+            await runner.run(
+                authority=authority, project_id=project,
+                model_safe_text=_source(), n2_projection_attested=True,
+            )
+
+        assert len(observed) == 1
+        assert provider.calls == []
+        assert before_reservations == 0
+        assert await _reservation_count(authority.tenant_id) == before_reservations
+        assert await _balances(authority.tenant_id) == before_balance
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_claimed_or_failed_window_cannot_resume_or_charge():
+    """Only PENDING/BLOCKED windows are resumable; stale states cannot spend."""
+    for state in ("CLAIMED", "FAILED"):
+        authority, project, engine = await _prepare()
+        provider = StubProvider()
+        runner = _runner(engine, provider)
+        try:
+            run_id = await _create_pending_run(
+                engine=engine, authority=authority, project=project, runner=runner,
+            )
+            async with AsyncSession(engine) as session, session.begin():
+                await session.execute(text(
+                    "SELECT set_config('app.current_tenant', :tenant, true)"
+                ), {"tenant": str(authority.tenant_id)})
+                await session.execute(text("""
+                    UPDATE public.n4_extraction_windows SET status = :state
+                     WHERE tenant_id = CAST(:tenant AS uuid)
+                       AND run_id = CAST(:run AS uuid) AND ordinal = 0
+                """), {
+                    "tenant": str(authority.tenant_id), "run": str(run_id),
+                    "state": state,
+                })
+            before_balance = await _balances(authority.tenant_id)
+            before_reservations = await _reservation_count(authority.tenant_id)
+
+            with pytest.raises(N4LedgerError, match="invalid N4 window state"):
+                await runner.run(
+                    authority=authority, project_id=project,
+                    model_safe_text=_source(), n2_projection_attested=True,
+                )
+
+            assert provider.calls == []
+            assert before_reservations == 0
+            assert await _reservation_count(authority.tenant_id) == before_reservations
+            assert await _balances(authority.tenant_id) == before_balance
+        finally:
+            await engine.dispose()
 
 
 async def test_successful_multiwindow_resume_never_calls_provider_twice():
@@ -375,7 +546,7 @@ async def test_no_cost_receipt_is_not_zero_and_does_not_validate_findings():
     a, project, engine = await _prepare()
     provider = StubProvider()
 
-    async def no_usage(*, window, tenant_id, request_id):
+    async def no_usage(*, window, tenant_id, request_id, attempt=1):
         provider.calls.append(window.ordinal)
         return N4ProviderReceipt(
             content='{"window_examined":true,"findings":[],'
@@ -412,12 +583,13 @@ async def test_simultaneous_runners_replay_does_not_interrupt_inflight_provider(
             self.started = asyncio.Event()
             self.release = asyncio.Event()
 
-        async def generate(self, *, window, tenant_id, request_id):
+        async def generate(self, *, window, tenant_id, request_id, attempt=1):
             if window.ordinal == 0:
                 self.started.set()
                 await self.release.wait()
             return await super().generate(
                 window=window, tenant_id=tenant_id, request_id=request_id,
+                attempt=attempt,
             )
 
     a, project, engine = await _prepare()
@@ -454,9 +626,10 @@ async def test_invalid_pricing_receipt_is_unknown_not_zero():
     a, project, engine = await _prepare()
 
     class InvalidCostProvider(StubProvider):
-        async def generate(self, *, window, tenant_id, request_id):
+        async def generate(self, *, window, tenant_id, request_id, attempt=1):
             response = await super().generate(
                 window=window, tenant_id=tenant_id, request_id=request_id,
+                attempt=attempt,
             )
             return replace(response, reported_cost_usd="not-a-price")
 
@@ -473,4 +646,229 @@ async def test_invalid_pricing_receipt_is_unknown_not_zero():
         assert Decimal(balance["reserved_usd"]) == Decimal("0.04")
         assert Decimal(balance["spent_usd"]) == 0
     finally:
+        await engine.dispose()
+
+
+async def test_a3_paid_invalid_envelope_retries_with_distinct_ledger_keys():
+    a, project, engine = await _prepare()
+    provider = StubProvider(malformed_at=0)
+    runner = _runner(engine, provider)
+    try:
+        first = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert first.status == "PARTIAL" and first.gap_windows == (0,)
+        assert first.coverage_status is N4CoverageStatus.INCOMPLETE
+        provider.malformed_at = None
+        resumed = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert resumed.run_id == first.run_id
+        assert resumed.status == "COMPLETE"
+        assert resumed.examined_windows == resumed.total_windows
+        assert resumed.gap_windows == ()
+        assert resumed.coverage_status is N4CoverageStatus.COMPLETE
+        assert provider.calls == [0, *range(resumed.total_windows)]
+        assert provider.attempts == [1, 2, *([1] * (resumed.total_windows - 1))]
+        conn = await asyncpg.connect(_DSN)
+        try:
+            receipts = await conn.fetch("""
+                SELECT status, spent_usd, idempotency_key
+                  FROM public.n4_usage_reservations
+                 WHERE tenant_id=$1 AND run_id=$2 AND window_ordinal=0
+                 ORDER BY created_at
+            """, a.tenant_id, resumed.run_id)
+            assert len(receipts) == 2
+            assert all(row["status"] == "SETTLED" for row in receipts)
+            assert len({row["idempotency_key"] for row in receipts}) == 2
+            assert [Decimal(row["spent_usd"]) for row in receipts] == [
+                Decimal("0.02"), Decimal("0.02"),
+            ]
+        finally:
+            await conn.close()
+        balance = await _balances(a.tenant_id)
+        assert Decimal(balance["reserved_usd"]) == 0
+        assert Decimal(balance["spent_usd"]) == Decimal("0.02") * (
+            resumed.total_windows + 1
+        )
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_unknown_requires_explicit_settlement_before_retry():
+    a, project, engine = await _prepare()
+    provider = StubProvider(error_at=0)
+    runner = _runner(engine, provider)
+    try:
+        first = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert first.status == "PARTIAL" and first.gap_windows == (0,)
+        provider.error_at = None
+        paused = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert paused.run_id == first.run_id
+        assert paused.stopped_reason == "OPEN_LIABILITY_REQUIRES_RECONCILIATION"
+        assert provider.calls == [0]
+        conn = await asyncpg.connect(_DSN)
+        try:
+            receipt = await conn.fetchrow("""
+                SELECT reservation_id, status FROM public.n4_usage_reservations
+                 WHERE tenant_id=$1 AND run_id=$2
+            """, a.tenant_id, first.run_id)
+            assert receipt["status"] == "UNKNOWN"
+            reservation_id = receipt["reservation_id"]
+        finally:
+            await conn.close()
+        async with AsyncSession(engine) as session, session.begin():
+            await session.execute(
+                text("SELECT set_config('app.current_tenant', :tenant, true)"),
+                {"tenant": str(a.tenant_id)},
+            )
+            charged = await settle_unknown_pessimistically(
+                session, authority=a, reservation_id=reservation_id,
+                actual_provider="anthropic", reason="synthetic reconciled liability",
+            )
+        assert charged == Decimal("0.040000")
+        resumed = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert resumed.run_id == first.run_id and resumed.status == "COMPLETE"
+        assert resumed.coverage_status is N4CoverageStatus.COMPLETE
+        assert provider.calls == [0, 0, *range(1, resumed.total_windows)]
+        assert provider.attempts[:2] == [1, 2]
+        balance = await _balances(a.tenant_id)
+        assert Decimal(balance["reserved_usd"]) == 0
+        assert Decimal(balance["spent_usd"]) == (
+            Decimal("0.04") + Decimal("0.02") * resumed.total_windows
+        )
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_retry_cap_keeps_gap_instead_of_unbounded_charges():
+    a, project, engine = await _prepare()
+    provider = StubProvider(malformed_at=0)
+    runner = N4IncrementalRunner(
+        session_factory=async_sessionmaker(engine, expire_on_commit=False),
+        provider=provider, enabled=True, run_cap_usd="1",
+        per_window_reservation_usd="0.04", period_key=_db_period(),
+        max_context_chars=600, overlap_chars=50, max_attempts=2,
+    )
+    try:
+        for _ in range(2):
+            outcome = await runner.run(
+                authority=a, project_id=project,
+                model_safe_text=_source(), n2_projection_attested=True,
+            )
+            assert outcome.status == "PARTIAL" and outcome.gap_windows == (0,)
+        last = await runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert last.status == "PARTIAL"
+        assert last.examined_windows == last.total_windows - 1
+        assert last.coverage_status is N4CoverageStatus.COMPLETE_WITH_GAPS
+        assert last.gap_windows == (0,)
+        assert provider.calls == [0, 0, *range(1, last.total_windows)]
+        assert provider.attempts[:2] == [1, 2]
+        balance = await _balances(a.tenant_id)
+        assert Decimal(balance["reserved_usd"]) == 0
+        assert Decimal(balance["spent_usd"]) == (
+            Decimal("0.04") + Decimal("0.02") * (last.total_windows - 1)
+        )
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_v2_config_never_reuses_v1_source_results():
+    a, project, engine = await _prepare()
+    v1, v2 = StubProvider(), StubProvider()
+    v2.prompt_version = "n4-compact-window-v2"
+    original_runner, changed_runner = _runner(engine, v1), _runner(engine, v2)
+    assert original_runner.config_sha256 != changed_runner.config_sha256
+    try:
+        original = await original_runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert original.status == "COMPLETE"
+        before = await _balances(a.tenant_id)
+        changed = await changed_runner.run(
+            authority=a, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert changed.run_id != original.run_id
+        assert changed.status == "PARTIAL"
+        assert changed.stopped_reason == "N4PriorRunReconciliationRequired"
+        assert changed.examined_windows == 0 and changed.gap_windows == (0,)
+        assert v2.calls == []
+        assert await _balances(a.tenant_id) == before
+    finally:
+        await engine.dispose()
+
+
+async def test_a3_new_generation_adopts_preparing_run_and_fences_old_worker():
+    class PausingProvider(StubProvider):
+        def __init__(self):
+            super().__init__()
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def generate(self, *, window, tenant_id, request_id, attempt=1):
+            self.started.set()
+            await self.release.wait()
+            return await super().generate(
+                window=window, tenant_id=tenant_id,
+                request_id=request_id, attempt=attempt,
+            )
+
+    a, project, engine = await _prepare()
+    provider = PausingProvider()
+    runner = _runner(engine, provider)
+    task = asyncio.create_task(runner.run(
+        authority=a, project_id=project,
+        model_safe_text=_source(), n2_projection_attested=True,
+    ))
+    try:
+        await asyncio.wait_for(provider.started.wait(), timeout=10)
+        a2 = await _advance_generation(a)
+        provider.release.set()
+        with pytest.raises((ProcessingAuthorityLost, N4LedgerError)):
+            await asyncio.wait_for(task, timeout=15)
+        before = await _balances(a.tenant_id)
+        assert Decimal(before["reserved_usd"]) == Decimal("0.04")
+        resumed = await _runner(engine, provider).run(
+            authority=a2, project_id=project,
+            model_safe_text=_source(), n2_projection_attested=True,
+        )
+        assert resumed.stopped_reason == "EXISTING_RESERVATION_REQUIRES_RECONCILIATION"
+        assert resumed.examined_windows == 0
+        assert resumed.status == "PREPARING"
+        assert provider.calls == [0]
+        assert await _balances(a.tenant_id) == before
+        conn = await asyncpg.connect(_DSN)
+        try:
+            runs = await conn.fetch("""
+                SELECT run_id, generation, fencing_token
+                  FROM public.n4_extraction_runs
+                 WHERE tenant_id=$1 ORDER BY created_at
+            """, a.tenant_id)
+            assert len(runs) == 1
+            assert runs[0]["run_id"] == resumed.run_id
+            assert (runs[0]["generation"], runs[0]["fencing_token"]) == (2, 2)
+        finally:
+            await conn.close()
+    finally:
+        provider.release.set()
+        if not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
         await engine.dispose()
