@@ -109,6 +109,9 @@ class PDFExtractionBlocks(list[dict[str, Any]]):
     def __init__(self) -> None:
         super().__init__()
         self.ocr_diagnostics: list[dict[str, Any]] = []
+        # Source-observed page statuses include pages with NO usable text.
+        # Kept as sidecar: no raw provider errors or contractual prose.
+        self.page_diagnostics: list[dict[str, Any]] = []
 
 
 class PDFFileParser:
@@ -159,43 +162,89 @@ class PDFFileParser:
                 page = document.load_page(page_num)
                 page_text_blocks = self._extract_page_text_blocks(page, page_num)
 
-                # OCR fallback fires when the page has NO extractable text, OR when
-                # the extracted text layer is present but corrupt (scanned PDF with a
-                # broken embedded text layer). In the corrupt case OCR replaces the
-                # garbage blocks so downstream steps see real text.
+                # Empty and corrupt native layers require OCR; additionally
+                # inspect sparse native pages that contain images. Only sparse
+                # OCR is additive: preserve original spans/offset provenance.
                 page_text = " ".join(block["text"] for block in page_text_blocks)
-                ocr_reason = (
-                    "no_native_text"
-                    if not page_text_blocks
-                    else "suspect_native_text" if _is_low_quality_text_layer(page_text)
-                    else None
-                )
-                if ocr_reason is not None:
+                native_chars = len(page_text.strip())
+                try:
+                    has_images = bool(page.get_images(full=True))
+                except Exception:
+                    # Unknown page-image inventory cannot justify sparse OCR.
+                    has_images = False
+                if not page_text_blocks:
+                    reason = "no_native_text"
+                elif _is_low_quality_text_layer(page_text):
+                    reason = "suspect_native_text"
+                elif native_chars < 200 and has_images:
+                    reason = "sparse_native_text"
+                else:
+                    reason = None
+                status = "NATIVE_TEXT"
+                ocr_chars = 0
+                if reason is not None:
                     observation: dict[str, Any] = {
-                        "page": page_num + 1, "reason": ocr_reason
+                        "page": page_num + 1, "reason": reason
                     }
                     if OCR_AVAILABLE:
                         ocr_text = self._ocr_page(
                             page, page_num, diagnostic=observation,
                         )
                         if ocr_text:
-                            page_text_blocks = [
-                                {
-                                    "text": ocr_text,
-                                    "bbox": (0, 0, page.rect.width, page.rect.height),
-                                    "page": page_num + 1,
-                                    "ocr": True,
-                                }
-                            ]
+                            ocr_chars = len(ocr_text)
+                            # Full-page bitmap is a render extent, NOT a
+                            # word/line-level OCR bbox. Never label it as
+                            # precise source geometry.
+                            ocr_block = {
+                                "text": ocr_text,
+                                "bbox": (0, 0, page.rect.width, page.rect.height),
+                                "page": page_num + 1,
+                                "ocr": True,
+                            }
+                            if reason == "sparse_native_text":
+                                if ocr_text.casefold() in page_text.casefold():
+                                    status = "OCR_DUPLICATE_IGNORED"
+                                else:
+                                    page_text_blocks = [*page_text_blocks, ocr_block]
+                                    status = "OCR_AUGMENTED"
+                            elif reason == "suspect_native_text":
+                                # The corrupt glyph layer cannot serve as
+                                # evidence. Keep the reason in diagnostics.
+                                page_text_blocks = [ocr_block]
+                                status = "OCR_REPLACED_SUSPECT"
+                            else:
+                                page_text_blocks = [ocr_block]
+                                status = "OCR_ONLY"
                             ocr_pages += 1
                             observation["outcome"] = "succeeded"
                         else:
-                            # If the method was replaced by an adapter or mock,
-                            # distinguish unknown from an observed OCR exception.
                             observation.setdefault("outcome", "unclassified_no_text")
                     else:
                         observation["outcome"] = "unavailable"
+                    if not ocr_chars:
+                        outcome = observation["outcome"]
+                        if reason == "sparse_native_text":
+                            status = {
+                                "failed": "SPARSE_OCR_FAILED",
+                                "empty_result": "SPARSE_OCR_EMPTY",
+                            }.get(outcome, "SPARSE_TEXT_UNVERIFIED")
+                        elif reason == "suspect_native_text":
+                            status = "SUSPECT_NATIVE_TEXT_UNVERIFIED"
+                        else:
+                            status = {
+                                "failed": "OCR_FAILED",
+                                "empty_result": "OCR_EMPTY_RESULT",
+                                "unavailable": "OCR_UNAVAILABLE",
+                            }.get(outcome, "OCR_UNCLASSIFIED")
                     text_blocks.ocr_diagnostics.append(observation)
+                text_blocks.page_diagnostics.append({
+                    "page": page_num + 1,
+                    "status": status,
+                    "reason": reason or "none",
+                    "has_images": has_images,
+                    "native_chars": native_chars,
+                    "ocr_chars": ocr_chars,
+                })
 
                 text_blocks.extend(page_text_blocks)
 

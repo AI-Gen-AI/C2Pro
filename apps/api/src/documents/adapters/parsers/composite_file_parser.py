@@ -69,6 +69,12 @@ class CompositeFileParser(IFileParserService):
                             *inventory["limitations"],
                         ],
                         "source_inventory": inventory,
+                        # One diagnostic per physical page, including pages
+                        # with no text. The parser sidecar contains no source
+                        # content or OCR exception strings.
+                        "page_analysis": list(
+                            getattr(text_blocks, "page_diagnostics", [])
+                        ),
                     },
                 }
             except PDFParsingError as e:

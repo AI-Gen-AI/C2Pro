@@ -16,6 +16,7 @@ from src.documents.application.document_coverage import (
     record_revision_parsed_text_digest,
 )
 from src.documents.application.document_source import fetch_source_file, resolve_source_revision
+from src.documents.application.page_span_lineage import record_revision_page_spans
 from src.documents.domain.models import DocumentStatus, DocumentType
 from src.documents.domain.upload_policy import WBS_ANALYSIS_EXCLUDED_DETAIL, is_analysis_excluded
 from src.documents.ports.document_repository import IDocumentRepository
@@ -212,6 +213,12 @@ class ParseDocumentUseCase:
             record_revision_document_coverage(
                 metadata,
                 parsed_payload=parsed_payload,
+                revision_id=revision.revision_id if revision is not None else None,
+                blob_hash=revision.blob_hash if revision is not None else None,
+            )
+            record_revision_page_spans(
+                metadata, parsed_payload=parsed_payload,
+                parsed_text=parsed_text,
                 revision_id=revision.revision_id if revision is not None else None,
                 blob_hash=revision.blob_hash if revision is not None else None,
             )
