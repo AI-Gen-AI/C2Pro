@@ -22,10 +22,12 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import sys
 import tempfile
 import time
 import uuid
 from contextlib import contextmanager
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -54,9 +56,13 @@ def price_of(model: str) -> tuple[float, float]:
     return _UNKNOWN_PRICE
 
 
-def usd(model: str, input_tokens: int, output_tokens: int) -> float:
+def _exact_usd(model: str, input_tokens: int, output_tokens: int) -> Decimal:
     price_in, price_out = price_of(model)
-    return (input_tokens * price_in + output_tokens * price_out) / 1_000_000
+    return (input_tokens * Decimal(str(price_in)) + output_tokens * Decimal(str(price_out))) / Decimal(1_000_000)
+
+
+def usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    return float(_exact_usd(model, input_tokens, output_tokens))
 
 
 def _allowed_roots() -> list[Path]:
@@ -72,14 +78,14 @@ def _checked_ledger(raw: str) -> Path:
     return path
 
 
-def _limits() -> tuple[Path, int, float]:
+def _limits() -> tuple[Path, int, Decimal]:
     raw_ledger = os.environ.get(ENV_LEDGER, "")
     try:
         calls = int(os.environ[ENV_MAX_CALLS])
-        budget = float(os.environ[ENV_MAX_USD])
-    except (KeyError, ValueError) as exc:
+        budget = Decimal(os.environ[ENV_MAX_USD])
+    except (KeyError, ValueError, InvalidOperation) as exc:
         raise GovernorRefusal(f"GOVERNOR_LIMITS_MISSING_OR_MALFORMED: set {ENV_MAX_CALLS} and {ENV_MAX_USD}") from exc
-    if not raw_ledger or calls < 1 or budget <= 0:
+    if not raw_ledger or calls < 1 or not budget.is_finite() or budget <= 0:
         raise GovernorRefusal("GOVERNOR_LIMITS_INVALID: ledger, calls >= 1 and budget > 0 are required")
     return _checked_ledger(raw_ledger), calls, budget
 
@@ -106,18 +112,66 @@ def _append(ledger: Path, event: dict[str, Any]) -> None:
         handle.write(json.dumps(event, sort_keys=True) + "\n")
 
 
+def _producer():
+    # The standalone governor is loaded through PYTHONPATH; use the producer
+    # from this same checkout, never a caller-controlled working directory.
+    directory = Path(__file__).resolve().parents[4] / "evals" / "journey_v1"
+    if not (directory / "b3_liability.py").is_file():
+        raise ImportError("liability producer unavailable")
+    if not sys.path or sys.path[0] != str(directory):
+        sys.path.insert(0, str(directory))
+    import b3_liability
+
+    if Path(b3_liability.__file__).resolve() != directory / "b3_liability.py":
+        raise ValueError("unexpected liability producer")
+    return b3_liability
+
+
+def _validated_snapshot(events: list[dict[str, Any]]):
+    producer = _producer()
+    if producer.VERSION != "b3-liability-v1":
+        raise ValueError("unsupported liability producer version")
+    snapshot = producer.liability_snapshot(events, ledger_scope="B3")
+    expected_hash = producer.digest({"version": producer.VERSION, "scope": "B3", "events": events})
+    if (snapshot.version != producer.VERSION or snapshot.ledger_scope != "B3"
+            or snapshot.snapshot_hash != expected_hash):
+        raise ValueError("invalid liability snapshot")
+    if not snapshot.receipts and any(e["ev"] != "refused" for e in events):
+        raise ValueError("missing liability receipts")
+    identities = set()
+    for receipt in snapshot.receipts:
+        producer.verify_receipt(receipt, snapshot)
+        identity = (receipt.ledger_scope, receipt.tenant_id, receipt.reservation_id)
+        if identity in identities or receipt.currency != "USD":
+            raise ValueError("invalid liability identity or currency")
+        identities.add(identity)
+        producer.money(receipt.exposure_usd)
+    return snapshot
+
+
 def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
-    reserves = {e["id"]: e for e in events if e["ev"] == "reserve"}
-    done = {e["id"]: e for e in events if e["ev"] == "done"}
-    failed = {e["id"] for e in events if e["ev"] == "fail"}
-    open_ids = [i for i in reserves if i not in done and i not in failed]
+    snapshot = _validated_snapshot(events)
+    # Financial projection of authoritative receipts, not event reduction.
+    settled = sum((Decimal(r.settled_usd) for r in snapshot.receipts
+                   if r.settled_usd is not None), Decimal(0))
+    held = snapshot.exposure_usd - settled
+    # Non-financial telemetry only. Preserve the existing reporting interface.
+    done = {}
+    for event in events:
+        if event["ev"] == "done":
+            done.setdefault((event.get("tenant_id"), event["id"]), event)
+    failed = {(e.get("tenant_id"), e["id"]) for e in events if e["ev"] == "fail"}
     return {
-        "calls": len(reserves),
+        "calls": len(snapshot.receipts),
         "completed": len(done),
         "failed": len(failed),
-        "in_flight": len(open_ids),
-        "spent_usd": round(sum(float(e["usd"]) for e in done.values()), 6),
-        "reserved_open_usd": round(sum(float(reserves[i]["est_usd"]) for i in open_ids), 6),
+        "in_flight": sum(r.state == "RESERVED" for r in snapshot.receipts),
+        "spent_usd": float(settled),
+        "reserved_open_usd": float(held),
+        "spent_usd_exact": str(settled),
+        "reserved_open_usd_exact": str(held),
+        "exposure_usd": str(snapshot.exposure_usd),
+        "snapshot_hash": snapshot.snapshot_hash,
         "refused": [e["reason"] for e in events if e["ev"] == "refused"],
         "models": sorted({str(e["model"]) for e in done.values()}),
         "input_tokens": sum(int(e["in"]) for e in done.values()),
@@ -138,22 +192,27 @@ def reserve(model: str, estimated_input_tokens: int, max_output_tokens: int) -> 
         except GovernorRefusal:
             pass
         raise
-    estimate = usd(model, estimated_input_tokens, max_output_tokens)
+    estimate = _exact_usd(model, estimated_input_tokens, max_output_tokens)
     with _locked(ledger):
-        state = summarize(read_events(ledger))
+        try:
+            snapshot = _validated_snapshot(read_events(ledger))
+        except (ImportError, ValueError, TypeError, KeyError, AttributeError, OSError) as exc:
+            raise GovernorRefusal("GOVERNOR_LIABILITY_INVALID") from exc
         reason = None
-        if state["calls"] >= max_calls:
-            reason = f"GOVERNOR_CALL_CAP: {state['calls']} call(s) already admitted, cap {max_calls}"
-        elif state["spent_usd"] + state["reserved_open_usd"] + estimate > budget:
+        if any(r.blocking_reason for r in snapshot.receipts):
+            reason = "GOVERNOR_LIABILITY_UNRECONCILED"
+        elif len(snapshot.receipts) >= max_calls:
+            reason = f"GOVERNOR_CALL_CAP: {len(snapshot.receipts)} call(s) already admitted, cap {max_calls}"
+        elif snapshot.exposure_usd + estimate > budget:
             reason = (
-                f"GOVERNOR_BUDGET_CAP: spent {state['spent_usd']:.4f} + in flight {state['reserved_open_usd']:.4f} "
+                f"GOVERNOR_BUDGET_CAP: exposure {snapshot.exposure_usd:.4f} "
                 f"+ this call's worst case {estimate:.4f} would exceed {budget:.2f} USD"
             )
         if reason:
             _append(ledger, {"ev": "refused", "t": time.time(), "reason": reason, "model": model})
             raise GovernorRefusal(reason)
         call_id = uuid.uuid4().hex
-        _append(ledger, {"ev": "reserve", "id": call_id, "t": time.time(), "model": model, "est_usd": round(estimate, 6), "pid": os.getpid()})
+        _append(ledger, {"ev": "reserve", "id": call_id, "t": time.time(), "model": model, "est_usd": str(estimate), "pid": os.getpid()})
     return call_id
 
 
@@ -168,7 +227,7 @@ def settle(call_id: str, response: Any, model: str) -> None:
             {
                 "ev": "done", "id": call_id, "t": time.time(), "model": getattr(response, "model", None) or model,
                 "message_id": getattr(response, "id", None), "stop_reason": getattr(response, "stop_reason", None),
-                "in": tokens_in, "out": tokens_out, "usd": round(usd(getattr(response, "model", None) or model, tokens_in, tokens_out), 6),
+                "in": tokens_in, "out": tokens_out, "usd": str(_exact_usd(getattr(response, "model", None) or model, tokens_in, tokens_out)),
             },
         )
 

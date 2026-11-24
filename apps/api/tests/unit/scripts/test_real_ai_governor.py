@@ -100,13 +100,15 @@ def test_sdk_retries_are_forced_off_and_streaming_is_refused(tmp_path: Path) -> 
     assert out["retries"] == 0 and out["stream"].startswith("GOVERNOR_STREAMING")
 
 
-def test_a_failed_call_is_counted_and_its_reservation_released(tmp_path: Path) -> None:
+def test_a_failed_call_is_counted_and_its_reservation_remains_exposed(tmp_path: Path) -> None:
     out = run(
         "try:\n    call()\nexcept TimeoutError:\n    pass\nout['summary'] = g.summarize(g.read_events(g._limits()[0]))",
         tmp_path, TEST_PROVIDER_DOWN="1", **LIMITS,
     )
     assert out["summary"]["calls"] == 1 and out["summary"]["failed"] == 1 and out["summary"]["in_flight"] == 0
     assert out["summary"]["spent_usd"] == 0
+    assert out["summary"]["reserved_open_usd"] > 0
+    assert out["summary"]["exposure_usd"] != "0"
 
 
 def test_the_governor_is_inert_without_a_ledger_variable(tmp_path: Path) -> None:
