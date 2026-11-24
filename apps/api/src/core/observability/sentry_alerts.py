@@ -29,7 +29,7 @@ def record_auth_failure(
     if not settings.sentry_dsn:
         return
 
-    with sentry_sdk.push_scope() as scope:
+    with sentry_sdk.new_scope() as scope:
         scope.set_tag("auth.reason", reason_code)
         scope.set_tag("tenant.id", str(tenant_id) if tenant_id else "anonymous")
         scope.set_tag("http.path", path)
